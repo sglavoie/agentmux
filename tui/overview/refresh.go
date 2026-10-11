@@ -105,6 +105,7 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	m.topology = msg.Topology
 	m.topologyObservedAt = m.deps.now()
 	m.err = nil
+	m.portableErr = msg.PortableErr
 	wasLoaded := m.loaded
 	m.loaded = true
 

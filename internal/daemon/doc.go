@@ -63,6 +63,25 @@
 // the Kitty writer: the runtime checkpoint is its durable state and is what
 // ends its dirty stretch (runtime_checkpoint.go).
 //
+// A session on a backend other than Kitty is probed by the bodies a Kitty
+// window is (runtime_screen_probes.go): the Claude context-limit banner and
+// the idle screen that settles a stuck turn or confirms a held stop, and the
+// Codex prompt and idle screen. Its binding comes from the slot table, not a
+// window tree, and its screen is read from the registered pane through
+// RuntimeScreenReader and accepted only for that pane under the registered
+// server generation while its agent runs. A pane that cannot be read is no
+// evidence, as a failed get-text is: a held stop then waits for its deadline.
+// A stop of such a session is held for confirmation only when its pane can
+// confirm it (terminalStopHoldArmableLocked). The Claude busy-title recovery,
+// the Codex cleared-screen check, and the Copilot transcript probe still read
+// Kitty only.
+//
+// Such a session has no focus to read either. What clears its unseen bit is
+// the reconciliation pass finding a terminal that attached to it, or was
+// used in it, no earlier than the session came to rest (observeRuntimeViewers
+// in runtime_reconcile.go); a terminal that is merely still attached clears
+// nothing, since the desktop workspace keeps one on every session.
+//
 // The companion's focus_window request (handler_companion.go) is the one
 // companion request that dials Kitty. It accepts only a socket the daemon
 // learned itself (a kittySockets value, lastKittyListenOn, or the snapshot's

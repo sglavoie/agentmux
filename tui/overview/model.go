@@ -240,6 +240,9 @@ type model struct {
 	topologyObservedAt time.Time
 	loaded             bool
 	err                error
+	// portableErr is set while the tmux tiles are kept from an earlier
+	// listing rather than read by the last refresh.
+	portableErr error
 
 	refreshNextSeq   int
 	refreshActiveSeq int

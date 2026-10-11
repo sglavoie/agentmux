@@ -1586,3 +1586,23 @@ func TestTheConfiguredModeIsTheOpeningMode(t *testing.T) {
 		}
 	}
 }
+
+// Tmux tiles kept through an outage are announced as kept, and the sentence
+// goes away with the outage.
+func TestFeedbackNamesATmuxOutageWhileItsTilesAreKept(t *testing.T) {
+	m, _ := started(t, 0)
+	kept := snapshot(firstRefreshSeq, 0, viewSessions(2))
+	kept.PortableErr = &commands.PortableOutage{Err: errors.New("timeout"), Kept: 2}
+	m = only(t, m, kept)
+	if len(m.sessions) != 2 {
+		t.Fatalf("%d tiles; want the 2 kept", len(m.sessions))
+	}
+	if got := m.feedback(); !strings.HasPrefix(got, "tmux outage: tmux is not answering") || !strings.Contains(got, "2 sessions") {
+		t.Fatalf("feedback = %q; want the outage and what is kept", got)
+	}
+	m = only(t, m, commands.TickMsg{})
+	m = only(t, m, snapshot(m.refreshActiveSeq, 0, viewSessions(2)))
+	if got := m.feedback(); got != "" {
+		t.Fatalf("feedback after recovery = %q; want silence", got)
+	}
+}

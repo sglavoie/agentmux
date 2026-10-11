@@ -430,3 +430,27 @@ func TestIconPickerWriteFailureStaysVisibleAndCanRetry(t *testing.T) {
 		t.Fatalf("SetTabTitle calls = %d, want 2", len(client.titleCalls))
 	}
 }
+
+// With a SetTitle hook the picker edits the title it was given and writes it
+// through the hook: no Kitty client is needed or used.
+func TestIconPickerSetTitleHookReplacesTheKittyTab(t *testing.T) {
+	var written []string
+	ctx := IconContext{
+		CurrentTitle:  "⭕api",
+		HarnessEmojis: map[string]string{"claude": "⭕", "codex": "📟"},
+		SetTitle: func(title string) error {
+			written = append(written, title)
+			return nil
+		},
+	}
+	m := mustIconPickerModel(t, ctx)
+	updated, _ := m.Update(iconPickerKey("down"))
+	updated, cmd := updated.(iconPickerModel).Update(iconPickerKey("enter"))
+	m = updated.(iconPickerModel)
+	if cmd == nil || !m.applied || m.err != nil {
+		t.Fatalf("enter: applied=%v err=%v", m.applied, m.err)
+	}
+	if len(written) != 1 || written[0] != "📟api" {
+		t.Fatalf("titles written = %q; want the icon swapped to 📟api", written)
+	}
+}

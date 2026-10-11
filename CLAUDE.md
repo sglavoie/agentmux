@@ -210,6 +210,10 @@ Shared and domain packages (`internal/...`):
   instance generation, pane size, alternate-screen and exit state, and capture
   time. Screen probes read it only through `probes.CheckScreen`, so a failed,
   stale, wrong-pane, wrong-generation, or exited-pane capture is never read.
+  The daemon probes a tmux session through the same Claude and Codex bodies
+  as a Kitty window (`internal/daemon/runtime_screen_probes.go`), with a
+  binding built from its slot instead of a window tree; a stop there is held
+  for confirmation only when its pane can confirm it.
 - `internal/tmux`: the private tmux backend — AgentMux's own socket and
   configuration (never the operator's server or `~/.tmux.conf`), one session
   and one agent pane per runtime session, exited panes retained until
@@ -231,7 +235,10 @@ Shared and domain packages (`internal/...`):
   (`internal/tmux/ownership.go`). The registry learns of agents that stop,
   owners whose terminal died, and competing terminals from
   `tmux.Reconciler`, which the daemon runs on maintenance and before it
-  restores its checkpoint; it never starts a server or an agent.
+  restores its checkpoint; it never starts a server or an agent. The same
+  pass is the focus observation of a tmux session: a terminal that attached
+  or was used after the session came to rest clears its unseen bit
+  (`observeRuntimeViewers`); one merely still attached clears nothing.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path
   and never touches the index or search sidecars.
@@ -282,6 +289,10 @@ TUI (`tui/...`):
   terminal (`commands.Attach`, **F12** detaches) and the surface keeps running;
   Kitty-only actions report why they are unavailable. Build action dependencies
   with `commands.TerminalDependencies`, never a bare `actions.Dependencies{Kitty: …}`.
+  A tmux that fails to answer, or a server that vanished under agents nobody
+  ended, keeps its rows on the list (`commands.PortableOutage`, carried as
+  `SessionsMsg.PortableErr`); rows kept that way are not evidence that
+  anything is running, so `LiveSessions` never counts them.
 - Hosted by the desktop workspace (`commands.Portable.Desktop`, set only by
   `amx workspace-view`), the TUI asks the daemon to have the workspace show
   things instead of taking over its own terminal: `commands.Attach`, the pager,
@@ -389,6 +400,9 @@ amx doctor --strict
 amx transcripts status
 amx daemon export-events --current-window --last 50
 ```
+
+`--current-window` is the session the command is typed in: its runtime session
+(`AMX_RUNTIME_SESSION_ID`) when it has one, else its Kitty window.
 
 Release acceptance must keep explicit coverage for warm Past Sessions,
 partial transcript/plan failures, CLI and TUI continuity, handoff/worktree

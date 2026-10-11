@@ -1,6 +1,7 @@
 package customization
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -253,4 +254,44 @@ func TestColorPicker_ManagedSetUserVars(t *testing.T) {
 	if client.userVarsCalls[0].vars["cc_color"] != "purple" {
 		t.Errorf("cc_color = %q, want purple", client.userVarsCalls[0].vars["cc_color"])
 	}
+}
+
+// With an Apply hook the picker is not a Kitty overlay: Enter hands the pick
+// to the hook and touches no Kitty client, and "reset" is an empty pick.
+func TestColorPicker_ApplyHookReceivesThePickInsteadOfKitty(t *testing.T) {
+	var picked []string
+	ctx := ColorContext{DefaultColor: "blue", Subject: "api", Apply: func(name string) error {
+		picked = append(picked, name)
+		return nil
+	}}
+	m := newColorPickerModel(ctx)
+	if !strings.Contains(m.View().Content, "Set Color: api") {
+		t.Fatalf("header does not name the session:\n%s", m.View().Content)
+	}
+	updated, _ := m.Update(cpKeyPress("j"))
+	updated, cmd := updated.(colorPickerModel).Update(cpKeyPress("enter"))
+	m = updated.(colorPickerModel)
+	if cmd == nil || !m.applied || m.err != nil {
+		t.Fatalf("enter: applied=%v err=%v", m.applied, m.err)
+	}
+
+	reset := newColorPickerModel(ctx)
+	reset.cursor = len(reset.items) - 1
+	updated, _ = reset.Update(cpKeyPress("enter"))
+	if !updated.(colorPickerModel).applied {
+		t.Fatal("reset was not applied")
+	}
+	want := []string{colorPickerOrder[(indexOfColor("blue")+1)%len(colorPickerOrder)], ""}
+	if len(picked) != 2 || picked[0] != want[0] || picked[1] != want[1] {
+		t.Fatalf("picks = %q; want %q", picked, want)
+	}
+}
+
+func indexOfColor(name string) int {
+	for i, candidate := range colorPickerOrder {
+		if candidate == name {
+			return i
+		}
+	}
+	return -1
 }

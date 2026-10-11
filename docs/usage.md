@@ -784,9 +784,26 @@ What changes for a tmux session, and only for it:
   editor suspend the dashboard, run in place, and return to it. Inside Kitty a
   Kitty session keeps its native overlay pager and new tabs.
 - **Kitty presentations are unavailable and say so.** `Resort Tabs` reports that
-  there are no Kitty tabs to reorder; `amx color-picker` and `amx icon-picker`
-  refuse outside Kitty, because a tab color and a tab icon are things only Kitty
-  draws. `amx keybindings` opens in place.
+  there are no Kitty tabs to reorder.
+- **The pickers edit a tmux session.** Outside Kitty `amx color-picker` and
+  `amx icon-picker` open in the terminal they are typed in and edit a tmux
+  session instead of a Kitty tab: the one named by `--runtime-session`, else
+  the one the command is typed in, else the only one running; with several and
+  none named they list them and open nothing. The icon goes into the session's
+  title. The color is kept with the session and the dashboard draws the
+  session's rows in it; "reset" returns to the profile's color. Inside Kitty
+  both stay overlays on the tab, and `--runtime-session` reaches a tmux session
+  from there. `amx keybindings` opens in place.
+- **A tmux outage keeps the list.** When tmux stops answering, the tmux rows
+  stay as last listed and the dashboard's health indicator (the overview's
+  status line) says they are kept. When the tmux server itself is gone, the
+  sessions it took stay listed, marked with the error icon, until a server
+  answers again; closing such a row dismisses it. Sessions you closed are not
+  an outage: the list is simply empty.
+- **Looking at a session marks it seen.** A tmux session that came to rest
+  unseen is marked seen when a terminal attaches to it (Enter, `amx attach`),
+  or when you type in a terminal already attached to it. A terminal that is
+  only still attached changes nothing.
 - **Continue shows a live conversation.** Continuing a conversation that is
   already running in a tmux session attaches to it rather than resuming it a
   second time. Past Sessions, Plans, Worktrees (fork, reopen, shell, editor),

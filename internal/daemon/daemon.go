@@ -45,6 +45,12 @@ type runDependencies struct {
 	// fails or blocks on demand instead of whichever Kitty the test host
 	// happens to be running; production leaves it nil.
 	kittyRunner kitty.CommandRunner
+	// startupProbeBudget bounds the wait for the daemon's own health answer
+	// at startup. Zero is production's: ipc.NormalAckBudget, what a hook
+	// would wait. A lifecycle test that asserts something else gives the
+	// probe its liveness grace, so a contended machine cannot fail the
+	// scenario on a latency ceiling it is not about.
+	startupProbeBudget time.Duration
 }
 
 func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr error) {
@@ -147,6 +153,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		handler.SetRuntimeSessionDirectory(reader)
 		handler.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
 		handler.SetRuntimeSessionReconciler(NewTmuxRuntimeReconciler(store, reader))
+		handler.SetRuntimeScreenReader(NewTmuxRuntimeScreenReader())
 		if recorder != nil {
 			handler.SetRuntimeJournal(recorder.record)
 		}
@@ -250,7 +257,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	if deps.beforeStartupConfirmation != nil {
 		deps.beforeStartupConfirmation(ctx)
 	}
-	if err := confirmDaemonServing(ctx, socketPath); err != nil {
+	if err := confirmDaemonServing(ctx, socketPath, deps.startupProbeBudget); err != nil {
 		select {
 		case <-shutdownAccepted:
 			return nil
@@ -352,8 +359,11 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 // wedged external call.
 const shutdownDrainBudget = 5 * time.Second
 
-func confirmDaemonServing(ctx context.Context, socketPath string) error {
-	probeCtx, cancel := context.WithTimeout(ctx, ipc.NormalAckBudget)
+func confirmDaemonServing(ctx context.Context, socketPath string, budget time.Duration) error {
+	if budget <= 0 {
+		budget = ipc.NormalAckBudget
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	resp, err := ipc.NewClientWithSocket(socketPath).SendWithContext(probeCtx, protocol.Request{Type: protocol.TypeHealth})
 	if err != nil {

@@ -363,3 +363,34 @@ func TestReconcileDetachesCompetingClients(t *testing.T) {
 	}
 	eventually(t, f, "one owner at its own size", sized(launched.Pane, 110, 35))
 }
+
+// A pass says which live sessions have a terminal on them and when that
+// terminal attached. That is an observation and not a change: a pass that
+// found only viewers is still an empty one.
+func TestReconcileReportsWhoIsViewedWithoutCountingItAsAChange(t *testing.T) {
+	f := tmuxtest.New(t)
+	start := time.Now().Add(-time.Minute)
+	watched := launchAgent(t, f)
+	watching := register(t, f, watched, start)
+	register(t, f, launchAgent(t, f), start)
+	reconciler := tmux.NewReconciler(f.Registry, nil)
+
+	report, err := reconciler.Reconcile(time.Now())
+	if err != nil || len(report.Viewed) != 0 {
+		t.Fatalf("pass with no terminal = %+v, %v; want nobody viewed", report, err)
+	}
+
+	before := time.Now().Truncate(time.Second)
+	attach(t, f, watched.Pane, 90, 24)
+	eventually(t, f, "the terminal", sized(watched.Pane, 90, 24))
+	report, err = reconciler.Reconcile(time.Now())
+	if err != nil || !report.Empty() {
+		t.Fatalf("pass = %+v, %v; want no change from a terminal attaching", report, err)
+	}
+	if len(report.Viewed) != 1 || report.Viewed[0].ID != watching.ID {
+		t.Fatalf("viewed = %+v; want only the session with the terminal", report.Viewed)
+	}
+	if at := report.Viewed[0].At; at.Before(before) || at.After(time.Now().Add(time.Second)) {
+		t.Fatalf("viewed at %v; want the moment the terminal attached (after %v)", at, before)
+	}
+}

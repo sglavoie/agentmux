@@ -21,15 +21,18 @@ var keybindingsCmd = &cobra.Command{
 		// Outside Kitty there is no other instance to find: the reference
 		// simply opens in this terminal.
 		if !insideKitty() {
-			return customization.RunKeybindingsOverlay()
+			return runKeybindingsOverlay()
 		}
 		client := cli.NewKittyClient()
 		if focusExistingKeybindings(client) {
 			return nil
 		}
-		return customization.RunKeybindingsOverlay()
+		return runKeybindingsOverlay()
 	},
 }
+
+// runKeybindingsOverlay shows the reference in this terminal.
+var runKeybindingsOverlay = customization.RunKeybindingsOverlay
 
 func focusExistingKeybindings(client kitty.KittyClient) bool {
 	osWindows, err := client.ListWindows()

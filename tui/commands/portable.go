@@ -2,10 +2,12 @@ package commands
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -83,7 +85,129 @@ var portableIDs = struct {
 	// effect that was handed only a tab or window ID find the session behind
 	// a portable one.
 	listed map[int]session.RunningSession
+	// order is the same discovery in the order it was listed, which is what
+	// an outage keeps showing.
+	order []int
+	// lost marks the listed sessions whose server is gone. They stay listed
+	// until the operator closes them or a server answers again.
+	lost map[int]bool
 }{byKey: map[string]int{}}
+
+// PortableOutage says why the portable rows of a refresh are not a fresh
+// listing: the backend could not be read (Err), or its server is gone and took
+// Lost sessions with it. Either way the rows are the last ones listed, kept so
+// that a failing backend degrades the list instead of emptying it.
+type PortableOutage struct {
+	Err  error
+	Kept int
+	Lost int
+}
+
+func (o *PortableOutage) Error() string {
+	if o.Err != nil {
+		return fmt.Sprintf("tmux is not answering; showing the last %s listed (%v)", countedSessions(o.Kept), o.Err)
+	}
+	return fmt.Sprintf("the tmux server is gone and %s with it; close a row to dismiss it", countedSessions(o.Lost))
+}
+
+func (o *PortableOutage) Unwrap() error { return o.Err }
+
+func countedSessions(n int) string {
+	if n == 1 {
+		return "1 session"
+	}
+	return fmt.Sprintf("%d sessions", n)
+}
+
+// PortableLost reports a listed session whose server is gone.
+func PortableLost(rs session.RunningSession) bool {
+	if !IsPortable(rs) {
+		return false
+	}
+	portableIDs.Lock()
+	defer portableIDs.Unlock()
+	return portableIDs.lost[rs.WindowID]
+}
+
+// dismissPortable drops a lost session from the list: there is nothing left
+// to close, so closing it is taking the row away.
+func dismissPortable(id int) {
+	portableIDs.Lock()
+	defer portableIDs.Unlock()
+	delete(portableIDs.listed, id)
+	delete(portableIDs.lost, id)
+	portableIDs.order = slices.DeleteFunc(portableIDs.order, func(listed int) bool { return listed == id })
+}
+
+// lastPortableListing is the previous discovery, in its order.
+func lastPortableListing() []session.RunningSession {
+	portableIDs.Lock()
+	defer portableIDs.Unlock()
+	sessions := make([]session.RunningSession, 0, len(portableIDs.order))
+	for _, id := range portableIDs.order {
+		if rs, ok := portableIDs.listed[id]; ok {
+			sessions = append(sessions, rs)
+		}
+	}
+	return sessions
+}
+
+func recordPortableListing(sessions []session.RunningSession, lost bool) {
+	listed := make(map[int]session.RunningSession, len(sessions))
+	order := make([]int, 0, len(sessions))
+	marks := map[int]bool{}
+	for _, rs := range sessions {
+		listed[rs.WindowID] = rs
+		order = append(order, rs.WindowID)
+		if lost {
+			marks[rs.WindowID] = true
+		}
+	}
+	portableIDs.Lock()
+	portableIDs.listed, portableIDs.order, portableIDs.lost = listed, order, marks
+	portableIDs.Unlock()
+}
+
+// lostPortableSessions answers an empty listing that follows a listing with
+// sessions in it. A server exits with its last session, so an empty listing
+// is the ordinary end of closing everything; it is an outage only for the
+// sessions the registry does not say were ended or seen to exit. Those ran on
+// a server that is gone, and they are returned to stay on the list, marked.
+func lostPortableSessions() []session.RunningSession {
+	previous := lastPortableListing()
+	if len(previous) == 0 {
+		return nil
+	}
+	store := Portable.Registry
+	if store == nil {
+		var err error
+		if store, err = runtimesession.NewStore(runtimesession.DefaultRegistryPath()); err != nil {
+			return nil
+		}
+	}
+	registry, err := store.Load()
+	if err != nil {
+		return nil
+	}
+	var lost []session.RunningSession
+	for _, rs := range previous {
+		if rs.RuntimeSessionID == "" {
+			continue
+		}
+		record, err := registry.Get(rs.RuntimeSessionID)
+		if err != nil {
+			continue
+		}
+		// Still live means nothing has reconciled the registry yet; the
+		// server it names is gone all the same.
+		if record.State != runtimesession.StateLive && record.Outcome() != runtimesession.OutcomeLost {
+			continue
+		}
+		rs.State, rs.Looping, rs.AgentTurn, rs.ASLPhases, rs.Unseen, rs.Reason = "error", false, nil, nil, false, ""
+		lost = append(lost, rs)
+	}
+	return lost
+}
 
 // PortableSession returns the portable session the last discovery listed
 // under id.
@@ -156,9 +280,15 @@ func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.
 				}
 				running = listed
 			}
-			portable, err := portableSessions(cfg)
-			if err != nil {
-				return nil, err
+			// This answers "is it running", so rows an outage kept on the
+			// list are not an answer: a backend that cannot be read is an
+			// error, and a lost session is not running.
+			portable, outage := portableSessions(cfg)
+			if outage != nil {
+				if outage.Err != nil {
+					return nil, outage
+				}
+				portable = nil
 			}
 			return append(running, portable...), nil
 		}
@@ -174,24 +304,31 @@ func LaunchesInKitty() bool {
 
 // portableSessions lists the sessions on the portable backends, each carrying
 // its process-local ID as both tab and window ID.
-func portableSessions(cfg *config.Config) ([]session.RunningSession, error) {
+//
+// A backend that cannot be read, or whose server went away under sessions
+// nobody ended, does not empty the list: the last sessions listed come back
+// with a PortableOutage saying which of the two happened.
+func portableSessions(cfg *config.Config) ([]session.RunningSession, *PortableOutage) {
 	if Portable.Tmux == nil {
 		return nil, nil
 	}
 	panes, err := Portable.Tmux.Discover()
 	if err != nil {
-		return nil, err
+		kept := lastPortableListing()
+		return kept, &PortableOutage{Err: err, Kept: len(kept)}
+	}
+	if len(panes) == 0 {
+		if lost := lostPortableSessions(); len(lost) > 0 {
+			recordPortableListing(lost, true)
+			return lost, &PortableOutage{Lost: len(lost)}
+		}
 	}
 	sessions := session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg)
-	listed := make(map[int]session.RunningSession, len(sessions))
 	for i := range sessions {
 		id := portableID(sessions[i])
 		sessions[i].WindowID, sessions[i].TabID = id, id
-		listed[id] = sessions[i]
 	}
-	portableIDs.Lock()
-	portableIDs.listed = listed
-	portableIDs.Unlock()
+	recordPortableListing(sessions, false)
 	return sessions, nil
 }
 

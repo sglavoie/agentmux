@@ -10,6 +10,10 @@ import (
 type EventsExport struct {
 	EventsByWindow map[int][]SessionEvent
 	WindowMetadata map[int]WindowDebugMetadata
+	// RuntimeSlots names the runtime session bound to each exported slot
+	// that has one. A session on a backend other than Kitty is exported
+	// under a slot only the daemon can name; this is what says whose it is.
+	RuntimeSlots map[int]RuntimeSlot
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by
@@ -69,15 +73,21 @@ type ExportDaemonMetadata struct {
 // ExportWindow is one per-window investigation entry in the current payload.
 // Durable fields come from the daemon; Live is joined at export time from
 // Kitty/session lookups on a best-effort basis.
+//
+// RuntimeSessionID and Backend are set when a runtime session holds the
+// entry. For a backend other than Kitty WindowID is then the daemon's slot
+// for that session, not a Kitty window, and Live is never found.
 type ExportWindow struct {
-	WindowID int                 `json:"window_id"`
-	Stats    WindowDebugStats    `json:"stats"`
-	Durable  WindowDebugDurable  `json:"durable"`
-	Renderer WindowDebugRenderer `json:"renderer"`
-	Shadow   WindowDebugShadow   `json:"shadow"`
-	Watchdog WindowDebugWatchdog `json:"watchdog"`
-	Live     WindowLiveMetadata  `json:"live"`
-	Events   []SessionEvent      `json:"events"`
+	WindowID         int                 `json:"window_id"`
+	RuntimeSessionID string              `json:"runtime_session_id,omitempty"`
+	Backend          string              `json:"backend,omitempty"`
+	Stats            WindowDebugStats    `json:"stats"`
+	Durable          WindowDebugDurable  `json:"durable"`
+	Renderer         WindowDebugRenderer `json:"renderer"`
+	Shadow           WindowDebugShadow   `json:"shadow"`
+	Watchdog         WindowDebugWatchdog `json:"watchdog"`
+	Live             WindowLiveMetadata  `json:"live"`
+	Events           []SessionEvent      `json:"events"`
 }
 
 // WindowLiveMetadata is the best-effort Kitty/session join captured at export

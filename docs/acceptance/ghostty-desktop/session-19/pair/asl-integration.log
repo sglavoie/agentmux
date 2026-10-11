@@ -1,0 +1,3 @@
+AMX_ASL_INTEGRATION=1 go test -count=1 -run TestInstalledBridge ./internal/aslbridge ./internal/daemon
+ok  	github.com/sglavoie/agentmux/internal/aslbridge	1.892s
+ok  	github.com/sglavoie/agentmux/internal/daemon	19.248s

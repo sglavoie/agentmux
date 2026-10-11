@@ -43,11 +43,20 @@ app's `amxBinaryPath`, which restores the world and runs the bundle's own
 - `tmux` (`drive_tmux.sh`, `isolated-tmux.log`): the dashboard and the overview
   on the tmux backend with no Kitty in their environment. The surface runs in
   a window of an observer tmux on a socket of its own, which is only a screen
-  recorder and a keyboard; it is headless. Twelve workflows: empty dashboard,
+  recorder and a keyboard; it is headless. Sixteen workflows: empty dashboard,
   launch, attach and detach with a hook in between, session actions and
   utility views, a Kitty-only command that says why it is unavailable,
   restart, Past Sessions and continuity, a worktree fork, Plans, the overview,
-  the Kitty-only pickers, and close.
+  the pickers as portable views of a tmux session (W11), event export selected
+  by runtime session (W13), a stop held for confirmation and released at its
+  deadline and the session marked seen when a terminal attaches (W14), the
+  context-limit banner read off a pane nobody is attached to (W15), close, and
+  the private server killed under running agents with the list kept (W16).
+  W13 to W16 do not go through the dashboard: they type at one agent through
+  the private server, which attaches nothing, and read what the daemon holds.
+- `pair` (`pair.sh`, `../pair/`): not on the MacBook and not part of `run.sh`.
+  The isolated installed pair, headless on the Studio; see the script's
+  header.
 - `kitty` (`drive_kitty.sh`, `isolated-kitty-legacy.log` and
   `isolated-kitty-tmux.log`): a real Kitty window on the MacBook, driven and
   read with `kitten @ send-text`, `send-key`, `get-text`, and `ls`. First the
@@ -72,7 +81,21 @@ app's `amxBinaryPath`, which restores the world and runs the bundle's own
 Every `PASS` or `FAIL` line in a log is one observed condition, and each log
 ends with its counts.
 
-## What was run more than once, and why
+## Two rounds
+
+The session ran in two rounds. The first (on fcd31c0b plus the working tree
+of the time) recorded the live runs and found nine matrix rows without
+evidence. The second, after the changes that gave those rows their behaviour
+and tests (the daemon reads tmux panes, a terminal attaching marks a session
+seen, the TUI keeps tmux rows through an outage, the pickers are portable,
+event export selects by runtime session), rebuilt the bundle and ran `tmux`,
+`kitty`, `packaged`, `down`, and the Session 17 installation driver again.
+The logs in `../live/` and `../packaged/` are the second round's, each once,
+with no failed pass before it. `isolated-install-cockpit.log` is the first
+round's rehearsal and was not repeated: it is of the earlier tree. The first
+round's logs are in the repository's history at 1510134c.
+
+## What was run more than once in the first round, and why
 
 - `tmux` twice. The first pass failed two steps in the overview case: the
   driver sent F12 and `q` before the attach it had just asked for had
@@ -91,6 +114,13 @@ ends with its counts.
   pass" is the world as the first run left it, less the configuration change,
   which the script applies between its passes.
 - `kitty` once.
+
+In the second round `pair.sh` ran three times. Its first run compared the
+clone with the source by `diff -r`, which the source's symlink loops made
+noisy; the script now compares tree hashes. Its second run passed, and was
+followed by one more Go change (the lifecycle tests' startup probe), so it was
+run a third time on the final tree: that one is the record in `../pair/`. All
+three passed every recipe.
 
 ## What the rehearsal found
 

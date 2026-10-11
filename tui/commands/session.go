@@ -63,6 +63,13 @@ func CloseSessionRow(client kitty.KittyClient, cfg *config.Config, rs session.Ru
 	if !IsPortable(rs) {
 		return Close(client, rs.TabID)
 	}
+	if PortableLost(rs) {
+		// Its server is gone: there is no agent to end, only a row to drop.
+		return func() tea.Msg {
+			dismissPortable(rs.WindowID)
+			return ActionDoneMsg{}
+		}
+	}
 	return func() tea.Msg {
 		result, err := Registry.Execute(context.Background(), TerminalDependencies(client, cfg), actions.Close, actions.Request{Session: &rs, Confirmed: true})
 		if err != nil {

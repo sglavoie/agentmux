@@ -36,7 +36,8 @@ var daemonCmd = &cobra.Command{
 
 func init() {
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsWindow, "window", 0, "restrict export to a single Kitty window ID")
-	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsCurrentWindow, "current-window", false, "resolve the target window from $KITTY_WINDOW_ID")
+	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsCurrentWindow, "current-window", false, "restrict export to the session this is typed in ($AMX_RUNTIME_SESSION_ID, else $KITTY_WINDOW_ID)")
+	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsRuntime, "runtime-session", "", "restrict export to a single runtime session ID")
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsLast, "last", 0, "keep only the last N events per exported window (0 = no limit)")
 	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "write JSON to this file instead of stdout")
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "pretty-print JSON with 2-space indent")

@@ -51,6 +51,12 @@ func startPublishedDaemon(
 ) chan error {
 	t.Helper()
 
+	// The startup probe is the daemon asking itself for health, bounded in
+	// production by the 250ms a hook may wait. Under the stress gate's load a
+	// healthy daemon can miss that, and these scenarios are not about it.
+	if deps.startupProbeBudget == 0 {
+		deps.startupProbeBudget = testLivenessGrace
+	}
 	published := make(chan struct{})
 	inner := deps.afterStartupPublication
 	deps.afterStartupPublication = func() {

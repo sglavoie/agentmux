@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -44,7 +45,15 @@ func HarnessColorMap(cfg *config.Config) map[string]string {
 // override-launched rows keep the project's visual identity on the title and
 // badge. Falls back to the running account color when the project is not
 // configured (orphan tab).
+//
+// A color the operator picked for the session itself comes first: it is the
+// one thing here that was chosen for this row and not derived for it.
 func ProjectIdentityColor(s session.RunningSession, acctColor map[string]string, cfg *config.Config) string {
+	if s.Color != "" {
+		if _, err := palette.Lookup(s.Color); err == nil {
+			return s.Color
+		}
+	}
 	colorName := acctColor[s.EffectiveProfile()]
 	if cfg == nil {
 		return colorName

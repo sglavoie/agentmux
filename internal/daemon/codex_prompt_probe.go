@@ -137,6 +137,11 @@ func (h *Handler) probeCodexBinding(
 		return
 	}
 	if titleParts.State == "stop" {
+		if binding.OnRuntimeBackend() {
+			// The cleared-screen check reads a window's whole scrollback
+			// through Kitty; it has no reader for another backend's pane.
+			return
+		}
 		h.probeCodexClearWindow(now, binding, titleParts, userVars, screens)
 		return
 	}

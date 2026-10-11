@@ -117,14 +117,3 @@ func attachCommandFor(server backend.TargetLauncher) func(session.RunningSession
 		return attacher.AttachCommand(rs.PaneRef())
 	}
 }
-
-// requireKittyTab refuses a picker that edits a Kitty tab's presentation when
-// there is no Kitty tab to edit. A tab color and a tab icon are things only
-// Kitty draws; in any other terminal the picker would have nothing to apply
-// its choice to, so it says so instead of failing on a Kitty call.
-func requireKittyTab(command, what string) error {
-	if insideKitty() {
-		return nil
-	}
-	return fmt.Errorf("%s sets a Kitty tab's %s, and this terminal is not Kitty: sessions on the tmux backend have no tab %s to set", command, what, what)
-}

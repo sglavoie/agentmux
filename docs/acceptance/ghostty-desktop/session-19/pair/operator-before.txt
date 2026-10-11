@@ -1,0 +1,4 @@
+e2b3e279d5dea95b /Users/sglavoie/.local/bin/amx /Users/sglavoie/.local/bin/amx
+4d5184046ac13ca6 /Users/sglavoie/scripts/bin/.local/bin/agent-session-loop /Users/sglavoie/.local/bin/asl
+092734d9fda44119 /Users/sglavoie/.config/agent-mux/config.toml /Users/sglavoie/.config/agent-mux/config.toml
+process 4419 /Users/sglavoie/.local/bin/amx daemon start

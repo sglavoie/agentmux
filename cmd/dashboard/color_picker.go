@@ -19,11 +19,17 @@ func ColorPickerCommand() *cobra.Command { return colorPickerCmd }
 var colorPickerCmd = &cobra.Command{
 	Use:   "color-picker",
 	Short: "Set the current tab's color (overlay picker)",
+	Long: `Pick the color of the Kitty tab this is opened on, as an overlay.
+
+Outside Kitty the picker opens in this terminal and colors a tmux session
+instead: the one named by --runtime-session, else the one the command is typed
+in, else the only one running. The dashboard draws that session in the color.`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireKittyTab("color-picker", "color"); err != nil {
-			return err
+		if portablePickerRequested(cmd) {
+			return runPortableColorPicker(cmd)
 		}
-		client := cli.NewKittyClient()
+		client := newColorPickerClient()
 		if focusExistingColorPicker(client) {
 			return nil
 		}
@@ -40,8 +46,19 @@ var colorPickerCmd = &cobra.Command{
 		}
 
 		ctx := resolveColorPickerContext(client, tab, windowID)
-		return customization.RunColorOverlay(ctx)
+		return runColorPickerOverlay(ctx)
 	},
+}
+
+var (
+	newColorPickerClient  = func() kitty.KittyClient { return cli.NewKittyClient() }
+	loadPickerConfig      = config.LoadDefault
+	runColorPickerOverlay = customization.RunColorOverlay
+)
+
+func init() {
+	addPickerSessionFlag(colorPickerCmd)
+	addPickerSessionFlag(iconPickerCmd)
 }
 
 func focusExistingColorPicker(client kitty.KittyClient) bool {

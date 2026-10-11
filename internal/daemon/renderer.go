@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
@@ -64,23 +65,35 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			snapshot, ready := h.cachedScreenProbeSnapshot()
-			if !ready {
-				continue
-			}
-			h.runScreenProbesWithSnapshot(now, snapshot)
+			h.runScreenProbeTick(now)
 		}
 	}
 }
 
-func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot probes.Snapshot) {
-	// One visible-screen observation per source pane for the whole tick. Beyond
-	// halving Kitty round-trips for a Claude pane (two probes) and a bolted
-	// Codex pane (prompt then idle), this is what makes the probes below
-	// classify the SAME frame — closing the race where the context-limit veto
-	// inside the idle classifier was evaluated against a different capture than
-	// the one that decided the banner.
+// runScreenProbeTick is one pass of every screen probe: the Kitty windows of
+// the cached snapshot when there is one, then the sessions on other backends,
+// which need no Kitty at all. Both halves share the tick's screen cache.
+func (h *Handler) runScreenProbeTick(now time.Time) {
 	screens := h.screenTextCacheFor()
+	if snapshot, ready := h.cachedScreenProbeSnapshot(); ready {
+		h.runScreenProbesWithScreens(now, snapshot, screens)
+	}
+	h.probeRuntimeScreens(now, screens)
+}
+
+func (h *Handler) runScreenProbesWithSnapshot(now time.Time, snapshot probes.Snapshot) {
+	h.runScreenProbesWithScreens(now, snapshot, h.screenTextCacheFor())
+}
+
+// runScreenProbesWithScreens runs the Kitty half of a tick over screens.
+//
+// One visible-screen observation per source pane for the whole tick. Beyond
+// halving Kitty round-trips for a Claude pane (two probes) and a bolted
+// Codex pane (prompt then idle), this is what makes the probes below
+// classify the SAME frame — closing the race where the context-limit veto
+// inside the idle classifier was evaluated against a different capture than
+// the one that decided the banner.
+func (h *Handler) runScreenProbesWithScreens(now time.Time, snapshot probes.Snapshot, screens *activity.ScreenTextCache) {
 	h.probeCodexScreenPromptsWithSnapshot(now, snapshot, screens)
 	// Context-limit probing runs before the idle stop probe so a
 	// context-limited Claude tab is settled to the error state first; the idle

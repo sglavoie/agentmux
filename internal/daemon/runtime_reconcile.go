@@ -82,6 +82,7 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	if err != nil {
 		slog.Debug("maintenance: runtime session reconciliation incomplete", "err", err)
 	}
+	h.observeRuntimeViewers(report.Viewed, finished)
 	if !report.Empty() {
 		// The directory answers a known session from the version it loaded;
 		// what was just recorded has to be the version the restore and the
@@ -100,5 +101,42 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	}
 	for _, client := range report.Detached {
 		slog.Info("maintenance: detached a terminal competing with a session's owner", "client", client.Name, "session", client.Group.ID)
+	}
+}
+
+// observeRuntimeViewers is the focus observation of a session with no Kitty
+// window. A Kitty pane is seen when a snapshot shows it focused
+// (refreshFocusFromSnapshotLocked); a tmux session has no focus to read, but
+// its server knows when a terminal attached to it and when that terminal was
+// last used. Either one, at or after the moment the session came to rest, is
+// the operator having looked at it, and clears the unseen bit.
+//
+// A terminal that is merely still attached proves nothing: the desktop
+// workspace keeps one attached to every session for as long as its window is
+// open. Only an attach or a use that is not older than the rest counts. tmux
+// reports both in whole seconds, so the rest is compared at the same grain.
+//
+// Like the Kitty observation this only ever clears the bit, and the clear is
+// a durable mutation: it marks the slot dirty so the runtime checkpoint
+// records it. Kitty slots are left to the Kitty observation.
+func (h *Handler) observeRuntimeViewers(viewed []tmux.Viewed, observedAt time.Time) {
+	if len(viewed) == 0 {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	for _, viewing := range viewed {
+		slot, ok := h.runtimeRoutes.byRuntime[string(viewing.ID)]
+		if !ok || !isRuntimeSyntheticSlot(slot) {
+			continue
+		}
+		st, ok := h.windowStateLocked(slot)
+		if !ok || !st.Unseen || viewing.At.Before(st.PresentationChangedAt.Truncate(time.Second)) {
+			continue
+		}
+		st.Unseen = false
+		st.PresentationChangedAt = observedAt
+		h.markWindowDirtyLocked(slot)
+		h.companionDirty()
 	}
 }

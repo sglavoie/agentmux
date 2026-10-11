@@ -2,6 +2,7 @@ package probes
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/conversation"
@@ -43,19 +44,62 @@ type Binding struct {
 	TerminalAt          int64
 	RecoverySource      protocol.SourceID
 	RecoveryAt          int64
+	// RuntimeInstance and RuntimePane, when set, say the producer pane is on a
+	// backend other than Kitty. SourceWindowID and TargetWindowID are then
+	// the daemon's slot for the runtime session, not a Kitty window; the
+	// binding comes from no Kitty window tree and so carries no epochs, and
+	// its screen must be the named pane of that exact instance generation.
+	RuntimeInstance runtimesession.BackendInstance
+	RuntimePane     backend.Ref
+}
+
+// OnRuntimeBackend reports a binding whose pane is on a backend other than
+// Kitty.
+func (b Binding) OnRuntimeBackend() bool { return !b.RuntimePane.IsZero() }
+
+// runtimeSlotPanePrefix marks the reference a runtime binding's pane is read
+// under. No backend issues such an ID: Kitty's are decimal and tmux's start
+// with a percent sign.
+const runtimeSlotPanePrefix = "slot:"
+
+// RuntimeSlotPane is how a per-tick screen cache keys the pane behind a
+// daemon slot. Pane IDs repeat across servers, so the slot is what is unique;
+// whoever reads the screen maps it back to the pane (RuntimeSlotOfPane).
+func RuntimeSlotPane(slot int) backend.Ref {
+	return backend.PaneID(runtimeSlotPanePrefix + strconv.Itoa(slot))
+}
+
+// RuntimeSlotOfPane reports the slot a RuntimeSlotPane reference names.
+func RuntimeSlotOfPane(pane backend.Ref) (int, bool) {
+	raw, ok := strings.CutPrefix(pane.ID, runtimeSlotPanePrefix)
+	if !ok || pane.Scope != backend.ScopePane {
+		return 0, false
+	}
+	slot, err := strconv.Atoi(raw)
+	if err != nil || slot <= 0 || strconv.Itoa(slot) != raw {
+		return 0, false
+	}
+	return slot, true
 }
 
 // SourcePane names the producer pane as a backend reference, which is how the
-// screen readers address it. A Binding is built from the Kitty window tree, so
-// the reference is that window's ID.
+// screen readers address it. A Binding built from the Kitty window tree names
+// that window's ID; one on another backend names its slot.
 func (b Binding) SourcePane() backend.Ref {
+	if b.OnRuntimeBackend() {
+		return RuntimeSlotPane(b.SourceWindowID)
+	}
 	return backend.PaneID(strconv.Itoa(b.SourceWindowID))
 }
 
 // ScreenExpectation is what a screen read for this binding must describe: the
-// producer pane, on Kitty. The binding's epochs already tie it to one Kitty
-// window tree, so no address or generation is named here.
+// producer pane. On Kitty the binding's epochs already tie it to one window
+// tree, so no address or generation is named; on another backend there are no
+// epochs, and the instance generation is what ties the read to the pane.
 func (b Binding) ScreenExpectation() ScreenExpectation {
+	if b.OnRuntimeBackend() {
+		return ScreenExpectation{Instance: b.RuntimeInstance, Pane: b.RuntimePane}
+	}
 	return ScreenExpectation{
 		Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendKitty},
 		Pane:     b.SourcePane(),

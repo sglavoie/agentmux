@@ -74,6 +74,11 @@ type RunningSession struct {
 	// RuntimeSessionID is the runtime session the launch registered, when it
 	// registered one.
 	RuntimeSessionID runtimesession.ID
+	// Color is the palette color the operator picked for this session, on a
+	// backend that keeps the pick in the session's metadata (ColorVar). Empty
+	// means the profile's color, and is always empty for a Kitty tab, whose
+	// pick Kitty itself draws.
+	Color string
 }
 
 // BackendKind is the backend hosting the session; Kitty when unrecorded.

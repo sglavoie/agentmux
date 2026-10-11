@@ -94,6 +94,7 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 	// failed first refresh still select the caller's tab on the retry.
 	m.initialSourceWindowID = 0
 	m.err = nil
+	m.portableErr = msg.PortableErr
 	// Capture the prior cursor's item identity before the list is rebuilt so we
 	// can restore it post-refresh. An empty list, or a cursor that is not on an
 	// item, yields the zero identity — there is no prior selection to preserve.

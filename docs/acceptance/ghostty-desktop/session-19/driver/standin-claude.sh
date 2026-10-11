@@ -2,8 +2,9 @@
 # Stand-in harness: no model, no network. Installed as the world's `claude`.
 # It prints who it is, reports itself to the daemon with real hooks through
 # `amx hook-indicator`, and then reads commands from its terminal: `ask` sends
-# a PermissionRequest hook, `work` a UserPromptSubmit hook, `quit` ends it,
-# and anything else is echoed.
+# a PermissionRequest hook, `work` a UserPromptSubmit hook, `done` a Stop hook,
+# `limit` prints Claude's context-limit banner, `quit` ends it, and anything
+# else is echoed.
 case "$1" in --version) echo "2.1.296 (stand-in)"; exit 0;; esac
 sid="standin-$$"; prev=""
 for a in "$@"; do
@@ -23,6 +24,8 @@ while IFS= read -r line; do
   case "$line" in
     ask) hook PermissionRequest ',"tool_name":"Bash"'; echo "asked ($i)";;
     work) hook UserPromptSubmit ',"prompt":"x"'; echo "working ($i)";;
+    done) hook Stop ''; echo "done ($i)";;
+    limit) echo "Context limit reached · /compact or /clear to continue";;
     quit) exit 0;;
     *) echo "echo[$i]: $line";;
   esac

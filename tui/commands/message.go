@@ -84,6 +84,10 @@ type SessionsMsg struct {
 	Topology       TopologyFreshness
 	HostWindowID   int
 	HostTabID      int
+	// PortableErr reports that the tmux rows in Sessions were not read by
+	// this refresh: the backend failed or its server is gone, and the rows
+	// are the last ones listed. Nil on an ordinary refresh.
+	PortableErr error
 }
 
 // ActiveLoopsMsg carries the latest active agent-session-loop discovery result.

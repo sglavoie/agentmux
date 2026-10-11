@@ -1,0 +1,28 @@
+== installed pair ==
+amx version 0.8.0 (revision 1510134cb9a7-dirty, built 2026-10-10T20:02:19Z, go1.27.1, sha256:bcdc97df1ea3)
+asl: /private/tmp/amxs19-pair.X1B0PS/home/.local/bin/asl -> /private/tmp/amxs19-pair.X1B0PS/asl/bin/.local/bin/agent-session-loop
+== overseer smoke ==
+test_the_installed_binary_answers_the_history_contract (tests.test_asl_overseer_paired_smoke.InstalledCompatibilityTests.test_the_installed_binary_answers_the_history_contract) ... ok
+test_the_installed_binary_answers_the_policy_contract (tests.test_asl_overseer_paired_smoke.InstalledCompatibilityTests.test_the_installed_binary_answers_the_policy_contract) ... ok
+test_an_authorized_checkpoint_commits_the_runs_own_work (tests.test_asl_overseer_paired_smoke.InstalledLoopTests.test_an_authorized_checkpoint_commits_the_runs_own_work)
+A checkpoint an installed pair authorizes, and the commit it lands. ... ok
+test_an_authorized_resume_restarts_the_run (tests.test_asl_overseer_paired_smoke.InstalledLoopTests.test_an_authorized_resume_restarts_the_run)
+The resume path, with the launcher replaced and nothing else. ... ok
+test_watch_finds_the_paused_run_and_inspect_carries_the_evidence (tests.test_asl_overseer_paired_smoke.InstalledLoopTests.test_watch_finds_the_paused_run_and_inspect_carries_the_evidence)
+Discovery and the evidence packet, each authorized before it reads. ... ok
+test_the_agentmux_half_is_the_installed_binary (tests.test_asl_overseer_paired_smoke.InstalledPairTests.test_the_agentmux_half_is_the_installed_binary)
+The AgentMux half: every invocation goes to the installed file. ... ok
+test_the_installed_wrapper_resolves_to_the_package_under_test (tests.test_asl_overseer_paired_smoke.InstalledPairTests.test_the_installed_wrapper_resolves_to_the_package_under_test)
+The ASL half: `asl` on PATH is this checkout, not another one. ... ok
+test_the_world_the_gate_runs_in_is_the_operators_in_nothing (tests.test_asl_overseer_paired_smoke.InstalledPairTests.test_the_world_the_gate_runs_in_is_the_operators_in_nothing)
+Repositories, state, configuration and processes are all throwaway. ... ok
+test_an_older_component_is_refused_on_the_history_contract (tests.test_asl_overseer_paired_smoke.OlderComponentTests.test_an_older_component_is_refused_on_the_history_contract) ... ok
+test_an_older_component_is_refused_on_the_policy_contract (tests.test_asl_overseer_paired_smoke.OlderComponentTests.test_an_older_component_is_refused_on_the_policy_contract) ... ok
+test_an_older_component_leaves_the_action_undone (tests.test_asl_overseer_paired_smoke.OlderComponentTests.test_an_older_component_leaves_the_action_undone)
+The refusal is the outcome, not a step on the way to one. ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 3.314s
+
+OK
+overseer-integration: ok

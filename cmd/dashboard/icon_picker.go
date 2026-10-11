@@ -26,10 +26,15 @@ func IconPickerCommand() *cobra.Command { return iconPickerCmd }
 var iconPickerCmd = &cobra.Command{
 	Use:   "icon-picker",
 	Short: "Set or clear the current tab's harness icon (overlay picker)",
-	Args:  cobra.NoArgs,
+	Long: `Pick the harness icon of the Kitty tab this is opened on, as an overlay.
+
+Outside Kitty the picker opens in this terminal and edits the title of a tmux
+session instead: the one named by --runtime-session, else the one the command
+is typed in, else the only one running.`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireKittyTab("icon-picker", "icon"); err != nil {
-			return err
+		if portablePickerRequested(cmd) {
+			return runPortableIconPicker(cmd)
 		}
 		client := newIconPickerClient()
 		if focusExistingIconPicker(client) {

@@ -15,12 +15,14 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/spf13/cobra"
 )
 
 var (
 	daemonExportEventsWindow        int
 	daemonExportEventsCurrentWindow bool
+	daemonExportEventsRuntime       string
 	daemonExportEventsLast          int
 	daemonExportEventsOutput        string
 	daemonExportEventsPretty        bool
@@ -41,6 +43,10 @@ func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health,
 			WindowID: id,
 			Live:     liveByID[id],
 			Events:   []protocol.SessionEvent{},
+		}
+		if bound, ok := snapshot.RuntimeSlots[id]; ok {
+			window.RuntimeSessionID = bound.RuntimeSessionID
+			window.Backend = bound.Backend
 		}
 		if durable, ok := snapshot.WindowMetadata[id]; ok {
 			window.Stats = durable.Stats
@@ -71,29 +77,91 @@ func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health,
 	}
 }
 
-func daemonExportCurrentWindowID() (int, error) {
+// daemonExportTarget is what one export is restricted to: a Kitty window, a
+// runtime session, or neither (everything).
+type daemonExportTarget struct {
+	windowID int
+	runtime  string
+}
+
+// runtimeSessionExporter is the part of the daemon client that exports by
+// runtime session. It is asked for separately so the three families sharing
+// cli.DaemonExportClient do not all have to grow a method only this one uses.
+type runtimeSessionExporter interface {
+	ExportRuntimeSessionEvents(runtimeSessionID string) (protocol.EventsExport, error)
+}
+
+func daemonExportRuntimeSession(raw, source string) (daemonExportTarget, error) {
+	id, err := runtimesession.ParseID(raw)
+	if err != nil {
+		return daemonExportTarget{}, fmt.Errorf("%s requires a valid runtime session ID, got %q", source, raw)
+	}
+	return daemonExportTarget{runtime: string(id)}, nil
+}
+
+// daemonExportCurrentTarget names the session this command was typed in. A
+// managed session says so itself (AMX_RUNTIME_SESSION_ID) and that wins: a
+// tmux pane inherits whatever KITTY_WINDOW_ID the launching terminal had, so
+// the Kitty variable is only believed when no runtime session is named. This
+// is the rule the hook client follows.
+func daemonExportCurrentTarget() (daemonExportTarget, error) {
+	if raw := os.Getenv(runtimesession.EnvVar); raw != "" {
+		return daemonExportRuntimeSession(raw, "--current-window with "+runtimesession.EnvVar)
+	}
 	s := os.Getenv(cli.WindowIDEnv)
 	if s == "" {
-		return 0, fmt.Errorf("--current-window requires KITTY_WINDOW_ID to be set")
+		return daemonExportTarget{}, fmt.Errorf("--current-window requires %s or KITTY_WINDOW_ID to be set", runtimesession.EnvVar)
 	}
 	id, err := strconv.Atoi(s)
 	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("--current-window requires a valid KITTY_WINDOW_ID, got %q", s)
+		return daemonExportTarget{}, fmt.Errorf("--current-window requires a valid KITTY_WINDOW_ID, got %q", s)
 	}
-	return id, nil
+	return daemonExportTarget{windowID: id}, nil
 }
 
-func resolveDaemonExportWindowID(cmd *cobra.Command) (int, error) {
-	if daemonExportEventsCurrentWindow && (daemonExportEventsWindow != 0 || cmd.Flags().Changed("window")) {
-		return 0, fmt.Errorf("--window and --current-window cannot be used together")
+func resolveDaemonExportTarget(cmd *cobra.Command) (daemonExportTarget, error) {
+	window := daemonExportEventsWindow != 0 || cmd.Flags().Changed("window")
+	runtime := daemonExportEventsRuntime != "" || cmd.Flags().Changed("runtime-session")
+	if daemonExportEventsCurrentWindow && window {
+		return daemonExportTarget{}, fmt.Errorf("--window and --current-window cannot be used together")
+	}
+	if runtime && (window || daemonExportEventsCurrentWindow) {
+		return daemonExportTarget{}, fmt.Errorf("--runtime-session cannot be used with --window or --current-window")
 	}
 	if daemonExportEventsWindow < 0 {
-		return 0, fmt.Errorf("--window must be >= 0")
+		return daemonExportTarget{}, fmt.Errorf("--window must be >= 0")
+	}
+	if runtime {
+		return daemonExportRuntimeSession(daemonExportEventsRuntime, "--runtime-session")
 	}
 	if daemonExportEventsCurrentWindow {
-		return daemonExportCurrentWindowID()
+		return daemonExportCurrentTarget()
 	}
-	return daemonExportEventsWindow, nil
+	return daemonExportTarget{windowID: daemonExportEventsWindow}, nil
+}
+
+// exportDaemonEvents asks the daemon for the target's snapshot and returns
+// the slot the export is filed under: the Kitty window asked for, or the slot
+// the daemon holds for the runtime session.
+func exportDaemonEvents(c cli.DaemonExportClient, target daemonExportTarget) (protocol.EventsExport, int, error) {
+	if target.runtime == "" {
+		snapshot, err := c.ExportEvents(target.windowID)
+		return snapshot, target.windowID, err
+	}
+	exporter, ok := c.(runtimeSessionExporter)
+	if !ok {
+		return protocol.EventsExport{}, 0, fmt.Errorf("this daemon client cannot export by runtime session")
+	}
+	snapshot, err := exporter.ExportRuntimeSessionEvents(target.runtime)
+	if err != nil {
+		return protocol.EventsExport{}, 0, err
+	}
+	for slot, bound := range snapshot.RuntimeSlots {
+		if bound.RuntimeSessionID == target.runtime {
+			return snapshot, slot, nil
+		}
+	}
+	return protocol.EventsExport{}, 0, fmt.Errorf("the daemon named no slot for runtime session %s", target.runtime)
 }
 
 var daemonExportEventsCmd = &cobra.Command{
@@ -103,13 +171,20 @@ var daemonExportEventsCmd = &cobra.Command{
 
 The payload is organized as a per-window array so each entry carries its own
 event list, durable daemon metadata, and best-effort live Kitty/session
-metadata without paired map lookups. Use --schema 12 for the pre-screen-decline
+metadata without paired map lookups. An entry held by a runtime session names
+it (runtime_session_id, backend); for a tmux session window_id is the daemon's
+own slot for it, not a Kitty window.
+
+--current-window selects the session the command is typed in: the runtime
+session named by AMX_RUNTIME_SESSION_ID when there is one, else the Kitty
+window named by KITTY_WINDOW_ID. --runtime-session selects one by ID. Use --schema 12 for the pre-screen-decline
 shape, --schema 11 for the pre-busy-anchor shape, --schema 10 for the pre-stop-hold shape, --schema 9 for the previous
 complete causal shape, or --schema 8 for pre-causal consumers.`,
 	Example: `  amx daemon export-events
   amx daemon export-events --current-window
   amx daemon export-events --current-window --last 25
   amx daemon export-events --window 42
+  amx daemon export-events --runtime-session rs-0123456789abcdef0123456789abcdef
   amx daemon export-events --pretty=false --output events.json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -124,13 +199,13 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 			daemonExportEventsSchema != protocol.EventsExportSchemaVersion {
 			return fmt.Errorf("--schema must be 8, 9, 10, 11, 12, or 13")
 		}
-		requestedWindowID, err := resolveDaemonExportWindowID(cmd)
+		target, err := resolveDaemonExportTarget(cmd)
 		if err != nil {
 			return err
 		}
 
 		c := newDaemonExportClient()
-		snapshot, err := c.ExportEvents(requestedWindowID)
+		snapshot, requestedWindowID, err := exportDaemonEvents(c, target)
 		if err != nil {
 			if !c.Health().Alive {
 				return fmt.Errorf("daemon not running: %w", err)

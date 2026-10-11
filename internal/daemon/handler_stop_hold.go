@@ -539,7 +539,15 @@ func (h *Handler) terminalStopHoldArmableLocked(req protocol.Request) bool {
 	if !h.stopConfirmEnabled || h.stopConfirmDelay <= 0 {
 		return false
 	}
-	if h.kittyClient == nil {
+	if isRuntimeSyntheticSlot(req.WindowID) {
+		// A session on another backend is confirmed by reading its own pane:
+		// without a reader for it, or a probe that reads its harness there,
+		// nothing could ever confirm the stop and it would only ride to the
+		// deadline.
+		if h.runtimeScreens == nil || !harnessHasRuntimeStopProbe(stopHoldTargetHarness(req)) {
+			return false
+		}
+	} else if h.kittyClient == nil {
 		// No screen read is possible, so nothing could ever confirm the stop.
 		return false
 	}

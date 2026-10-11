@@ -1,50 +1,48 @@
-== just reliability-stress  (2026-10-10T19:37:37Z, fcd31c0b + working tree)
 == isolated repetitions (x20) ==
-ok  	github.com/sglavoie/agentmux/internal/daemon	53.382s
+ok  	github.com/sglavoie/agentmux/internal/daemon	68.935s
 == isolated repetitions under -race (x20) ==
-ok  	github.com/sglavoie/agentmux/internal/daemon	65.394s
+ok  	github.com/sglavoie/agentmux/internal/daemon	82.912s
 == 4 concurrent shards (x20) under full-suite load ==
 == latency budgets (quiet machine) ==
 -- fleet budgets against the packaged tmux 3.7c
 === RUN   TestPerformance_FleetBudgets
 === RUN   TestPerformance_FleetBudgets/1-sessions-idle
-    performance_fleet_test.go:317: tmux 3.7c: launch 69ms; pass p50 5.0ms p95 5.6ms max 5.6ms (1.00 tmux clients per pass); read p50 4.9ms p95 5.4ms max 5.4ms; sweep of 1 p95 5.4ms; 4-wide round p95 6.3ms; tick p95 11.0ms of 2s; at most 1 clients at once; server 0.0% CPU, 4.4 MiB; clients 152ms CPU over 256ms
+    performance_fleet_test.go:317: tmux 3.7c: launch 74ms; pass p50 5.0ms p95 6.0ms max 6.0ms (1.00 tmux clients per pass); read p50 4.8ms p95 5.5ms max 5.5ms; sweep of 1 p95 5.5ms; 4-wide round p95 5.4ms; tick p95 11.5ms of 2s; at most 1 clients at once; server 4.0% CPU, 4.4 MiB; clients 153ms CPU over 253ms
 === RUN   TestPerformance_FleetBudgets/1-sessions-output
-    performance_fleet_test.go:317: tmux 3.7c: launch 54ms; pass p50 5.7ms p95 6.2ms max 6.3ms (1.00 tmux clients per pass); read p50 5.2ms p95 5.7ms max 5.7ms; sweep of 1 p95 5.7ms; 4-wide round p95 6.0ms; tick p95 11.9ms of 2s; at most 1 clients at once; server 99.5% CPU, 29.0 MiB; clients 169ms CPU over 281ms
+    performance_fleet_test.go:317: tmux 3.7c: launch 55ms; pass p50 5.7ms p95 6.2ms max 6.5ms (1.00 tmux clients per pass); read p50 5.1ms p95 5.4ms max 5.4ms; sweep of 1 p95 5.4ms; 4-wide round p95 5.6ms; tick p95 11.6ms of 2s; at most 1 clients at once; server 100.7% CPU, 30.5 MiB; clients 168ms CPU over 278ms
 === RUN   TestPerformance_FleetBudgets/10-sessions-idle
-    performance_fleet_test.go:317: tmux 3.7c: launch 493ms; pass p50 5.2ms p95 5.7ms max 6.3ms (1.00 tmux clients per pass); read p50 4.8ms p95 5.4ms max 6.0ms; sweep of 10 p95 54.2ms; 4-wide round p95 18.5ms; tick p95 59.9ms of 2s; at most 4 clients at once; server 6.0% CPU, 4.6 MiB; clients 720ms CPU over 827ms
+    performance_fleet_test.go:317: tmux 3.7c: launch 1065ms; pass p50 5.1ms p95 5.4ms max 5.4ms (1.00 tmux clients per pass); read p50 4.8ms p95 5.4ms max 5.8ms; sweep of 10 p95 51.6ms; 4-wide round p95 18.9ms; tick p95 57.0ms of 2s; at most 4 clients at once; server 6.1% CPU, 4.6 MiB; clients 719ms CPU over 819ms
 === RUN   TestPerformance_FleetBudgets/10-sessions-output
-    performance_fleet_test.go:317: tmux 3.7c: launch 520ms; pass p50 7.6ms p95 8.3ms max 8.5ms (1.00 tmux clients per pass); read p50 6.7ms p95 7.2ms max 7.7ms; sweep of 10 p95 69.2ms; 4-wide round p95 23.4ms; tick p95 77.4ms of 2s; at most 4 clients at once; server 100.2% CPU, 248.3 MiB; clients 794ms CPU over 1128ms
+    performance_fleet_test.go:317: tmux 3.7c: launch 522ms; pass p50 7.8ms p95 8.4ms max 8.7ms (1.00 tmux clients per pass); read p50 6.8ms p95 7.3ms max 7.7ms; sweep of 10 p95 69.5ms; 4-wide round p95 23.1ms; tick p95 77.9ms of 2s; at most 4 clients at once; server 99.5% CPU, 247.7 MiB; clients 808ms CPU over 1146ms
 === RUN   TestPerformance_FleetBudgets/30-sessions-idle
-    performance_fleet_test.go:317: tmux 3.7c: launch 2167ms; pass p50 6.2ms p95 7.0ms max 7.0ms (1.00 tmux clients per pass); read p50 4.8ms p95 5.5ms max 6.5ms; sweep of 30 p95 154.2ms; 4-wide round p95 48.5ms; tick p95 161.2ms of 2s; at most 4 clients at once; server 8.0% CPU, 4.9 MiB; clients 2007ms CPU over 2124ms
+    performance_fleet_test.go:317: tmux 3.7c: launch 1534ms; pass p50 5.9ms p95 6.3ms max 6.5ms (1.00 tmux clients per pass); read p50 4.8ms p95 5.4ms max 8.1ms; sweep of 30 p95 155.7ms; 4-wide round p95 50.4ms; tick p95 162.0ms of 2s; at most 4 clients at once; server 7.6% CPU, 5.0 MiB; clients 2001ms CPU over 2100ms
 === RUN   TestPerformance_FleetBudgets/30-sessions-output
-    performance_fleet_test.go:317: tmux 3.7c: launch 1766ms; pass p50 14.1ms p95 14.9ms max 15.0ms (1.00 tmux clients per pass); read p50 9.7ms p95 10.6ms max 12.4ms; sweep of 30 p95 304.0ms; 4-wide round p95 92.5ms; tick p95 318.9ms of 2s; at most 4 clients at once; server 99.5% CPU, 703.8 MiB; clients 2222ms CPU over 4190ms
---- PASS: TestPerformance_FleetBudgets (18.89s)
+    performance_fleet_test.go:317: tmux 3.7c: launch 1780ms; pass p50 14.1ms p95 15.3ms max 15.5ms (1.00 tmux clients per pass); read p50 9.7ms p95 10.5ms max 11.1ms; sweep of 30 p95 295.5ms; 4-wide round p95 85.9ms; tick p95 310.8ms of 2s; at most 4 clients at once; server 99.9% CPU, 704.0 MiB; clients 2201ms CPU over 4163ms
+--- PASS: TestPerformance_FleetBudgets (18.81s)
     --- PASS: TestPerformance_FleetBudgets/1-sessions-idle (0.41s)
     --- PASS: TestPerformance_FleetBudgets/1-sessions-output (1.41s)
-    --- PASS: TestPerformance_FleetBudgets/10-sessions-idle (1.52s)
-    --- PASS: TestPerformance_FleetBudgets/10-sessions-output (2.90s)
-    --- PASS: TestPerformance_FleetBudgets/30-sessions-idle (4.79s)
+    --- PASS: TestPerformance_FleetBudgets/10-sessions-idle (2.08s)
+    --- PASS: TestPerformance_FleetBudgets/10-sessions-output (2.92s)
+    --- PASS: TestPerformance_FleetBudgets/30-sessions-idle (4.13s)
     --- PASS: TestPerformance_FleetBudgets/30-sessions-output (7.86s)
 === RUN   TestPerformance_StartupPublicationBudgetWithHugeMalformedIndex
-2026/10/10 13:42:01 INFO daemon: acquiring single-instance lock socket=/tmp/amx-run-huge-index-4132374740/.local/share/agent-mux/daemon.sock lock=/tmp/amx-run-huge-index-4132374740/.local/share/agent-mux/daemon.lock
-2026/10/10 13:42:01 INFO daemon: acquired single-instance lock socket=/tmp/amx-run-huge-index-4132374740/.local/share/agent-mux/daemon.sock lock=/tmp/amx-run-huge-index-4132374740/.local/share/agent-mux/daemon.lock
-2026/10/10 13:42:01 WARN daemon: starting degraded; initial snapshot did not complete in time reason="initial kitty snapshot failed: kitty command failed: kitten @ --to unix:/tmp/kitty-692 ls\n  error: exec: \"kitten\": executable file not found in $PATH"
-2026/10/10 13:42:01 INFO daemon: started socket=/tmp/amx-run-huge-index-4132374740/.local/share/agent-mux/daemon.sock guard_duration=1s
-2026/10/10 13:42:01 INFO daemon: ready socket=/tmp/amx-run-huge-index-4132374740/.local/share/agent-mux/daemon.sock
-2026/10/10 13:42:01 INFO daemon: shutting down
-    performance_test.go:89: startup publication with huge malformed index: 43.213917ms
+2026/10/10 20:20:45 INFO daemon: acquiring single-instance lock socket=/tmp/amx-run-huge-index-4182983112/.local/share/agent-mux/daemon.sock lock=/tmp/amx-run-huge-index-4182983112/.local/share/agent-mux/daemon.lock
+2026/10/10 20:20:45 INFO daemon: acquired single-instance lock socket=/tmp/amx-run-huge-index-4182983112/.local/share/agent-mux/daemon.sock lock=/tmp/amx-run-huge-index-4182983112/.local/share/agent-mux/daemon.lock
+2026/10/10 20:20:45 WARN daemon: starting degraded; initial snapshot did not complete in time reason="initial kitty snapshot failed: kitty command failed: kitten @ --to unix:/tmp/kitty-692 ls\n  error: exec: \"kitten\": executable file not found in $PATH"
+2026/10/10 20:20:45 INFO daemon: started socket=/tmp/amx-run-huge-index-4182983112/.local/share/agent-mux/daemon.sock guard_duration=1s
+2026/10/10 20:20:45 INFO daemon: ready socket=/tmp/amx-run-huge-index-4182983112/.local/share/agent-mux/daemon.sock
+    performance_test.go:89: startup publication with huge malformed index: 47.053791ms
 --- PASS: TestPerformance_StartupPublicationBudgetWithHugeMalformedIndex (0.07s)
 === RUN   TestPerformance_ShutdownJoinBudget
-2026/10/10 13:42:01 INFO daemon: acquiring single-instance lock socket=/tmp/amx-perf-shutdown-3436482451/.local/share/agent-mux/daemon.sock lock=/tmp/amx-perf-shutdown-3436482451/.local/share/agent-mux/daemon.lock
-2026/10/10 13:42:01 INFO daemon: acquired single-instance lock socket=/tmp/amx-perf-shutdown-3436482451/.local/share/agent-mux/daemon.sock lock=/tmp/amx-perf-shutdown-3436482451/.local/share/agent-mux/daemon.lock
-2026/10/10 13:42:01 INFO daemon: initial snapshot restored socket=/tmp/amx-perf-shutdown-3436482451/.local/share/agent-mux/daemon.sock
-2026/10/10 13:42:01 INFO daemon: started socket=/tmp/amx-perf-shutdown-3436482451/.local/share/agent-mux/daemon.sock guard_duration=1s
-2026/10/10 13:42:01 INFO daemon: ready socket=/tmp/amx-perf-shutdown-3436482451/.local/share/agent-mux/daemon.sock
-2026/10/10 13:42:01 INFO daemon: shutting down
-    performance_test.go:141: shutdown request to joined Run return: 28.919125ms
---- PASS: TestPerformance_ShutdownJoinBudget (0.23s)
+2026/10/10 20:20:45 INFO daemon: acquiring single-instance lock socket=/tmp/amx-perf-shutdown-1478431757/.local/share/agent-mux/daemon.sock lock=/tmp/amx-perf-shutdown-1478431757/.local/share/agent-mux/daemon.lock
+2026/10/10 20:20:45 INFO daemon: acquired single-instance lock socket=/tmp/amx-perf-shutdown-1478431757/.local/share/agent-mux/daemon.sock lock=/tmp/amx-perf-shutdown-1478431757/.local/share/agent-mux/daemon.lock
+2026/10/10 20:20:45 INFO daemon: initial snapshot restored socket=/tmp/amx-perf-shutdown-1478431757/.local/share/agent-mux/daemon.sock
+2026/10/10 20:20:45 INFO daemon: started socket=/tmp/amx-perf-shutdown-1478431757/.local/share/agent-mux/daemon.sock guard_duration=1s
+2026/10/10 20:20:45 INFO daemon: ready socket=/tmp/amx-perf-shutdown-1478431757/.local/share/agent-mux/daemon.sock
+2026/10/10 20:20:45 INFO daemon: shutting down
+    performance_test.go:141: shutdown request to joined Run return: 27.874459ms
+--- PASS: TestPerformance_ShutdownJoinBudget (0.31s)
 PASS
-ok  	github.com/sglavoie/agentmux/internal/daemon	19.402s
+ok  	github.com/sglavoie/agentmux/internal/daemon	19.432s
 reliability-stress: ok
-== exit 0 (2026-10-10T19:42:01Z)
+exit status: 0 at 2026-10-11T02:20:45Z

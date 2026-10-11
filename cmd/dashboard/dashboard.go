@@ -33,6 +33,14 @@
 // utility views. It strips every session and Kitty variable first, so a view
 // never needs Kitty and never speaks as a managed session.
 //
+// Outside Kitty there are no Kitty tabs, and the rule that each surface is
+// open once is a rule about them: the dashboard, the overview, and the
+// keybinding reference open in the terminal they are typed in and look for no
+// other instance. The two pickers become portable views there
+// (picker_portable.go): they open in this terminal and edit a tmux session,
+// its title for the icon and its metadata for the color, where inside Kitty
+// they stay overlays over the tab they were opened on.
+//
 // There is deliberately no `dashboard` subcommand. The dashboard is the root
 // command's default execution path, so this package exposes Run for the root
 // to call rather than a *cobra.Command of its own.
@@ -59,7 +67,7 @@ import (
 // so the singleton rule does not apply, and every Kitty tab action is replaced
 // by its in-terminal counterpart.
 func Run(sourceWindowID int, backendName string) error {
-	cfg, err := cli.LoadRunnableConfig()
+	cfg, err := loadRunnableConfig()
 	if err != nil {
 		return err
 	}
@@ -68,7 +76,7 @@ func Run(sourceWindowID int, backendName string) error {
 		return err
 	}
 	if client == nil {
-		return tui.RunFromWindow(cfg, nil, 0)
+		return runDashboard(cfg, nil, 0)
 	}
 	if sourceWindowID <= 0 {
 		sourceWindowID = cli.WindowIDFromEnv()
@@ -76,8 +84,14 @@ func Run(sourceWindowID int, backendName string) error {
 	if focusExistingDashboard(client, sourceWindowID) {
 		return nil
 	}
-	return tui.RunFromWindow(cfg, client, sourceWindowID)
+	return runDashboard(cfg, client, sourceWindowID)
 }
+
+// runDashboard starts the dashboard program in this terminal.
+var (
+	runDashboard       = tui.RunFromWindow
+	loadRunnableConfig = cli.LoadRunnableConfig
+)
 
 func focusExistingDashboard(client kitty.KittyClient, sourceWindowID int) bool {
 	osWindows, err := client.ListWindows()

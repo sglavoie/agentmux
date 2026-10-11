@@ -18,6 +18,12 @@ type ColorContext struct {
 	TabID        int
 	WindowID     int
 	DefaultColor string
+	// Apply, when set, records the pick somewhere other than a Kitty tab: the
+	// picker then never touches Client. colorName is empty for "reset to
+	// default", which is the absence of a pick.
+	Apply func(colorName string) error
+	// Subject names what is being colored in the header; empty means a tab.
+	Subject string
 }
 
 type colorPickerItem struct {
@@ -134,6 +140,18 @@ func (m *colorPickerModel) apply() {
 		m.err = fmt.Errorf("lookup %q: %w", colorName, err)
 		return
 	}
+	if m.ctx.Apply != nil {
+		picked := colorName
+		if m.items[m.cursor].isReset {
+			picked = ""
+		}
+		if err := m.ctx.Apply(picked); err != nil {
+			m.err = fmt.Errorf("set color: %w", err)
+			return
+		}
+		m.applied = true
+		return
+	}
 
 	err = m.ctx.Client.SetTabColor(
 		kitty.MatchTabByID(m.ctx.TabID),
@@ -164,7 +182,11 @@ func (m colorPickerModel) View() tea.View {
 
 	divider := strings.Repeat("─", 30)
 
-	sb.WriteString(styleHeader.Render("Set Tab Color") + "\n")
+	header := "Set Tab Color"
+	if m.ctx.Subject != "" {
+		header = "Set Color: " + m.ctx.Subject
+	}
+	sb.WriteString(styleHeader.Render(header) + "\n")
 	sb.WriteString(styleDim.Render(divider) + "\n")
 
 	maxNameLen := 0

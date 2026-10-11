@@ -529,3 +529,17 @@ func TestRenderHealthSaysSoWhenThereIsNothingToShow(t *testing.T) {
 		t.Fatal("an unbuilt reading claimed a clean bill of health")
 	}
 }
+
+// Tmux rows kept through an outage make the Sessions source a warning on a
+// tree that is otherwise fresh, in the outage's own words.
+func TestHealthReportsKeptTmuxSessions(t *testing.T) {
+	facts := healthyFacts()
+	if state := healthStates(t, facts)[HealthIssueTopology]; state != HealthOK {
+		t.Fatalf("healthy reading = %v; want ok", state)
+	}
+	facts.PortableErr = "tmux is not answering; showing the last 2 sessions listed (timeout)"
+	issue := healthIssueByID(t, BuildHealthIssues(facts), HealthIssueTopology)
+	if issue.State != HealthWarning || issue.Summary != facts.PortableErr || issue.Compact != "tmux sessions stale" || !issue.WantsAttention() {
+		t.Fatalf("issue = %+v; want a warning carrying the outage", issue)
+	}
+}

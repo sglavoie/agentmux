@@ -25,6 +25,12 @@ import (
 // registered launch created, so discovery can tie a pane back to its record.
 const RuntimeSessionVar = "amx_runtime_session_id"
 
+// ColorVar is the metadata key holding the color an operator picked for one
+// session (`amx color-picker`). On Kitty the pick is drawn by the tab bar and
+// this key is only its record; a session on another backend has no tab bar,
+// and the key is what its rows are drawn from (RunningSession.Color).
+const ColorVar = "cc_color"
+
 // pendingLaunchTimeout is how old a pending registration must be before a
 // later launch treats it as left behind by a launcher that died between
 // registering and committing. Launches finish in seconds.
@@ -303,6 +309,7 @@ func RunningSessionsFromPanes(kind runtimesession.BackendKind, panes []backend.P
 		if id, err := runtimesession.ParseID(pane.Vars[RuntimeSessionVar]); err == nil {
 			rs.RuntimeSessionID = id
 		}
+		rs.Color = pane.Vars[ColorVar]
 		sessions = append(sessions, ctx.stampFamily(rs))
 	}
 	return sessions

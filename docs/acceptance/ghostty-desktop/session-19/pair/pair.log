@@ -1,0 +1,35 @@
+world: /private/tmp/amxs19-pair.X1B0PS
+agentmux: /Users/sglavoie/1_dev_projects/sglavoie_agentmux at 1510134cb9a71fd5049367523e3b97cc951a16cc (82 uncommitted paths)
+asl source: /Users/sglavoie/1_dev_projects/asl_acceptance_source_39ba17 at 9f2e4318e224261a616e25b0d18033ee5f4eeb0e (0 changed or ignored paths)
+asl clone: /private/tmp/amxs19-pair.X1B0PS/asl at 9f2e4318e224261a616e25b0d18033ee5f4eeb0e
+asl clone: same tree as the source (d3335ab90eee8e0eb252d5f9025e8e4b180c7eed), clean
+== install: just install ==
+install: exit 0
+installed amx: amx version 0.8.0 (revision 1510134cb9a7-dirty, built 2026-10-10T20:02:19Z, go1.27.1, sha256:bcdc97df1ea3)
+installed asl: /private/tmp/amxs19-pair.X1B0PS/home/.local/bin/asl -> /private/tmp/amxs19-pair.X1B0PS/asl/bin/.local/bin/agent-session-loop
+asl harness-compat: {
+  "counts": {
+    "incompatible": 0,
+    "supported": 0,
+    "unknown": 3
+  },
+  "harnesses": [
+    {
+      "detail": "codex 0.162.1 is newer than the tested 0.154.0; this pairing has not been smoke-tested",
+      "executable": "/opt/homebrew/bin/codex",
+      "harness": "codex",
+      "policy": {
+        "blocked": [],
+        "latest": "0.154.0",
+        "minimum": "0.140.0",
+        "previous
+== asl-contract-sync: just asl-contract-sync asl_root=/Users/sglavoie/1_dev_projects/asl_acceptance_source_39ba17 ==
+asl-contract-sync: exit 0
+== asl-integration: just asl-integration ==
+asl-integration: exit 0
+== overseer-integration: just overseer-integration asl_root=/private/tmp/amxs19-pair.X1B0PS/asl ==
+overseer-integration: exit 0
+asl source: unchanged (no modified, untracked or ignored path)
+world: removed
+operator's amx, asl, config and daemon: unchanged
+pair: ok

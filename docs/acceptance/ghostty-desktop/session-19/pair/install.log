@@ -1,0 +1,7 @@
+go build -o amx .
+cp amx "/private/tmp/amxs19-pair.X1B0PS/home/.local/bin/.amx.staging"
+mv -f "/private/tmp/amxs19-pair.X1B0PS/home/.local/bin/.amx.staging" "/private/tmp/amxs19-pair.X1B0PS/home/.local/bin/amx"
+ln -sf "/Users/sglavoie/1_dev_projects/sglavoie_agentmux/agent-mux.conf" "/private/tmp/amxs19-pair.X1B0PS/home/.config/kitty/agent-mux.conf"
+Seeded /private/tmp/amxs19-pair.X1B0PS/home/.config/agent-mux/config.toml
+Installed /private/tmp/amxs19-pair.X1B0PS/home/.local/bin/amx
+Symlinked /private/tmp/amxs19-pair.X1B0PS/home/.config/kitty/agent-mux.conf

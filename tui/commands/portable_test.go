@@ -3,6 +3,9 @@ package commands
 import (
 	"errors"
 	"os/exec"
+	"slices"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/backend"
@@ -44,7 +47,13 @@ func usePortable(t *testing.T, terminals PortableTerminals) {
 	t.Helper()
 	previous := Portable
 	Portable = terminals
-	t.Cleanup(func() { Portable = previous })
+	// Every test starts with nothing listed: an outage keeps what the last
+	// discovery listed, and that must not be another test's.
+	recordPortableListing(nil, false)
+	t.Cleanup(func() {
+		Portable = previous
+		recordPortableListing(nil, false)
+	})
 }
 
 func newPortableRuntimeID(t *testing.T) runtimesession.ID {
@@ -169,6 +178,9 @@ func TestFocusOnAPortableSessionAttachesInsteadOfFocusingATab(t *testing.T) {
 	}
 }
 
+// A discovery that fails before anything was ever listed leaves a surface
+// without Kitty nothing to show: that is the total failure. Beside Kitty the
+// Kitty rows are listed and the failure rides beside them.
 func TestPortableDiscoveryFailureIsTotalOnlyWithoutKitty(t *testing.T) {
 	server := &portableServer{discoverErr: errors.New("tmux exploded")}
 	usePortable(t, PortableTerminals{Tmux: server, Launch: runtimesession.BackendTmux})
@@ -183,6 +195,85 @@ func TestPortableDiscoveryFailureIsTotalOnlyWithoutKitty(t *testing.T) {
 	if len(msg.Sessions) != 1 || msg.Sessions[0].TabID != 7 {
 		t.Fatalf("refresh beside Kitty = %+v, want the Kitty row kept", msg.Sessions)
 	}
+	var outage *PortableOutage
+	if !errors.As(msg.PortableErr, &outage) || outage.Err == nil || outage.Kept != 0 {
+		t.Fatalf("refresh beside Kitty reports %v; want the failed tmux discovery", msg.PortableErr)
+	}
+}
+
+// Once tmux sessions are on the list, a tmux that stops answering degrades
+// the list instead of emptying it: the same rows stay, with or without Kitty,
+// the refresh says they are kept, and the next good answer replaces them.
+func TestAFailedTmuxDiscoveryKeepsTheLastListedSessions(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		client *recordingKittyClient
+		kitty  int
+	}{
+		{name: "without Kitty"},
+		{name: "beside Kitty", client: &recordingKittyClient{windows: managedWindows(7, 70, "api")}, kitty: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api, web := newPortableRuntimeID(t), newPortableRuntimeID(t)
+			server := &portableServer{panes: []backend.Pane{portablePane("$0", "%0", "api", api), portablePane("$1", "%1", "web", web)}}
+			usePortable(t, PortableTerminals{Tmux: server, Launch: runtimesession.BackendTmux})
+			stubLocalKittySocket(t, "")
+			stubStateQuery(t, func() (protocol.Response, error) { return protocol.Response{}, errors.New("no daemon") })
+
+			before := portableRefresh(t, tc.client)
+			if len(before.Sessions) != 2+tc.kitty || before.PortableErr != nil {
+				t.Fatalf("first refresh = %d sessions, %v; want %d and no outage", len(before.Sessions), before.PortableErr, 2+tc.kitty)
+			}
+
+			server.panes, server.discoverErr = nil, errors.New("tmux: list-panes timed out")
+			for range 2 {
+				during := portableRefresh(t, tc.client)
+				if got, want := portableRuntimes(during.Sessions), portableRuntimes(before.Sessions); !slices.Equal(got, want) {
+					t.Fatalf("tmux rows during the outage = %v; want the last listed %v", got, want)
+				}
+				if len(during.Sessions) != len(before.Sessions) {
+					t.Fatalf("%d rows during the outage; want all %d", len(during.Sessions), len(before.Sessions))
+				}
+				var outage *PortableOutage
+				if !errors.As(during.PortableErr, &outage) || outage.Kept != 2 || outage.Lost != 0 || !errors.Is(during.PortableErr, server.discoverErr) {
+					t.Fatalf("outage = %v; want 2 sessions kept after the failed discovery", during.PortableErr)
+				}
+				if !strings.Contains(during.PortableErr.Error(), "not answering") || !strings.Contains(during.PortableErr.Error(), "2 sessions") {
+					t.Fatalf("outage reads %q; want it to say tmux is not answering and what is kept", during.PortableErr)
+				}
+				// A kept row is still a session an action can find.
+				for _, rs := range during.Sessions {
+					if IsPortable(rs) {
+						if _, ok := PortableSession(rs.WindowID); !ok {
+							t.Fatalf("kept row %d is no longer addressable", rs.WindowID)
+						}
+					}
+				}
+			}
+			// Whether anything is running is a question a kept row cannot
+			// answer: the probe actions rely on reports the failure.
+			if _, err := TerminalDependencies(nil, &config.Config{}).LiveSessions(&config.Config{}); err == nil {
+				t.Fatal("the live-session probe answered from kept rows")
+			}
+
+			server.panes, server.discoverErr = []backend.Pane{portablePane("$0", "%0", "api", api)}, nil
+			after := portableRefresh(t, tc.client)
+			if after.PortableErr != nil || len(after.Sessions) != 1+tc.kitty {
+				t.Fatalf("recovered refresh = %d sessions, %v; want the fresh listing and no outage", len(after.Sessions), after.PortableErr)
+			}
+		})
+	}
+}
+
+func portableRuntimes(sessions []session.RunningSession) []string {
+	var ids []string
+	for _, rs := range sessions {
+		if IsPortable(rs) {
+			ids = append(ids, string(rs.RuntimeSessionID))
+		}
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 func TestKittyAndPortableSessionsShareOneList(t *testing.T) {

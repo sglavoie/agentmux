@@ -6,6 +6,10 @@
 # The surface under test runs in a window of an observer tmux server (its own
 # socket and no configuration): only a screen recorder and a keyboard. It is
 # not AgentMux's private server and hosts no agent. Nothing is displayed.
+#
+# The later steps (W13 to W16) act on one agent without the dashboard: they
+# type at the agent through the private server (send-keys attaches nothing)
+# and read what the daemon holds for it.
 # usage: drive_tmux.sh LOG
 R=/tmp/amxs19; . $R/driver/remote-env.sh
 LOG=$1; T=dash; : > "$LOG"
@@ -132,11 +136,104 @@ k F12; step waitfor "Live sessions"; sleep 1; k q; step waitfor "OVERVIEW_EXIT=0
 check "no terminal is attached after leaving the overview" ev '[ "$(priv list-clients | wc -l | tr -d " ")" = 0 ]'
 T=dash
 
-note "W11 Kitty-only commands refuse outside Kitty and say why"
-facts "amx color-picker" sh -c 'amx color-picker; echo "exit status: $?"'
-facts "amx icon-picker" sh -c 'amx icon-picker; echo "exit status: $?"'
-check "color-picker refuses with a nonzero status" ev '! amx color-picker'
-check "icon-picker refuses with a nonzero status" ev '! amx icon-picker'
+note "W11 the pickers are portable views: they open in this terminal and edit a tmux session"
+rid=$(registry | awk '/ live restart /{print $1}'); pane=$(registry | awk '/ live restart /{print $5}')
+facts "the session the next steps act on (the restarted alpha)" echo "$rid $pane"
+check "one restarted session to act on" ev '[ -n "$rid" ] && [ -n "$pane" ]'
+unb64() { python3 -c 'import base64,sys; s=sys.stdin.read().strip(); sys.stdout.write(base64.urlsafe_b64decode(s+"="*(-len(s)%4)).decode())'; }
+title_of() { priv display-message -p -t "$pane" "#{@amx_title}" | unb64; echo; }
+color_of() { priv show-options -pv -t "$pane" @amx_vars | unb64 | python3 -c 'import json,sys; print("cc_color=" + json.load(sys.stdin).get("cc_color","(none)"))'; }
+picker_unnamed() { amx icon-picker; echo "exit status: $?"; }
+facts "amx icon-picker with three sessions and none named" picker_unnamed
+check "with several sessions and none named the picker lists them and opens nothing" ev '! amx icon-picker && amx icon-picker 2>&1 | grep -q "3 tmux sessions are running"'
+facts "title of the session before" title_of
+facts "color of the session before" color_of
+obs new-window -d -n pick "amx icon-picker --runtime-session $rid; echo ICON_EXIT=\$?; exec sleep 3600"
+T=pick
+step waitfor "Set Harness Icon"; shot "icon picker, in this terminal, for a tmux session"
+k j; sleep 0.3; k Enter; step waitfor "ICON_EXIT=0"
+facts "title of the session after 'None (clear icon)'" title_of
+check "the icon picker wrote the session's title: the harness icon is gone" ev '[ "$(title_of)" = alpha ]'
+obs kill-window -t pick
+obs new-window -d -n pick "amx color-picker --runtime-session $rid; echo COLOR_EXIT=\$?; exec sleep 3600"
+step waitfor "Set Color: alpha"; shot "color picker, in this terminal, for a tmux session"
+k j; sleep 0.3; k Enter; step waitfor "COLOR_EXIT=0"
+facts "color of the session after the pick" color_of
+check "the color picker recorded the pick on the session (red, the one after the profile's blue)" ev '[ "$(color_of)" = cc_color=red ]'
+obs kill-window -t pick
+T=dash
+
+# dstate: the daemon's state for the session: its icon and whether it is unseen.
+dstate() { python3 - "$rid" <<'PY'
+import json,socket,os,sys
+s=socket.socket(socket.AF_UNIX);s.connect(os.path.expanduser('~/.local/share/agent-mux/daemon.sock'));s.sendall(b'{"type":"state_query"}\n')
+buf=b''
+while not buf.endswith(b'\n'):
+    c=s.recv(65536)
+    if not c: break
+    buf+=c
+d=json.loads(buf)
+for slot,b in d.get('runtime_slots',{}).items():
+    if b['runtime_session_id']==sys.argv[1]:
+        st=d['states'].get(slot,{})
+        print('icon=%s unseen=%s' % (st.get('icon_state') or '-', bool(st.get('unseen'))))
+PY
+}
+until_state() { # PATTERN SECONDS: waits for the daemon's state of the session to match
+  local n=$(( $2 * 2 ))
+  while [ $n -gt 0 ]; do dstate | grep -q -- "$1" && { printf 'PASS: daemon state: %s\n' "$1" >> "$LOG"; return 0; }; sleep 0.5; n=$((n-1)); done
+  printf 'FAIL: TIMEOUT waiting for daemon state: %s (it is: %s)\n' "$1" "$(dstate)" >> "$LOG"; echo "TIMEOUT state: $1"; return 1
+}
+say() { priv send-keys -t "$pane" -l "$1"; priv send-keys -t "$pane" Enter; }
+# exported WHAT...: the export of the session, summarized.
+summarize() { python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+for w in d["windows"]:
+    stops=[e for e in w["events"] if e.get("event")=="Stop"]
+    print("runtime_session_id=%s backend=%s events=%d live.found=%s last_stop_confirmed_by=%s" % (w.get("runtime_session_id"), w.get("backend"), len(w["events"]), w["live"]["found"], stops[-1].get("stop_confirmed_by") if stops else None))
+print("windows=%d" % len(d["windows"]))'; }
+export_current() { AMX_RUNTIME_SESSION_ID=$rid KITTY_WINDOW_ID=999 amx daemon export-events --current-window --pretty=false | summarize; }
+export_named() { amx daemon export-events --runtime-session "$rid" --pretty=false | summarize; }
+export_outside() { amx daemon export-events --current-window; echo "exit status: $?"; }
+
+note "W13 event export selected by runtime session, as typed in a tmux session"
+facts "amx daemon export-events --current-window, with AMX_RUNTIME_SESSION_ID and a stale KITTY_WINDOW_ID=999" export_current
+check "--current-window in a tmux session exports that session alone, by its runtime session" ev 'export_current | grep -q "^runtime_session_id=$rid backend=tmux events=[1-9].* live.found=False" && export_current | grep -qx "windows=1"'
+check "--runtime-session selects the same session from anywhere" ev 'export_named | grep -q "^runtime_session_id=$rid backend=tmux" && export_named | grep -qx "windows=1"'
+facts "amx daemon export-events --current-window outside any session" export_outside
+check "outside any session --current-window is refused" ev '! amx daemon export-events --current-window'
+
+note "W14 stop hold and focus observation on tmux: a stop nothing confirms is released at the deadline; attaching a terminal marks the session seen"
+say work; step until_state "icon=bolt" 10
+facts "state while working" dstate
+t0=$(date +%s); say done
+step until_state "icon=stop" 40; t1=$(date +%s)
+facts "state at rest" dstate
+facts "how long the stop was held" echo "$((t1-t0)) s"
+check "the stop was held for confirmation and released at the deadline, not at once (held at least 10 s)" ev '[ $((t1-t0)) -ge 10 ]'
+facts "the export of the session" export_named
+check "the export records the stop as released by the deadline" ev 'export_named | grep -q "last_stop_confirmed_by=deadline"'
+check "at rest with no terminal attached the session is unseen" ev 'dstate | grep -q "icon=stop unseen=True"'
+check "no terminal is attached" ev '[ "$(priv list-clients | wc -l | tr -d " ")" = 0 ]'
+sleep 5
+check "still unseen after two more maintenance passes with nobody looking" ev 'dstate | grep -q "unseen=True"'
+obs new-window -d -n att "amx attach $rid; echo ATTACH_EXIT=\$?; exec sleep 3600"
+step until_state "icon=stop unseen=False" 12
+facts "state after a terminal attached" dstate
+check "one terminal is attached, and the agent is the same pane" ev '[ "$(priv list-clients | wc -l | tr -d " ")" = 1 ] && panes | grep -q " $pane .*dead=0"'
+obs kill-window -t att; sleep 1
+check "no terminal is attached after the view closed" ev '[ "$(priv list-clients | wc -l | tr -d " ")" = 0 ]'
+
+note "W15 context limit on tmux: the banner on a working agent's pane is read with no terminal attached"
+say work; step until_state "icon=bolt" 10
+say limit; step until_state "icon=error" 15
+facts "state with the banner on the pane" dstate
+facts "the pane, as the daemon read it" priv capture-pane -p -t "$pane"
+check "reading the pane attached no terminal" ev '[ "$(priv list-clients | wc -l | tr -d " ")" = 0 ]'
+capture_health() { amx doctor --json | python3 -c 'import json,sys; c=json.load(sys.stdin)["daemon"]["runtime"]["capture"]; print(json.dumps(c)); sys.exit(0 if c.get("reads",0)>0 and c.get("consecutive_failures",0)==0 else 1)'; }
+facts "amx doctor --json: the daemon's pane reads" capture_health
+check "the daemon's health counts its pane reads, with none failing now" capture_health
 
 note "W12 close ends the session and its runtime record; the dashboard quits cleanly"
 step waitfor "Sessions"
@@ -158,6 +255,22 @@ for slot,b in sorted(d.get('runtime_slots',{}).items()):
     st=d['states'].get(slot,{})
     print('slot',slot,b['backend'],b['runtime_session_id'],'icon='+repr(st.get('icon_state')))
 print('kitty_snapshot.ready=',(d.get('kitty_snapshot') or {}).get('ready'))"
+
+note "W16 a tmux server that disappears under running agents does not empty the list"
+left=$(panes | grep -c "dead=0")
+obs new-window -d -n ov2 "amx overview; echo OVERVIEW_EXIT=\$?; exec sleep 3600"
+T=ov2
+step waitfor "Live sessions  $left"; shot "overview before the server is killed"
+spid=$(priv display-message -p "#{pid}")
+facts "kill -9 of the private tmux server" sh -c "kill -9 $spid; echo killed pid $spid"
+step waitfor "tmux outage: the tmux server is gone" 15; shot "overview after the server vanished: tiles kept, outage named"
+check "the sessions it took are still listed" ev 'obs capture-pane -p -t ov2 | grep -q "Live sessions  $left"'
+sleep 5
+check "and stay listed on later refreshes" ev 'obs capture-pane -p -t ov2 | grep -q "Live sessions  $left" && obs capture-pane -p -t ov2 | grep -q "tmux outage"'
+facts "registry after the server vanished" registry
+check "the daemon recorded them as stopped, and nothing was relaunched" ev '[ "$(registry | grep -c " live ")" = 0 ] && ! priv list-panes -a'
+k q; step waitfor "OVERVIEW_EXIT=0"
+T=dash
 
 note "teardown of this run: the agents are ended through amx, the daemon stopped"
 facts "amx backend stop --yes" amx backend stop --yes

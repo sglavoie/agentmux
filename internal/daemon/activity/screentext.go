@@ -78,6 +78,12 @@ func NewScreenTextCache(client TextReader) *ScreenTextCache {
 	return NewScreenObservationCache(kittyScreenObserver{client: client})
 }
 
+// KittyScreenObserver is the Kitty client as a screen observer, for a caller
+// that reads Kitty windows beside another backend's panes.
+func KittyScreenObserver(client TextReader) backend.Observer {
+	return kittyScreenObserver{client: client}
+}
+
 // NewScreenObservationCache builds the per-tick cache over any backend's
 // screen observer.
 func NewScreenObservationCache(observer backend.Observer) *ScreenTextCache {

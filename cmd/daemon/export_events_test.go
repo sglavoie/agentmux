@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 type fakeDaemonExportClient struct {
@@ -50,6 +51,10 @@ func resetDaemonExportTestState(t *testing.T) {
 	oldNow := daemonExportNow
 	oldWindow := daemonExportEventsWindow
 	oldCurrentWindow := daemonExportEventsCurrentWindow
+	oldRuntime := daemonExportEventsRuntime
+	// A test run typed inside a managed session must not select it.
+	t.Setenv(runtimesession.EnvVar, "")
+	daemonExportEventsRuntime = ""
 	oldLast := daemonExportEventsLast
 	oldOutput := daemonExportEventsOutput
 	oldPretty := daemonExportEventsPretty
@@ -62,6 +67,7 @@ func resetDaemonExportTestState(t *testing.T) {
 		daemonExportNow = oldNow
 		daemonExportEventsWindow = oldWindow
 		daemonExportEventsCurrentWindow = oldCurrentWindow
+		daemonExportEventsRuntime = oldRuntime
 		daemonExportEventsLast = oldLast
 		daemonExportEventsOutput = oldOutput
 		daemonExportEventsPretty = oldPretty
@@ -127,7 +133,7 @@ func TestDaemonExportEventsCommand_CurrentWindowRequiresKittyWindowID(t *testing
 	if err == nil {
 		t.Fatal("RunE error = nil; want KITTY_WINDOW_ID error")
 	}
-	if got := err.Error(); got != "--current-window requires KITTY_WINDOW_ID to be set" {
+	if got := err.Error(); got != "--current-window requires AMX_RUNTIME_SESSION_ID or KITTY_WINDOW_ID to be set" {
 		t.Fatalf("RunE error = %q; want missing KITTY_WINDOW_ID error", got)
 	}
 }

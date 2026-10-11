@@ -10,10 +10,10 @@ arm64
 kitty 0.48.2 created by Kovid Goyal
 
 --- this run's Kitty process ---
-57293 /Applications/kitty.app/Contents/MacOS/kitty --config NONE -o allow_remote_control=yes -o env=ZDOTDIR=/tmp/amxs19/zdot -o confirm_os_window_close=0 -o shell=/bin/zsh -o remember_window_size=no -
+34735 /Applications/kitty.app/Contents/MacOS/kitty --config NONE -o allow_remote_control=yes -o env=ZDOTDIR=/tmp/amxs19/zdot -o confirm_os_window_close=0 -o shell=/bin/zsh -o remember_window_size=no -
 
 --- amx build (the packaged amx) ---
-amx version 0.8.0 (revision fcd31c0bcfa4-dirty, built 2026-10-10T19:30:19Z, go1.27.1, sha256:e7bc1fcbe50d)
+amx version 0.8.0 (revision 1510134cb9a7-dirty, built 2026-10-10T20:02:19Z, go1.27.1, sha256:9aea2a832250)
 
 --- kitty window tree before anything ---
 tab 1 [active] title='/tmp/amxs19'
@@ -22,7 +22,7 @@ PASS: this Kitty is separate from any other: one process of its own, one tab
 PASS: the private tmux server does not exist
 PASS: on screen in window 1: HOME=/tmp/amxs19/home KITTY_WINDOW_ID=1 /tmp/amxs19/bin/amx
 
-=== the shell inside Kitty is in the world (kitty window 1) [19:45:26Z] ===
+=== the shell inside Kitty is in the world (kitty window 1) [02:02:19Z] ===
 s19 amxs19 % echo "HOME=$HOME KITTY_WINDOW_ID=$KITTY_WINDOW_ID $(command -v amx)"
 HOME=/tmp/amxs19/home KITTY_WINDOW_ID=1 /tmp/amxs19/bin/amx
 s19 amxs19 %
@@ -30,7 +30,7 @@ s19 amxs19 %
 ##### L1 bare amx inside Kitty: dashboard on the Kitty backend, no sessions
 PASS: on screen in window 1: No running sessions
 
-=== empty dashboard in Kitty (kitty window 1) [19:45:26Z] ===
+=== empty dashboard in Kitty (kitty window 1) [02:02:20Z] ===
 Agent Mux · Urgency · all projects                                                                                                          ✖ 2 issues
 > Sessions · focused                                                      │  Inspector
                            No running sessions.                           │
@@ -80,14 +80,14 @@ PASS: on screen in window 1: Launch Sessions
 tab 1 title='/tmp/amxs19'
    window 1 fg=['-zsh'] vars={}
 tab 2 [active] title='🟠alpha'
-   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
 PASS: on screen in window 2: stand-in claude pid
 
-=== the launched agent in its own Kitty tab (kitty window 2) [19:45:32Z] ===
-stand-in claude pid 57402 in /tmp/amxs19/proj/alpha
+=== the launched agent in its own Kitty tab (kitty window 2) [02:02:25Z] ===
+stand-in claude pid 34854 in /tmp/amxs19/proj/alpha
 runtime session: none  kitty window: 2
-conversation: standin-57402
-args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log
+conversation: standin-34854
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log
 PASS: the launch made a second Kitty tab carrying the session's identity
 PASS: a Kitty launch started no tmux server
 PASS: a Kitty launch registered no runtime session
@@ -99,13 +99,13 @@ PASS: on screen in window 2: asked (1)
 tab 1 title='/tmp/amxs19'
    window 1 fg=['-zsh'] vars={}
 tab 2 [active] title='🔑🟠alpha'
-   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
 PASS: the daemon retitled the tab with the permission mark
 
 ##### L4 dashboard reopened in Kitty lists the Kitty session with daemon state
 PASS: on screen in window 1: Needs permission
 
-=== dashboard: Kitty session needing permission (kitty window 1) [19:45:35Z] ===
+=== dashboard: Kitty session needing permission (kitty window 1) [02:02:29Z] ===
 Agent Mux · Urgency · all projects                                                                                                     ✖ hooks drifted
 > Sessions · focused                                                      │  Inspector
 Needs you (1)                                                             │alpha
@@ -115,10 +115,10 @@ alpha     Needs permission   0:03                                         │Nee
                                                                           │Dir     /tmp/amxs19/proj/alpha
                                                                           │Watch   —
                                                                           │───────────────────────────────────────────────────────────────────────────
-                                                                          │stand-in claude pid 57402 in /tmp/amxs19/proj/alpha
+                                                                          │stand-in claude pid 34854 in /tmp/amxs19/proj/alpha
                                                                           │runtime session: none  kitty window: 2
-                                                                          │conversation: standin-57402
-                                                                          │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1…
+                                                                          │conversation: standin-34854
+                                                                          │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4…
                                                                           │ask
                                                                           │asked (1)
                                                                           │
@@ -150,7 +150,7 @@ alpha     Needs permission   0:03                                         │Nee
 ##### L5 session actions on the Kitty row: clear, mark active, lock, mute
 PASS: on screen in window 1: Actions for alpha
 
-=== actions menu for a Kitty session (kitty window 1) [19:45:36Z] ===
+=== actions menu for a Kitty session (kitty window 1) [02:02:29Z] ===
 Agent Mux · Urgency · all projects                                                                                                     ✖ hooks drifted
 Needs you (1)                                                             │alpha
 alpha     Needs permission   0:03                                         │Needs permission · 0:03
@@ -162,7 +162,7 @@ alpha     Needs permission   0:03                                         │Nee
                                        ╭──────────────────────────────────────────────────────────────────────╮xs19/proj/alpha
                                        │ Actions for alpha                                                    │ 2
                                        │ work · claude · main · /tmp/amxs19/proj/alpha                        │
-                                       │ ▸ Open session                                                       │.local/state/agent-mux/native/1790efa1…
+                                       │ ▸ Open session                                                       │.local/state/agent-mux/native/6fdd23a4…
                                        │   Peek scrollback                                                  e │
                                        │   Launch another session                                           C │
                                        │   Open shell                                                       o │
@@ -196,7 +196,7 @@ PASS: on screen in window 1: requested status clear
 tab 1 [active] title='amx'
    window 1 fg=['/tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx'] vars={}
 tab 2 title='🟠alpha'
-   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
 PASS: Clear status: the tab title is the plain one
 PASS: on screen in window 1: Actions for alpha
 PASS: on screen in window 1: Working
@@ -205,7 +205,7 @@ PASS: on screen in window 1: Working
 tab 1 [active] title='amx'
    window 1 fg=['/tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx'] vars={}
 tab 2 title='⚡🟠alpha'
-   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
 PASS: Mark active: the tab title carries the working mark
 PASS: on screen in window 1: Actions for alpha
 
@@ -213,7 +213,7 @@ PASS: on screen in window 1: Actions for alpha
 tab 1 [active] title='amx'
    window 1 fg=['/tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx'] vars={}
 tab 2 title='🔒⚡🟠alpha'
-   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': 'true', 'amx_profile': 'work', 'amx_project': 'alpha'}
+   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': 'true', 'amx_profile': 'work', 'amx_project': 'alpha'}
 PASS: Lock: the tab title carries the lock
 PASS: on screen in window 1: Actions for alpha
 
@@ -221,23 +221,23 @@ PASS: on screen in window 1: Actions for alpha
 tab 1 [active] title='amx'
    window 1 fg=['/tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx'] vars={}
 tab 2 title='🔒🔇⚡🟠alpha'
-   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': 'true', 'amx_profile': 'work', 'amx_project': 'alpha', 'cc_mute': '1'}
+   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': 'true', 'amx_profile': 'work', 'amx_project': 'alpha', 'cc_mute': '1'}
 PASS: Mute: the tab title carries the mute mark
 
-=== dashboard after lock + mute (kitty window 1) [19:45:46Z] ===
+=== dashboard after lock + mute (kitty window 1) [02:02:40Z] ===
 Agent Mux · Urgency · all projects                                                                                                     ✖ hooks drifted
 > Sessions · focused                                                      │  Inspector
 Running (1)                                                               │alpha
-🔒 alpha  Working   0:07                                                  │Working · 0:07
+🔒 alpha  Working   0:08                                                  │Working · 0:08
                                                                           │Agent   claude · work
                                                                           │Branch  main
                                                                           │Dir     /tmp/amxs19/proj/alpha
                                                                           │Watch   🔒 · 🔇 · last event 0m
                                                                           │───────────────────────────────────────────────────────────────────────────
-                                                                          │stand-in claude pid 57402 in /tmp/amxs19/proj/alpha
+                                                                          │stand-in claude pid 34854 in /tmp/amxs19/proj/alpha
                                                                           │runtime session: none  kitty window: 2
-                                                                          │conversation: standin-57402
-                                                                          │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1…
+                                                                          │conversation: standin-34854
+                                                                          │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4…
                                                                           │ask
                                                                           │asked (1)
                                                                           │
@@ -273,17 +273,17 @@ PASS: on screen in window 1: Actions for alpha
 
 --- tree with the overlay pager (less) over the agent window ---
 tab 1 [active] title='less'
-   window 1 fg=['/tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx'] vars={}
+   window 1 fg=['git -C /private/tmp/amxs19/proj/beta', 'git -C /private/tmp/amxs19/proj/alpha'] vars={}
    window 3 fg=['less'] vars={}
 tab 2 title='⚡🟠alpha'
-   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': '', 'amx_profile': 'work', 'amx_project': 'alpha', 'cc_mute': ''}
+   window 2 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_locked': '', 'amx_profile': 'work', 'amx_project': 'alpha', 'cc_mute': ''}
 PASS: Peek opened a Kitty overlay window running the pager
 
-=== native overlay pager (kitty window 3) [19:45:54Z] ===
-stand-in claude pid 57402 in /tmp/amxs19/proj/alpha
+=== native overlay pager (kitty window 3) [02:02:48Z] ===
+stand-in claude pid 34854 in /tmp/amxs19/proj/alpha
 runtime session: none  kitty window: 2
-conversation: standin-57402
-args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/1790efa1-ca9c-464c-8859-2ca67eabf9e6/claude-debug.log
+conversation: standin-34854
+args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/6fdd23a4-f62d-4500-b002-2cf5a9531ab2/claude-debug.log
 ask
 asked (1)
 
@@ -297,12 +297,12 @@ PASS: on screen in window 1: restarted alpha
 tab 1 title='amx'
    window 1 fg=['/tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx'] vars={}
 tab 3 [active] title='🟠alpha'
-   window 4 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/5b63c05a-d7fa-4b9a-bfdc-7618adf4bbf5/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+   window 4 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/e98da7e3-e5eb-424f-8ea2-8fa27c3ca7b2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
 PASS: Restart: another Kitty window now holds alpha, and there is still one alpha tab
 
 ##### L8 focus (enter) brings the Kitty tab forward and the dashboard quits
 
-=== dashboard after restart, row refreshed (kitty window 1) [19:46:03Z] ===
+=== dashboard after restart, row refreshed (kitty window 1) [02:02:57Z] ===
 Agent Mux · Urgency · all projects                                                                                                     ✖ hooks drifted
 > Sessions · focused                                                      │  Inspector
 Running (1)                                                               │alpha
@@ -312,10 +312,10 @@ alpha     Active      —                                                   │A
                                                                           │Dir     /tmp/amxs19/proj/alpha
                                                                           │Watch   —
                                                                           │───────────────────────────────────────────────────────────────────────────
-                                                                          │stand-in claude pid 58068 in /tmp/amxs19/proj/alpha
+                                                                          │stand-in claude pid 35523 in /tmp/amxs19/proj/alpha
                                                                           │runtime session: none  kitty window: 4
-                                                                          │conversation: standin-58068
-                                                                          │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/5b63c05a…
+                                                                          │conversation: standin-35523
+                                                                          │args: --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/e98da7e3…
                                                                           │
                                                                           │
                                                                           │
@@ -348,10 +348,10 @@ alpha     Active      —                                                   │A
 tab 1 title='/tmp/amxs19'
    window 1 fg=['-zsh'] vars={}
 tab 3 [active] title='🟠alpha'
-   window 4 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/5b63c05a-d7fa-4b9a-bfdc-7618adf4bbf5/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
+   window 4 fg=['/bin/sh /tmp/amxs19/bin/claude --debug-file', '/bin/zsh -lic umask 077 && exec env CLAUDE_CONFIG_DIR=/tmp/amxs19/home/.claude-a claude --debug-file /tmp/amxs19/home/.local/state/agent-mux/native/e98da7e3-e5eb-424f-8ea2-8fa27c3ca7b2/claude-debug.log'] vars={'amx_harness': 'claude', 'amx_harness_session': '', 'amx_profile': 'work', 'amx_project': 'alpha'}
 PASS: Enter made the agent's tab the active one
 
-=== dashboard window after focus: back at the shell (kitty window 1) [19:46:05Z] ===
+=== dashboard window after focus: back at the shell (kitty window 1) [02:02:59Z] ===
 s19 amxs19 % echo "HOME=$HOME KITTY_WINDOW_ID=$KITTY_WINDOW_ID $(command -v amx)"
 HOME=/tmp/amxs19/home KITTY_WINDOW_ID=1 /tmp/amxs19/bin/amx
 s19 amxs19 % amx
@@ -361,7 +361,7 @@ s19 amxs19 %
 ##### L9 overview inside Kitty
 PASS: on screen in window 1: Live sessions
 
-=== overview in Kitty with one Kitty session (kitty window 1) [19:46:08Z] ===
+=== overview in Kitty with one Kitty session (kitty window 1) [02:03:02Z] ===
 Live sessions  1
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓

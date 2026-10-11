@@ -290,13 +290,15 @@ func (h *Handler) userActiveRetirableByProbe(windowID int) bool {
 // without reaching for a nil check at every call site. The cache itself lives
 // in internal/daemon/activity; this binds it to the handler's screen observer,
 // which is the Kitty client unless SetScreenObserver installed another.
+//
+// A pane behind a runtime slot is read through the backend its session is
+// registered on (runtimeScreenRouter); every other pane goes to that observer.
 func (h *Handler) screenTextCacheFor() *activity.ScreenTextCache {
-	var screens *activity.ScreenTextCache
-	if h.screenObserver != nil {
-		screens = activity.NewScreenObservationCache(h.screenObserver)
-	} else {
-		screens = activity.NewScreenTextCache(h.kittyClient)
+	base := h.screenObserver
+	if base == nil {
+		base = activity.KittyScreenObserver(h.kittyClient)
 	}
+	screens := activity.NewScreenObservationCache(runtimeScreenRouter{h: h, base: base})
 	// Every read through to a backend is tallied for health; a cached answer
 	// is not a read.
 	screens.OnRead(h.recordScreenRead)

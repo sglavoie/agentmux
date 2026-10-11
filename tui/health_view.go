@@ -52,6 +52,9 @@ func healthFacts(m Model) dashboard.HealthFacts {
 	if m.err != nil {
 		facts.TopologyErr = m.err.Error()
 	}
+	if m.portableErr != nil {
+		facts.PortableErr = m.portableErr.Error()
+	}
 	facts.TopologyAge, facts.TopologyWarm = topologyAge(m, now)
 	for _, d := range m.deprecations {
 		facts.Deprecations = append(facts.Deprecations, dashboard.HealthDeprecation{

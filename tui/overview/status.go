@@ -78,6 +78,11 @@ func (m model) feedback() string {
 	if age >= protocol.KittySnapshotStaleAfter {
 		return fmt.Sprintf("Kitty refresh delayed; showing cached sessions (%ds old)", int(age/time.Second))
 	}
+	if m.portableErr != nil {
+		// The tmux tiles are the last ones listed; say so rather than let
+		// them pass for live ones.
+		return "tmux outage: " + m.portableErr.Error()
+	}
 	if len(m.sessions) == 0 {
 		return "No running sessions"
 	}

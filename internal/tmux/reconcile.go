@@ -53,7 +53,16 @@ type Ended struct {
 	Reason  string
 }
 
-// Report is what one pass changed.
+// Viewed is one live session with a terminal attached, and the last moment
+// that terminal was seen to be in use: when it attached, or when the operator
+// last typed or pointed in it, whichever is later. tmux keeps both to the
+// second.
+type Viewed struct {
+	ID runtimesession.ID
+	At time.Time
+}
+
+// Report is what one pass changed, and who it found looking.
 type Report struct {
 	// Ended lists the sessions marked stale, with whether the agent was seen
 	// to exit or could not be found.
@@ -63,6 +72,9 @@ type Report struct {
 	// Detached lists the terminals removed because a later one owns the
 	// session they were attached to.
 	Detached []Client
+	// Viewed lists the live sessions a terminal is attached to. It is an
+	// observation, not a change: Empty ignores it.
+	Viewed []Viewed
 }
 
 // Empty reports whether the pass changed nothing.
@@ -134,6 +146,9 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 			changes[record.ID] = change{observation: observation}
 			continue
 		}
+		if at, ok := lastViewed(survey.ClientsOf(recordPane(record))); ok {
+			report.Viewed = append(report.Viewed, Viewed{ID: record.ID, At: at})
+		}
 		if a := record.Attachment; a != nil && now.Sub(record.UpdatedAt) >= attachmentGrace &&
 			len(survey.ClientsOf(recordPane(record))) == 0 {
 			changes[record.ID] = change{release: a.ID}
@@ -170,6 +185,19 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 		}
 		return nil
 	})
+}
+
+// lastViewed is the latest moment any of a session's terminals attached or
+// was used.
+func lastViewed(clients []Client) (time.Time, bool) {
+	var latest int64
+	for _, client := range clients {
+		latest = max(latest, client.Created, client.Activity)
+	}
+	if latest == 0 {
+		return time.Time{}, false
+	}
+	return time.Unix(latest, 0), true
 }
 
 // unchanged reports whether an observation agrees with a live record, which

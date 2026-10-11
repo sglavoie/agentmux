@@ -1,0 +1,13 @@
+# Excerpt of the one `just reliability-stress` run of this session that failed (2026-10-11T02:12:03Z),
+# before the lifecycle tests' startup probe was given the liveness grace. The whole log was
+# 1357 lines of interleaved shard output; these are its phase lines, the failure, and the end.
+1:== isolated repetitions (x20) ==
+3:== isolated repetitions under -race (x20) ==
+5:== 4 concurrent shards (x20) under full-suite load ==
+78:--- FAIL: TestRun_RemovesSocketOnShutdown (1.33s)
+79:    run_lifecycle_test.go:120: Run returned before startup publication: daemon: confirming startup publication: context deadline exceeded
+1266:FAIL
+1267:FAIL	github.com/sglavoie/agentmux/internal/daemon	151.427s
+1268:FAIL
+1356:error: recipe `reliability-stress` failed with exit code 1
+1357:exit status: 1 at 2026-10-11T02:12:03Z

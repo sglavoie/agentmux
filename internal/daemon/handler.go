@@ -94,6 +94,14 @@ type Handler struct {
 	// observations either way; this is the seam for another backend's reader.
 	screenObserver backend.Observer
 
+	// runtimeScreens opens the screen reader of a backend instance other than
+	// Kitty, for the probes of the sessions registered on it. Nil means those
+	// sessions are not probed (runtime_screen_probes.go).
+	runtimeScreens RuntimeScreenReader
+	// runtimeProbeTicks counts the probe ticks that reached those sessions.
+	// Only the screen-probe loop touches it.
+	runtimeProbeTicks uint64
+
 	// renderQueue is the latest-generation per-window render queue consumed by
 	// the render worker (renderqueue.go), the daemon's single Kitty writer.
 	renderQueue *rendering.Queue

@@ -66,3 +66,9 @@ func (v *Viewer) Exited(timeout time.Duration) bool {
 		return false
 	}
 }
+
+// Type sends text to the terminal as if the operator had typed it.
+func (v *Viewer) Type(text string) error {
+	_, err := io.WriteString(v.stdin, text)
+	return err
+}

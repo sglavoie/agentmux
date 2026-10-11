@@ -3,10 +3,7 @@ package dashboard
 import (
 	"errors"
 	"os/exec"
-	"strings"
 	"testing"
-
-	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -100,23 +97,5 @@ func TestAttachCommandFor(t *testing.T) {
 	}
 	if attachCommandFor(nil) != nil {
 		t.Fatal("a surface with no tmux backend must have no attach")
-	}
-}
-
-// The pickers edit a Kitty tab's presentation. Outside Kitty they say that
-// plainly rather than surfacing a failed Kitty call.
-func TestPickersExplainThemselvesOutsideKitty(t *testing.T) {
-	previous := insideKitty
-	t.Cleanup(func() { insideKitty = previous })
-	insideKitty = func() bool { return false }
-	for _, command := range []*cobra.Command{ColorPickerCommand(), IconPickerCommand()} {
-		err := command.RunE(command, nil)
-		if err == nil || !strings.Contains(err.Error(), "this terminal is not Kitty") {
-			t.Errorf("%s outside Kitty = %v, want it to say there is no Kitty tab", command.Name(), err)
-		}
-	}
-	insideKitty = func() bool { return true }
-	if err := requireKittyTab("color-picker", "color"); err != nil {
-		t.Fatalf("inside Kitty the picker was refused: %v", err)
 	}
 }

@@ -151,6 +151,9 @@ type Model struct {
 
 	// last error from Kitty query
 	err error
+	// portableErr is set while the tmux rows are kept from an earlier
+	// listing (commands.PortableOutage); nil once a refresh reads them again.
+	portableErr error
 
 	// confirm / config-picker target
 	targetSession session.RunningSession

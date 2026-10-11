@@ -606,6 +606,18 @@ downgrade protected attention states (`key`, `question`, `error`, `warning`,
 busy-title active recovery is likewise narrow: it only fills an empty icon. The
 daemon runs these
 probes on the same periodic probe loop as the renderer tick (every 2s).
+A tmux session is probed on the same loop by the same Claude and Codex screen
+probes, reading its own pane on the private server with no terminal attached
+and no Kitty running: the context-limit banner, the prompt label, and the idle
+screen that settles a stuck `⚡` or confirms a held stop. A capture is used
+only when it is of the registered pane, under the server generation the
+session was registered on, while its agent is running; anything else, and a
+read that fails, is no evidence for that tick. A session showing no icon is
+read every fifth tick, a working one every tick, and one at rest on `🛑` not at
+all. The Claude busy-title recovery, the Codex cleared-screen check
+(`ScreenClearProbe`), and the Copilot transcript probe read Kitty windows
+only; a Copilot stop in a tmux session is therefore not held for confirmation.
+
 In split Kitty tabs, screen probes read only the tab-title owner: the active
 managed pane, or the first managed pane if none is active. Sibling panes cannot
 overwrite the shared title with Claude context-limit detection or Codex
@@ -640,9 +652,15 @@ amx daemon export-events --current-window --last 20 \
   | jq '.windows[0].events[] | {at, event, action, source, reason, stop_reason, notification_type, reset_flow}'
 ```
 
-`--current-window` resolves the target from `KITTY_WINDOW_ID` and errors when
-run outside Kitty (or when combined with `--window`). `--window ID` still works
-for explicit targeting, and `--output PATH` writes the JSON to a file instead of
+`--current-window` selects the session the command is typed in: the runtime
+session named by `AMX_RUNTIME_SESSION_ID` when there is one (so it works in a
+tmux session, where an inherited `KITTY_WINDOW_ID` is not believed), else the
+Kitty window named by `KITTY_WINDOW_ID`. With neither it is an error, as it is
+combined with `--window`. `--runtime-session ID` selects a session from
+anywhere, and `--window ID` a Kitty window. An entry held by a runtime session
+carries `runtime_session_id` and `backend`; for a tmux session its `window_id`
+is the daemon's own slot for the session, not a Kitty window, and `live.found`
+is false. `--output PATH` writes the JSON to a file instead of
 stdout. The export is read-only and does not auto-start the daemon, so the
 buffer of a still-running investigation session is never replaced.
 

@@ -52,6 +52,9 @@ type liveSessions struct {
 	SourceTabID  int
 	HostWindowID int
 	HostTabID    int
+	// PortableErr is set when the portable rows are kept from an earlier
+	// listing rather than read now.
+	PortableErr error
 }
 
 // readLiveSessions resolves one refresh's view of the live sessions and touches
@@ -87,8 +90,10 @@ type liveSessions struct {
 //
 // Portable sessions join the same universe here. They are discovered through
 // their own backend, never through Kitty, and a surface started without a
-// Kitty client lists them alone: there, a failed discovery is the total
-// failure. Beside Kitty a failed portable discovery costs only those rows.
+// Kitty client lists them alone: there, a failed discovery with nothing listed
+// before it is the total failure. Once sessions have been listed, a backend
+// that fails or disappears keeps them on the list, with or without Kitty, and
+// the refresh carries the outage beside them (PortableErr).
 func readLiveSessions(client kitty.KittyClient, cfg *config.Config, sourceWindowID int) (liveSessions, error) {
 	osWindows, topology, daemon, resp, err := refreshTopology(client)
 	if err != nil {
@@ -99,11 +104,17 @@ func readLiveSessions(client kitty.KittyClient, cfg *config.Config, sourceWindow
 	if daemon.States != nil {
 		ApplyDaemonStates(live.Sessions, daemon.States)
 	}
-	portable, err := portableSessions(cfg)
-	if err != nil && client == nil {
-		return liveSessions{}, err
+	portable, outage := portableSessions(cfg)
+	if outage != nil {
+		if client == nil && len(portable) == 0 {
+			return liveSessions{}, outage.Err
+		}
+		live.PortableErr = outage
 	}
-	overlayPortableState(portable, resp, &live.Daemon)
+	// A lost session has no agent for the daemon to describe.
+	if outage == nil || outage.Lost == 0 {
+		overlayPortableState(portable, resp, &live.Daemon)
+	}
 	live.Sessions = append(live.Sessions, portable...)
 	if sourceWindowID > 0 {
 		if tab, _, found := kitty.FindTabByWindowID(osWindows, sourceWindowID); found {
@@ -174,6 +185,7 @@ func Refresh(client kitty.KittyClient, cfg *config.Config, sortMode string, seq,
 			Topology:       live.Topology,
 			HostWindowID:   live.HostWindowID,
 			HostTabID:      live.HostTabID,
+			PortableErr:    live.PortableErr,
 		}
 	}
 }
@@ -222,6 +234,7 @@ func RefreshOverview(client kitty.KittyClient, cfg *config.Config, seq, sourceWi
 			Topology:       live.Topology,
 			HostWindowID:   live.HostWindowID,
 			HostTabID:      live.HostTabID,
+			PortableErr:    live.PortableErr,
 		}
 	}
 }

@@ -1,21 +1,21 @@
 $ just mac-release-gate --rehearsal --evidence-dir docs/acceptance/ghostty-desktop/session-19/desktop-release
-go run . desktop-release-gate --amx-root "/Users/sglavoie/1_dev_projects/sglavoie_agentmux" --rehearsal --evidence-dir /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release
+go run . desktop-release-gate --amx-root "/Users/sglavoie/1_dev_projects/sglavoie_agentmux" --rehearsal --evidence-dir docs/acceptance/ghostty-desktop/session-19/desktop-release
 run  os-version [agentmux] sw_vers -productVersion
-ok   os-version (10ms)
+ok   os-version (11ms)
 run  toolchain [agentmux] macos/scripts/release-gate.sh toolchain
-ok   toolchain (1.01s)
+ok   toolchain (1.321s)
 run  build-app [agentmux] just mac-app Release
-ok   build-app (11.657s)
+ok   build-app (11.782s)
 run  bundle [agentmux] macos/scripts/release-gate.sh bundle
-ok   bundle (1.144s)
+ok   bundle (1.186s)
 run  hosted-tests-debug [agentmux] just mac-test
-ok   hosted-tests-debug (32.079s)
+ok   hosted-tests-debug (31.853s)
 run  hosted-tests-release [agentmux] just mac-test Release
-ok   hosted-tests-release (1m8.816s)
-evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/amx-desktop-1.4b6470abacb26353.json
+ok   hosted-tests-release (32.85s)
+evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/amx-desktop-1.aaa1c65aaac2cc29.json
 evidence is unsigned (no signing key given)
-desktop rehearsal amx-desktop-1.4b6470abacb26353 (passed)
-  agentmux  fcd31c0bcfa4 dirty (19 paths), tree 2da8138cf7b4
+desktop rehearsal amx-desktop-1.aaa1c65aaac2cc29 (passed)
+  agentmux  1510134cb9a7 dirty (81 paths), tree aba2d683be28
   toolchain route                    remote
   toolchain remote_host              sglavoie@sebs-macbook-pro.local
   toolchain build_host               Seb’s MacBook Pro
@@ -26,10 +26,10 @@ desktop rehearsal amx-desktop-1.4b6470abacb26353 (passed)
   bundle bundle_version              0.1.0
   bundle bundle_build                1
   bundle bundle_minimum_os           14.0
-  bundle bundle_executable_sha256    827e3e11c8e01fc803edfa3c9e83b4113e18b37a51b2e8299d43fcfe2a3d55b9
-  bundle amx_version                 amx version 0.8.0 (revision fcd31c0bcfa4-dirty, built 2026-10-10T19:30:19Z, go1.27.1, sha256:9dab63589d5d)
-  bundle amx_sha256                  9dab63589d5d55027da7f5668d5df78a49157f3dfa1e567853cf92116434728f
-  bundle amx_go_build_id             hqXnOgXo21xAULAlsKDf/8eFZqw-7io6dRRIJVWWS/eHeHjC3Nmy_BS0BRDAy4/2jl_sOSr2m68onJmvr47
+  bundle bundle_executable_sha256    82ec9992953437216d8c55ebaacdafacb9ad925c8b6821c2080d421b2bc8fc20
+  bundle amx_version                 amx version 0.8.0 (revision 1510134cb9a7-dirty, built 2026-10-10T20:02:19Z, go1.27.1, sha256:e7129a8146a7)
+  bundle amx_sha256                  e7129a8146a77051c45956d2ea6b01e425eb71d2a9f01e85e62d1acea0d9d3c4
+  bundle amx_go_build_id             rghjc48ZCrt-us8U2TGl/XOfsxnX6yscuQqK7kIuw/YK8HQLH3_kNga83yHe4-/2s73-z2QpHIljC-VMdlz
   bundle tmux_version                tmux 3.7c
   bundle tmux_sha256                 fb421000337b050b00f0bb3c938af2c4e6bb3971a96b74ba0ca75e5c25abd802
   bundle tmux_checksums_sha256       858d25c2c2d4f810f051a8670284fb2caca51e49a3144aa353c6388451da06f3
@@ -37,11 +37,11 @@ desktop rehearsal amx-desktop-1.4b6470abacb26353 (passed)
   bundle notarization_stapled        no
   bundle distribution                this-mac-only
   passed   os-version           0.0s
-  passed   toolchain            1.0s
-  passed   build-app            11.7s
-  passed   bundle               1.1s
-  passed   hosted-tests-debug   32.1s
-  passed   hosted-tests-release 68.8s
-  evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/amx-desktop-1.4b6470abacb26353.json
+  passed   toolchain            1.3s
+  passed   build-app            11.8s
+  passed   bundle               1.2s
+  passed   hosted-tests-debug   31.9s
+  passed   hosted-tests-release 32.9s
+  evidence /Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/amx-desktop-1.aaa1c65aaac2cc29.json
   signature none (unsigned record)
 exit status: 0

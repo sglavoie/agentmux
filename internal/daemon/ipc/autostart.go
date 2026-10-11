@@ -192,6 +192,26 @@ func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
 	return protocol.EventsExport{
 		EventsByWindow: resp.EventsByWindow,
 		WindowMetadata: resp.WindowMetadata,
+		RuntimeSlots:   resp.RuntimeSlots,
+	}, nil
+}
+
+// ExportRuntimeSessionEvents is ExportEvents for the one slot a runtime
+// session holds. The daemon resolves the slot, so this works for a session
+// with no Kitty window; the answer's RuntimeSlots names the slot it used. A
+// session the daemon holds no slot for is an error.
+func (c *Client) ExportRuntimeSessionEvents(runtimeSessionID string) (protocol.EventsExport, error) {
+	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeEventsExport, RuntimeSessionID: runtimeSessionID}, exportDeadline)
+	if err != nil {
+		return protocol.EventsExport{}, err
+	}
+	if !resp.OK {
+		return protocol.EventsExport{}, fmt.Errorf("daemon error: %s", resp.Error)
+	}
+	return protocol.EventsExport{
+		EventsByWindow: resp.EventsByWindow,
+		WindowMetadata: resp.WindowMetadata,
+		RuntimeSlots:   resp.RuntimeSlots,
 	}, nil
 }
 

@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "gate": "desktop",
+  "record_id": "amx-desktop-1.aaa1c65aaac2cc29",
+  "generated_at": "2026-10-11T02:21:43Z",
+  "result": "passed",
+  "rehearsal": true,
+  "notarized_required": false,
+  "repository": {
+    "repo": "agentmux",
+    "root": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux",
+    "revision": "1510134cb9a71fd5049367523e3b97cc951a16cc",
+    "describe": "1510134c-dirty",
+    "clean": false,
+    "dirty": [
+      "M CLAUDE.md",
+      "M cmd/daemon/daemon.go",
+      "M cmd/daemon/export.go",
+      "M cmd/daemon/export_events_test.go",
+      "M cmd/dashboard/color_picker.go",
+      "M cmd/dashboard/dashboard.go",
+      "M cmd/dashboard/icon_picker.go",
+      "M cmd/dashboard/keybindings.go",
+      "M cmd/dashboard/terminals.go",
+      "M cmd/dashboard/terminals_test.go",
+      "D docs/acceptance/ghostty-desktop/session-19/desktop-release/amx-desktop-1.4b6470abacb26353.json",
+      "M docs/acceptance/ghostty-desktop/session-19/desktop-release/gate-run.log",
+      "M docs/acceptance/ghostty-desktop/session-19/driver/README.md",
+      "M docs/acceptance/ghostty-desktop/session-19/driver/drive_tmux.sh",
+      "M docs/acceptance/ghostty-desktop/session-19/driver/standin-claude.sh",
+      "M docs/acceptance/ghostty-desktop/session-19/go-asl-integration.log",
+      "M docs/acceptance/ghostty-desktop/session-19/go-check.log",
+      "M docs/acceptance/ghostty-desktop/session-19/go-crash-restart.log",
+      "M docs/acceptance/ghostty-desktop/session-19/go-reliability-stress.log",
+      "M docs/acceptance/ghostty-desktop/session-19/live/isolated-kitty-legacy.log",
+      "M docs/acceptance/ghostty-desktop/session-19/live/isolated-kitty-tmux.log",
+      "M docs/acceptance/ghostty-desktop/session-19/live/isolated-tmux.log",
+      "M docs/acceptance/ghostty-desktop/session-19/live/packaged-workspace.log",
+      "M docs/acceptance/ghostty-desktop/session-19/live/setup.log",
+      "M docs/acceptance/ghostty-desktop/session-19/live/teardown.log",
+      "D docs/acceptance/ghostty-desktop/session-19/packaged/.values",
+      "M docs/acceptance/ghostty-desktop/session-19/packaged/install-acceptance.log",
+      "M docs/backend-migration.md",
+      "M docs/daemon.md",
+      "M docs/usage.md",
+      "M internal/daemon/activity/screentext.go",
+      "M internal/daemon/codex_prompt_probe.go",
+      "M internal/daemon/daemon.go",
+      "M internal/daemon/doc.go",
+      "M internal/daemon/handler.go",
+      "M internal/daemon/handler_query.go",
+      "M internal/daemon/handler_stop_hold.go",
+      "M internal/daemon/ipc/autostart.go",
+      "M internal/daemon/probes/binding.go",
+      "M internal/daemon/protocol/export.go",
+      "M internal/daemon/renderer.go",
+      "M internal/daemon/run_lifecycle_test.go",
+      "M internal/daemon/runtime_reconcile.go",
+      "M internal/daemon/screen_idle_probe.go",
+      "M internal/session/query.go",
+      "M internal/session/runtime.go",
+      "M internal/tmux/ownership_test.go",
+      "M internal/tmux/reconcile.go",
+      "M internal/tmux/tmuxtest/viewer.go",
+      "M tui/commands/fetch.go",
+      "M tui/commands/message.go",
+      "M tui/commands/portable.go",
+      "M tui/commands/portable_test.go",
+      "M tui/commands/session.go",
+      "M tui/customization/color.go",
+      "M tui/customization/color_test.go",
+      "M tui/customization/icon.go",
+      "M tui/customization/icon_test.go",
+      "M tui/dashboard/colors.go",
+      "M tui/dashboard/health.go",
+      "M tui/dashboard/health_test.go",
+      "M tui/health_view.go",
+      "M tui/model.go",
+      "M tui/model_update_sessions.go",
+      "M tui/overview/model.go",
+      "M tui/overview/model_test.go",
+      "M tui/overview/refresh.go",
+      "M tui/overview/status.go",
+      "?? cmd/daemon/export_events_runtime_test.go",
+      "?? cmd/dashboard/picker_portable.go",
+      "?? cmd/dashboard/picker_portable_test.go",
+      "?? cmd/project/backend_parity_test.go",
+      "?? docs/acceptance/ghostty-desktop/session-19/driver/pair.sh",
+      "?? docs/acceptance/ghostty-desktop/session-19/pair/",
+      "?? internal/actions/fork_tmux_test.go",
+      "?? internal/daemon/events_export_runtime_test.go",
+      "?? internal/daemon/runtime_screen_probes.go",
+      "?? internal/daemon/runtime_screen_probes_test.go",
+      "?? internal/daemon/runtime_viewers_test.go",
+      "?? internal/session/restart_order_test.go",
+      "?? tui/commands/portable_lost_test.go"
+    ]
+  },
+  "tree_sha256": "aba2d683be2884d05ac76beb3905ab4440008c54dcb8210cec825e4fd8032d4b",
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "os_version": "27.0.1",
+    "go": "go1.27.1",
+    "toolchain": [
+      {
+        "name": "route",
+        "value": "remote"
+      },
+      {
+        "name": "remote_host",
+        "value": "sglavoie@sebs-macbook-pro.local"
+      },
+      {
+        "name": "build_host",
+        "value": "Seb’s MacBook Pro"
+      },
+      {
+        "name": "build_os_version",
+        "value": "27.0.1"
+      },
+      {
+        "name": "build_arch",
+        "value": "arm64"
+      },
+      {
+        "name": "xcode",
+        "value": "Xcode 27.0 Build version 27A266a"
+      },
+      {
+        "name": "developer_id_identities",
+        "value": "0"
+      }
+    ]
+  },
+  "bundle": [
+    {
+      "name": "bundle_version",
+      "value": "0.1.0"
+    },
+    {
+      "name": "bundle_build",
+      "value": "1"
+    },
+    {
+      "name": "bundle_minimum_os",
+      "value": "14.0"
+    },
+    {
+      "name": "bundle_executable_sha256",
+      "value": "82ec9992953437216d8c55ebaacdafacb9ad925c8b6821c2080d421b2bc8fc20"
+    },
+    {
+      "name": "amx_version",
+      "value": "amx version 0.8.0 (revision 1510134cb9a7-dirty, built 2026-10-10T20:02:19Z, go1.27.1, sha256:e7129a8146a7)"
+    },
+    {
+      "name": "amx_sha256",
+      "value": "e7129a8146a77051c45956d2ea6b01e425eb71d2a9f01e85e62d1acea0d9d3c4"
+    },
+    {
+      "name": "amx_go_build_id",
+      "value": "rghjc48ZCrt-us8U2TGl/XOfsxnX6yscuQqK7kIuw/YK8HQLH3_kNga83yHe4-/2s73-z2QpHIljC-VMdlz"
+    },
+    {
+      "name": "tmux_version",
+      "value": "tmux 3.7c"
+    },
+    {
+      "name": "tmux_sha256",
+      "value": "fb421000337b050b00f0bb3c938af2c4e6bb3971a96b74ba0ca75e5c25abd802"
+    },
+    {
+      "name": "tmux_checksums_sha256",
+      "value": "858d25c2c2d4f810f051a8670284fb2caca51e49a3144aa353c6388451da06f3"
+    },
+    {
+      "name": "signature",
+      "value": "ad-hoc"
+    },
+    {
+      "name": "notarization_stapled",
+      "value": "no"
+    },
+    {
+      "name": "distribution",
+      "value": "this-mac-only"
+    }
+  ],
+  "steps": [
+    {
+      "name": "os-version",
+      "repo": "agentmux",
+      "phase": "environment",
+      "command": [
+        "sw_vers",
+        "-productVersion"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 10
+    },
+    {
+      "name": "toolchain",
+      "repo": "agentmux",
+      "phase": "toolchain",
+      "command": [
+        "macos/scripts/release-gate.sh",
+        "toolchain"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 1321
+    },
+    {
+      "name": "build-app",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "just",
+        "mac-app",
+        "Release"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 11782
+    },
+    {
+      "name": "bundle",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "macos/scripts/release-gate.sh",
+        "bundle"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 1185
+    },
+    {
+      "name": "hosted-tests-debug",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "mac-test"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 31852
+    },
+    {
+      "name": "hosted-tests-release",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "mac-test",
+        "Release"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 32850
+    }
+  ],
+  "signature": {
+    "signed": false,
+    "namespace": "agentmux-desktop-release"
+  },
+  "path": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux/docs/acceptance/ghostty-desktop/session-19/desktop-release/amx-desktop-1.aaa1c65aaac2cc29.json"
+}

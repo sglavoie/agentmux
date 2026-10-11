@@ -137,6 +137,18 @@ func (h *Handler) notificationEnricherLocked(windowID int) func(protocol.Session
 // state.
 func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 	h.stateMu.Lock()
+	if req.RuntimeSessionID != "" {
+		// Selection by runtime session: the daemon names the slot, as it
+		// does for a session detail, so a session with no Kitty window can
+		// ask for its own history. An unknown session is an error rather
+		// than an export of everything.
+		slot, ok := h.runtimeRoutes.byRuntime[req.RuntimeSessionID]
+		if !ok || req.WindowID != 0 {
+			h.stateMu.Unlock()
+			return protocol.Response{OK: false, Error: protocol.OriginReasonRuntimeSessionUnknown}
+		}
+		req.WindowID = slot
+	}
 	out := make(map[int][]protocol.SessionEvent)
 	meta := make(map[int]protocol.WindowDebugMetadata)
 	if req.WindowID != 0 {
@@ -159,8 +171,16 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 			meta[id] = h.exportEnrichLocked(id, eventlog.CloneWindowMetadata(snapshot))
 		}
 	}
+	slots := h.runtimeSlotsLocked()
+	if req.WindowID != 0 {
+		bound, ok := slots[req.WindowID]
+		slots = nil
+		if ok {
+			slots = map[int]protocol.RuntimeSlot{req.WindowID: bound}
+		}
+	}
 	h.stateMu.Unlock()
-	return protocol.Response{OK: true, EventsByWindow: out, WindowMetadata: meta}
+	return protocol.Response{OK: true, EventsByWindow: out, WindowMetadata: meta, RuntimeSlots: slots}
 }
 
 // exportEnrichLocked stamps live-only state onto an export snapshot: the

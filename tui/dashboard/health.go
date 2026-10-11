@@ -212,6 +212,9 @@ type HealthFacts struct {
 	TopologyStale      bool
 	TopologyGeneration uint64
 	TopologyErr        string
+	// PortableErr is set while the tmux rows on screen are kept from an
+	// earlier listing: the backend failed to answer, or its server is gone.
+	PortableErr string
 
 	Deprecations          []HealthDeprecation
 	DeprecationsDismissed bool
@@ -479,6 +482,16 @@ func healthTopologyIssue(f HealthFacts) HealthIssue {
 		if f.TopologyErr != "" {
 			issue.Remedy = "amx doctor --strict"
 		}
+		return issue
+	}
+	if f.PortableErr != "" {
+		// The tree is fresh and the tmux rows in it are not: they are the
+		// last ones listed, kept because emptying the list would hide an
+		// outage as an absence of sessions.
+		issue.State = HealthWarning
+		issue.Summary = f.PortableErr
+		issue.Compact = "tmux sessions stale"
+		issue.Remedy = "amx doctor --strict"
 		return issue
 	}
 	issue.State = HealthOK

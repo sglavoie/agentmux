@@ -19,6 +19,10 @@ type IconContext struct {
 	TabID         int
 	CurrentTitle  string
 	HarnessEmojis map[string]string
+	// SetTitle, when set, writes the new title somewhere other than a Kitty
+	// tab: the picker then never touches Client, and CurrentTitle is the
+	// title it edits.
+	SetTitle func(title string) error
 }
 
 type iconPickerItem struct {
@@ -86,6 +90,18 @@ func (m iconPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *iconPickerModel) apply() bool {
+	if m.ctx.SetTitle != nil {
+		parts := palette.ParseTitleParts(m.ctx.CurrentTitle)
+		parts.Base = removeConfiguredHarnessPrefix(parts.Base, m.ctx.HarnessEmojis)
+		parts.Base = m.items[m.cursor].emoji + parts.Base
+		title := palette.BuildTitleParts(parts)
+		if err := m.ctx.SetTitle(title); err != nil {
+			m.err = fmt.Errorf("set title: %w", err)
+			return false
+		}
+		m.ctx.CurrentTitle, m.err, m.applied = title, nil, true
+		return true
+	}
 	if m.ctx.Client == nil {
 		m.err = errors.New("set tab title: Kitty client is unavailable")
 		return false
