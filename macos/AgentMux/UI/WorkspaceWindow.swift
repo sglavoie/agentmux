@@ -40,6 +40,10 @@ protocol WorkspaceDelegate: AnyObject {
     /// is nil once it is closed, or why it could not be, and arrives on the
     /// main actor, possibly before this returns.
     func closeSession(runtimeSessionID: String, completion: @escaping @MainActor (String?) -> Void)
+    /// Gives a session a name, or with an empty one removes the name it has.
+    /// The answer is nil once it is written, or why it could not be, and
+    /// arrives on the main actor, possibly before this returns.
+    func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void)
 }
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -83,7 +87,7 @@ protocol WorkspaceDelegate: AnyObject {
 /// with the arrow keys or by stepping to the next or previous session; the
 /// digits count sessions only.
 @MainActor
-final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
+final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "workspace")
 
     /// One line of the sidebar.
@@ -166,6 +170,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var confirmClose: ((_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
     /// Stands in for the sheet that says why a session could not be closed.
     var reportCloseProblem: ((_ name: String, _ message: String) -> Void)?
+    /// Stands in for the sheet that asks for a session's name, for tests.
+    /// Answers on the main actor: the name, or nil when it was cancelled.
+    var askName: ((_ row: WorkspaceRow, _ answer: @escaping @MainActor (String?) -> Void) -> Void)?
+    /// Stands in for the sheet that says why a session could not be named.
+    var reportNameProblem: ((_ name: String, _ message: String) -> Void)?
 
     /// The utility views listed above the projects.
     private(set) var views = WorkspaceViews()
@@ -670,6 +679,91 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         return state.selectedRow
     }
 
+    // MARK: Naming
+
+    static let nameSessionTitle = "Name Session…"
+    static let namingNeedsEmbedded = "Only a session the workspace embeds can be named here; a Kitty session is named by its tab, in Kitty."
+
+    /// ⌘R: asks for a name for the embedded session the pane is on, and
+    /// reports whether there was one.
+    @discardableResult
+    func nameShownSession() -> Bool {
+        guard let row = shownSessionRow, row.embeddedRuntimeSessionID != nil else {
+            Self.logger.notice("workspace: no embedded session is shown; nothing to name")
+            return false
+        }
+        nameSession(row.key)
+        return true
+    }
+
+    /// Asks for a session's name and has amx write it. An empty answer
+    /// removes the name; a cancelled one changes nothing. The line shows the
+    /// change once a snapshot carries it.
+    func nameSession(_ key: AttentionCycler.Key) {
+        guard let row = state.row(key), let id = row.embeddedRuntimeSessionID else { return }
+        (askName ?? askForName)(row) { [weak self] answer in
+            guard let self, let answer else { return }
+            let name = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard name != row.name else { return }
+            Self.logger.notice("workspace: naming session \(id, privacy: .public)")
+            self.delegate?.nameSession(runtimeSessionID: id, name: name) { [weak self] problem in
+                guard let self, let problem else { return }
+                let title = "\(row.project) — \(row.label)"
+                if let report = self.reportNameProblem {
+                    report(title, problem)
+                } else if !AppDelegate.isRunningTests {
+                    let alert = NSAlert()
+                    alert.alertStyle = .warning
+                    alert.messageText = "\(title) could not be named"
+                    alert.informativeText = problem
+                    alert.beginSheetModal(for: self.window)
+                }
+            }
+        }
+    }
+
+    private func askForName(_ row: WorkspaceRow, _ answer: @escaping @MainActor (String?) -> Void) {
+        let field = NSTextField(string: row.name)
+        field.placeholderString = "No name"
+        field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        let alert = NSAlert()
+        alert.messageText = "Name \(row.project) — \(row.label)"
+        alert.informativeText = "The name is shown above the session in the sidebar. Leave it empty to remove it."
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Name")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated { answer(response == .alertFirstButtonReturn ? field.stringValue : nil) }
+        }
+    }
+
+    /// The menu a right-click on the session list shows: what can be done to
+    /// the line under the pointer. Only a session's line has anything.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        for item in contextMenuItems(forRow: sidebar.clickedRow) { menu.addItem(item) }
+    }
+
+    func contextMenuItems(forRow index: Int) -> [NSMenuItem] {
+        guard index >= 0, index < items.count, case let .row(row) = items[index] else { return [] }
+        let name = NSMenuItem(title: Self.nameSessionTitle, action: #selector(nameClickedSession(_:)), keyEquivalent: "")
+        name.representedObject = row.key
+        if row.embeddedRuntimeSessionID != nil {
+            name.target = self
+        } else {
+            // No target and no action: the item is listed, greyed out.
+            name.action = nil
+            name.toolTip = Self.namingNeedsEmbedded
+        }
+        return [name]
+    }
+
+    @objc private func nameClickedSession(_ sender: Any?) {
+        guard let key = (sender as? NSMenuItem)?.representedObject as? AttentionCycler.Key else { return }
+        nameSession(key)
+    }
+
     /// F5 and F6: opens the icon or color picker for the embedded session the
     /// pane is on, and reports whether there was one. A Kitty session has its
     /// pickers in Kitty.
@@ -1062,7 +1156,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        self.tableView(tableView, isGroupRow: row) ? 24 : 38
+        switch items[row] {
+        case .section, .group: return 24
+        case let .row(row) where !row.name.isEmpty: return 54
+        case .view, .row: return 38
+        }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -1215,6 +1313,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.target = self
         sidebar.action = #selector(rowClicked(_:))
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
+        let context = NSMenu()
+        context.delegate = self
+        sidebar.menu = context
         sidebar.setAccessibilityLabel("Sessions")
 
         let scroll = NSScrollView()
@@ -1511,11 +1612,13 @@ final class WorkspaceGroupCellView: NSTableCellView {
 }
 
 /// A session's line: its state glyph, its profile, and a line of detail,
-/// with a × in the top right corner when the line can be closed.
+/// with a × in the top right corner when the line can be closed. A session
+/// that was given a name has it on a line of its own above the profile.
 @MainActor
 final class WorkspaceRowCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.row")
     let glyphLabel = NSTextField(labelWithString: "")
+    let nameLabel = NSTextField(labelWithString: "")
     let titleLabel = NSTextField(labelWithString: "")
     let detailLabel = NSTextField(labelWithString: "")
     let closeButton = NSButton(title: "", target: nil, action: nil)
@@ -1526,12 +1629,16 @@ final class WorkspaceRowCellView: NSTableCellView {
         super.init(frame: .zero)
         identifier = Self.identifier
         glyphLabel.alignment = .center
+        nameLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .bold)
+        nameLabel.textColor = Self.nameColor
+        nameLabel.lineBreakMode = .byTruncatingTail
+        nameLabel.isHidden = true
         titleLabel.lineBreakMode = .byTruncatingTail
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
         textField = titleLabel
-        let text = NSStackView(views: [titleLabel, detailLabel])
+        let text = NSStackView(views: [nameLabel, titleLabel, detailLabel])
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 1
@@ -1564,9 +1671,20 @@ final class WorkspaceRowCellView: NSTableCellView {
 
     @objc private func closePressed(_ sender: Any?) { onClose?() }
 
+    /// A session's name on its color: a dark blue, which reads on every
+    /// color the daemon publishes, as black does.
+    static let nameOnTabColor = NSColor(srgbRed: 0, green: 0.16, blue: 0.55, alpha: 1)
+    /// A session's name on the list's own background: the same dark blue in
+    /// a light appearance, and a blue light enough to read in a dark one.
+    static let nameColor = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.45, green: 0.68, blue: 1, alpha: 1) : nameOnTabColor
+    }
+
     /// Draws the text in `color`, for a session's color behind it, or as the
     /// list draws it when there is none.
     func setTabText(_ color: NSColor?) {
+        nameLabel.textColor = color == nil ? Self.nameColor : Self.nameOnTabColor
         glyphLabel.textColor = color ?? .labelColor
         titleLabel.textColor = color ?? .labelColor
         detailLabel.textColor = color?.withAlphaComponent(0.8) ?? .secondaryLabelColor
@@ -1580,6 +1698,8 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// A utility view's line: what it is and what it is about. It shows no
     /// session state, because it has none.
     func show(_ view: WorkspaceUtilityView) {
+        nameLabel.stringValue = ""
+        nameLabel.isHidden = true
         glyphLabel.stringValue = view.glyph
         titleLabel.stringValue = view.title
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
@@ -1594,12 +1714,14 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// Only an embedded session can be closed from here; `closing` is set
     /// once it was asked to be.
     func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false) {
+        nameLabel.stringValue = row.name
+        nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
         titleLabel.stringValue = row.muted ? "\(row.label) \(muteGlyph)" : row.label
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: row.attention ? .semibold : .regular)
         detailLabel.stringValue = row.detail
         toolTip = row.toolTip
-        var spoken = [row.project, row.label]
+        var spoken = (row.name.isEmpty ? [] : [row.name]) + [row.project, row.label]
         if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
         if !row.detail.isEmpty { spoken.append(row.detail) }
         setAccessibilityLabel(spoken.joined(separator: ", "))

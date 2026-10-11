@@ -367,6 +367,9 @@ struct CompanionSession: Decodable, Equatable {
     /// the color picked for it, else its profile's, bright enough for
     /// black text. Empty for none.
     var tabColor = ""
+    /// The name the operator gave a session with no Kitty tab
+    /// (`amx name-session`). Empty for none.
+    var name = ""
     /// The session's runtime identity; nil for a Kitty session no runtime
     /// session claims, and on a v1 snapshot.
     var runtime: CompanionRuntime?
@@ -376,7 +379,7 @@ struct CompanionSession: Decodable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, branch, dirty
+        case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, branch, dirty, name
         case runtime
         case windowID = "window_id"
         case tabID = "tab_id"
@@ -416,6 +419,7 @@ struct CompanionSession: Decodable, Equatable {
         branch = c.lenient(.branch, "")
         dirty = c.lenient(.dirty, false)
         tabColor = c.lenient(.tabColor, "")
+        name = c.lenient(.name, "")
         runtime = c.lenient(.runtime)
     }
 

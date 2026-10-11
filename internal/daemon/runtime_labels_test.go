@@ -211,3 +211,44 @@ func TestRuntimeSessionColorFollowsThePickAndTheProfile(t *testing.T) {
 		t.Fatalf("tab color after the pick was removed = %q; want the profile's again", got)
 	}
 }
+
+// TestRuntimeSessionNameFollowsThePane: a tmux session is published under the
+// name a reconciliation pass read from its pane, keeps it across a later
+// labeling pass, and loses it when the name is removed. A Kitty slot never
+// takes a name from the tmux observation.
+func TestRuntimeSessionNameFollowsThePane(t *testing.T) {
+	h, directory := newRuntimeTestHandler(t)
+	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
+	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
+	h.SetRuntimeSessionLabeler(func(runtimesession.Record) (RuntimeSessionLabel, error) {
+		return RuntimeSessionLabel{Project: "API", Profile: "work"}, nil
+	})
+	for _, runtime := range []runtimesession.ID{onKitty, onTmux} {
+		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
+	}
+
+	now := time.Now()
+	h.labelRuntimeSessions(now)
+	if got := tmuxSessionIn(t, h, onTmux).Name; got != "" {
+		t.Fatalf("name before any was given = %q", got)
+	}
+	h.observeRuntimeNames([]tmux.Named{{ID: onTmux, Name: "billing fix"}, {ID: onKitty, Name: "billing fix"}, {ID: newRuntimeID(t), Name: "billing fix"}})
+	if got := tmuxSessionIn(t, h, onTmux).Name; got != "billing fix" {
+		t.Fatalf("name after naming = %q", got)
+	}
+	h.stateMu.Lock()
+	_, kittyLabeled := h.runtimeLabels[string(onKitty)]
+	h.stateMu.Unlock()
+	if kittyLabeled {
+		t.Fatal("a Kitty slot took a name from the tmux observation")
+	}
+	h.labelRuntimeSessions(now.Add(10 * runtimeLabelRetry))
+	if got := tmuxSessionIn(t, h, onTmux).Name; got != "billing fix" {
+		t.Fatalf("name after a labeling pass = %q; want it kept", got)
+	}
+	h.observeRuntimeNames([]tmux.Named{{ID: onTmux}})
+	if got := tmuxSessionIn(t, h, onTmux).Name; got != "" {
+		t.Fatalf("name after it was removed = %q", got)
+	}
+}

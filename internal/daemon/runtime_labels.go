@@ -43,6 +43,9 @@ type runtimeLabel struct {
 	// Unlike the rest it can change while the binding lives, so every
 	// reconciliation pass reads it again (observeRuntimeColors).
 	color string
+	// name is the name the operator gave the session, empty for none. Like
+	// the color it can change while the binding lives (observeRuntimeNames).
+	name string
 	// read is true once the backend answered (or there is none to ask), so
 	// the label is final for as long as the binding lives.
 	read    bool
@@ -162,7 +165,7 @@ func (h *Handler) labelRuntimeSessions(now time.Time) {
 		if old.project != label.project || old.profile != label.profile {
 			changed = true
 		}
-		label.color = old.color
+		label.color, label.name = old.color, old.name
 		h.runtimeLabels[runtime] = label
 	}
 	if changed {

@@ -71,6 +71,34 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertNil(WorkspaceTabColor(hex: "#1a36zz"))
     }
 
+    func testASessionCarriesTheNameTheDaemonPublishes() throws {
+        let json = #"""
+        {"v":2,"sessions":[
+          {"project":"api","profile":"work","name":"billing fix",
+           "runtime":{"session_id":"rs-00000000000000000000000000000001","backend":"tmux","pane":"%1"}},
+          {"project":"api","profile":"plain",
+           "runtime":{"session_id":"rs-00000000000000000000000000000002","backend":"tmux","pane":"%2"}},
+          {"window_id":4,"project":"api","profile":"kitty","name":"stray"}]}
+        """#
+        let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
+        XCTAssertEqual(snapshot.sessions.map(\.name), ["billing fix", "", "stray"])
+
+        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions)[0].rows.map { ($0.label, $0) })
+        XCTAssertEqual(rows["work"]?.name, "billing fix")
+        XCTAssertEqual(rows["plain"]?.name, "", "a session nobody named has none")
+        XCTAssertEqual(rows["kitty"]?.name, "", "a Kitty session is named by its tab, in Kitty")
+        XCTAssertEqual(rows["work"]?.label, "work", "the name does not replace the profile, or move the row")
+    }
+
+    func testNamingPutsEveryFlagBeforeTheName() {
+        // `AMXCommand.json` appends `--json` only when it is missing, and
+        // anything after `--` is a name, not a flag.
+        let arguments = NameSessionResult.arguments(runtimeSessionID: "rs-1", name: "--odd name")
+        XCTAssertEqual(arguments, ["name-session", "--runtime-session", "rs-1", "--json", "--", "--odd name"])
+        XCTAssertEqual(arguments.last, "--odd name")
+        XCTAssertEqual(arguments.firstIndex(of: "--"), arguments.count - 2)
+    }
+
     // MARK: Sidebar
 
     func testGroupsByProjectAndLabelsByProfile() {

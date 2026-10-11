@@ -69,6 +69,8 @@ type RuntimeSlot struct {
 	// for it, else its profile's. Empty, or a name the palette lacks, is no
 	// color.
 	Color string
+	// Name is the name the operator gave such a session, empty for none.
+	Name string
 }
 
 func (r RuntimeSlot) kitty() bool { return r.Backend == "kitty" }
@@ -382,6 +384,7 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 		s := protocol.CompanionSession{
 			Profile:  display(in.Runtime[slot].Profile),
 			TabColor: tabColor(in.Runtime[slot].Color),
+			Name:     display(in.Runtime[slot].Name),
 			Project:  display(in.Runtime[slot].Project),
 			ASLRunID: identifier(runs[slot]),
 			Runtime:  companionRuntime(in.Runtime[slot]),

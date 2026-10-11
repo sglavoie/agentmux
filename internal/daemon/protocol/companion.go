@@ -413,6 +413,9 @@ type CompanionSession struct {
 	// reads on. Only a v2 snapshot carries it, and the daemon leaves it empty
 	// for a Kitty session, whose tab Kitty itself paints.
 	TabColor string `json:"tab_color,omitempty"`
+	// Name is the name the operator gave a session with no Kitty tab
+	// (`amx name-session`), empty for none. Only a v2 snapshot carries it.
+	Name string `json:"name,omitempty"`
 	// Runtime names the AgentMux runtime session that owns this session. Only
 	// a v2 snapshot carries it.
 	Runtime *CompanionRuntime `json:"runtime,omitempty"`

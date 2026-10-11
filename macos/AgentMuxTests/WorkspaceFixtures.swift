@@ -145,6 +145,16 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
         }
     }
 
+    /// The names amx was asked to give, in order.
+    private(set) var named: [(id: String, name: String)] = []
+    /// Set to refuse every naming with this message.
+    var nameProblem: String?
+
+    func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void) {
+        named.append((runtimeSessionID, name))
+        completion(nameProblem)
+    }
+
     /// The sessions amx was asked to close, in order.
     private(set) var ended: [String] = []
     /// Set to refuse every close with this message.

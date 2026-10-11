@@ -79,6 +79,14 @@ type Colored struct {
 	Color string
 }
 
+// Named is one live session and the name the operator gave it (cc_name),
+// empty when it has none. Like Muted it is listed only when the pass read the
+// session's pane.
+type Named struct {
+	ID   runtimesession.ID
+	Name string
+}
+
 // Report is what one pass changed, and who it found looking.
 type Report struct {
 	// Ended lists the sessions marked stale, with whether the agent was seen
@@ -98,6 +106,9 @@ type Report struct {
 	// Colors says, for every live session the pass read, which color was
 	// picked for it. Like Viewed it is an observation.
 	Colors []Colored
+	// Names says, for every live session the pass read, which name it was
+	// given. Like Viewed it is an observation.
+	Names []Named
 }
 
 // Empty reports whether the pass changed nothing.
@@ -172,6 +183,7 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 		if pane, ok := backend.FindPane(survey.Panes, recordPane(record)); ok {
 			report.Mutes = append(report.Mutes, Muted{ID: record.ID, Muted: pane.Vars[muteVar] != ""})
 			report.Colors = append(report.Colors, Colored{ID: record.ID, Color: pane.Vars[colorVar]})
+			report.Names = append(report.Names, Named{ID: record.ID, Name: pane.Vars[nameVar]})
 		}
 		if at, ok := lastViewed(survey.ClientsOf(recordPane(record))); ok {
 			report.Viewed = append(report.Viewed, Viewed{ID: record.ID, At: at})
@@ -221,6 +233,10 @@ const muteVar = "cc_mute"
 // colorVar is the pane variable holding the color picked for a session
 // (session.ColorVar; the color picker writes it).
 const colorVar = "cc_color"
+
+// nameVar is the pane variable holding the name given to a session
+// (session.NameVar; `amx name-session` writes it).
+const nameVar = "cc_name"
 
 // lastViewed is the latest moment any of a session's terminals attached or
 // was used.

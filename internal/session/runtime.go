@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cachefile"
@@ -30,6 +31,26 @@ const RuntimeSessionVar = "amx_runtime_session_id"
 // this key is only its record; a session on another backend has no tab bar,
 // and the key is what its rows are drawn from (RunningSession.Color).
 const ColorVar = "cc_color"
+
+// NameVar is the metadata key holding the name an operator gave one session
+// (`amx name-session`), empty for none. The daemon publishes it to companions,
+// where the desktop workspace shows it above the session's profile.
+const NameVar = "cc_name"
+
+// NameMax is the longest name a session is given, in runes.
+const NameMax = 64
+
+// CleanName is name as it is kept: on one line, with no control characters,
+// its runs of whitespace collapsed, and no longer than NameMax. Empty is no
+// name.
+func CleanName(name string) string {
+	fields := strings.FieldsFunc(name, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+	runes := []rune(strings.Join(fields, " "))
+	if len(runes) > NameMax {
+		runes = runes[:NameMax]
+	}
+	return strings.TrimSpace(string(runes))
+}
 
 // pendingLaunchTimeout is how old a pending registration must be before a
 // later launch treats it as left behind by a launcher that died between

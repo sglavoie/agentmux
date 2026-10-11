@@ -77,6 +77,29 @@ struct MuteToggleResult: Decodable, Equatable {
     }
 }
 
+/// `amx name-session --json`'s data.
+struct NameSessionResult: Decodable, Equatable {
+    var name = ""
+    var changed = false
+
+    enum CodingKeys: String, CodingKey {
+        case name, changed
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = c.lenient(.name, "")
+        changed = c.lenient(.changed, false)
+    }
+
+    /// An empty name removes the one the session has. The `--` keeps a name
+    /// that starts with a dash from being read as a flag, so `--json` is
+    /// given here, before it: appended after, it would be a second name.
+    static func arguments(runtimeSessionID: String, name: String) -> [String] {
+        ["name-session", "--runtime-session", runtimeSessionID, "--json", "--", name]
+    }
+}
+
 /// An amx command that dials Kitty itself, run against each candidate socket
 /// in turn. Only `kitty_unavailable` — a socket nobody answers on, such as one
 /// a crashed Kitty left behind — moves on to the next: any other answer,

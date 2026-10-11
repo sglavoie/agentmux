@@ -480,3 +480,45 @@ func TestReconcileReportsTheColorPickedForASession(t *testing.T) {
 		t.Fatalf("colors after removing the pick = %v", got)
 	}
 }
+
+// A pass says which name each live session was given: the pane variable
+// `amx name-session` writes, empty again once the name is removed.
+func TestReconcileReportsTheNameGivenToASession(t *testing.T) {
+	f := tmuxtest.New(t)
+	start := time.Now().Add(-time.Minute)
+	labeled := launchAgent(t, f)
+	named := register(t, f, labeled, start)
+	plain := register(t, f, launchAgent(t, f), start)
+	reconciler := tmux.NewReconciler(f.Registry, nil)
+
+	read := func() map[runtimesession.ID]string {
+		t.Helper()
+		report, err := reconciler.Reconcile(time.Now())
+		if err != nil || !report.Empty() {
+			t.Fatalf("pass = %+v, %v; want no change", report, err)
+		}
+		names := map[runtimesession.ID]string{}
+		for _, n := range report.Names {
+			names[n.ID] = n.Name
+		}
+		if len(names) != 2 {
+			t.Fatalf("names = %+v; want both live sessions read", report.Names)
+		}
+		return names
+	}
+	if got := read(); got[named.ID] != "" || got[plain.ID] != "" {
+		t.Fatalf("names before any was given = %v", got)
+	}
+	if err := f.Backend.SetMetadata(labeled.Pane, map[string]string{"cc_name": "billing fix"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[named.ID] != "billing fix" || got[plain.ID] != "" {
+		t.Fatalf("names after naming one = %v; want only it", got)
+	}
+	if err := f.Backend.SetMetadata(labeled.Pane, map[string]string{"cc_name": ""}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[named.ID] != "" {
+		t.Fatalf("names after removing it = %v", got)
+	}
+}

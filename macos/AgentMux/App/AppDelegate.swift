@@ -369,6 +369,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
+    /// Names a session with `amx name-session`; an empty name removes the
+    /// one it has. The sidebar shows the change once the daemon has read it.
+    func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void) {
+        guard let command else {
+            completion(preferences.binaryProblem ?? "amx has not been found yet.")
+            return
+        }
+        focusQueue.async {
+            let result = command.json(NameSessionResult.self, NameSessionResult.arguments(runtimeSessionID: runtimeSessionID, name: name))
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    switch result {
+                    case .success, .partial:
+                        Self.logger.notice("name-session \(runtimeSessionID, privacy: .public): done")
+                        completion(nil)
+                    case let .failure(error):
+                        Self.logger.error("name-session \(runtimeSessionID, privacy: .public): \(error.message, privacy: .public)")
+                        completion(error.message)
+                    }
+                }
+            }
+        }
+    }
+
     @objc func openWorkspace(_ sender: Any?) { showWorkspace() }
     @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
     @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }
@@ -404,6 +428,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return
         }
         if workspace?.closeShown() != true { NSSound.beep() }
+    }
+    /// ⌘R: names the session the workspace's pane is on.
+    @objc func nameSession(_ sender: Any?) {
+        guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
+        if !workspace.nameShownSession() { refuse(WorkspaceWindowController.namingNeedsEmbedded) }
     }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
     @objc func toggleRecentPlace(_ sender: Any?) {

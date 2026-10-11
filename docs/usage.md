@@ -808,6 +808,11 @@ What changes for a tmux session, and only for it:
   profile's color. Inside Kitty
   both stay overlays on the tab, and `--runtime-session` reaches a tmux session
   from there. `amx keybindings` opens in place.
+- **A tmux session can be given a name.** `amx name-session --runtime-session
+  <id> [name]` keeps a name with the session, on one line and at most 64
+  characters; with no name it removes the one the session has. Agent Mux.app
+  shows the name above the session's profile in its sidebar, and names a
+  session itself with ⌘R or a right-click on its line.
 - **A tmux outage keeps the list.** When tmux stops answering, the tmux rows
   stay as last listed and the dashboard's health indicator (the overview's
   status line) says they are kept. When the tmux server itself is gone, the

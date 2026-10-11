@@ -232,6 +232,13 @@ Whatever has the keyboard decides where a key goes.
   those are turned off in System Settings › Keyboard › Keyboard Shortcuts.
 - **⌘L** goes back to the session or view shown before this one, and again
   returns: the two most recently shown.
+- **⌘R** names the session shown (**Session › Name Session…**), and so does
+  **Name Session…** in the menu a right-click on a session's line opens. A
+  named session has the name on a first line of its own, bold and dark blue,
+  above its profile; one with no name looks as it always did. An empty name
+  removes it. The name is kept with the session (`amx name-session`), so it
+  is still there after the app was quit, and shows about two seconds after
+  it was given. Only a session embedded here can be named.
 - Every shortcut of the menu bar holds ⌘, so none is taken from a program,
   with two exceptions: Shift+Page Up and Shift+Page Down, and the function
   keys below. The global shortcuts work whatever has the keyboard.

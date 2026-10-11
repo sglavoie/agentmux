@@ -125,6 +125,99 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
     }
 
+    func testANamedSessionShowsItsNameAboveItsProfile() throws {
+        var named = sessions
+        named[0].name = "billing fix"
+        named[0].tabColor = "#c8c848"
+        app.store.apply(snapshot: F.snapshot(named))
+        let work = try index(of: .embedded(F.runtimeID(1)))
+        let personal = try index(of: .embedded(F.runtimeID(2)))
+
+        func line(_ index: Int) throws -> WorkspaceRowCellView {
+            let rowView = try XCTUnwrap(workspace.sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)
+            return try XCTUnwrap(rowView.view(atColumn: 0) as? WorkspaceRowCellView)
+        }
+        var cell = try line(work)
+        XCTAssertFalse(cell.nameLabel.isHidden)
+        XCTAssertEqual(cell.nameLabel.stringValue, "billing fix")
+        XCTAssertEqual(cell.titleLabel.stringValue, "work", "the profile stays on its own line")
+        XCTAssertTrue(cell.nameLabel.font?.fontDescriptor.symbolicTraits.contains(.bold) == true)
+        XCTAssertEqual(cell.nameLabel.textColor, WorkspaceRowCellView.nameOnTabColor, "dark blue on the session's color")
+        XCTAssertTrue((cell.nameLabel.superview as? NSStackView)?.arrangedSubviews.first === cell.nameLabel, "the name is the first line")
+        XCTAssertGreaterThan(workspace.sidebar.rect(ofRow: work).height, workspace.sidebar.rect(ofRow: personal).height,
+                             "the named line is taller by its first line")
+
+        // A session with no name looks as it did.
+        let plain = try line(personal)
+        XCTAssertTrue(plain.nameLabel.isHidden)
+        XCTAssertEqual(plain.titleLabel.stringValue, "personal")
+        XCTAssertEqual(workspace.sidebar.rect(ofRow: personal).height, 38)
+
+        // Selected, the line is on the list's own selection.
+        workspace.select(.embedded(F.runtimeID(1)))
+        cell = try line(work)
+        XCTAssertEqual(cell.nameLabel.textColor, WorkspaceRowCellView.nameColor)
+
+        // The name taken back leaves the line as it was.
+        named[0].name = ""
+        app.store.apply(snapshot: F.snapshot(named))
+        cell = try line(work)
+        XCTAssertTrue(cell.nameLabel.isHidden)
+        XCTAssertEqual(workspace.sidebar.rect(ofRow: work).height, 38)
+    }
+
+    func testNamingASessionFromItsMenuAndFromTheKeyboard() throws {
+        var named = sessions
+        named[1].name = "old name"
+        app.store.apply(snapshot: F.snapshot(named))
+        let work = try row("api", "work")
+        let personal = try row("api", "personal")
+        var asked: [(WorkspaceRow, @MainActor (String?) -> Void)] = []
+        workspace.askName = { row, answer in asked.append((row, answer)) }
+        var problems: [String] = []
+        workspace.reportNameProblem = { _, message in problems.append(message) }
+
+        // The right-click menu of a session's line names that session,
+        // wherever the pane is.
+        workspace.activate(work)
+        var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
+        XCTAssertEqual(items.map(\.title), ["Name Session…"])
+        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        XCTAssertEqual(asked.map(\.0), [personal])
+        XCTAssertTrue(app.named.isEmpty, "nothing is written before the answer")
+        asked[0].1("  release notes ")
+        XCTAssertEqual(app.named.map(\.id), [F.runtimeID(2)])
+        XCTAssertEqual(app.named.map(\.name), ["release notes"])
+
+        // Cancelled, or left as it was, it writes nothing; empty removes it.
+        workspace.nameSession(personal.key)
+        asked[1].1(nil)
+        workspace.nameSession(personal.key)
+        asked[2].1("old name")
+        XCTAssertEqual(app.named.count, 1)
+        workspace.nameSession(personal.key)
+        asked[3].1("")
+        XCTAssertEqual(app.named.map(\.name), ["release notes", ""])
+
+        // The shortcut names the session the pane is on.
+        XCTAssertTrue(workspace.nameShownSession())
+        XCTAssertEqual(asked.last?.0, work)
+        app.nameProblem = "tmux backend unavailable"
+        asked[4].1("x")
+        XCTAssertEqual(problems, ["tmux backend unavailable"])
+
+        // A Kitty window is named in Kitty; other lines have no menu.
+        let kitty = try row("web", "work")
+        items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
+        XCTAssertEqual(items.count, 1)
+        XCTAssertNil(items[0].action, "listed, and greyed out")
+        XCTAssertTrue(workspace.contextMenuItems(forRow: 0).isEmpty)
+        XCTAssertTrue(workspace.contextMenuItems(forRow: -1).isEmpty)
+        workspace.select(kitty.key)
+        XCTAssertFalse(workspace.nameShownSession())
+        XCTAssertEqual(asked.count, 5)
+    }
+
     func testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, personal) = (try row("api", "work"), try row("api", "personal"))

@@ -45,6 +45,10 @@ struct WorkspaceRow: Equatable {
     /// picked for the session, else its profile's. Only an embedded session has one; a Kitty
     /// session's color is on its tab, in Kitty.
     var tabColor: WorkspaceTabColor?
+    /// The name the operator gave the session, shown on a line of its own
+    /// above the label; empty for none, and the row then looks as it always
+    /// did. Only an embedded session has one.
+    var name = ""
 
     var embeddedRuntimeSessionID: String? {
         if case let .embedded(id) = target { return id }
@@ -118,7 +122,8 @@ enum WorkspaceSidebar {
             working: session.isWorking,
             muted: session.muted,
             toolTip: tip.joined(separator: " · "),
-            tabColor: embedded == nil ? nil : WorkspaceTabColor(hex: session.tabColor)
+            tabColor: embedded == nil ? nil : WorkspaceTabColor(hex: session.tabColor),
+            name: embedded == nil ? "" : session.name
         )
     }
 

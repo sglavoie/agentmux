@@ -431,6 +431,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("w", keyCode: 13), "Close"),
             (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
             (.command("\r", keyCode: 36), "New Terminal Below"),
+            (.command("r", keyCode: 15), "Name Session…"),
             (.command("]", keyCode: 30), "Select Next Session"),
             (.command("[", keyCode: 33), "Select Previous Session"),
             (.command("l", keyCode: 37), "Back to Last Shown"),
