@@ -224,3 +224,36 @@ func (g Geometry) Tile(pos int) (Tile, bool) {
 	}
 	return t, true
 }
+
+// TileAt is the page position of the tile covering a cell, and false for a cell
+// no tile covers: the chrome rows, and the spare rows compact mode leaves under
+// the grid.
+//
+// It reads the same extents Tile does, so a pointer resolves to the tile that
+// was drawn under it. Whether a SESSION is in that slot is the caller's to
+// answer; the last page usually has slots with nothing in them.
+func (g Geometry) TileAt(x, y int) (int, bool) {
+	if x < 0 || y < gridTop {
+		return 0, false
+	}
+	col, ok := extentAt(g.colWidths, x)
+	if !ok {
+		return 0, false
+	}
+	row, ok := extentAt(g.rowHeights, y-gridTop)
+	if !ok {
+		return 0, false
+	}
+	return row*g.Cols + col, true
+}
+
+// extentAt is which of a run of adjoining extents an offset falls in.
+func extentAt(extents []int, offset int) (int, bool) {
+	for i, extent := range extents {
+		if offset < extent {
+			return i, true
+		}
+		offset -= extent
+	}
+	return 0, false
+}

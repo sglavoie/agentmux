@@ -2,8 +2,8 @@
 //
 // Update is a dispatch table and nothing more: each case hands off to the
 // handler that owns the state it touches, so the set of messages this surface
-// understands is readable in one screen. There are five, which is the point of a
-// standalone overview — the dashboard's loop consumes several dozen.
+// understands is readable in one screen, which is the point of a standalone
+// overview — the dashboard's loop consumes several dozen.
 //
 // The keymap itself is declared in bindings.go, which the footer and the help
 // overlay project the same table from; what is here is only the routing. It
@@ -19,6 +19,8 @@
 //   - ENTER and DIGITS act on a session. Enter captures the tab currently under the
 //     cursor and dispatches the existing focus action against that captured tab
 //     exactly once; 1–0 select and focus one of the first ten cards overall.
+//     A left click on a tile is the same thing said with the pointer, and the
+//     wheel is PgUp and PgDn.
 //   - DISMISSAL — esc, q, ctrl+c — leaves. It leaves while a refresh is out and
 //     while a focus is pending, because an operator who wants out of an overlay
 //     is not asking to wait for a subprocess first.
@@ -63,6 +65,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleRecoveryDone(msg)
 	case tea.KeyPressMsg:
 		return m.handleKeyPress(msg)
+	case tea.MouseClickMsg:
+		return m.handleMouseClick(msg)
+	case tea.MouseWheelMsg:
+		return m.handleMouseWheel(msg)
 	}
 	return m, nil
 }
@@ -151,6 +157,58 @@ func (m model) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// gridInFront reports that nothing is over the grid, which is when the pointer
+// is talking to it. View reads it to decide whether the terminal reports the
+// mouse at all, and the two mouse handlers read it again because an event
+// already on its way when a modal opened still arrives.
+func (m model) gridInFront() bool {
+	return !m.help.open && m.acts.surface == surfaceGrid
+}
+
+// handleMouseClick is the pointer's spelling of a digit: a left click on a tile
+// selects that session and focuses it, through focusIndex and so through the
+// same captured-target, single-flight path. A click anywhere else — the chrome,
+// an empty slot, the rows under a compact grid — does nothing.
+//
+// A shifted click is left alone, as it is on the dashboard: shift is how a
+// terminal is asked to select text rather than report the mouse.
+func (m model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	mouse := msg.Mouse()
+	if !m.gridInFront() || mouse.Button != tea.MouseLeft || mouse.Mod&tea.ModShift != 0 {
+		return m, nil
+	}
+	g := MeasureMode(m.width, m.height, m.compact)
+	pos, ok := g.TileAt(mouse.X, mouse.Y)
+	if !ok {
+		return m, nil
+	}
+	return m.focusIndex(g.PageStart(g.PageOf(m.selected)) + pos)
+}
+
+// handleMouseWheel turns the page, and only the page: it is PgUp and PgDn when
+// there is another page to show and nothing when there is not, so a wheel over
+// a grid that already shows everything does not move the cursor to its end.
+func (m model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
+	mouse := msg.Mouse()
+	if !m.gridInFront() || mouse.Mod&tea.ModShift != 0 {
+		return m, nil
+	}
+	var move Move
+	switch mouse.Button {
+	case tea.MouseWheelUp:
+		move = MovePageUp
+	case tea.MouseWheelDown:
+		move = MovePageDown
+	default:
+		return m, nil
+	}
+	g := MeasureMode(m.width, m.height, m.compact)
+	if g.PageOf(Navigate(g, len(m.sessions), m.selected, move)) == g.PageOf(m.selected) {
+		return m, nil
+	}
+	return m.applyMove(move)
 }
 
 // dismiss leaves the surface.

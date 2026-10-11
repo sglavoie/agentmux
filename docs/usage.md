@@ -485,11 +485,16 @@ under the same rules and the same confirmations, as `a` on a dashboard row.
   order: left to right across each row, then top to bottom. Later cards have no
   digit; a digit without a matching card does nothing. Like `Enter`, a failed
   focus leaves the target selected for retry, and pending focus ignores repeats.
+- Mouse: a left click on a tile selects and focuses that session, exactly as
+  its digit would, for any tile on the page; a click anywhere else does
+  nothing. The wheel turns the page when there is another one. Hold `Shift` to
+  select text instead, and the mouse is not reported while a menu, a
+  confirmation, or the help is open.
 - `Esc`, `q`, `Ctrl+C`: close, whether or not a read is still out
 
 Browsing itself still only observes sessions and their screen text: moving the
 selection, paging, and `n`/`N` touch nothing, `c` changes only the daemon's
-in-memory view preference, and `Enter` and the digits focus a tab. Everything
+in-memory view preference, and `Enter`, the digits, and a click focus a tab. Everything
 that changes a session is behind `a`, where it is named and — when
 `confirm_destructive = true` — confirmed. Closing immediately after a compact
 toggle lets its bounded save finish before exiting.

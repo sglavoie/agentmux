@@ -46,8 +46,8 @@
 // `?` help overlay, and browsing the `a` actions menu write nothing to Kitty at
 // all, and `c` is no exception either, since it saves only the daemon's
 // in-memory compact preference. Every Kitty MUTATION is therefore one the
-// operator explicitly asked for: the focus call that Enter, a digit, and the
-// menu's Open entry share, and the twelve session actions the menu dispatches
+// operator explicitly asked for: the focus call that Enter, a digit, a click on
+// a tile, and the menu's Open entry share, and the twelve session actions the menu dispatches
 // under the same declarations, availability rules, and confirm_destructive
 // prompts the dashboard reads from tui/sessionactions. The feedback row is
 // where those land, and it names every refusal and every failure — including
@@ -326,8 +326,12 @@ func (m model) Init() tea.Cmd {
 // frame is a total function of the model: the same model renders the same bytes,
 // which is what lets a lifecycle test assert on what an operator would see
 // rather than only on what the model holds.
+//
+// The mouse is reported only while the grid is in front. A modal answers the
+// keyboard alone, and leaving reporting off under one is what lets the terminal
+// select its text.
 func (m model) View() tea.View {
-	return tea.NewView(Render(Input{
+	v := tea.NewView(Render(Input{
 		FocusPending:  m.focusTabID != 0,
 		Closing:       m.quitAfterPreference,
 		Compact:       m.compact,
@@ -345,6 +349,10 @@ func (m model) View() tea.View {
 		Overlay:       m.overlayView(),
 		OverlayHints:  m.overlayHints(),
 	}))
+	if m.gridInFront() {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
+	return v
 }
 
 // selectedSession is the row the cursor is on, and false when there is no row to
