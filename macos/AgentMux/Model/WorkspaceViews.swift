@@ -238,6 +238,20 @@ struct WorkspaceViews: Equatable {
         ))
     }
 
+    /// Moves a terminal among the ones beside its session: to before
+    /// `other`, or after the last of them when nil. It never leaves its
+    /// session.
+    mutating func moveTerminal(_ id: String, before other: String?) {
+        guard id != other, let from = opened.firstIndex(where: { $0.id == id }),
+              let session = opened[from].besideRuntimeSessionID else { return }
+        if let other, view(other)?.besideRuntimeSessionID != session { return }
+        let moved = opened.remove(at: from)
+        let to = other.flatMap { other in opened.firstIndex { $0.id == other } }
+            ?? opened.lastIndex { $0.besideRuntimeSessionID == session }.map { $0 + 1 }
+            ?? opened.count
+        opened.insert(moved, at: to)
+    }
+
     /// Drops an opened view; the Dashboard and the Overview stay.
     mutating func close(_ id: String) {
         opened.removeAll { $0.id == id }

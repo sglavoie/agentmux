@@ -65,12 +65,55 @@ struct WorkspaceGroup: Equatable {
     var attention: Int { rows.filter(\.attention).count }
 }
 
+/// The order the operator dragged the sessions of each project into.
+///
+/// It names sessions, never positions: a session that is not named, one
+/// launched since the drag, follows the named ones in the order
+/// `WorkspaceSidebar` gives it. A project nobody dragged in is not here.
+struct WorkspaceOrder: Equatable {
+    static let defaultsKey = "amxWorkspaceSessionOrder"
+
+    /// The sessions of each project that was dragged in, first to last.
+    private(set) var projects: [String: [String]] = [:]
+
+    /// What a session is named by here: its runtime session, or its Kitty
+    /// socket and window.
+    static func token(_ key: AttentionCycler.Key) -> String {
+        key.runtimeSessionID.isEmpty ? "kitty:\(key.windowID):\(key.socket)" : key.runtimeSessionID
+    }
+
+    /// Records the order of a project's sessions, replacing the one it had.
+    mutating func set(_ keys: [AttentionCycler.Key], for project: String) {
+        projects[project] = keys.map(Self.token)
+    }
+
+    /// A project's rows in the order they were dragged into.
+    func arranged(_ rows: [WorkspaceRow], in project: String) -> [WorkspaceRow] {
+        guard let tokens = projects[project] else { return rows }
+        let rank = Dictionary(tokens.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return rows.enumerated().sorted { lhs, rhs in
+            let (a, b) = (rank[Self.token(lhs.element.key)] ?? Int.max, rank[Self.token(rhs.element.key)] ?? Int.max)
+            return a != b ? a < b : lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
+    static func load(from defaults: UserDefaults = .standard) -> WorkspaceOrder {
+        WorkspaceOrder(projects: defaults.dictionary(forKey: defaultsKey) as? [String: [String]] ?? [:])
+    }
+
+    func save(to defaults: UserDefaults = .standard) {
+        defaults.set(projects, forKey: Self.defaultsKey)
+    }
+}
+
 /// The sidebar as data, built from a snapshot so it can be tested without
 /// AppKit: sessions grouped by project, each labeled with its profile.
 ///
 /// The order never follows attention. Projects sort by name and rows by
-/// profile, harness, and identity, so a session keeps its place while its
-/// state changes; the glyph and the group's count are what draw the eye.
+/// profile, harness, and identity, unless the operator dragged a project's
+/// rows into an order of their own (`WorkspaceOrder`). Either way a session
+/// keeps its place while its state changes; the glyph and the group's count
+/// are what draw the eye.
 enum WorkspaceSidebar {
     /// What a session with no profile and no harness is called.
     static let unlabeled = "session"
@@ -81,7 +124,8 @@ enum WorkspaceSidebar {
         _ sessions: [CompanionSession],
         snapshotSocket: String = "",
         now: Date = Date(),
-        glyphs: Glyphs = .bundled
+        glyphs: Glyphs = .bundled,
+        order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceGroup] {
         var byProject: [String: [(CompanionSession, WorkspaceRow)]] = [:]
         for session in sessions {
@@ -90,7 +134,8 @@ enum WorkspaceSidebar {
         }
         return byProject.keys.sorted(by: nameOrder).map { project in
             let members = byProject[project] ?? []
-            return WorkspaceGroup(project: project, rows: members.sorted { rowOrder($0, $1) }.map(\.1))
+            let rows = members.sorted { rowOrder($0, $1) }.map(\.1)
+            return WorkspaceGroup(project: project, rows: order.arranged(rows, in: project))
         }
     }
 
@@ -196,6 +241,12 @@ struct WorkspaceState: Equatable {
         guard selection != nil, selectedRow == nil else { return false }
         selection = nil
         return true
+    }
+
+    /// Puts the listed rows in the order they were dragged into. It lists
+    /// nothing new, so it works on held rows too.
+    mutating func arrange(_ order: WorkspaceOrder) {
+        groups = groups.map { WorkspaceGroup(project: $0.project, rows: order.arranged($0.rows, in: $0.project)) }
     }
 
     /// Selects a listed session, or nothing; false when `key` is not listed.

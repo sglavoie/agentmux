@@ -126,6 +126,10 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     private(set) var sidebarCollapses: [Bool] = []
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool) { sidebarCollapses.append(collapsed) }
 
+    /// Every order the sessions were dragged into, in order.
+    private(set) var orders: [WorkspaceOrder] = []
+    func workspaceOrderChanged(_ order: WorkspaceOrder) { orders.append(order) }
+
     /// What amx says about each session; one that is not named is running
     /// with no terminal attached.
     var statuses: [String: WorkspaceSessionStatus] = [:]

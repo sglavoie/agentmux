@@ -91,6 +91,29 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertEqual(views.all.map(\.id), ["dashboard", "overview", "editor:/work/api"], "the Dashboard cannot be unlisted")
     }
 
+    func testATerminalMovesOnlyAmongTheOnesBesideItsSession() {
+        var views = WorkspaceViews()
+        let (a, b) = (F.runtimeID(1), F.runtimeID(2))
+        let a1 = views.openTerminal(beside: a).id
+        let b1 = views.openTerminal(beside: b).id
+        let a2 = views.openTerminal(beside: a).id
+        let a3 = views.openTerminal(beside: a).id
+
+        views.moveTerminal(a3, before: a1)
+        XCTAssertEqual(views.terminals(beside: a).map(\.id), [a3, a1, a2])
+        views.moveTerminal(a3, before: nil)
+        XCTAssertEqual(views.terminals(beside: a).map(\.id), [a1, a2, a3], "nil is after the last of them")
+        views.moveTerminal(a1, before: a3)
+        XCTAssertEqual(views.terminals(beside: a).map(\.id), [a2, a1, a3])
+
+        let before = views
+        views.moveTerminal(a1, before: b1)
+        views.moveTerminal("dashboard", before: a1)
+        views.moveTerminal(a1, before: a1)
+        XCTAssertEqual(views, before, "a terminal never leaves its session, and no other view moves")
+        XCTAssertEqual(views.terminals(beside: b).map(\.id), [b1])
+    }
+
     func testTheShortcutSentToKittyGoesToTheWorkspaceOnlyWhenThereIsNoKittyToAsk() {
         let opened = OpenDashboardResult(windowID: 4, tabID: 2, opened: true)
         XCTAssertEqual(DashboardOpener.destination(for: .opened(opened, socket: "unix:/tmp/k")), .kitty(opened, socket: "unix:/tmp/k"))
@@ -150,6 +173,58 @@ final class WorkspaceViewsWindowTests: XCTestCase {
             if case let .view(view) = item { return view.id == id }
             return false
         })
+    }
+
+    func testSessionsAreDraggedWithinTheirProjectAndTerminalsWithinTheirSession() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let (work, personal) = (F.runtimeID(1), F.runtimeID(2))
+        workspace.select(.embedded(personal), focus: true)
+        workspace.openTerminalBesideSession()
+        workspace.openTerminalBesideSession()
+        let (first, second) = ("terminal:\(personal)#1", "terminal:\(personal)#2")
+        func sessionIndex(_ id: String) throws -> Int {
+            try XCTUnwrap(workspace.items.firstIndex { item in
+                if case let .row(row) = item { return row.embeddedRuntimeSessionID == id }
+                return false
+            })
+        }
+        // api, personal, its two terminals, work, web, the Kitty session.
+        let top = try sessionIndex(personal)
+        XCTAssertEqual(try sessionIndex(work), top + 3)
+        XCTAssertEqual(workspace.dropSlots(forItemAt: top), [top, top + 3, top + 4])
+        XCTAssertEqual(workspace.dropSlots(forItemAt: top + 1), [top + 1, top + 2, top + 3])
+        XCTAssertTrue(workspace.dropSlots(forItemAt: 1).isEmpty, "the Dashboard stays where it is")
+        XCTAssertTrue(workspace.dropSlots(forItemAt: top - 1).isEmpty, "a project line is not dragged")
+        XCTAssertNotNil(workspace.tableView(workspace.sidebar, pasteboardWriterForRow: top))
+        XCTAssertNotNil(workspace.tableView(workspace.sidebar, pasteboardWriterForRow: top + 1))
+        XCTAssertNil(workspace.tableView(workspace.sidebar, pasteboardWriterForRow: top + 6),
+                     "a project's only session has nowhere to go")
+
+        XCTAssertFalse(workspace.moveItem(at: top, to: top - 1), "not above its project")
+        XCTAssertFalse(workspace.moveItem(at: top, to: top + 2), "among its own terminals is where it is")
+        XCTAssertFalse(workspace.moveItem(at: top, to: top + 5), "not into another project")
+        XCTAssertTrue(app.orders.isEmpty)
+
+        XCTAssertTrue(workspace.moveItem(at: top, to: top + 4))
+        XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, nil])
+        XCTAssertEqual(try sessionIndex(work), top)
+        XCTAssertEqual(try index(ofView: first), top + 2, "a session takes its terminals with it")
+        XCTAssertEqual(try index(ofView: second), top + 3)
+        XCTAssertEqual(app.orders, [workspace.order])
+        XCTAssertEqual(workspace.viewSelection, second, "the pane stays where it was")
+        XCTAssertEqual(workspace.sidebar.selectedRow, top + 3)
+
+        // The order holds over snapshots, and a new session follows it.
+        app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "alpha")]))
+        XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, F.runtimeID(3), nil])
+
+        XCTAssertFalse(workspace.moveItem(at: top + 3, to: top + 5), "a terminal does not leave its session")
+        XCTAssertTrue(workspace.moveItem(at: top + 3, to: top + 2))
+        XCTAssertEqual(workspace.views.terminals(beside: personal).map(\.id), [second, first])
+        XCTAssertEqual(try index(ofView: second), top + 2)
+        XCTAssertTrue(workspace.moveItem(at: top + 2, to: top + 4))
+        XCTAssertEqual(workspace.views.terminals(beside: personal).map(\.id), [first, second])
+        XCTAssertEqual(app.orders.count, 1, "moving a terminal changes no session order")
     }
 
     func testTheDashboardIsATerminalOfItsOwnStartedWhenShown() throws {

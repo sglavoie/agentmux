@@ -318,6 +318,14 @@ ASL answer panel work the same either way.
   session is marked `Kitty`. A project's line counts its sessions that wait on
   you. The order never follows attention, so a session keeps its place while
   its state changes.
+- **Dragging.** Press a session's row and drag it to move it among its
+  project's sessions; the terminals beside it go with it. The order is a
+  `WorkspaceOrder`, kept in the `amxWorkspaceSessionOrder` preference, and a
+  session launched later follows the dragged ones. A terminal beside a
+  session drags among that session's terminals (`WorkspaceViews.moveTerminal`),
+  for as long as the app runs. `dropSlots(forItemAt:)` is the whole rule:
+  nothing leaves its project or its session, and the project lines and the
+  **Workspace** section do not move.
 - **Selecting and focusing.** Selecting a row (arrow keys, **Session ›
   Select Next/Previous Session**) shows what there is to show and never leaves
   the app: a tmux session's terminal, or a note that the session is a Kitty

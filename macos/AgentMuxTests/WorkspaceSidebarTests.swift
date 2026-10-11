@@ -147,6 +147,34 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(built[0].rows.map(\.key), [.embedded(F.runtimeID(1)), .embedded(F.runtimeID(2))])
     }
 
+    func testADraggedOrderHoldsAndNewSessionsFollowIt() throws {
+        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api"), F.kitty(4, project: "api"), F.tmux(3, project: "web")]
+        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        var order = WorkspaceOrder()
+        order.set([kitty, .embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))], for: "api")
+        func keys(_ sessions: [CompanionSession], _ project: String = "api") -> [AttentionCycler.Key] {
+            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order)
+                .first { $0.project == project }?.rows.map(\.key) ?? []
+        }
+        XCTAssertEqual(keys(sessions), [kitty, .embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))])
+        XCTAssertEqual(keys(sessions, "web"), [.embedded(F.runtimeID(3))], "a project nobody dragged in sorts as it did")
+        XCTAssertEqual(keys(sessions + [F.tmux(5, project: "api", profile: "alpha")]).last, .embedded(F.runtimeID(5)),
+                       "a session launched since follows the dragged ones")
+        XCTAssertEqual(keys([sessions[0], sessions[2]]), [kitty, .embedded(F.runtimeID(1))], "one that ended leaves no gap")
+
+        var state = WorkspaceState()
+        state.apply(groups(sessions))
+        state.arrange(order)
+        XCTAssertEqual(state.groups[0].rows.map(\.key), keys(sessions), "held rows are arranged without a snapshot")
+
+        let suite = "amx.tests.order.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(WorkspaceOrder.load(from: defaults), WorkspaceOrder())
+        order.save(to: defaults)
+        XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
+    }
+
     func testFeedNotice() {
         XCTAssertNil(WorkspaceSidebar.feedNotice(.live))
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.notRunning), "Daemon: not running")

@@ -32,6 +32,8 @@ protocol WorkspaceDelegate: AnyObject {
     func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?)
     /// The sidebar was hidden or shown.
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
+    /// A project's sessions were dragged into another order.
+    func workspaceOrderChanged(_ order: WorkspaceOrder)
     /// Asks whether a session's agent is running and whether a terminal is
     /// attached to it. It only asks: nothing is attached and nothing started.
     /// The answer arrives on the main actor, possibly before this returns.
@@ -86,6 +88,11 @@ protocol WorkspaceDelegate: AnyObject {
 /// session's row instead of above the projects. It can be clicked and reached
 /// with the arrow keys or by stepping to the next or previous session; the
 /// digits count sessions only.
+///
+/// A session's row can be dragged to another place among its project's
+/// sessions, and takes its terminals with it; a terminal can be dragged among
+/// the ones beside its session. Nothing is dragged out of its project or its
+/// session, and the Workspace section stays as it is.
 @MainActor
 final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "workspace")
@@ -139,6 +146,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     private weak var delegate: WorkspaceDelegate?
     private(set) var state = WorkspaceState()
+    /// The order sessions were dragged into; the app keeps it across
+    /// launches.
+    var order = WorkspaceOrder()
+    /// The line being dragged, from when the drag begins until it ends.
+    private var dragged: Place?
     private(set) var items: [Item] = []
     private(set) var content: Content = .empty
     /// Whether the window is on screen; terminals exist only while it is.
@@ -274,7 +286,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard let store = delegate?.store else { return }
         var live: [WorkspaceGroup]?
         if store.feed == .live, let snapshot = store.snapshot {
-            live = WorkspaceSidebar.groups(store.sessions, snapshotSocket: snapshot.kitty.socket, now: now(), glyphs: glyphs)
+            live = WorkspaceSidebar.groups(store.sessions, snapshotSocket: snapshot.kitty.socket, now: now(), glyphs: glyphs, order: order)
         }
         let wasCurrent = state.current
         let previous = state.selection
@@ -1219,6 +1231,122 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
+    // MARK: Dragging
+
+    static let dragType = NSPasteboard.PasteboardType("io.github.sglavoie.agentmux.workspace-line")
+
+    /// Where the line at `index` may be dropped, as the lines it would land
+    /// above; the last is the line after its last sibling. A session goes
+    /// among the sessions of its project and a terminal among the ones
+    /// beside its session; no other line moves.
+    func dropSlots(forItemAt index: Int) -> [Int] {
+        guard items.indices.contains(index) else { return [] }
+        switch items[index] {
+        case .section, .group:
+            return []
+        case .row:
+            guard let group = items[..<index].lastIndex(where: { if case .group = $0 { return true } else { return false } })
+            else { return [] }
+            let end = items[(group + 1)...].firstIndex { item in
+                switch item {
+                case .section, .group: return true
+                case .view, .row: return false
+                }
+            } ?? items.count
+            return (group + 1 ..< end).filter { if case .row = items[$0] { return true } else { return false } } + [end]
+        case let .view(view):
+            guard view.besideRuntimeSessionID != nil,
+                  let session = items[..<index].lastIndex(where: { if case .view = $0 { return false } else { return true } }),
+                  case let .row(row) = items[session], row.embeddedRuntimeSessionID == view.besideRuntimeSessionID
+            else { return [] }
+            let end = items[(session + 1)...].firstIndex { if case .view = $0 { return false } else { return true } } ?? items.count
+            return Array(session + 1 ... end)
+        }
+    }
+
+    /// The slot a line dragged from `index` takes when it is let go over
+    /// `proposed`: the first one at or below it. Nil outside the line's
+    /// project or session, and where it would land back where it is.
+    func dropSlot(forItemAt index: Int, proposed: Int) -> Int? {
+        let slots = dropSlots(forItemAt: index)
+        guard let first = slots.first, proposed >= first, let slot = slots.first(where: { $0 >= proposed }) else { return nil }
+        let after = slots.first { $0 > index }
+        return slot == index || slot == after ? nil : slot
+    }
+
+    /// Moves the line at `index` to above the line at `proposed`; false when
+    /// it may not go there.
+    @discardableResult
+    func moveItem(at index: Int, to proposed: Int) -> Bool {
+        guard let slot = dropSlot(forItemAt: index, proposed: proposed) else { return false }
+        switch items[index] {
+        case .section, .group:
+            return false
+        case let .row(row):
+            guard let group = state.groups.first(where: { $0.project == row.project }) else { return false }
+            var keys = group.rows.map(\.key).filter { $0 != row.key }
+            var at = keys.count
+            if slot < items.count, case let .row(next) = items[slot] { at = keys.firstIndex(of: next.key) ?? at }
+            keys.insert(row.key, at: at)
+            order.set(keys, for: row.project)
+            state.arrange(order)
+            delegate?.workspaceOrderChanged(order)
+        case let .view(view):
+            var next: String?
+            if slot < items.count, case let .view(other) = items[slot], other.besideRuntimeSessionID == view.besideRuntimeSessionID {
+                next = other.id
+            }
+            views.moveTerminal(view.id, before: next)
+        }
+        reloadSidebar()
+        return true
+    }
+
+    private func draggedIndex() -> Int? {
+        guard let dragged else { return nil }
+        return items.firstIndex { item in
+            switch item {
+            case let .row(row): return dragged == .session(row.key)
+            case let .view(view): return dragged == .view(view.id)
+            case .section, .group: return false
+            }
+        }
+    }
+
+    /// A line is dragged only when there is somewhere else for it to go.
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard dropSlots(forItemAt: row).count > 2 else { return nil }
+        let item = NSPasteboardItem()
+        item.setString("", forType: Self.dragType)
+        return item
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
+        dragged = nil
+        guard let index = rowIndexes.first, items.indices.contains(index) else { return }
+        switch items[index] {
+        case let .row(row): dragged = .session(row.key)
+        case let .view(view): dragged = .view(view.id)
+        case .section, .group: break
+        }
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        dragged = nil
+    }
+
+    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        guard info.draggingSource as? NSTableView === sidebar, let index = draggedIndex(),
+              let slot = dropSlot(forItemAt: index, proposed: row) else { return [] }
+        tableView.setDropRow(slot, dropOperation: .above)
+        return .move
+    }
+
+    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        guard info.draggingSource as? NSTableView === sidebar, let index = draggedIndex() else { return false }
+        return moveItem(at: index, to: row)
+    }
+
     /// A click on a row focuses it.
     @objc private func rowClicked(_ sender: Any?) {
         focusItem(at: sidebar.clickedRow)
@@ -1313,6 +1441,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.target = self
         sidebar.action = #selector(rowClicked(_:))
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
+        sidebar.registerForDraggedTypes([Self.dragType])
+        sidebar.setDraggingSourceOperationMask(.move, forLocal: true)
+        sidebar.setDraggingSourceOperationMask([], forLocal: false)
         let context = NSMenu()
         context.delegate = self
         sidebar.menu = context

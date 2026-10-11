@@ -246,6 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         workspace = controller
         if !Self.isRunningTests {
             controller.setSidebarCollapsed(WorkspaceRestoration.load().sidebarCollapsed)
+            controller.order = WorkspaceOrder.load()
         }
         // The terminals offer their shortcuts to the main menu first, and a
         // regular app needs one; the accessory never shows it.
@@ -325,6 +326,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool) {
         guard !Self.isRunningTests, !isTerminating else { return }
         WorkspaceRestoration.saveSidebarCollapsed(collapsed)
+    }
+
+    func workspaceOrderChanged(_ order: WorkspaceOrder) {
+        guard !Self.isRunningTests, !isTerminating else { return }
+        order.save()
     }
 
     /// Asks amx what the registry and the private tmux server say about a
