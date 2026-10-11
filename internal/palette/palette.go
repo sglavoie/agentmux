@@ -10,8 +10,11 @@ import (
 type Color struct {
 	ActiveBg   string `json:"active_bg"`
 	InactiveBg string `json:"inactive_bg"`
-	TextFg     [3]int `json:"text_fg"`
-	Emoji      string `json:"emoji"`
+	// BrightBg is a background light enough to carry black text, for a list
+	// that tells a session by its color alone.
+	BrightBg string `json:"bright_bg"`
+	TextFg   [3]int `json:"text_fg"`
+	Emoji    string `json:"emoji"`
 }
 
 // ForegroundHex returns the text foreground as a hex color string (#rrggbb).

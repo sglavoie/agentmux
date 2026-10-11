@@ -84,6 +84,7 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	}
 	h.observeRuntimeViewers(report.Viewed, finished)
 	h.observeRuntimeMutes(report.Mutes)
+	h.observeRuntimeColors(report.Colors)
 	if !report.Empty() {
 		// The directory answers a known session from the version it loaded;
 		// what was just recorded has to be the version the restore and the
@@ -127,6 +128,32 @@ func (h *Handler) observeRuntimeMutes(mutes []tmux.Muted) {
 			continue
 		}
 		st.Muted = observed.Muted
+		h.companionDirty()
+	}
+}
+
+// observeRuntimeColors is the color observation of a session with no Kitty
+// window. Kitty paints a tab in the color picked for it; a tmux session has
+// no tab, so the pick stays on its pane and the companion snapshot publishes
+// it for whoever lists the session. It is kept beside the session's label
+// and, like the mute, read again by every pass.
+func (h *Handler) observeRuntimeColors(colors []tmux.Colored) {
+	if len(colors) == 0 {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	for _, observed := range colors {
+		slot, ok := h.runtimeRoutes.byRuntime[string(observed.ID)]
+		if !ok || !isRuntimeSyntheticSlot(slot) {
+			continue
+		}
+		label, ok := h.runtimeLabels[string(observed.ID)]
+		if !ok || label.color == observed.Color {
+			continue
+		}
+		label.color = observed.Color
+		h.runtimeLabels[string(observed.ID)] = label
 		h.companionDirty()
 	}
 }

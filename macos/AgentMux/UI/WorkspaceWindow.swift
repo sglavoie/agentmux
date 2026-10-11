@@ -1092,6 +1092,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
+    /// A session's line is drawn on the session's color; every other line,
+    /// the Dashboard and the Overview among them, on the list's own.
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        let view = WorkspaceRowView()
+        if case let .row(row) = items[row], let color = row.tabColor {
+            view.tabColor = NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+        }
+        return view
+    }
+
+    func tableView(_ tableView: NSTableView, didAdd rowView: NSTableRowView, forRow row: Int) {
+        (rowView as? WorkspaceRowView)?.syncCell()
+    }
+
     /// The arrow keys moved the selection: show it, and stay in the sidebar.
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard !applying else { return }
@@ -1305,6 +1319,102 @@ final class WorkspaceSidebarView: NSTableView {
     }
 }
 
+/// A line of the session list, drawn on its session's color: the color
+/// while the line is not the selected one, and the list's own selection
+/// while it is.
+@MainActor
+final class WorkspaceRowView: NSTableRowView {
+    /// The text on a session's color. The daemon publishes colors bright
+    /// enough for it.
+    static let tabText = NSColor.black
+
+    var tabColor: NSColor? {
+        didSet {
+            needsDisplay = true
+            syncCell()
+        }
+    }
+
+    override var isSelected: Bool {
+        didSet {
+            needsDisplay = true
+            needsLayout = true
+            syncCell()
+        }
+    }
+
+    /// Whether the color is what the line shows now.
+    var showsTabColor: Bool { tabColor != nil && !isSelected }
+
+    /// Tells the line's cell what it is drawn on, so its text stays legible.
+    func syncCell() {
+        guard numberOfColumns > 0 else { return }
+        (view(atColumn: 0) as? WorkspaceRowCellView)?.setTabText(showsTabColor ? Self.tabText : nil)
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        guard showsTabColor, let tabColor else {
+            super.drawBackground(in: dirtyRect)
+            return
+        }
+        tabColor.setFill()
+        outline().fill()
+    }
+
+    /// The selected line has a border in the accent color around the list's
+    /// selection, which on its own is a gray close to the lines beside it.
+    /// It is a view over the line, not something drawn here: a source list
+    /// paints its selection without asking the row view to.
+    let selectionBorder = WorkspaceSelectionBorderView()
+
+    static let selectionBorderWidth: CGFloat = 2
+    /// How far the list's selection is inset from the row's sides, and how
+    /// round its corners are.
+    static let selectionInset: CGFloat = 10
+    static let selectionRadius: CGFloat = 10
+
+    override func layout() {
+        super.layout()
+        if subviews.last !== selectionBorder {
+            addSubview(selectionBorder, positioned: .above, relativeTo: nil)
+        }
+        selectionBorder.frame = bounds.insetBy(dx: Self.selectionInset, dy: 0)
+        selectionBorder.isHidden = !isSelected
+    }
+
+    /// The shape a line's color follows: the selection's, a point shorter so
+    /// two colored lines do not run together.
+    private func outline() -> NSBezierPath {
+        NSBezierPath(roundedRect: bounds.insetBy(dx: Self.selectionInset, dy: 1),
+                     xRadius: Self.selectionRadius, yRadius: Self.selectionRadius)
+    }
+}
+
+/// The border of the selected line. It takes no clicks.
+@MainActor
+final class WorkspaceSelectionBorderView: NSView {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.borderWidth = WorkspaceRowView.selectionBorderWidth
+        layer?.cornerRadius = WorkspaceRowView.selectionRadius
+        layer?.cornerCurve = .continuous
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported for this view")
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    /// Runs again when the appearance or the accent color changes.
+    override func updateLayer() {
+        layer?.borderColor = NSColor.controlAccentColor.cgColor
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 /// What the pane shows when it has no terminal to show: a title, a line of
 /// explanation, and at most one thing to do about it.
 @MainActor
@@ -1453,6 +1563,15 @@ final class WorkspaceRowCellView: NSTableCellView {
     }
 
     @objc private func closePressed(_ sender: Any?) { onClose?() }
+
+    /// Draws the text in `color`, for a session's color behind it, or as the
+    /// list draws it when there is none.
+    func setTabText(_ color: NSColor?) {
+        glyphLabel.textColor = color ?? .labelColor
+        titleLabel.textColor = color ?? .labelColor
+        detailLabel.textColor = color?.withAlphaComponent(0.8) ?? .secondaryLabelColor
+        closeButton.contentTintColor = color?.withAlphaComponent(0.8) ?? .tertiaryLabelColor
+    }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported for this view")

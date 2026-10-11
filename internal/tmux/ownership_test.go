@@ -437,3 +437,46 @@ func TestReconcileReportsWhichSessionsAreMuted(t *testing.T) {
 		t.Fatalf("mutes after unmuting = %v", got)
 	}
 }
+
+// A pass says which color was picked for each live session: the pane variable
+// the color picker writes, read with everything else, and empty again once
+// the pick is removed.
+func TestReconcileReportsTheColorPickedForASession(t *testing.T) {
+	f := tmuxtest.New(t)
+	start := time.Now().Add(-time.Minute)
+	painted := launchAgent(t, f)
+	picked := register(t, f, painted, start)
+	plain := register(t, f, launchAgent(t, f), start)
+	reconciler := tmux.NewReconciler(f.Registry, nil)
+
+	read := func() map[runtimesession.ID]string {
+		t.Helper()
+		report, err := reconciler.Reconcile(time.Now())
+		if err != nil || !report.Empty() {
+			t.Fatalf("pass = %+v, %v; want no change", report, err)
+		}
+		colors := map[runtimesession.ID]string{}
+		for _, c := range report.Colors {
+			colors[c.ID] = c.Color
+		}
+		if len(colors) != 2 {
+			t.Fatalf("colors = %+v; want both live sessions read", report.Colors)
+		}
+		return colors
+	}
+	if got := read(); got[picked.ID] != "" || got[plain.ID] != "" {
+		t.Fatalf("colors before any pick = %v", got)
+	}
+	if err := f.Backend.SetMetadata(painted.Pane, map[string]string{"cc_color": "red"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[picked.ID] != "red" || got[plain.ID] != "" {
+		t.Fatalf("colors after picking one = %v; want only it", got)
+	}
+	if err := f.Backend.SetMetadata(painted.Pane, map[string]string{"cc_color": ""}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[picked.ID] != "" {
+		t.Fatalf("colors after removing the pick = %v", got)
+	}
+}

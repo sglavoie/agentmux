@@ -8,7 +8,9 @@ import (
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
 
@@ -150,5 +152,62 @@ func TestTmuxRuntimeSessionLabelReadsPaneMetadata(t *testing.T) {
 	kitty.Target = &onKitty
 	if _, err := TmuxRuntimeSessionLabel(kitty); !errors.Is(err, errRuntimeLabelUnsupported) {
 		t.Fatalf("a Kitty record: %v", err)
+	}
+}
+
+// TestRuntimeSessionColorFollowsThePickAndTheProfile: a tmux session is
+// published on its profile's color, in the palette's bright background. A color picked for it replaces the profile's as
+// soon as a reconciliation pass reads the pick, survives a later labeling
+// pass, and gives way to the profile's again when the pick is removed. A
+// Kitty slot never takes a color from the tmux observation.
+func TestRuntimeSessionColorFollowsThePickAndTheProfile(t *testing.T) {
+	h, directory := newRuntimeTestHandler(t)
+	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
+	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
+	h.SetProfileColors(map[string]string{"Work": "blue"})
+	h.SetRuntimeSessionLabeler(func(runtimesession.Record) (RuntimeSessionLabel, error) {
+		return RuntimeSessionLabel{Project: "API", Profile: "work"}, nil
+	})
+	for _, runtime := range []runtimesession.ID{onKitty, onTmux} {
+		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
+	}
+	color := func(name string) string {
+		t.Helper()
+		c, err := palette.Lookup(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.BrightBg
+	}
+
+	now := time.Now()
+	h.labelRuntimeSessions(now)
+	if got := tmuxSessionIn(t, h, onTmux).TabColor; got != color("blue") {
+		t.Fatalf("tab color with no pick = %q; want the profile's, %q", got, color("blue"))
+	}
+
+	h.observeRuntimeColors([]tmux.Colored{{ID: onTmux, Color: "red"}, {ID: onKitty, Color: "red"}, {ID: newRuntimeID(t), Color: "red"}})
+	if got := tmuxSessionIn(t, h, onTmux).TabColor; got != color("red") {
+		t.Fatalf("tab color after a pick = %q; want %q", got, color("red"))
+	}
+	h.stateMu.Lock()
+	_, kittyLabeled := h.runtimeLabels[string(onKitty)]
+	h.stateMu.Unlock()
+	if kittyLabeled {
+		t.Fatal("a Kitty slot took a color from the tmux observation")
+	}
+	h.labelRuntimeSessions(now.Add(10 * runtimeLabelRetry))
+	if got := tmuxSessionIn(t, h, onTmux).TabColor; got != color("red") {
+		t.Fatalf("tab color after a labeling pass = %q; want the pick kept", got)
+	}
+
+	h.observeRuntimeColors([]tmux.Colored{{ID: onTmux, Color: "no-such-color"}})
+	if got := tmuxSessionIn(t, h, onTmux).TabColor; got != "" {
+		t.Fatalf("tab color for a name the palette lacks = %q; want none", got)
+	}
+	h.observeRuntimeColors([]tmux.Colored{{ID: onTmux}})
+	if got := tmuxSessionIn(t, h, onTmux).TabColor; got != color("blue") {
+		t.Fatalf("tab color after the pick was removed = %q; want the profile's again", got)
 	}
 }

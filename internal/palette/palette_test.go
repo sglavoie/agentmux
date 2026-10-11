@@ -1,6 +1,8 @@
 package palette
 
 import (
+	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -119,5 +121,29 @@ func TestNamesReturnsFreshSlice(t *testing.T) {
 func TestLookupCaseSensitive(t *testing.T) {
 	if _, err := Lookup("Blue"); err == nil {
 		t.Error("Lookup(\"Blue\") expected error (lookup is case-sensitive), got nil")
+	}
+}
+
+// TestBrightBackgroundsCarryBlackText: a companion draws a session's line on
+// BrightBg with black text, so every color must keep that readable (WCAG AAA,
+// 7:1).
+func TestBrightBackgroundsCarryBlackText(t *testing.T) {
+	linear := func(c float64) float64 {
+		if c <= 0.04045 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
+	}
+	for _, name := range Names() {
+		c, _ := Lookup(name)
+		var r, g, b int
+		if n, err := fmt.Sscanf(c.BrightBg, "#%02x%02x%02x", &r, &g, &b); err != nil || n != 3 || len(c.BrightBg) != 7 {
+			t.Errorf("%s: bright_bg %q is not #rrggbb", name, c.BrightBg)
+			continue
+		}
+		luminance := 0.2126*linear(float64(r)/255) + 0.7152*linear(float64(g)/255) + 0.0722*linear(float64(b)/255)
+		if contrast := (luminance + 0.05) / 0.05; contrast < 7 {
+			t.Errorf("%s: black on %s has contrast %.1f; want at least 7", name, c.BrightBg, contrast)
+		}
 	}
 }

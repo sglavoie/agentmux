@@ -65,6 +65,10 @@ type RuntimeSlot struct {
 	// them. A Kitty session's come from its tab, never from here.
 	Project string
 	Profile string
+	// Color is the palette color such a session is shown in: the one picked
+	// for it, else its profile's. Empty, or a name the palette lacks, is no
+	// color.
+	Color string
 }
 
 func (r RuntimeSlot) kitty() bool { return r.Backend == "kitty" }
@@ -377,6 +381,7 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 	for _, slot := range slots {
 		s := protocol.CompanionSession{
 			Profile:  display(in.Runtime[slot].Profile),
+			TabColor: tabColor(in.Runtime[slot].Color),
 			Project:  display(in.Runtime[slot].Project),
 			ASLRunID: identifier(runs[slot]),
 			Runtime:  companionRuntime(in.Runtime[slot]),
@@ -392,6 +397,18 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 		out = append(out, candidate{session: s, order: base + len(out)})
 	}
 	return out
+}
+
+// tabColor is the named palette color's bright background, which black text
+// reads on; empty for no color. Kitty's tab bar can afford the dim inactive
+// background because it also colors the title, and a companion's list has
+// only this to tell a session by.
+func tabColor(name string) string {
+	color, err := palette.Lookup(name)
+	if err != nil {
+		return ""
+	}
+	return color.BrightBg
 }
 
 // applyState lays the daemon's state over a session. The daemon's icon wins

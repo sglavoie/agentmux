@@ -180,6 +180,7 @@ func (h *Handler) companionRuntimeSlotsLocked() map[int]companion.RuntimeSlot {
 			Pane:       b.target.pane,
 			Project:    label.project,
 			Profile:    label.profile,
+			Color:      h.runtimeColorLocked(label),
 		}
 	}
 	return out

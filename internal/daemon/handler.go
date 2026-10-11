@@ -180,6 +180,10 @@ type Handler struct {
 	// runtimeLabels is the project and profile of each non-Kitty runtime
 	// session bound to a slot, by runtime-session ID. Guarded by stateMu.
 	runtimeLabels map[string]runtimeLabel
+	// profileColors is each configured profile's palette color, by folded
+	// profile name: the color of a session nobody picked one for. Installed
+	// once at startup by SetProfileColors.
+	profileColors map[string]string
 	// runtimeCheckpointPath is the backend-neutral reducer checkpoint
 	// (runtime_checkpoint.go), set once at startup; empty disables it.
 	// runtimeRestorePending holds checkpointed sessions the registry could

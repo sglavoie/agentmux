@@ -71,6 +71,60 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No session selected")
     }
 
+    func testASessionLineIsDrawnOnItsColorUnlessSelected() throws {
+        var colored = sessions
+        colored[0].tabColor = "#1a3655"
+        app.store.apply(snapshot: F.snapshot(colored))
+        let work = try index(of: .embedded(F.runtimeID(1)))
+        let personal = try index(of: .embedded(F.runtimeID(2)))
+
+        func line(_ index: Int) throws -> (WorkspaceRowView, WorkspaceRowCellView) {
+            let rowView = try XCTUnwrap(workspace.sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)
+            return (rowView, try XCTUnwrap(rowView.view(atColumn: 0) as? WorkspaceRowCellView))
+        }
+        var (rowView, cell) = try line(work)
+        XCTAssertEqual(rowView.tabColor, NSColor(srgbRed: 0x1a / 255.0, green: 0x36 / 255.0, blue: 0x55 / 255.0, alpha: 1))
+        XCTAssertTrue(rowView.showsTabColor)
+        XCTAssertEqual(cell.titleLabel.textColor, .black, "the text is black on the color")
+        let (plainView, plainCell) = try line(personal)
+        XCTAssertNil(plainView.tabColor)
+        XCTAssertEqual(plainCell.titleLabel.textColor, .labelColor)
+        for own in [1, 2] {
+            let ownView = try XCTUnwrap(workspace.sidebar.rowView(atRow: own, makeIfNecessary: true) as? WorkspaceRowView)
+            XCTAssertNil(ownView.tabColor, "the Dashboard and the Overview are not a session's and take no color")
+        }
+
+        // The selected line shows the list's selection, as the active tab
+        // shows Kitty's own colors.
+        workspace.select(.embedded(F.runtimeID(1)))
+        (rowView, cell) = try line(work)
+        XCTAssertNotNil(rowView.tabColor)
+        XCTAssertFalse(rowView.showsTabColor)
+        rowView.layoutSubtreeIfNeeded()
+        XCTAssertTrue(rowView.subviews.last === rowView.selectionBorder, "the border is over the line")
+        XCTAssertFalse(rowView.selectionBorder.isHidden, "the selected line has a border")
+        let unselected = try line(personal).0
+        unselected.layoutSubtreeIfNeeded()
+        XCTAssertTrue(unselected.selectionBorder.isHidden)
+        XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
+        workspace.select(.embedded(F.runtimeID(2)))
+        (rowView, cell) = try line(work)
+        XCTAssertTrue(rowView.showsTabColor)
+        XCTAssertEqual(cell.titleLabel.textColor, .black)
+
+        // Another pick repaints the line; a pick taken back leaves none.
+        colored[0].tabColor = "#c8c848"
+        app.store.apply(snapshot: F.snapshot(colored))
+        (rowView, cell) = try line(work)
+        XCTAssertEqual(rowView.tabColor, NSColor(srgbRed: 0xc8 / 255.0, green: 0xc8 / 255.0, blue: 0x48 / 255.0, alpha: 1))
+        XCTAssertEqual(cell.titleLabel.textColor, .black)
+        colored[0].tabColor = ""
+        app.store.apply(snapshot: F.snapshot(colored))
+        (rowView, cell) = try line(work)
+        XCTAssertNil(rowView.tabColor)
+        XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
+    }
+
     func testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, personal) = (try row("api", "work"), try row("api", "personal"))

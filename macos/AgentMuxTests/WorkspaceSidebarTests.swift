@@ -47,6 +47,30 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(AttentionCycler.key(tmux, snapshotSocket: "unix:/tmp/kitty-100"), .embedded("rs-fedcba9876543210fedcba9876543210"))
     }
 
+    func testASessionIsListedOnTheColorTheDaemonPublishes() throws {
+        let json = #"""
+        {"v":2,"sessions":[
+          {"project":"api","profile":"work","tab_color":"#1a3655",
+           "runtime":{"session_id":"rs-00000000000000000000000000000001","backend":"tmux","pane":"%1"}},
+          {"project":"api","profile":"plain",
+           "runtime":{"session_id":"rs-00000000000000000000000000000002","backend":"tmux","pane":"%2"}},
+          {"project":"api","profile":"odd","tab_color":"blue",
+           "runtime":{"session_id":"rs-00000000000000000000000000000003","backend":"tmux","pane":"%3"}},
+          {"window_id":4,"project":"api","profile":"kitty","tab_color":"#551a1a"}]}
+        """#
+        let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
+        XCTAssertEqual(snapshot.sessions.map(\.tabColor), ["#1a3655", "", "blue", "#551a1a"])
+
+        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions)[0].rows.map { ($0.label, $0) })
+        let color = try XCTUnwrap(rows["work"]?.tabColor)
+        XCTAssertEqual([color.red, color.green, color.blue], [0x1a / 255.0, 0x36 / 255.0, 0x55 / 255.0])
+        XCTAssertNil(rows["plain"]?.tabColor, "a session with no color is drawn on the list's own")
+        XCTAssertNil(rows["odd"]?.tabColor, "anything but #rrggbb is no color")
+        XCTAssertNil(rows["kitty"]?.tabColor, "a Kitty session's color is on its tab, in Kitty")
+        XCTAssertNil(WorkspaceTabColor(hex: "#1a365"))
+        XCTAssertNil(WorkspaceTabColor(hex: "#1a36zz"))
+    }
+
     // MARK: Sidebar
 
     func testGroupsByProjectAndLabelsByProfile() {

@@ -332,6 +332,16 @@ ASL answer panel work the same either way.
   detached with **F12**; the pane then offers **Reattach** instead of taking
   the session back by itself), when a live snapshot no longer lists its
   session, or when the window closes. None of those ends the agent.
+- **Session colors.** An embedded session's line is drawn on its color
+  (`WorkspaceRowView`): the profile's color, or the one F6 picked, in the
+  palette's `bright_bg`, with black text; a palette test holds every
+  `bright_bg` to a 7:1 contrast with black. The selected line shows the list's own
+  selection, with a border in the accent
+  color around it (any selected line has one, a view's too). The daemon publishes the color
+  as the session's `tab_color` (`#rrggbb`) and reads the pick from the pane
+  on every reconciliation pass, so a pick shows within about two seconds. A
+  Kitty session's color stays on its tab in Kitty, and the workspace's own
+  views (Dashboard, Overview, shells) take none.
 - **Closing from the sidebar.** A row that can be closed has a × in its top
   right corner. On an opened view (a shell, an editor, a pager, a session's
   terminal) it does what **View › Close** does on a view, wherever the pane is. On an

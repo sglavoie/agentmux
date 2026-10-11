@@ -802,8 +802,10 @@ What changes for a tmux session, and only for it:
   session instead of a Kitty tab: the one named by `--runtime-session`, else
   the one the command is typed in, else the only one running; with several and
   none named they list them and open nothing. The icon goes into the session's
-  title. The color is kept with the session and the dashboard draws the
-  session's rows in it; "reset" returns to the profile's color. Inside Kitty
+  title. The color is kept with the session: the dashboard draws the
+  session's rows in it, and Agent Mux.app draws the session's sidebar line on
+  it. "reset" returns to the
+  profile's color. Inside Kitty
   both stay overlays on the tab, and `--runtime-session` reaches a tmux session
   from there. `amx keybindings` opens in place.
 - **A tmux outage keeps the list.** When tmux stops answering, the tmux rows

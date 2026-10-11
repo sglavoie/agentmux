@@ -9,6 +9,22 @@ enum WorkspaceTarget: Equatable {
     case kitty(socket: String, windowID: Int)
 }
 
+/// The color a session's line is drawn on, as the daemon publishes it.
+struct WorkspaceTabColor: Equatable {
+    let red: Double
+    let green: Double
+    let blue: Double
+
+    /// Reads "#rrggbb"; nil for anything else, which is no color.
+    init?(hex: String) {
+        let digits = hex.dropFirst()
+        guard hex.hasPrefix("#"), digits.utf8.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+        red = Double((value >> 16) & 0xff) / 255
+        green = Double((value >> 8) & 0xff) / 255
+        blue = Double(value & 0xff) / 255
+    }
+}
+
 /// One session in the workspace sidebar.
 struct WorkspaceRow: Equatable {
     let key: AttentionCycler.Key
@@ -25,6 +41,10 @@ struct WorkspaceRow: Equatable {
     let working: Bool
     let muted: Bool
     let toolTip: String
+    /// What the line is drawn on while it is not the selected one: the color
+    /// picked for the session, else its profile's. Only an embedded session has one; a Kitty
+    /// session's color is on its tab, in Kitty.
+    var tabColor: WorkspaceTabColor?
 
     var embeddedRuntimeSessionID: String? {
         if case let .embedded(id) = target { return id }
@@ -97,7 +117,8 @@ enum WorkspaceSidebar {
             attention: session.attention,
             working: session.isWorking,
             muted: session.muted,
-            toolTip: tip.joined(separator: " · ")
+            toolTip: tip.joined(separator: " · "),
+            tabColor: embedded == nil ? nil : WorkspaceTabColor(hex: session.tabColor)
         )
     }
 

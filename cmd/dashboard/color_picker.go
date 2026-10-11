@@ -23,7 +23,8 @@ var colorPickerCmd = &cobra.Command{
 
 Outside Kitty the picker opens in this terminal and colors a tmux session
 instead: the one named by --runtime-session, else the one the command is typed
-in, else the only one running. The dashboard draws that session in the color.`,
+in, else the only one running. The dashboard draws that session in the color,
+and Agent Mux.app draws its sidebar line on it.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if portablePickerRequested(cmd) {

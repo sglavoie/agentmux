@@ -408,6 +408,11 @@ type CompanionSession struct {
 	PresentationChangedAtMS int64                  `json:"presentation_changed_at_ms,omitempty"`
 	Branch                  string                 `json:"branch,omitempty"`
 	Dirty                   bool                   `json:"dirty,omitempty"`
+	// TabColor is the background a session with no Kitty tab is listed on,
+	// as "#rrggbb": its palette color's bright background, which black text
+	// reads on. Only a v2 snapshot carries it, and the daemon leaves it empty
+	// for a Kitty session, whose tab Kitty itself paints.
+	TabColor string `json:"tab_color,omitempty"`
 	// Runtime names the AgentMux runtime session that owns this session. Only
 	// a v2 snapshot carries it.
 	Runtime *CompanionRuntime `json:"runtime,omitempty"`

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -38,6 +39,10 @@ type RuntimeSessionLabeler func(record runtimesession.Record) (RuntimeSessionLab
 type runtimeLabel struct {
 	project string
 	profile string
+	// color is the palette color picked for the session, empty for none.
+	// Unlike the rest it can change while the binding lives, so every
+	// reconciliation pass reads it again (observeRuntimeColors).
+	color string
 	// read is true once the backend answered (or there is none to ask), so
 	// the label is final for as long as the binding lives.
 	read    bool
@@ -49,6 +54,26 @@ type runtimeLabel struct {
 // session is labeled with its registry project alone.
 func (h *Handler) SetRuntimeSessionLabeler(labeler RuntimeSessionLabeler) {
 	h.runtimeLabeler = labeler
+}
+
+// SetProfileColors installs the configured profiles' palette colors, by
+// profile name. It is called once at startup, before any snapshot is built;
+// without it a session is colored only when a color was picked for it.
+func (h *Handler) SetProfileColors(colors map[string]string) {
+	folded := make(map[string]string, len(colors))
+	for profile, color := range colors {
+		folded[strings.ToLower(profile)] = color
+	}
+	h.profileColors = folded
+}
+
+// runtimeColorLocked is the palette color a non-Kitty session is shown in:
+// the one picked for it, else its profile's. Callers hold stateMu.
+func (h *Handler) runtimeColorLocked(label runtimeLabel) string {
+	if label.color != "" {
+		return label.color
+	}
+	return h.profileColors[strings.ToLower(label.profile)]
 }
 
 // noteRuntimeProjectLocked records the registry's project for a session that
@@ -133,9 +158,11 @@ func (h *Handler) labelRuntimeSessions(now time.Time) {
 		if h.runtimeLabels == nil {
 			h.runtimeLabels = make(map[string]runtimeLabel)
 		}
-		if old := h.runtimeLabels[runtime]; old.project != label.project || old.profile != label.profile {
+		old := h.runtimeLabels[runtime]
+		if old.project != label.project || old.profile != label.profile {
 			changed = true
 		}
+		label.color = old.color
 		h.runtimeLabels[runtime] = label
 	}
 	if changed {

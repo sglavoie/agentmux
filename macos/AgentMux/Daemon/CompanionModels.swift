@@ -363,6 +363,10 @@ struct CompanionSession: Decodable, Equatable {
     var presentationChangedAtMS: Int64 = 0
     var branch = ""
     var dirty = false
+    /// The background a session with no Kitty tab is listed on, "#rrggbb":
+    /// the color picked for it, else its profile's, bright enough for
+    /// black text. Empty for none.
+    var tabColor = ""
     /// The session's runtime identity; nil for a Kitty session no runtime
     /// session claims, and on a v1 snapshot.
     var runtime: CompanionRuntime?
@@ -384,6 +388,7 @@ struct CompanionSession: Decodable, Equatable {
         case busySinceAt = "busy_since_at"
         case lastEventAt = "last_event_at"
         case presentationChangedAtMS = "presentation_changed_at_ms"
+        case tabColor = "tab_color"
     }
 
     init(from decoder: Decoder) throws {
@@ -410,6 +415,7 @@ struct CompanionSession: Decodable, Equatable {
         presentationChangedAtMS = c.lenient(.presentationChangedAtMS, 0)
         branch = c.lenient(.branch, "")
         dirty = c.lenient(.dirty, false)
+        tabColor = c.lenient(.tabColor, "")
         runtime = c.lenient(.runtime)
     }
 

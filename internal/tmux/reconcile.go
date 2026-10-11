@@ -71,6 +71,14 @@ type Muted struct {
 	Muted bool
 }
 
+// Colored is one live session and the palette color the operator picked for
+// it (cc_color), empty when there is no pick. Like Muted it is listed only
+// when the pass read the session's pane.
+type Colored struct {
+	ID    runtimesession.ID
+	Color string
+}
+
 // Report is what one pass changed, and who it found looking.
 type Report struct {
 	// Ended lists the sessions marked stale, with whether the agent was seen
@@ -87,6 +95,9 @@ type Report struct {
 	// Mutes says, for every live session the pass read, whether it is muted.
 	// Like Viewed it is an observation.
 	Mutes []Muted
+	// Colors says, for every live session the pass read, which color was
+	// picked for it. Like Viewed it is an observation.
+	Colors []Colored
 }
 
 // Empty reports whether the pass changed nothing.
@@ -160,6 +171,7 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 		}
 		if pane, ok := backend.FindPane(survey.Panes, recordPane(record)); ok {
 			report.Mutes = append(report.Mutes, Muted{ID: record.ID, Muted: pane.Vars[muteVar] != ""})
+			report.Colors = append(report.Colors, Colored{ID: record.ID, Color: pane.Vars[colorVar]})
 		}
 		if at, ok := lastViewed(survey.ClientsOf(recordPane(record))); ok {
 			report.Viewed = append(report.Viewed, Viewed{ID: record.ID, At: at})
@@ -205,6 +217,10 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 // muteVar is the pane variable that mutes a session's notifications
 // (session.Mute writes it; this package cannot import that one).
 const muteVar = "cc_mute"
+
+// colorVar is the pane variable holding the color picked for a session
+// (session.ColorVar; the color picker writes it).
+const colorVar = "cc_color"
 
 // lastViewed is the latest moment any of a session's terminals attached or
 // was used.

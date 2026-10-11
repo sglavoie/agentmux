@@ -18,8 +18,9 @@ import (
 // Outside Kitty the two pickers are portable views: they open in the terminal
 // they are typed in and edit a tmux session instead of a Kitty tab. The icon
 // is part of the session's title, which every surface that lists the session
-// shows. The color is kept in the session's metadata (session.ColorVar), and
-// the dashboard draws the session's rows in it. Inside Kitty nothing changes:
+// shows. The color is kept in the session's metadata (session.ColorVar): the
+// dashboard draws the session's rows in it, and the daemon publishes it to
+// companions, where the desktop workspace draws the session's line on it. Inside Kitty nothing changes:
 // the pickers stay Kitty overlays over the tab they were opened on.
 
 // pickerRuntimeSessionFlag names the tmux session a picker edits.

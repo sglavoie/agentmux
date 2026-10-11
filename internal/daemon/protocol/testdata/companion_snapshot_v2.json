@@ -92,6 +92,7 @@
       "presentation_changed_at_ms": 1700000050123,
       "branch": "main",
       "dirty": true,
+      "tab_color": "#5aa9ff",
       "runtime": {
         "session_id": "rs-0123456789abcdef0123456789abcdef",
         "backend": "kitty",
@@ -112,6 +113,7 @@
       "icon_state": "stop",
       "attention": true,
       "last_event_at": 1700000060,
+      "tab_color": "#ff6b5e",
       "runtime": {
         "session_id": "rs-fedcba9876543210fedcba9876543210",
         "backend": "tmux",

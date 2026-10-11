@@ -152,6 +152,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		reader := runtimesession.NewReader(store)
 		handler.SetRuntimeSessionDirectory(reader)
 		handler.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
+		handler.SetProfileColors(profileColors(cfg))
 		handler.SetRuntimeSessionReconciler(NewTmuxRuntimeReconciler(store, reader))
 		handler.SetRuntimeScreenReader(NewTmuxRuntimeScreenReader())
 		if recorder != nil {
@@ -432,6 +433,18 @@ func buildStaleThresholds(cfg *config.Config) (map[string]time.Duration, map[str
 // expansion here (ResolveCopilotTranscript joins the homes verbatim). Duplicate
 // homes are collapsed so multiple Copilot profiles sharing a home are probed
 // once.
+// profileColors is each configured profile's palette color, by profile name.
+func profileColors(cfg *config.Config) map[string]string {
+	if cfg == nil {
+		return nil
+	}
+	colors := make(map[string]string, len(cfg.Profiles))
+	for _, p := range cfg.Profiles {
+		colors[p.Name] = p.Color
+	}
+	return colors
+}
+
 func copilotProfileHomes(cfg *config.Config) []string {
 	var homes []string
 	seen := make(map[string]bool)
