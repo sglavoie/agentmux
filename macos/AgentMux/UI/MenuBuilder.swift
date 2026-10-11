@@ -414,7 +414,7 @@ enum MenuBuilder {
         var entries: [MenuEntry] = [.info(snooze.description(now: input.now))]
         for choice in SnoozeChoice.allCases {
             if choice == .resume, !snoozed {
-                entries.append(.unavailable(choice.title, reason: "Notifications are not snoozed"))
+                entries.append(.unavailable(choice.title, reason: SnoozeChoice.notSnoozed))
             } else if choice == .untilResumed, snooze.indefinite {
                 entries.append(.unavailable(choice.title, reason: "Already snoozed until resumed"))
             } else {

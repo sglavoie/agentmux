@@ -81,6 +81,8 @@ enum SnoozeChoice: CaseIterable, Equatable {
 
     /// Tomorrow's snooze ends at this hour, local time.
     static let morningHour = 8
+    /// Why Resume Now is greyed out, in the menu and in Preferences.
+    static let notSnoozed = "Notifications are not snoozed"
 
     var title: String {
         switch self {

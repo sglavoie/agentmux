@@ -305,9 +305,9 @@ struct PreferencesView: View {
                 LabeledContent("Snooze") {
                     HStack {
                         Text(model.snoozeDescription).foregroundStyle(.secondary)
-                        if model.isSnoozed {
-                            Button(SnoozeChoice.resume.title) { model.resumeSnooze() }
-                        }
+                        Button(SnoozeChoice.resume.title) { model.resumeSnooze() }
+                            .disabled(!model.isSnoozed)
+                            .help(model.isSnoozed ? "" : SnoozeChoice.notSnoozed)
                     }
                 }
             }
