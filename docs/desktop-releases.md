@@ -50,6 +50,8 @@ The gate does not install the app. Installing, updating, and uninstalling are
 exercised by the live acceptance under `docs/acceptance/ghostty-desktop/`
 (`session-17` and `session-19`), which run the repository's installer against a
 disposable install root; `just mac-install` is the operator's own step.
+Moving daily work to the app, and going back, is in
+[Daily-driver trial](daily-driver-trial.md).
 
 ## Pending is not passed
 

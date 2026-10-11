@@ -7,6 +7,7 @@ This is the operator index. Each area below has its own guide.
 | [Build and test](testing.md) | `just` gates, the three non-hermetic gates, CI lanes, the live Kitty worktree checklist, the TUI layout regression harness |
 | [agent-session-loop rollout](asl-integration.md) | install order, `[defaults.asl]` modes, `amx config asl-sync`, the six doctor pairing dimensions, run-presence cutover, deferred gaps |
 | [Paired releases](paired-releases.md) | `just paired-release-gate`, phase order, the signed evidence record, verification, tags and their rollback, maintenance installation, harness compatibility policy |
+| [Daily-driver trial](daily-driver-trial.md) | installing the desktop candidate, switching new launches to it, what a trial covers and how it is logged, rollback, Kitty as the fallback |
 | [Screen classifier health](screen-classifier-health.md) | pattern-set sources in `amx doctor`, `screenstate_override_invalid` and `screenstate_persistent_decline`, the decline-signal drill |
 | [Troubleshooting](troubleshooting.md) | symptom-first recovery for icons, hooks, routing, the daemon, the ASL cockpit, and debug bundles |
 

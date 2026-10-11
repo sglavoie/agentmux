@@ -1,0 +1,165 @@
+
+##### 0 the candidate and the world before the transition [03:04:23Z]
+--- the Mac ---
+Seb’s MacBook Pro
+27.0.1
+arm64
+--- the installed app ---
+/tmp/amxs19/Applications/Agent Mux.app
+0.1.0
+Signature=adhoc
+TeamIdentifier=not set
+--- amx outside the app (/tmp/amxs19/home/.local/bin/amx) ---
+amx version 0.8.0 (revision 911ce009f3d0, built 2026-10-11T02:57:46Z, go1.27.1, sha256:a9a8f5d99f97)
+--- amx inside the app ---
+amx version 0.8.0 (revision 911ce009f3d0, built 2026-10-11T02:57:46Z, go1.27.1, sha256:a9a8f5d99f97)
+--- kitty ---
+kitty 0.48.2 created by Kovid Goyal
+--- launch backend in config.toml ---
+(no launch_backend line: the default, kitty)
+PASS: the installed bundle passes strict signature verification
+PASS: the amx outside the app is the same build as the one inside it
+PASS: no launch backend is configured: launches go to Kitty
+PASS: no private tmux server runs
+
+##### 1 before the transition: a Kitty session, launched the way it always was [03:04:23Z]
+--- $ amx project launch alpha --profile work --json   (KITTY_LISTEN_ON names the world's Kitty) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"alpha","harness":"claude","directory":"/tmp/amxs19/proj/alpha","groups":[]},"tab_id":2,"window_id":2,"backend":"kitty"}}
+(exit 0)
+PASS: alpha runs in a Kitty tab of its own
+PASS: the agent in that tab is up
+alpha: kitty window 2, process 60005 Sun Oct 11 03:04:23 2026 
+--- kitty window tree ---
+tab 1 title='/tmp/amxs19'
+   window 1 pid=59936 vars={}
+tab 2 title='🟠alpha'
+   window 2 pid=60005 vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'alpha'}
+PASS: the default launch started no tmux server and registered no runtime session
+PASS: its hook reaches the daemon: the tab is marked working
+
+##### 2 the transition: launch_backend = "tmux", and the app as the workspace [03:04:24Z]
+--- $ amx backend status --check ---
+launch backend: kitty
+tmux: /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux (3.7c, from installed, checksums verified)
+server: not running (the first tmux launch starts it)
+(exit 0)
+PASS: amx backend status --check passes before the switch
+--- launch backend in config.toml ---
+2:launch_backend = "tmux"
+PASS: config.toml validates
+--- $ amx backend status ---
+launch backend: tmux
+tmux: /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux (3.7c, from installed, checksums verified)
+server: not running (the first tmux launch starts it)
+(exit 0)
+PASS: amx backend status names tmux as the launch backend and passes --check
+PASS: the app runs from the install root
+PASS: the app found its bundled tmux and its feed is live
+--- the app's log (backend and feed lines) ---
+21:04:24.922 [io.github.sglavoie.agentmux:app] feed: connecting
+21:04:24.922 [io.github.sglavoie.agentmux:app] feed: live
+21:04:25.031 [io.github.sglavoie.agentmux:app] backend: tmux 3.7c (bundled with Agent Mux, verified) at /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux; session server: Not running; the first workspace launch starts it
+21:04:25.031 [io.github.sglavoie.agentmux:app] running /tmp/amxs19/shim/amx (userDefaultsOverride)
+21:04:25.291 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+21:04:25.308 [io.github.sglavoie.agentmux:app] feed: live
+
+##### 3 after the transition: new launches go to tmux; the Kitty session carries on where it is [03:04:27Z]
+--- $ amx project launch beta --profile work --json   (no --backend) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"beta","harness":"claude","directory":"/tmp/amxs19/proj/beta","groups":[]},"backend":"tmux","runtime_session_id":"rs-f0562a4c05b0aa42c790f2281edf2a0b"}}
+(exit 0)
+PASS: beta runs in a pane of the private tmux server
+PASS: the registry holds one live tmux session, for beta
+beta: runtime session rs-f0562a4c05b0aa42c790f2281edf2a0b, process 60186 Sun Oct 11 03:04:27 2026 ; server pid 60185
+--- registry ---
+rs-f0562a4c05b0aa42c790f2281edf2a0b live fresh tmux %0 project=beta pid=60186 conv=None parent=None
+--- private tmux server ---
+amx-64de3959432b1e8a %0 pid=60186 dead=0 /private/tmp/amxs19/proj/beta
+--- workspace_view session beta (the request the Dashboard sends when a row is chosen) ---
+{"ok": true, "workspace_view": {"delivered": 1}}
+PASS: the app shows beta: one terminal of its own is attached to it
+--- terminals attached to the private server ---
+client_pid=60258 term=xterm-ghostty pane=%0
+PASS: the launch made no Kitty tab
+PASS: the Kitty session is the same process in the same tab
+PASS: the Kitty session's hooks still reach the daemon: the tab is marked for permission
+PASS: amx attach --json finds the tmux session live
+--- $ amx attach rs-f0562a4c05b0aa42c790f2281edf2a0b --json ---
+{"schema_version":1,"data":{"runtime_session_id":"rs-f0562a4c05b0aa42c790f2281edf2a0b","backend":"tmux","project":"beta","state":"live","pane":"%0","pid":60186,"clients":1,"command":["/tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux","-S","/tmp/amxs19/tmp/agent-mux-504/tmux.sock","-f","/tmp/amxs19/tmp/agent-mux-504/tmux.conf","source-file","/tmp/amxs19/tmp/agent-mux-504/tmux.conf",";","attach-session","-d","-t","%0"]}}
+(exit 0)
+--- $ amx project launch beta --profile work --backend kitty --json   (Kitty named explicitly while tmux is the default) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"beta","harness":"claude","directory":"/tmp/amxs19/proj/beta","groups":[]},"tab_id":3,"window_id":3,"backend":"kitty"}}
+(exit 0)
+PASS: Kitty stays available while tmux is the default: beta also runs in a Kitty tab
+PASS: that launch added no tmux pane
+--- kitty window tree ---
+tab 1 title='/tmp/amxs19'
+   window 1 pid=59936 vars={}
+tab 2 title='🔑🟠alpha'
+   window 2 pid=60005 vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'alpha'}
+tab 3 title='🟠beta'
+   window 3 pid=60346 vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'beta'}
+
+##### 4 the Kitty session finishes in place [03:04:28Z]
+PASS: the agent ended by itself and its Kitty tab is gone
+PASS: so did the one launched on Kitty after the transition
+PASS: the tmux session was not touched by that
+
+##### 5 rollback, step 1: launches back to Kitty; the tmux agent keeps running [03:04:28Z]
+--- launch backend in config.toml ---
+(no launch_backend line: the default, kitty)
+PASS: config.toml validates
+--- $ amx project launch alpha --profile work --json   (no --backend) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"alpha","harness":"claude","directory":"/tmp/amxs19/proj/alpha","groups":[]},"tab_id":4,"window_id":4,"backend":"kitty"}}
+(exit 0)
+PASS: alpha is launched in a Kitty tab again
+PASS: the agent in that tab is up
+PASS: the Kitty launch added no tmux pane and no runtime session
+PASS: its hook reaches the daemon: the tab is marked for permission
+PASS: the tmux agent is the same process on the same server
+
+##### 6 rollback, step 2: remove the app; the tmux agent keeps running and stays reachable [03:04:29Z]
+--- $ uninstall-app.sh ---
+Quitting the running Agent Mux.app...
+Removed /tmp/amxs19/Applications/Agent Mux.app
+Kept the app's preferences (io.github.sglavoie.agentmux) and its tmux runtime (/tmp/amxs19/home/.local/share/agent-mux/runtime); --remove-app-data removes them.
+Left running: the session server and its 1 agent(s).
+  Reach them again by installing the app, or with any amx: amx attach <runtime-session-id>
+  End them without amx: '/tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux' -S '/tmp/amxs19/tmp/agent-mux-504/tmux.sock' kill-server
+Kept: your configuration (~/.config/agent-mux) and data (/tmp/amxs19/home/.local/share/agent-mux): conversations' indexes, handoffs, worktrees, and the session registry.
+(exit 0)
+PASS: the app is gone and no process of it is left
+PASS: the tmux agent is the same process on the same server
+PASS: the app's terminal is detached
+PASS: the amx outside the app still finds the session live
+--- $ amx backend status   (the amx outside the app, the app gone) ---
+launch backend: kitty
+tmux: /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux (3.7c, from installed, checksums verified)
+server: running at /tmp/amxs19/tmp/agent-mux-504/tmux.sock, 1 session, 1 running agent
+server tmux: /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+(exit 0)
+PASS: the Kitty session is still there
+PASS: the tmux agent still answers its terminal
+--- $ amx project launch alpha --profile work --backend tmux --json   (tmux named explicitly, the app gone) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"alpha","harness":"claude","directory":"/tmp/amxs19/proj/alpha","groups":[]},"backend":"tmux","runtime_session_id":"rs-e31b39eeee18c994a9e151fca07a1ec5"}}
+(exit 0)
+PASS: tmux remains usable without the app: a second agent runs on the same server
+
+##### 7 rollback, step 3: end the tmux agents explicitly; Kitty is all that is left [03:04:30Z]
+--- $ amx backend stop --yes ---
+Stopped the private tmux server and 2 running agents.
+(exit 0)
+PASS: the private server and its agent are gone
+PASS: the registry no longer holds a live session
+--- registry ---
+rs-f0562a4c05b0aa42c790f2281edf2a0b stale fresh tmux %0 project=beta pid=60186 conv=None parent=None
+rs-e31b39eeee18c994a9e151fca07a1ec5 stale fresh tmux %1 project=alpha pid=60584 conv=None parent=None
+PASS: the Kitty session is untouched
+PASS: and its hooks still reach the daemon
+--- kitty window tree ---
+tab 1 title='/tmp/amxs19'
+   window 1 pid=59936 vars={}
+tab 4 title='⚡🟠alpha'
+   window 4 pid=60417 vars={'amx_harness': 'claude', 'amx_profile': 'work', 'amx_project': 'alpha'}
+PASS: config.toml is as it was before the transition
+
+##### RESULT: 43 passed, 0 failed

@@ -1,0 +1,75 @@
+{
+  "session": "20",
+  "status": "pending",
+  "artifact_revision": "agentmux 911ce009f3d0a974223d0b7265973cef63f1480e (clean tree at build). amx 0.8.0 revision 911ce009f3d0, sha256:9fc978dda369 (Go build ID 0aQpHb53OUQz423Lzk2t/…). Agent Mux.app 0.1.0 Release, built and ad-hoc signed on the MacBook Pro by `just mac-app Release` through the remote route; bundled amx sha256:a9a8f5d99f97 (same Go build ID; re-signed), bundled tmux 3.7c (bin/tmux sha256 fb421000337b…, SHA256SUMS sha256 858d25c2c2d4f810…). Kitty 0.48.2. This is the trial candidate, not yet the revision a trial was completed on.",
+  "operator_confirmed": false,
+  "workdays": [],
+  "unresolved_blockers": [
+    "The five-workday operator trial has not been performed: Session 19 completed at 2026-10-11T02:57Z and this record was prepared within the same hour. No day of real use on the desktop workflow exists yet.",
+    "The operator has not confirmed anything about daily use."
+  ],
+  "why_pending": "Every trial case needs the operator's own work over at least five distinct workdays and the operator's explicit confirmation. Neither can be produced by a test run. What exists is the candidate build, the operator's guide (docs/daily-driver-trial.md), an empty log (session-20/trial-log.md), and a rehearsal of the transition and rollback instructions with stand-in agents in a disposable world on the MacBook Pro. The rehearsal is recorded under `rehearsal` and is deliberately not counted as any case.",
+  "cases": {
+    "multiple-profiles": {
+      "status": "pending",
+      "evidence": "",
+      "required": "agents under at least two profiles at once in real work, with no crossover"
+    },
+    "all-harnesses": {
+      "status": "pending",
+      "evidence": "",
+      "required": "Claude, Codex, and Copilot each launched, used, and resumed in the workspace"
+    },
+    "permission-prompts": {
+      "status": "pending",
+      "evidence": "",
+      "required": "permission and question prompts raised, seen, answered from the embedded terminal, and cleared"
+    },
+    "long-running-jobs": {
+      "status": "pending",
+      "evidence": "",
+      "required": "agents left working for hours across app close/reopen and sleep, found again intact"
+    },
+    "asl": {
+      "status": "pending",
+      "evidence": "",
+      "required": "a real asl run supervised from the workspace, including a mailbox question and its reply"
+    },
+    "overview": {
+      "status": "pending",
+      "evidence": "",
+      "required": "the overview used in real work to watch and focus several agents"
+    },
+    "conversation-continuity": {
+      "status": "pending",
+      "evidence": "",
+      "required": "continue, fork, and handoff from Past Sessions; a conversation resumed after its agent ended"
+    },
+    "affected-acceptance-rerun": {
+      "status": "pending",
+      "evidence": "",
+      "required": "each trial defect fixed and its affected acceptance checks rerun, or an explicit statement that the trial found none"
+    },
+    "rollback": {
+      "status": "pending",
+      "evidence": "",
+      "required": "the rollback carried out on the operator's installation, or the rehearsal accepted by the operator with the reason recorded"
+    },
+    "kitty-fallback": {
+      "status": "pending",
+      "evidence": "",
+      "required": "a deliberate Kitty launch during the trial with tmux as the default, and pre-transition Kitty sessions finished in place"
+    }
+  },
+  "rehearsal": {
+    "status": "passed",
+    "what": "The transition and rollback steps 1 to 3 of docs/daily-driver-trial.md, on the candidate build, in the Session 19 world on Seb's MacBook Pro (macOS 27.0.1, arm64): app installed by install-app.sh into a disposable root, an amx outside the app, a real Kitty 0.48.2 of the run's own, stand-in agents that send real hooks.",
+    "observed": "43 passed, 0 failed (second pass; the first pass's 9 failures were driver mistakes, see session-20/driver/README.md). A Kitty session launched before the switch stayed the same process in the same tab, kept reporting to the daemon, and ended in place. With launch_backend = \"tmux\" a launch with no --backend went to the private server and the app attached one xterm-ghostty terminal to it; --backend kitty still opened a Kitty tab. After the switch was reverted a launch opened a Kitty tab while the tmux agent stayed the same process on the same server. uninstall-app.sh removed the app and left that agent running, answering its terminal, and live to `amx attach --json`; a --backend tmux launch still worked with the app gone. `amx backend stop --yes` ended the server and both agents and left the Kitty session and its hooks untouched; config.toml ended as it began. Teardown: no process left, the MacBook user's own amx, AgentMux directories, Kitty configuration, and app preferences unchanged.",
+    "not_shown": "Rollback step 4 (reinstalling the earlier build, amx revision 5645f028f120) was not rehearsed. Nothing was installed into /Applications. No real harness ran. No Developer ID signature or notarization exists. A launch from the app's own menu was not driven.",
+    "logs": [
+      "docs/acceptance/ghostty-desktop/session-20/rehearsal/setup.log",
+      "docs/acceptance/ghostty-desktop/session-20/rehearsal/transition-rollback.log",
+      "docs/acceptance/ghostty-desktop/session-20/rehearsal/teardown.log"
+    ]
+  }
+}
