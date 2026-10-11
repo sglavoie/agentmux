@@ -357,6 +357,22 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(workspace.viewSelection, second)
         XCTAssertEqual(workspace.state.rows, rowsBefore)
 
+        // With Shift the step is from session to session. From a terminal,
+        // the next session is the one after its own and the previous its own.
+        workspace.selectNeighbor(1, raising: true)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertEqual(workspace.state.selection, rowsBefore[2].key)
+        workspace.showView(second)
+        workspace.selectNeighbor(-1, raising: true)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertEqual(workspace.state.selection, rowsBefore[1].key)
+        workspace.selectNeighbor(1, raising: true)
+        XCTAssertEqual(workspace.state.selection, rowsBefore[2].key, "the terminals under it are passed over")
+        workspace.selectNeighbor(-1, raising: true)
+        workspace.selectNeighbor(-1, raising: true)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertEqual(workspace.state.selection, rowsBefore[0].key)
+
         // Its shell exits: it is unlisted and the pane goes back.
         workspace.showView(second)
         workspace.terminalEnded(try XCTUnwrap(workspace.utilityTerminalView(for: second)))

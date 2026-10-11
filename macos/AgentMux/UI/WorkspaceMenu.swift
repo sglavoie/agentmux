@@ -14,7 +14,8 @@ import AppKit
 /// The digits are places in the sidebar: ⌘1 the Dashboard, ⌘2 the Overview,
 /// then the sessions from the top down. Going to a session with ⌘ alone stays
 /// in the workspace; with Shift, a session that lives in Kitty comes forward
-/// there.
+/// there. ⌘] and ⌘[ stop at every session and every terminal under one; with
+/// Shift they go from session to session.
 enum WorkspaceMenu {
     /// The keys of the first sessions in the sidebar, in its order: ⌘3 is the
     /// first one listed and ⌘0 the eighth.
@@ -87,7 +88,8 @@ enum WorkspaceMenu {
             session.addItem(place)
         }
         session.addItem(.separator())
-        // The same places with Shift: a Kitty session is raised in Kitty.
+        // The same places with Shift: a Kitty session is raised in Kitty, and
+        // the steps pass over the terminals under a session.
         let kitty = submenu("Show in Kitty", in: session)
         kitty.addItem(item("Next Session in Kitty", #selector(AppDelegate.showNextSessionInKitty(_:)), "}", target: target))
         kitty.addItem(item("Previous Session in Kitty", #selector(AppDelegate.showPreviousSessionInKitty(_:)), "{", target: target))

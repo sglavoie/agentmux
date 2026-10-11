@@ -367,10 +367,10 @@ ASL answer panel work the same either way.
 - **Main menu.** The terminals offer every key equivalent to the main menu
   before encoding it for their program, so the menu is the list of shortcuts
   the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘⇧-, ⌘⇧A (next needing attention),
-  ⌘] and ⌘[ (next and previous session), ⌘1 or ⌘D (Dashboard), ⌘2 or ⌘O
+  ⌘] and ⌘[ (next and previous session or terminal under one), ⌘1 or ⌘D (Dashboard), ⌘2 or ⌘O
   (Overview), ⌘3 to ⌘0 (the first eight sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘⇧W (close view), ⌘W, ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘⇧W (close view), ⌘W, ⌘M,
   ⌘, and ⌘Q.
 
 ### Dashboard and utility views
@@ -411,7 +411,8 @@ and Kitty variable from its environment before running it.
   and moves it there if a live snapshot stops listing the session. It is a
   utility view in every other respect: `WorkspaceState.rows` never holds it,
   so the digit shortcuts cannot land on it; `selectNeighbor` walks the
-  sidebar's sessions and the terminals under them, so ⌘] and ⌘[ do.
+  sidebar's sessions and the terminals under them, so ⌘] and ⌘[ do, and
+  with `raising` (⌘⇧] and ⌘⇧[) it walks the sessions alone.
 - **The dashboard shortcut.** `DashboardOpener.destination(for:)` sends it to
   the workspace's Dashboard only when there is no Kitty socket to try; a Kitty
   that answered with a failure, or sockets nobody answers on, are still

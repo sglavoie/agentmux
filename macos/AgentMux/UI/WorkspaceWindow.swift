@@ -669,26 +669,34 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Moves `offset` places through the sessions and the terminals listed
     /// under them, in sidebar order, wrapping; from anywhere else, to the
     /// first (or last) of them. A Kitty row is selected, not raised: stepping
-    /// through the sidebar never leaves the app, unless `raising` asks for the
-    /// row to come forward in Kitty.
+    /// through the sidebar never leaves the app.
+    ///
+    /// With `raising` the step is from session to session: terminals are
+    /// passed over, one of them counts as standing just below its session,
+    /// and a Kitty row comes forward in Kitty.
     func selectNeighbor(_ offset: Int, raising: Bool = false) {
         let listed = state.embeddedRuntimeSessionIDs
         let stops = items.filter { item in
             switch item {
             case .row: return true
-            case let .view(view): return view.besideRuntimeSessionID.map(listed.contains) ?? false
+            case let .view(view): return !raising && view.besideRuntimeSessionID.map(listed.contains) ?? false
             case .section, .group: return false
             }
         }
         guard !stops.isEmpty else { return }
+        let beside = raising ? views.view(viewSelection)?.besideRuntimeSessionID : nil
         let here = stops.firstIndex { item in
             switch item {
-            case let .row(row): return viewSelection == nil && row.key == state.selection
+            case let .row(row):
+                if let beside { return row.embeddedRuntimeSessionID == beside }
+                return viewSelection == nil && row.key == state.selection
             case let .view(view): return view.id == viewSelection
             case .section, .group: return false
             }
         }
-        let next = here.map { (($0 + offset) % stops.count + stops.count) % stops.count }
+        // Up from a terminal, the nearest session is its own.
+        let step = beside != nil && offset < 0 ? offset + 1 : offset
+        let next = here.map { (($0 + step) % stops.count + stops.count) % stops.count }
             ?? (offset < 0 ? stops.count - 1 : 0)
         switch stops[next] {
         case let .row(row): go(to: row, raising: raising)

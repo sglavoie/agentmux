@@ -182,7 +182,8 @@ terminals of their own beside the agents, and none of them needs Kitty.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you
   are on is working and lists it right under that session; pressed again, it
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[ stop
-  at every session and every terminal under one, in sidebar order. The digits
+  at every session and every terminal under one, in sidebar order; ⌘⇧] and
+  ⌘⇧[ go from session to session, passing over the terminals. The digits
   (⌘3 to ⌘0) count sessions only. It applies to sessions whose terminal
   is in the workspace, not to Kitty sessions. If the session ends first, the
   shell keeps running and moves up to the **Workspace** section.
@@ -215,9 +216,11 @@ Whatever has the keyboard decides where a key goes.
 - **⌘3** to **⌘0** go to the first eight sessions in the order the sidebar
   lists them, top to bottom: ⌘3 is the first session and ⌘0 the eighth.
   Shells and other opened views are not counted. **⌘]** and **⌘[** step to
-  the next and the previous session, wrapping.
-- Those keys never leave the app: a session that lives in Kitty is selected
-  and its pane says where it is. Add Shift (**⌘⇧3** to **⌘⇧0**, **⌘⇧]**,
+  the next and the previous session or terminal under one, wrapping; **⌘⇧]**
+  and **⌘⇧[** step to the next and the previous session, skipping the
+  terminals. From a terminal, the previous session is the one it is under.
+- Without Shift those keys never leave the app: a session that lives in
+  Kitty is selected and its pane says where it is. Add Shift (**⌘⇧3** to **⌘⇧0**, **⌘⇧]**,
   **⌘⇧[**) and such a session comes forward in Kitty instead, as a click on
   its row does. A session embedded here is focused here either way. macOS
   takes ⌘⇧3, ⌘⇧4, and ⌘⇧5 for screenshots before any app sees them, unless
