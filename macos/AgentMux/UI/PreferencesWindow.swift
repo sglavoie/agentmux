@@ -66,6 +66,8 @@ final class PreferencesModel: ObservableObject {
 
     /// Read-only facts about the running app.
     @Published var snapshot = PreferencesSnapshot()
+    /// The config's effective size while no preference overrides it.
+    @Published var configFontSize: Float = 13
     /// The daemon's own snooze, from the latest snapshot; nil when the feed is
     /// not live.
     @Published var daemonNotification: CompanionNotification?
@@ -272,6 +274,26 @@ struct PreferencesView: View {
             }
 
             Section("Workspace") {
+                LabeledContent("Default zoom") {
+                    HStack {
+                        if model.preferences.defaultFontSize != nil {
+                            Button("Reset") { model.preferences.defaultFontSize = nil }
+                        }
+                        Stepper(
+                            "\(Ghostty.ConfigOverrides.number(model.preferences.defaultFontSize ?? model.configFontSize)) pt",
+                            value: Binding(
+                                get: { model.preferences.defaultFontSize ?? model.configFontSize },
+                                set: { model.preferences.defaultFontSize = $0.rounded() }
+                            ),
+                            in: DefaultFontSize.range
+                        )
+                    }
+                }
+                note((model.preferences.defaultFontSize == nil
+                    ? "Uses the Ghostty config's font size. "
+                    : "Overrides the Ghostty config's font-size. ")
+                    + "Changing this updates all open terminals. ⌘+ and ⌘− zoom the focused terminal; "
+                    + "⌘0 returns to this size. New terminals start at this size.")
                 Picker("Launch projects in", selection: $model.preferences.launchBackend) {
                     ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
                 }

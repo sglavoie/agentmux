@@ -266,6 +266,12 @@ runs without embedded terminals.
   `config-file = ~/.config/ghostty/config` to share it. The app configuration
   names no command. `reloadConfig()` rebuilds the layers and hands the result
   to every surface; a manually zoomed surface keeps its zoom until reset.
+  Preferences › Workspace › Default zoom saves a size from 6–72 points and
+  applies it immediately to all open terminals, including hidden views.
+  Reset removes that override and restores the config's `font-size`.
+  **⌘+** (or **⌘=**) and **⌘−** adjust only the focused terminal;
+  **⌘0** restores the saved default. New terminals start at that default;
+  shortcut changes are not persisted.
 - **Callbacks.** Runtime actions are sorted by `Ghostty.disposition(of:)`. The
   app answers quit (passed to `GhosttyAppDelegate`, which ignores it), open
   URL, open and reload config, and the bell. A surface-targeted title,
@@ -704,6 +710,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
 | `amxLaunchBackend` | `automatic` | Where Launch Project starts an agent: `automatic` (a Kitty tab when a Kitty is running, else the workspace), `kitty`, or `workspace` (always the private tmux server). An explicit choice is never overridden by what happens to be running. |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
+| `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘0 resets to this size. |
 
 Preferences › Workspace also shows the backend setup, read from
 `amx backend status --json` each time amx is resolved

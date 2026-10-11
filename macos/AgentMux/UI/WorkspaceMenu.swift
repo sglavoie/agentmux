@@ -33,6 +33,11 @@ enum WorkspaceMenu {
 
         let view = submenu("View", in: main)
         view.addItem(item("Bigger", #selector(Ghostty.SurfaceView.zoomIn(_:)), "+"))
+        // Accept the unshifted + key too, as in TT and other Mac terminals.
+        let bigger = item("Bigger", #selector(Ghostty.SurfaceView.zoomIn(_:)), "=")
+        bigger.isHidden = true
+        bigger.allowsKeyEquivalentWhenHidden = true
+        view.addItem(bigger)
         view.addItem(item("Smaller", #selector(Ghostty.SurfaceView.zoomOut(_:)), "-"))
         view.addItem(item("Actual Size", #selector(Ghostty.SurfaceView.resetZoom(_:)), "0"))
         view.addItem(.separator())

@@ -21,11 +21,12 @@ struct AppPreferences: Equatable {
         static let environment = "amxEnvironment"
         static let launchBackend = "amxLaunchBackend"
         static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
+        static let defaultFontSize = "amxDefaultFontSize"
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
-            launchBackend, openWorkspaceAtLaunch,
+            launchBackend, openWorkspaceAtLaunch, defaultFontSize,
         ]
     }
 
@@ -60,6 +61,8 @@ struct AppPreferences: Equatable {
     /// `amxOpenWorkspaceAtLaunch`: show the workspace window as soon as the
     /// app starts, even when it was closed last time.
     var openWorkspaceAtLaunch = false
+    /// The terminal size at launch and on ⌘0; nil uses the Ghostty config.
+    var defaultFontSize: Float?
 
     init() {}
 
@@ -80,6 +83,7 @@ struct AppPreferences: Equatable {
         preferences.launchBackend = defaults.string(forKey: Key.launchBackend)
             .flatMap(LaunchBackendPreference.init(rawValue:)) ?? .automatic
         preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
+        preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
         return preferences
     }
 
@@ -104,6 +108,7 @@ struct AppPreferences: Equatable {
         EnvironmentOverrides.save(environment, to: defaults)
         defaults.set(launchBackend.rawValue, forKey: Key.launchBackend)
         defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
+        DefaultFontSize.save(defaultFontSize, to: defaults)
     }
 
     static func clamp(_ value: Int, _ range: ClosedRange<Int>) -> Int {
@@ -136,6 +141,27 @@ struct AppPreferences: Equatable {
               CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
         let value = number.intValue
         return range.contains(value) ? value : nil
+    }
+}
+
+/// Persistent default zoom. Runtime zoom belongs to each terminal separately.
+enum DefaultFontSize {
+    static let range: ClosedRange<Float> = 6...72
+
+    static func load(from defaults: UserDefaults) -> Float? {
+        guard let number = defaults.object(forKey: AppPreferences.Key.defaultFontSize) as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              range.contains(number.floatValue) else { return nil }
+        return number.floatValue
+    }
+
+    static func save(_ points: Float?, to defaults: UserDefaults) {
+        if let points, points.isFinite {
+            defaults.set(min(max(points, range.lowerBound), range.upperBound),
+                         forKey: AppPreferences.Key.defaultFontSize)
+        } else {
+            defaults.removeObject(forKey: AppPreferences.Key.defaultFontSize)
+        }
     }
 }
 

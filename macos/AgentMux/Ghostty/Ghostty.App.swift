@@ -163,9 +163,10 @@ extension Ghostty {
         /// Reloads the layered config from disk and hands it to the app, which
         /// passes it to every surface; the applied value comes back through
         /// `GHOSTTY_ACTION_CONFIG_CHANGE`. Every surface has taken it by the
-        /// time this returns. Returns whether the new config was applied.
+        /// time this returns. `resetFontSize` also moves manually zoomed
+        /// surfaces to the new default. Returns whether the config applied.
         @discardableResult
-        func reloadConfig() -> Bool {
+        func reloadConfig(resetFontSize: Bool = false) -> Bool {
             guard let app else { return false }
             let fresh = makeConfig()
             Self.logDiagnostics(fresh)
@@ -176,6 +177,9 @@ extension Ghostty {
             // Ghostty clones what it keeps, so the old config can go.
             ghostty_app_update_config(app, cfg)
             config = fresh
+            if resetFontSize {
+                for surface in surfaces { surface.resetZoom(nil) }
+            }
             return true
         }
 

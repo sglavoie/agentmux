@@ -23,6 +23,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.environment, [:])
         XCTAssertEqual(preferences.launchBackend, .automatic)
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
+        XCTAssertNil(preferences.defaultFontSize)
     }
 
     func testWorkspacePreferencesRoundTripAndRejectUnknownValues() {
@@ -51,7 +52,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(AppPreferences.Key.all, [
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
-            "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch",
+            "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
         ])
     }
 
@@ -112,6 +113,44 @@ final class AppPreferencesTests: XCTestCase {
         preferences.save(to: defaults)
         XCTAssertEqual(defaults.integer(forKey: "amxRecentDays"), AppPreferences.recentDaysRange.upperBound)
         XCTAssertEqual(defaults.integer(forKey: "amxRecentLimit"), AppPreferences.recentLimitRange.lowerBound)
+    }
+
+    func testDefaultZoomPersistsFractionalPointsAndResetRemovesOverride() {
+        let defaults = freshDefaults()
+        var preferences = AppPreferences()
+        preferences.defaultFontSize = 17.5
+        preferences.save(to: defaults)
+        XCTAssertEqual(AppPreferences.load(from: defaults).defaultFontSize, 17.5)
+        preferences.defaultFontSize = nil
+        preferences.save(to: defaults)
+        XCTAssertNil(defaults.object(forKey: AppPreferences.Key.defaultFontSize))
+    }
+
+    func testDefaultZoomRejectsInvalidStoredValuesAndClampsSavedValues() {
+        let defaults = freshDefaults()
+        for value: Any in ["17", true, 0, 73, Float.nan, Float.infinity] {
+            defaults.set(value, forKey: AppPreferences.Key.defaultFontSize)
+            XCTAssertNil(AppPreferences.load(from: defaults).defaultFontSize)
+        }
+        for (value, expected): (Float, Float?) in [(1, 6), (100, 72), (.nan, nil), (.infinity, nil)] {
+            var preferences = AppPreferences()
+            preferences.defaultFontSize = value
+            preferences.save(to: defaults)
+            XCTAssertEqual(AppPreferences.load(from: defaults).defaultFontSize, expected)
+        }
+    }
+
+    @MainActor
+    func testDefaultZoomChangesAreSavedAndReportedImmediately() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        var sizes: [Float?] = []
+        model.onChange = { _, new in sizes.append(new.defaultFontSize) }
+        model.preferences.defaultFontSize = 18
+        XCTAssertEqual(AppPreferences.load(from: defaults).defaultFontSize, 18)
+        model.preferences.defaultFontSize = nil
+        XCTAssertNil(AppPreferences.load(from: defaults).defaultFontSize)
+        XCTAssertEqual(sizes, [18, nil])
     }
 
     func testEnvironmentOverridesApply() {

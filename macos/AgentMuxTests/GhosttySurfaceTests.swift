@@ -210,6 +210,39 @@ final class GhosttySurfaceTests: XCTestCase {
         XCTAssertLessThan(reset, zoomed)
     }
 
+    func testDefaultZoomChangeResetsVisibleAndHiddenSurfacesAndNewSurfacesInheritIt() throws {
+        window.contentView = nil
+        view = nil
+        ghostty.shutdown()
+        var overrides = Ghostty.ConfigOverrides(fontSize: 14)
+        ghostty = Ghostty.App { Ghostty.Config(userConfig: nil, overrides: overrides) }
+        view = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        window.contentView = view
+        let hidden = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        defer { hidden.close() }
+        let initial = try surfaceSize().cell_width_px
+        view.performBindingAction("increase_font_size:20")
+        hidden.performBindingAction("increase_font_size:10")
+
+        overrides.fontSize = 22
+        XCTAssertTrue(ghostty.reloadConfig(resetFontSize: true))
+        let reset = try surfaceSize().cell_width_px
+        XCTAssertGreaterThan(reset, initial)
+        let hiddenSize = ghostty_surface_size(try XCTUnwrap(hidden.surface))
+        XCTAssertEqual(hiddenSize.cell_width_px, reset)
+
+        let fresh = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        defer { fresh.close() }
+        XCTAssertEqual(ghostty_surface_size(try XCTUnwrap(fresh.surface)).cell_width_px, reset)
+
+        view.zoomIn(nil)
+        view.resetZoom(nil)
+        XCTAssertEqual(try surfaceSize().cell_width_px, reset, "⌘0 uses the saved default")
+        overrides.fontSize = nil
+        XCTAssertTrue(ghostty.reloadConfig(resetFontSize: true))
+        XCTAssertLessThan(try surfaceSize().cell_width_px, reset, "Reset restores the config's font size")
+    }
+
     func testAPerSurfaceFontSizeOverridesTheAppConfiguration() throws {
         var large = Self.cat
         large.fontSize = 30

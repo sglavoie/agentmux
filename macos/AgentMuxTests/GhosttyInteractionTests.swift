@@ -101,6 +101,46 @@ final class GhosttyInteractionTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testZoomKeysResizeTheFocusedTerminalWithoutSendingInput() throws {
+        let savedMenu = NSApp.mainMenu
+        let savedWindowsMenu = NSApp.windowsMenu
+        NSApp.mainMenu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
+        defer {
+            NSApp.mainMenu = savedMenu
+            NSApp.windowsMenu = savedWindowsMenu
+        }
+        let menu = try XCTUnwrap(NSApp.mainMenu)
+        // An offscreen test window is not NSApp's key window, so direct the
+        // menu's responder actions to the terminal it is exercising.
+        let zoomActions = [#selector(Ghostty.SurfaceView.zoomIn(_:)),
+                           #selector(Ghostty.SurfaceView.zoomOut(_:)),
+                           #selector(Ghostty.SurfaceView.resetZoom(_:))]
+        for item in menu.item(withTitle: "View")!.submenu!.items where item.action.map(zoomActions.contains) == true {
+            item.target = view
+        }
+        func zoomKey(_ key: TestKey) {
+            let event = key.event()
+            if !view.performKeyEquivalent(with: event), !menu.performKeyEquivalent(with: event) {
+                view.keyDown(with: event)
+            }
+        }
+        let surface = try XCTUnwrap(view.surface)
+        let initial = ghostty_surface_size(surface).cell_width_px
+        for key in [TestKey.command("=", keyCode: 24), .command("=", keyCode: 24, shifted: "+")] {
+            // Several point steps avoid pixel rounding hiding a size change.
+            for _ in 0..<5 { zoomKey(key) }
+            let bigger = ghostty_surface_size(surface).cell_width_px
+            XCTAssertGreaterThan(bigger, initial, key.characters)
+            for _ in 0..<3 { zoomKey(.command("-", keyCode: 27)) }
+            XCTAssertLessThan(ghostty_surface_size(surface).cell_width_px, bigger)
+            zoomKey(.command("0", keyCode: 29))
+            XCTAssertEqual(ghostty_surface_size(surface).cell_width_px, initial)
+        }
+        press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
+        expect("a", "zoom keys send nothing to the program")
+    }
+
     // MARK: Keys that are the program's
 
     func testModifiedKeysReachTheProgramDistinctFromTheirPlainForms() {
@@ -337,6 +377,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("g", keyCode: 5), "Find Next"),
             (.command("g", keyCode: 5, shifted: "G"), "Find Previous"),
             (.command("=", keyCode: 24, shifted: "+"), "Bigger"),
+            (.command("=", keyCode: 24), "Bigger"),
             (.command("-", keyCode: 27), "Smaller"),
             (.command("0", keyCode: 29), "Actual Size"),
             (.pageUp.with(.shift), "Page Up"),

@@ -185,13 +185,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// its own command and environment.
     func terminalRuntime() -> Ghostty.App? {
         if let terminals { return terminals }
-        let runtime = Ghostty.App()
+        let model = preferencesModel
+        let runtime = Ghostty.App {
+            Ghostty.Config(overrides: Ghostty.ConfigOverrides(fontSize: model.preferences.defaultFontSize))
+        }
         guard runtime.readiness == .ready else {
             Self.logger.error("embedded terminals are unavailable: Ghostty did not start")
             return nil
         }
         runtime.delegate = self
         terminals = runtime
+        refreshConfigFontSize()
         Self.logger.notice("embedded terminals use Ghostty \(Ghostty.versionDescription, privacy: .public)")
         return runtime
     }
@@ -667,6 +671,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
+        if old.defaultFontSize != new.defaultFontSize {
+            applyDefaultFontSize()
+        }
         if old.hotKeyDashboard != new.hotKeyDashboard || old.hotKeyNextAttention != new.hotKeyNextAttention {
             registerHotKeys()
         }
@@ -675,6 +682,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             scheduleResolve()
         }
         notifications?.enabled = new.useAppNotifications
+    }
+
+    /// Reload first so ⌘0 uses the new default, then reset even manually
+    /// zoomed terminals, including the workspace's hidden session views.
+    private func applyDefaultFontSize() {
+        terminals?.reloadConfig(resetFontSize: true)
+        refreshConfigFontSize()
+    }
+
+    private func refreshConfigFontSize() {
+        guard preferencesModel.preferences.defaultFontSize == nil else { return }
+        let config = terminals?.config ?? Ghostty.Config()
+        if let size = config.get("font-size", as: Float.self, initial: 0), size.isFinite, size > 0 {
+            preferencesModel.configFontSize = size
+        }
     }
 
     // MARK: Notifications
@@ -1283,6 +1305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         preferencesController = controller
         publishPreferences()
         controller.show()
+        refreshConfigFontSize()
     }
 }
 
