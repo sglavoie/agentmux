@@ -19,7 +19,7 @@ operator has done it and said so.
 | Candidate | the checkout at `911ce009f3d0` or later: `amx` 0.8.0 and Agent Mux.app 0.1.0 built from it by `just mac-app Release` |
 | Signing | ad-hoc (`this-mac-only`, see [desktop-releases.md](desktop-releases.md)); no Developer ID signature or notarization has been observed |
 | Installed before the trial | `amx` 0.8.0 revision `5645f028f120` and the Agent Mux.app of that revision: this is what a full rollback returns to |
-| Rehearsal | the transition and the rollback below, with stand-in agents in a disposable world on another Mac: `docs/acceptance/ghostty-desktop/session-20/rehearsal/transition-rollback.log` |
+| Rehearsal | the transition and the rollback below, with stand-in agents in a disposable world on another Mac: `transition-rollback.log` and `rollback-step4.log` under `docs/acceptance/ghostty-desktop/session-20/rehearsal/` |
 
 The rehearsal shows that the instructions work. It is not the trial and
 covers none of its days.
@@ -120,8 +120,8 @@ for the cases it touches.
 ## Rollback
 
 The steps are independent and in order of how much they undo. Stop at the one
-that is enough. Each was rehearsed in this order
-(`session-20/rehearsal/transition-rollback.log`).
+that is enough. Each was rehearsed; what the rehearsals did and did not show
+is at the end of this section.
 
 1. **Launch in Kitty again.** Remove `launch_backend = "tmux"` from
    `config.toml` (or set it to `"kitty"`) and set the app's **Launch projects
@@ -140,18 +140,48 @@ that is enough. Each was rehearsed in this order
    not affected.
 
 4. **Go back to the earlier build.** In a checkout of the revision written
-   down before installing: `just update` (or `just install-restart-smoke` for
-   `amx` alone). `config.toml`, conversations, handoffs, worktrees, and
-   profile homes are not rewritten by either build. An `amx` older than the
-   tmux backend ignores the runtime-session registry and the runtime
-   checkpoint under `~/.local/share/agent-mux`; it also warns about
-   `launch_backend` as an unknown key, so do step 1 first.
+   down before installing, inside Kitty: `just update` (or `just
+   install-restart-smoke` for `amx` alone). Do step 1 first: an `amx` older
+   than the tmux backend still starts with `launch_backend` in `config.toml`,
+   but warns about it as an unknown key on every validation (`--strict`
+   included, which still passes).
+
+   What the earlier build does and does not do, as rehearsed with revision
+   `5645f028f120`:
+
+   - It launches into Kitty tabs, its daemon takes hooks from Kitty sessions
+     launched before the rollback, it lists the indexed conversations, and its
+     app (the menu bar companion, with no workspace and no tmux) connects to
+     its daemon.
+   - It leaves `config.toml`, transcripts, handoffs, worktrees, plans, and
+     `launch_overrides.json` byte for byte as they were.
+   - It does not know the tmux backend at all: no `--backend` flag, no `amx
+     attach`, no `amx backend`. The runtime-session registry, the runtime
+     checkpoint, and the installed tmux runtime under
+     `~/.local/share/agent-mux` are left exactly as the candidate's daemon
+     wrote them when it stopped.
+   - Agents still on the tmux server keep running through the downgrade, and
+     the earlier build cannot list, show, or end them. End them first (step
+     3), or end them afterwards with the tmux command `just mac-uninstall`
+     prints in step 2; or leave them, and they are found live again, the same
+     processes, when the candidate is installed again.
+   - Its installer replaces the app in place (`rm` then copy) and quits any
+     running copy; it knows nothing about a session server and does not check
+     one.
 
 `just mac-uninstall --end-sessions --remove-app-data --yes` does 2 and 3 and
 also removes the app's preferences and its installed tmux runtime.
 
-The rehearsal did steps 1 to 3 on the candidate build. Step 4 was not
-rehearsed: it reinstalls the operator's own tools, which no test run does.
+The rehearsal did steps 1 to 3 on the candidate build
+(`session-20/rehearsal/transition-rollback.log`) and step 4 separately, with
+a tmux agent deliberately left running across it, and then went forward to
+the candidate again (`session-20/rehearsal/rollback-step4.log`). In step 4
+the earlier `amx` was put in place and the daemon restarted by hand, as `just
+install` and `amx daemon restart` do; `just update` itself was not run, and
+its closing `amx doctor --strict` was not judged, because the disposable
+world has no hooks installed, no notifier, and no agent-session-loop. After a
+real rollback, expect to run `amx config hooks-sync` with the earlier `amx`
+if doctor reports the hooks as drifted: that was not observed either way.
 
 ## Closing the trial
 

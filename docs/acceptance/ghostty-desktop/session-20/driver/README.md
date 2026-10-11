@@ -1,6 +1,7 @@
 # Session 20 rehearsal driver
 
-The scripts that produced `../rehearsal/transition-rollback.log`. They
+The scripts that produced `../rehearsal/transition-rollback.log` and
+`../rehearsal/rollback-step4.log`. They
 rehearse the transition and the rollback that
 [docs/daily-driver-trial.md](../../../../daily-driver-trial.md) gives the
 operator, with stand-in agents, in a disposable world on another Mac. They are
@@ -62,8 +63,8 @@ app's window is never looked at as pixels.
 
 ## What it does not show
 
-- Step 4 of the guide's rollback (reinstalling the earlier build) was not
-  rehearsed: it replaces the operator's own tools.
+- `just update` in the earlier checkout was not run: step 4 does its parts by
+  hand, in the world (see below).
 - The app was installed into `/tmp/amxs19/Applications` with
   `AMX_APP_NO_LAUNCH=1`, not into `/Applications`, and the bundle is ad-hoc
   signed.
@@ -72,9 +73,66 @@ app's window is never looked at as pixels.
   observed only through the app's log and the terminal it attached; a launch
   made from the app's own menu was not driven.
 
+## Rollback step 4
+
+`run.sh REPO OUTDIR old setup rollback4 down`.
+
+`old` builds the release the operator ran before the candidate (`OLD_REV`,
+5645f028f120): `amx` on the Studio, headless, from a detached worktree under
+`/tmp` that is removed again, so that it carries its revision; the app on the
+MacBook, from that tree copied to `/tmp/amxs20-old`, with the earlier
+checkout's own `build-app.sh Release`. `down` removes `/tmp/amxs20-old`, so
+`old` comes before `setup` every time.
+
+`rollback4` (`drive_rollback4.sh`) is eight steps:
+
+0. the two builds: different revisions, the earlier app sealed and with no
+   tmux runtime;
+1. the candidate in use: a tmux agent, the daemon's runtime checkpoint, the
+   transcript index, a Kitty session, and files a rollback must leave alone
+   (a handoff, a worktree file, `launch_overrides.json`);
+2. the earlier `amx` reading a configuration that still names
+   `launch_backend`;
+3. rollback step 1, and a listing with checksums;
+4. step 4: the candidate's daemon stopped, the earlier `amx` put at
+   `~/.local/bin/amx` (as `just install` does), the earlier checkout's
+   `install-app.sh` run against the world's install root, and the daemon
+   started by the earlier `amx`. The tmux agent is left running on purpose;
+5. the earlier build at work: the Kitty session from before, a new Kitty
+   launch, hooks, the conversation list, the commands it does not have, its
+   app;
+6. what it did to what it does not know: the tmux agent, the checksums again;
+7. forward: the candidate's `amx` back, the daemon restarted, the tmux
+   session found live, then `amx backend stop --yes`.
+
+The daemon is stopped and started in two commands where `just update` uses one
+(`amx daemon restart`), so that what the candidate's daemon writes as it stops
+is not counted against the earlier build. The registry and checkpoint are
+compared from "the candidate's daemon has stopped" to "the earlier build has
+run".
+
+`amx daemon restart` and `amx doctor` are given `KITTY_LISTEN_ON`, because the
+operator types them inside Kitty and the driver does not. `amx doctor
+--strict` is recorded and not judged: in this world it fails with either
+build (no hooks installed, no notifier, and the world's `amx` is a wrapper).
+
 ## Runs
 
-`transition` ran twice. The first pass recorded 32 passed and 9 failed, and
+`rollback4` ran twice. The first pass recorded 32 passed and 3 failed. Two
+were the driver's: it restarted the daemon from a shell that named no Kitty,
+so the daemon came up not ready (`kitten @ ls` had no terminal); hooks, which
+carry their own socket, worked regardless. The third was the checkpoint
+comparison: `runtime-state.json` differed between a listing taken the moment
+the tmux agent had asked for permission and the end of the run, and that pass
+could not say whether the candidate's daemon or the earlier build had written
+it. The driver now names Kitty, lets the checkpoint settle, and takes its
+baseline after the candidate's daemon has stopped. Rebuilt world, second
+pass: 35 passed, 0 failed, with no difference in the checkpoint at any of the
+three points. That the first pass's difference was the candidate's own daemon
+is therefore likely and not proven. The second pass is the record.
+
+
+`transition` also ran twice. The first pass recorded 32 passed and 9 failed, and
 every failure was the driver's: it expected `amx project launch` of a project
 that is already running to start nothing (it launches another session, on
 either backend, by design), which threw off the checks that counted tabs and

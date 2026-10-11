@@ -1,0 +1,215 @@
+
+##### 0 the two builds [03:14:45Z]
+--- the candidate (installed: ~/.local/bin/amx and the app) ---
+amx version 0.8.0 (revision 911ce009f3d0, built 2026-10-11T02:57:46Z, go1.27.1, sha256:a9a8f5d99f97)
+0.1.0
+--- the earlier build (in /tmp/amxs20-old, not installed yet) ---
+amx version 0.8.0 (revision 5645f028f120, built 2026-10-08T23:01:47Z, go1.27.1, sha256:557f00895965)
+0.1.0
+Signature=adhoc
+TeamIdentifier=not set
+PASS: the earlier amx is a different revision from the candidate's
+PASS: the earlier app bundle passes strict signature verification
+PASS: the earlier app has no tmux runtime: it is the menu bar companion
+
+##### 1 the candidate in use: a tmux agent, a Kitty session, and the files a rollback must leave alone [03:14:46Z]
+--- $ amx project launch beta --profile work --json   (launch_backend = "tmux") ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"beta","harness":"claude","directory":"/tmp/amxs19/proj/beta","groups":[]},"backend":"tmux","runtime_session_id":"rs-ea0f26d7a5f669a80558d42b7b91f619"}}
+(exit 0)
+PASS: beta runs on the private tmux server and is registered live
+beta: runtime session rs-ea0f26d7a5f669a80558d42b7b91f619, process 64872 Sun Oct 11 03:14:46 2026 ; server pid 64871
+PASS: the daemon wrote its runtime checkpoint
+--- $ amx session list --json   (builds the transcript index) ---
+{"schema_version":1,"data":{"sessions":[{"id":"11111111-1111-4111-8111-111111111111","harness":"claude","profile":"work","profiles":["work"],"project":"alpha","projects":["alpha"],"cwd":"/tmp/amxs19/proj/alpha","started_at":"2026-10-09T12:00:00Z","last_at":"2026-10-09T12:00:05Z","path":"/tmp/amxs19/home/.claude-a/projects/-tmp-amxs19-proj-alpha/11111111-1111-4111-8111-111111111111.jsonl","file_siz
+(exit 0)
+PASS: the transcript index exists and lists the fixture conversation
+--- $ amx project launch alpha --profile work --backend kitty --json ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"alpha","harness":"claude","directory":"/tmp/amxs19/proj/alpha","groups":[]},"tab_id":2,"window_id":2,"backend":"kitty"}}
+(exit 0)
+PASS: alpha runs in a Kitty tab
+PASS: the agent in that tab is up
+
+##### 2 the earlier amx reads a configuration that still says launch_backend = "tmux" (why step 1 comes first) [03:14:47Z]
+--- $ OLD amx config validate ---
+warning: unknown key defaults.launch_backend (ignored; check its spelling and section)
+config is valid
+(exit 0)
+--- $ OLD amx config validate --strict ---
+warning: unknown key defaults.launch_backend (ignored; check its spelling and section)
+config is valid
+(exit 0)
+PASS: the earlier amx names launch_backend as a key it does not know
+
+##### 3 rollback step 1, then the state before step 4 [03:14:47Z]
+PASS: config.toml validates with both builds
+--- data directory ---
+.
+./handoffs
+./handoffs/rehearsal-handoff.md
+./launch_overrides.json
+./runtime
+./runtime-sessions.json
+./runtime-state.json
+./runtime/current
+./runtime/tmux-3.7c-858d25c2c2d4f810
+./transcripts.json
+./transcripts.search
+./transcripts.search/5b121f435f7f3f8dbb891f90c10314c86e1a8b07a36bc3dda38a6b6744db861c.txt
+./worktrees
+./worktrees/rehearsal
+--- files neither build may rewrite ---
+8cc82d330c58df42  home/.config/agent-mux/config.toml
+ef26c2260abe92e0  home/.claude-a/projects/-tmp-amxs19-proj-alpha/11111111-1111-4111-8111-111111111111.jsonl
+e879a698dd271511  home/.local/share/agent-mux/handoffs/rehearsal-handoff.md
+901e26745426b62b  home/.local/share/agent-mux/worktrees/rehearsal/README
+7ae2dd3eae2d55e7  home/plans/demo-plan/session-1.md
+ca3d163bab055381  home/.local/share/agent-mux/launch_overrides.json
+--- state only the candidate knows ---
+37e15d43dead3d9f  home/.local/share/agent-mux/runtime-sessions.json
+71db5c5753d416d6  home/.local/share/agent-mux/runtime-state.json
+--- transcript index (a disposable cache) ---
+e9834f735f68ca2b  home/.local/share/agent-mux/transcripts.json
+
+##### 4 rollback step 4: the earlier amx, the earlier app, the daemon started by the earlier amx; the tmux agent left running on purpose [03:14:51Z]
+--- $ amx daemon stop   (the candidate's daemon) ---
+daemon stopped
+(exit 0)
+--- state only the candidate knows, once its daemon has stopped ---
+37e15d43dead3d9f  home/.local/share/agent-mux/runtime-sessions.json
+71db5c5753d416d6  home/.local/share/agent-mux/runtime-state.json
+--- what the candidate's daemon changed in its checkpoint between the first listing and stopping (report only) ---
+--- $ the earlier checkout's install-app.sh ---
+Installed /tmp/amxs19/Applications/Agent Mux.app
+(exit 0)
+--- $ amx daemon restart   (the earlier amx) ---
+daemon restarted (pid 65095)
+(exit 0)
+PASS: the daemon is ready
+--- $ amx --version ---
+amx version 0.8.0 (revision 5645f028f120, built 2026-10-08T23:01:47Z, go1.27.1, sha256:557f00895965)
+(exit 0)
+--- $ amx daemon status ---
+daemon: running (pid 65095, uptime 0s, /tmp/amxs19/home/.local/share/agent-mux/daemon.sock)
+ready: true
+build: 0.8.0 (revision 5645f028f120, built 2026-10-08T23:01:47Z, go1.27.1, sha256:557f00895965)
+notifications: unavailable (alerter; not_found)
+asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH)
+companion: no subscribers
+(exit 0)
+PASS: the installed amx is the earlier revision
+PASS: the daemon runs the earlier revision too
+PASS: the installed app is the earlier one, with the earlier amx inside
+--- $ amx doctor --strict   (recorded, not judged: the world has no hooks installed, no notifier, and no asl) ---
+recent suppressions (last 15m0s): none
+asl integration: mode auto
+  shell_resolution    warn           defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either
+                                     remediation: install agent-session-loop, then run `amx config asl-sync`
+  daemon_resolution   warn           the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH
+                                     remediation: run `amx config asl-sync` to resolve and persist an absolute path
+  contract            unknown        no peer has announced a contract set; this build implements asl-amx-1.85ec3041b9f03f47
+  projection          unknown        no reconciliation sweep has completed yet under /tmp/amxs19/home/.local/state/agent-session-loop
+  freshness           not_applicable no bridge is connected, so there is no snapshot to age
+  delivery            unknown        no lifecycle hook has been delivered since this daemon started
+health failures:
+- [notifications_unavailable] interactive notifications are enabled but unavailable: not_found
+- [socket] the daemon is not running the installed amx at /tmp/amxs19/bin/amx; run `amx daemon restart`
+- [hooks] hooks for work require attention: hook file does not exist; run `amx config hooks-sync`
+warnings:
+- [asl_shell_resolution] defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either; remediation: install agent-session-loop, then run `amx config asl-sync`
+- [asl_daemon_resolution] the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amxs19/home/.local/bin or on the daemon's PATH: executable file not found in $PATH; remediation: run `amx config asl-sync` to resolve and persist an absolute path
+notes:
+- [uninstalled_binary] this doctor runs ~/.local/bin/amx rather than the amx on PATH (/tmp/amxs19/bin/amx); its socket and hook checks judge the installed amx, so hook files that name this build would read as drifted
+- [hooks_contract_ahead] hooks for work are ahead of the verified contract: CLI 2.1.296 is newer than verified hook contract 2.1.195, and its hook events are arriving
+overall: issues detected
+doctor: 3 health failures detected
+(exit 0)
+
+##### 5 the earlier build works: Kitty launch, hooks, the conversation index, the app [03:14:54Z]
+PASS: the Kitty session from before the rollback is the same process in the same tab
+PASS: its hook reaches the earlier daemon: the tab is marked for permission
+--- $ amx project launch beta --profile work --json   (the earlier amx) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"work","title":"beta","harness":"claude","directory":"/tmp/amxs19/proj/beta","groups":[]},"tab_id":3,"window_id":3}}
+(exit 0)
+PASS: the earlier amx launches beta in a Kitty tab
+PASS: the agent in that tab is up
+PASS: and its hook marks the tab working
+--- $ amx session list --json   (the earlier amx) ---
+{"schema_version":1,"data":{"sessions":[{"id":"11111111-1111-4111-8111-111111111111","harness":"claude","profile":"work","profiles":["work"],"project":"alpha","projects":["alpha"],"cwd":"/tmp/amxs19/proj/alpha","started_at":"2026-10-09T12:00:00Z","last_at":"2026-10-09T12:00:05Z","path":"/tmp/amxs19/home/.claude-a/projects/-tmp-amxs19-proj-alpha/11111111-1111-4111-8111-111111111111.jsonl","file_siz
+(exit 0)
+PASS: the earlier amx lists the fixture conversation
+--- $ amx project launch beta --backend tmux   (the earlier amx has no such flag) ---
+Error: unknown flag: --backend
+(exit 1)
+PASS: the earlier amx refuses --backend
+--- $ amx attach rs-ea0f26d7a5f669a80558d42b7b91f619 --json   (the earlier amx has no such command) ---
+Error: unknown command "attach" for "amx"
+Run 'amx --help' for usage.
+(exit 1)
+PASS: the earlier app runs from the install root
+PASS: its feed from the earlier daemon is live
+--- the earlier app's log ---
+21:14:56.007 [io.github.sglavoie.agentmux:app] feed: connecting
+21:14:56.007 [io.github.sglavoie.agentmux:app] feed: live
+21:14:56.136 [io.github.sglavoie.agentmux:app] running /private/tmp/amxs19/Applications/Agent Mux.app/Contents/Resources/bin/amx (bundled)
+21:14:56.257 [io.github.sglavoie.agentmux:app] feed: reconnecting("reconnecting")
+21:14:56.261 [io.github.sglavoie.agentmux:app] feed: live
+
+##### 6 what the earlier build did to what it does not know [03:14:57Z]
+PASS: the tmux agent is the same process on the same server, through the downgrade
+PASS: it still answers its terminal
+PASS: the earlier amx's session listing does not show it
+--- files neither build may rewrite, after ---
+8cc82d330c58df42  home/.config/agent-mux/config.toml
+ef26c2260abe92e0  home/.claude-a/projects/-tmp-amxs19-proj-alpha/11111111-1111-4111-8111-111111111111.jsonl
+e879a698dd271511  home/.local/share/agent-mux/handoffs/rehearsal-handoff.md
+901e26745426b62b  home/.local/share/agent-mux/worktrees/rehearsal/README
+7ae2dd3eae2d55e7  home/plans/demo-plan/session-1.md
+ca3d163bab055381  home/.local/share/agent-mux/launch_overrides.json
+PASS: config.toml, the transcript, the handoff, the worktree, the plan, and launch_overrides.json are byte for byte what they were
+--- state only the candidate knows, after ---
+37e15d43dead3d9f  home/.local/share/agent-mux/runtime-sessions.json
+71db5c5753d416d6  home/.local/share/agent-mux/runtime-state.json
+PASS: the runtime-session registry and the runtime checkpoint are byte for byte what the candidate's daemon left
+--- transcript index, after (report only: it is a cache either build may refresh) ---
+e9834f735f68ca2b  home/.local/share/agent-mux/transcripts.json
+--- data directory ---
+.
+./handoffs
+./handoffs/rehearsal-handoff.md
+./launch_overrides.json
+./runtime
+./runtime-sessions.json
+./runtime-state.json
+./runtime/current
+./runtime/tmux-3.7c-858d25c2c2d4f810
+./transcripts.json
+./transcripts.search
+./transcripts.search/5b121f435f7f3f8dbb891f90c10314c86e1a8b07a36bc3dda38a6b6744db861c.txt
+./worktrees
+./worktrees/rehearsal
+PASS: the tmux runtime the candidate's app installed is still there
+
+##### 7 forward again: the candidate's amx back, the daemon restarted; the tmux agent is found as it was [03:15:03Z]
+--- $ amx daemon restart   (the candidate's amx) ---
+daemon restarted (pid 65385)
+(exit 0)
+PASS: the daemon is ready
+PASS: the installed amx is the candidate again
+--- $ amx attach rs-ea0f26d7a5f669a80558d42b7b91f619 --json ---
+{"schema_version":1,"data":{"runtime_session_id":"rs-ea0f26d7a5f669a80558d42b7b91f619","backend":"tmux","project":"beta","state":"live","pane":"%0","pid":64872,"clients":0,"command":["/tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux","-S","/tmp/amxs19/tmp/agent-mux-504/tmux.sock","-f","/tmp/amxs19/tmp/agent-mux-504/tmux.conf","source-file","/tmp/amxs19/tmp/agent-mux-504/tmux.conf",";","attach-session","-d","-t","%0"]}}
+(exit 0)
+PASS: the candidate finds the tmux session live, the same process
+--- $ amx backend status ---
+launch backend: kitty
+tmux: /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux (3.7c, from installed, checksums verified)
+server: running at /tmp/amxs19/tmp/agent-mux-504/tmux.sock, 1 session, 1 running agent
+server tmux: /tmp/amxs19/home/.local/share/agent-mux/runtime/tmux-3.7c-858d25c2c2d4f810/bin/tmux
+(exit 0)
+PASS: the Kitty sessions launched by either build are still there
+PASS: a Kitty session launched by the earlier build reports to the candidate's daemon
+--- $ amx backend stop --yes ---
+Stopped the private tmux server and 1 running agent.
+(exit 0)
+PASS: the private server and its agent are gone
+
+##### RESULT: 35 passed, 0 failed
