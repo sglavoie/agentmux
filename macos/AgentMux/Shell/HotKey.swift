@@ -139,7 +139,8 @@ struct HotKeyPreference: Equatable {
     /// What Preferences and conflict warnings call it.
     let label: String
 
-    /// Brings Kitty forward on the dashboard tab, opening one when absent.
+    /// Shows the dashboard where `amxDashboardPlace` says: the workspace's
+    /// own, or a tab in Kitty.
     static let dashboard = HotKeyPreference(
         defaultsKey: "amxHotKeyDashboard", default: HotKeyCombo(string: "ctrl+opt+cmd+a")!, label: "Show dashboard"
     )

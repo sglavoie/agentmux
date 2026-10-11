@@ -24,6 +24,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.launchBackend, .automatic)
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
         XCTAssertNil(preferences.defaultFontSize)
+        XCTAssertEqual(preferences.dashboardPlace, .workspace)
     }
 
     func testWorkspacePreferencesRoundTripAndRejectUnknownValues() {
@@ -31,8 +32,10 @@ final class AppPreferencesTests: XCTestCase {
         var preferences = AppPreferences()
         preferences.launchBackend = .workspace
         preferences.openWorkspaceAtLaunch = true
+        preferences.dashboardPlace = .kitty
         preferences.save(to: defaults)
         XCTAssertEqual(defaults.string(forKey: "amxLaunchBackend"), "workspace")
+        XCTAssertEqual(defaults.string(forKey: "amxDashboardPlace"), "kitty")
         XCTAssertEqual(AppPreferences.load(from: defaults), preferences)
 
         // The hidden default earlier builds read is the same key, so an
@@ -43,9 +46,11 @@ final class AppPreferencesTests: XCTestCase {
 
         defaults.set("ghostty", forKey: "amxLaunchBackend")
         defaults.set("yes", forKey: "amxOpenWorkspaceAtLaunch")
+        defaults.set("ghostty", forKey: "amxDashboardPlace")
         let stray = AppPreferences.load(from: defaults)
         XCTAssertEqual(stray.launchBackend, .automatic)
         XCTAssertFalse(stray.openWorkspaceAtLaunch)
+        XCTAssertEqual(stray.dashboardPlace, .workspace)
     }
 
     func testKeysAreThePlannedNames() {
@@ -53,6 +58,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
+            "amxDashboardPlace",
         ])
     }
 

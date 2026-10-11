@@ -238,7 +238,10 @@ struct PreferencesView: View {
                                        recorder: dashboardRecorder, other: attentionRecorder)
                 }
                 problem(for: HotKeyPreference.dashboard)
-                note("Brings Kitty forward on the Agent Mux dashboard tab, opening one when none is running.")
+                Picker("Show the dashboard in", selection: $model.preferences.dashboardPlace) {
+                    ForEach(DashboardPlacePreference.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                note("In Kitty, the shortcut brings Kitty forward on the Agent Mux dashboard tab, opening one when none is running.")
                 LabeledContent(HotKeyPreference.nextAttention.label) {
                     HotKeyRecorderView(combo: $model.preferences.hotKeyNextAttention, model: model,
                                        recorder: attentionRecorder, other: dashboardRecorder)

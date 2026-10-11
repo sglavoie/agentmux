@@ -27,7 +27,23 @@ struct OpenDashboardResult: Decodable, Equatable {
     }
 }
 
-/// What the dashboard shortcut does: `amx open-dashboard`, which focuses the
+/// Where the dashboard shortcut and the menu's Open Dashboard show the
+/// dashboard (`amxDashboardPlace`).
+enum DashboardPlacePreference: String, CaseIterable, Equatable {
+    /// The workspace's own Dashboard view, whatever Kitty is running.
+    case workspace
+    /// A dashboard tab in Kitty when a Kitty is running, else the workspace.
+    case kitty
+
+    var label: String {
+        switch self {
+        case .workspace: return "The workspace"
+        case .kitty: return "Kitty when it is running, else the workspace"
+        }
+    }
+}
+
+/// What the dashboard shortcut does when it is sent to Kitty: `amx open-dashboard`, which focuses the
 /// running dashboard or opens one, against each candidate Kitty socket in
 /// turn. amx dials the socket itself, so unlike focus_window any address Kitty
 /// answers on will do; only `kitty_unavailable` — a socket nobody answers on,

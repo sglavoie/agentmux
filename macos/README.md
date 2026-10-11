@@ -413,8 +413,9 @@ and Kitty variable from its environment before running it.
   so the digit shortcuts cannot land on it; `selectNeighbor` walks the
   sidebar's sessions and the terminals under them, so ⌘] and ⌘[ do, and
   with `raising` (⌘⇧] and ⌘⇧[) it walks the sessions alone.
-- **The dashboard shortcut.** `DashboardOpener.destination(for:)` sends it to
-  the workspace's Dashboard only when there is no Kitty socket to try; a Kitty
+- **The dashboard shortcut.** It shows the workspace's Dashboard unless
+  `amxDashboardPlace` is `kitty`. Then `DashboardOpener.destination(for:)`
+  sends it to the workspace only when there is no Kitty socket to try; a Kitty
   that answered with a failure, or sockets nobody answers on, are still
   reported. **Launch Project** with no Kitty socket runs
   `amx project launch --backend tmux` and shows the session in the workspace.
@@ -555,7 +556,7 @@ After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
 
 | Item | Does |
 | --- | --- |
-| Open Dashboard | The same `amx open-dashboard` the ⌃⌥⌘A shortcut runs. |
+| Open Dashboard | What the ⌃⌥⌘A shortcut does. |
 | Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch, cached, and refreshed when the menu opens on one older than 60s. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip. Choosing one runs `amx project launch --title T --profile P --json`. |
 | Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --json`. |
 | ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket. |
@@ -686,10 +687,10 @@ permission:
 
 | Default | Does |
 | --- | --- |
-| ⌃⌥⌘A | Runs `amx open-dashboard --json`, which focuses the running dashboard or opens one, then brings that Kitty forward. |
+| ⌃⌥⌘A | Shows the workspace's Dashboard. With `amxDashboardPlace` set to `kitty`, runs `amx open-dashboard --json`, which focuses the running dashboard or opens one, then brings that Kitty forward. |
 | ⌃⌥⌘N | Focuses the next session needing attention (`Model/AttentionCycler.swift`). |
 
-The dashboard shortcut names a Kitty socket the same way focus does: the
+Sent to Kitty, the dashboard shortcut names a socket the same way focus does: the
 Preferences override, the running dashboard's Kitty, the snapshot's, then each
 `/tmp/kitty-<pid>`. amx dials the socket itself, so only `kitty_unavailable`
 moves on to the next one.
@@ -730,6 +731,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxKittySocketOverride` | empty | A Kitty socket tried first by focus and the dashboard shortcut. |
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
 | `amxLaunchBackend` | `automatic` | Where Launch Project starts an agent: `automatic` (a Kitty tab when a Kitty is running, else the workspace), `kitty`, or `workspace` (always the private tmux server). An explicit choice is never overridden by what happens to be running. |
+| `amxDashboardPlace` | `workspace` | Where the dashboard shortcut and Open Dashboard show the dashboard: `workspace` (the workspace's own view), or `kitty` (a dashboard tab in Kitty when a Kitty is running, else the workspace). |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
 

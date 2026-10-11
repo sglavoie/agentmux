@@ -195,9 +195,10 @@ view is not mistaken for a managed agent. Closing the window detaches the
 session terminals but leaves a running shell, editor, or the Dashboard alone;
 they end when they exit, when their view is closed, or when the app quits.
 
-The global dashboard shortcut still prefers Kitty when a Kitty is running: it
-focuses the dashboard there, or opens one. With no Kitty to ask it shows the
-workspace's Dashboard, and **Launch Project** in the menu launches on tmux and
+The global dashboard shortcut shows the workspace's Dashboard. Preferences ›
+Show the dashboard in can send it to Kitty instead: it then focuses the
+dashboard there, or opens one, and shows the workspace's only when there is no
+Kitty to ask. **Launch Project** in the menu launches on tmux and
 shows the new session in the workspace.
 
 ### Keys, history, and the mouse in a terminal
@@ -271,7 +272,7 @@ is committed.
 
 | Default | Does |
 | --- | --- |
-| ⌃⌥⌘A | Brings the running dashboard forward, or opens one (`amx open-dashboard`). |
+| ⌃⌥⌘A | Shows the workspace's Dashboard. Sent to Kitty in Preferences, it brings the dashboard running there forward, or opens one (`amx open-dashboard`). |
 | ⌃⌥⌘N | Focuses the next session needing attention, oldest first, across Kitty instances and the workspace: a tmux session opens in the workspace, a Kitty session in Kitty. Beeps when nothing waits. |
 
 Change or clear them in Preferences. They are Carbon hotkeys and need no

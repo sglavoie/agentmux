@@ -22,11 +22,12 @@ struct AppPreferences: Equatable {
         static let launchBackend = "amxLaunchBackend"
         static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
         static let defaultFontSize = "amxDefaultFontSize"
+        static let dashboardPlace = "amxDashboardPlace"
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
-            launchBackend, openWorkspaceAtLaunch, defaultFontSize,
+            launchBackend, openWorkspaceAtLaunch, defaultFontSize, dashboardPlace,
         ]
     }
 
@@ -63,6 +64,8 @@ struct AppPreferences: Equatable {
     var openWorkspaceAtLaunch = false
     /// The terminal size at launch and on ⌘⇧-; nil uses the Ghostty config.
     var defaultFontSize: Float?
+    /// `amxDashboardPlace`: where the dashboard shortcut shows the dashboard.
+    var dashboardPlace: DashboardPlacePreference = .workspace
 
     init() {}
 
@@ -84,6 +87,8 @@ struct AppPreferences: Equatable {
             .flatMap(LaunchBackendPreference.init(rawValue:)) ?? .automatic
         preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
+        preferences.dashboardPlace = defaults.string(forKey: Key.dashboardPlace)
+            .flatMap(DashboardPlacePreference.init(rawValue:)) ?? .workspace
         return preferences
     }
 
@@ -109,6 +114,7 @@ struct AppPreferences: Equatable {
         defaults.set(launchBackend.rawValue, forKey: Key.launchBackend)
         defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
         DefaultFontSize.save(defaultFontSize, to: defaults)
+        defaults.set(dashboardPlace.rawValue, forKey: Key.dashboardPlace)
     }
 
     static func clamp(_ value: Int, _ range: ClosedRange<Int>) -> Int {

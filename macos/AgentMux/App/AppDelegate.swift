@@ -377,7 +377,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         workspace?.selectSession(at: item.tag, raising: true)
     }
     /// The workspace's own Dashboard: the main menu's, as opposed to the
-    /// global shortcut, which prefers a dashboard already running in Kitty.
+    /// global shortcut, which goes where `amxDashboardPlace` says.
     @objc func openDashboardFromMenu(_ sender: Any?) { showWorkspaceView(.dashboard) }
     @objc func openOverviewFromMenu(_ sender: Any?) { showWorkspaceView(.overview) }
     @objc func newShellFromMenu(_ sender: Any?) {
@@ -867,10 +867,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         preferencesModel.hotKeyProblems = problems
     }
 
-    /// ⌃⌥⌘A: focuses the running dashboard, or opens one, then brings its
-    /// Kitty forward. With no Kitty to ask, the dashboard is the workspace's
-    /// own.
+    /// ⌃⌥⌘A: shows the workspace's Dashboard, or, when Preferences sends it
+    /// to Kitty, focuses the dashboard running there or opens one, then
+    /// brings that Kitty forward. With no Kitty to ask, the dashboard is the
+    /// workspace's own either way.
     func openDashboard() {
+        guard preferencesModel.preferences.dashboardPlace == .kitty else {
+            showWorkspaceView(.dashboard)
+            return
+        }
         guard let command else {
             refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.")
             return

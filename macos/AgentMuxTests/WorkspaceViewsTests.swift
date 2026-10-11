@@ -76,7 +76,7 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertEqual(views.all.map(\.id), ["dashboard", "overview", "editor:/work/api"], "the Dashboard cannot be unlisted")
     }
 
-    func testTheShortcutGoesToTheWorkspaceOnlyWhenThereIsNoKittyToAsk() {
+    func testTheShortcutSentToKittyGoesToTheWorkspaceOnlyWhenThereIsNoKittyToAsk() {
         let opened = OpenDashboardResult(windowID: 4, tabID: 2, opened: true)
         XCTAssertEqual(DashboardOpener.destination(for: .opened(opened, socket: "unix:/tmp/k")), .kitty(opened, socket: "unix:/tmp/k"))
         XCTAssertEqual(DashboardOpener.destination(for: .noSocket), .workspace)
