@@ -122,6 +122,18 @@ followed by one more Go change (the lifecycle tests' startup probe), so it was
 run a third time on the final tree: that one is the record in `../pair/`. All
 three passed every recipe.
 
+## Test isolation
+
+`home-probe.sh REPO PACKAGE...` runs each Go package's tests with `HOME` set
+to a disposable home seeded with sentinel files (launch overrides naming a
+project no fixture has, a transcript cache, a config) and reports every
+package that created or changed anything under it. It found two leaks, both
+repaired in this session: the scenario runner built fixture models under the
+caller's home and pruned its launch overrides (`cmd/tuitest`, and `amx
+tui-test run` itself, so `just check`), and the new `tui/commands` tests wrote
+launch state under the caller's state home. After the repairs it reports
+nothing for any package. It is never to be pointed at a real home.
+
 ## What the rehearsal found
 
 `just install-restart-smoke` and `just cockpit-smoke` can be run against an

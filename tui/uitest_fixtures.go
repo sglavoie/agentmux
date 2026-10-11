@@ -1026,6 +1026,16 @@ type uitestConfigEnv struct {
 	Vars       map[string]string // env var → value applied via the setenv callback
 }
 
+// IsolateUITestEnv points every user-path helper at an empty environment
+// under root before a harness run builds a model. A fixture needs it as much
+// as a staged config does: constructing a model loads the launch overrides
+// and prunes the entries its projects do not name, and with the operator's
+// own HOME that is the operator's file, emptied by a fixture's projects.
+func IsolateUITestEnv(root string, setenv func(string, string) error) error {
+	_, err := stageUITestConfigEnv(root, "", setenv)
+	return err
+}
+
 // stageUITestConfigEnv stages an isolated environment under root and, when
 // srcConfigPath is non-empty, copies that config into it. It applies HOME,
 // AMX_CONFIG, AMX_OVERRIDES_PATH, XDG_DATA_HOME, and XDG_STATE_HOME through

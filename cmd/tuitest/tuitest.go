@@ -178,7 +178,13 @@ func runTUITestFixture(cmd *cobra.Command, name string) error {
 	}
 	opts := tui.UITestOptions{Size: tui.UITestSize{Width: tuiTestWidth, Height: tuiTestHeight}}
 
+	// The same isolation a scenario gets: see tuiTestScenarioEnv.
+	_, cleanup, err := tuiTestScenarioEnv(tui.UITestScenario{Name: name})
+	if err != nil {
+		return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
+	}
 	obs, err := tui.RunUITestFixture(name, opts, actions)
+	cleanup()
 	if err != nil {
 		return &cli.ExitError{Code: cli.ExitInvalidInput, Err: err}
 	}
@@ -206,27 +212,32 @@ func tuiTestObservationsHaveIssues(obs []tui.UITestObservation) bool {
 	return len(obs[len(obs)-1].Screen.Issues) > 0
 }
 
-// tuiTestScenarioEnv builds the isolation seam a scenario needs. Fixture
-// scenarios need nothing; config scenarios stage a throwaway root and apply the
-// isolation env vars through a restoring setter, returning a cleanup that both
-// rolls back every env var the staging changed and removes the staging
-// directory once the run completes. The real binary exits right after a run, so
+// tuiTestScenarioEnv builds the isolation every scenario runs in: a throwaway
+// root, with the isolation env vars applied through a restoring setter. A
+// fixture scenario is isolated here, before its model exists, because building
+// a model reads and may rewrite the launch overrides under HOME; a config
+// scenario stages its config into the same root when its driver is built. The
+// returned cleanup both rolls back every env var the staging changed and
+// removes the staging directory once the run completes. The real binary exits right after a run, so
 // the rollback is defensive: it keeps repeated in-process runs (and the
 // harness's own integration tests) from leaking the staged HOME/AMX_CONFIG/XDG
 // values into later work.
 func tuiTestScenarioEnv(sc tui.UITestScenario) (tui.UITestScenarioEnv, func(), error) {
-	if sc.Config == "" {
-		return tui.UITestScenarioEnv{}, func() {}, nil
-	}
 	root, err := os.MkdirTemp("", "amx-tui-test-")
 	if err != nil {
-		return tui.UITestScenarioEnv{}, func() {}, fmt.Errorf("tui-test: staging config scenario: %w", err)
+		return tui.UITestScenarioEnv{}, func() {}, fmt.Errorf("tui-test: staging scenario %q: %w", sc.Name, err)
 	}
 	restorer := newEnvRestorer()
 	env := tui.UITestScenarioEnv{Root: root, Setenv: restorer.setenv}
 	cleanup := func() {
 		restorer.restore()
 		_ = os.RemoveAll(root)
+	}
+	if sc.Config == "" {
+		if err := tui.IsolateUITestEnv(root, restorer.setenv); err != nil {
+			cleanup()
+			return tui.UITestScenarioEnv{}, func() {}, err
+		}
 	}
 	return env, cleanup, nil
 }
