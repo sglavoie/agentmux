@@ -405,6 +405,29 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
     }
 
+    func testCloseShownEndsTheSessionThePaneIsOnAsItsButtonDoes() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let busy = try row("api", "personal")
+        workspace.activate(busy)
+        var asked: [(WorkspaceRow, @MainActor (Bool) -> Void)] = []
+        workspace.confirmClose = { row, answer in asked.append((row, answer)) }
+
+        XCTAssertTrue(workspace.closeShown())
+        XCTAssertEqual(asked.map(\.0), [busy])
+        XCTAssertEqual(app.ended, [], "nothing ends before the answer")
+        asked[0].1(true)
+        XCTAssertEqual(app.ended, [F.runtimeID(2)])
+
+        // An idle one ends at once; a Kitty window is not the workspace's.
+        workspace.activate(try row("api", "work"))
+        XCTAssertTrue(workspace.closeShown())
+        XCTAssertEqual(asked.count, 1)
+        XCTAssertEqual(app.ended, [F.runtimeID(2), F.runtimeID(1)])
+        workspace.select(try row("web", "work").key, focus: false)
+        XCTAssertFalse(workspace.closeShown())
+        XCTAssertEqual(app.ended, [F.runtimeID(2), F.runtimeID(1)])
+    }
+
     func testASessionThatCouldNotBeClosedComesBack() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")

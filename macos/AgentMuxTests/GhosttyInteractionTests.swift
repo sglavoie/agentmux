@@ -428,7 +428,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("d", keyCode: 2), "Dashboard"),
             (.command("o", keyCode: 31), "Overview"),
             (.command("t", keyCode: 17), "New Shell"),
-            (.command("w", keyCode: 13, shifted: "W"), "Close View"),
+            (.command("w", keyCode: 13), "Close"),
             (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
             (.command("\r", keyCode: 36), "New Terminal Below"),
             (.command("]", keyCode: 30), "Select Next Session"),
@@ -468,7 +468,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("9", keyCode: 25), "Session 9"),
             (.command("0", keyCode: 29), "Session 10"),
             (.command("m", keyCode: 46), "Minimize"),
-            (.command("w", keyCode: 13), "Close"),
+            (.command("w", keyCode: 13, shifted: "W"), "Close Window"),
             (.command("l", keyCode: 37, shifted: "L"), "Session List"),
         ]
         for (key, title) in expected {

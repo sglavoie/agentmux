@@ -173,12 +173,13 @@ terminals of their own beside the agents, and none of them needs Kitty.
 - **Shell**, **editor**, and **scrollback** views open when the Dashboard asks
   for them (*Open shell*, *Open editor*, *Peek scrollback*, the plan and
   worktree editors) and from **View › New Shell** (⌘T). Each is listed while
-  its program runs and goes away when it exits; **View › Close View** (⌘⇧W)
-  ends one, and so does the × in the top right corner of its row.
+  its program runs and goes away when it exits; **View › Close** (⌘W)
+  ends the one you are on, and so does the × in the top right corner of its row.
 - The same × on a session's row **ends that session's agent**, as closing it
   from the Dashboard does. It asks first when the agent is working or waiting
   on you; an idle one closes at once. The conversation stays on disk and can
-  be resumed. A session that is a Kitty window has no ×: close its tab.
+  be resumed. ⌘W on a session does the same. A session that is a Kitty window
+  has no ×: close its tab.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you
   are on is working and lists it right under that session; pressed again, it
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[ stop

@@ -395,7 +395,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
     /// ⌘↩: a shell beside the session the workspace is on.
     @objc func newSessionTerminal(_ sender: Any?) { workspace?.openTerminalBesideSession() }
-    @objc func closeWorkspaceView(_ sender: Any?) { workspace?.closeSelectedView() }
+    /// ⌘W: closes what the workspace's pane is on, as the × on its row does,
+    /// and never the workspace itself. Another window that has the keyboard,
+    /// such as Preferences, closes as it would.
+    @objc func closeWorkspaceView(_ sender: Any?) {
+        if let key = NSApp.keyWindow, workspace?.isOpen != true || key !== workspace?.window {
+            key.performClose(sender)
+            return
+        }
+        if workspace?.closeShown() != true { NSSound.beep() }
+    }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
     @objc func toggleRecentPlace(_ sender: Any?) {
         if workspace?.toggleRecentPlace() != true { NSSound.beep() }

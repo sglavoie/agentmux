@@ -334,7 +334,7 @@ ASL answer panel work the same either way.
   session, or when the window closes. None of those ends the agent.
 - **Closing from the sidebar.** A row that can be closed has a × in its top
   right corner. On an opened view (a shell, an editor, a pager, a session's
-  terminal) it does what **Close View** does, wherever the pane is. On an
+  terminal) it does what **View › Close** does on a view, wherever the pane is. On an
   embedded session it ends the agent: the workspace runs
   `amx close <runtime-session-id> --yes`, after a sheet when the agent is
   working or waiting, and at once when it is idle. The row says `closing…`
@@ -370,7 +370,7 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘B (hide or show the sidebar), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘⇧W (close view), ⌘W, ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘B (hide or show the sidebar), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
   ⌘, and ⌘Q.
 - **Function keys.** F1 to F11 are the menu's too, with no modifier
   (`WorkspaceMenu.functionKeys`, listed under **Session › Function Keys**):

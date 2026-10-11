@@ -88,7 +88,9 @@ enum WorkspaceMenu {
         view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
         view.addItem(.separator())
-        view.addItem(item("Close View", #selector(AppDelegate.closeWorkspaceView(_:)), "W", target: target))
+        // ⌘W closes what the pane is on, as it closes a tab elsewhere; the
+        // window itself is ⌘⇧W.
+        view.addItem(item("Close", #selector(AppDelegate.closeWorkspaceView(_:)), "w", target: target))
 
         let session = submenu("Session", in: main)
         session.addItem(item("Next Needing Attention", #selector(AppDelegate.nextAttention(_:)), "A", target: target))
@@ -125,7 +127,7 @@ enum WorkspaceMenu {
 
         let window = submenu("Window", in: main)
         window.addItem(item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
-        window.addItem(item("Close", #selector(NSWindow.performClose(_:)), "w"))
+        window.addItem(item("Close Window", #selector(NSWindow.performClose(_:)), "W"))
         window.addItem(.separator())
         let workspace = NSMenuItem(title: "Workspace", action: #selector(AppDelegate.openWorkspace(_:)), keyEquivalent: "")
         workspace.target = target

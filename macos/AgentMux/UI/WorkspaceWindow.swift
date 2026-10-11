@@ -540,10 +540,25 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// Closes the utility view the pane shows, ending its program. An opened
     /// view is unlisted; the Dashboard and the Overview stay listed and start
-    /// again the next time they are shown.
-    func closeSelectedView() {
-        guard let id = viewSelection else { return }
+    /// again the next time they are shown. Reports whether the pane was on
+    /// a view.
+    @discardableResult
+    func closeSelectedView() -> Bool {
+        guard let id = viewSelection else { return false }
         closeView(id)
+        return true
+    }
+
+    /// ⌘W: closes what the pane is on, as the × on its row would. A view is
+    /// closed; an embedded session's agent is ended, after the same sheet
+    /// when it is working or waiting. Reports whether there was anything to
+    /// close: a Kitty session is not the workspace's.
+    @discardableResult
+    func closeShown() -> Bool {
+        if closeSelectedView() { return true }
+        guard let row = state.selectedRow, row.embeddedRuntimeSessionID != nil else { return false }
+        closeSession(row.key)
+        return true
     }
 
     /// Closes a utility view, ending its program, whether or not the pane
