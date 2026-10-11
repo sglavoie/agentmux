@@ -332,6 +332,14 @@ ASL answer panel work the same either way.
   detached with **F12**; the pane then offers **Reattach** instead of taking
   the session back by itself), when a live snapshot no longer lists its
   session, or when the window closes. None of those ends the agent.
+- **Closing from the sidebar.** A row that can be closed has a × in its top
+  right corner. On an opened view (a shell, an editor, a pager, a session's
+  terminal) it does what **Close View** does, wherever the pane is. On an
+  embedded session it ends the agent: the workspace runs
+  `amx close <runtime-session-id> --yes`, after a sheet when the agent is
+  working or waiting, and at once when it is idle. The row says `closing…`
+  until a live snapshot drops it, and a pane that was on it goes to the
+  Dashboard. A Kitty session, the Dashboard, and the Overview have no ×.
 - **Losing the daemon.** `WorkspaceState` replaces its rows only from a live
   snapshot. While the feed is down the last rows stay listed, dimmed, with the
   daemon line under them; the selection and every terminal stay as they are,

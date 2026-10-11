@@ -160,3 +160,27 @@ struct AttachCheck: Decodable, Equatable {
         clients = try c.decodeIfPresent(Int.self, forKey: .clients) ?? 0
     }
 }
+
+/// The payload of `amx close RUNTIME_SESSION_ID --yes --json`.
+struct SessionClose: Decodable, Equatable {
+    /// Whether a tmux session was killed; false when nothing was left of it.
+    var closed = false
+
+    enum CodingKeys: String, CodingKey { case closed }
+
+    init(closed: Bool = false) { self.closed = closed }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        closed = try c.decodeIfPresent(Bool.self, forKey: .closed) ?? false
+    }
+
+    /// Why an `amx close` answer means the session is still there; nil when
+    /// it is closed or was already gone.
+    static func problem(_ result: AMXCommandResult<SessionClose>) -> String? {
+        switch result {
+        case .success, .partial: return nil
+        case let .failure(error): return error.message
+        }
+    }
+}

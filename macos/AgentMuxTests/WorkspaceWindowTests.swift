@@ -321,6 +321,78 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
     }
 
+    private func cell(_ key: AttentionCycler.Key) throws -> WorkspaceRowCellView {
+        try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: try index(of: key), makeIfNecessary: true) as? WorkspaceRowCellView)
+    }
+
+    func testTheCloseButtonEndsAnIdleSessionAtOnce() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        workspace.activate(work)
+        app.holdsCloses = true
+        workspace.confirmClose = { _, _ in XCTFail("an idle session is closed without asking") }
+
+        XCTAssertFalse(try cell(work.key).closeButton.isHidden)
+        XCTAssertTrue(try cell(try row("web", "work").key).closeButton.isHidden, "a Kitty window is not the workspace's to close")
+        try cell(work.key).closeButton.performClick(nil)
+        XCTAssertEqual(app.ended, [F.runtimeID(1)])
+        XCTAssertEqual(app.closed, [F.runtimeID(1)], "its terminal is let go at once")
+        XCTAssertEqual(workspace.content, .closing(runtimeSessionID: F.runtimeID(1)))
+        XCTAssertTrue(try cell(work.key).closeButton.isHidden)
+        XCTAssertEqual(try cell(work.key).detailLabel.stringValue, "closing…")
+
+        // A second click, and snapshots that still list it, change nothing.
+        workspace.closeSession(work.key)
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(app.ended, [F.runtimeID(1)])
+        XCTAssertEqual(app.made, [F.runtimeID(1)], "a session being closed is not attached again")
+
+        // The daemon drops the row before amx answers: nothing is reported
+        // as gone, and the pane ends up on the Dashboard.
+        app.store.apply(snapshot: F.snapshot(Array(sessions.dropFirst())))
+        XCTAssertEqual(workspace.content, .empty)
+        XCTAssertEqual(app.asked, [], "a session the operator closed is not asked about")
+        app.finishClosing()
+        XCTAssertEqual(workspace.content, .view(id: "dashboard"))
+        XCTAssertEqual(workspace.state.rows.count, 2)
+    }
+
+    func testClosingASessionThatIsBusyAsksFirst() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+        let busy = try row("api", "personal")
+        var asked: [(WorkspaceRow, @MainActor (Bool) -> Void)] = []
+        workspace.confirmClose = { row, answer in asked.append((row, answer)) }
+
+        try cell(busy.key).closeButton.performClick(nil)
+        XCTAssertEqual(asked.map(\.0), [busy])
+        XCTAssertEqual(app.ended, [], "nothing ends before the answer")
+        asked[0].1(false)
+        XCTAssertEqual(app.ended, [])
+        XCTAssertFalse(try cell(busy.key).closeButton.isHidden)
+
+        try cell(busy.key).closeButton.performClick(nil)
+        asked[1].1(true)
+        XCTAssertEqual(app.ended, [F.runtimeID(2)])
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)), "the pane was elsewhere and stays there")
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+    }
+
+    func testASessionThatCouldNotBeClosedComesBack() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        workspace.activate(work)
+        app.closeProblem = "tmux backend unavailable"
+        var reported: [String] = []
+        workspace.reportCloseProblem = { name, message in reported.append("\(name): \(message)") }
+
+        try cell(work.key).closeButton.performClick(nil)
+        XCTAssertEqual(reported, ["api — work: tmux backend unavailable"])
+        XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)], "its terminal is attached again")
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
+        XCTAssertFalse(try cell(work.key).closeButton.isHidden)
+    }
+
     func testATerminalThatCannotBeMadeSaysWhyAndIsRetriedOnlyWhenAsked() throws {
         app.problem = "amx is still being resolved."
         app.store.apply(snapshot: F.snapshot(sessions))

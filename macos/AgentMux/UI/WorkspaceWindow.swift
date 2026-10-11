@@ -34,6 +34,10 @@ protocol WorkspaceDelegate: AnyObject {
     /// attached to it. It only asks: nothing is attached and nothing started.
     /// The answer arrives on the main actor, possibly before this returns.
     func sessionStatus(runtimeSessionID: String, completion: @escaping @MainActor (WorkspaceSessionStatus) -> Void)
+    /// Ends a session's agent and the tmux session that holds it. The answer
+    /// is nil once it is closed, or why it could not be, and arrives on the
+    /// main actor, possibly before this returns.
+    func closeSession(runtimeSessionID: String, completion: @escaping @MainActor (String?) -> Void)
 }
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -50,6 +54,11 @@ protocol WorkspaceDelegate: AnyObject {
 /// selected and kept, hidden, while another is shown. A terminal is let go
 /// when its `amx attach` ends, when a live snapshot no longer lists its
 /// session, or when the window closes. None of those ends the agent.
+///
+/// Only the × on an embedded session's row ends an agent, and it asks first
+/// when that agent is working or waiting on the operator. The × on an opened
+/// view closes that view and ends its program. A Kitty session and the
+/// Dashboard and Overview have none.
 ///
 /// The workspace only ever shows agents that are running. It comes back to
 /// where it was after a crash or a restart (`restore(_:)`), keeps its rows and
@@ -101,6 +110,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         /// listed: it was attached elsewhere, or detached with F12.
         case detached(runtimeSessionID: String)
         case unavailable(runtimeSessionID: String, String)
+        /// The session is being closed: its agent was asked to end.
+        case closing(runtimeSessionID: String)
         /// The session the workspace is coming back to is not known to be
         /// running yet: the daemon has not said, or amx is being asked.
         case restoring(runtimeSessionID: String)
@@ -136,6 +147,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var terminals: [String: WorkspaceTerminal] = [:]
     /// Sessions whose terminal ended and is not remade until asked for.
     private var detached: Set<String> = []
+
+    /// Sessions amx was asked to close, until it has answered and a live
+    /// snapshot no longer lists them: whether the pane was on each when it
+    /// was closed, and whether amx has answered.
+    private var closing: [String: (wasShown: Bool, answered: Bool)] = [:]
+    /// Stands in for the sheet that asks before a session that is working or
+    /// waiting is closed, for tests. Answers on the main actor.
+    var confirmClose: ((_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
+    /// Stands in for the sheet that says why a session could not be closed.
+    var reportCloseProblem: ((_ name: String, _ message: String) -> Void)?
 
     /// The utility views listed above the projects.
     private(set) var views = WorkspaceViews()
@@ -243,7 +264,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         if lost {
             Self.logger.notice("workspace: selected session \(Self.describe(previous), privacy: .public) is no longer listed")
-            if let previous, !previous.runtimeSessionID.isEmpty {
+            // A session the operator closed is not reported as gone.
+            if let previous, !previous.runtimeSessionID.isEmpty, closing[previous.runtimeSessionID] == nil {
                 sessionGone(previous.runtimeSessionID, name: previousName ?? "This session")
             }
         }
@@ -255,6 +277,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 discardTerminal(id)
             }
             detached.formIntersection(listed)
+            closing = closing.filter { !$0.value.answered || listed.contains($0.key) }
         }
         reloadSidebar()
         let notice = WorkspaceSidebar.feedNotice(store.feed)
@@ -507,16 +530,94 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// view is unlisted; the Dashboard and the Overview stay listed and start
     /// again the next time they are shown.
     func closeSelectedView() {
-        guard let id = viewSelection, let view = views.view(id) else { return }
+        guard let id = viewSelection else { return }
+        closeView(id)
+    }
+
+    /// Closes a utility view, ending its program, whether or not the pane
+    /// shows it.
+    func closeView(_ id: String) {
+        guard let view = views.view(id) else { return }
         Self.logger.notice("workspace: closing view \(id, privacy: .public)")
         discardViewTerminal(id)
         endedViews.remove(id)
-        if view.isPermanent {
+        if !view.isPermanent {
+            retire(view)
+        } else if viewSelection == id {
             viewSelection = nil
             syncSidebarSelection()
             updateContent(focus: false)
-        } else {
-            retire(view)
+        }
+    }
+
+    /// Ends an embedded session's agent, asking first when it is working or
+    /// waiting on the operator. The row stays until a live snapshot drops it;
+    /// if the pane was on the session it goes to the Dashboard.
+    func closeSession(_ key: AttentionCycler.Key) {
+        guard let row = state.row(key), let id = row.embeddedRuntimeSessionID, closing[id] == nil else { return }
+        guard row.attention || row.working else {
+            endSession(row, id)
+            return
+        }
+        (confirmClose ?? askToClose)(row) { [weak self] confirmed in
+            guard let self, confirmed, self.closing[id] == nil, let row = self.state.row(key) else { return }
+            self.endSession(row, id)
+        }
+    }
+
+    private func askToClose(_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "End \(row.project) — \(row.label)?"
+        alert.informativeText = (row.attention ? "Its agent is waiting on you." : "Its agent is working.")
+            + " Ending it loses the work in progress. The conversation stays on disk and can be resumed from the Dashboard."
+        alert.addButton(withTitle: "End Session").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated { answer(response == .alertFirstButtonReturn) }
+        }
+    }
+
+    private func sayCloseFailed(_ name: String, _ message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "\(name) could not be closed"
+        alert.informativeText = message
+        alert.beginSheetModal(for: window)
+    }
+
+    private func endSession(_ row: WorkspaceRow, _ id: String) {
+        let name = "\(row.project) — \(row.label)"
+        Self.logger.notice("workspace: closing session \(id, privacy: .public)")
+        closing[id] = (place == .session(row.key), false)
+        // Its terminal goes first: the attachment ending with the agent is
+        // not a detach to report.
+        discardTerminal(id)
+        detached.remove(id)
+        reloadSidebar(force: true)
+        updateContent(focus: false)
+        delegate?.closeSession(runtimeSessionID: id) { [weak self] problem in
+            guard let self, let wasShown = self.closing[id]?.wasShown else { return }
+            if let problem {
+                Self.logger.notice("workspace: could not close \(id, privacy: .public): \(problem, privacy: .public)")
+                self.closing[id] = nil
+                self.reloadSidebar(force: true)
+                self.updateContent(focus: false, retry: true)
+                (self.reportCloseProblem ?? self.sayCloseFailed)(name, problem)
+                return
+            }
+            Self.logger.notice("workspace: closed session \(id, privacy: .public)")
+            if self.state.current, !self.state.embeddedRuntimeSessionIDs.contains(id) {
+                self.closing[id] = nil
+            } else {
+                self.closing[id]?.answered = true
+            }
+            // Still where the operator left it: on the row, or on nothing
+            // because a snapshot already dropped the row.
+            let stayed = self.place == .session(row.key) || (self.place == nil && self.restoring == nil)
+            if wasShown, self.isOpen, stayed {
+                self.showView(WorkspaceUtilityView.dashboard.id, focus: true)
+            }
         }
     }
 
@@ -622,6 +723,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             return
         }
         guard let id = terminals.first(where: { $0.value.view === view })?.key else { return }
+        if closing[id] != nil {
+            discardTerminal(id)
+            return
+        }
         Self.logger.notice("workspace: the terminal for \(id, privacy: .public) ended; detached")
         discardTerminal(id)
         detached.insert(id)
@@ -687,6 +792,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             return .empty
         }
         guard let id = row.embeddedRuntimeSessionID else { return .external(row.key) }
+        if closing[id] != nil { return .closing(runtimeSessionID: id) }
         if detached.contains(id) { return .detached(runtimeSessionID: id) }
         if terminals[id] != nil { return .terminal(runtimeSessionID: id) }
         // A terminal that could not be made is not asked for again on every
@@ -796,6 +902,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             placeholder.show(title: "No terminal yet", message: message, button: "Try Again") { [weak self] in
                 self?.reattach(id)
             }
+        case .closing:
+            placeholder.show(title: "Closing", message: "This session's agent is being ended.")
         }
     }
 
@@ -819,7 +927,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     // MARK: Sidebar
 
-    private func reloadSidebar() {
+    private func reloadSidebar(force: Bool = false) {
         // A session's terminals follow its row. One whose session is no
         // longer listed keeps running, among the workspace's own views.
         let listed = state.embeddedRuntimeSessionIDs
@@ -831,7 +939,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 }
             }
         let dimmed: CGFloat = state.current ? 1 : 0.5
-        if wanted != items || sidebar.alphaValue != dimmed {
+        if force || wanted != items || sidebar.alphaValue != dimmed {
             items = wanted
             sidebar.alphaValue = dimmed
             applying = true
@@ -884,6 +992,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
             cell.show(view)
+            cell.onClose = { [weak self] in self?.closeView(view.id) }
             return cell
         case let .group(group):
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
@@ -893,7 +1002,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .row(row):
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
-            cell.show(row, muteGlyph: glyphs.mute)
+            cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false)
+            cell.onClose = { [weak self] in self?.closeSession(row.key) }
             return cell
         }
     }
@@ -1135,13 +1245,17 @@ final class WorkspaceGroupCellView: NSTableCellView {
     }
 }
 
-/// A session's line: its state glyph, its profile, and a line of detail.
+/// A session's line: its state glyph, its profile, and a line of detail,
+/// with a × in the top right corner when the line can be closed.
 @MainActor
 final class WorkspaceRowCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.row")
     let glyphLabel = NSTextField(labelWithString: "")
     let titleLabel = NSTextField(labelWithString: "")
     let detailLabel = NSTextField(labelWithString: "")
+    let closeButton = NSButton(title: "", target: nil, action: nil)
+    /// What the × does for the line shown now.
+    var onClose: (() -> Void)?
 
     init() {
         super.init(frame: .zero)
@@ -1161,13 +1275,29 @@ final class WorkspaceRowCellView: NSTableCellView {
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .bold))
+        closeButton.imagePosition = .imageOnly
+        closeButton.isBordered = false
+        closeButton.contentTintColor = .tertiaryLabelColor
+        closeButton.refusesFirstResponder = true
+        closeButton.target = self
+        closeButton.action = #selector(closePressed(_:))
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(closeButton)
         NSLayoutConstraint.activate([
             glyphLabel.widthAnchor.constraint(equalToConstant: 20),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 3),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            closeButton.widthAnchor.constraint(equalToConstant: 14),
+            closeButton.heightAnchor.constraint(equalToConstant: 14),
         ])
     }
+
+    @objc private func closePressed(_ sender: Any?) { onClose?() }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported for this view")
@@ -1182,9 +1312,14 @@ final class WorkspaceRowCellView: NSTableCellView {
         detailLabel.stringValue = view.detail
         toolTip = view.target.isEmpty ? view.detail : view.target
         setAccessibilityLabel("\(view.title), \(view.kind.rawValue) view")
+        closeButton.isHidden = view.isPermanent
+        closeButton.toolTip = "Close \(view.title)"
+        closeButton.setAccessibilityLabel("Close \(view.title)")
     }
 
-    func show(_ row: WorkspaceRow, muteGlyph: String) {
+    /// Only an embedded session can be closed from here; `closing` is set
+    /// once it was asked to be.
+    func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false) {
         glyphLabel.stringValue = row.glyph
         titleLabel.stringValue = row.muted ? "\(row.label) \(muteGlyph)" : row.label
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: row.attention ? .semibold : .regular)
@@ -1194,5 +1329,9 @@ final class WorkspaceRowCellView: NSTableCellView {
         if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
         if !row.detail.isEmpty { spoken.append(row.detail) }
         setAccessibilityLabel(spoken.joined(separator: ", "))
+        if closing { detailLabel.stringValue = "closing…" }
+        closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
+        closeButton.toolTip = "End \(row.project) — \(row.label)"
+        closeButton.setAccessibilityLabel("End \(row.project), \(row.label)")
     }
 }

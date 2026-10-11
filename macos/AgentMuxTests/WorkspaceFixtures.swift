@@ -141,6 +141,31 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
         }
     }
 
+    /// The sessions amx was asked to close, in order.
+    private(set) var ended: [String] = []
+    /// Set to refuse every close with this message.
+    var closeProblem: String?
+    /// Set to hold every close until `finishClosing()` is called.
+    var holdsCloses = false
+    private var heldCloses: [() -> Void] = []
+
+    func closeSession(runtimeSessionID: String, completion: @escaping @MainActor (String?) -> Void) {
+        ended.append(runtimeSessionID)
+        let problem = closeProblem
+        if holdsCloses {
+            heldCloses.append { completion(problem) }
+        } else {
+            completion(problem)
+        }
+    }
+
+    /// Delivers the held close answers, oldest first.
+    func finishClosing() {
+        let pending = heldCloses
+        heldCloses = []
+        pending.forEach { $0() }
+    }
+
     /// Delivers the held answers, oldest first.
     func answer() {
         let pending = held

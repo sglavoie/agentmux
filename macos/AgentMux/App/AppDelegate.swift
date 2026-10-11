@@ -342,6 +342,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
+    /// Ends a session's agent with `amx close --yes`. The workspace has
+    /// already asked the operator when there was something to ask.
+    func closeSession(runtimeSessionID: String, completion: @escaping @MainActor (String?) -> Void) {
+        guard let command else {
+            completion(preferences.binaryProblem ?? "amx has not been found yet.")
+            return
+        }
+        focusQueue.async {
+            let problem = SessionClose.problem(command.json(SessionClose.self, ["close", runtimeSessionID, "--yes"]))
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    Self.logger.notice("close \(runtimeSessionID, privacy: .public): \(problem ?? "closed", privacy: .public)")
+                    completion(problem)
+                }
+            }
+        }
+    }
+
     @objc func openWorkspace(_ sender: Any?) { showWorkspace() }
     @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
     @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }

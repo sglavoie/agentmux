@@ -12,6 +12,10 @@
 // configured order. Both halves reduce to "which session, and what happens to
 // it".
 //
+// `attach` and `close` work on a runtime session instead of a tab: the first
+// hands this terminal to a running agent, the second ends one agent and the
+// tmux session holding it, and only with --yes.
+//
 // `mute-toggle --json` reports {window_id, muted, changed} for the companion
 // app; a mute whose title write failed is partial durable success.
 //

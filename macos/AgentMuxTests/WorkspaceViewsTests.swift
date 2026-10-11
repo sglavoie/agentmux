@@ -279,6 +279,31 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(app.made, [F.runtimeID(1)], "a pager reads the session's scrollback and attaches nothing")
     }
 
+    func testTheCloseButtonClosesAnOpenedViewWhereverThePaneIs() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.showView("dashboard")
+        workspace.open(WorkspaceViewRequest(kind: "shell", directory: "/work/api", title: "api"))
+        workspace.open(WorkspaceViewRequest(kind: "editor", path: "/work/api/main.go"))
+        func cell(_ id: String) throws -> WorkspaceRowCellView {
+            try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: try index(ofView: id), makeIfNecessary: true) as? WorkspaceRowCellView)
+        }
+        XCTAssertTrue(try cell("dashboard").closeButton.isHidden, "the Dashboard is always listed")
+        XCTAssertTrue(try cell("overview").closeButton.isHidden)
+
+        // The pane is on the editor; the shell is closed from its row.
+        try cell("shell:/work/api").closeButton.performClick(nil)
+        XCTAssertEqual(app.closedViews, ["shell:/work/api"])
+        XCTAssertNil(workspace.views.view("shell:/work/api"))
+        XCTAssertEqual(workspace.viewSelection, "editor:/work/api/main.go", "the pane stays where it was")
+        XCTAssertEqual(workspace.content, .view(id: "editor:/work/api/main.go"))
+
+        // Closing the view the pane is on goes back to where it came from.
+        try cell("editor:/work/api/main.go").closeButton.performClick(nil)
+        XCTAssertEqual(app.closedViews, ["shell:/work/api", "editor:/work/api/main.go"])
+        XCTAssertEqual(workspace.viewSelection, "dashboard")
+        XCTAssertEqual(app.ended, [], "closing a view ends no session")
+    }
+
     func testATerminalOpensRightBelowItsSessionAndIsNotASession() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let rowsBefore = workspace.state.rows

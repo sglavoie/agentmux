@@ -703,7 +703,14 @@ started with, so installing another one never disturbs live agents.
 amx backend status          # the launch backend, the tmux in use and where it came from, the server, and any problem with its fix
 amx backend status --json   # the same as data; --check exits 1 when a tmux launch would not work
 amx backend stop --yes      # end the private server and every agent in it; nothing else does
+amx close ID --yes          # end one agent and its tmux session, by runtime-session ID
 ```
+
+`amx close` kills only the pane its launch tagged with that runtime session,
+on the server generation it was registered on. Closing a session whose agent
+already stopped cleans up what is left of it, and closing one that is already
+gone succeeds with `closed: false` under `--json`. It refuses a Kitty runtime
+session (`unsupported_backend`): close its tab instead.
 
 When no tmux can be used, a tmux launch fails with `backend_unavailable` and a
 message that names each place tried and what to do:
