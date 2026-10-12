@@ -82,6 +82,10 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	if err != nil {
 		slog.Debug("maintenance: runtime session reconciliation incomplete", "err", err)
 	}
+	h.runtimeSeenLive = h.runtimeSeenLive[:0]
+	for _, observed := range report.Mutes {
+		h.runtimeSeenLive = append(h.runtimeSeenLive, string(observed.ID))
+	}
 	h.observeRuntimeViewers(report.Viewed, finished)
 	h.observeRuntimeMutes(report.Mutes)
 	h.observeRuntimeColors(report.Colors)
@@ -245,5 +249,88 @@ func (h *Handler) observeRuntimeViewers(viewed []tmux.Viewed, observedAt time.Ti
 		st.PresentationChangedAt = observedAt
 		h.markWindowDirtyLocked(slot)
 		h.companionDirty()
+	}
+}
+
+// adoptRuntimeSessions gives a slot to every live session of another backend
+// that holds none. A slot is otherwise claimed by a session's first hook, and
+// a harness may say nothing for as long as it likes: one waiting at its own
+// trust prompt has run no hook yet, and one whose hooks are not installed
+// never will. Until then the session is running and a terminal can attach to
+// it, so a companion has to list it; what it lists is a session with no state.
+//
+// Only a session whose pane the last reconciliation pass read is adopted, at
+// the target its registry record names, and under the rules a hook's claim
+// follows: a slot another live session holds is left alone. A session whose
+// checkpoint entry still awaits verification is left to that restore. It runs
+// on the maintenance schedule after the restores, never before the startup
+// one, so a restored session's state is restored rather than merged into an
+// empty one.
+func (h *Handler) adoptRuntimeSessions() {
+	if h.runtimeDirectory == nil || len(h.runtimeSeenLive) == 0 {
+		return
+	}
+	h.stateMu.Lock()
+	pending := make(map[string]bool, len(h.runtimeRestorePending))
+	for _, e := range h.runtimeRestorePending {
+		pending[e.RuntimeSessionID] = true
+	}
+	var unbound []string
+	for _, id := range h.runtimeSeenLive {
+		slot, bound := h.runtimeRoutes.byRuntime[id]
+		switch {
+		case !bound:
+			if !pending[id] {
+				unbound = append(unbound, id)
+			}
+		case isRuntimeSyntheticSlot(slot):
+			// A checkpoint entry with no state binds its slot and nothing
+			// else.
+			if _, ok := h.windowStateLocked(slot); !ok {
+				h.ensureWindowStateLocked(slot)
+				h.companionDirty()
+			}
+		}
+	}
+	h.stateMu.Unlock()
+
+	for _, runtime := range unbound {
+		id, err := runtimesession.ParseID(runtime)
+		if err != nil {
+			continue
+		}
+		record, found, _ := h.runtimeDirectory.Lookup(id)
+		if !found || record.State != runtimesession.StateLive {
+			continue
+		}
+		target, ok := runtimeTargetOf(record.Target)
+		if !ok || target.backend == string(runtimesession.BackendKitty) {
+			continue
+		}
+		// As on the hook path, the occupant's liveness is read off stateMu
+		// and the claim fails closed if the slot moved meanwhile.
+		h.stateMu.Lock()
+		slot := h.runtimeSlotForTargetLocked(target)
+		occupant := h.slotRuntimeLocked(slot)
+		h.stateMu.Unlock()
+		occupantLive := occupant != "" && occupant != string(id) && h.runtimeSessionLive(occupant)
+
+		h.stateMu.Lock()
+		closed, rejection := h.claimRuntimeSlotLocked(slot, string(id), target, occupant, occupantLive)
+		if rejection == nil {
+			h.noteRuntimeProjectLocked(string(id), record.Project)
+			h.ensureWindowStateLocked(slot)
+			h.companionDirty()
+		} else {
+			h.runtimeRoutes.forgetUnboundSynthetic(target)
+		}
+		h.stateMu.Unlock()
+		if rejection != nil {
+			slog.Debug("maintenance: runtime session not adopted", "runtime_session", id, "reason", rejection.reason)
+			continue
+		}
+		if closed != nil {
+			h.finishClosedWindows(closed)
+		}
 	}
 }

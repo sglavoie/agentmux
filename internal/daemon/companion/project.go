@@ -69,6 +69,10 @@ type RuntimeSlot struct {
 	// them. A Kitty session's come from its tab, never from here.
 	Project string
 	Profile string
+	// Harness is the harness such a session was launched with, which names
+	// it until a hook names its conversation. Empty until the daemon has
+	// read it.
+	Harness string
 	// Color is the palette color such a session is shown in: the one picked
 	// for it, else its profile's. Empty, or a name the palette lacks, is no
 	// color.
@@ -403,6 +407,7 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 	out := make([]candidate, 0, len(slots))
 	for _, slot := range slots {
 		s := protocol.CompanionSession{
+			Harness:     display(in.Runtime[slot].Harness),
 			Profile:     display(in.Runtime[slot].Profile),
 			TabColor:    tabColor(in.Runtime[slot].Color),
 			Name:        display(in.Runtime[slot].Name),

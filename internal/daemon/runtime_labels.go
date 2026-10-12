@@ -30,6 +30,7 @@ const runtimeLabelRetry = 30 * time.Second
 type RuntimeSessionLabel struct {
 	Project string
 	Profile string
+	Harness string
 }
 
 // RuntimeSessionLabeler reads a live runtime session's label from its backend.
@@ -40,6 +41,9 @@ type RuntimeSessionLabeler func(record runtimesession.Record) (RuntimeSessionLab
 type runtimeLabel struct {
 	project string
 	profile string
+	// harness is the harness the session was launched with. It names the
+	// session until its first hook names a conversation.
+	harness string
 	// color is the palette color picked for the session, empty for none.
 	// Unlike the rest it can change while the binding lives, so every
 	// reconciliation pass reads it again (observeRuntimeColors).
@@ -155,6 +159,7 @@ func (h *Handler) labelRuntimeSessions(now time.Time) {
 			} else {
 				label.read = true
 				label.profile = read.Profile
+				label.harness = read.Harness
 				if read.Project != "" {
 					label.project = read.Project
 				}
@@ -174,7 +179,7 @@ func (h *Handler) labelRuntimeSessions(now time.Time) {
 			h.runtimeLabels = make(map[string]runtimeLabel)
 		}
 		old := h.runtimeLabels[runtime]
-		if old.project != label.project || old.profile != label.profile {
+		if old.project != label.project || old.profile != label.profile || old.harness != label.harness {
 			changed = true
 		}
 		label.color, label.name, label.title = old.color, old.name, old.title
@@ -232,7 +237,7 @@ func TmuxRuntimeSessionLabel(record runtimesession.Record) (RuntimeSessionLabel,
 		if profile == "" {
 			profile = pane.Vars["cc_account"]
 		}
-		return RuntimeSessionLabel{Project: pane.Vars["amx_project"], Profile: profile}, nil
+		return RuntimeSessionLabel{Project: pane.Vars["amx_project"], Profile: profile, Harness: pane.Vars["amx_harness"]}, nil
 	}
 	return RuntimeSessionLabel{}, fmt.Errorf("runtime session label: pane %s is not on the server", record.Target.Ref)
 }

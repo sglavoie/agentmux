@@ -172,6 +172,9 @@ type Handler struct {
 	// runtimeReconcileFailures is how many passes in a row have failed, which
 	// spaces the next one out; same goroutines as lastRuntimeReconcile.
 	runtimeReconcileFailures uint64
+	// runtimeSeenLive is the live sessions the last pass read a pane of, the
+	// ones adoptRuntimeSessions may give a slot; same goroutines again.
+	runtimeSeenLive []string
 	// runtimeHealth tallies the passes and the screen reads for health, and
 	// runtimeJournal records their edges (runtime_health.go). The journal
 	// writer is installed once at startup; nil writes nothing.

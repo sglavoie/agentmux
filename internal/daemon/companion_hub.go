@@ -181,6 +181,7 @@ func (h *Handler) companionRuntimeSlotsLocked() map[int]companion.RuntimeSlot {
 			Pane:       b.target.pane,
 			Project:    label.project,
 			Profile:    label.profile,
+			Harness:    label.harness,
 			Color:      h.runtimeColorLocked(label),
 			Name:       label.name,
 			Title:      label.title,
