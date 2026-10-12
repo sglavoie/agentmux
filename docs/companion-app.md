@@ -218,6 +218,17 @@ Whatever has the keyboard decides where a key goes.
 - The button in the title bar, or **View › Toggle Sidebar** (⌘B), hides the
   sidebar so the terminal has the whole window, and brings it back; ⌘⇧L
   shows it too. The choice is kept across launches.
+- The button at the other end of the title bar, or **View › Toggle
+  Inspector** (⌘⇧B), shows a second sidebar on the right, hidden until it is
+  asked for. Its **Waiting** tab lists every session waiting on you, the one
+  that has waited longest first (the order **F4** steps through), with why
+  and for how long; a click goes to the session as a click on its line in
+  the session list does. Its **Session** tab says what the daemon knows
+  about the session the pane is on (state, reason, times, flags, profile,
+  conversation and runtime-session IDs, branch), copies an identifier when
+  its line is clicked, and has buttons for what ⌘R and F5, F6, F8, F10, and
+  F11 do. Nothing in it takes the keyboard, and whether it is shown and
+  which tab it is on are kept across launches.
 - **⌘1** to **⌘0** go to the first ten sessions in the order the sidebar
   lists them, top to bottom: ⌘1 is the first session and ⌘0 the tenth.
   Shells and other opened views are not counted. **⌘]** and **⌘[** step to

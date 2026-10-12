@@ -425,6 +425,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.home.with(.command), "Scroll to Top"),
             (.end.with(.command), "Scroll to Bottom"),
             (.command("b", keyCode: 11), "Toggle Sidebar"),
+            (.command("b", keyCode: 11, shifted: "B"), "Toggle Inspector"),
             (.command("d", keyCode: 2), "Dashboard"),
             (.command("o", keyCode: 31), "Overview"),
             (.command("t", keyCode: 17), "New Shell"),

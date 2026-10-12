@@ -82,6 +82,7 @@ enum WorkspaceMenu {
         view.addItem(item("Scroll to Bottom", #selector(NSResponder.scrollToEndOfDocument(_:)), key(NSEndFunctionKey)))
         view.addItem(.separator())
         view.addItem(item("Toggle Sidebar", #selector(AppDelegate.toggleWorkspaceSidebar(_:)), "b", target: target))
+        view.addItem(item("Toggle Inspector", #selector(AppDelegate.toggleWorkspaceInspector(_:)), "B", target: target))
         view.addItem(.separator())
         // The digits are all the sessions'.
         view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))

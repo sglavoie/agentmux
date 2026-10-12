@@ -91,6 +91,13 @@ which strips every session and Kitty variable before running anything. A
 utility view is never a session: it has no key, comes from no snapshot, and
 must never count toward attention.
 
+The inspector on the pane's other side (`UI/WorkspaceInspectorView.swift`,
+built as data by `Model/WorkspaceInspector.swift`) lists the sessions waiting
+on the operator in `AttentionCycler` order and describes the session the pane
+is on, from the snapshot alone. It is hidden until asked for (⌘⇧B), is
+neither a session nor a view, and must never take the keyboard, count toward
+attention, or launch anything.
+
 F1 to F11 do in the workspace what Kitty binds them to
 (`WorkspaceMenu.functionKeys`, the main menu's only keys with no modifier):
 the reference and the icon and color pickers are overlay views of their own

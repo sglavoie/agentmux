@@ -59,19 +59,31 @@ struct WorkspaceRestoration: Equatable {
     static let windowOpenKey = "amxWorkspaceWindowOpen"
     static let placeKey = "amxWorkspacePlace"
     static let sidebarCollapsedKey = "amxWorkspaceSidebarCollapsed"
+    static let inspectorShownKey = "amxWorkspaceInspectorShown"
+    static let inspectorTabKey = "amxWorkspaceInspectorTab"
 
     /// Whether the window was open when the app last ran.
     var windowOpen = false
     var place: Place?
     /// Whether the sidebar was hidden.
     var sidebarCollapsed = false
+    /// Whether the inspector was shown; it is hidden until asked for.
+    var inspectorShown = false
+    var inspectorTab = WorkspaceInspectorTab.waiting
 
     static func load(from defaults: UserDefaults = .standard) -> WorkspaceRestoration {
         WorkspaceRestoration(
             windowOpen: defaults.bool(forKey: windowOpenKey),
             place: defaults.string(forKey: placeKey).flatMap(Place.init(encoded:)),
-            sidebarCollapsed: defaults.bool(forKey: sidebarCollapsedKey)
+            sidebarCollapsed: defaults.bool(forKey: sidebarCollapsedKey),
+            inspectorShown: defaults.bool(forKey: inspectorShownKey),
+            inspectorTab: defaults.string(forKey: inspectorTabKey).flatMap(WorkspaceInspectorTab.init(rawValue:)) ?? .waiting
         )
+    }
+
+    static func saveInspector(shown: Bool, tab: WorkspaceInspectorTab, to defaults: UserDefaults = .standard) {
+        defaults.set(shown, forKey: inspectorShownKey)
+        defaults.set(tab.rawValue, forKey: inspectorTabKey)
     }
 
     static func saveSidebarCollapsed(_ collapsed: Bool, to defaults: UserDefaults = .standard) {

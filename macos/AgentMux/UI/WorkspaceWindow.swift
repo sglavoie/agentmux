@@ -32,6 +32,11 @@ protocol WorkspaceDelegate: AnyObject {
     func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?)
     /// The sidebar was hidden or shown.
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
+    /// The inspector was hidden or shown, or turned to another tab.
+    func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab)
+    /// Does what one of the inspector's buttons asks for the session the
+    /// pane is on.
+    func workspaceInspectorAction(_ action: WorkspaceInspectorAction)
     /// A project's sessions were dragged into another order.
     func workspaceOrderChanged(_ order: WorkspaceOrder)
     /// Asks whether a session's agent is running and whether a terminal is
@@ -93,6 +98,12 @@ protocol WorkspaceDelegate: AnyObject {
 /// sessions, and takes its terminals with it; a terminal can be dragged among
 /// the ones beside its session. Nothing is dragged out of its project or its
 /// session, and the Workspace section stays as it is.
+///
+/// On the other side of the pane is the inspector, hidden until it is asked
+/// for (`WorkspaceInspectorView`): the sessions waiting on the operator,
+/// oldest first, or what the daemon says about the session the pane is on.
+/// It is not a session and not a view, never counts as waiting, starts
+/// nothing, and never takes the keyboard.
 @MainActor
 final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "workspace")
@@ -164,6 +175,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var reportedCollapsed = false
     private var sidebarItem: NSSplitViewItem?
     private var sidebarObservation: NSKeyValueObservation?
+    let inspector = WorkspaceInspectorView()
+    /// Hides the inspector and brings it back, from the title bar.
+    let inspectorToggle = WorkspaceWindowController.makeInspectorToggle()
+    /// The tab the inspector is turned to; the app keeps it across launches.
+    private(set) var inspectorTab = WorkspaceInspectorTab.waiting
+    private var reportedInspectorCollapsed = true
+    private var inspectorItem: NSSplitViewItem?
+    private var inspectorObservation: NSKeyValueObservation?
     let feedLabel = NSTextField(labelWithString: "")
     let placeholder = WorkspacePlaceholderView()
     private let pane = NSView()
@@ -1031,6 +1050,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             // shown had it: the sidebar takes it, so the arrow keys work.
             window.makeFirstResponder(sidebar)
         }
+        reloadInspector()
         reportPlace()
     }
 
@@ -1137,6 +1157,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             applying = false
         }
         syncSidebarSelection()
+        reloadInspector()
     }
 
     private func syncSidebarSelection() {
@@ -1397,16 +1418,94 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private static func makeSidebarToggle() -> NSButton {
+        makeTitlebarToggle(symbol: "line.3.horizontal", title: "Toggle Sidebar", shortcut: "⌘B")
+    }
+
+    private static func makeInspectorToggle() -> NSButton {
+        makeTitlebarToggle(symbol: "sidebar.right", title: "Toggle Inspector", shortcut: "⌘⇧B")
+    }
+
+    private static func makeTitlebarToggle(symbol: String, title: String, shortcut: String) -> NSButton {
         let button = NSButton(title: "", target: nil, action: nil)
-        button.image = NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: "Toggle Sidebar")?
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular))
         button.imagePosition = .imageOnly
         button.isBordered = false
         button.contentTintColor = .secondaryLabelColor
         button.refusesFirstResponder = true
-        button.toolTip = "Toggle Sidebar (⌘B)"
+        button.toolTip = "\(title) (\(shortcut))"
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
+    }
+
+    /// A title bar accessory holding one of the toggles.
+    private static func titlebarAccessory(_ toggle: NSButton, at edge: NSLayoutConstraint.Attribute) -> NSTitlebarAccessoryViewController {
+        let holder = NSView(frame: NSRect(x: 0, y: 0, width: 32, height: 28))
+        holder.addSubview(toggle)
+        NSLayoutConstraint.activate([
+            toggle.centerXAnchor.constraint(equalTo: holder.centerXAnchor),
+            toggle.centerYAnchor.constraint(equalTo: holder.centerYAnchor),
+            toggle.widthAnchor.constraint(equalToConstant: 24),
+            toggle.heightAnchor.constraint(equalToConstant: 22),
+        ])
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = holder
+        accessory.layoutAttribute = edge
+        return accessory
+    }
+
+    // MARK: Inspector
+
+    /// Whether the inspector is hidden, as it is until it is asked for.
+    var isInspectorCollapsed: Bool {
+        _ = window
+        return inspectorItem?.isCollapsed ?? true
+    }
+
+    @objc func toggleInspector(_ sender: Any? = nil) {
+        setInspectorCollapsed(!isInspectorCollapsed, animated: true)
+    }
+
+    func setInspectorCollapsed(_ collapsed: Bool, animated: Bool = false) {
+        guard collapsed != isInspectorCollapsed, let inspectorItem else { return }
+        if animated, !AppDelegate.isRunningTests {
+            inspectorItem.animator().isCollapsed = collapsed
+        } else {
+            inspectorItem.isCollapsed = collapsed
+        }
+    }
+
+    /// Turns the inspector to a tab. It stays hidden if it is.
+    func setInspectorTab(_ tab: WorkspaceInspectorTab) {
+        guard tab != inspectorTab else { return }
+        inspectorTab = tab
+        reloadInspector()
+        delegate?.workspaceInspectorChanged(collapsed: reportedInspectorCollapsed, tab: tab)
+    }
+
+    private func inspectorCollapseChanged() {
+        let collapsed = inspectorItem?.isCollapsed ?? true
+        guard collapsed != reportedInspectorCollapsed else { return }
+        reportedInspectorCollapsed = collapsed
+        delegate?.workspaceInspectorChanged(collapsed: collapsed, tab: inspectorTab)
+    }
+
+    /// Brings the inspector in line with the store and with where the pane
+    /// is. The session it describes is the one the session keys act on.
+    private func reloadInspector() {
+        guard let store = delegate?.store else { return }
+        let socket = store.snapshot?.kitty.socket ?? ""
+        // Only what is listed can be gone to, so only that is shown.
+        let sessions = store.sessions.filter { state.row(AttentionCycler.key($0, snapshotSocket: socket)) != nil }
+        let shown = shownSessionRow.flatMap { row in
+            sessions.first { AttentionCycler.key($0, snapshotSocket: socket) == row.key }
+        }
+        inspector.show(WorkspaceInspectorView.Model(
+            tab: inspectorTab,
+            waiting: WorkspaceInspector.waiting(sessions, snapshotSocket: socket, now: now(), glyphs: glyphs),
+            inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs) },
+            current: state.current
+        ))
     }
 
     /// Return in the session list: focuses the selected row, as a click does.
@@ -1492,8 +1591,26 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         let paneItem = NSSplitViewItem(viewController: paneController)
         paneItem.minimumThickness = 320
+
+        inspector.onTab = { [weak self] tab in self?.setInspectorTab(tab) }
+        inspector.onWaiting = { [weak self] key in
+            guard let self, let row = self.state.row(key) else { return }
+            self.activate(row)
+        }
+        inspector.onAction = { [weak self] action in self?.delegate?.workspaceInspectorAction(action) }
+        let inspectorController = NSViewController()
+        inspectorController.view = inspector
+        let inspectorItem = NSSplitViewItem(viewController: inspectorController)
+        inspectorItem.minimumThickness = 220
+        inspectorItem.maximumThickness = 420
+        inspectorItem.canCollapse = true
+        // Like the sidebar it keeps its width while the window is resized:
+        // the pane takes the difference.
+        inspectorItem.holdingPriority = sidebarItem.holdingPriority
+        self.inspectorItem = inspectorItem
         split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(paneItem)
+        split.addSplitViewItem(inspectorItem)
 
         let window = NSWindow(contentViewController: split)
         window.title = "Agent Mux"
@@ -1505,21 +1622,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         window.center()
         if !AppDelegate.isRunningTests { window.setFrameAutosaveName("AgentMuxWorkspace") }
         split.splitView.setPosition(240, ofDividerAt: 0)
+        // Hidden until it is asked for. An item is collapsed for good only
+        // once its split view is laid out in a window.
+        split.splitView.layoutSubtreeIfNeeded()
+        inspectorItem.isCollapsed = true
+        inspectorObservation = inspectorItem.observe(\.isCollapsed) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.inspectorCollapseChanged() }
+        }
 
         sidebarToggle.target = self
         sidebarToggle.action = #selector(toggleSidebar(_:))
-        let holder = NSView(frame: NSRect(x: 0, y: 0, width: 32, height: 28))
-        holder.addSubview(sidebarToggle)
-        NSLayoutConstraint.activate([
-            sidebarToggle.centerXAnchor.constraint(equalTo: holder.centerXAnchor),
-            sidebarToggle.centerYAnchor.constraint(equalTo: holder.centerYAnchor),
-            sidebarToggle.widthAnchor.constraint(equalToConstant: 24),
-            sidebarToggle.heightAnchor.constraint(equalToConstant: 22),
-        ])
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.view = holder
-        accessory.layoutAttribute = .leading
-        window.addTitlebarAccessoryViewController(accessory)
+        window.addTitlebarAccessoryViewController(Self.titlebarAccessory(sidebarToggle, at: .leading))
+        inspectorToggle.target = self
+        inspectorToggle.action = #selector(toggleInspector(_:))
+        window.addTitlebarAccessoryViewController(Self.titlebarAccessory(inspectorToggle, at: .trailing))
         return window
     }
 }

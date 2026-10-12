@@ -245,7 +245,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let controller = WorkspaceWindowController(delegate: self)
         workspace = controller
         if !Self.isRunningTests {
-            controller.setSidebarCollapsed(WorkspaceRestoration.load().sidebarCollapsed)
+            let restoration = WorkspaceRestoration.load()
+            controller.setSidebarCollapsed(restoration.sidebarCollapsed)
+            controller.setInspectorTab(restoration.inspectorTab)
+            controller.setInspectorCollapsed(!restoration.inspectorShown)
             controller.order = WorkspaceOrder.load()
         }
         // The terminals offer their shortcuts to the main menu first, and a
@@ -326,6 +329,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool) {
         guard !Self.isRunningTests, !isTerminating else { return }
         WorkspaceRestoration.saveSidebarCollapsed(collapsed)
+    }
+
+    func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab) {
+        guard !Self.isRunningTests, !isTerminating else { return }
+        WorkspaceRestoration.saveInspector(shown: !collapsed, tab: tab)
+    }
+
+    /// The inspector's buttons do what ⌘R and the session function keys do.
+    func workspaceInspectorAction(_ action: WorkspaceInspectorAction) {
+        switch action {
+        case .name: nameSession(nil)
+        case .color: pickSessionColor(nil)
+        case .icon: pickSessionIcon(nil)
+        case .mute: toggleSessionMute(nil)
+        case .clearState: clearSessionState(nil)
+        case .markActive: markSessionActive(nil)
+        }
     }
 
     func workspaceOrderChanged(_ order: WorkspaceOrder) {
@@ -441,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if !workspace.nameShownSession() { refuse(WorkspaceWindowController.namingNeedsEmbedded) }
     }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
+    @objc func toggleWorkspaceInspector(_ sender: Any?) { workspace?.toggleInspector() }
     @objc func toggleRecentPlace(_ sender: Any?) {
         if workspace?.toggleRecentPlace() != true { NSSound.beep() }
     }

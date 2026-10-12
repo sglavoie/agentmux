@@ -395,7 +395,7 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘B (hide or show the sidebar), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
   ⌘, and ⌘Q.
 - **Session names.** ⌘R and the sidebar's right-click menu
   (`menuNeedsUpdate`, `contextMenuItems(forRow:)`) ask for a name in a sheet

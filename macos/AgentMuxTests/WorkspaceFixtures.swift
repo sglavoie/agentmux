@@ -126,6 +126,15 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     private(set) var sidebarCollapses: [Bool] = []
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool) { sidebarCollapses.append(collapsed) }
 
+    /// Every time the inspector was hidden (true) or shown, or turned to
+    /// another tab, in order.
+    private(set) var inspectorChanges: [(collapsed: Bool, tab: WorkspaceInspectorTab)] = []
+    func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab) { inspectorChanges.append((collapsed, tab)) }
+
+    /// What the inspector's buttons asked for, in order.
+    private(set) var inspectorActions: [WorkspaceInspectorAction] = []
+    func workspaceInspectorAction(_ action: WorkspaceInspectorAction) { inspectorActions.append(action) }
+
     /// Every order the sessions were dragged into, in order.
     private(set) var orders: [WorkspaceOrder] = []
     func workspaceOrderChanged(_ order: WorkspaceOrder) { orders.append(order) }
