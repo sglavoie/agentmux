@@ -647,6 +647,14 @@ its own badge/metadata columns.
 - `P` pins or unpins the highlighted project so pinned projects stay at the top,
 - `s` searches past session transcripts for the highlighted project,
 - `C` chooses a **one-time profile override** for the highlighted project,
+- `d` chooses a **working directory override** for the highlighted project:
+  type a path (`tab` completes directories, `ctrl+u` clears the line) and press
+  `enter`. A relative path starts at the project's configured directory; an
+  empty line, or the configured directory itself, removes the override. The
+  row then reads `(dir: …)`, and launching it, `o`, and `O` all use that
+  directory. The override is never saved: it is gone once the launch is sent
+  or the launcher is closed. A directory that is not there is refused at the
+  prompt,
 - `o` opens every selected project's directory; with no selection, it opens
   the highlighted project's directory instead.
 - `?` shows the keymap,
@@ -802,7 +810,9 @@ What changes for a tmux session, and only for it:
   session instead of a Kitty tab: the one named by `--runtime-session`, else
   the one the command is typed in, else the only one running; with several and
   none named they list them and open nothing. The icon goes into the session's
-  title. The color is kept with the session: the dashboard draws the
+  title, where its launch already put its harness's `[harness_emojis]` icon,
+  and Agent Mux.app shows the one the title carries ahead of the session's
+  profile in its sidebar. The color is kept with the session: the dashboard draws the
   session's rows in it, and Agent Mux.app draws the session's sidebar line on
   it. "reset" returns to the
   profile's color. Inside Kitty
@@ -847,6 +857,7 @@ amx project list --group work --harness codex  # filters combine; each flag repe
 amx project launch API                         # one project titled API
 amx project launch amx                         # the project titled 🐱amx
 amx project launch --title API --profile codex-work --json
+amx project launch API --directory ../api-hotfix   # this one session, in another directory
 ```
 
 A project is identified by its profile and title, given as the argument or as
@@ -861,6 +872,12 @@ contain it, when there are any. Like `enter` in the launcher, `project launch` a
 new tab. Its `--json` data is `{action, changed, message, project, tab_id,
 window_id}`; `tab_id` and `window_id` name the new tab when exactly one new tab
 carrying the title appeared, and are omitted otherwise.
+
+`--directory DIR` starts that one session in `DIR` instead of the project's
+configured directory, read from the current directory when relative. The
+session keeps the project's title, profile, arguments, and environment, and
+`config.toml` is not touched; `project.directory` in the `--json` data is the
+directory used.
 
 A project whose directory is missing or is not a directory is never launched,
 because Kitty would quietly open the tab somewhere else: `project launch`

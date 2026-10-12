@@ -65,6 +65,7 @@ const (
 	keyDeleteWorktreeBranch = "D" // ModeWorktrees: remove checkout and safely delete merged branch
 	keyForgetWorktree       = "F" // ModeWorktrees: forget missing or invalid sidecar metadata
 	keyPinProject           = "P" // ModePicker: pin/unpin the highlighted configured project
+	keyLaunchDirectory      = "d" // ModePicker: set the highlighted project's launch directory
 	keySortPlan             = "o" // ModePlanSearch: cycles the result-sort mode
 	keyPlanOpenEditor       = "e" // ModePlanSearch/ModePlanView: open the plan directory in the editor (O, as everywhere else, too)
 	keyToggleTimeline       = "t" // toggle flat list ↔ timeline in ModeDetail

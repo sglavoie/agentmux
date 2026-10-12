@@ -1848,7 +1848,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.stringValue = row.name
         nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
-        titleLabel.stringValue = row.muted ? "\(row.label) \(muteGlyph)" : row.label
+        let label = row.harnessIcon.isEmpty ? row.label : "\(row.harnessIcon) \(row.label)"
+        titleLabel.stringValue = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: row.attention ? .semibold : .regular)
         detailLabel.stringValue = row.detail
         toolTip = row.toolTip

@@ -94,6 +94,7 @@
       "dirty": true,
       "tab_color": "#5aa9ff",
       "name": "flaky login",
+      "harness_icon": "🦊",
       "runtime": {
         "session_id": "rs-0123456789abcdef0123456789abcdef",
         "backend": "kitty",
@@ -116,6 +117,7 @@
       "last_event_at": 1700000060,
       "tab_color": "#ff6b5e",
       "name": "billing fix",
+      "harness_icon": "📟",
       "runtime": {
         "session_id": "rs-fedcba9876543210fedcba9876543210",
         "backend": "tmux",

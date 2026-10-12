@@ -87,6 +87,14 @@ type Named struct {
 	Name string
 }
 
+// Titled is one live session and the title of its group, which carries the
+// harness icon its launch or the icon picker put there. Like Muted it is
+// listed only when the pass read the session's pane.
+type Titled struct {
+	ID    runtimesession.ID
+	Title string
+}
+
 // Report is what one pass changed, and who it found looking.
 type Report struct {
 	// Ended lists the sessions marked stale, with whether the agent was seen
@@ -109,6 +117,9 @@ type Report struct {
 	// Names says, for every live session the pass read, which name it was
 	// given. Like Viewed it is an observation.
 	Names []Named
+	// Titles says, for every live session the pass read, what its group is
+	// titled. Like Viewed it is an observation.
+	Titles []Titled
 }
 
 // Empty reports whether the pass changed nothing.
@@ -184,6 +195,7 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 			report.Mutes = append(report.Mutes, Muted{ID: record.ID, Muted: pane.Vars[muteVar] != ""})
 			report.Colors = append(report.Colors, Colored{ID: record.ID, Color: pane.Vars[colorVar]})
 			report.Names = append(report.Names, Named{ID: record.ID, Name: pane.Vars[nameVar]})
+			report.Titles = append(report.Titles, Titled{ID: record.ID, Title: pane.GroupTitle})
 		}
 		if at, ok := lastViewed(survey.ClientsOf(recordPane(record))); ok {
 			report.Viewed = append(report.Viewed, Viewed{ID: record.ID, At: at})

@@ -370,6 +370,10 @@ struct CompanionSession: Decodable, Equatable {
     /// The name the operator gave a session with no Kitty tab
     /// (`amx name-session`). Empty for none.
     var name = ""
+    /// The harness badge a session with no Kitty tab is listed with: its
+    /// harness's configured emoji, or the one the icon picker (F5) put in
+    /// its title. Empty for none.
+    var harnessIcon = ""
     /// The session's runtime identity; nil for a Kitty session no runtime
     /// session claims, and on a v1 snapshot.
     var runtime: CompanionRuntime?
@@ -392,6 +396,7 @@ struct CompanionSession: Decodable, Equatable {
         case lastEventAt = "last_event_at"
         case presentationChangedAtMS = "presentation_changed_at_ms"
         case tabColor = "tab_color"
+        case harnessIcon = "harness_icon"
     }
 
     init(from decoder: Decoder) throws {
@@ -420,6 +425,7 @@ struct CompanionSession: Decodable, Equatable {
         dirty = c.lenient(.dirty, false)
         tabColor = c.lenient(.tabColor, "")
         name = c.lenient(.name, "")
+        harnessIcon = c.lenient(.harnessIcon, "")
         runtime = c.lenient(.runtime)
     }
 

@@ -1,7 +1,8 @@
 // Package launch owns the TUI's launch workflow: the launcher project list
 // and its preview pane, the launcher's filter/profile-cycle/pin controls, the
 // profile-override overlay that decides which profile and harness a session
-// starts under, the persisted launcher preferences, the ConfigPickerPurpose
+// starts under, the directory prompt that decides where it starts, the
+// persisted launcher preferences, the ConfigPickerPurpose
 // vocabulary that says why that overlay is open, and the launch batch's target
 // selection and progress wording.
 //

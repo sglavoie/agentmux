@@ -28,6 +28,9 @@ enum MenuAction: Equatable {
     case openWorkspace
     case openDashboard
     case launchProject(ProjectEntry)
+    /// Asks for a folder, then launches the project there instead of in its
+    /// configured directory: a project item's ⌥ alternate.
+    case launchProjectInFolder(ProjectEntry)
     case continueConversation(RecentConversation)
     case snooze(SnoozeChoice)
     /// Opens the answer panel on an ASL run waiting for its supervisor.
@@ -456,8 +459,9 @@ enum MenuBuilder {
     /// The menu items for `entries`. Session items send `sessionAction` and
     /// carry their row in `representedObject`; with a `muteAction`, each is
     /// followed by its ⌥ alternate, which sends that instead. Action items
-    /// send `actionSelector` and carry their `MenuAction`. A submenu
-    /// reference takes its menu from `submenus`.
+    /// send `actionSelector` and carry their `MenuAction`; one that launches
+    /// a project is followed by its ⌥ alternate, which asks for a folder
+    /// first. A submenu reference takes its menu from `submenus`.
     static func items(
         for entries: [MenuEntry],
         target: AnyObject,
@@ -512,7 +516,14 @@ enum MenuBuilder {
                 let item = NSMenuItem(title: title, action: actionSelector, keyEquivalent: "")
                 item.target = target
                 item.representedObject = ActionBox(action)
-                return [item]
+                guard case let .launchProject(project) = action else { return [item] }
+                item.keyEquivalentModifierMask = []
+                let alternate = NSMenuItem(title: "\(title) in Folder…", action: actionSelector, keyEquivalent: "")
+                alternate.target = target
+                alternate.keyEquivalentModifierMask = .option
+                alternate.isAlternate = true
+                alternate.representedObject = ActionBox(.launchProjectInFolder(project))
+                return [item, alternate]
             case let .unavailable(title, reason):
                 let item = infoItem(title)
                 item.toolTip = reason

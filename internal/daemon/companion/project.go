@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"maps"
 	"sort"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -44,6 +45,9 @@ type Input struct {
 	// States. A slot whose Backend is not Kitty is not a Kitty window: v1
 	// never lists it, and v2 lists it by its runtime identity alone.
 	Runtime map[int]RuntimeSlot
+	// HarnessIcons is the configured harness emojis, longest first: the
+	// badges a session's title may carry.
+	HarnessIcons []string
 	// SnapshotVersion selects the shape: CompanionSnapshotVersionRuntime
 	// projects v2, anything else the v1 snapshot old clients read.
 	SnapshotVersion int
@@ -71,6 +75,9 @@ type RuntimeSlot struct {
 	Color string
 	// Name is the name the operator gave such a session, empty for none.
 	Name string
+	// Title is the title of such a session's group, empty until the daemon
+	// has read it. Only the harness icon it carries is published.
+	Title string
 }
 
 func (r RuntimeSlot) kitty() bool { return r.Backend == "kitty" }
@@ -343,6 +350,20 @@ func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 	return out
 }
 
+// harnessIcon is the harness badge a session's title carries: the configured
+// emoji its base title starts with, empty when it starts with none. The
+// launch puts the harness's own there and the icon picker replaces or clears
+// it, so the title alone says which one the operator wants shown.
+func harnessIcon(title string, icons []string) string {
+	base := palette.ParseTitleParts(title).Base
+	for _, icon := range icons {
+		if icon != "" && strings.HasPrefix(base, icon) {
+			return icon
+		}
+	}
+	return ""
+}
+
 // kittyRuntime is the runtime block of a Kitty window, when a runtime session
 // of that same Kitty instance holds it.
 func kittyRuntime(slots map[int]RuntimeSlot, windowID int, socket string) *protocol.CompanionRuntime {
@@ -382,12 +403,13 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 	out := make([]candidate, 0, len(slots))
 	for _, slot := range slots {
 		s := protocol.CompanionSession{
-			Profile:  display(in.Runtime[slot].Profile),
-			TabColor: tabColor(in.Runtime[slot].Color),
-			Name:     display(in.Runtime[slot].Name),
-			Project:  display(in.Runtime[slot].Project),
-			ASLRunID: identifier(runs[slot]),
-			Runtime:  companionRuntime(in.Runtime[slot]),
+			Profile:     display(in.Runtime[slot].Profile),
+			TabColor:    tabColor(in.Runtime[slot].Color),
+			Name:        display(in.Runtime[slot].Name),
+			HarnessIcon: harnessIcon(in.Runtime[slot].Title, in.HarnessIcons),
+			Project:     display(in.Runtime[slot].Project),
+			ASLRunID:    identifier(runs[slot]),
+			Runtime:     companionRuntime(in.Runtime[slot]),
 		}
 		applyState(&s, in.States[slot])
 		// A Kitty row reads its mute from its title and window; a session

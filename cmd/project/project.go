@@ -83,6 +83,7 @@ var (
 	projectLaunchJSON    bool
 	projectLaunchProfile string
 	projectLaunchTitle   string
+	projectLaunchDir     string
 )
 
 var projectListCmd = &cobra.Command{
@@ -93,7 +94,7 @@ var projectListCmd = &cobra.Command{
 }
 
 var projectLaunchCmd = &cobra.Command{
-	Use:   "launch TITLE [--profile PROFILE]",
+	Use:   "launch TITLE [--profile PROFILE] [--directory DIR]",
 	Short: "Launch a new session from a configured project",
 	Long: `Launches a new session from the configured project named by TITLE (or
 --title), in a new Kitty tab, through the same launch action the dashboard uses.
@@ -107,6 +108,10 @@ the same without its leading emoji or symbols, ignoring case: "amx" launches
 "🐱amx". --profile is needed only when several projects share the title; an
 ambiguous or unmatched selector lists the configured projects it could have
 meant and launches nothing.
+
+--directory starts this one session in DIR instead of the project's configured
+directory; a relative DIR is read from the current directory. The project, its
+profile, and its configuration are unchanged.
 
 Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket
 (a tmux launch needs no Kitty).`,
@@ -128,6 +133,8 @@ func init() {
 	projectLaunchCmd.Flags().BoolVar(&projectLaunchJSON, "json", false, "emit schema-v1 JSON")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
+	projectLaunchCmd.Flags().StringVar(&projectLaunchDir, "directory", "", "working directory for this launch, instead of the project's configured one")
+	_ = projectLaunchCmd.MarkFlagDirname("directory")
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("title", completeProjectTitles)
 	cli.AddBackendFlag(projectLaunchCmd)
@@ -443,7 +450,18 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 		deps.Kitty = client
 		before = tabIDs(client)
 	}
-	result, err := projectExecute(cli.CommandContext(cmd), deps, actions.Request{Project: &project})
+	request := actions.Request{Project: &project}
+	if directory := strings.TrimSpace(projectLaunchDir); directory != "" {
+		// Made absolute here, where "relative" still means the caller's
+		// directory; the launch itself runs wherever the backend does.
+		absolute, err := filepath.Abs(config.ExpandTilde(directory))
+		if err != nil {
+			return cli.CommandFailure(cmd, projectLaunchJSON, "invalid_arguments", fmt.Errorf("--directory %q: %w", directory, err))
+		}
+		project.Directory = absolute
+		request.Parameters = map[string]string{"directory": absolute}
+	}
+	result, err := projectExecute(cli.CommandContext(cmd), deps, request)
 	if err != nil {
 		return projectActionError(cmd, err)
 	}

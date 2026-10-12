@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -250,5 +251,43 @@ func TestRuntimeSessionNameFollowsThePane(t *testing.T) {
 	h.observeRuntimeNames([]tmux.Named{{ID: onTmux}})
 	if got := tmuxSessionIn(t, h, onTmux).Name; got != "" {
 		t.Fatalf("name after it was removed = %q", got)
+	}
+}
+
+// TestRuntimeSessionHarnessIconFollowsTheTitle: a tmux session is published
+// with the harness icon its title carries, the one its launch put there, and
+// follows the title when the icon picker replaces or clears it. Markers ahead
+// of the icon do not hide it, and an emoji that is no configured harness icon
+// is part of the title, not an icon.
+func TestRuntimeSessionHarnessIconFollowsTheTitle(t *testing.T) {
+	h, directory := newRuntimeTestHandler(t)
+	onTmux := newRuntimeID(t)
+	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
+	h.SetHarnessIcons((&config.Config{HarnessEmojis: map[string]string{"claude": "🦊", "codex": "📟"}}).HarnessIcons())
+	h.SetRuntimeSessionLabeler(func(runtimesession.Record) (RuntimeSessionLabel, error) {
+		return RuntimeSessionLabel{Project: "API", Profile: "work"}, nil
+	})
+	requireAccepted(t, h.Handle(runtimeHook(t, onTmux, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(onTmux)})))
+
+	now := time.Now()
+	h.labelRuntimeSessions(now)
+	if got := tmuxSessionIn(t, h, onTmux).HarnessIcon; got != "" {
+		t.Fatalf("icon before the title was read = %q", got)
+	}
+	for _, step := range []struct{ title, want string }{
+		{"🦊API", "🦊"},
+		{palette.BuildTitleParts(palette.TitleParts{Base: "📟API", Starred: true}), "📟"},
+		{"🚁API", ""},
+		{"API", ""},
+	} {
+		h.observeRuntimeTitles([]tmux.Titled{{ID: onTmux, Title: step.title}, {ID: newRuntimeID(t), Title: "🦊stray"}})
+		if got := tmuxSessionIn(t, h, onTmux).HarnessIcon; got != step.want {
+			t.Fatalf("icon for title %q = %q; want %q", step.title, got, step.want)
+		}
+	}
+	h.observeRuntimeTitles([]tmux.Titled{{ID: onTmux, Title: "🦊API"}})
+	h.labelRuntimeSessions(now.Add(10 * runtimeLabelRetry))
+	if got := tmuxSessionIn(t, h, onTmux).HarnessIcon; got != "🦊" {
+		t.Fatalf("icon after a labeling pass = %q; want it kept", got)
 	}
 }

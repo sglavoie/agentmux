@@ -155,11 +155,12 @@ func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 			Socket:  view.Socket(),
 			Windows: view.Windows(),
 		},
-		Others:     maps.Clone(h.otherKittyTrees),
-		Runtime:    h.companionRuntimeSlotsLocked(),
-		ASLTargets: h.aslSupervisors.Targets(),
-		ASLPending: h.aslSupervisors.Pending(),
-		Now:        now,
+		Others:       maps.Clone(h.otherKittyTrees),
+		Runtime:      h.companionRuntimeSlotsLocked(),
+		HarnessIcons: h.harnessIcons,
+		ASLTargets:   h.aslSupervisors.Targets(),
+		ASLPending:   h.aslSupervisors.Pending(),
+		Now:          now,
 	}
 }
 
@@ -182,6 +183,7 @@ func (h *Handler) companionRuntimeSlotsLocked() map[int]companion.RuntimeSlot {
 			Profile:    label.profile,
 			Color:      h.runtimeColorLocked(label),
 			Name:       label.name,
+			Title:      label.title,
 		}
 	}
 	return out

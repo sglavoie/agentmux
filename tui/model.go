@@ -176,6 +176,11 @@ type Model struct {
 	pickerFilteredIdx    []int  // indices into pickerSessions for the filtered view
 	pickerSearchMode     bool   // true while / is active and filter input is open
 	pickerPreviewEnabled bool   // picker-local preview toggle, independent of ModeList
+	// directory prompt: open on pickerDirIdx while pickerDirMode is true
+	pickerDirMode  bool
+	pickerDirIdx   int
+	pickerDirValue string
+	pickerDirError string // why the last entry was refused; cleared by the next edit
 
 	// active agent-session-loop runs retained for detail views. Dashboard loop
 	// markers come from the daemon's bulk state snapshot.
@@ -240,6 +245,9 @@ type Model struct {
 
 	// picker launch overrides: project index -> profile name
 	pickerProfileOverride map[int]string
+	// picker launch overrides: project index -> working directory. Unlike the
+	// profile choice it is never saved: it lasts until the launcher closes.
+	pickerDirOverride map[int]string
 
 	// activity tracking: window_id → last activity time, sourced from daemon.
 	// Empty when the daemon is unreachable; treated as "Active" by stateGroup.

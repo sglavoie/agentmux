@@ -125,6 +125,24 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
     }
 
+    func testASessionShowsItsHarnessIconAheadOfItsProfile() throws {
+        var badged = sessions
+        badged[0].harnessIcon = "🦊"
+        app.store.apply(snapshot: F.snapshot(badged))
+
+        func line(_ key: AttentionCycler.Key) throws -> WorkspaceRowCellView {
+            let rowView = try XCTUnwrap(workspace.sidebar.rowView(atRow: try index(of: key), makeIfNecessary: true) as? WorkspaceRowView)
+            return try XCTUnwrap(rowView.view(atColumn: 0) as? WorkspaceRowCellView)
+        }
+        XCTAssertEqual(try line(.embedded(F.runtimeID(1))).titleLabel.stringValue, "🦊 work")
+        XCTAssertEqual(try line(.embedded(F.runtimeID(2))).titleLabel.stringValue, "personal", "a session with no icon looks as it did")
+
+        // The icon picker cleared it: the next snapshot takes it off the line.
+        badged[0].harnessIcon = ""
+        app.store.apply(snapshot: F.snapshot(badged))
+        XCTAssertEqual(try line(.embedded(F.runtimeID(1))).titleLabel.stringValue, "work")
+    }
+
     func testANamedSessionShowsItsNameAboveItsProfile() throws {
         var named = sessions
         named[0].name = "billing fix"

@@ -9,9 +9,10 @@ const minVisibleRows = 3
 // internalChrome is the number of vertical lines the launcher emits before the
 // first row inside RenderList. In the empty-filter nav state the filter hint
 // lives in the header, so the chrome is header + blank spacer. Once search
-// input is visible, the prompt gets its own line before that blank.
+// input is visible, the prompt gets its own line before that blank; the
+// directory prompt takes the same line.
 func (in PickerInput) internalChrome() int {
-	if in.SearchMode || in.Filter != "" {
+	if in.SearchMode || in.Filter != "" || in.DirMode {
 		return 3
 	}
 	return 2

@@ -38,10 +38,15 @@ func (in PickerInput) RenderPreview(origIdx, width, height int) string {
 		lines = append(lines, layout.StyledTruncate(body, width, "…"))
 	}
 	addField("title", sess.Title)
+	dirLabel := "dir"
+	if in.DirOverride[origIdx] != "" {
+		addField("default dir", in.Sessions[origIdx].Directory)
+		dirLabel = "launch dir"
+	}
 	if problem := in.DirProblems[origIdx]; problem != "" {
-		addField("dir", sess.Directory+" "+styleError.Render("("+problem+")"))
+		addField(dirLabel, sess.Directory+" "+styleError.Render("("+problem+")"))
 	} else {
-		addField("dir", sess.Directory)
+		addField(dirLabel, sess.Directory)
 	}
 	if sess.EffectiveProfile() != defaultProfile {
 		addField("default profile", defaultProfile)

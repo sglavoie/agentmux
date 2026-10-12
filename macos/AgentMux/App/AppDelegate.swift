@@ -673,6 +673,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             openDashboard()
         case let .launchProject(project):
             launch(project)
+        case let .launchProjectInFolder(project):
+            launchInChosenFolder(project)
         case let .continueConversation(conversation):
             continueConversation(conversation)
         case let .snooze(choice):
@@ -1210,15 +1212,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Launch Project: `amx project launch` in the Kitty used last, then that
     /// Kitty is brought forward on the new tab. With no Kitty to open a tab
     /// in, or when Preferences says so, the project launches on tmux and the
-    /// workspace shows it.
-    private func launch(_ project: ProjectEntry) {
+    /// workspace shows it. A `directory` replaces the project's configured
+    /// one for this launch.
+    private func launch(_ project: ProjectEntry, directory: String? = nil) {
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
         if let reason = gate.unavailableReason(.project) { return report(reason) }
         let candidates = newTabCandidates()
         if preferencesModel.preferences.launchBackend.launchesInWorkspace(kittyAvailable: !candidates.isEmpty) {
-            return launchInWorkspace(project, command: command)
+            return launchInWorkspace(project, directory: directory, command: command)
         }
-        let arguments = ProjectCatalog.launchArguments(for: project)
+        let arguments = ProjectCatalog.launchArguments(for: project, directory: directory)
         focusQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
                 command.json(ProjectLaunchResult.self, arguments, kittyListenOn: socket)
@@ -1231,11 +1234,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
+    /// Launch Project's ⌥ alternate: asks for the folder to launch in,
+    /// starting from the project's own, and launches there. Cancelling
+    /// launches nothing.
+    private func launchInChosenFolder(_ project: ProjectEntry) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Launch"
+        panel.message = "Choose the folder to launch \(project.title) in."
+        if !project.directory.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: project.directory, isDirectory: true)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        launch(project, directory: url.path)
+    }
+
     /// Launches a project on the private tmux server and shows the workspace
     /// on it: the session's own view as soon as the daemon lists it, and the
     /// window meanwhile.
-    private func launchInWorkspace(_ project: ProjectEntry, command: AMXCommand) {
-        let arguments = ProjectCatalog.workspaceLaunchArguments(for: project)
+    private func launchInWorkspace(_ project: ProjectEntry, directory: String?, command: AMXCommand) {
+        let arguments = ProjectCatalog.workspaceLaunchArguments(for: project, directory: directory)
         let label = "launch \(project.profile)/\(project.title)"
         focusQueue.async { [weak self] in
             let result = command.json(ProjectLaunchResult.self, arguments)

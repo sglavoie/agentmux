@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -514,6 +515,30 @@ func (c *Config) HarnessEmoji(name string) string {
 		return ""
 	}
 	return c.HarnessEmojis[harness.Normalize(name)]
+}
+
+// HarnessIcons returns the distinct configured harness emojis, longest first,
+// so the first one a title starts with is the badge that title carries.
+func (c *Config) HarnessIcons() []string {
+	if c == nil {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(c.HarnessEmojis))
+	icons := make([]string, 0, len(c.HarnessEmojis))
+	for _, icon := range c.HarnessEmojis {
+		if _, ok := seen[icon]; ok || icon == "" {
+			continue
+		}
+		seen[icon] = struct{}{}
+		icons = append(icons, icon)
+	}
+	sort.Slice(icons, func(i, j int) bool {
+		if len(icons[i]) != len(icons[j]) {
+			return len(icons[i]) > len(icons[j])
+		}
+		return icons[i] < icons[j]
+	})
+	return icons
 }
 
 // HarnessColor returns the configured UI color for the named harness, or ""

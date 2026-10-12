@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,6 +47,10 @@ type runtimeLabel struct {
 	// name is the name the operator gave the session, empty for none. Like
 	// the color it can change while the binding lives (observeRuntimeNames).
 	name string
+	// title is the title of the session's group, which carries its harness
+	// icon. The icon picker rewrites it, so like the color it is read again
+	// by every pass (observeRuntimeTitles).
+	title string
 	// read is true once the backend answered (or there is none to ask), so
 	// the label is final for as long as the binding lives.
 	read    bool
@@ -68,6 +73,13 @@ func (h *Handler) SetProfileColors(colors map[string]string) {
 		folded[strings.ToLower(profile)] = color
 	}
 	h.profileColors = folded
+}
+
+// SetHarnessIcons installs the configured harness emojis, longest first
+// (config.HarnessIcons). It is called once at startup, before any snapshot is
+// built; without it no session is listed with a harness icon.
+func (h *Handler) SetHarnessIcons(icons []string) {
+	h.harnessIcons = slices.Clone(icons)
 }
 
 // runtimeColorLocked is the palette color a non-Kitty session is shown in:
@@ -165,7 +177,7 @@ func (h *Handler) labelRuntimeSessions(now time.Time) {
 		if old.project != label.project || old.profile != label.profile {
 			changed = true
 		}
-		label.color, label.name = old.color, old.name
+		label.color, label.name, label.title = old.color, old.name, old.title
 		h.runtimeLabels[runtime] = label
 	}
 	if changed {

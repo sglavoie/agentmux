@@ -90,6 +90,25 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(rows["work"]?.label, "work", "the name does not replace the profile, or move the row")
     }
 
+    func testASessionCarriesTheHarnessIconTheDaemonPublishes() throws {
+        let json = #"""
+        {"v":2,"sessions":[
+          {"project":"api","profile":"work","harness_icon":"🦊",
+           "runtime":{"session_id":"rs-00000000000000000000000000000001","backend":"tmux","pane":"%1"}},
+          {"project":"api","profile":"plain",
+           "runtime":{"session_id":"rs-00000000000000000000000000000002","backend":"tmux","pane":"%2"}},
+          {"window_id":4,"project":"api","profile":"kitty","harness_icon":"📟"}]}
+        """#
+        let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
+        XCTAssertEqual(snapshot.sessions.map(\.harnessIcon), ["🦊", "", "📟"])
+
+        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions)[0].rows.map { ($0.label, $0) })
+        XCTAssertEqual(rows["work"]?.harnessIcon, "🦊")
+        XCTAssertEqual(rows["plain"]?.harnessIcon, "", "a session whose icon was cleared has none")
+        XCTAssertEqual(rows["kitty"]?.harnessIcon, "", "a Kitty session's icon is on its tab, in Kitty")
+        XCTAssertEqual(rows["work"]?.label, "work", "the icon does not replace the profile, or move the row")
+    }
+
     func testNamingPutsEveryFlagBeforeTheName() {
         // `AMXCommand.json` appends `--json` only when it is missing, and
         // anything after `--` is a name, not a flag.

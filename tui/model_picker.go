@@ -21,10 +21,103 @@ import (
 )
 
 func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.pickerDirMode {
+		return m.handlePickerDirKey(msg)
+	}
 	if m.pickerSearchMode {
 		return m.handlePickerSearchKey(msg)
 	}
 	return m.handlePickerNavKey(msg)
+}
+
+// openPickerDirPrompt opens the directory prompt on the highlighted project,
+// holding the directory it would launch in now.
+func (m Model) openPickerDirPrompt() (tea.Model, tea.Cmd) {
+	if m.pickerCursor < 0 || m.pickerCursor >= len(m.pickerFilteredIdx) {
+		return m, nil
+	}
+	origIdx := m.pickerFilteredIdx[m.pickerCursor]
+	if origIdx < 0 || origIdx >= len(m.pickerSessions) {
+		return m, nil
+	}
+	m.pickerDirMode = true
+	m.pickerDirIdx = origIdx
+	m.pickerDirValue = m.pickerInput().EffectiveDirectory(origIdx)
+	m.pickerDirError = ""
+	scrollPickerToCursor(&m)
+	return m, nil
+}
+
+// handlePickerDirKey handles input while the directory prompt is open. Enter
+// keeps the prompt open on a directory a launch would refuse, so the override
+// that is saved is always one that can be launched in.
+func (m Model) handlePickerDirKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case keyCtrlC:
+		return m, tea.Quit
+	case keyEsc:
+		m.pickerDirMode = false
+		scrollPickerToCursor(&m)
+		return m, nil
+	case keyEnter:
+		idx := m.pickerDirIdx
+		if idx < 0 || idx >= len(m.pickerSessions) {
+			m.pickerDirMode = false
+			return m, nil
+		}
+		dir := launch.ResolveDirectory(m.pickerSessions[idx].Directory, m.pickerDirValue)
+		if dir != "" {
+			if problem := actions.ProjectDirectoryProblem(dir); problem != "" {
+				m.pickerDirError = problem
+				return m, nil
+			}
+			if m.pickerDirOverride == nil {
+				m.pickerDirOverride = make(map[int]string)
+			}
+			m.pickerDirOverride[idx] = dir
+		} else {
+			delete(m.pickerDirOverride, idx)
+		}
+		m.pickerDirMode = false
+		m.refreshPickerDirProblem(idx)
+		scrollPickerToCursor(&m)
+		return m, m.refreshPreviewForPickerCursor()
+	case keyTab:
+		if idx := m.pickerDirIdx; idx >= 0 && idx < len(m.pickerSessions) {
+			m.pickerDirValue = launch.CompleteDirectory(m.pickerSessions[idx].Directory, m.pickerDirValue)
+			m.pickerDirError = ""
+		}
+		return m, nil
+	case keyCtrlU:
+		m.pickerDirValue = ""
+		m.pickerDirError = ""
+		return m, nil
+	case keyBackspace:
+		if r := []rune(m.pickerDirValue); len(r) > 0 {
+			m.pickerDirValue = string(r[:len(r)-1])
+			m.pickerDirError = ""
+		}
+		return m, nil
+	default:
+		if t := msg.Key().Text; t != "" {
+			m.pickerDirValue += t
+			m.pickerDirError = ""
+		}
+		return m, nil
+	}
+}
+
+// refreshPickerDirProblem re-reads whether the directory a project would
+// launch in is usable, after its override changed.
+func (m *Model) refreshPickerDirProblem(idx int) {
+	if m.pickerDirProblems == nil {
+		m.pickerDirProblems = make(map[int]string)
+	}
+	if problem := actions.ProjectDirectoryProblem(m.pickerInput().EffectiveDirectory(idx)); problem != "" {
+		m.pickerDirProblems[idx] = problem
+	} else {
+		delete(m.pickerDirProblems, idx)
+	}
 }
 
 // handlePickerSearchKey handles input while the picker is in search mode
@@ -70,6 +163,7 @@ func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) exitPicker() (tea.Model, tea.Cmd) {
 	m.mode = ModeList
 	m.pickerProfileOverride = nil
+	m.pickerDirOverride = nil
 	m.pickerPinned = nil
 	m.pickerProfileFilter = ""
 	// The mode is assigned before the pane is handed back, because handing it
@@ -190,6 +284,8 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.cyclePickerProfile()
 	case keyPinProject:
 		return m.togglePickerPin()
+	case keyLaunchDirectory:
+		return m.openPickerDirPrompt()
 	case keySpace:
 		if len(m.pickerFilteredIdx) == 0 {
 			return m, nil
@@ -265,6 +361,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModeList
 		m.pickerSelected = nil
 		m.pickerProfileOverride = nil
+		m.pickerDirOverride = nil
 		m.pickerPinned = nil
 		m.pickerProfileFilter = ""
 		// Returned before the expression is built, not inside it: handing the pane

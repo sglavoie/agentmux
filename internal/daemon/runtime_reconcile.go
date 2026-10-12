@@ -86,6 +86,7 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	h.observeRuntimeMutes(report.Mutes)
 	h.observeRuntimeColors(report.Colors)
 	h.observeRuntimeNames(report.Names)
+	h.observeRuntimeTitles(report.Titles)
 	if !report.Empty() {
 		// The directory answers a known session from the version it loaded;
 		// what was just recorded has to be the version the restore and the
@@ -179,6 +180,32 @@ func (h *Handler) observeRuntimeNames(names []tmux.Named) {
 			continue
 		}
 		label.name = observed.Name
+		h.runtimeLabels[string(observed.ID)] = label
+		h.companionDirty()
+	}
+}
+
+// observeRuntimeTitles is the title observation of a session with no Kitty
+// window. Its launch titled it with its harness's icon and the icon picker
+// rewrites that title; with no tab to show it, the companion snapshot
+// publishes the icon the title carries. Like the color it is kept beside the
+// session's label and read again by every pass.
+func (h *Handler) observeRuntimeTitles(titles []tmux.Titled) {
+	if len(titles) == 0 {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	for _, observed := range titles {
+		slot, ok := h.runtimeRoutes.byRuntime[string(observed.ID)]
+		if !ok || !isRuntimeSyntheticSlot(slot) {
+			continue
+		}
+		label, ok := h.runtimeLabels[string(observed.ID)]
+		if !ok || label.title == observed.Title {
+			continue
+		}
+		label.title = observed.Title
 		h.runtimeLabels[string(observed.ID)] = label
 		h.companionDirty()
 	}

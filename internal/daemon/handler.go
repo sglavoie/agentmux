@@ -184,6 +184,10 @@ type Handler struct {
 	// profile name: the color of a session nobody picked one for. Installed
 	// once at startup by SetProfileColors.
 	profileColors map[string]string
+	// harnessIcons is the configured harness emojis, longest first: what a
+	// session's title is read against for the icon it carries. Installed
+	// once at startup by SetHarnessIcons.
+	harnessIcons []string
 	// runtimeCheckpointPath is the backend-neutral reducer checkpoint
 	// (runtime_checkpoint.go), set once at startup; empty disables it.
 	// runtimeRestorePending holds checkpointed sessions the registry could

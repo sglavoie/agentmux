@@ -41,7 +41,10 @@ func defaultDefinitions() []Definition {
 		},
 		{
 			ID: Launch, Label: "launch new", Description: "launch a new session from a configured project", Requires: projectRequirement,
-			Parameters: []ParameterSchema{{Name: "profile", Type: "string", Description: "optional profile override"}},
+			Parameters: []ParameterSchema{
+				{Name: "profile", Type: "string", Description: "optional profile override"},
+				{Name: "directory", Type: "string", Description: "optional working directory override"},
+			},
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
 				rt, err := deps.launchRuntime(Launch)
 				if err != nil {
@@ -50,6 +53,11 @@ func defaultDefinitions() []Definition {
 				project := *request.Project
 				if profile := strings.TrimSpace(request.Parameters["profile"]); profile != "" {
 					project.Profile, project.Account = profile, profile
+				}
+				// The override replaces the configured directory before the
+				// check below, so an unusable override is refused the same way.
+				if directory := strings.TrimSpace(request.Parameters["directory"]); directory != "" {
+					project.Directory = directory
 				}
 				account, ok := accountByName(deps.Config, project.EffectiveProfile())
 				if !ok {

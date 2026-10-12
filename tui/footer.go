@@ -35,11 +35,22 @@ func renderFooter(m Model) string {
 			renderFooterBinding("[esc]", "cancel"),
 		))
 	case ModePicker:
+		if m.pickerDirMode {
+			lines = nonEmptyFooterLines(
+				footerStyledLine(m.width, "  ",
+					renderFooterBinding("enter", "apply"), renderFooterBinding("tab", "complete"),
+					renderFooterBinding("ctrl+u", "clear"), renderFooterBinding("esc", "cancel"),
+				),
+				footerLine(m.width, " · ", "launch directory", "relative paths start at the project's directory", "empty restores it"),
+			)
+			break
+		}
 		lines = nonEmptyFooterLines(
 			footerStyledLine(m.width, "  ",
 				renderFooterBinding("space", "toggle"), renderFooterBinding("enter", "launch"),
 				renderFooterBinding("f", "profile"), renderFooterBinding("P", "pin"),
 				renderFooterBinding("s", "sessions"), renderFooterBinding("C", "override"),
+				renderFooterBinding("d", "directory"),
 				renderFooterBinding("o", "open dirs"), renderFooterBinding("O", "open in editor"),
 				renderFooterBinding("p", "preview"), renderFooterBinding("esc", "clear/exit"),
 				renderFooterBinding("?", "help"),

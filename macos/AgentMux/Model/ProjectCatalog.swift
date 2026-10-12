@@ -174,17 +174,19 @@ struct ProjectCatalog: Equatable {
     }
 
     /// `amx project launch --title T --profile P`: the profile is always
-    /// named, so a title shared across profiles is never ambiguous.
-    static func launchArguments(for project: ProjectEntry) -> [String] {
+    /// named, so a title shared across profiles is never ambiguous. A
+    /// `directory` replaces the project's configured one for this launch.
+    static func launchArguments(for project: ProjectEntry, directory: String? = nil) -> [String] {
         var arguments = ["project", "launch", "--title", project.title]
         if !project.profile.isEmpty { arguments += ["--profile", project.profile] }
+        if let directory { arguments += ["--directory", directory] }
         return arguments
     }
 
     /// The same launch on the private tmux server, for the workspace to
     /// embed: what Launch Project runs when there is no Kitty to open a tab in.
-    static func workspaceLaunchArguments(for project: ProjectEntry) -> [String] {
-        launchArguments(for: project) + ["--backend", "tmux"]
+    static func workspaceLaunchArguments(for project: ProjectEntry, directory: String? = nil) -> [String] {
+        launchArguments(for: project, directory: directory) + ["--backend", "tmux"]
     }
 
     static func fetch(_ command: AMXCommand) -> Result<[ProjectEntry], AMXCommandError> {

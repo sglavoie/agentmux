@@ -49,6 +49,10 @@ struct WorkspaceRow: Equatable {
     /// above the label; empty for none, and the row then looks as it always
     /// did. Only an embedded session has one.
     var name = ""
+    /// The session's harness icon, shown ahead of the label: its harness's
+    /// own until the icon picker replaces or clears it. Empty for none, and
+    /// only an embedded session has one; a Kitty session's is on its tab.
+    var harnessIcon = ""
 
     var embeddedRuntimeSessionID: String? {
         if case let .embedded(id) = target { return id }
@@ -168,7 +172,8 @@ enum WorkspaceSidebar {
             muted: session.muted,
             toolTip: tip.joined(separator: " · "),
             tabColor: embedded == nil ? nil : WorkspaceTabColor(hex: session.tabColor),
-            name: embedded == nil ? "" : session.name
+            name: embedded == nil ? "" : session.name,
+            harnessIcon: embedded == nil ? "" : session.harnessIcon
         )
     }
 

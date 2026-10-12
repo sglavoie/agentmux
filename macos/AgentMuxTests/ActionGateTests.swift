@@ -162,6 +162,11 @@ final class ActionGateTests: XCTestCase {
         XCTAssertFalse(items[2].isEnabled)
         XCTAssertEqual(items[2].toolTip, "old")
         XCTAssertEqual((items[3].representedObject as? MenuBuilder.ActionBox)?.action, .launchProject(ProjectEntry(profile: "w", title: "A")))
+        XCTAssertEqual(items.count, 5, "a project is followed by its ⌥ alternate")
+        XCTAssertTrue(items[4].isAlternate)
+        XCTAssertEqual(items[4].keyEquivalentModifierMask, .option)
+        XCTAssertEqual(items[4].title, "A in Folder…")
+        XCTAssertEqual((items[4].representedObject as? MenuBuilder.ActionBox)?.action, .launchProjectInFolder(ProjectEntry(profile: "w", title: "A")))
     }
 
     func testMuteToggleRunsAgainstTheRowSocket() {

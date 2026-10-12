@@ -416,6 +416,10 @@ type CompanionSession struct {
 	// Name is the name the operator gave a session with no Kitty tab
 	// (`amx name-session`), empty for none. Only a v2 snapshot carries it.
 	Name string `json:"name,omitempty"`
+	// HarnessIcon is the harness badge a session with no Kitty tab is listed
+	// with: its harness's configured emoji, or the one the icon picker put
+	// in its title, empty for none. Only a v2 snapshot carries it.
+	HarnessIcon string `json:"harness_icon,omitempty"`
 	// Runtime names the AgentMux runtime session that owns this session. Only
 	// a v2 snapshot carries it.
 	Runtime *CompanionRuntime `json:"runtime,omitempty"`

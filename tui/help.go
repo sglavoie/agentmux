@@ -165,6 +165,7 @@ var helpSections = []struct {
 		"  enter     launch every selected project (in the launcher)",
 		"  f         cycle the launch profile (in the launcher)",
 		"  C         choose a profile for this launch (in the launcher)",
+		"  d         choose a working directory for this launch (in the launcher)",
 		"  P         pin / unpin highlighted launcher project (in the launcher)",
 		"  p         toggle the launcher's preview pane (in the launcher)",
 		"  s         search past sessions for the highlighted project (launcher)",

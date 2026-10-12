@@ -121,6 +121,10 @@ final class ProjectCatalogTests: XCTestCase {
         let project = ProjectEntry(profile: "work", title: "API")
         XCTAssertEqual(ProjectCatalog.launchArguments(for: project), ["project", "launch", "--title", "API", "--profile", "work"])
         XCTAssertEqual(ProjectCatalog.launchArguments(for: ProjectEntry(profile: "", title: "X")), ["project", "launch", "--title", "X"])
+        XCTAssertEqual(ProjectCatalog.launchArguments(for: project, directory: "/src/hotfix"),
+                       ["project", "launch", "--title", "API", "--profile", "work", "--directory", "/src/hotfix"])
+        XCTAssertEqual(ProjectCatalog.workspaceLaunchArguments(for: project, directory: "/src/hotfix").suffix(4),
+                       ["--directory", "/src/hotfix", "--backend", "tmux"])
 
         let (amx, calls) = command { _ in
             self.output(#"{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched","project":{"profile":"work","title":"API","harness":"claude","directory":"/p","groups":[]},"tab_id":4,"window_id":9}}"#)

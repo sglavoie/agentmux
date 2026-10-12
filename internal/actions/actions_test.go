@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -92,6 +93,24 @@ func TestCloseReportsWhetherTheTabWasObservedToClose(t *testing.T) {
 	}
 	if result.Message == "closed session" {
 		t.Fatalf("unobserved close claimed %q", result.Message)
+	}
+}
+
+func TestLaunchDirectoryParameterIsCheckedInPlaceOfTheConfiguredOne(t *testing.T) {
+	runner := kitty.NewMockRunner(nil)
+	client := kitty.NewClientWithSocket(runner, "")
+	missing := filepath.Join(t.TempDir(), "gone")
+	cfg := &config.Config{Accounts: []config.Account{{Name: "work", Harness: "claude"}}}
+	project := config.Session{Title: "api", Directory: t.TempDir(), Profile: "work"}
+
+	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Kitty: client, Config: cfg}, Launch,
+		Request{Project: &project, Parameters: map[string]string{"directory": missing}})
+	var actionErr *Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "directory_unusable" || !strings.Contains(actionErr.Message, missing) {
+		t.Fatalf("error = %v, want directory_unusable naming %q", err, missing)
+	}
+	if len(runner.Calls) != 0 {
+		t.Fatalf("a refused launch called Kitty: %+v", runner.Calls)
 	}
 }
 

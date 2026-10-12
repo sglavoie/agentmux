@@ -350,6 +350,13 @@ ASL answer panel work the same either way.
   on every reconciliation pass, so a pick shows within about two seconds. A
   Kitty session's color stays on its tab in Kitty, and the workspace's own
   views (Dashboard, Overview, shells) take none.
+- **Harness icons.** An embedded session's line starts with its harness
+  icon, ahead of the profile: the `[harness_emojis]` emoji its launch put in
+  its title, with nothing to set up, until F5 picks another or clears it.
+  The daemon reads the title on every reconciliation pass and publishes the
+  configured emoji it starts with as the session's `harness_icon`, so a pick
+  shows as soon as a color does. A Kitty session's icon stays on its tab in
+  Kitty.
 - **Closing from the sidebar.** A row that can be closed has a × in its top
   right corner. On an opened view (a shell, an editor, a pager, a session's
   terminal) it does what **View › Close** does on a view, wherever the pane is. On an

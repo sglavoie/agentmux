@@ -31,12 +31,13 @@ type PickerInput struct {
 	// ("does not exist", ...); a usable directory has no entry. Launching
 	// such a project is refused, so its row and preview say so up front.
 	DirProblems map[int]string
-	// Selected, Pinned, and ProfileOverride are the launcher's per-project
-	// state: multi-select checkboxes, persistent pins, and one-time profile
-	// choices.
+	// Selected, Pinned, ProfileOverride, and DirOverride are the launcher's
+	// per-project state: multi-select checkboxes, persistent pins, the saved
+	// profile choice, and the working directory chosen for this visit only.
 	Selected        map[int]bool
 	Pinned          map[int]bool
 	ProfileOverride map[int]string
+	DirOverride     map[int]string
 
 	// FilteredIdx holds indices into Sessions for the currently visible view.
 	FilteredIdx   []int
@@ -45,6 +46,11 @@ type PickerInput struct {
 	Filter        string
 	ProfileFilter string
 	SearchMode    bool
+	// DirMode is true while the directory prompt is open; DirValue is what
+	// has been typed and DirError why the last attempt was refused.
+	DirMode  bool
+	DirValue string
+	DirError string
 
 	PreviewEnabled bool
 	PreviewText    string
@@ -70,12 +76,14 @@ func (in PickerInput) EffectiveProfile(origIdx int) string {
 }
 
 // SessionWithResolvedProfile returns the configured project stamped with the
-// profile it would actually launch under.
+// profile and the directory it would actually launch with.
 func (in PickerInput) SessionWithResolvedProfile(origIdx int) config.Session {
 	if origIdx < 0 || origIdx >= len(in.Sessions) {
 		return config.Session{}
 	}
-	return sessionWithProfile(in.Sessions[origIdx], in.EffectiveProfile(origIdx))
+	sess := sessionWithProfile(in.Sessions[origIdx], in.EffectiveProfile(origIdx))
+	sess.Directory = in.EffectiveDirectory(origIdx)
+	return sess
 }
 
 // Render renders the session picker. When preview is enabled and the terminal
@@ -143,6 +151,15 @@ func (in PickerInput) RenderList(height int) string {
 	header += "  [profile: " + profileLabel + "]"
 	sb.WriteString(in.renderHeader(header))
 	switch {
+	case in.DirMode:
+		prompt := styleSearch.Render("dir: ") + in.DirValue + "█"
+		if in.DirError != "" {
+			prompt += "  " + styleError.Render("("+in.DirError+")")
+		}
+		if in.Width > 0 {
+			prompt = layout.StyledTruncate(prompt, in.Width, "…")
+		}
+		sb.WriteString(prompt + "\n\n")
 	case in.SearchMode:
 		sb.WriteString(styleSearch.Render("/") + in.Filter + "█" + "\n\n")
 	case in.Filter != "":
@@ -270,6 +287,9 @@ func (in PickerInput) RenderList(height int) string {
 		line := "  " + prefix + coloredTitle + strings.Repeat(" ", titlePad) + "  " + harnessCell
 		if sess.EffectiveProfile() != defaultProfile {
 			line += "  " + styleDim.Render("(override)")
+		}
+		if in.DirOverride[origIdx] != "" {
+			line += "  " + styleDim.Render("(dir: "+sess.Directory+")")
 		}
 		if in.DirProblems[origIdx] != "" {
 			line += "  " + styleError.Render("(missing)")

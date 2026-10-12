@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -366,6 +367,38 @@ func TestProjectLaunchJSONGoesThroughTheLaunchAction(t *testing.T) {
 	}
 	if data.TabID != 501 || data.WindowID != 901 {
 		t.Fatalf("tab/window = %d/%d, want the new tab 501/901", data.TabID, data.WindowID)
+	}
+}
+
+func TestProjectLaunchDirectoryOverridesTheConfiguredOne(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(filepath.Dir(dir))
+	projectLaunchDir = filepath.Base(dir)
+	t.Cleanup(func() { projectLaunchDir = "" })
+	client := &recordingKittyClient{windows: []kitty.OSWindow{{ID: 1, IsFocused: true, Tabs: []kitty.Tab{{ID: 10, Title: "shell", Windows: []kitty.Window{{ID: 100}}}}}}}
+	cfg := testConfig()
+	out, err := runProject(t, "launch", cfg, client, true, "codex-work", "API")
+	if err != nil {
+		t.Fatalf("launch: %v\n%s", err, out)
+	}
+	want, err := filepath.Abs(filepath.Base(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.launched) != 1 || client.launched[0].Directory != want {
+		t.Fatalf("launched = %+v, want one tab in %q", client.launched, want)
+	}
+	var envelope struct {
+		Data projectLaunchData `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("decode %q: %v", out, err)
+	}
+	if envelope.Data.Project.Directory != want || envelope.Data.Project.Title != "API" {
+		t.Fatalf("project = %+v, want API in %q", envelope.Data.Project, want)
+	}
+	if cfg.Projects[1].Directory != "/tmp/api" {
+		t.Fatalf("the configured project was rewritten to %q", cfg.Projects[1].Directory)
 	}
 }
 

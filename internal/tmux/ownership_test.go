@@ -522,3 +522,38 @@ func TestReconcileReportsTheNameGivenToASession(t *testing.T) {
 		t.Fatalf("names after removing it = %v", got)
 	}
 }
+
+// TestReconcileReportsTheTitleOfASession: a pass reports every live session's
+// group title, which is where the harness icon is kept, and follows it when
+// the title is rewritten.
+func TestReconcileReportsTheTitleOfASession(t *testing.T) {
+	f := tmuxtest.New(t)
+	start := time.Now().Add(-time.Minute)
+	launched := launchAgent(t, f)
+	retitled := register(t, f, launched, start)
+	plain := register(t, f, launchAgent(t, f), start)
+	reconciler := tmux.NewReconciler(f.Registry, nil)
+
+	read := func() map[runtimesession.ID]string {
+		t.Helper()
+		report, err := reconciler.Reconcile(time.Now())
+		if err != nil || !report.Empty() {
+			t.Fatalf("pass = %+v, %v; want no change", report, err)
+		}
+		titles := map[runtimesession.ID]string{}
+		for _, titled := range report.Titles {
+			titles[titled.ID] = titled.Title
+		}
+		if len(titles) != 2 {
+			t.Fatalf("titles = %+v; want both live sessions read", report.Titles)
+		}
+		return titles
+	}
+	before := read()
+	if err := f.Backend.SetTitle(launched.Pane, "🦊API"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[retitled.ID] != "🦊API" || got[plain.ID] != before[plain.ID] {
+		t.Fatalf("titles after retitling one = %v; want only it changed from %v", got, before)
+	}
+}

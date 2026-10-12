@@ -57,10 +57,12 @@ func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	m.pickerDirProblems = launch.DirectoryProblems(m.pickerSessions, actions.ProjectDirectoryProblem)
 	m.pickerSelected = make(map[int]bool)
 	m.pickerProfileOverride, m.pickerPinned = launch.LoadState(m.pickerSessions)
+	m.pickerDirOverride = nil
 	m.pickerCursor = 0
 	m.pickerFilter = ""
 	m.pickerProfileFilter = ""
 	m.pickerSearchMode = false
+	m.pickerDirMode = false
 	m.pickerFilteredIdx = m.pickerFilteredIndices("")
 	m.mode = ModePicker
 	return m, m.refreshPreviewForPickerCursor()
