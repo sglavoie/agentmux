@@ -26,6 +26,9 @@ type actionWorktreeManager struct {
 	forgetErr   error
 	removeCalls int
 	forgetCalls int
+
+	reviewOptions []worktree.ReviewOptions
+	reviewErr     error
 }
 
 func (m *actionWorktreeManager) List(context.Context) ([]worktree.Entry, error) {
@@ -42,6 +45,11 @@ func (m *actionWorktreeManager) Resolve(_ context.Context, selector string) (wor
 func (m *actionWorktreeManager) Remove(context.Context, string, worktree.RemoveOptions) (worktree.MutationResult, error) {
 	m.removeCalls++
 	return worktree.MutationResult{Entry: m.entries[0], CheckoutRemoved: m.removeErr == nil}, m.removeErr
+}
+
+func (m *actionWorktreeManager) Review(_ context.Context, entry worktree.Entry, options worktree.ReviewOptions) (worktree.Review, error) {
+	m.reviewOptions = append(m.reviewOptions, options)
+	return worktree.Review{ID: entry.ID, SourceBranch: entry.SourceBranch, Lands: worktree.LandsFastForward, Ahead: 1}, m.reviewErr
 }
 
 func (m *actionWorktreeManager) Forget(context.Context, string) (worktree.MutationResult, error) {
@@ -274,5 +282,46 @@ func writeActionTranscriptIndex(t *testing.T, path string, metas ...transcript.S
 	}
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWorktreeDiffReviewsActiveAndDirtyWorktreesAndPassesItsOptions(t *testing.T) {
+	entry := worktree.Entry{
+		ID: "wt-1", Classification: worktree.ClassificationValid, SourceBranch: "main",
+		Exists: true, GitAvailable: true, Registered: true,
+		Dirty: true, Locked: true, Usage: worktree.Usage{Live: true, Looping: true},
+	}
+	manager := &actionWorktreeManager{entries: []worktree.Entry{entry}}
+	deps := Dependencies{WorktreeManager: manager}
+	registry := DefaultRegistry()
+
+	result, err := registry.Execute(context.Background(), deps, WorktreeDiff, Request{
+		Worktree: &entry, Parameters: map[string]string{"committed": "true", "patch": "true"},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if review, ok := result.Data["review"].(worktree.Review); !ok || review.Lands != worktree.LandsFastForward || result.Changed {
+		t.Fatalf("result = %+v, want an unchanged review", result)
+	}
+	if len(manager.reviewOptions) != 1 || manager.reviewOptions[0] != (worktree.ReviewOptions{CommittedOnly: true, Patch: true}) {
+		t.Fatalf("review options = %+v", manager.reviewOptions)
+	}
+
+	for name, refused := range map[string]worktree.Entry{
+		"missing checkout": {ID: "wt-1", Classification: worktree.ClassificationMissing, SourceBranch: "main"},
+		"legacy":           {ID: "wt-1", Classification: worktree.ClassificationLegacy, Exists: true, GitAvailable: true},
+		"git unavailable":  {ID: "wt-1", Classification: worktree.ClassificationValid, SourceBranch: "main", Exists: true},
+	} {
+		if got := registry.Availability(deps, WorktreeDiff, Request{Worktree: &refused}); got.Available || got.Reason == "" {
+			t.Errorf("%s availability = %+v, want a refusal with a reason", name, got)
+		}
+	}
+
+	manager.reviewErr = worktree.ErrSourceBranchMissing
+	_, err = registry.Execute(context.Background(), deps, WorktreeDiff, Request{Worktree: &entry})
+	var actionErr *Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "source_branch_missing" {
+		t.Fatalf("error = %v, want source_branch_missing", err)
 	}
 }

@@ -27,6 +27,8 @@ type commandWorktreeManager struct {
 	entries       []worktree.Entry
 	removeOptions []worktree.RemoveOptions
 	forgetCalls   int
+	reviewOptions []worktree.ReviewOptions
+	review        worktree.Review
 }
 
 func (m *commandWorktreeManager) List(context.Context) ([]worktree.Entry, error) {
@@ -38,6 +40,10 @@ func (m *commandWorktreeManager) Resolve(_ context.Context, selector string) (wo
 func (m *commandWorktreeManager) Remove(_ context.Context, _ string, options worktree.RemoveOptions) (worktree.MutationResult, error) {
 	m.removeOptions = append(m.removeOptions, options)
 	return worktree.MutationResult{Entry: m.entries[0], CheckoutRemoved: true, BranchDeleted: options.DeleteBranch, MetadataForgotten: true}, nil
+}
+func (m *commandWorktreeManager) Review(_ context.Context, _ worktree.Entry, options worktree.ReviewOptions) (worktree.Review, error) {
+	m.reviewOptions = append(m.reviewOptions, options)
+	return m.review, nil
 }
 func (m *commandWorktreeManager) Forget(context.Context, string) (worktree.MutationResult, error) {
 	m.forgetCalls++
@@ -52,6 +58,7 @@ func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
 	}{
 		{worktreeListCmd, nil},
 		{worktreeShowCmd, []string{"wt-1"}},
+		{worktreeDiffCmd, []string{"wt-1"}},
 		{worktreeReopenCmd, []string{"wt-1"}},
 		{worktreeShellCmd, []string{"wt-1"}},
 		{worktreeEditCmd, []string{"wt-1"}},
@@ -261,7 +268,7 @@ func TestWorktreeCLIMapsCandidatesConfirmationsAndParameters(t *testing.T) {
 // family is reachable as `amx worktree` is only true once root has registered
 // it, and asserting that against a locally built parent would be tautological.
 func TestWorktreeCLIHelpIsRegistered(t *testing.T) {
-	for _, name := range []string{"list", "show", "reopen", "shell", "edit", "remove", "forget"} {
+	for _, name := range []string{"list", "show", "diff", "reopen", "shell", "edit", "remove", "forget"} {
 		if command, _, err := worktreeCmd.Find([]string{name}); err != nil || command == nil || command.Name() != name {
 			t.Fatalf("worktree %s registration: command=%v err=%v", name, command, err)
 		}
@@ -278,7 +285,7 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 	oldIndex := worktreeCommandsTranscriptIndex
 	oldReaders := worktreeCommandsReaders
 	oldIsTerminal := worktreeListIsTerminal
-	commands := []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd, worktreeForgetCmd}
+	commands := []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeDiffCmd, worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd, worktreeForgetCmd}
 	outputs := make([]io.Writer, len(commands))
 	for index, command := range commands {
 		outputs[index] = command.OutOrStdout()
@@ -301,13 +308,15 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 		_ = worktreeRemoveCmd.Flags().Set("yes", "false")
 		_ = worktreeRemoveCmd.Flags().Set("delete-branch", "false")
 		_ = worktreeForgetCmd.Flags().Set("yes", "false")
+		_ = worktreeDiffCmd.Flags().Set("committed", "false")
+		_ = worktreeDiffCmd.Flags().Set("patch", "false")
 	})
 
 	root := t.TempDir()
 	source := t.TempDir()
 	entry := worktree.Entry{
 		ID: "wt-1", Classification: worktree.ClassificationValid, ProjectLabel: "api", Path: root,
-		Branch: "amx/api/source-1", SourceRoot: source, Profile: "work", Harness: harness.Claude,
+		Branch: "amx/api/source-1", SourceRoot: source, SourceBranch: "main", Profile: "work", Harness: harness.Claude,
 		Exists: true, GitAvailable: true, StatusAvailable: true, Registered: true, Actionable: true,
 	}
 	manager := &commandWorktreeManager{entries: []worktree.Entry{entry}}
@@ -368,9 +377,58 @@ func TestCompleteWorktreeSelectorsOffersIDsWithBranchAndProject(t *testing.T) {
 	if got, _ := completeWorktreeSelectors(worktreeShowCmd, []string{"wt-api"}, ""); got != nil {
 		t.Fatalf("second argument completed %q, want nothing", got)
 	}
-	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
+	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeDiffCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
 		if command.ValidArgsFunction == nil {
 			t.Errorf("worktree %s has no selector completion", command.Name())
 		}
+	}
+}
+
+func TestWorktreeDiffTextNamesTheVerdictFilesAndConflicts(t *testing.T) {
+	manager, _ := resetWorktreeCommandsTestState(t)
+	manager.review = worktree.Review{
+		ID: "wt-1", Branch: "amx/api/source-1", SourceBranch: "main", Ahead: 2, Behind: 1, Dirty: true,
+		Files: []worktree.FileChange{{Path: "a.go", Added: 3, Deleted: 1}, {Path: "img/logo.png", Binary: true}},
+		Added: 3, Deleted: 1, Untracked: []string{"notes.md"},
+		Lands: worktree.LandsConflicts, Conflicts: []string{"a.go"}, Patch: "diff --git a/a.go b/a.go\n",
+	}
+	var out bytes.Buffer
+	worktreeDiffCmd.SetOut(&out)
+	for _, flag := range []string{"committed", "patch"} {
+		if err := worktreeDiffCmd.Flags().Set(flag, "true"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := worktreeDiffCmd.RunE(worktreeDiffCmd, []string{"wt-1"}); err != nil {
+		t.Fatalf("diff text: %v", err)
+	}
+	want := "amx/api/source-1 against main: 2 commits ahead, 1 behind, uncommitted changes\n" +
+		"lands: conflicts with main in 1 file\n" +
+		" a.go         | +3 -1\n" +
+		" img/logo.png | binary\n" +
+		"2 files changed, +3 -1\n" +
+		"untracked: notes.md\n" +
+		"conflict: a.go\n" +
+		"\ndiff --git a/a.go b/a.go\n"
+	if out.String() != want {
+		t.Fatalf("diff text =\n%s\nwant\n%s", out.String(), want)
+	}
+	// A buffer is no terminal, so the patch is asked for without color.
+	if want := []worktree.ReviewOptions{{CommittedOnly: true, Patch: true}}; !reflect.DeepEqual(manager.reviewOptions, want) {
+		t.Fatalf("review options = %+v, want %+v", manager.reviewOptions, want)
+	}
+}
+
+func TestWorktreeDiffRefusesAWorktreeWithNoRecordedSource(t *testing.T) {
+	manager, _ := resetWorktreeCommandsTestState(t)
+	manager.entries[0].SourceBranch = ""
+	var out bytes.Buffer
+	worktreeDiffCmd.SetOut(&out)
+	if err := worktreeDiffCmd.Flags().Set("json", "true"); err != nil {
+		t.Fatal(err)
+	}
+	err := worktreeDiffCmd.RunE(worktreeDiffCmd, []string{"wt-1"})
+	if payload := decodeWorktreeJSONError(t, out.Bytes(), err); payload.Error.Code != "unavailable" {
+		t.Fatalf("error = %+v, want unavailable", payload.Error)
 	}
 }

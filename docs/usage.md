@@ -1022,6 +1022,7 @@ The same lifecycle is scriptable:
 ```bash
 amx worktree list [--json]
 amx worktree show <selector> [--json]
+amx worktree diff <selector> [--committed] [--patch] [--json]
 amx worktree reopen <selector> [--session <candidate>] [--profile <name>] [--json]
 amx worktree shell <selector> [--json]
 amx worktree edit <selector> [--json]
@@ -1037,6 +1038,18 @@ valid, clean, unlocked, and used by no live session or loop — and with
 `remove`, which re-checks everything at that moment, so a worktree that became
 active in the meantime is kept and reported. Branches are kept unless
 `--delete-branch` is given, and even then only merged branches are deleted.
+
+`diff` reviews what a worktree did since it left its recorded source branch:
+commits ahead and behind, each changed file with its line counts, files Git
+does not track yet, and a verdict on how the committed work would land —
+`nothing_to_land`, `fast_forward`, `diverged_clean`, `conflicts` (naming the
+files), or `unknown` when the merge could not be predicted. The comparison
+starts at the merge base, so what the source branch gained meanwhile is not
+counted as the worktree's change. Uncommitted changes are included unless
+`--committed` is given; `--patch` appends the unified diff. It reads and never
+writes — the merge is predicted in Git's object database, not in a checkout —
+so it needs no `--yes` and is safe on a worktree with a live session in it. A
+worktree with no recorded source branch (a legacy checkout) cannot be reviewed.
 
 A selector is a full stable ID, unique ID prefix, branch, or canonical path.
 Ambiguous selectors and live sessions return structured candidates rather than

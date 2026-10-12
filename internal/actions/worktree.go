@@ -111,6 +111,45 @@ func showWorktree(ctx context.Context, deps Dependencies, request Request) (Resu
 	}}, nil
 }
 
+// worktreeDiffAvailability refuses only what no comparison can be made for. A
+// dirty, locked, or active worktree is reviewable: the review reads and never
+// writes.
+func worktreeDiffAvailability(request Request) Availability {
+	if request.Worktree == nil {
+		return Availability{Available: true}
+	}
+	entry := *request.Worktree
+	if !entry.Exists {
+		return Availability{Reason: "worktree checkout is missing"}
+	}
+	if entry.Classification != worktree.ClassificationValid || strings.TrimSpace(entry.SourceBranch) == "" {
+		return Availability{Reason: "no source branch was recorded for this worktree"}
+	}
+	if !entry.GitAvailable {
+		return Availability{Reason: "worktree Git facts are unavailable"}
+	}
+	return Availability{Available: true}
+}
+
+func diffWorktree(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+	entry, err := resolveWorktree(ctx, deps, request, WorktreeDiff)
+	if err != nil {
+		return Result{}, err
+	}
+	if availability := worktreeDiffAvailability(Request{Worktree: &entry}); !availability.Available {
+		return Result{}, &Error{Code: "unavailable", Action: WorktreeDiff, Message: availability.Reason}
+	}
+	review, err := lifecycleManager(deps).Review(ctx, entry, worktree.ReviewOptions{
+		CommittedOnly: parameterBool(request.Parameters, "committed"),
+		Patch:         parameterBool(request.Parameters, "patch"),
+		Color:         parameterBool(request.Parameters, "color"),
+	})
+	if err != nil {
+		return Result{}, mapLifecycleError(WorktreeDiff, err)
+	}
+	return Result{Message: "reviewed managed worktree", Data: map[string]any{"review": review}}, nil
+}
+
 func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Result, error) {
 	entry, err := resolveWorktree(ctx, deps, request, WorktreeReopen)
 	if err != nil {
@@ -401,6 +440,9 @@ func mapLifecycleError(action ID, err error) *Error {
 	}
 	code := "git_unavailable"
 	switch {
+	case action == WorktreeDiff && errors.Is(err, worktree.ErrSourceBranchMissing):
+		// A review merges nothing, so the cleanup code for this would mislead.
+		code = "source_branch_missing"
 	case errors.Is(err, worktree.ErrWorktreeDirty):
 		code = "worktree_dirty"
 	case errors.Is(err, worktree.ErrWorktreeLocked):

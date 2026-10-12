@@ -409,10 +409,13 @@ func runGit(ctx context.Context, directory string, timeout time.Duration, args .
 		if errors.Is(commandCtx.Err(), context.DeadlineExceeded) {
 			return nil, fmt.Errorf("git %s timed out after %s: %w", args[0], timeout, context.DeadlineExceeded)
 		}
+		// What Git printed before failing is returned with the error: for a
+		// command whose exit status is an answer (merge-tree's 1 for a
+		// conflict), the output is the rest of that answer.
 		if text := strings.TrimSpace(stderr.String()); text != "" {
-			return nil, fmt.Errorf("git %s failed: %w: %s", args[0], err, text)
+			return stdout.Bytes(), fmt.Errorf("git %s failed: %w: %s", args[0], err, text)
 		}
-		return nil, fmt.Errorf("git %s failed: %w", args[0], err)
+		return stdout.Bytes(), fmt.Errorf("git %s failed: %w", args[0], err)
 	}
 	return stdout.Bytes(), nil
 }

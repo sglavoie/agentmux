@@ -309,6 +309,20 @@ func defaultDefinitions() []Definition {
 			},
 		},
 		{
+			ID: WorktreeDiff, Label: "review worktree changes", Description: "show what a worktree changed since its source branch and how it would land", Requires: worktreeRequirement,
+			Parameters: []ParameterSchema{
+				{Name: "committed", Type: "boolean", Description: "leave uncommitted changes out"},
+				{Name: "patch", Type: "boolean", Description: "include the unified diff"},
+				{Name: "color", Type: "boolean", Description: "color the patch for a terminal"},
+			},
+			available: func(_ Dependencies, request Request) Availability {
+				return worktreeDiffAvailability(request)
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return diffWorktree(ctx, deps, request)
+			},
+		},
+		{
 			ID: WorktreeReopen, Label: "reopen worktree", Description: "focus a live session or resume the newest conversation", Requires: worktreeRequirement,
 			Parameters: []ParameterSchema{
 				{Name: "session", Type: "string", Description: "live-session candidate identifier"},
