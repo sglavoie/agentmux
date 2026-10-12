@@ -717,6 +717,7 @@ amx backend status          # the launch backend, the tmux in use and where it c
 amx backend status --json   # the same as data; --check exits 1 when a tmux launch would not work
 amx backend stop --yes      # end the private server and every agent in it; nothing else does
 amx close ID --yes          # end one agent and its tmux session, by runtime-session ID
+amx send ID "run the tests" # prompt one agent without attaching; --key answers a prompt it is showing
 ```
 
 `amx close` kills only the pane its launch tagged with that runtime session,
@@ -724,6 +725,61 @@ on the server generation it was registered on. Closing a session whose agent
 already stopped cleans up what is left of it, and closing one that is already
 gone succeeds with `closed: false` under `--json`. It refuses a Kitty runtime
 session (`unsupported_backend`): close its tab instead.
+
+#### Answering or prompting an agent without attaching
+
+`amx send` writes to a running agent's terminal with nothing attached, and
+takes the session from nobody who has it:
+
+```bash
+amx send ID "run the tests and fix what fails"   # pasted as one prompt, then entered
+git diff | amx send ID --stdin --no-enter         # typed into its prompt box, not entered
+amx send ID --key 1                               # answer the permission prompt it is showing
+amx send ID --key down --key enter --wait 10s     # and watch for the agent taking it
+```
+
+`--key` takes `enter`, `escape`, `tab`, `shift-tab`, `up`, `down`, `left`,
+`right`, `space`, `y`, `n`, and the digits. Text may span lines and may not
+carry control characters.
+
+What is sent has to fit what the agent's screen shows, which is read just
+before writing with the same classifiers the daemon uses:
+
+| Sent | Screen | Result |
+| --- | --- | --- |
+| text | at rest, or working | written; what a prompt typed mid-turn does is the harness's to decide |
+| text | asking something | refused, `prompt_showing`: a sentence typed into a menu answers it |
+| keys | asking something | written |
+| keys | anything else | refused, `no_prompt_showing` |
+| text | no prompt showing and nothing else to go on | written, reported as `screen: "unknown"`: a session before its first turn, and Copilot at rest, read this way |
+| either | unreadable, or a harness with no screen adapter | refused, `screen_unreadable` |
+
+`--any-screen` skips the reading, for when you have looked yourself.
+
+**agent-session-loop.** `amx send` types at a terminal; it is not a reply to
+a run. A supervisor question is answered through the run's mailbox, from the
+Runs view, Agent Mux.app's answer panel, or the Workbench, so that the run
+records the reply. A session with such a question open is therefore refused
+whatever is passed (`asl_question_open`). A session that runs a run with no
+question open needs `--yes`, because what is typed reaches the run's
+supervisor, and so does any session while the daemon cannot be asked
+(`daemon_unavailable`).
+
+**Once.** `--operation-id` names a send; without one a name is made up and
+reported. The operation is recorded on the pane before its input is written
+and again after, so repeating a finished operation writes nothing and reports
+`delivery: "replayed"`, and repeating one that was never seen to finish is
+refused (`operation_outcome_unknown`) instead of risking a second copy. Only
+a session's latest operation is remembered.
+
+**What it claims.** `delivery` is `accepted` once the input is written, which
+says nothing about the agent. With `--wait`, a session that was at rest or
+asking is watched, and `delivery` becomes `consumed` when the daemon's state
+for it moves. An agent that was already working moves by itself, so it is not
+watched and stays `accepted`. `--json` reports `{runtime_session_id, backend,
+project, operation_id, input, screen, delivery}` and never the text, which is
+passed to tmux on standard input and appears in no argument list, log, or
+journal. A Kitty runtime session is refused (`unsupported_backend`).
 
 When no tmux can be used, a tmux launch fails with `backend_unavailable` and a
 message that names each place tried and what to do:

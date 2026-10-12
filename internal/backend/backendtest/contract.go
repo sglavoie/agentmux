@@ -169,10 +169,16 @@ func testCapabilities(t *testing.T, c *contract) {
 	for _, op := range backend.Operations {
 		known[op] = true
 	}
+	// Input is the one operation outside that list: a backend has it exactly
+	// when it implements Typist.
+	known[backend.OpInput] = true
 	for op := range caps {
 		if !known[op] {
 			t.Errorf("capability %q is not a declared backend.Operation", op)
 		}
+	}
+	if _, types := c.Backend.(backend.Typist); types != caps.Supports(backend.OpInput) {
+		t.Errorf("implements Typist = %v, but reports input support = %v", types, caps.Supports(backend.OpInput))
 	}
 }
 

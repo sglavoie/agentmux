@@ -253,6 +253,16 @@ Shared and domain packages (`internal/...`):
   pass is the focus observation of a tmux session: a terminal that attached
   or was used after the session came to rest clears its unseen bit
   (`observeRuntimeViewers`); one merely still attached clears nothing.
+  `amx send <runtime-session-id>` (`cmd/session/send.go`) writes text or
+  named keys to an agent nobody is attached to, through `backend.Typist`
+  (tmux only; `OpInput` is deliberately outside `backend.Operations`).
+  `session.Send` is the one place that decides a pane may be written to: it
+  reads the screen first (text never lands on a prompt, keys only on one),
+  and records each operation on the pane before and after writing so a
+  repeat writes nothing twice. The text travels on tmux's standard input and
+  must never reach an argument list, an error, a log, or a journal. It is
+  not an agent-session-loop reply: a session with a supervisor question open
+  is refused, since that answer belongs to the run's mailbox.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path
   and never touches the index or search sidecars.

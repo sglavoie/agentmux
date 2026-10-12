@@ -8,6 +8,11 @@
 // Operations a backend cannot perform return an *UnsupportedError (matched by
 // errors.Is(err, ErrUnsupported)) and are declared up front in Capabilities,
 // so callers can hide an action instead of discovering the gap by failing.
+//
+// Writing input to a pane (Typist, input.go) is the one seam outside Backend:
+// only a backend that holds the pane itself can do it, so it is an optional
+// interface reported as OpInput rather than an operation every backend is
+// asked for.
 package backend
 
 import (

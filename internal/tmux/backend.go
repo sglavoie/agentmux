@@ -50,9 +50,9 @@ const (
 // Kind reports the tmux backend kind.
 func (b *Backend) Kind() runtimesession.BackendKind { return runtimesession.BackendTmux }
 
-// Capabilities reports the core operations plus titles. Focus, colors, and
-// ordering belong to whatever view attaches to the session, not to the
-// server, so they are unsupported here.
+// Capabilities reports the core operations plus titles and input. Focus,
+// colors, and ordering belong to whatever view attaches to the session, not
+// to the server, so they are unsupported here.
 func (b *Backend) Capabilities() backend.Capabilities {
 	return backend.Capabilities{
 		backend.OpDiscover: true,
@@ -61,6 +61,7 @@ func (b *Backend) Capabilities() backend.Capabilities {
 		backend.OpCapture:  true,
 		backend.OpMetadata: true,
 		backend.OpTitle:    true,
+		backend.OpInput:    true,
 	}
 }
 

@@ -345,6 +345,13 @@ func (s *Server) run(cmd []string) (string, error) {
 // passed as argv, never through a shell; a trailing ';' is escaped so tmux
 // does not read it as a command separator.
 func (s *Server) runChain(cmds [][]string) (string, error) {
+	return s.runChainInput(cmds, nil)
+}
+
+// runChainInput is runChain with stdin given to the client, for a command
+// that reads from it. What is read that way appears in no argument list and
+// so in no error.
+func (s *Server) runChainInput(cmds [][]string, stdin []byte) (string, error) {
 	args := []string{"-S", s.socket, "-f", s.config}
 	var shown []string
 	for i, cmd := range cmds {
@@ -378,6 +385,9 @@ func (s *Server) runChain(cmds [][]string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	c.Stdout = &stdout
 	c.Stderr = &stderr
+	if stdin != nil {
+		c.Stdin = bytes.NewReader(stdin)
+	}
 	err = c.Run()
 	timedOut := ctx.Err() != nil
 	if timedOut {
