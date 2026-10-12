@@ -100,6 +100,11 @@ protocol WorkspaceDelegate: AnyObject {
 /// the ones beside its session. Nothing is dragged out of its project or its
 /// session, and the Workspace section stays as it is.
 ///
+/// A session can be pinned from its line's right-click menu or the Session
+/// menu. The pinned ones are listed first, under a Pinned line above every
+/// project, each naming the project it left; they are dragged among
+/// themselves, and unpinning one puts it back under its project.
+///
 /// On the other side of the pane is the inspector, hidden until it is asked
 /// for (`WorkspaceInspectorView`): the sessions waiting on the operator, in
 /// the order they are listed here, or what the daemon says about the session
@@ -789,7 +794,43 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             name.action = nil
             name.toolTip = Self.namingNeedsEmbedded
         }
-        return [name]
+        let pin = NSMenuItem(title: row.pinned ? Self.unpinSessionTitle : Self.pinSessionTitle,
+                             action: #selector(pinClickedSession(_:)), keyEquivalent: "")
+        pin.representedObject = row.key
+        pin.target = self
+        return [name, pin]
+    }
+
+    @objc private func pinClickedSession(_ sender: Any?) {
+        guard let key = (sender as? NSMenuItem)?.representedObject as? AttentionCycler.Key, let row = state.row(key) else { return }
+        setPinned(key, !row.pinned)
+    }
+
+    // MARK: Pinning
+
+    static let pinSessionTitle = "Pin to Top"
+    static let unpinSessionTitle = "Unpin"
+
+    /// Pins a listed session, which then leaves its project for the Pinned
+    /// group above them all, or unpins it, which puts it back. Any session
+    /// can be pinned, a Kitty one too: a pin is a place in this list.
+    func setPinned(_ key: AttentionCycler.Key, _ pinned: Bool) {
+        guard let row = state.row(key), row.pinned != pinned else { return }
+        // Only a live snapshot says a session is gone, and its pin with it.
+        if state.current { order.forgetPins(notAmong: state.rows.map(\.key)) }
+        order.setPinned(key, pinned)
+        state.arrange(order)
+        delegate?.workspaceOrderChanged(order)
+        reloadSidebar()
+    }
+
+    /// Pins the session the pane is on, or unpins it when it is pinned, and
+    /// reports whether there was one.
+    @discardableResult
+    func togglePinOfShownSession() -> Bool {
+        guard let row = shownSessionRow else { return false }
+        setPinned(row.key, !row.pinned)
+        return true
     }
 
     @objc private func nameClickedSession(_ sender: Any?) {
@@ -1315,12 +1356,17 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case .section, .group:
             return false
         case let .row(row):
-            guard let group = state.groups.first(where: { $0.project == row.project }) else { return false }
+            guard let group = state.groups.first(where: { $0.pinned == row.pinned && (row.pinned || $0.project == row.project) })
+            else { return false }
             var keys = group.rows.map(\.key).filter { $0 != row.key }
             var at = keys.count
             if slot < items.count, case let .row(next) = items[slot] { at = keys.firstIndex(of: next.key) ?? at }
             keys.insert(row.key, at: at)
-            order.set(keys, for: row.project)
+            if row.pinned {
+                order.setPinned(keys)
+            } else {
+                order.set(keys, for: row.project)
+            }
             state.arrange(order)
             delegate?.workspaceOrderChanged(order)
         case let .view(view):
@@ -1991,7 +2037,9 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.stringValue = row.name
         nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
-        let label = row.harnessIcon.isEmpty ? row.label : "\(row.harnessIcon) \(row.label)"
+        // A pinned session is not under its project's line, so it names it.
+        let place = row.pinned ? "\(row.project) — \(row.label)" : row.label
+        let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
         titleLabel.stringValue = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: row.attention ? .semibold : .regular)
         detailLabel.stringValue = row.detail

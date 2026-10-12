@@ -53,6 +53,12 @@ struct WorkspaceRow: Equatable {
     /// own until the icon picker replaces or clears it. Empty for none, and
     /// only an embedded session has one; a Kitty session's is on its tab.
     var harnessIcon = ""
+    /// The session's harness, which orders rows of one profile.
+    var harness = ""
+    /// Whether the operator pinned the session: it is then listed under
+    /// `WorkspaceSidebar.pinnedSection`, above every project, instead of
+    /// under its own.
+    var pinned = false
 
     var embeddedRuntimeSessionID: String? {
         if case let .embedded(id) = target { return id }
@@ -60,25 +66,34 @@ struct WorkspaceRow: Equatable {
     }
 }
 
-/// The sessions of one project.
+/// The sessions of one project, or the pinned ones of every project.
 struct WorkspaceGroup: Equatable {
+    /// The project's name; `WorkspaceSidebar.pinnedSection` for the pinned.
     let project: String
     let rows: [WorkspaceRow]
+    /// True for the group of pinned sessions, whose rows keep the project
+    /// they belong to.
+    var pinned = false
 
     /// How many of the project's sessions wait on a human.
     var attention: Int { rows.filter(\.attention).count }
 }
 
-/// The order the operator dragged the sessions of each project into.
+/// Where the operator put sessions: the order they dragged the sessions of
+/// each project into, and the sessions they pinned above every project.
 ///
 /// It names sessions, never positions: a session that is not named, one
 /// launched since the drag, follows the named ones in the order
 /// `WorkspaceSidebar` gives it. A project nobody dragged in is not here.
 struct WorkspaceOrder: Equatable {
     static let defaultsKey = "amxWorkspaceSessionOrder"
+    static let pinnedDefaultsKey = "amxWorkspacePinnedSessions"
 
     /// The sessions of each project that was dragged in, first to last.
     private(set) var projects: [String: [String]] = [:]
+    /// The pinned sessions, first to last: in the order they were pinned,
+    /// until they are dragged.
+    private(set) var pinned: [String] = []
 
     /// What a session is named by here: its runtime session, or its Kitty
     /// socket and window.
@@ -101,12 +116,49 @@ struct WorkspaceOrder: Equatable {
         }.map(\.element)
     }
 
+    func isPinned(_ key: AttentionCycler.Key) -> Bool {
+        pinned.contains(Self.token(key))
+    }
+
+    /// Pins a session below the ones already pinned, or unpins it.
+    mutating func setPinned(_ key: AttentionCycler.Key, _ wanted: Bool) {
+        let token = Self.token(key)
+        pinned.removeAll { $0 == token }
+        if wanted { pinned.append(token) }
+    }
+
+    /// Records the order of the pinned sessions, replacing the one they had.
+    /// Every pin is named, so one left out is no longer pinned.
+    mutating func setPinned(_ keys: [AttentionCycler.Key]) {
+        pinned = keys.map(Self.token)
+    }
+
+    /// Forgets the pins of sessions that are not among `listed`: a session
+    /// that ended is never listed again, and its pin would be kept forever.
+    mutating func forgetPins(notAmong listed: [AttentionCycler.Key]) {
+        let tokens = Set(listed.map(Self.token))
+        pinned.removeAll { !tokens.contains($0) }
+    }
+
+    /// The pinned rows in the order they were pinned or dragged into.
+    func arrangedPins(_ rows: [WorkspaceRow]) -> [WorkspaceRow] {
+        let rank = Dictionary(pinned.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return rows.enumerated().sorted { lhs, rhs in
+            let (a, b) = (rank[Self.token(lhs.element.key)] ?? Int.max, rank[Self.token(rhs.element.key)] ?? Int.max)
+            return a != b ? a < b : lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
     static func load(from defaults: UserDefaults = .standard) -> WorkspaceOrder {
-        WorkspaceOrder(projects: defaults.dictionary(forKey: defaultsKey) as? [String: [String]] ?? [:])
+        WorkspaceOrder(
+            projects: defaults.dictionary(forKey: defaultsKey) as? [String: [String]] ?? [:],
+            pinned: defaults.stringArray(forKey: pinnedDefaultsKey) ?? []
+        )
     }
 
     func save(to defaults: UserDefaults = .standard) {
         defaults.set(projects, forKey: Self.defaultsKey)
+        defaults.set(pinned, forKey: Self.pinnedDefaultsKey)
     }
 }
 
@@ -117,10 +169,14 @@ struct WorkspaceOrder: Equatable {
 /// it (`AttentionCycler`). Projects sort by name, past any icon
 /// the name leads with, and rows by
 /// profile, harness, and identity, unless the operator dragged a project's
-/// rows into an order of their own (`WorkspaceOrder`). Either way a session
+/// rows into an order of their own (`WorkspaceOrder`). A session the
+/// operator pinned leaves its project for a group of the pinned, listed
+/// first. Either way a session
 /// keeps its place while its state changes; the glyph and the group's count
 /// are what draw the eye.
 enum WorkspaceSidebar {
+    /// The heading the pinned sessions are listed under.
+    static let pinnedSection = "Pinned"
     /// What a session with no profile and no harness is called.
     static let unlabeled = "session"
     /// Marks a row whose terminal is a Kitty window.
@@ -133,16 +189,28 @@ enum WorkspaceSidebar {
         glyphs: Glyphs = .bundled,
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceGroup] {
-        var byProject: [String: [(CompanionSession, WorkspaceRow)]] = [:]
-        for session in sessions {
-            let row = row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
-            byProject[row.project, default: []].append((session, row))
+        groups(sessions.map { row($0, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs) }, order: order)
+    }
+
+    /// Rows as the sidebar groups them: the pinned ones first, under a
+    /// heading of their own, then each project's. It needs no snapshot, so
+    /// held rows can be grouped again.
+    static func groups(_ rows: [WorkspaceRow], order: WorkspaceOrder) -> [WorkspaceGroup] {
+        var pinned: [WorkspaceRow] = []
+        var byProject: [String: [WorkspaceRow]] = [:]
+        for var row in rows.sorted(by: rowOrder) {
+            row.pinned = order.isPinned(row.key)
+            if row.pinned {
+                pinned.append(row)
+            } else {
+                byProject[row.project, default: []].append(row)
+            }
         }
-        return byProject.keys.sorted(by: projectOrder).map { project in
-            let members = byProject[project] ?? []
-            let rows = members.sorted { rowOrder($0, $1) }.map(\.1)
-            return WorkspaceGroup(project: project, rows: order.arranged(rows, in: project))
+        let projects = byProject.keys.sorted(by: projectOrder).map { project in
+            WorkspaceGroup(project: project, rows: order.arranged(byProject[project] ?? [], in: project))
         }
+        guard !pinned.isEmpty else { return projects }
+        return [WorkspaceGroup(project: pinnedSection, rows: order.arrangedPins(pinned), pinned: true)] + projects
     }
 
     /// The sessions in the order `groups` lists them, which is the order the
@@ -189,7 +257,8 @@ enum WorkspaceSidebar {
             toolTip: tip.joined(separator: " · "),
             tabColor: embedded == nil ? nil : WorkspaceTabColor(hex: session.tabColor),
             name: embedded == nil ? "" : session.name,
-            harnessIcon: embedded == nil ? "" : session.harnessIcon
+            harnessIcon: embedded == nil ? "" : session.harnessIcon,
+            harness: session.harness
         )
     }
 
@@ -211,10 +280,10 @@ enum WorkspaceSidebar {
         return folded == .orderedSame ? lhs < rhs : folded == .orderedAscending
     }
 
-    private static func rowOrder(_ lhs: (CompanionSession, WorkspaceRow), _ rhs: (CompanionSession, WorkspaceRow)) -> Bool {
-        if lhs.1.label != rhs.1.label { return nameOrder(lhs.1.label, rhs.1.label) }
-        if lhs.0.harness != rhs.0.harness { return lhs.0.harness < rhs.0.harness }
-        let (a, b) = (lhs.1.key, rhs.1.key)
+    private static func rowOrder(_ lhs: WorkspaceRow, _ rhs: WorkspaceRow) -> Bool {
+        if lhs.label != rhs.label { return nameOrder(lhs.label, rhs.label) }
+        if lhs.harness != rhs.harness { return lhs.harness < rhs.harness }
+        let (a, b) = (lhs.key, rhs.key)
         if a.socket != b.socket { return a.socket < b.socket }
         if a.windowID != b.windowID { return a.windowID < b.windowID }
         return a.runtimeSessionID < b.runtimeSessionID
@@ -277,10 +346,10 @@ struct WorkspaceState: Equatable {
         return true
     }
 
-    /// Puts the listed rows in the order they were dragged into. It lists
+    /// Puts the listed rows where they were dragged or pinned. It lists
     /// nothing new, so it works on held rows too.
     mutating func arrange(_ order: WorkspaceOrder) {
-        groups = groups.map { WorkspaceGroup(project: $0.project, rows: order.arranged($0.rows, in: $0.project)) }
+        groups = WorkspaceSidebar.groups(rows, order: order)
     }
 
     /// Selects a listed session, or nothing; false when `key` is not listed.

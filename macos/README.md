@@ -326,6 +326,18 @@ ASL answer panel work the same either way.
   for as long as the app runs. `dropSlots(forItemAt:)` is the whole rule:
   nothing leaves its project or its session, and the project lines and the
   **Workspace** section do not move.
+- **Pinning.** **Pin to Top** in a session's right-click menu, or **Session ›
+  Pin or Unpin Session** for the one the pane is on, moves the session out of
+  its project into a **Pinned** group listed above every project
+  (`WorkspaceSidebar.groups(_:order:)`, `setPinned(_:_:)`); its line then
+  names its project. Pinned sessions keep the order they were pinned in until
+  they are dragged among themselves, and **Unpin** puts one back under its
+  project. The pins are part of the `WorkspaceOrder`, kept in the
+  `amxWorkspacePinnedSessions` preference, and everything that follows
+  sidebar order (⌘1 to ⌘0, the next-attention shortcut, the inspector's
+  waiting list) follows them. Any session can be pinned, a Kitty one too. A
+  pin of a session that ended is forgotten the next time a pin changes while
+  the feed is live.
 - **Selecting and focusing.** Selecting a row (arrow keys, **Session ›
   Select Next/Previous Session**) shows what there is to show and never leaves
   the app: a tmux session's terminal, or a note that the session is a Kitty

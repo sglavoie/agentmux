@@ -199,7 +199,7 @@ final class WorkspaceWindowTests: XCTestCase {
         // wherever the pane is.
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…"])
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(asked.map(\.0), [personal])
         XCTAssertTrue(app.named.isEmpty, "nothing is written before the answer")
@@ -227,13 +227,63 @@ final class WorkspaceWindowTests: XCTestCase {
         // A Kitty window is named in Kitty; other lines have no menu.
         let kitty = try row("web", "work")
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.count, 2)
         XCTAssertNil(items[0].action, "listed, and greyed out")
+        XCTAssertNotNil(items[1].action, "a Kitty session can be pinned")
         XCTAssertTrue(workspace.contextMenuItems(forRow: 0).isEmpty)
         XCTAssertTrue(workspace.contextMenuItems(forRow: -1).isEmpty)
         workspace.select(kitty.key)
         XCTAssertFalse(workspace.nameShownSession())
         XCTAssertEqual(asked.count, 5)
+    }
+
+    func testPinningASessionListsItAboveEveryProject() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        let kitty = try row("web", "work")
+        workspace.activate(work)
+        func lines() -> [String] {
+            workspace.items.compactMap { item in
+                switch item {
+                case let .group(group): return "[\(group.project)]"
+                case let .row(row): return "\(row.project)/\(row.label)"
+                case .section, .view: return nil
+                }
+            }
+        }
+        XCTAssertEqual(lines(), ["[api]", "api/personal", "api/work", "[web]", "web/work"])
+
+        // The right-click menu pins the session under the pointer.
+        var items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
+        _ = try XCTUnwrap(items[1].target).perform(try XCTUnwrap(items[1].action), with: items[1])
+        XCTAssertEqual(lines(), ["[Pinned]", "web/work", "[api]", "api/personal", "api/work"],
+                       "a project with nothing left under it is not listed")
+        XCTAssertEqual(workspace.sessionKey(of: kitty.key), "1", "the digits follow the list")
+        XCTAssertEqual(workspace.state.selection, work.key, "the pane stays where it is")
+        XCTAssertEqual(app.orders.last?.pinned, [WorkspaceOrder.token(kitty.key)])
+
+        // The menu pins the one the pane is on, below the ones pinned before.
+        XCTAssertTrue(workspace.togglePinOfShownSession())
+        XCTAssertEqual(lines(), ["[Pinned]", "web/work", "api/work", "[api]", "api/personal"])
+
+        // Pinned sessions are dragged among themselves and nowhere else.
+        let top = try index(of: kitty.key)
+        XCTAssertEqual(workspace.dropSlots(forItemAt: top), [top, top + 1, top + 2])
+        XCTAssertTrue(workspace.moveItem(at: top, to: top + 2))
+        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[api]", "api/personal"])
+        XCTAssertEqual(app.orders.last?.pinned, [WorkspaceOrder.token(work.key), WorkspaceOrder.token(kitty.key)])
+
+        // A snapshot keeps them there, and unpinning puts one back.
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.refresh()
+        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[api]", "api/personal"])
+        items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Unpin"])
+        workspace.setPinned(kitty.key, false)
+        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[api]", "api/personal", "[web]", "web/work"])
+        XCTAssertTrue(workspace.togglePinOfShownSession())
+        XCTAssertEqual(lines(), ["[api]", "api/personal", "api/work", "[web]", "web/work"])
+        XCTAssertEqual(app.orders.last?.pinned, [])
     }
 
     func testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers() throws {

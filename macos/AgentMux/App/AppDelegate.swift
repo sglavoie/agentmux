@@ -461,6 +461,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
         if !workspace.nameShownSession() { refuse(WorkspaceWindowController.namingNeedsEmbedded) }
     }
+    /// Pins the session the workspace's pane is on above every project, or
+    /// unpins it.
+    @objc func togglePinSession(_ sender: Any?) {
+        if workspace?.togglePinOfShownSession() != true { refuse(Self.noSessionShown) }
+    }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
     @objc func toggleWorkspaceInspector(_ sender: Any?) { workspace?.toggleInspector() }
     @objc func toggleRecentPlace(_ sender: Any?) {

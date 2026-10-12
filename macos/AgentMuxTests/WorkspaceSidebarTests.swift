@@ -204,6 +204,53 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
     }
 
+    func testPinnedSessionsLeaveTheirProjectsForAGroupListedFirst() throws {
+        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web"),
+                        F.tmux(3, project: "Pinned")]
+        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        var order = WorkspaceOrder()
+        func built(_ sessions: [CompanionSession]) -> [WorkspaceGroup] {
+            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order)
+        }
+        XCTAssertEqual(built(sessions).map(\.pinned), [false, false, false], "nothing is pinned until asked")
+
+        order.setPinned(kitty, true)
+        order.setPinned(.embedded(F.runtimeID(1)), true)
+        var groups = built(sessions)
+        XCTAssertEqual(groups.map(\.project), ["Pinned", "api", "Pinned"], "a project of that name is still a project")
+        XCTAssertEqual(groups.map(\.pinned), [true, false, false])
+        XCTAssertEqual(groups[0].rows.map(\.key), [kitty, .embedded(F.runtimeID(1))], "in the order they were pinned")
+        XCTAssertEqual(groups[0].rows.map(\.project), ["web", "api"], "a pinned row keeps its project")
+        XCTAssertEqual(groups[0].rows.map(\.pinned), [true, true])
+        XCTAssertEqual(groups[1].rows.map(\.key), [.embedded(F.runtimeID(2))])
+        XCTAssertEqual(WorkspaceSidebar.ordered(sessions, snapshotSocket: "unix:/tmp/kitty-1", order: order).first?.windowID, 4,
+                       "what follows sidebar order starts with the pinned")
+
+        order.setPinned([.embedded(F.runtimeID(1)), kitty])
+        XCTAssertEqual(built(sessions)[0].rows.map(\.key), [.embedded(F.runtimeID(1)), kitty])
+        XCTAssertEqual(built([sessions[1], sessions[2]])[0].rows.map(\.key), [kitty], "one that ended leaves no gap")
+        XCTAssertFalse(built([sessions[1]])[0].pinned, "and no heading when none is listed")
+
+        // Held rows are grouped again without a snapshot.
+        var state = WorkspaceState()
+        state.apply(built(sessions))
+        order.setPinned(kitty, false)
+        state.arrange(order)
+        XCTAssertEqual(state.groups, built(sessions))
+        groups = state.groups
+        XCTAssertEqual(groups.map(\.project), ["Pinned", "api", "Pinned", "web"])
+
+        order.setPinned(kitty, true)
+        order.forgetPins(notAmong: [kitty])
+        XCTAssertEqual(order.pinned, [WorkspaceOrder.token(kitty)], "the pin of a session that ended is forgotten")
+
+        let suite = "amx.tests.pins.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        order.save(to: defaults)
+        XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
+    }
+
     func testFeedNotice() {
         XCTAssertNil(WorkspaceSidebar.feedNotice(.live))
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.notRunning), "Daemon: not running")

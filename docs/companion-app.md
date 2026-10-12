@@ -250,6 +250,14 @@ Whatever has the keyboard decides where a key goes.
   removes it. The name is kept with the session (`amx name-session`), so it
   is still there after the app was quit, and shows about two seconds after
   it was given. Only a session embedded here can be named.
+- **Pin to Top**, in the same right-click menu, moves a session out of its
+  project into a **Pinned** group at the top of the list, above every
+  project; its line then names its project. **Session › Pin or Unpin
+  Session** does it for the session shown. Pinned sessions are listed in the
+  order they were pinned and can be dragged among themselves; **Unpin** puts
+  one back under its project. The digits, the next-attention shortcut, and
+  the inspector follow the list, so the first pinned session is ⌘1. Pins are
+  kept across launches, and any session can be pinned, a Kitty one too.
 - Every shortcut of the menu bar holds ⌘, so none is taken from a program,
   with two exceptions: Shift+Page Up and Shift+Page Down, and the function
   keys below. The global shortcuts work whatever has the keyboard.
