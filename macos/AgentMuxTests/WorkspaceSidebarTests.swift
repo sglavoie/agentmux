@@ -160,6 +160,16 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertFalse(web.attention)
     }
 
+    func testProjectsSortByNameNotByTheIconTheyLeadWith() {
+        let names = ["🎵 muse", "🐱 amx", "👶 Lyzma", "🔍 LogScanner", "🧠 BrainNotes", "🧰 dev-helpers", "api", "★"]
+        let built = groups(names.enumerated().map { F.tmux($0 + 1, project: $1) })
+        XCTAssertEqual(
+            built.map(\.project),
+            ["★", "🐱 amx", "api", "🧠 BrainNotes", "🧰 dev-helpers", "🔍 LogScanner", "👶 Lyzma", "🎵 muse"],
+            "a name that is all symbols sorts as written"
+        )
+    }
+
     func testTwoTmuxSessionsOfOneProjectAndProfileStayApart() {
         let built = groups([F.tmux(2, project: "api"), F.tmux(1, project: "api")])
         XCTAssertEqual(built.count, 1)

@@ -113,7 +113,8 @@ struct WorkspaceOrder: Equatable {
 /// The sidebar as data, built from a snapshot so it can be tested without
 /// AppKit: sessions grouped by project, each labeled with its profile.
 ///
-/// The order never follows attention. Projects sort by name and rows by
+/// The order never follows attention. Projects sort by name, past any icon
+/// the name leads with, and rows by
 /// profile, harness, and identity, unless the operator dragged a project's
 /// rows into an order of their own (`WorkspaceOrder`). Either way a session
 /// keeps its place while its state changes; the glyph and the group's count
@@ -136,7 +137,7 @@ enum WorkspaceSidebar {
             let row = row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
             byProject[row.project, default: []].append((session, row))
         }
-        return byProject.keys.sorted(by: nameOrder).map { project in
+        return byProject.keys.sorted(by: projectOrder).map { project in
             let members = byProject[project] ?? []
             let rows = members.sorted { rowOrder($0, $1) }.map(\.1)
             return WorkspaceGroup(project: project, rows: order.arranged(rows, in: project))
@@ -175,6 +176,19 @@ enum WorkspaceSidebar {
             name: embedded == nil ? "" : session.name,
             harnessIcon: embedded == nil ? "" : session.harnessIcon
         )
+    }
+
+    /// What a project sorts by: its name after the icon it leads with, as
+    /// `session.ProjectSortKey` reads it for the dashboard. A name that is
+    /// all symbols sorts as it is written.
+    static func projectSortKey(_ project: String) -> String {
+        let name = project.unicodeScalars.drop { !CharacterSet.alphanumerics.contains($0) }
+        return name.isEmpty ? project : String(String.UnicodeScalarView(name))
+    }
+
+    private static func projectOrder(_ lhs: String, _ rhs: String) -> Bool {
+        let (a, b) = (projectSortKey(lhs), projectSortKey(rhs))
+        return a == b ? nameOrder(lhs, rhs) : nameOrder(a, b)
     }
 
     private static func nameOrder(_ lhs: String, _ rhs: String) -> Bool {
