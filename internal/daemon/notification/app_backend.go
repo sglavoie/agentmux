@@ -127,11 +127,20 @@ func newNotificationID() string {
 	return "n-" + hex.EncodeToString(b[:])
 }
 
+// BackendKindTmux is the NotificationTarget.Backend of a session on the
+// private tmux server, the only backend `amx send` writes to.
+const BackendKindTmux = "tmux"
+
 // appActions is what a notice offers besides its click. A permission prompt
-// offers nothing: the operator must look at the pane before answering it.
-// Muting needs a pane, and answering needs an ASL run with a question.
+// offers no answer: the operator must look at the pane before answering it.
+// What it can offer is a way to look and answer without going there, for a
+// session `amx send` can write to. Muting needs a pane, and answering needs
+// an ASL run with a question.
 func appActions(target NotificationTarget, action string, trace NotificationTrace) []string {
 	if action == "permission" {
+		if target.RuntimeSessionID != "" && target.Backend == BackendKindTmux {
+			return []string{protocol.NotificationActionRespond}
+		}
 		return nil
 	}
 	var actions []string

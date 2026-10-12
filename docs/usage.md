@@ -794,6 +794,12 @@ project, operation_id, input, screen, delivery}` and never the text, which is
 passed to tmux on standard input and appears in no argument list, log, or
 journal. A Kitty runtime session is refused (`unsupported_backend`).
 
+**Looking first.** `amx send ID --look` sends nothing and prints the last
+rows of the agent's screen; with `--json` it reports `{runtime_session_id,
+backend, project, screen, lines}`, where `screen` is the word a send would
+report. It is what Agent Mux.app shows when a permission banner's Answer… is
+chosen, so the prompt is read before a key is pressed.
+
 When no tmux can be used, a tmux launch fails with `backend_unavailable` and a
 message that names each place tried and what to do:
 

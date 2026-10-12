@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var preferencesController: PreferencesWindowController?
     /// The ASL answer panel, made the first time a question is answered.
     private var aslPanel: ASLQuestionPanelController?
+    private var promptPanel: PromptAnswerPanelController?
     /// The workspace window, made the first time it is shown.
     private(set) var workspace: WorkspaceWindowController?
     /// Set once the app is quitting, so the windows it takes down with it are
@@ -949,9 +950,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .actionAnswer:
             guard !response.runID.isEmpty else { return report("Could not answer: the notification names no run.") }
             answer(ASLAnswerTarget(runID: response.runID, windowID: response.windowID))
+        case .actionRespond:
+            guard !response.embeddedRuntimeSessionID.isEmpty else { return report("Could not answer: the notification names no session.") }
+            answerPrompt(PromptAnswerTarget(runtimeSessionID: response.embeddedRuntimeSessionID))
         case .delivered, .dismissed, .failed:
             break
         }
+    }
+
+    /// Answer… on a permission banner: opens the prompt panel on that
+    /// session. The panel reads the session's screen before it offers a key.
+    func answerPrompt(_ target: PromptAnswerTarget) {
+        let controller = promptPanel ?? PromptAnswerPanelController(flow: PromptAnswerFlow(service: AMXPromptAnswerService(
+            command: { [weak self] in self?.command },
+            problem: { [weak self] in self?.preferences.binaryProblem ?? "amx has not been found yet." }
+        )))
+        promptPanel = controller
+        Self.logger.notice("prompt panel: session \(target.runtimeSessionID, privacy: .public)")
+        controller.show(target)
     }
 
     /// Where a notice came from, as far as it can be told apart from every

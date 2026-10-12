@@ -365,7 +365,7 @@ func TestAppBackendDebouncedPermissionStillDebounces(t *testing.T) {
 // TestAppBackendRecordsSafeActionsLikeReplied: mute, snooze, and answer end a
 // notification without a click and are recorded by name.
 func TestAppBackendRecordsSafeActionsLikeReplied(t *testing.T) {
-	for _, disposition := range []string{protocol.DispositionActionMute, protocol.DispositionActionSnooze, protocol.DispositionActionAnswer} {
+	for _, disposition := range []string{protocol.DispositionActionMute, protocol.DispositionActionSnooze, protocol.DispositionActionAnswer, protocol.DispositionActionRespond} {
 		t.Run(disposition, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				app := newFakeApp()
@@ -385,6 +385,28 @@ func TestAppBackendRecordsSafeActionsLikeReplied(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+// A permission prompt is never answered from a banner. On a session that can
+// be written to with nothing attached, the banner may offer to show the
+// prompt and take the answer there; anywhere else it offers nothing.
+func TestAppBackendOffersRespondOnlyWhereAPromptCanBeAnsweredInPlace(t *testing.T) {
+	tmux := NotificationTarget{WindowID: 1 << 40, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux}
+	if got := appActions(tmux, "permission", NotificationTrace{}); !slices.Equal(got, []string{protocol.NotificationActionRespond}) {
+		t.Fatalf("tmux permission actions = %v; want respond alone", got)
+	}
+	for name, target := range map[string]NotificationTarget{
+		"a Kitty window":          {WindowID: 3, Navigable: true},
+		"a Kitty runtime session": {WindowID: 3, Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindKitty},
+		"tmux with no session":    {WindowID: 3, Backend: BackendKindTmux},
+	} {
+		if got := appActions(target, "permission", NotificationTrace{}); len(got) != 0 {
+			t.Errorf("%s: permission actions = %v; want none", name, got)
+		}
+	}
+	if got := appActions(tmux, "stop", NotificationTrace{}); slices.Contains(got, protocol.NotificationActionRespond) {
+		t.Fatalf("stop actions = %v; respond is for a prompt", got)
 	}
 }
 

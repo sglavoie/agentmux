@@ -265,7 +265,11 @@ Shared and domain packages (`internal/...`):
   is refused, since that answer belongs to the run's mailbox. The
   dashboard's send form (`t`, `tui/model_send.go`, `tui/sendform`) reaches
   it through `commands.Portable.Send`, which runs `amx send --json`, so a
-  surface never holds a second copy of that decision.
+  surface never holds a second copy of that decision. The app's prompt
+  answer panel (`UI/PromptAnswerPanel.swift`, rules in
+  `Model/PromptAnswer.swift`) is the same: a `permission` notice of a tmux
+  session offers `respond`, never an approval, and the panel runs
+  `amx send --look` before it enables a key.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path
   and never touches the index or search sidecars.

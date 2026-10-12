@@ -83,6 +83,7 @@ enum NotificationDisposition: String, Equatable {
     case actionMute = "action_mute"
     case actionSnooze = "action_snooze"
     case actionAnswer = "action_answer"
+    case actionRespond = "action_respond"
     case failed
 }
 
@@ -99,19 +100,25 @@ enum NotificationCategories {
     /// An ASL question: Answer…, then the session actions it was offered.
     static let asl = "amx.asl"
     static let aslSnoozeOnly = "amx.asl.snooze"
-    /// A permission prompt, or anything offering no action: the operator
-    /// must look at the pane, so the banner offers nothing but its click.
+    /// A permission prompt of a session `amx send` can write to: Answer…,
+    /// which shows the session's screen before any key can be pressed.
+    static let prompt = "amx.prompt"
+    /// A permission prompt anywhere else, or anything offering no action: the
+    /// operator must look at the pane, so the banner offers nothing but its
+    /// click.
     static let plain = "amx.plain"
 
     /// Action identifiers, as the delegate sees them.
     static let muteAction = "amx.mute"
     static let snoozeAction = "amx.snooze"
     static let answerAction = "amx.answer"
+    static let respondAction = "amx.respond"
 
     /// The daemon's offer names (`protocol.NotificationAction*`).
     static let offerMute = "mute"
     static let offerSnooze = "snooze"
     static let offerAnswer = "answer"
+    static let offerRespond = "respond"
 
     struct Action: Equatable {
         let identifier: String
@@ -122,6 +129,7 @@ enum NotificationCategories {
     static let mute = Action(identifier: muteAction, title: "Mute session", foreground: false)
     static let snooze = Action(identifier: snoozeAction, title: "Snooze 1h", foreground: false)
     static let answer = Action(identifier: answerAction, title: "Answer…", foreground: true)
+    static let respond = Action(identifier: respondAction, title: "Answer…", foreground: true)
 
     /// Every category and its actions, in display order.
     static let all: [(identifier: String, actions: [Action])] = [
@@ -129,16 +137,20 @@ enum NotificationCategories {
         (sessionSnoozeOnly, [snooze]),
         (asl, [answer, mute, snooze]),
         (aslSnoozeOnly, [answer, snooze]),
+        (prompt, [respond]),
         (plain, []),
     ]
 
-    /// The category a notice is shown under. A permission notice gets no
-    /// actions whatever it was offered; otherwise the offer decides, and an
-    /// offer this app has no category for degrades to fewer actions, never
-    /// to an action that was not offered.
+    /// The category a notice is shown under. A permission notice gets at most
+    /// Answer…, and only when that was offered for a session the workspace
+    /// embeds; nothing else it was offered is shown. Otherwise the offer
+    /// decides, and an offer this app has no category for degrades to fewer
+    /// actions, never to an action that was not offered.
     static func category(for notice: AppNotice) -> String {
-        guard notice.action != "permission" else { return plain }
         let offered = Set(notice.actions)
+        guard notice.action != "permission" else {
+            return offered.contains(offerRespond) && !notice.embeddedRuntimeSessionID.isEmpty ? prompt : plain
+        }
         let mute = offered.contains(offerMute)
         let snooze = offered.contains(offerSnooze)
         if offered.contains(offerAnswer) {
@@ -160,6 +172,7 @@ enum NotificationCategories {
         case muteAction: return .actionMute
         case snoozeAction: return .actionSnooze
         case answerAction: return .actionAnswer
+        case respondAction: return .actionRespond
         default: return nil
         }
     }

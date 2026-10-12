@@ -188,7 +188,10 @@ const (
 	DispositionActionMute   = "action_mute"
 	DispositionActionSnooze = "action_snooze"
 	DispositionActionAnswer = "action_answer"
-	DispositionFailed       = "failed"
+	// DispositionActionRespond says the operator asked to answer the prompt a
+	// session is showing; see NotificationActionRespond.
+	DispositionActionRespond = "action_respond"
+	DispositionFailed        = "failed"
 )
 
 // CompanionDispositions lists every disposition a companion may report.
@@ -199,18 +202,24 @@ var CompanionDispositions = []string{
 	DispositionActionMute,
 	DispositionActionSnooze,
 	DispositionActionAnswer,
+	DispositionActionRespond,
 	DispositionFailed,
 }
 
 // Notification actions a notification frame may offer. The daemon only offers
 // what the companion can carry out itself through requests it already has:
 // muting goes through `amx mute-toggle`, snoozing through notification_snooze,
-// and answering through the ASL question surface. The daemon records which one
-// was chosen and performs none of them.
+// answering through the ASL question surface, and responding to a harness
+// prompt through `amx send`, with the prompt in front of the operator. The
+// daemon records which one was chosen and performs none of them.
 const (
 	NotificationActionMute   = "mute"
 	NotificationActionSnooze = "snooze"
 	NotificationActionAnswer = "answer"
+	// NotificationActionRespond is offered on a permission prompt of a session
+	// `amx send` can write to. It is not an approval: the companion shows the
+	// session's screen and the operator presses the key that answers it.
+	NotificationActionRespond = "respond"
 )
 
 // NotificationRetract is the payload of a notification_retract frame: the

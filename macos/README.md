@@ -674,17 +674,20 @@ an action that was not offered:
 | `amx.session` | Mute session, Snooze 1h | A session notification |
 | `amx.session.snooze` | Snooze 1h | One with no pane to mute |
 | `amx.asl` / `amx.asl.snooze` | Answer…, then the offered session actions | An ASL question |
-| `amx.plain` | none | Permission prompts, which get no actions, and any notification offered none |
+| `amx.prompt` | Answer… | A permission prompt of a tmux session, when the daemon offered `respond` |
+| `amx.plain` | none | Every other permission prompt, and any notification offered none |
 
 **Responses.** A click reports `clicked`, and the daemon focuses the pane
 exactly as it does for an Alerter click. The app then brings that Kitty
 forward. A dismissal reports `dismissed` (every category sets
-`customDismissAction`). An action reports `action_mute`, `action_snooze`, or
-`action_answer`, and the app carries it out:
+`customDismissAction`). An action reports `action_mute`, `action_snooze`,
+`action_answer`, or `action_respond`, and the app carries it out:
 - Mute runs `amx mute-toggle` on that session, unless the session is already
   muted, and only when exactly one listed session has that window ID.
 - Snooze sets the same 1-hour snooze as the Notifications menu.
 - Answer opens the [ASL answer panel](#asl-answer-panel) on the notice's run.
+- Answer on a permission prompt opens the [prompt answer
+  panel](#prompt-answer-panel) on the notice's session.
 
 A `notification_retract` frame removes the banner. A retracted notification
 that is still waiting on the permission prompt, or on `add`, is never shown.
@@ -733,6 +736,43 @@ The question body and every draft are held only while the panel is open, and
 closing it drops them. `SecretText` and the state's `description`, `dump`
 mirror, and request descriptions are all redacted, so the logs (category
 `asl`) name only methods, run, question, and operation IDs, and refusal codes.
+
+## Prompt answer panel
+
+A permission banner never approves anything: the operator has to see the
+prompt before answering it. For a session on the private tmux server the
+banner can offer to show it. Its **Answer…** opens a floating panel
+(`UI/PromptAnswerPanel.swift`) with the tail of the session's screen and a
+strip of keys, and the workspace does not have to come forward or attach.
+
+The panel decides nothing about whether a session may be written to. It runs
+two `amx send` invocations and shows what they answer:
+
+1. `amx send <runtime-session-id> --look --json` reads the screen. It runs
+   when the panel opens, on **Look again**, and 0.6 seconds after every key.
+2. `amx send <runtime-session-id> --key <name> --json` presses one key.
+
+The rules are in `Model/PromptAnswer.swift`:
+
+- No key can be pressed before a look has answered, or while a key or a look
+  is on its way.
+- Keys are enabled only while the look says the screen is asking something.
+  `amx send` checks the same thing again when it writes, so a prompt that
+  went away in between is a refusal and not a stray key.
+- The strip is `1`–`9`, `↑` `↓` `↩`, and `y` `n` `esc`. Typing a digit, `y`,
+  `n`, or Return in the panel presses that key; Escape closes the panel, so
+  the session's Escape is the `esc` button.
+- A session running an agent-session-loop run answers the first press with
+  "press the key again to confirm"; the second carries `--yes`. A different
+  key is asked about afresh.
+- A refusal is shown as a sentence chosen by its code, not `amx send`'s own
+  message, which names command-line flags.
+
+The daemon offers `respond` only on a `permission` notice whose target is a
+tmux runtime session, and the app shows Answer… only when that was offered
+and the notice names such a session. A Kitty session's permission banner is
+unchanged: it offers nothing but its click. The logs (category `prompt`) name
+sessions, key names, and refusal codes, never screen text.
 
 ## Global shortcuts
 

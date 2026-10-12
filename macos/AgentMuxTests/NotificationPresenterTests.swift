@@ -97,7 +97,7 @@ final class NotificationPresenterTests: XCTestCase {
     func testCategoriesAreRegisteredWithTheirActions() throws {
         _ = presenter()
         let byID = Dictionary(uniqueKeysWithValues: center.categories.map { ($0.identifier, $0) })
-        XCTAssertEqual(Set(byID.keys), ["amx.session", "amx.session.snooze", "amx.asl", "amx.asl.snooze", "amx.plain"])
+        XCTAssertEqual(Set(byID.keys), ["amx.session", "amx.session.snooze", "amx.asl", "amx.asl.snooze", "amx.prompt", "amx.plain"])
         let session = try XCTUnwrap(byID["amx.session"])
         XCTAssertEqual(session.actions.map(\.title), ["Mute session", "Snooze 1h"])
         XCTAssertEqual(session.actions.map(\.identifier), ["amx.mute", "amx.snooze"])
@@ -106,6 +106,10 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(asl.actions.first?.title, "Answer…")
         XCTAssertTrue(asl.actions.first?.options.contains(.foreground) ?? false)
         XCTAssertEqual(byID["amx.plain"]?.actions.count, 0)
+        let prompt = try XCTUnwrap(byID["amx.prompt"])
+        XCTAssertEqual(prompt.actions.map(\.title), ["Answer…"])
+        XCTAssertEqual(prompt.actions.map(\.identifier), ["amx.respond"])
+        XCTAssertTrue(prompt.actions.first?.options.contains(.foreground) ?? false)
         for category in center.categories {
             XCTAssertTrue(category.options.contains(.customDismissAction), category.identifier)
             for action in category.actions {
@@ -126,6 +130,20 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(category("stop", ["mute"]), "amx.plain", "never an action that was not offered")
         // Permission prompts get nothing, whatever they were offered.
         XCTAssertEqual(category("permission", ["mute", "snooze"]), "amx.plain")
+        // A permission prompt may offer to show itself, and only on a session
+        // the workspace embeds; no other action rides along with it.
+        func permission(_ actions: [String], backend: String, runtimeSessionID: String = "rs-1") -> String {
+            var notice = AppNotice(notificationID: "n", action: "permission", actions: actions)
+            notice.runtimeSessionID = runtimeSessionID
+            notice.backend = backend
+            return NotificationCategories.category(for: notice)
+        }
+        XCTAssertEqual(permission(["respond"], backend: "tmux"), "amx.prompt")
+        XCTAssertEqual(permission(["respond", "mute", "snooze"], backend: "tmux"), "amx.prompt")
+        XCTAssertEqual(permission(["respond"], backend: "kitty"), "amx.plain")
+        XCTAssertEqual(permission(["respond"], backend: "tmux", runtimeSessionID: ""), "amx.plain")
+        XCTAssertEqual(permission([], backend: "tmux"), "amx.plain", "never an action that was not offered")
+        XCTAssertEqual(category("stop", ["respond", "mute", "snooze"]), "amx.session", "respond is for a prompt")
     }
 
     func testResponseIdentifiersMapToDispositions() {
@@ -134,6 +152,7 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(NotificationCategories.disposition(forAction: "amx.mute"), .actionMute)
         XCTAssertEqual(NotificationCategories.disposition(forAction: "amx.snooze"), .actionSnooze)
         XCTAssertEqual(NotificationCategories.disposition(forAction: "amx.answer"), .actionAnswer)
+        XCTAssertEqual(NotificationCategories.disposition(forAction: "amx.respond"), .actionRespond)
         XCTAssertNil(NotificationCategories.disposition(forAction: "other"))
         XCTAssertEqual(NotificationDisposition.actionMute.rawValue, "action_mute")
     }

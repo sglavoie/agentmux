@@ -37,6 +37,7 @@ var (
 	sendYes         bool
 	sendOperationID string
 	sendWait        time.Duration
+	sendLook        bool
 )
 
 // The seams the tests replace: the screen classifier, and the pause between
@@ -81,7 +82,13 @@ latest operation is remembered.
 Delivery is "accepted" once the input is written. With --wait, a session that
 was at rest or asking is watched for that long, and delivery is "consumed" if
 its state moves; an agent that was already working gives no such evidence and
-stays "accepted". The text itself is never logged or recorded.`,
+stays "accepted". The text itself is never logged or recorded.
+
+--look sends nothing: it prints the last rows of the agent's screen, and with
+--json reports {runtime_session_id, backend, project, screen, lines}, where
+screen is the word a send would report. It is what a surface shows before a
+key is pressed, and it is refused where a send would be for a session that is
+gone or a screen that cannot be read.`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: runSend,
 }
@@ -95,6 +102,7 @@ func init() {
 	sendCmd.Flags().BoolVar(&sendYes, "yes", false, "confirm sending into a session that runs an agent-session-loop run")
 	sendCmd.Flags().StringVar(&sendOperationID, "operation-id", "", "name this send, so a repeat of it writes nothing twice")
 	sendCmd.Flags().DurationVar(&sendWait, "wait", 0, "how long to watch for the agent taking the input")
+	sendCmd.Flags().BoolVar(&sendLook, "look", false, "send nothing; show what the agent's screen shows")
 }
 
 // SendCommand returns the top-level `amx send` command.
@@ -122,6 +130,16 @@ type sendData struct {
 	Delivery string `json:"delivery"`
 }
 
+// sendLookData is the `send --look --json` payload.
+type sendLookData struct {
+	RuntimeSessionID string `json:"runtime_session_id"`
+	Backend          string `json:"backend"`
+	Project          string `json:"project"`
+	// Screen is blocked, working, idle, or unknown.
+	Screen string   `json:"screen"`
+	Lines  []string `json:"lines"`
+}
+
 // sendTerminal is what sending needs from the tmux backend.
 type sendTerminal interface {
 	tmuxAttacher
@@ -136,16 +154,23 @@ func runSend(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return cli.CommandFailure(cmd, sendJSON, "invalid_arguments", err)
 	}
-	input, err := sendInput(cmd, args[1:])
-	if err != nil {
+	var input backend.Input
+	if sendLook {
+		if len(args) > 1 || sendStdin || len(sendKeys) > 0 {
+			return cli.CommandFailure(cmd, sendJSON, "invalid_arguments", errors.New("--look sends nothing; leave out TEXT, --stdin, and --key"))
+		}
+	} else if input, err = sendInput(cmd, args[1:]); err != nil {
 		return cli.CommandFailure(cmd, sendJSON, "invalid_arguments", err)
 	}
 	operation := strings.TrimSpace(sendOperationID)
-	if operation == "" {
+	switch {
+	case sendLook:
+		// A look writes nothing, so there is no operation to name.
+	case operation == "":
 		if operation, err = newSendOperationID(); err != nil {
 			return cli.CommandFailure(cmd, sendJSON, "send_failed", err)
 		}
-	} else if !session.ValidSendOperationID(operation) {
+	case !session.ValidSendOperationID(operation):
 		return cli.CommandFailure(cmd, sendJSON, "invalid_arguments", errors.New("--operation-id must be 1 to 64 letters, digits, '.', '_' or '-'"))
 	}
 	store, err := runtimesession.NewStore(attachRegistryPath())
@@ -180,6 +205,9 @@ func runSend(cmd *cobra.Command, args []string) error {
 	}
 	if record.State != runtimesession.StateLive {
 		return cli.CommandFailure(cmd, sendJSON, notLiveCode(record), notLiveError(record))
+	}
+	if sendLook {
+		return runSendLook(cmd, term, record)
 	}
 	before, known := sendSlotState(id)
 	if code, refusal := sendASLGuard(record, before, known, sendYes); refusal != nil {
@@ -226,6 +254,26 @@ func runSend(cmd *cobra.Command, args []string) error {
 		message = fmt.Sprintf("Sent to %s, and its agent took it.", record.Project)
 	}
 	_, err = fmt.Fprintln(cmd.OutOrStdout(), message)
+	return err
+}
+
+// runSendLook reports what the agent's screen shows and writes nothing.
+func runSendLook(cmd *cobra.Command, term sendTerminal, record runtimesession.Record) error {
+	look, err := session.Look(term, session.SendRequest{Record: record, Now: attachNow(), Classify: sendClassify})
+	var refusal *session.SendRefusal
+	switch {
+	case errors.As(err, &refusal):
+		return cli.CommandFailure(cmd, sendJSON, refusal.Code, refusal)
+	case err != nil:
+		return cli.CommandFailure(cmd, sendJSON, "send_failed", fmt.Errorf("reading the screen of %s: %w", record.Project, err))
+	}
+	if sendJSON {
+		return cli.WriteJSON(cmd, sendLookData{
+			RuntimeSessionID: string(record.ID), Backend: string(record.Target.Instance.Kind), Project: record.Project,
+			Screen: look.Screen, Lines: look.Lines,
+		})
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(look.Lines, "\n"))
 	return err
 }
 

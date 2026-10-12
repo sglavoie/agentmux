@@ -62,7 +62,7 @@ func (w *sendWorld) id() string { return string(w.launched.RuntimeSessionID) }
 func (w *sendWorld) run(t *testing.T, stdin string, args ...string) (string, error) {
 	t.Helper()
 	reset := func() {
-		sendJSON, sendStdin, sendKeys, sendNoEnter, sendAnyScreen, sendYes, sendOperationID, sendWait = false, false, nil, false, false, false, "", 0
+		sendJSON, sendStdin, sendKeys, sendNoEnter, sendAnyScreen, sendYes, sendOperationID, sendWait, sendLook = false, false, nil, false, false, false, "", 0, false
 	}
 	reset()
 	t.Cleanup(reset)
@@ -75,6 +75,7 @@ func (w *sendWorld) run(t *testing.T, stdin string, args ...string) (string, err
 	cmd.Flags().BoolVar(&sendYes, "yes", false, "")
 	cmd.Flags().StringVar(&sendOperationID, "operation-id", "", "")
 	cmd.Flags().DurationVar(&sendWait, "wait", 0, "")
+	cmd.Flags().BoolVar(&sendLook, "look", false, "")
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -310,5 +311,60 @@ func TestSendRefusesAnAgentThatStopped(t *testing.T) {
 	out, err := w.run(t, "", w.id(), "typed-marker", "--json")
 	if err == nil || !strings.HasPrefix(closeErrorCode(t, out), "runtime_session_") {
 		t.Fatalf("send to a closed session: err=%v out=%s", err, out)
+	}
+}
+
+func TestSendLookShowsTheScreenAndWritesNothing(t *testing.T) {
+	w := newSendWorld(t)
+	w.sent(t, w.id(), "look-marker", "--no-enter")
+	w.waitTyped(t, "look-marker", 1)
+	before := w.operation(t)
+
+	w.screen = screenstate.Blocked
+	out, err := w.run(t, "", w.id(), "--look", "--json")
+	if err != nil {
+		t.Fatalf("send --look: %v\n%s", err, out)
+	}
+	var envelope struct {
+		SchemaVersion int          `json:"schema_version"`
+		Data          sendLookData `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil || envelope.SchemaVersion != 1 {
+		t.Fatalf("decode %q: %v", out, err)
+	}
+	data := envelope.Data
+	if data.RuntimeSessionID != w.id() || data.Backend != "tmux" || data.Project != "api" || data.Screen != "blocked" {
+		t.Fatalf("payload = %+v", data)
+	}
+	if len(data.Lines) == 0 || !strings.Contains(strings.Join(data.Lines, "\n"), "look-marker") {
+		t.Fatalf("lines = %q, want the screen's tail", data.Lines)
+	}
+	if last := data.Lines[len(data.Lines)-1]; strings.TrimSpace(last) == "" {
+		t.Fatalf("the tail ends in a blank row: %q", data.Lines)
+	}
+	// Looking is not sending: nothing was typed, recorded, or asked of the daemon.
+	queries := w.queries
+	if text, err := w.run(t, "", w.id(), "--look"); err != nil || !strings.Contains(text, "look-marker") {
+		t.Fatalf("text output = %q, %v", text, err)
+	}
+	if got := w.operation(t); got != before || w.queries != queries {
+		t.Fatalf("a look recorded %q (was %q) and asked the daemon %d times", got, before, w.queries-queries)
+	}
+	w.waitTyped(t, "look-marker", 1)
+
+	// A harness no adapter reads can still be looked at.
+	w.noAdapter = true
+	if out, err := w.run(t, "", w.id(), "--look", "--json"); err != nil || !strings.Contains(out, `"screen":"unknown"`) {
+		t.Fatalf("look with no adapter = %q, %v", out, err)
+	}
+	for name, args := range map[string][]string{
+		"with text":  {w.id(), "text", "--look"},
+		"with a key": {w.id(), "--key", "y", "--look"},
+		"with stdin": {w.id(), "--stdin", "--look"},
+	} {
+		out, err := w.run(t, "", append(args, "--json")...)
+		if err == nil || closeErrorCode(t, out) != "invalid_arguments" {
+			t.Errorf("%s: err=%v out=%s, want invalid_arguments", name, err, out)
+		}
 	}
 }

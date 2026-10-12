@@ -241,7 +241,7 @@ func (n *Notifier) settleInteraction(target NotificationTarget, action string, t
 		reason := interaction
 		switch reason {
 		case interactionTimeout, interactionDismissed, interactionReplied, interactionUnavailable, interactionUnknown,
-			interactionActionMute, interactionActionSnooze, interactionActionAnswer, interactionRetracted:
+			interactionActionMute, interactionActionSnooze, interactionActionAnswer, interactionActionRespond, interactionRetracted:
 		default:
 			reason = interactionUnknown
 		}

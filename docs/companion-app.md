@@ -333,7 +333,11 @@ With the app running and allowed, the daemon still applies every gate (quiet
 hours, mute, snooze, cooldown) and then hands each notification to the app,
 which shows it through Notification Center. Clicking it focuses the pane the
 way an Alerter click does; the banner's actions mute the session, snooze for an
-hour, or open the ASL answer panel. If the app does not confirm delivery
+hour, or open the ASL answer panel. A permission prompt's banner offers no
+approval. For a session in the workspace it offers **Answer…**, which opens a
+small panel showing the session's screen: you read the prompt there and press
+the key that answers it (`1`–`9`, `y`, `n`, arrows, Return, or the `esc`
+button), without bringing the workspace forward. If the app does not confirm delivery
 within 3 seconds, or reports a failure, the daemon withdraws it and Alerter
 shows it instead. Quitting the app falls back to Alerter at once.
 

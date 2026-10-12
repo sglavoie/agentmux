@@ -319,7 +319,8 @@ subscriber holds the role. Every notification still passes every gate first.
 The daemon then sends the backend a `notification` frame —
 `{notification_id, window_id, navigable, title, subtitle, action, run_id,
 session_id, actions[]}`, where `actions` offers `mute`, `snooze`, and (for an
-ASL question) `answer`, and a permission prompt offers none — and waits up to
+ASL question) `answer`, and a permission prompt offers none, or `respond` alone when its
+session runs on tmux — and waits up to
 3s for a `notification_disposition` request reporting `delivered`. A notice
 about a runtime session also carries `runtime_session_id` and `backend`; when
 the backend is not Kitty, `window_id` is 0, `navigable` is false, and `mute`
@@ -328,7 +329,11 @@ the notice is retracted, `dispatch:fallback:app_fallback` is recorded, and
 Alerter shows the notification instead; with no app connected Alerter is used
 exactly as before. After `delivered` the app reports one terminal disposition:
 `clicked` (the daemon focuses the pane exactly as an Alerter click does),
-`dismissed`, `action_mute`, `action_snooze`, `action_answer`, or `failed`.
+`dismissed`, `action_mute`, `action_snooze`, `action_answer`, `action_respond`,
+or `failed`. `action_respond` follows the one action a `permission` notice can
+offer, `respond`, and only for a tmux runtime session: the app shows the
+session's screen and the operator answers the prompt there through `amx send`.
+The daemon records the choice and writes nothing to the session itself.
 Reports are idempotent: the first terminal disposition wins and an unknown
 `notification_id` is answered ok. A `notification_retract` frame
 `{notification_id, reason}` withdraws a notice that is still showing when a

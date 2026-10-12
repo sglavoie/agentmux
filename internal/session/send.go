@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
@@ -188,9 +189,58 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 	return outcome, nil
 }
 
-// sendScreen reads the pane's screen and applies the screen rules, returning
-// the word for what it saw.
-func sendScreen(term SendTerminal, req SendRequest, pane backend.Pane) (string, error) {
+// SendLook is what an agent's screen shows to someone about to send to it:
+// the word a send would report for it, and its last rows.
+type SendLook struct {
+	// Screen is one of the SendScreen words, never SendScreenUnchecked.
+	Screen string
+	// Lines is the tail of the screen, without the blank rows below the
+	// program's last one.
+	Lines []string
+}
+
+// SendLookLines is how many rows of a screen Look returns.
+const SendLookLines = 24
+
+// Look reads the screen a send to req.Record would be judged against, and
+// writes nothing. It is what lets a surface put a prompt in front of the
+// operator before a key is pressed. Only Record, Now, and Classify are read.
+//
+// A screen that cannot be read is refused as a send to it would be; one no
+// adapter knows is returned as SendScreenUnknown, since it can still be
+// looked at.
+func Look(term SendTerminal, req SendRequest) (SendLook, error) {
+	if req.Record.Target == nil {
+		return SendLook{}, &SendRefusal{Code: SendRefusedGone, Message: fmt.Sprintf("runtime session %s has no terminal", req.Record.ID)}
+	}
+	panes, err := term.Discover()
+	if err != nil {
+		return SendLook{}, err
+	}
+	pane, ok := backend.FindPane(panes, backend.PaneID(req.Record.Target.Ref))
+	if !ok || pane.Exit != nil || pane.Vars[RuntimeSessionVar] != string(req.Record.ID) {
+		return SendLook{}, &SendRefusal{Code: SendRefusedGone, Message: fmt.Sprintf("no running agent of runtime session %s", req.Record.ID)}
+	}
+	text, state, recognized, err := readSendScreen(term, req, pane)
+	if err != nil {
+		return SendLook{}, err
+	}
+	if !recognized {
+		state = screenstate.Unknown
+	}
+	lines := strings.Split(strings.TrimRight(text, " \n"), "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " ")
+	}
+	if len(lines) > SendLookLines {
+		lines = lines[len(lines)-SendLookLines:]
+	}
+	return SendLook{Screen: sendScreenWord(state), Lines: lines}, nil
+}
+
+// readSendScreen reads the pane's screen fresh and classifies it. The last
+// result is false when the session's harness has no screen adapter.
+func readSendScreen(term SendTerminal, req SendRequest, pane backend.Pane) (string, screenstate.State, bool, error) {
 	screen, err := term.Observe(pane.Ref)
 	text, readErr := probes.FreshScreenText(screen, err, probes.ExpectScreenOf(*req.Record.Target), req.Now)
 	if readErr != nil {
@@ -199,7 +249,7 @@ func sendScreen(term SendTerminal, req SendRequest, pane backend.Pane) (string, 
 		if errors.As(readErr, &withheld) {
 			verdict = withheld.Verdict
 		}
-		return "", &SendRefusal{Code: SendRefusedUnreadable, Message: fmt.Sprintf(
+		return "", screenstate.Unknown, false, &SendRefusal{Code: SendRefusedUnreadable, Message: fmt.Sprintf(
 			"the agent's screen could not be read (%s), so there is no telling what the input would land on; --any-screen sends anyway", verdict)}
 	}
 	harnessName := ""
@@ -211,6 +261,29 @@ func sendScreen(term SendTerminal, req SendRequest, pane backend.Pane) (string, 
 		classify = classifySendScreen
 	}
 	state, recognized := classify(harnessName, text)
+	return text, state, recognized, nil
+}
+
+func sendScreenWord(state screenstate.State) string {
+	switch state {
+	case screenstate.Blocked:
+		return SendScreenBlocked
+	case screenstate.Working:
+		return SendScreenWorking
+	case screenstate.Terminal:
+		return SendScreenIdle
+	default:
+		return SendScreenUnknown
+	}
+}
+
+// sendScreen reads the pane's screen and applies the screen rules, returning
+// the word for what it saw.
+func sendScreen(term SendTerminal, req SendRequest, pane backend.Pane) (string, error) {
+	_, state, recognized, err := readSendScreen(term, req, pane)
+	if err != nil {
+		return "", err
+	}
 	isText := req.Input.Text != ""
 	switch {
 	case !recognized:
@@ -220,16 +293,7 @@ func sendScreen(term SendTerminal, req SendRequest, pane backend.Pane) (string, 
 	case !isText && state != screenstate.Blocked:
 		return "", &SendRefusal{Code: SendRefusedNoPrompt, Message: "the agent is not asking anything, so the keys would be typed into its prompt box; pass --any-screen to press them anyway"}
 	}
-	switch state {
-	case screenstate.Blocked:
-		return SendScreenBlocked, nil
-	case screenstate.Working:
-		return SendScreenWorking, nil
-	case screenstate.Terminal:
-		return SendScreenIdle, nil
-	default:
-		return SendScreenUnknown, nil
-	}
+	return sendScreenWord(state), nil
 }
 
 func classifySendScreen(harnessName, screen string) (screenstate.State, bool) {
