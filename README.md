@@ -32,7 +32,7 @@ The everyday commands beyond the dashboard (`amx`):
 | `amx open-dashboard` | focus the dashboard, opening it in a new tab if absent |
 | `amx project list` / `launch` | list configured projects; launch one in a new tab |
 | `amx session list` / `search` / `show` / `continue` / `fork` / `handoff` | conversation continuity |
-| `amx worktree list` / `reopen` / `remove` / `prune` | managed Git worktrees |
+| `amx worktree list` / `reopen` / `diff` / `land` / `remove` / `prune` | managed Git worktrees: reopen, review, land by fast-forward, clean up |
 | `amx mute-toggle` | mute or unmute a tab's notifications |
 | `amx notifications` / `snooze` / `test` | say where notifications go and whether they are snoozed; show, set, or clear the snooze; test notifications |
 | `amx daemon status` / `restart` | the always-on daemon |

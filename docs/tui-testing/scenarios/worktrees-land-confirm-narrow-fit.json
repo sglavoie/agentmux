@@ -1,0 +1,17 @@
+{
+  "name": "worktrees-land-confirm-narrow-fit",
+  "fixture": "worktree_lifecycle",
+  "size": { "width": 80, "height": 24 },
+  "actions": [
+    { "type": "command", "command_id": "explore.manage-worktrees" },
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "wt-unmerged" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "L" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "confirm" },
+    { "type": "contains_text", "text": "Land worktree on its source branch" },
+    { "type": "no_layout_issues" }
+  ]
+}

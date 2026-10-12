@@ -67,6 +67,8 @@ type uitestDriver struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	tempRoot string
+	// pagedText is every text a pager was asked to show, in order.
+	pagedText []string
 
 	commandMu  sync.Mutex
 	commands   sync.WaitGroup
@@ -580,6 +582,12 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 		}
 	}
 	fixtureWorktrees := append([]actions.WorktreeView(nil), fx.Worktrees...)
+	// No terminal exists to hand a pager, so what would have been paged is
+	// kept for the test to read and the pager returns at once.
+	d.model.backgroundCommands.pageText = func(text string, done func(error) tea.Msg) tea.Cmd {
+		d.pagedText = append(d.pagedText, text)
+		return func() tea.Msg { return done(nil) }
+	}
 	d.model.backgroundCommands.worktrees = func(_ Model, seq int) tea.Cmd {
 		return func() tea.Msg {
 			return worktreesLoadedMsg{seq: seq, entries: append([]actions.WorktreeView(nil), fixtureWorktrees...)}
@@ -720,6 +728,21 @@ func fixtureWorktreeActionCmd(client *uitestKittyClient, entries *[]actions.Work
 			}
 			removeFixtureWorktree(entries, entry.ID)
 			return done(actions.Result{Changed: true, Message: "removed managed worktree", Data: map[string]any{"mutation": mutation}}, nil)
+		case actions.WorktreeDiff:
+			review := worktree.Review{
+				ID: entry.ID, Branch: entry.Branch, SourceBranch: entry.SourceBranch, Ahead: 2,
+				Files: []worktree.FileChange{{Path: "main.go", Added: 4, Deleted: 1}}, Added: 4, Deleted: 1,
+				Lands: worktree.LandsFastForward, Patch: "diff --git a/main.go b/main.go\n",
+			}
+			return done(actions.Result{Message: "reviewed managed worktree", Data: map[string]any{"review": review}}, nil)
+		case actions.WorktreeLand:
+			landed, none := true, 0
+			for index := range *entries {
+				if (*entries)[index].ID == entry.ID {
+					(*entries)[index].ReachableFromSource, (*entries)[index].Ahead = &landed, &none
+				}
+			}
+			return done(actions.Result{Changed: true, Message: "landed worktree on " + entry.SourceBranch, Data: map[string]any{"landing": worktree.LandResult{Entry: *entry, SourceBranch: entry.SourceBranch, Commits: 2, Landed: true}}}, nil)
 		case actions.WorktreeForget:
 			mutation := worktree.MutationResult{Entry: *entry, MetadataForgotten: true}
 			removeFixtureWorktree(entries, entry.ID)

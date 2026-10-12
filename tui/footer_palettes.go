@@ -80,6 +80,16 @@ func worktreeRemovable(deleteBranch bool) func(Model) bool {
 	}
 }
 
+func worktreeReviewable(m Model) bool {
+	entry, ok := m.selectedWorktree()
+	return ok && m.worktreeReviewRefusal(entry) == ""
+}
+
+func worktreeLandable(m Model) bool {
+	entry, ok := m.selectedWorktree()
+	return ok && m.worktreeLandRefusal(entry) == ""
+}
+
 func worktreeForgettable(m Model) bool {
 	entry, ok := m.selectedWorktree()
 	return ok && m.worktreeForgetRefusal(entry) == ""
@@ -179,6 +189,8 @@ var worktreesFooterPalette = []footerEntry{
 	{"enter", "reopen", footerSectionRow, hasPresentWorktree, footerPriorityEssential},
 	{"o", "shell", footerSectionRow, hasPresentWorktree, footerPriorityPrimary},
 	{"O", "editor", footerSectionRow, hasPresentWorktree, footerPriorityPrimary},
+	{"v", "diff", footerSectionRow, worktreeReviewable, footerPriorityPrimary},
+	{"L", "land", footerSectionRow, worktreeLandable, footerPrioritySecondary},
 	{"d", "remove", footerSectionRow, worktreeRemovable(false), footerPriorityPrimary},
 	{"D", "delete branch", footerSectionRow, worktreeRemovable(true), footerPrioritySecondary},
 	{"F", "forget", footerSectionRow, worktreeForgettable, footerPrioritySecondary},

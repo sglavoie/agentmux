@@ -11,7 +11,7 @@ import (
 // explicit so adding or removing a worktree surface requires a contract audit.
 func TestWorktreeJSONCommandSurfaceIsVersioned(t *testing.T) {
 	commands := []*cobra.Command{
-		worktreeListCmd, worktreeShowCmd, worktreeDiffCmd, worktreeReopenCmd,
+		worktreeListCmd, worktreeShowCmd, worktreeDiffCmd, worktreeLandCmd, worktreeReopenCmd,
 		worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd,
 		worktreeForgetCmd, worktreePruneCmd,
 	}

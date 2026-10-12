@@ -495,6 +495,13 @@ func pagerCommand(path string) *exec.Cmd {
 	return exec.Command("less", "-R", "+G", path)
 }
 
+// PageText pages text this surface already holds, from its first line, in
+// this terminal: the surface is suspended while the pager runs and done
+// reports how it ended. Unlike a scrollback, a report is read from the top.
+func PageText(text string, done func(error) tea.Msg) tea.Cmd {
+	return tea.Exec(&scrollbackView{capture: func() (string, error) { return text, nil }, fromTop: true}, done)
+}
+
 // peekPortable pages a portable session's scrollback: the text is captured
 // through the backend and handed to a pager, in a view of the desktop
 // workspace when one hosts this surface and in this terminal otherwise.
@@ -525,6 +532,7 @@ func NewScrollbackView(capture func() (string, error)) tea.ExecCommand {
 // terminal, so one command covers the read, the pager, and the cleanup.
 type scrollbackView struct {
 	capture        func() (string, error)
+	fromTop        bool
 	stdin          io.Reader
 	stdout, stderr io.Writer
 }
@@ -552,6 +560,10 @@ func (v *scrollbackView) Run() error {
 		return err
 	}
 	pager := pagerCommand(path)
+	if v.fromTop {
+		// #nosec G204 -- fixed program; path is a file this process just wrote.
+		pager = exec.Command("less", "-R", path)
+	}
 	pager.Stdin, pager.Stdout, pager.Stderr = v.stdin, v.stdout, v.stderr
 	return pager.Run()
 }

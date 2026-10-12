@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/commands"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
@@ -27,6 +28,10 @@ type worktreesLoadedMsg struct {
 	warnings []string
 	err      error
 }
+
+// worktreeReviewClosed marks the return from the pager a review was read in.
+// It is no registry action: nothing ran but the pager.
+const worktreeReviewClosed actions.ID = "worktree.review_closed"
 
 type worktreeActionDoneMsg struct {
 	action actions.ID
@@ -186,6 +191,10 @@ func (m Model) handleWorktreesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.beginWorktreeRemove(true)
 	case keyForgetWorktree:
 		return m.beginWorktreeForget()
+	case keyReviewWorktree:
+		return m.reviewSelectedWorktree()
+	case keyLandWorktree:
+		return m.beginWorktreeLand()
 	default:
 		return m, nil
 	}
@@ -404,6 +413,87 @@ func (m Model) beginWorktreeForget() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// worktreeReviewRefusal and worktreeLandRefusal are the same answer for v and
+// L. A snapshot cannot promise that the source branch has not moved on, so L
+// may still be refused by the landing itself.
+func (m Model) worktreeReviewRefusal(entry actions.WorktreeView) string {
+	request := actions.Request{Worktree: &entry.Entry}
+	if availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeDiff, request); !availability.Available {
+		return availability.Reason
+	}
+	return ""
+}
+
+func (m Model) worktreeLandRefusal(entry actions.WorktreeView) string {
+	if entry.Behind != nil && *entry.Behind > 0 && (entry.Ahead == nil || *entry.Ahead > 0) {
+		return fmt.Sprintf("%s has moved on; rebase the worktree branch onto it first", tuiworktrees.SourceLabel(entry))
+	}
+	request := actions.Request{Worktree: &entry.Entry}
+	if availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeLand, request); !availability.Available {
+		return availability.Reason
+	}
+	return ""
+}
+
+// reviewSelectedWorktree reads the review in the background and pages it when
+// it arrives. It reads and never writes, so it asks for no confirmation and
+// is offered for a worktree an agent is working in.
+func (m Model) reviewSelectedWorktree() (tea.Model, tea.Cmd) {
+	entry, ok := m.selectedWorktree()
+	if !ok || m.worktreeActionInFlight {
+		return m, nil
+	}
+	if reason := m.worktreeReviewRefusal(entry); reason != "" {
+		return m.worktreeDisabledToast(reason)
+	}
+	m.actionErr = nil
+	m.worktreeActionInFlight = true
+	request := actions.Request{Worktree: &entry.Entry, Parameters: map[string]string{"patch": "true", "color": "true"}}
+	return m, m.runWorktreeActionCmd(actions.WorktreeDiff, request)
+}
+
+func (m Model) handleWorktreeReviewDone(msg worktreeActionDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.actionErr = msg.err
+		return m, nil
+	}
+	m.actionErr = nil
+	review, ok := msg.result.Data["review"].(worktree.Review)
+	if !ok {
+		return m, nil
+	}
+	return m, m.runPageTextCmd(review.Text(), func(err error) tea.Msg {
+		return worktreeActionDoneMsg{action: worktreeReviewClosed, err: err}
+	})
+}
+
+func (m Model) beginWorktreeLand() (tea.Model, tea.Cmd) {
+	entry, ok := m.selectedWorktree()
+	if !ok || m.worktreeActionInFlight {
+		return m, nil
+	}
+	if reason := m.worktreeLandRefusal(entry); reason != "" {
+		return m.worktreeDisabledToast(reason)
+	}
+	m.worktreeActionTarget = &entry
+	m.confirmReturnMode = ModeWorktrees
+	m.confirmAction = "worktree land"
+	m.confirmConsequence = fmt.Sprintf("Fast-forwards %q to branch %q, or refuses if it has moved on. The worktree and its branch are kept.", tuiworktrees.SourceLabel(entry), entry.Branch)
+	m.mode = ModeConfirm
+	m.actionErr = nil
+	return m, nil
+}
+
+func (m Model) confirmedWorktreeLand() (tea.Model, tea.Cmd) {
+	if m.worktreeActionTarget == nil {
+		return m, nil
+	}
+	request := actions.Request{Worktree: &m.worktreeActionTarget.Entry, Confirmed: true}
+	m.actionErr = nil
+	m.worktreeActionInFlight = true
+	return m, m.runWorktreeActionCmd(actions.WorktreeLand, request)
+}
+
 func (m Model) worktreeDisabledToast(reason string) (tea.Model, tea.Cmd) {
 	m.actionErr = nil
 	cmd := m.pushToast(Toast{Severity: toastWarning, Text: "Unavailable: " + reason})
@@ -439,8 +529,17 @@ func (m Model) handleWorktreeActionDone(msg worktreeActionDoneMsg) (tea.Model, t
 	if msg.action == actions.WorktreeReopen {
 		return m.handleWorktreeReopenDone(msg)
 	}
-	if msg.action == actions.WorktreeRemove || msg.action == actions.WorktreeForget {
+	if msg.action == actions.WorktreeRemove || msg.action == actions.WorktreeForget || msg.action == actions.WorktreeLand {
 		return m.handleWorktreeMutationDone(msg)
+	}
+	if msg.action == actions.WorktreeDiff {
+		return m.handleWorktreeReviewDone(msg)
+	}
+	if msg.action == worktreeReviewClosed {
+		// Back from the pager: nothing changed, so there is nothing to say
+		// unless the pager itself could not run.
+		m.actionErr = msg.err
+		return m, nil
 	}
 	if msg.err != nil {
 		m.actionErr = msg.err

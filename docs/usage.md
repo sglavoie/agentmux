@@ -998,6 +998,20 @@ conversation inside the checkout or launches a fresh session. If recorded
 profile provenance is no longer usable, the normal profile picker requests an
 explicit replacement; it does not silently choose another identity.
 
+`v` pages a review of the selected worktree: what it changed since it left
+its source branch, file by file with the full diff, and how its committed
+work would land. It reads and never writes, so it is offered for a worktree
+with a live session too.
+
+`L` lands the selected worktree after a confirmation: the recorded source
+branch is fast-forwarded to the worktree branch, and nothing else. The
+worktree and its branch are kept, and since the branch is then merged, `D`
+will remove both. Landing is refused, with the reason, for a worktree that is
+dirty, locked, detached, or in use, when there is nothing to land, when the
+source branch's own checkout has uncommitted changes, and when the source
+branch has moved on — rebase the worktree branch onto it and land again.
+Agent Mux never merges, squashes, or resolves a conflict.
+
 Cleanup is always explicit:
 
 - `d` removes a clean, inactive checkout and its sidecar while retaining the
@@ -1023,6 +1037,7 @@ The same lifecycle is scriptable:
 amx worktree list [--json]
 amx worktree show <selector> [--json]
 amx worktree diff <selector> [--committed] [--patch] [--json]
+amx worktree land <selector> --yes [--remove] [--json]
 amx worktree reopen <selector> [--session <candidate>] [--profile <name>] [--json]
 amx worktree shell <selector> [--json]
 amx worktree edit <selector> [--json]
@@ -1050,6 +1065,19 @@ counted as the worktree's change. Uncommitted changes are included unless
 writes — the merge is predicted in Git's object database, not in a checkout —
 so it needs no `--yes` and is safe on a worktree with a live session in it. A
 worktree with no recorded source branch (a legacy checkout) cannot be reviewed.
+
+`land` fast-forwards the recorded source branch to the worktree branch under
+the same lock and with the same fresh checks as `remove`, and never forces.
+Where the source branch is checked out, that checkout moves with it and must
+have no uncommitted changes to tracked files; where no worktree has it checked
+out, only the branch is advanced. A `diff` verdict of `fast_forward` is the one
+that lands; `diverged_clean` and `conflicts` are refused as `branch_diverged`.
+The other refusals are `nothing_to_land`, `worktree_dirty`, `worktree_locked`,
+`worktree_detached`, `worktree_active`, `source_dirty`, `source_busy` (the
+source branch is mid-rebase), and `source_branch_missing`. `--remove` goes on
+to remove the worktree and delete its now-merged branch; if that second step
+is refused, the landing stands and the command reports a partial result with
+a nonzero exit.
 
 A selector is a full stable ID, unique ID prefix, branch, or canonical path.
 Ambiguous selectors and live sessions return structured candidates rather than

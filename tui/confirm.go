@@ -52,6 +52,9 @@ func confirmVerbAndTitle(m Model) (verb, title string) {
 	case "worktree forget":
 		verb = "Forget worktree metadata"
 		title = worktreeConfirmationTitle(m.worktreeActionTarget)
+	case "worktree land":
+		verb = "Land worktree on its source branch"
+		title = worktreeConfirmationTitle(m.worktreeActionTarget)
 	case asl.ConfirmStop:
 		verb = "Stop after the current session"
 		title = aslConfirmationTitle(m.aslActionTarget)

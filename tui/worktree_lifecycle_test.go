@@ -216,3 +216,80 @@ func TestWorktreeSessionPickerResponsiveLayouts(t *testing.T) {
 		}
 	}
 }
+
+func TestWorktreeReviewPagesTheReviewAndReturnsWithoutAToast(t *testing.T) {
+	driver, _ := lifecycleDriver(t)
+	// A live worktree is reviewable: the review reads and never writes.
+	filterLifecycleWorktree(t, driver, "wt-live")
+	if err := driver.Key("v"); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	model := driver.Model()
+	if model.mode != ModeWorktrees || model.worktreeActionInFlight || model.actionErr != nil {
+		t.Fatalf("review left mode=%v inFlight=%v err=%v", model.mode, model.worktreeActionInFlight, model.actionErr)
+	}
+	if len(driver.pagedText) != 1 {
+		t.Fatalf("paged %d texts, want one", len(driver.pagedText))
+	}
+	for _, want := range []string{"amx/live against main: 2 commits ahead", "lands: fast-forward onto main", "main.go | +4 -1", "diff --git a/main.go"} {
+		if !strings.Contains(driver.pagedText[0], want) {
+			t.Errorf("paged review misses %q:\n%s", want, driver.pagedText[0])
+		}
+	}
+	if len(model.toasts) != 0 {
+		t.Fatalf("returning from the pager published %d toasts", len(model.toasts))
+	}
+}
+
+func TestWorktreeLandOffersOnlyWhatTheSnapshotAllowsAndKeepsTheRow(t *testing.T) {
+	for id, reason := range map[string]string{
+		"wt-cleanup":  "nothing to land",
+		"wt-dirty":    "worktree is dirty",
+		"wt-looping":  "worktree is active",
+		"wt-diverged": "main has moved on",
+		"wt-missing":  "worktree checkout is missing",
+	} {
+		t.Run(id, func(t *testing.T) {
+			driver, _ := lifecycleDriver(t)
+			filterLifecycleWorktree(t, driver, id)
+			if err := driver.Key("L"); err != nil {
+				t.Fatalf("land: %v", err)
+			}
+			model := driver.Model()
+			if model.mode != ModeWorktrees || len(model.toasts) == 0 {
+				t.Fatalf("refused land left mode=%v with %d toasts", model.mode, len(model.toasts))
+			}
+			if status := currentStatusMessage(model, model.toasts[0].Expires.Add(-1)); !strings.Contains(status.Text, reason) {
+				t.Fatalf("refusal = %q, want %q", status.Text, reason)
+			}
+		})
+	}
+
+	driver, _ := lifecycleDriver(t)
+	filterLifecycleWorktree(t, driver, "wt-unmerged")
+	if err := driver.Key("L"); err != nil {
+		t.Fatalf("land: %v", err)
+	}
+	if model := driver.Model(); model.mode != ModeConfirm || !strings.Contains(model.confirmConsequence, `Fast-forwards "main" to branch "amx/unmerged"`) {
+		t.Fatalf("land confirmation mode=%v consequence=%q", model.mode, model.confirmConsequence)
+	}
+	if err := driver.Key("n"); err != nil {
+		t.Fatalf("decline: %v", err)
+	}
+	if model := driver.Model(); model.mode != ModeWorktrees || len(model.toasts) != 0 {
+		t.Fatalf("declined land left mode=%v with %d toasts", model.mode, len(model.toasts))
+	}
+	for _, key := range []string{"L", "y"} {
+		if err := driver.Key(key); err != nil {
+			t.Fatalf("key %s: %v", key, err)
+		}
+	}
+	model := driver.Model()
+	if model.mode != ModeWorktrees || len(model.worktreeFiltered) != 1 {
+		t.Fatalf("landing left mode=%v with %d rows, want the worktree kept", model.mode, len(model.worktreeFiltered))
+	}
+	// What landed is now merged, so the branch-deleting removal is offered.
+	if reason := model.worktreeRemoveRefusal(model.worktreeFiltered[0], true); reason != "" {
+		t.Fatalf("a landed worktree still refuses D: %s", reason)
+	}
+}

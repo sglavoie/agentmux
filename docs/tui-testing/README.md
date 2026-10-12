@@ -587,8 +587,13 @@ file. The exact inventory is:
 | [`worktrees-cleanup-looping-refusal.json`](scenarios/worktrees-cleanup-looping-refusal.json) | `worktree_lifecycle` | checkout removal is refused from a snapshot with an active loop |
 | [`worktrees-delete-merged-branch.json`](scenarios/worktrees-delete-merged-branch.json) | `worktree_lifecycle` | `D` confirms and completes safe deletion of a branch recorded as merged |
 | [`worktrees-delete-unmerged-refusal.json`](scenarios/worktrees-delete-unmerged-refusal.json) | `worktree_lifecycle` | `D` refuses an unmerged branch before confirmation |
+| [`worktrees-diff-missing-refusal.json`](scenarios/worktrees-diff-missing-refusal.json) | `worktree_lifecycle` | `v` refuses to review a worktree whose checkout is missing |
 | [`worktrees-forget-invalid.json`](scenarios/worktrees-forget-invalid.json) | `worktree_lifecycle` | `F` explicitly forgets invalid sidecar metadata |
 | [`worktrees-forget-missing.json`](scenarios/worktrees-forget-missing.json) | `worktree_lifecycle` | `F` explicitly forgets retained metadata for a missing checkout |
+| [`worktrees-land-active-refusal.json`](scenarios/worktrees-land-active-refusal.json) | `worktree_lifecycle` | `L` refuses to land a worktree with a live session before confirmation |
+| [`worktrees-land-confirm-narrow-fit.json`](scenarios/worktrees-land-confirm-narrow-fit.json) | `worktree_lifecycle` | the landing confirmation stays usable at narrow width |
+| [`worktrees-land-diverged-refusal.json`](scenarios/worktrees-land-diverged-refusal.json) | `worktree_lifecycle` | `L` refuses a worktree whose source branch has moved on before confirmation |
+| [`worktrees-land-fast-forward.json`](scenarios/worktrees-land-fast-forward.json) | `worktree_lifecycle` | `L` confirms and completes a fast-forward landing, keeping the worktree row |
 | [`worktrees-partial-recovery.json`](scenarios/worktrees-partial-recovery.json) | `worktree_lifecycle` | a typed partial cleanup reports the removed checkout and retained recovery row |
 | [`worktrees-picker-narrow-fit.json`](scenarios/worktrees-picker-narrow-fit.json) | `worktree_lifecycle` | the ambiguous live-session picker remains usable at narrow width |
 | [`worktrees-remove-retain-branch.json`](scenarios/worktrees-remove-retain-branch.json) | `worktree_lifecycle` | default `d` removal retains the branch and refreshes away the checkout row |

@@ -1,0 +1,17 @@
+{
+  "name": "worktrees-diff-missing-refusal",
+  "fixture": "worktree_lifecycle",
+  "size": { "width": 132, "height": 34 },
+  "actions": [
+    { "type": "command", "command_id": "explore.manage-worktrees" },
+    { "type": "key", "key": "/" },
+    { "type": "text", "text": "wt-missing" },
+    { "type": "key", "key": "enter" },
+    { "type": "key", "key": "v" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "worktrees" },
+    { "type": "contains_text", "text": "worktree checkout is missing" },
+    { "type": "no_layout_issues" }
+  ]
+}

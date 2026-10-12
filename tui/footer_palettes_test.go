@@ -311,7 +311,8 @@ var footerHintCharacterizations = []struct {
 		entries: worktreesFooterPalette,
 		width:   200,
 		want: []string{
-			"  / filter · enter reopen · o shell · O editor · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · enter reopen · o shell · O editor · v diff · L land · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page",
+			"  g/G top/bot",
 		},
 	},
 	{
@@ -319,8 +320,8 @@ var footerHintCharacterizations = []struct {
 		entries: worktreesFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · enter reopen · o shell · O editor · d remove · D delete branch · F forget",
-			"  Y path · r refresh · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · ? more",
+			"  / filter · enter reopen · o shell · O editor · v diff · L land · d remove",
+			"  D delete branch · F forget · Y path · r refresh · esc back · j/k up/down · ? more",
 		},
 	},
 	{
@@ -329,7 +330,7 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  enter reopen · o shell · O editor",
-			"  d remove · esc back · ? more",
+			"  v diff · d remove · esc back · ? more",
 		},
 	},
 	{
@@ -337,7 +338,7 @@ var footerHintCharacterizations = []struct {
 		entries: worktreesFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · enter reopen · o shell · O editor · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · enter reopen · o shell · O editor · v diff · L land · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{

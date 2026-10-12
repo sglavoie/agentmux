@@ -7,6 +7,14 @@
 // failed-launch cleanup, and compensation may remove only the worktree the
 // failed request created (Workflow.RemoveUnused).
 //
+// It also answers what a worktree did and brings that work back.
+// Inventory.Review compares a worktree with the source branch recorded when
+// it was created and predicts how it would land, reading only. Inventory.Land
+// is the one mutation here that reaches outside the managed root: it moves
+// the source branch, and only by fast-forward. This package never merges,
+// rebases, squashes, or resolves a conflict; a source branch that has moved
+// on is a refusal.
+//
 // Its answers about a checkout are AUTHORITATIVE and EXPENSIVE, because they
 // gate destructive actions. internal/gitstate also reports a branch and a dirty
 // bit, but cheaply, unscoped, and advisory, for painting a dashboard column;

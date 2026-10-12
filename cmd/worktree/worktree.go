@@ -2,7 +2,8 @@
 // Agent Mux Git worktrees, showing one, reopening it as a live session,
 // opening a shell or the configured editor in it, reviewing what it changed
 // since its source branch and how that would land (`diff`, diff.go, which
-// writes nothing), and the bounded destructive
+// writes nothing), bringing that work back by fast-forward (`land`, land.go),
+// and the bounded destructive
 // leaves — `remove` a clean inactive worktree, `forget` stale metadata, and
 // `prune` (prune.go), which selects every worktree `remove` would accept and
 // removes each through `remove` itself, previewing unless --yes. The bounded

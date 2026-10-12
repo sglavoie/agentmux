@@ -323,6 +323,17 @@ func defaultDefinitions() []Definition {
 			},
 		},
 		{
+			ID: WorktreeLand, Label: "land worktree", Description: "fast-forward the source branch to a clean inactive worktree's branch", Requires: worktreeRequirement,
+			Parameters:   []ParameterSchema{{Name: "remove", Type: "boolean", Description: "then remove the worktree and delete its landed branch"}},
+			Confirmation: Confirmation{Required: true, Prompt: "land this worktree on its source branch?"},
+			available: func(_ Dependencies, request Request) Availability {
+				return worktreeLandAvailability(request)
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return landWorktree(ctx, deps, request)
+			},
+		},
+		{
 			ID: WorktreeReopen, Label: "reopen worktree", Description: "focus a live session or resume the newest conversation", Requires: worktreeRequirement,
 			Parameters: []ParameterSchema{
 				{Name: "session", Type: "string", Description: "live-session candidate identifier"},

@@ -44,6 +44,7 @@ const (
 	WorktreeList   ID = "worktree.list"
 	WorktreeShow   ID = "worktree.show"
 	WorktreeDiff   ID = "worktree.diff"
+	WorktreeLand   ID = "worktree.land"
 	WorktreeReopen ID = "worktree.reopen"
 	WorktreeShell  ID = "worktree.shell"
 	WorktreeEditor ID = "worktree.editor"
@@ -155,6 +156,7 @@ type WorktreeLifecycle interface {
 	Remove(context.Context, string, worktree.RemoveOptions) (worktree.MutationResult, error)
 	Forget(context.Context, string) (worktree.MutationResult, error)
 	Review(context.Context, worktree.Entry, worktree.ReviewOptions) (worktree.Review, error)
+	Land(context.Context, string) (worktree.LandResult, error)
 }
 
 // Request holds the typed targets and plain parameters supplied to one action.

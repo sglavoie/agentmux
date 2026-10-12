@@ -243,3 +243,82 @@ func untrackedPaths(status []byte) []string {
 	sort.Strings(paths)
 	return paths
 }
+
+// Text is the review for a person: the comparison, the landing verdict, each
+// changed file, then untracked files, conflicts, warnings, and the patch when
+// one was asked for. The command line and the dashboard both print this, so
+// neither words a verdict its own way.
+func (r Review) Text() string {
+	var b strings.Builder
+	branch := r.Branch
+	if branch == "" {
+		branch = "detached HEAD"
+	}
+	facts := []string{countOf(r.Ahead, "commit", "commits") + " ahead", fmt.Sprintf("%d behind", r.Behind)}
+	if r.Dirty {
+		facts = append(facts, "uncommitted changes")
+	}
+	fmt.Fprintf(&b, "%s against %s: %s\n", branch, r.SourceBranch, strings.Join(facts, ", "))
+	fmt.Fprintf(&b, "lands: %s\n", r.LandsText())
+
+	width := 0
+	for _, file := range r.Files {
+		width = max(width, len(file.Path))
+	}
+	for _, file := range r.Files {
+		if file.Binary {
+			fmt.Fprintf(&b, " %-*s | binary\n", width, file.Path)
+			continue
+		}
+		fmt.Fprintf(&b, " %-*s | +%d -%d\n", width, file.Path, file.Added, file.Deleted)
+	}
+	switch {
+	case len(r.Files) > 0:
+		fmt.Fprintf(&b, "%s changed, +%d -%d\n", countOf(len(r.Files), "file", "files"), r.Added, r.Deleted)
+	case r.CommittedOnly:
+		b.WriteString("no committed changes\n")
+	default:
+		b.WriteString("no changes to tracked files\n")
+	}
+	for _, path := range r.Untracked {
+		fmt.Fprintf(&b, "untracked: %s\n", path)
+	}
+	for _, path := range r.Conflicts {
+		fmt.Fprintf(&b, "conflict: %s\n", path)
+	}
+	for _, warning := range r.Warnings {
+		fmt.Fprintf(&b, "warning: %s\n", warning)
+	}
+	if r.Patch != "" {
+		b.WriteString("\n")
+		b.WriteString(r.Patch)
+	}
+	return b.String()
+}
+
+// LandsText says the verdict in words. It speaks of committed work only, which
+// is all a landing could carry.
+func (r Review) LandsText() string {
+	switch r.Lands {
+	case LandsNothing:
+		if r.Dirty {
+			return "nothing committed to land"
+		}
+		return "nothing to land"
+	case LandsFastForward:
+		return "fast-forward onto " + r.SourceBranch
+	case LandsDivergedClean:
+		return "merges with " + r.SourceBranch + " without conflict; rebase before landing"
+	case LandsConflicts:
+		return fmt.Sprintf("conflicts with %s in %s", r.SourceBranch, countOf(len(r.Conflicts), "file", "files"))
+	default:
+		return "could not be predicted"
+	}
+}
+
+func countOf(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}

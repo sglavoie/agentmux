@@ -1,9 +1,7 @@
 package worktree
 
 import (
-	"fmt"
 	"io"
-	"strings"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -48,84 +46,13 @@ var worktreeDiffCmd = &cobra.Command{
 		if jsonOutput {
 			return cli.WriteJSON(cmd, worktreeDiffData{Review: review})
 		}
-		return writeWorktreeReview(out, review)
+		_, err = io.WriteString(out, review.Text())
+		return err
 	},
 }
 
 type worktreeDiffData struct {
 	Review worktree.Review `json:"review"`
-}
-
-func writeWorktreeReview(out io.Writer, review worktree.Review) error {
-	var b strings.Builder
-	branch := review.Branch
-	if branch == "" {
-		branch = "detached HEAD"
-	}
-	facts := []string{
-		cli.CountOf(review.Ahead, "commit", "commits") + " ahead",
-		fmt.Sprintf("%d behind", review.Behind),
-	}
-	if review.Dirty {
-		facts = append(facts, "uncommitted changes")
-	}
-	fmt.Fprintf(&b, "%s against %s: %s\n", branch, review.SourceBranch, strings.Join(facts, ", "))
-	fmt.Fprintf(&b, "lands: %s\n", landsText(review))
-
-	width := 0
-	for _, file := range review.Files {
-		width = max(width, len(file.Path))
-	}
-	for _, file := range review.Files {
-		if file.Binary {
-			fmt.Fprintf(&b, " %-*s | binary\n", width, file.Path)
-			continue
-		}
-		fmt.Fprintf(&b, " %-*s | +%d -%d\n", width, file.Path, file.Added, file.Deleted)
-	}
-	switch {
-	case len(review.Files) > 0:
-		fmt.Fprintf(&b, "%s changed, +%d -%d\n", cli.CountOf(len(review.Files), "file", "files"), review.Added, review.Deleted)
-	case review.CommittedOnly:
-		b.WriteString("no committed changes\n")
-	default:
-		b.WriteString("no changes to tracked files\n")
-	}
-	for _, path := range review.Untracked {
-		fmt.Fprintf(&b, "untracked: %s\n", path)
-	}
-	for _, path := range review.Conflicts {
-		fmt.Fprintf(&b, "conflict: %s\n", path)
-	}
-	for _, warning := range review.Warnings {
-		fmt.Fprintf(&b, "warning: %s\n", warning)
-	}
-	if review.Patch != "" {
-		b.WriteString("\n")
-		b.WriteString(review.Patch)
-	}
-	_, err := io.WriteString(out, b.String())
-	return err
-}
-
-// landsText says the verdict in words. It speaks of committed work only, which
-// is all a landing could carry.
-func landsText(review worktree.Review) string {
-	switch review.Lands {
-	case worktree.LandsNothing:
-		if review.Dirty {
-			return "nothing committed to land"
-		}
-		return "nothing to land"
-	case worktree.LandsFastForward:
-		return "fast-forward onto " + review.SourceBranch
-	case worktree.LandsDivergedClean:
-		return "merges with " + review.SourceBranch + " without conflict"
-	case worktree.LandsConflicts:
-		return fmt.Sprintf("conflicts with %s in %s", review.SourceBranch, cli.CountOf(len(review.Conflicts), "file", "files"))
-	default:
-		return "could not be predicted"
-	}
 }
 
 func init() {

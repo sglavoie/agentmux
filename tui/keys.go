@@ -65,6 +65,8 @@ const (
 	keyASLAbort             = "a" // ModeASLRuns: confirm aborting the in-flight turn
 	keyDeleteWorktreeBranch = "D" // ModeWorktrees: remove checkout and safely delete merged branch
 	keyForgetWorktree       = "F" // ModeWorktrees: forget missing or invalid sidecar metadata
+	keyReviewWorktree       = "v" // ModeWorktrees: page what the worktree changed and how it would land
+	keyLandWorktree         = "L" // ModeWorktrees: fast-forward the source branch to the worktree branch
 	keyPinProject           = "P" // ModePicker: pin/unpin the highlighted configured project
 	keyLaunchDirectory      = "d" // ModePicker: set the highlighted project's launch directory
 	keySortPlan             = "o" // ModePlanSearch: cycles the result-sort mode

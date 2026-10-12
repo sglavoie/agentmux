@@ -29,6 +29,8 @@ type actionWorktreeManager struct {
 
 	reviewOptions []worktree.ReviewOptions
 	reviewErr     error
+	landCalls     int
+	landErr       error
 }
 
 func (m *actionWorktreeManager) List(context.Context) ([]worktree.Entry, error) {
@@ -50,6 +52,11 @@ func (m *actionWorktreeManager) Remove(context.Context, string, worktree.RemoveO
 func (m *actionWorktreeManager) Review(_ context.Context, entry worktree.Entry, options worktree.ReviewOptions) (worktree.Review, error) {
 	m.reviewOptions = append(m.reviewOptions, options)
 	return worktree.Review{ID: entry.ID, SourceBranch: entry.SourceBranch, Lands: worktree.LandsFastForward, Ahead: 1}, m.reviewErr
+}
+
+func (m *actionWorktreeManager) Land(context.Context, string) (worktree.LandResult, error) {
+	m.landCalls++
+	return worktree.LandResult{Entry: m.entries[0], SourceBranch: "main", Commits: 1, Landed: m.landErr == nil}, m.landErr
 }
 
 func (m *actionWorktreeManager) Forget(context.Context, string) (worktree.MutationResult, error) {
@@ -323,5 +330,83 @@ func TestWorktreeDiffReviewsActiveAndDirtyWorktreesAndPassesItsOptions(t *testin
 	var actionErr *Error
 	if !errors.As(err, &actionErr) || actionErr.Code != "source_branch_missing" {
 		t.Fatalf("error = %v, want source_branch_missing", err)
+	}
+}
+
+func TestWorktreeLandRequiresConfirmationAnInactiveWorktreeAndReportsAKeptOne(t *testing.T) {
+	entry := worktree.Entry{
+		ID: "wt-1", Classification: worktree.ClassificationValid, Path: t.TempDir(), Branch: "amx/api/fix", SourceBranch: "main",
+		Exists: true, GitAvailable: true, StatusAvailable: true, Registered: true, Actionable: true,
+	}
+	manager := &actionWorktreeManager{entries: []worktree.Entry{entry}}
+	var running []session.RunningSession
+	deps := Dependencies{
+		WorktreeManager: manager,
+		LiveSessions:    func(*config.Config) ([]session.RunningSession, error) { return running, nil },
+		ActiveLoops:     func() ([]agentloop.Candidate, error) { return nil, nil },
+	}
+	registry := DefaultRegistry()
+	var actionErr *Error
+
+	_, err := registry.Execute(context.Background(), deps, WorktreeLand, Request{Selector: "wt-1"})
+	if !errors.As(err, &actionErr) || actionErr.Code != "confirmation_required" || manager.landCalls != 0 {
+		t.Fatalf("unconfirmed error = %v after %d landings, want confirmation_required and none", err, manager.landCalls)
+	}
+
+	running = []session.RunningSession{{TabID: 7, Directory: entry.Path}}
+	_, err = registry.Execute(context.Background(), deps, WorktreeLand, Request{Selector: "wt-1", Confirmed: true})
+	if !errors.As(err, &actionErr) || actionErr.Code != "worktree_active" || manager.landCalls != 0 {
+		t.Fatalf("active error = %v after %d landings, want worktree_active and none", err, manager.landCalls)
+	}
+	running = nil
+
+	for cause, code := range map[error]string{
+		worktree.ErrNothingToLand: "nothing_to_land", worktree.ErrLandDiverged: "branch_diverged",
+		worktree.ErrSourceDirty: "source_dirty", worktree.ErrSourceBusy: "source_busy",
+		worktree.ErrWorktreeDirty: "worktree_dirty", worktree.ErrSourceBranchMissing: "source_branch_missing",
+		worktree.ErrWorktreeDetached: "worktree_detached",
+	} {
+		manager.landErr = cause
+		_, err = registry.Execute(context.Background(), deps, WorktreeLand, Request{Selector: "wt-1", Confirmed: true})
+		if !errors.As(err, &actionErr) || actionErr.Code != code {
+			t.Errorf("%v mapped to %v, want code %q", cause, err, code)
+		}
+	}
+	manager.landErr = nil
+	if manager.removeCalls != 0 {
+		t.Fatalf("a refused landing reached Remove %d times", manager.removeCalls)
+	}
+
+	result, err := registry.Execute(context.Background(), deps, WorktreeLand, Request{Selector: "wt-1", Confirmed: true})
+	if err != nil || !result.Changed || manager.removeCalls != 0 {
+		t.Fatalf("landing = %+v, err = %v, removals = %d; want a landing that keeps the worktree", result, err, manager.removeCalls)
+	}
+
+	manager.removeErr = worktree.ErrWorktreeLocked
+	result, err = registry.Execute(context.Background(), deps, WorktreeLand, Request{Selector: "wt-1", Confirmed: true, Parameters: map[string]string{"remove": "true"}})
+	var partial *PartialResultError
+	if !errors.As(err, &partial) || partial.ActionError.Code != "worktree_locked" || !result.Changed {
+		t.Fatalf("landing with a failed removal = %+v, err = %v; want a partial result that still reports the landing", result, err)
+	}
+	if _, ok := result.Data["landing"].(worktree.LandResult); !ok {
+		t.Fatalf("partial result lost the landing: %+v", result.Data)
+	}
+
+	manager.removeErr = nil
+	result, err = registry.Execute(context.Background(), deps, WorktreeLand, Request{Selector: "wt-1", Confirmed: true, Parameters: map[string]string{"remove": "true"}})
+	if err != nil || result.Data["mutation"] == nil {
+		t.Fatalf("landing with removal = %+v, err = %v", result, err)
+	}
+
+	ahead := 0
+	for name, refused := range map[string]worktree.Entry{
+		"active": {ID: "wt-1", Classification: worktree.ClassificationValid, SourceBranch: "main", Exists: true, Usage: worktree.Usage{Live: true}},
+		"dirty":  {ID: "wt-1", Classification: worktree.ClassificationValid, SourceBranch: "main", Exists: true, Dirty: true},
+		"legacy": {ID: "wt-1", Classification: worktree.ClassificationLegacy, Exists: true},
+		"merged": {ID: "wt-1", Classification: worktree.ClassificationValid, SourceBranch: "main", Exists: true, GitAvailable: true, StatusAvailable: true, Actionable: true, Ahead: &ahead},
+	} {
+		if got := registry.Availability(deps, WorktreeLand, Request{Worktree: &refused}); got.Available || got.Reason == "" {
+			t.Errorf("%s availability = %+v, want a refusal with a reason", name, got)
+		}
 	}
 }

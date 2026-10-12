@@ -150,6 +150,89 @@ func diffWorktree(ctx context.Context, deps Dependencies, request Request) (Resu
 	return Result{Message: "reviewed managed worktree", Data: map[string]any{"review": review}}, nil
 }
 
+// worktreeLandAvailability reports what the latest snapshot already rules out.
+// Whether the source branch has moved on is not in a snapshot's gift to
+// promise, so a diverged branch is left to the landing itself to refuse.
+func worktreeLandAvailability(request Request) Availability {
+	if request.Worktree == nil {
+		return Availability{Available: true}
+	}
+	entry := *request.Worktree
+	if !entry.Exists {
+		return Availability{Reason: "worktree checkout is missing"}
+	}
+	if entry.Classification != worktree.ClassificationValid || strings.TrimSpace(entry.SourceBranch) == "" {
+		return Availability{Reason: "no source branch was recorded for this worktree"}
+	}
+	if entry.Usage.Live || entry.Usage.Looping {
+		return Availability{Reason: "worktree is active"}
+	}
+	if entry.Locked {
+		return Availability{Reason: "worktree is locked"}
+	}
+	if entry.Dirty {
+		return Availability{Reason: "worktree is dirty"}
+	}
+	if entry.Detached {
+		return Availability{Reason: "worktree is detached"}
+	}
+	if !entry.Actionable || !entry.GitAvailable || !entry.StatusAvailable {
+		return Availability{Reason: "worktree Git safety facts are unavailable"}
+	}
+	if entry.Ahead != nil && *entry.Ahead == 0 {
+		return Availability{Reason: "nothing to land"}
+	}
+	return Availability{Available: true}
+}
+
+// landWorktree fast-forwards the source branch and, when asked, goes on to
+// remove the worktree and delete its branch through removeWorktree, which
+// makes its own fresh checks. A landing whose removal then failed is a partial
+// result: the source branch has moved and stays moved.
+func landWorktree(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+	entry, err := resolveWorktree(ctx, deps, request, WorktreeLand)
+	if err != nil {
+		return Result{}, err
+	}
+	snapshot := probeWorktreeUsage(deps, []worktree.Entry{entry})
+	if len(snapshot.warnings) > 0 {
+		return Result{}, &Error{Code: "probe_unavailable", Action: WorktreeLand, Message: strings.Join(sortedStrings(snapshot.warnings), "; ")}
+	}
+	key := entryKey(entry)
+	if len(snapshot.live[key]) > 0 || len(snapshot.loops[key]) > 0 {
+		candidates := append(liveSessionCandidates(snapshot.live[key]), loopCandidates(snapshot.loops[key])...)
+		return Result{}, &Error{Code: "worktree_active", Action: WorktreeLand, Message: "worktree has a live session or active loop", Candidates: candidates}
+	}
+	landing, err := lifecycleManager(deps).Land(ctx, mutationSelector(request, entry))
+	if err != nil {
+		return Result{}, mapLifecycleError(WorktreeLand, err)
+	}
+	result := Result{Action: WorktreeLand, Changed: landing.Landed, Message: "landed worktree on " + landing.SourceBranch, Data: map[string]any{"landing": landing}}
+	if !parameterBool(request.Parameters, "remove") {
+		return result, nil
+	}
+	removal := request
+	removal.Worktree = nil
+	removal.Selector = mutationSelector(request, entry)
+	removal.Parameters = map[string]string{"delete_branch": "true"}
+	removed, err := removeWorktree(ctx, deps, removal)
+	if mutation, ok := removed.Data["mutation"]; ok {
+		result.Data["mutation"] = mutation
+	}
+	if err != nil {
+		var actionErr *Error
+		if !errors.As(err, &actionErr) {
+			actionErr = &Error{Code: "action_failed", Action: WorktreeLand, Message: err.Error()}
+		}
+		kept := *actionErr
+		kept.Action = WorktreeLand
+		kept.Message = "landed on " + landing.SourceBranch + ", but the worktree was kept: " + actionErr.Message
+		return result, &PartialResultError{ActionError: &kept}
+	}
+	result.Message = "landed worktree on " + landing.SourceBranch + " and removed it"
+	return result, nil
+}
+
 func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Result, error) {
 	entry, err := resolveWorktree(ctx, deps, request, WorktreeReopen)
 	if err != nil {
@@ -440,9 +523,20 @@ func mapLifecycleError(action ID, err error) *Error {
 	}
 	code := "git_unavailable"
 	switch {
-	case action == WorktreeDiff && errors.Is(err, worktree.ErrSourceBranchMissing):
-		// A review merges nothing, so the cleanup code for this would mislead.
+	case (action == WorktreeDiff || action == WorktreeLand) && errors.Is(err, worktree.ErrSourceBranchMissing):
+		// Neither a review nor a landing found a branch unmerged, so the
+		// cleanup code for this would mislead.
 		code = "source_branch_missing"
+	case errors.Is(err, worktree.ErrNothingToLand):
+		code = "nothing_to_land"
+	case errors.Is(err, worktree.ErrLandDiverged):
+		code = "branch_diverged"
+	case errors.Is(err, worktree.ErrSourceDirty):
+		code = "source_dirty"
+	case errors.Is(err, worktree.ErrSourceBusy):
+		code = "source_busy"
+	case action == WorktreeLand && errors.Is(err, worktree.ErrWorktreeDetached):
+		code = "worktree_detached"
 	case errors.Is(err, worktree.ErrWorktreeDirty):
 		code = "worktree_dirty"
 	case errors.Is(err, worktree.ErrWorktreeLocked):

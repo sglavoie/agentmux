@@ -700,6 +700,9 @@ type modelBackgroundCommands struct {
 	// production: the read goes to the backend hosting the pane. The UI harness
 	// sets it for a fixture whose sessions no fake Kitty client can answer for.
 	scrollback func(windowID int) (string, error)
+	// pageText suspends the surface for a pager over text it already holds.
+	// Nil is production; the UI harness has no terminal to hand a pager.
+	pageText func(text string, done func(error) tea.Msg) tea.Cmd
 }
 
 func defaultModelBackgroundCommands() modelBackgroundCommands {
@@ -745,6 +748,13 @@ func (m Model) runWorktreeActionCmd(id actions.ID, request actions.Request) tea.
 		return m.backgroundCommands.worktreeAction(m, id, request)
 	}
 	return defaultModelBackgroundCommands().worktreeAction(m, id, request)
+}
+
+func (m Model) runPageTextCmd(text string, done func(error) tea.Msg) tea.Cmd {
+	if m.backgroundCommands.pageText != nil {
+		return m.backgroundCommands.pageText(text, done)
+	}
+	return commands.PageText(text, done)
 }
 
 func (m Model) runTopologyRefreshCmd(seq, sourceWindowID int) tea.Cmd {

@@ -29,6 +29,7 @@ type commandWorktreeManager struct {
 	forgetCalls   int
 	reviewOptions []worktree.ReviewOptions
 	review        worktree.Review
+	landCalls     int
 }
 
 func (m *commandWorktreeManager) List(context.Context) ([]worktree.Entry, error) {
@@ -45,6 +46,10 @@ func (m *commandWorktreeManager) Review(_ context.Context, _ worktree.Entry, opt
 	m.reviewOptions = append(m.reviewOptions, options)
 	return m.review, nil
 }
+func (m *commandWorktreeManager) Land(context.Context, string) (worktree.LandResult, error) {
+	m.landCalls++
+	return worktree.LandResult{Entry: m.entries[0], SourceBranch: "main", Commits: 2, Landed: true}, nil
+}
 func (m *commandWorktreeManager) Forget(context.Context, string) (worktree.MutationResult, error) {
 	m.forgetCalls++
 	return worktree.MutationResult{Entry: m.entries[0], MetadataForgotten: true}, nil
@@ -59,6 +64,7 @@ func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
 		{worktreeListCmd, nil},
 		{worktreeShowCmd, []string{"wt-1"}},
 		{worktreeDiffCmd, []string{"wt-1"}},
+		{worktreeLandCmd, []string{"wt-1"}},
 		{worktreeReopenCmd, []string{"wt-1"}},
 		{worktreeShellCmd, []string{"wt-1"}},
 		{worktreeEditCmd, []string{"wt-1"}},
@@ -69,13 +75,15 @@ func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
 	for _, tc := range commands {
 		var out bytes.Buffer
 		tc.command.SetOut(&out)
-		if tc.command == worktreeRemoveCmd || tc.command == worktreeForgetCmd {
+		if tc.command == worktreeRemoveCmd || tc.command == worktreeForgetCmd || tc.command == worktreeLandCmd {
 			if err := tc.command.Flags().Set("yes", "true"); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if tc.command == worktreeRemoveCmd {
+		if tc.command == worktreeRemoveCmd || tc.command == worktreeLandCmd {
 			worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+		}
+		if tc.command == worktreeRemoveCmd {
 			if err := tc.command.Flags().Set("delete-branch", "true"); err != nil {
 				t.Fatal(err)
 			}
@@ -268,7 +276,7 @@ func TestWorktreeCLIMapsCandidatesConfirmationsAndParameters(t *testing.T) {
 // family is reachable as `amx worktree` is only true once root has registered
 // it, and asserting that against a locally built parent would be tautological.
 func TestWorktreeCLIHelpIsRegistered(t *testing.T) {
-	for _, name := range []string{"list", "show", "diff", "reopen", "shell", "edit", "remove", "forget"} {
+	for _, name := range []string{"list", "show", "diff", "land", "reopen", "shell", "edit", "remove", "forget"} {
 		if command, _, err := worktreeCmd.Find([]string{name}); err != nil || command == nil || command.Name() != name {
 			t.Fatalf("worktree %s registration: command=%v err=%v", name, command, err)
 		}
@@ -285,7 +293,7 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 	oldIndex := worktreeCommandsTranscriptIndex
 	oldReaders := worktreeCommandsReaders
 	oldIsTerminal := worktreeListIsTerminal
-	commands := []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeDiffCmd, worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd, worktreeForgetCmd}
+	commands := []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeDiffCmd, worktreeLandCmd, worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd, worktreeRemoveCmd, worktreeForgetCmd}
 	outputs := make([]io.Writer, len(commands))
 	for index, command := range commands {
 		outputs[index] = command.OutOrStdout()
@@ -309,6 +317,8 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 		_ = worktreeRemoveCmd.Flags().Set("delete-branch", "false")
 		_ = worktreeForgetCmd.Flags().Set("yes", "false")
 		_ = worktreeDiffCmd.Flags().Set("committed", "false")
+		_ = worktreeLandCmd.Flags().Set("yes", "false")
+		_ = worktreeLandCmd.Flags().Set("remove", "false")
 		_ = worktreeDiffCmd.Flags().Set("patch", "false")
 	})
 
@@ -377,7 +387,7 @@ func TestCompleteWorktreeSelectorsOffersIDsWithBranchAndProject(t *testing.T) {
 	if got, _ := completeWorktreeSelectors(worktreeShowCmd, []string{"wt-api"}, ""); got != nil {
 		t.Fatalf("second argument completed %q, want nothing", got)
 	}
-	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeDiffCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
+	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeDiffCmd, worktreeLandCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
 		if command.ValidArgsFunction == nil {
 			t.Errorf("worktree %s has no selector completion", command.Name())
 		}
@@ -430,5 +440,30 @@ func TestWorktreeDiffRefusesAWorktreeWithNoRecordedSource(t *testing.T) {
 	err := worktreeDiffCmd.RunE(worktreeDiffCmd, []string{"wt-1"})
 	if payload := decodeWorktreeJSONError(t, out.Bytes(), err); payload.Error.Code != "unavailable" {
 		t.Fatalf("error = %+v, want unavailable", payload.Error)
+	}
+}
+
+func TestWorktreeLandNeedsYesAndSaysWhatMoved(t *testing.T) {
+	manager, _ := resetWorktreeCommandsTestState(t)
+	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+	var out bytes.Buffer
+	worktreeLandCmd.SetOut(&out)
+
+	if err := worktreeLandCmd.RunE(worktreeLandCmd, []string{"wt-1"}); err == nil || manager.landCalls != 0 {
+		t.Fatalf("unconfirmed land error = %v after %d landings, want a refusal and none", err, manager.landCalls)
+	}
+	for _, flag := range []string{"yes", "remove"} {
+		if err := worktreeLandCmd.Flags().Set(flag, "true"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := worktreeLandCmd.RunE(worktreeLandCmd, []string{"wt-1"}); err != nil {
+		t.Fatalf("land: %v", err)
+	}
+	if want := "main: 2 commits, ..\nlanded worktree on main and removed it\n"; out.String() != want {
+		t.Fatalf("land text = %q, want %q", out.String(), want)
+	}
+	if manager.landCalls != 1 || len(manager.removeOptions) != 1 || !manager.removeOptions[0].DeleteBranch {
+		t.Fatalf("landings = %d, removals = %+v; want one of each, deleting the branch", manager.landCalls, manager.removeOptions)
 	}
 }

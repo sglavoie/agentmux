@@ -176,6 +176,8 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.confirmedWorktreeMutation(true)
 		case "worktree forget":
 			return m.confirmedWorktreeForget()
+		case "worktree land":
+			return m.confirmedWorktreeLand()
 		case asl.ConfirmStop:
 			return m.submitASLControl(aslbridge.MethodRunStopAfterCurrent)
 		case asl.ConfirmAbort:

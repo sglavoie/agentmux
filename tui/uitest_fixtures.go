@@ -1302,6 +1302,12 @@ func worktreeLifecycleFixture() uitestFixture {
 	deleteMerged.ReachableFromSource = &merged
 	unmergedEntry := base("wt-unmerged", "unmerged-project")
 	unmergedEntry.ReachableFromSource = &unmerged
+	two, none := 2, 0
+	unmergedEntry.Ahead, unmergedEntry.Behind = &two, &none
+	clean.Ahead, clean.Behind = &none, &none
+	diverged := base("wt-diverged", "diverged-project")
+	diverged.ReachableFromSource = &unmerged
+	diverged.Ahead, diverged.Behind = &two, &two
 	dirty := base("wt-dirty", "dirty-project")
 	dirty.Dirty = true
 	looping := base("wt-looping", "looping-project")
@@ -1314,7 +1320,7 @@ func worktreeLifecycleFixture() uitestFixture {
 	invalid := base("wt-invalid", "invalid-project")
 	invalid.Classification, invalid.Actionable = worktree.ClassificationMetadataInvalid, false
 	invalid.Warnings = []string{"metadata checksum mismatch"}
-	fx.Worktrees = []actions.WorktreeView{live, multi, resume, fresh, profile, clean, deleteMerged, unmergedEntry, dirty, looping, partial, missing, invalid}
+	fx.Worktrees = []actions.WorktreeView{live, multi, resume, fresh, profile, clean, deleteMerged, unmergedEntry, diverged, dirty, looping, partial, missing, invalid}
 	return fx
 }
 
