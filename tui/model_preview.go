@@ -130,7 +130,7 @@ func renderRootBody(m Model, chrome rootChrome) string {
 			popup = renderDeleteChoiceBox(m)
 		}
 		sb.WriteString(layout.CenterOverlay(base, popup, m.width, chrome.bodyHeight(), true))
-	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeCommandPalette, ModeASLResponse, ModeHealth, ModeSend:
+	case ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp, ModeDetail, ModeCommandPalette, ModeASLResponse, ModeHealth, ModeSend, ModePlanRun:
 		// Every one of these raises a popup over the view esc returns to, and
 		// activeRootMode is the one place that names that view — including for
 		// help, whose backdrop is its own return mode, and for the config
@@ -154,6 +154,8 @@ func renderRootBody(m Model, chrome rootChrome) string {
 			popup = renderASLResponseBox(m)
 		case ModeSend:
 			popup = renderSendBox(m)
+		case ModePlanRun:
+			popup = renderPlanRunBox(m)
 		case ModeHealth:
 			popup = renderHealthBox(m)
 		}

@@ -24,6 +24,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
+	"github.com/sglavoie/agentmux/tui/runform"
 	"github.com/sglavoie/agentmux/tui/sendform"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
@@ -529,6 +530,8 @@ type Model struct {
 	// send is the send form (ModeSend). It holds the operator's draft and is
 	// zeroed wholesale when the form closes.
 	send sendform.State
+	// planRun is the run form (ModePlanRun), zeroed wholesale when it closes.
+	planRun runform.State
 	// aslOperations is the bounded body-free receipt window shown next to the
 	// runs list, so an accepted submission can reach consumed after its form has
 	// already closed.
@@ -562,6 +565,7 @@ type Model struct {
 	plansIndex                *plans.Index
 	planCacheLoadInFlight     bool
 	planRefreshCommand        func(*plans.Index, *config.Config, int) tea.Cmd
+	planRunCommand            func(int, plans.PlanMeta, map[string]string) tea.Cmd
 	planSearchCommand         func(int, *plans.Index, plans.Query) tea.Cmd
 	sessionWarmRefreshCommand func(int, transcript.Query) tea.Cmd
 	sessionRefreshCommand     func(int) tea.Cmd
@@ -629,6 +633,7 @@ const (
 	ModeProjectSwitcher        // overlay choosing the dashboard's project scope
 	ModeHealth                 // scrollable details for every health check, from cached facts
 	ModeSend                   // text and keys for one tmux session, sent without attaching
+	ModePlanRun                // choices for starting an agent-session-loop run of one plan
 )
 
 // LivePickerPurpose names the caller that raised ModeLiveSessionPicker. The

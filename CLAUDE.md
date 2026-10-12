@@ -201,7 +201,8 @@ Command tree (`cmd/...`; every user-facing command lives in a child package):
   `open-dashboard`, overlays; the singleton rule), `cmd/project`,
   `cmd/config` (incl. `asl-sync`), `cmd/hooks`, `cmd/debug` (`debug`, `doctor`,
   `daemon audit`), `cmd/session` (conversation commands and root tab controls),
-  `cmd/worktree`, `cmd/transcripts`, `cmd/notifications`, `cmd/overseer`
+  `cmd/worktree`, `cmd/plans` (`amx plans run`; the family is never `plan`,
+  a retired name), `cmd/transcripts`, `cmd/notifications`, `cmd/overseer`
   (authorization surface for the ASL overseer), `cmd/release` and `cmd/tuitest`
   (hidden).
 
@@ -273,6 +274,12 @@ Shared and domain packages (`internal/...`):
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path
   and never touches the index or search sidecars.
+- `internal/planrun`: may a split plan be started, and what a supervising
+  agent types to start it. Both answers are ASL's (`asl status`, `preflight`,
+  `supervisor-guide`), read through one seam; it launches nothing. The
+  `plan.run` action (`internal/actions/plan.go`) picks the project and
+  profile and launches the session, for `amx plans run` and the Plans run
+  form (`R`, `tui/model_planrun.go`, `tui/runform`) alike.
 - `internal/cachefile`, `internal/searchstore`, `internal/searchquery`: atomic
   cache primitives, search sidecars, and what a search query means.
 - `internal/handoff`, `internal/worktree`: bounded handoff packs and managed
@@ -303,7 +310,8 @@ TUI (`tui/...`):
   values and return strings. Effects run in `tui/commands`.
 - Dependency direction: `tui` → `tui/sessionactions` → `tui/commands` →
   `tui/dashboard`; `tui/layout` and `tui/theme` have no in-repo dependencies.
-  Other leaves: `history`, `launch`, `plans`, `worktrees`, `asl`.
+  Other leaves: `history`, `launch`, `plans`, `runform`, `sendform`,
+  `worktrees`, `asl`.
 - `tui/overview` and `tui/customization` are standalone programs that root `tui`
   does not import. The overview is read-only toward Kitty except for actions the
   operator explicitly asks for.

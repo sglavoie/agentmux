@@ -425,11 +425,18 @@ See `docs/paired-releases.md`.
 
 These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
 
-- **Plans readiness and launch.** Agent Mux does not evaluate whether a plan is
-  ready to run, and does not start runs. Use `asl prepare` and `asl run`.
+- **Plan preparation.** Agent Mux starts a run of a plan that is already
+  loop-ready (`R` in Plans, `amx plans run`; see
+  [Starting a run of a plan](usage.md#starting-a-run-of-a-plan)) and reports
+  `asl preflight`'s findings for one that is not. It does not evaluate
+  readiness itself and repairs nothing: use `asl prepare` and
+  `asl preflight -m`. Readiness is asked for when a run is, so the Plans list
+  does not show it per row.
 - **Worktree-registry binding.** Runs are matched to managed worktrees by
   canonicalized workspace path, not by a shared registry identity.
 - **Assurance inbox.** Verification findings are visible in the Workbench, not
   as an Agent Mux queue.
 - **Model and profile brokering.** ASL chooses its own harness and model;
-  Agent Mux profiles do not override what a run launches.
+  Agent Mux profiles do not override what a run launches. The run form
+  forwards `--harness`, `--review-harness`, and the commit mode and nothing
+  else, and the profile it asks for is the supervising agent's.

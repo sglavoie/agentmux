@@ -130,3 +130,30 @@ func classifyPlanProject(meta PlanMeta, resolver projectresolve.Resolver) PlanMe
 	meta.Projects = projects
 	return meta
 }
+
+// Describe reads the identity of the one plan in planDir: its name and the
+// working directory it records, the way a refresh would. It reads no index
+// and no plan text, so a caller that only has to act on a plan pays for
+// neither. A directory that is not a plan is refused.
+func Describe(planDir string) (PlanMeta, error) {
+	absolute, err := filepath.Abs(planDir)
+	if err != nil {
+		return PlanMeta{}, fmt.Errorf("plans: resolving %s: %w", planDir, err)
+	}
+	info, err := os.Stat(absolute)
+	if err != nil {
+		return PlanMeta{}, fmt.Errorf("plans: %w", err)
+	}
+	if !info.IsDir() {
+		return PlanMeta{}, fmt.Errorf("plans: %s is not a directory", absolute)
+	}
+	if _, err := os.Stat(filepath.Join(absolute, "manifest.md")); err != nil {
+		return PlanMeta{}, fmt.Errorf("plans: %s holds no manifest.md, so it is not a split plan", absolute)
+	}
+	cwd, err := discoverPlanCWD(absolute, agentloop.DefaultStateRoot())
+	if err != nil {
+		return PlanMeta{}, err
+	}
+	base := filepath.Base(absolute)
+	return PlanMeta{Name: DisplayName(base), DirPath: absolute, CWD: cwd}, nil
+}

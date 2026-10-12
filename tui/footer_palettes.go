@@ -151,6 +151,7 @@ var planSearchFooterPalette = []footerEntry{
 	{"enter", "view", footerSectionRow, hasPlanResult, footerPriorityEssential},
 	{"o", "sort", footerSectionApp, footerAlways, footerPriorityPrimary},
 	{"O", "editor", footerSectionRow, hasPlanResult, footerPriorityPrimary},
+	{"R", "run", footerSectionRow, hasPlanResult, footerPrioritySecondary},
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		return selectedPlanSearchPath(m) != ""
 	}, footerPriorityExtra},
@@ -267,6 +268,15 @@ var sendFooterPalette = []footerEntry{
 	{"ctrl+s", "send text", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"tab", "text/keys", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"enter", "newline, or the key", footerSectionRow, footerAlways, footerPriorityPrimary},
+	{"esc", "close", footerSectionApp, footerAlways, footerPriorityEssential},
+}
+
+// planRunFooterPalette names the run form's keys. Every row is a choice, so
+// there is no text key: enter starts the run.
+var planRunFooterPalette = []footerEntry{
+	{"enter", "check and run", footerSectionRow, footerAlways, footerPriorityEssential},
+	{"h/l", "change", footerSectionRow, footerAlways, footerPriorityEssential},
+	{"j/k", "row", footerSectionRow, footerAlways, footerPriorityPrimary},
 	{"esc", "close", footerSectionApp, footerAlways, footerPriorityEssential},
 }
 

@@ -20,8 +20,8 @@ The binary is **`amx`**.
 - creates standalone handoff files and manages Git worktrees through safe reopen,
   cleanup, branch-retention, and metadata-recovery workflows,
 - syncs hook commands into each profile so tab icons track agent state,
-- answers, resumes, stops, and aborts in-flight `agent-session-loop` runs from
-  the `A` cockpit view,
+- starts an `agent-session-loop` run of a ready plan from the Plans view, and
+  answers, resumes, stops, and aborts in-flight runs from the `A` cockpit view,
 - keeps the current Kitty/daemon/tab-color workflow intact.
 
 The everyday commands beyond the dashboard (`amx`):
@@ -33,6 +33,7 @@ The everyday commands beyond the dashboard (`amx`):
 | `amx project list` / `launch` | list configured projects; launch one in a new tab |
 | `amx session list` / `search` / `show` / `continue` / `fork` / `handoff` | conversation continuity |
 | `amx worktree list` / `reopen` / `diff` / `land` / `remove` / `prune` | managed Git worktrees: reopen, review, land by fast-forward, clean up |
+| `amx plans run` | start an `agent-session-loop` run of a ready plan under a supervising agent (`R` in Plans); `--check` reports readiness only |
 | `amx mute-toggle` | mute or unmute a tab's notifications |
 | `amx notifications` / `snooze` / `test` | say where notifications go and whether they are snoozed; show, set, or clear the snooze; test notifications |
 | `amx daemon status` / `restart` | the always-on daemon |

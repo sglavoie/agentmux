@@ -566,9 +566,11 @@ the grid.
 ## The agent-session-loop cockpit
 
 **Show Runs** in the command palette opens the runs view: every active or
-actionable `agent-session-loop` run, newest need first. It is an *intervention* surface, not a loop runner. Agent Mux
+actionable `agent-session-loop` run, newest need first. It is an *intervention* surface, not a loop runner. The cockpit
 never starts, schedules, or tails a loop — start runs with `agent-session-loop`
-directly and use the cockpit to answer and steer the ones already in flight.
+directly, or from Plans, which launches an agent to supervise one
+([Starting a run of a plan](#starting-a-run-of-a-plan)), and use the cockpit to
+answer and steer the ones already in flight.
 
 Inside the runs view:
 
@@ -1200,6 +1202,65 @@ supports `j`/`k`, `g`/`G`, `Ctrl+d/u/f/b`, `n`/`N` to move between matches,
 `/` to refine the query, `y` to copy the selected raw line, `Y` to copy the plan
 directory, and `O` (or `e`) to open the plan directory in your editor. `esc` or
 `q` returns to the plan list, and pressing either again there leaves Plans.
+
+### Starting a run of a plan
+
+`R` on a plan opens the run form, and `amx plans run PLAN` is the same thing
+from a shell. Either one starts an `agent-session-loop` run by launching an
+ordinary managed session whose first prompt is agent-session-loop's own
+supervision skill (`/asl asl run PLAN_DIR` for Claude and Copilot, `$asl asl
+run PLAN_DIR` for Codex; Agent Mux reads the spelling from `asl
+supervisor-guide`). The run is supervised by an agent you can attach to, and
+it appears in the dashboard, the overview, and the runs view like any other.
+Agent Mux itself still runs no loop.
+
+The plan is checked before anything launches, and the check is
+agent-session-loop's, not Agent Mux's:
+
+- `asl preflight` has to pass. A finding that is not green, red or yellow,
+  refuses the run, and each one is shown as agent-session-loop worded it. A
+  plan that was reviewed but never marked loop-ready is the usual one;
+  preparing a plan stays with `asl prepare` and `asl preflight -m`.
+- A plan whose run holds agent-session-loop's lock is refused as running, and
+  one with no session left is refused as complete.
+
+The form has five rows, each a choice among a few values (`j`/`k` or `tab`
+moves between rows, `h`/`l` or `space` changes one, `enter` checks the plan
+and starts the run, `esc` closes):
+
+| Row | What it chooses |
+| --- | --- |
+| Project | the configured project the session launches from. The projects whose directory covers the plan's working directory are offered; a plan no project covers offers every project. |
+| Supervisor | the profile the supervising agent runs under. It follows the project and can be changed on its own. |
+| Harness | `asl run --harness`: what implements the plan's sessions. `asl default` passes nothing. |
+| Review harness | `asl run --review-harness`: a final review by a different harness. `none` passes nothing. |
+| Commit | `--commit-per-session` or `--commit-at-end`. `asl default` passes nothing. |
+
+The supervisor and the harness are independent: the first is the agent
+watching the run, the second is what the run launches for each session. The
+line under the rows is the `asl run` command the choices amount to. The
+session starts in the plan's own working directory, since that is where `asl
+run` reads its workspace from. A plan that is refused keeps the form open on
+its findings, and changing a row clears them.
+
+```bash
+amx plans run 2e774ec64570 --check          # readiness only; starts nothing and needs no backend
+amx plans run 2e774ec64570 --harness codex --review-harness claude --commit-per-session
+amx plans run ~/.local/share/agent-plans/2e774ec64570-1a09b1daef1c --project api --profile claude-work --backend tmux
+```
+
+`PLAN` is a plan directory, or a name under `plans_directory`: the exact one,
+or the start of it when only one plan begins that way. `--project` takes a
+title, or the `profile/title` identifier an ambiguity lists, and is needed
+only when the plan's working directory names no project or several; `--check`
+answers without one. Under `--json` a started run and a check are the usual
+data envelope (`started`, `readiness`, `command`, `project`, `profile`,
+`directory`, and for a started run `backend` and `runtime_session_id`). A plan
+that may not be started is the same envelope with `started: false`, a
+`readiness.state` of `not_ready`, `running`, or `complete`, its
+`readiness.findings`, and a quiet nonzero exit: that is a decision about the
+plan, not a failure to decide. Everything else (an unknown plan, an ambiguous
+project, an agent-session-loop that did not answer) is the error envelope.
 
 Project association is source-backed rather than inferred from plan prose.
 Agent Mux resolves the canonical plan workspace in this order: retained ASL

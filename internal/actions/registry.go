@@ -141,6 +141,10 @@ func validateEntities(definition Definition, request Request) error {
 			if request.Worktree == nil && strings.TrimSpace(request.Selector) == "" {
 				return &Error{Code: "missing_entity", Action: definition.ID, Message: "a worktree selector is required"}
 			}
+		case EntityPlan:
+			if request.Plan == nil {
+				return &Error{Code: "missing_entity", Action: definition.ID, Message: "a plan is required"}
+			}
 		default:
 			return &Error{Code: "invalid_action", Action: definition.ID, Message: fmt.Sprintf("unknown entity requirement %q", requirement.Kind)}
 		}

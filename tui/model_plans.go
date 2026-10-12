@@ -226,6 +226,11 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		return m.enterPlanView(m.planResults[m.planCursor].Meta)
+	case keyRunPlan:
+		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
+			return m, nil
+		}
+		return m.openPlanRunForm(m.planResults[m.planCursor].Meta)
 	case keySortPlan:
 		m.planSortMode = tuiplans.NextSortMode(m.planSortMode)
 		var anchor string

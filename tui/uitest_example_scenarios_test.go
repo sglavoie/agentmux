@@ -125,6 +125,8 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"picker-preview-fit.json":                              false,
 		"plan-search-header-narrow-fit.json":                   false,
 		"plan-search-narrow-fit.json":                          false,
+		"plan-run-form-wide.json":                              false,
+		"plan-run-refused-narrow-fit.json":                     false,
 		"plan-search-sort-rebind.json":                         false,
 		"plan-view-fit.json":                                   false,
 		"plan-view-narrow-fit.json":                            false,

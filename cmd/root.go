@@ -27,6 +27,7 @@ import (
 	"github.com/sglavoie/agentmux/cmd/hooks"
 	"github.com/sglavoie/agentmux/cmd/notifications"
 	"github.com/sglavoie/agentmux/cmd/overseer"
+	"github.com/sglavoie/agentmux/cmd/plans"
 	"github.com/sglavoie/agentmux/cmd/project"
 	"github.com/sglavoie/agentmux/cmd/release"
 	"github.com/sglavoie/agentmux/cmd/session"
@@ -163,7 +164,7 @@ func init() {
 		&cobra.Group{ID: groupTabs, Title: "Kitty tabs:"},
 		&cobra.Group{ID: groupSetup, Title: "Setup and diagnostics:"},
 	)
-	addGrouped(groupSessions, session.Command(), project.Command(), session.AttachCommand(), session.SendCommand(), session.CloseCommand(), worktree.Command(), dashboard.OverviewCommand(), dashboard.OpenDashboardCommand())
+	addGrouped(groupSessions, session.Command(), project.Command(), session.AttachCommand(), session.SendCommand(), session.CloseCommand(), worktree.Command(), plans.Command(), dashboard.OverviewCommand(), dashboard.OpenDashboardCommand())
 	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.NameSessionCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
 	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.BackendCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
 	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), release.DesktopCommand(), tuitest.Command(), dashboard.WorkspaceViewCommand())

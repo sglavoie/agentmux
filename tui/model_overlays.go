@@ -41,6 +41,8 @@ func (m Model) activeRootMode() Mode {
 		return ModeASLRuns
 	case ModeSend:
 		return ModeList
+	case ModePlanRun:
+		return ModePlanSearch
 	default:
 		return m.mode
 	}

@@ -411,6 +411,11 @@ func fallbackStatusText(m Model) string {
 			return "Runs: reply and resume"
 		}
 		return "Runs: reply"
+	case ModePlanRun:
+		if m.planRun.InFlight {
+			return "Plans: checking"
+		}
+		return "Plans: run"
 	case ModeSend:
 		if m.send.InFlight {
 			return "Send: sending"

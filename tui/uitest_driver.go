@@ -22,6 +22,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/planrun"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -821,6 +822,22 @@ func newUITestDriverUnder(m Model, size UITestSize, tempParent string) (*uitestD
 		return func() tea.Msg {
 			results, err := plans.Search(index, query)
 			return planSearchDoneMsg{seq: seq, results: results, err: err}
+		}
+	}
+	// The run form's submission would ask the operator's agent-session-loop
+	// about a plan and could launch an agent. The harness answers every one
+	// as a plan that is not ready, which is also the form's tallest state.
+	m.planRunCommand = func(seq int, plan plans.PlanMeta, _ map[string]string) tea.Cmd {
+		return func() tea.Msg {
+			readiness := planrun.Readiness{PlanDir: plan.DirPath, State: planrun.StateNotReady, Findings: []planrun.Finding{{
+				Severity: "yellow", Category: "manifest-readiness",
+				Message: "plan readiness state is 'reviewed'", Detail: "run preflight to advance to loop-ready when checks pass",
+			}}}
+			return planRunDoneMsg{
+				seq:    seq,
+				result: actions.Result{Action: actions.PlanRun, Data: map[string]any{actions.DataPlanReadiness: readiness}},
+				err:    &actions.Error{Code: "plan_not_ready", Action: actions.PlanRun, Message: readiness.Summary()},
+			}
 		}
 	}
 	m.sessionWarmRefreshCommand = func(seq int, query transcript.Query) tea.Cmd {

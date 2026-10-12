@@ -1,0 +1,16 @@
+{
+  "name": "plan-run-refused-narrow-fit",
+  "fixture": "basic",
+  "size": { "width": 60, "height": 30 },
+  "actions": [
+    { "type": "command", "command_id": "explore.search-plans" },
+    { "type": "key", "key": "R" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "plan_run" },
+    { "type": "contains_text", "text": "not ready to run" },
+    { "type": "contains_text", "text": "manifest-readiness" },
+    { "type": "no_layout_issues" }
+  ]
+}

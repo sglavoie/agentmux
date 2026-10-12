@@ -361,7 +361,7 @@ so it remains part of the attended live checklist in `docs/acceptance.md`.
 `help`, `health`, `detail`, `actions`, `session_search`, `session_view`,
 `delete_choice`, `chip_picker`, `message_detail`, `plan_search`, `plan_view`,
 `worktrees`, `live_session_picker`, `asl_runs`, `asl_response`,
-`project_switcher`, and `command_palette`. An unmapped mode reports `unknown`
+`project_switcher`, `command_palette`, `send`, and `plan_run`. An unmapped mode reports `unknown`
 rather than a bare integer, so a `mode_equals` assertion against a mode nobody
 named fails visibly.
 
@@ -534,6 +534,8 @@ file. The exact inventory is:
 | [`resize-stress.json`](scenarios/resize-stress.json) | `basic` | the dashboard survives a sequence of resizes and ends clean |
 | [`picker-fit.json`](scenarios/picker-fit.json) | `actions` | launch picker rows stay within width after pressing `l` |
 | [`picker-preview-fit.json`](scenarios/picker-preview-fit.json) | `actions` | launch picker list+preview split fits after pressing `l` then `p` |
+| [`plan-run-form-wide.json`](scenarios/plan-run-form-wide.json) | `basic` | `R` on a plan opens the run form over the Plans list; rows cycle with `h`/`l` and the `asl run` line follows the choices |
+| [`plan-run-refused-narrow-fit.json`](scenarios/plan-run-refused-narrow-fit.json) | `basic` | a plan agent-session-loop holds as not ready keeps the run form open on its findings, wrapped to a narrow width |
 | [`plan-search-header-narrow-fit.json`](scenarios/plan-search-header-narrow-fit.json) | `basic` | Plans header and filters fit at narrow width |
 | [`plan-search-narrow-fit.json`](scenarios/plan-search-narrow-fit.json) | `basic` | Plans results fit at narrow width |
 | [`plan-search-sort-rebind.json`](scenarios/plan-search-sort-rebind.json) | `basic` | `o` cycles the Plans sort order and the footer advertises `o sort`, not `s sort` |

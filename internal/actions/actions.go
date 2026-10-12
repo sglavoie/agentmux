@@ -15,6 +15,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/planrun"
+	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -50,6 +52,7 @@ const (
 	WorktreeEditor ID = "worktree.editor"
 	WorktreeRemove ID = "worktree.remove"
 	WorktreeForget ID = "worktree.forget"
+	PlanRun        ID = "plan.run"
 )
 
 // EntityKind identifies a typed target accepted by an action.
@@ -60,6 +63,7 @@ const (
 	EntityProject        EntityKind = "project"
 	EntityConversation   EntityKind = "conversation"
 	EntityWorktree       EntityKind = "worktree"
+	EntityPlan           EntityKind = "plan"
 )
 
 // EntityRequirement declares the target an action needs before it can run.
@@ -145,6 +149,9 @@ type Dependencies struct {
 	Launched        func(session.LaunchResult)
 	ActiveLoops     func() ([]agentloop.Candidate, error)
 	TranscriptIndex func() (*transcript.Index, error)
+	// ASL answers whether a plan may be started and how a supervising agent
+	// starts it; nil means the configured agent-session-loop command.
+	ASL planrun.ASL
 }
 
 // WorktreeLifecycle is the Git-authoritative inventory and cleanup boundary
@@ -161,12 +168,13 @@ type WorktreeLifecycle interface {
 
 // Request holds the typed targets and plain parameters supplied to one action.
 // Project is a configured launch template, while Session is an already-live
-// Kitty-backed session.
+// Kitty-backed session. Plan is a split plan directory.
 type Request struct {
 	Session      *session.RunningSession
 	Project      *config.Session
 	Conversation *transcript.SessionMeta
 	Worktree     *worktree.Entry
+	Plan         *plans.PlanMeta
 	Selector     string
 	Parameters   map[string]string
 	Confirmed    bool

@@ -1,0 +1,21 @@
+{
+  "name": "plan-run-form-wide",
+  "fixture": "basic",
+  "size": { "width": 120, "height": 34 },
+  "actions": [
+    { "type": "command", "command_id": "explore.search-plans" },
+    { "type": "key", "key": "R" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "l" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "plan_run" },
+    { "type": "contains_text", "text": "Run fixture plan" },
+    { "type": "contains_text", "text": "Supervisor" },
+    { "type": "contains_text", "text": "Review harness" },
+    { "type": "contains_text", "text": "--harness claude" },
+    { "type": "contains_text", "text": "enter check and run" },
+    { "type": "no_layout_issues" }
+  ]
+}

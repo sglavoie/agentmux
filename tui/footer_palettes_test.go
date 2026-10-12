@@ -243,7 +243,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   200,
 		want: []string{
-			"  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -251,8 +251,8 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back",
-			"  j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · O editor · R run · Y path · ? help",
+			"  esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -269,7 +269,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · r project · enter view · o sort · O editor · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{

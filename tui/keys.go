@@ -70,6 +70,7 @@ const (
 	keyPinProject           = "P" // ModePicker: pin/unpin the highlighted configured project
 	keyLaunchDirectory      = "d" // ModePicker: set the highlighted project's launch directory
 	keySortPlan             = "o" // ModePlanSearch: cycles the result-sort mode
+	keyRunPlan              = "R" // ModePlanSearch: open the run form for the plan under the cursor
 	keyPlanOpenEditor       = "e" // ModePlanSearch/ModePlanView: open the plan directory in the editor (O, as everywhere else, too)
 	keyToggleTimeline       = "t" // toggle flat list ↔ timeline in ModeDetail
 	keyToggleTimestamps     = "T" // toggle timestamp column in timeline (ModeDetail)

@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -25,6 +26,7 @@ func defaultDefinitions() []Definition {
 	projectRequirement := []EntityRequirement{{Kind: EntityProject, Description: "configured project"}}
 	conversationRequirement := []EntityRequirement{{Kind: EntityConversation, Description: "indexed conversation"}}
 	worktreeRequirement := []EntityRequirement{{Kind: EntityWorktree, Description: "managed worktree"}}
+	planRequirement := []EntityRequirement{{Kind: EntityPlan, Description: "split plan directory"}}
 	return []Definition{
 		{
 			ID: Focus, Label: "focus tab", Description: "focus the session's Kitty tab", Requires: sessionRequirement,
@@ -383,6 +385,20 @@ func defaultDefinitions() []Definition {
 			},
 			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
 				return forgetWorktree(ctx, deps, request)
+			},
+		},
+		{
+			ID: PlanRun, Label: "run plan", Description: "start an agent-session-loop run of a ready plan under a supervising agent", Requires: planRequirement,
+			Parameters: []ParameterSchema{
+				{Name: "project", Type: "string", Description: "configured project the supervising session launches from, when the plan's directory does not name exactly one"},
+				{Name: "profile", Type: "string", Description: "optional profile the supervising session launches under"},
+				{Name: "harness", Type: "string", Description: "harness that implements the plan's sessions; ASL's default when omitted", Enum: harness.Names()},
+				{Name: "review_harness", Type: "string", Description: "harness for a final review; none when omitted", Enum: harness.Names()},
+				{Name: "commit_mode", Type: "string", Description: "when the run commits; ASL's default when omitted", Enum: planCommitModes()},
+				{Name: "check", Type: "boolean", Description: "report readiness and start nothing"},
+			},
+			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
+				return runPlan(ctx, deps, request)
 			},
 		},
 	}

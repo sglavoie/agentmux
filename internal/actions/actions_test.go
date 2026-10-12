@@ -16,7 +16,7 @@ import (
 func TestDefaultRegistryHasStableDefinitions(t *testing.T) {
 	registry := DefaultRegistry()
 	got := registry.Definitions()
-	want := []ID{OpenDirectory, OpenEditor, ClearStatus, Close, Continue, CopyTitle, Focus, Fork, ForkWorktree, Handoff, Launch, MarkActive, Restart, ToggleLock, ToggleMute, WorktreeDiff, WorktreeEditor, WorktreeForget, WorktreeLand, WorktreeList, WorktreeRemove, WorktreeReopen, WorktreeShell, WorktreeShow}
+	want := []ID{PlanRun, OpenDirectory, OpenEditor, ClearStatus, Close, Continue, CopyTitle, Focus, Fork, ForkWorktree, Handoff, Launch, MarkActive, Restart, ToggleLock, ToggleMute, WorktreeDiff, WorktreeEditor, WorktreeForget, WorktreeLand, WorktreeList, WorktreeRemove, WorktreeReopen, WorktreeShell, WorktreeShow}
 	if len(got) != len(want) {
 		t.Fatalf("definition count = %d, want %d", len(got), len(want))
 	}
