@@ -92,7 +92,7 @@
       "presentation_changed_at_ms": 1700000050123,
       "branch": "main",
       "dirty": true,
-      "tab_color": "#5aa9ff",
+      "tab_color": "#8ab7e9",
       "name": "flaky login",
       "harness_icon": "🦊",
       "runtime": {
@@ -115,7 +115,7 @@
       "icon_state": "stop",
       "attention": true,
       "last_event_at": 1700000060,
-      "tab_color": "#ff6b5e",
+      "tab_color": "#e49591",
       "name": "billing fix",
       "harness_icon": "📟",
       "runtime": {

@@ -220,8 +220,8 @@ Whatever has the keyboard decides where a key goes.
   shows it too. The choice is kept across launches.
 - The button at the other end of the title bar, or **View › Toggle
   Inspector** (⌘⇧B), shows a second sidebar on the right, hidden until it is
-  asked for. Its **Waiting** tab lists every session waiting on you, the one
-  that has waited longest first (the order **F4** steps through), with why
+  asked for. Its **Waiting** tab lists every session waiting on you, in the
+  order the session list has them (the order **F4** steps through), with why
   and for how long; a click goes to the session as a click on its line in
   the session list does. Its **Session** tab says what the daemon knows
   about the session the pane is on (state, reason, times, flags, profile,
@@ -319,7 +319,7 @@ is committed.
 | Default | Does |
 | --- | --- |
 | ⌃⌥⌘A | Shows the workspace's Dashboard. Sent to Kitty in Preferences, it brings the dashboard running there forward, or opens one (`amx open-dashboard`). |
-| ⌃⌥⌘N | Focuses the next session needing attention, oldest first, across Kitty instances and the workspace: a tmux session opens in the workspace, a Kitty session in Kitty. Beeps when nothing waits. |
+| ⌃⌥⌘N | Focuses the next session needing attention, in the order the workspace lists sessions (projects by name, then each project's sessions as arranged there), across Kitty instances and the workspace: a tmux session opens in the workspace, a Kitty session in Kitty. Beeps when nothing waits. |
 
 Change or clear them in Preferences. They are Carbon hotkeys and need no
 Accessibility permission. Preferences warns when a shortcut is taken by the

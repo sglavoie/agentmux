@@ -70,14 +70,14 @@ func goldenCompanionSnapshotV2() CompanionSnapshot {
 		SessionID: "rs-0123456789abcdef0123456789abcdef", Backend: "kitty",
 		Instance: "unix:/tmp/kitty-100", Generation: "kitty-gen-1", Pane: "101",
 	}
-	s.Sessions[0].TabColor = "#5aa9ff"
+	s.Sessions[0].TabColor = "#8ab7e9"
 	s.Sessions[0].Name = "flaky login"
 	s.Sessions[0].HarnessIcon = "🦊"
 	s.Sessions = append(s.Sessions, CompanionSession{
 		Harness: "codex", Profile: "work", Project: "API",
 		Conversation: &conversation.Identity{Harness: "codex", SessionID: "019a-session"},
 		ASLRunID:     "run-2", IconState: "stop", Attention: true, LastEventAt: 1_700_000_060,
-		TabColor: "#ff6b5e", Name: "billing fix", HarnessIcon: "📟",
+		TabColor: "#e49591", Name: "billing fix", HarnessIcon: "📟",
 		Runtime: &CompanionRuntime{
 			SessionID: "rs-fedcba9876543210fedcba9876543210", Backend: "tmux",
 			Instance: "/tmp/amx-tmux.sock", Generation: "tmux-gen-1", Pane: "%7",

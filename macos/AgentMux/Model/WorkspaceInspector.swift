@@ -90,9 +90,9 @@ enum WorkspaceInspectorAction: CaseIterable, Equatable {
 /// The right sidebar as data, built from a snapshot so it can be tested
 /// without AppKit.
 ///
-/// It lists what the left sidebar does not: there the order never follows
-/// attention, here the sessions waiting on the operator are in the order
-/// the next-attention shortcut visits them, oldest first. Like a utility
+/// It lists what the left sidebar does not: only the sessions waiting on the
+/// operator, in the order the next-attention shortcut visits them, which is
+/// the order the left sidebar has them in. Like a utility
 /// view it is not a session and adds nothing to what counts as waiting.
 enum WorkspaceInspector {
     /// A state in words, for the states the palette draws as glyphs.
@@ -106,15 +106,16 @@ enum WorkspaceInspector {
         iconState.isEmpty ? idle : stateWords[iconState] ?? iconState
     }
 
-    /// The sessions waiting on the operator, the one that waited longest
-    /// first: the order `AttentionCycler` steps through.
+    /// The sessions waiting on the operator, in the order `AttentionCycler`
+    /// steps through: the sidebar's.
     static func waiting(
         _ sessions: [CompanionSession],
         snapshotSocket: String = "",
         now: Date = Date(),
-        glyphs: Glyphs = .bundled
+        glyphs: Glyphs = .bundled,
+        order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceWaitingRow] {
-        AttentionCycler.ordered(sessions, snapshotSocket: snapshotSocket).map { session in
+        AttentionCycler.ordered(sessions, snapshotSocket: snapshotSocket, order: order).map { session in
             let row = WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
             var detail = [session.reason.isEmpty ? word(for: session.iconState) : session.reason]
             if let changed = session.changedAt { detail.append(MenuBuilder.age(since: changed, now: now)) }

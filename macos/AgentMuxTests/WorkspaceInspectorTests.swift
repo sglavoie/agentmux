@@ -32,13 +32,13 @@ final class WorkspaceInspectorTests: XCTestCase {
 
     // MARK: Data
 
-    func testWaitingListsTheSessionsThatWaitOldestFirst() {
+    func testWaitingListsTheSessionsThatWaitInSidebarOrder() {
         let waiting = WorkspaceInspector.waiting(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
-        XCTAssertEqual(waiting.map(\.title), ["web — work", "api — personal"], "the one that waited longest comes first")
-        XCTAssertEqual(waiting.map(\.detail), ["needs permission · 9m · Kitty", "stopped · 5m"])
-        XCTAssertEqual(waiting.map(\.glyph), ["🔑", "🛑"])
+        XCTAssertEqual(waiting.map(\.title), ["api — personal", "web — work"], "not the one that waited longest first")
+        XCTAssertEqual(waiting.map(\.detail), ["stopped · 5m", "needs permission · 9m · Kitty"])
+        XCTAssertEqual(waiting.map(\.glyph), ["🛑", "🔑"])
         XCTAssertEqual(waiting.map(\.key), [
-            AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4), .embedded(F.runtimeID(2)),
+            .embedded(F.runtimeID(2)), AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4),
         ])
     }
 
@@ -149,14 +149,14 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.setInspectorCollapsed(false)
         XCTAssertEqual(workspace.inspector.tabs.label(forSegment: 0), "Waiting 2")
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 web — work", "🛑 api — personal"])
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🛑 api — personal", "🔑 web — work"])
 
-        lines[1].press()
+        lines[0].press()
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
         XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(2)),
                       "as a click on its line in the session list does")
 
-        lines[0].press()
+        lines[1].press()
         XCTAssertEqual(app.external.map(\.project), ["web"], "a Kitty session comes forward in Kitty")
 
         var settled = sessions

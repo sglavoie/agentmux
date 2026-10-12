@@ -276,8 +276,8 @@ struct PreferencesView: View {
                                        recorder: attentionRecorder, other: dashboardRecorder)
                 }
                 problem(for: HotKeyPreference.nextAttention)
-                note("Focuses the session that has waited longest on a stop, key, error, or question; "
-                    + "each press moves to the next. Both work from any app.")
+                note("Focuses the first session waiting on a stop, key, error, or question, in the order "
+                    + "the workspace lists them; each press moves to the next. Both work from any app.")
             }
 
             Section("Menu bar") {

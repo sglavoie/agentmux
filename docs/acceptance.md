@@ -626,7 +626,7 @@ macOS and Kitty versions beside the result:
 - [ ] **Dashboard shortcut.** ⌃⌥⌘A from another app brings the running
       dashboard forward, or opens one when none runs.
 - [ ] **Attention shortcut.** ⌃⌥⌘N cycles through every waiting session,
-      oldest first, and beeps when nothing waits.
+      in the workspace's sidebar order, and beeps when nothing waits.
 - [ ] **Actions.** Open Dashboard, Launch Project, Recent (including a
       conversation already live, which focuses instead of resuming twice), ⌥
       Mute and Unmute on a row, every Notifications snooze and Resume Now,

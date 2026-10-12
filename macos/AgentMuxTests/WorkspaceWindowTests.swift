@@ -385,6 +385,26 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
     }
 
+    func testASessionLineShowsTheDigitThatGoesToIt() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        // Sidebar order: api/personal, api/work, web/work.
+        let keys = try workspace.state.rows.map { try cell($0.key).keyLabel.stringValue }
+        XCTAssertEqual(keys, ["⌘1", "⌘2", "⌘3"])
+        // A view is not a place among the sessions.
+        let dashboard = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 1) as? WorkspaceRowCellView)
+        XCTAssertEqual(dashboard.keyLabel.stringValue, "")
+
+        // The number is the place, not the session: it follows a drag.
+        let api = workspace.state.rows.filter { $0.project == "api" }
+        XCTAssertTrue(workspace.moveItem(at: try index(of: api[1].key), to: try index(of: api[0].key)))
+        XCTAssertEqual(try cell(api[0].key).keyLabel.stringValue, "⌘2")
+        XCTAssertEqual(try cell(api[1].key).keyLabel.stringValue, "⌘1")
+
+        // The tenth is ⌘0, and past it a session has no key.
+        XCTAssertEqual(WorkspaceMenu.sessionKeys.count, 10)
+        XCTAssertNil(workspace.sessionKey(of: .embedded("rs-not-listed")))
+    }
+
     func testShiftRaisesAKittySessionInKitty() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         // An embedded session has nowhere else to go: it is focused here.

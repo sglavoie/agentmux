@@ -92,7 +92,8 @@ protocol WorkspaceDelegate: AnyObject {
 /// A terminal opened beside a session is such a view too, listed under that
 /// session's row instead of above the projects. It can be clicked and reached
 /// with the arrow keys or by stepping to the next or previous session; the
-/// digits count sessions only.
+/// digits count sessions only, and each of the first ten sessions shows its
+/// own on its line.
 ///
 /// A session's row can be dragged to another place among its project's
 /// sessions, and takes its terminals with it; a terminal can be dragged among
@@ -100,8 +101,9 @@ protocol WorkspaceDelegate: AnyObject {
 /// session, and the Workspace section stays as it is.
 ///
 /// On the other side of the pane is the inspector, hidden until it is asked
-/// for (`WorkspaceInspectorView`): the sessions waiting on the operator,
-/// oldest first, or what the daemon says about the session the pane is on.
+/// for (`WorkspaceInspectorView`): the sessions waiting on the operator, in
+/// the order they are listed here, or what the daemon says about the session
+/// the pane is on.
 /// It is not a session and not a view, never counts as waiting, starts
 /// nothing, and never takes the keyboard.
 @MainActor
@@ -913,6 +915,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         go(to: rows[index], raising: raising)
     }
 
+    /// The digit that goes to a session with ⌘, which its line shows; nil
+    /// past the tenth, which has none.
+    func sessionKey(of key: AttentionCycler.Key) -> String? {
+        guard let index = state.rows.firstIndex(where: { $0.key == key }),
+              WorkspaceMenu.sessionKeys.indices.contains(index) else { return nil }
+        return WorkspaceMenu.sessionKeys[index]
+    }
+
     /// An embedded session takes the keyboard either way. A Kitty session is
     /// only selected here, or with `raising` focused as a click does.
     private func go(to row: WorkspaceRow, raising: Bool) {
@@ -1217,7 +1227,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .row(row):
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
-            cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false)
+            cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
+                      sessionKey: sessionKey(of: row.key))
             cell.onClose = { [weak self] in self?.closeSession(row.key) }
             return cell
         }
@@ -1320,6 +1331,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             views.moveTerminal(view.id, before: next)
         }
         reloadSidebar()
+        // The waiting sessions are listed in the order they have here.
+        reloadInspector()
         return true
     }
 
@@ -1502,7 +1515,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         inspector.show(WorkspaceInspectorView.Model(
             tab: inspectorTab,
-            waiting: WorkspaceInspector.waiting(sessions, snapshotSocket: socket, now: now(), glyphs: glyphs),
+            waiting: WorkspaceInspector.waiting(sessions, snapshotSocket: socket, now: now(), glyphs: glyphs, order: order),
             inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs) },
             current: state.current
         ))
@@ -1860,7 +1873,8 @@ final class WorkspaceGroupCellView: NSTableCellView {
 
 /// A session's line: its state glyph, its profile, and a line of detail,
 /// with a × in the top right corner when the line can be closed. A session
-/// that was given a name has it on a line of its own above the profile.
+/// that was given a name has it on a line of its own above the profile, and
+/// one of the first ten has the key that goes to it in the bottom right.
 @MainActor
 final class WorkspaceRowCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.row")
@@ -1869,6 +1883,8 @@ final class WorkspaceRowCellView: NSTableCellView {
     let titleLabel = NSTextField(labelWithString: "")
     let detailLabel = NSTextField(labelWithString: "")
     let closeButton = NSButton(title: "", target: nil, action: nil)
+    /// `⌘1`: the key that goes to the session, empty when it has none.
+    let keyLabel = NSTextField(labelWithString: "")
     /// What the × does for the line shown now.
     var onClose: (() -> Void)?
 
@@ -1904,10 +1920,18 @@ final class WorkspaceRowCellView: NSTableCellView {
         closeButton.action = #selector(closePressed(_:))
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(closeButton)
+        keyLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        keyLabel.textColor = .tertiaryLabelColor
+        keyLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        keyLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(keyLabel)
         NSLayoutConstraint.activate([
             glyphLabel.widthAnchor.constraint(equalToConstant: 20),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4),
+            keyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            keyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 3),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
@@ -1936,6 +1960,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         titleLabel.textColor = color ?? .labelColor
         detailLabel.textColor = color?.withAlphaComponent(0.8) ?? .secondaryLabelColor
         closeButton.contentTintColor = color?.withAlphaComponent(0.8) ?? .tertiaryLabelColor
+        keyLabel.textColor = color?.withAlphaComponent(0.8) ?? .tertiaryLabelColor
     }
 
     required init?(coder: NSCoder) {
@@ -1953,14 +1978,16 @@ final class WorkspaceRowCellView: NSTableCellView {
         detailLabel.stringValue = view.detail
         toolTip = view.target.isEmpty ? view.detail : view.target
         setAccessibilityLabel("\(view.title), \(view.kind.rawValue) view")
+        keyLabel.stringValue = ""
         closeButton.isHidden = view.isPermanent
         closeButton.toolTip = "Close \(view.title)"
         closeButton.setAccessibilityLabel("Close \(view.title)")
     }
 
     /// Only an embedded session can be closed from here; `closing` is set
-    /// once it was asked to be.
-    func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false) {
+    /// once it was asked to be. `sessionKey` is the digit that goes to the
+    /// session with ⌘, when it has one.
+    func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil) {
         nameLabel.stringValue = row.name
         nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
@@ -1972,6 +1999,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         var spoken = (row.name.isEmpty ? [] : [row.name]) + [row.project, row.label]
         if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
         if !row.detail.isEmpty { spoken.append(row.detail) }
+        keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
+        if let sessionKey { spoken.append("Command \(sessionKey)") }
         setAccessibilityLabel(spoken.joined(separator: ", "))
         if closing { detailLabel.stringValue = "closing…" }
         closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing

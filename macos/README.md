@@ -789,13 +789,16 @@ Preferences override, the running dashboard's Kitty, the snapshot's, then each
 `/tmp/kitty-<pid>`. amx dials the socket itself, so only `kitty_unavailable`
 moves on to the next one.
 
-The next-attention shortcut orders the attention rows (stop, key, error,
-question) by the oldest `presentation_changed_at_ms`, the same order as the
-menu's Needs attention section. Each press focuses the one after the session
-the last press focused, and wraps after the last one. A session is its Kitty
-socket plus its window ID, so the cycle spans Kitty instances. When the session
-it last focused no longer waits, the cycle carries on from where that session
-stood instead of starting over. With nothing waiting, it beeps.
+The next-attention shortcut visits the attention rows (stop, key, error,
+question) in the order the workspace sidebar lists every session
+(`WorkspaceSidebar.ordered`): projects by name, then each project's sessions
+as they stand there, dragged or not. How long a session has waited moves
+nothing; the menu's Needs attention section is the one place that puts the
+longest-waiting first. Each press focuses the one after the session the last
+press focused, and wraps after the last one. A session is its Kitty socket
+plus its window ID, so the cycle spans Kitty instances. When the session it
+last focused no longer waits, or is gone, the cycle carries on from where
+that session stood instead of starting over. With nothing waiting, it beeps.
 
 A shortcut that cannot act beeps and leaves the reason as the menu's notice.
 Preferences records shortcuts, and a change is registered at once. It warns

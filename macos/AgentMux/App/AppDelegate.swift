@@ -1097,15 +1097,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
-    /// ⌃⌥⌘N: focuses the session that has waited longest, then the next on
-    /// each press, across every Kitty instance and the workspace's own
-    /// sessions.
+    /// ⌃⌥⌘N: focuses the first waiting session in the workspace sidebar's
+    /// order, then the next on each press, across every Kitty instance and
+    /// the workspace's own sessions.
     func focusNextAttention() {
         guard store.feed == .live, let snapshot = store.snapshot else {
             refuse("The session feed is not live.")
             return
         }
-        guard let session = cycler.advance(in: store.sessions, snapshotSocket: snapshot.kitty.socket) else {
+        let order = workspace?.order ?? (Self.isRunningTests ? WorkspaceOrder() : .load())
+        guard let session = cycler.advance(in: store.sessions, snapshotSocket: snapshot.kitty.socket, order: order) else {
             Self.logger.notice("next attention: nothing is waiting")
             NSSound.beep()
             return

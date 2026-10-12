@@ -2,15 +2,15 @@
   "active_fg": "#ffffff",
   "inactive_fg": "#aaaaaa",
   "colors": {
-    "green":  { "active_bg": "#2d7d46", "inactive_bg": "#1a4a2a", "bright_bg": "#3ddc66", "text_fg": [72, 200, 112], "emoji": "🟩" },
-    "blue":   { "active_bg": "#2d5a88", "inactive_bg": "#1a3655", "bright_bg": "#5aa9ff", "text_fg": [72, 144, 218], "emoji": "🟦" },
-    "red":    { "active_bg": "#8b2d2d", "inactive_bg": "#551a1a", "bright_bg": "#ff6b5e", "text_fg": [222, 72, 72], "emoji": "🟥" },
-    "orange": { "active_bg": "#8b5a2d", "inactive_bg": "#553a1a", "bright_bg": "#ff9f2e", "text_fg": [222, 144, 72], "emoji": "🟧" },
-    "purple": { "active_bg": "#5a2d8b", "inactive_bg": "#3a1a55", "bright_bg": "#b98cff", "text_fg": [144, 72, 222], "emoji": "🟪" },
-    "teal":   { "active_bg": "#2d7d7d", "inactive_bg": "#1a4a4a", "bright_bg": "#2fd9c4", "text_fg": [72, 200, 200], "emoji": "🟢" },
-    "pink":   { "active_bg": "#8b2d6a", "inactive_bg": "#551a42", "bright_bg": "#ff7ac6", "text_fg": [222, 72, 170], "emoji": "🟣" },
-    "yellow": { "active_bg": "#7d7d2d", "inactive_bg": "#4a4a1a", "bright_bg": "#ffd60a", "text_fg": [200, 200, 72], "emoji": "🟨" },
+    "green":  { "active_bg": "#2d7d46", "inactive_bg": "#1a4a2a", "bright_bg": "#7ad395", "text_fg": [72, 200, 112], "emoji": "🟩" },
+    "blue":   { "active_bg": "#2d5a88", "inactive_bg": "#1a3655", "bright_bg": "#8ab7e9", "text_fg": [72, 144, 218], "emoji": "🟦" },
+    "red":    { "active_bg": "#8b2d2d", "inactive_bg": "#551a1a", "bright_bg": "#e49591", "text_fg": [222, 72, 72], "emoji": "🟥" },
+    "orange": { "active_bg": "#8b5a2d", "inactive_bg": "#553a1a", "bright_bg": "#e4b176", "text_fg": [222, 144, 72], "emoji": "🟧" },
+    "purple": { "active_bg": "#5a2d8b", "inactive_bg": "#3a1a55", "bright_bg": "#bea7e9", "text_fg": [144, 72, 222], "emoji": "🟪" },
+    "teal":   { "active_bg": "#2d7d7d", "inactive_bg": "#1a4a4a", "bright_bg": "#72d1c9", "text_fg": [72, 200, 200], "emoji": "🟢" },
+    "pink":   { "active_bg": "#8b2d6a", "inactive_bg": "#551a42", "bright_bg": "#e49dca", "text_fg": [222, 72, 170], "emoji": "🟣" },
+    "yellow": { "active_bg": "#7d7d2d", "inactive_bg": "#4a4a1a", "bright_bg": "#e4d063", "text_fg": [200, 200, 72], "emoji": "🟨" },
     "gray":   { "active_bg": "#555555", "inactive_bg": "#333333", "bright_bg": "#c4c8cf", "text_fg": [150, 150, 150], "emoji": "⬜" },
-    "cyan":   { "active_bg": "#2d6a8b", "inactive_bg": "#1a4255", "bright_bg": "#3ccbff", "text_fg": [72, 170, 222], "emoji": "🔵" }
+    "cyan":   { "active_bg": "#2d6a8b", "inactive_bg": "#1a4255", "bright_bg": "#79cae9", "text_fg": [72, 170, 222], "emoji": "🔵" }
   }
 }

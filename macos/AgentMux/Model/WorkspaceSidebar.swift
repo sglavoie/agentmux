@@ -113,7 +113,8 @@ struct WorkspaceOrder: Equatable {
 /// The sidebar as data, built from a snapshot so it can be tested without
 /// AppKit: sessions grouped by project, each labeled with its profile.
 ///
-/// The order never follows attention. Projects sort by name, past any icon
+/// The order never follows attention; the next-attention shortcut follows
+/// it (`AttentionCycler`). Projects sort by name, past any icon
 /// the name leads with, and rows by
 /// profile, harness, and identity, unless the operator dragged a project's
 /// rows into an order of their own (`WorkspaceOrder`). Either way a session
@@ -142,6 +143,20 @@ enum WorkspaceSidebar {
             let rows = members.sorted { rowOrder($0, $1) }.map(\.1)
             return WorkspaceGroup(project: project, rows: order.arranged(rows, in: project))
         }
+    }
+
+    /// The sessions in the order `groups` lists them, which is the order the
+    /// next-attention shortcut steps through the ones that wait.
+    static func ordered(
+        _ sessions: [CompanionSession],
+        snapshotSocket: String = "",
+        order: WorkspaceOrder = WorkspaceOrder()
+    ) -> [CompanionSession] {
+        let byKey = Dictionary(
+            sessions.map { (AttentionCycler.key($0, snapshotSocket: snapshotSocket), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return groups(sessions, snapshotSocket: snapshotSocket, order: order).flatMap(\.rows).compactMap { byKey[$0.key] }
     }
 
     static func row(_ session: CompanionSession, snapshotSocket: String, now: Date, glyphs: Glyphs) -> WorkspaceRow {

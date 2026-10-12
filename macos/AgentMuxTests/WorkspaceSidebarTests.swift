@@ -249,7 +249,7 @@ final class WorkspaceSidebarTests: XCTestCase {
 
     // MARK: Mixed backends in the menu bar and the cycle
 
-    func testNextAttentionCyclesAcrossBackendsOldestFirst() {
+    func testNextAttentionCyclesAcrossBackendsInSidebarOrder() {
         let sessions = [
             F.tmux(1, project: "a", icon: "stop", attention: true, changedAtMS: ms(secondsAgo: 100)),
             F.kitty(4, project: "b", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 300)),
@@ -263,21 +263,21 @@ final class WorkspaceSidebarTests: XCTestCase {
             let session = cycler.advance(in: sessions, snapshotSocket: "unix:/tmp/kitty-1")
             visited.append(session?.project ?? "")
         }
-        XCTAssertEqual(visited, ["b", "c", "a", "e", "b"])
+        XCTAssertEqual(visited, ["a", "b", "c", "e", "a"], "however long each has waited")
 
         // The row each press focuses names where the session is.
         let rows = AttentionCycler.ordered(sessions, snapshotSocket: "unix:/tmp/kitty-1").map { MenuSessionRow.focusing($0) }
-        XCTAssertEqual(rows.map(\.runtimeSessionID), ["", F.runtimeID(2), F.runtimeID(1), ""])
-        XCTAssertEqual(rows.map(\.windowID), [4, 0, 0, 4])
+        XCTAssertEqual(rows.map(\.runtimeSessionID), [F.runtimeID(1), "", F.runtimeID(2), ""])
+        XCTAssertEqual(rows.map(\.windowID), [0, 4, 0, 4])
 
         // The session focused last settles and leaves; the cycle goes on from
         // where it stood instead of starting over.
         var after = sessions
         cycler = AttentionCycler()
         _ = cycler.advance(in: after, snapshotSocket: "unix:/tmp/kitty-1")
+        XCTAssertEqual(cycler.advance(in: after, snapshotSocket: "unix:/tmp/kitty-1")?.project, "b")
+        after[1].attention = false
         XCTAssertEqual(cycler.advance(in: after, snapshotSocket: "unix:/tmp/kitty-1")?.project, "c")
-        after[2].attention = false
-        XCTAssertEqual(cycler.advance(in: after, snapshotSocket: "unix:/tmp/kitty-1")?.project, "a")
     }
 
     func testMenuListsTmuxSessionsWithTheirAnswerItems() throws {
