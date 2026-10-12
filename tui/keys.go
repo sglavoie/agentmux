@@ -45,6 +45,7 @@ const (
 	keyDashboardLaunch = "C" // opens ModeConfigPicker for dashboard launch
 	keyClearStatus     = "x" // clears the highlighted session's icon
 	keyMarkActive      = "b" // marks the highlighted session active (⚡)
+	keySend            = "t" // opens the send form for the highlighted tmux session
 	keyOpenEditor      = "O" // opens the project directory in the configured editor
 	keyLock            = "L" // toggle the session lock (blocks close/restart/override)
 	keyM               = "m" // toggle session mute (suppresses notifications)

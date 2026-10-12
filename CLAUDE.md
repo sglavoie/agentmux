@@ -262,7 +262,10 @@ Shared and domain packages (`internal/...`):
   repeat writes nothing twice. The text travels on tmux's standard input and
   must never reach an argument list, an error, a log, or a journal. It is
   not an agent-session-loop reply: a session with a supervisor question open
-  is refused, since that answer belongs to the run's mailbox.
+  is refused, since that answer belongs to the run's mailbox. The
+  dashboard's send form (`t`, `tui/model_send.go`, `tui/sendform`) reaches
+  it through `commands.Portable.Send`, which runs `amx send --json`, so a
+  surface never holds a second copy of that decision.
 - `internal/transcript`, `internal/plans`: discovery, metadata caches, search,
   recovery. `transcript.History` is the overseer's metadata-only admission path
   and never touches the index or search sidecars.

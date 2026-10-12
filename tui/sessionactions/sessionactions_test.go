@@ -53,6 +53,7 @@ func TestDefinitionsInventory(t *testing.T) {
 		{commands.CopyTitleID, MenuGroupOpen, Mnemonic{"y", "y"}, "Copy title", "Copy Session Title", []string{"clipboard", "yank"}},
 		{commands.ToggleLockID, MenuGroupStatus, Mnemonic{"L", "L"}, "Lock/Unlock", "Lock Session", []string{"protect", "unlock"}},
 		{commands.ToggleMuteID, MenuGroupStatus, Mnemonic{"m", "m"}, "Mute/Unmute", "Mute Session", []string{"notifications", "unmute"}},
+		{commands.SendToSession, MenuGroupNone, Mnemonic{}, "", "Send to Session", []string{"answer", "keys", "prompt", "reply", "type"}},
 		{commands.SearchProject, MenuGroupNone, Mnemonic{}, "", "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}},
 		{commands.ShowDetails, MenuGroupNone, Mnemonic{}, "", "Show Session Details", []string{"events", "hooks"}},
 		{commands.ShowTimeline, MenuGroupNone, Mnemonic{}, "", "Show Session Timeline", []string{"events", "phases"}},

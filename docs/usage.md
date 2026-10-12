@@ -101,6 +101,19 @@ below for where each key went.
   An entry that cannot apply to the row is dimmed but still selectable, and the
   detail block under the list is where its reason is written. `Esc` or `q`
   closes the menu; `Ctrl+C` quits the dashboard
+- `t`: send to the selected tmux session without attaching. The form shows
+  the tail of the agent's screen and has two halves, with `Tab` moving between
+  them. In **Text**, `Enter` is a newline and `Ctrl+s` sends the draft as one
+  prompt, then closes the form. In **Keys**, each press of `0`-`9`, `y`, `n`,
+  an arrow, `Space`, or `Enter` is sent at once and the form stays open on the
+  screen that results; a row that is asking something opens there. `Esc`
+  closes. It is `amx send` underneath ([Answering or prompting an agent
+  without attaching](#answering-or-prompting-an-agent-without-attaching)), so
+  the same refusals apply: text is not typed onto a prompt, a key is not
+  pressed where nothing is asked, and a session running an agent-session-loop
+  run asks you to send a second time to confirm. The key is dead on a Kitty
+  row, and on a row whose run has a question open, which is answered from Runs.
+  Pasting into the form is not supported; pipe to `amx send --stdin` for that
 - `u`: relaunch the session you just closed, while the five-second recovery
   window named on the toast is still open
 - `:`: open the command palette; it is one line per command rather than a card,
@@ -151,7 +164,7 @@ longer dispatches. `:` does not open the palette from other modes.
 
 ### Upgrading from the old dashboard shortcuts
 
-The dashboard used to bind roughly thirty keys directly. It binds eleven now,
+The dashboard used to bind roughly thirty keys directly. It binds twelve now,
 and the rest of the capabilities moved to the two surfaces above — no capability
 was dropped. A retired key is *unbound* rather than rebound: pressing it does
 nothing at all, so nothing you remember can now mean something else.

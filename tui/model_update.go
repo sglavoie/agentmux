@@ -157,6 +157,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commands.AttachDoneMsg:
 		return m.handleAttachDone(msg)
 
+	case commands.SendDoneMsg:
+		return m.handleSendDone(msg)
+
+	case commands.SendScreenMsg:
+		return m.handleSendScreen(msg)
+
 	case commands.DetailEventsMsg:
 		return m.handleDetailEvents(msg)
 

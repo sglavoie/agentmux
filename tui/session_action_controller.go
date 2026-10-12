@@ -129,6 +129,9 @@ func sessionActionRunners() map[commands.ID]sessionactions.Effect[Model] {
 		commands.ToggleMuteID: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			return m, commands.ToggleMute(m.client, d.Target.Session)
 		},
+		commands.SendToSession: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
+			return m.openSendForm(d.Target.Session)
+		},
 		commands.SearchProject: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			updated, cmd := m.enterSessionSearchForProject(d.Target.Session.EffectiveProject())
 			return updated.(Model), cmd

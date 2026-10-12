@@ -1,7 +1,7 @@
 {
   "name": "command-palette-wide",
   "fixture": "basic",
-  "size": { "width": 120, "height": 40 },
+  "size": { "width": 120, "height": 44 },
   "actions": [{ "type": "key", "key": ":" }],
   "assertions": [
     { "type": "mode_equals", "mode": "command_palette" },
@@ -16,6 +16,6 @@
     { "type": "contains_text", "text": "─ Application ─" },
     { "type": "contains_text", "text": "Choose configured projects to launch." },
     { "type": "excludes_text", "text": "Browse all projects and harnesses" },
-    { "type": "contains_text", "text": "Command Palette: 31 results" }
+    { "type": "contains_text", "text": "Command Palette: 32 results" }
   ]
 }

@@ -42,6 +42,7 @@ fails there.
 | `l` | Launcher |
 | `s` | Past Sessions for the selected project |
 | `S` | All-project Past Sessions, newest activity first; clears previous history filters |
+| `t` | Send to the selected tmux session: answer its prompt or type its next one, without attaching |
 | `:` | Command palette |
 | `u` | Undo the last close (five-second window) |
 | `?` | Help |
@@ -55,7 +56,7 @@ to pane switching, and `Enter` keeps focusing but no longer shares the job with
 
 ## Command-backed bindings
 
-Each surviving row is one entry in `dashboardBindings()`, which is eleven entries
+Each surviving row is one entry in `dashboardBindings()`, which is twelve entries
 long. "Successor" names the surface that reaches the capability now. A palette
 entry exists for every command in this table — the catalog is the complete list
 — so "palette" never means "gone"; where something more direct exists, it is
@@ -76,6 +77,7 @@ named first.
 | `L` | `ToggleLockID` | Lock/unlock the session | **Retired** | actions `a`; palette |
 | `m` | `ToggleMuteID` | Mute/unmute notifications | **Retired** | actions `a`; palette |
 | `s` | `SearchProject` | Past Sessions scoped to this project | Survives (restored) | `s`; palette |
+| `t` | `SendToSession` | Send text or keys to a tmux session without attaching | **Added**; the key was never bound before, so nothing was retired to make room | `t`; palette |
 | `d` | `DismissDeprecation` | Silence the configuration deprecation notice | **Retired** | palette; the health details overlay's own `d`. The banner this used to hide is gone — the notice reads as the header's health indicator and as one issue in that overlay, and both recompute from the same dismissible issue |
 | `d` | `ShowDetails` | Per-session event detail overlay | **Retired** | inspector `i`; palette |
 | `T` | `ShowTimeline` | Per-session phase timeline | **Retired** | palette |

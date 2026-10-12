@@ -57,6 +57,10 @@ type PortableTerminals struct {
 	// workspace for a view of its own, and only a refusal falls back to
 	// taking over this terminal.
 	Desktop func(protocol.WorkspaceViewRequest) error
+	// Send writes input to a portable session's agent with nothing attached,
+	// under every rule `amx send` holds it to. Nil means sessions cannot be
+	// sent to from this surface.
+	Send func(session.RunningSession, SendRequest) (SendReport, error)
 }
 
 // Portable is the process's portable terminal set, installed once by the

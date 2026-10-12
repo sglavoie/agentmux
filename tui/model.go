@@ -24,6 +24,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
+	"github.com/sglavoie/agentmux/tui/sendform"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
@@ -525,6 +526,9 @@ type Model struct {
 	// question body and the operator's drafts and is zeroed wholesale on cancel,
 	// success, and mode exit.
 	aslResponse asl.ResponseState
+	// send is the send form (ModeSend). It holds the operator's draft and is
+	// zeroed wholesale when the form closes.
+	send sendform.State
 	// aslOperations is the bounded body-free receipt window shown next to the
 	// runs list, so an accepted submission can reach consumed after its form has
 	// already closed.
@@ -624,6 +628,7 @@ const (
 	ModeASLResponse            // answer editor and closure buttons for one ASL question
 	ModeProjectSwitcher        // overlay choosing the dashboard's project scope
 	ModeHealth                 // scrollable details for every health check, from cached facts
+	ModeSend                   // text and keys for one tmux session, sent without attaching
 )
 
 // LivePickerPurpose names the caller that raised ModeLiveSessionPicker. The

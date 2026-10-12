@@ -86,7 +86,7 @@ func selectTerminalsWith(requested string, kittyClient func() kitty.KittyClient)
 			launch = runtimesession.BackendKitty
 		}
 	}
-	commands.Portable = commands.PortableTerminals{Tmux: server, Launch: launch, Attach: attachCommandFor(server), Desktop: desktopViews}
+	commands.Portable = commands.PortableTerminals{Tmux: server, Launch: launch, Attach: attachCommandFor(server), Send: sendFor(server), Desktop: desktopViews}
 	if !hosted && launch == runtimesession.BackendTmux {
 		return nil, nil
 	}

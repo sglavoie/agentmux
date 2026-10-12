@@ -114,6 +114,8 @@ func renderFooter(m Model) string {
 		lines = footerHintLines(m, aslRunsFooterPalette, footerHintMaxLines)
 	case ModeASLResponse:
 		lines = footerHintLines(m, aslResponseFooterPalette, footerHintMaxLines)
+	case ModeSend:
+		lines = footerHintLines(m, sendFooterPalette, footerHintMaxLines)
 	case ModeMessageDetail:
 		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", renderFooterBinding("j/k", "scroll"), renderFooterBinding("ctrl+d/u", "half"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("y", "copy"), renderFooterBinding("esc/q/enter", "close")))
 	case ModeDeleteChoice:

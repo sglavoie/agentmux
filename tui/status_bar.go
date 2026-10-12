@@ -411,6 +411,14 @@ func fallbackStatusText(m Model) string {
 			return "Runs: reply and resume"
 		}
 		return "Runs: reply"
+	case ModeSend:
+		if m.send.InFlight {
+			return "Send: sending"
+		}
+		if m.send.FocusKeys {
+			return "Send: keys"
+		}
+		return "Send: text"
 	case ModeLiveSessionPicker:
 		return fmt.Sprintf("Choose live session: %d candidate%s", len(m.livePickerCandidates), plural(len(m.livePickerCandidates)))
 	default:

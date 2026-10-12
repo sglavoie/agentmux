@@ -80,6 +80,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.CopyTitleID, commands.GroupSession, "Copy Session Title", []string{"clipboard", "yank"}, ""},
 		{commands.ToggleLockID, commands.GroupSession, "Lock Session", []string{"protect", "unlock"}, ""},
 		{commands.ToggleMuteID, commands.GroupSession, "Mute Session", []string{"notifications", "unmute"}, ""},
+		{commands.SendToSession, commands.GroupSession, "Send to Session", []string{"answer", "keys", "prompt", "reply", "type"}, keySend},
 		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, keyProjectSessionSearch},
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
 		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
@@ -153,6 +154,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 	want := map[commands.ID]string{
 		commands.FocusSession:      keyEnter,
 		commands.SearchProject:     keyProjectSessionSearch,
+		commands.SendToSession:     keySend,
 		commands.FilterSessions:    keySlash,
 		commands.ClearFilters:      keyEsc,
 		commands.OpenLauncher:      keyL,
@@ -378,7 +380,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 31 {
-		t.Fatalf("clean catalog has %d visible commands, want 31", visible)
+	if visible != 32 {
+		t.Fatalf("clean catalog has %d visible commands, want 32", visible)
 	}
 }

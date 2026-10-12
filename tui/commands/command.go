@@ -29,6 +29,7 @@ const (
 	SearchProject      ID = "session.search-project-history"
 	ShowDetails        ID = "session.show-details"
 	ShowTimeline       ID = "session.show-timeline"
+	SendToSession      ID = "session.send"
 	FilterSessions     ID = "explore.filter-sessions"
 	CycleProfileFilter ID = "explore.cycle-profile-filter"
 	ClearFilters       ID = "explore.clear-filters"
@@ -140,6 +141,9 @@ const (
 	ReasonPreviewTooSmall = "terminal is too small for preview"
 	ReasonNothingToUndo   = "nothing to undo"
 	ReasonNoKittyTabs     = "there are no Kitty tabs to reorder"
+	ReasonSendNeedsTmux   = "only a tmux session can be sent to; type in its Kitty tab"
+	ReasonSendLost        = "the session's tmux server is gone"
+	ReasonSendASLQuestion = "answer its agent-session-loop question from Runs"
 )
 
 // Available is the affirmative availability verdict.

@@ -47,6 +47,7 @@ func dashboardBindings() commands.BindingSet {
 		// summary before it ever reaches here, by folding.
 		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "focus", Command: commands.FocusSession},
 		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project history", Command: commands.SearchProject},
+		{Keys: []string{keySend}, Display: keySend, Hint: "send", Command: commands.SendToSession},
 
 		// Navigate.
 		{Keys: []string{keyAllSessions}, Display: keyAllSessions, Hint: "past sessions", Command: commands.SearchAllSessions},

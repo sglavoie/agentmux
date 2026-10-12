@@ -39,6 +39,8 @@ func (m Model) activeRootMode() Mode {
 		return m.healthReturnMode
 	case ModeASLResponse:
 		return ModeASLRuns
+	case ModeSend:
+		return ModeList
 	default:
 		return m.mode
 	}

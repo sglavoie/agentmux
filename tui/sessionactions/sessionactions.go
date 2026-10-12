@@ -229,6 +229,12 @@ func requiresConfiguredProject(env Env, target Target) commands.Availability {
 	return commands.ConfiguredProjectAvailability(env.Config, target.Context())
 }
 
+// requiresSendable refuses a row that is not a live tmux session, and one
+// whose agent-session-loop question is open.
+func requiresSendable(_ Env, target Target) commands.Availability {
+	return commands.SendAvailability(target.Context())
+}
+
 // requiresClearableStatus refuses a row whose badge is not the kind an operator
 // can acknowledge away.
 func requiresClearableStatus(env Env, target Target) commands.Availability {
@@ -409,6 +415,13 @@ func Definitions() []Definition {
 		// Palette-only from here down. Each opens a surface of its own rather
 		// than acting on the row, which is why the per-row menu — a list an
 		// operator runs one entry from and closes — does not carry them.
+		{
+			ID:                 commands.SendToSession,
+			PaletteTitle:       static("Send to Session"),
+			PaletteDescription: "Answer the prompt a tmux session is showing, or type its next prompt, without attaching.",
+			PaletteAliases:     []string{"answer", "keys", "prompt", "reply", "type"},
+			Availability:       requiresSendable,
+		},
 		{
 			ID:                 commands.SearchProject,
 			PaletteTitle:       static("Search This Project's Past Sessions"),

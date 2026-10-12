@@ -722,6 +722,13 @@ func TestEveryCatalogCommandIsAvailableSomewhere(t *testing.T) {
 		m    Model
 	}{"projects view", projects})
 
+	// A third: sending needs a row that runs in tmux, where there is a pane to
+	// write to with nothing attached.
+	states = append(states, struct {
+		name string
+		m    Model
+	}{"tmux session", withListRows(testModelWithSessions(), tmuxTestRow("bolt"))})
+
 	for _, candidate := range commandCatalog() {
 		t.Run(string(candidate.ID), func(t *testing.T) {
 			for _, tc := range states {
