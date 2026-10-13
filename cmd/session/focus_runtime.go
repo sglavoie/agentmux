@@ -43,12 +43,13 @@ var (
 		}
 		return strings.TrimSpace(os.Getenv(runtimesession.EnvVar))
 	}
-	focusWorkspaceHosted = func() bool {
-		_, hosted := os.LookupEnv(tmux.WorkspaceHostEnv)
-		return hosted
-	}
-	focusLoadConfig    = config.LoadDefault
-	focusWorkspaceView = func(view protocol.WorkspaceViewRequest) error {
+	// focusWorkspaceHosted is whether this command itself was started by the
+	// workspace. A command typed in an agent's pane never is, whoever shows
+	// the pane: there the session's recorded owner answers
+	// (tmux.Switcher.Hosted).
+	focusWorkspaceHosted = attachHosted
+	focusLoadConfig      = config.LoadDefault
+	focusWorkspaceView   = func(view protocol.WorkspaceViewRequest) error {
 		_, err := ipc.NewClient().WorkspaceView(view)
 		return err
 	}
@@ -168,18 +169,26 @@ func runFocusRuntime(cmd *cobra.Command, named string, choose focusChoice) error
 	if !ok || target.RuntimeSessionID == "" {
 		return nil
 	}
-	if client == "" && focusWorkspaceHosted() {
+	store, err := runtimesession.NewStore(attachRegistryPath())
+	if err != nil {
+		return cli.CommandFailure(cmd, false, "registry_unavailable", err)
+	}
+	switcher := tmux.Switcher{Store: store, Backend: server, Fingerprint: attachFingerprint, Now: attachNow}
+	// With no terminal named, the one to move is whichever shows the current
+	// session, and a terminal of the workspace's is the workspace's to move.
+	hosted := client == "" && focusWorkspaceHosted()
+	if client == "" && !hosted {
+		if hosted, err = switcher.Hosted(id); err != nil {
+			return cli.CommandFailure(cmd, false, "registry_unavailable", err)
+		}
+	}
+	if hosted {
 		view := protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(target.RuntimeSessionID)}
 		if err := focusWorkspaceView(view); err != nil {
 			return cli.CommandFailure(cmd, false, "workspace_view_failed", fmt.Errorf("asking the workspace to show %s: %w", target.RuntimeSessionID, err))
 		}
 		return nil
 	}
-	store, err := runtimesession.NewStore(attachRegistryPath())
-	if err != nil {
-		return cli.CommandFailure(cmd, false, "registry_unavailable", err)
-	}
-	switcher := tmux.Switcher{Store: store, Backend: server, Fingerprint: attachFingerprint, Now: attachNow}
 	if client == "" {
 		viewer, err := switcher.Viewer(id)
 		if err != nil {

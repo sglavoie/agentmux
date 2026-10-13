@@ -301,7 +301,11 @@ Shared and domain packages (`internal/...`):
   `focus-prev-managed` (`cmd/session/focus_runtime.go`) take the neighbour in
   `session.Order` from `AMX_RUNTIME_SESSION_ID` or `--runtime-session` and
   switch `--client` (else the terminal attached to that session), or send a
-  `workspace_view` request when the workspace hosts them.
+  `workspace_view` request when the workspace hosts them. A command typed in
+  an agent's pane cannot see who views it (`AMX_WORKSPACE_HOSTED` never
+  reaches a pane), so that is read from the session's recorded owner
+  (`tmux.Switcher.Hosted`): the workspace's `amx attach` records an
+  `amx-workspace-` attachment, and whatever takes the session next replaces it.
   `amx send <runtime-session-id>` (`cmd/session/send.go`) writes text or
   named keys to an agent nobody is attached to, through `backend.Typist`
   (tmux only; `OpInput` is deliberately outside `backend.Operations`).

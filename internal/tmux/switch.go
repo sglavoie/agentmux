@@ -188,6 +188,44 @@ func (s Switcher) Viewer(id runtimesession.ID) (Client, error) {
 	return viewer, nil
 }
 
+// The owner the registry records for a session is named for what attached it.
+// An `amx attach` the desktop workspace runs in one of its own terminals
+// records a hosted one, and whatever takes the session next (an `amx attach`
+// in a plain terminal, a client switched to it) replaces that record. So the
+// record, not anything in the agent's environment, says whether the terminal
+// showing a session right now is the workspace's.
+const (
+	attachmentPrefix       = "amx-attach-"
+	hostedAttachmentPrefix = "amx-workspace-"
+)
+
+// AttachmentID names the ownership an `amx attach` records, from a token of
+// its own. hosted is whether the desktop workspace runs that attach
+// (WorkspaceHostEnv).
+func AttachmentID(hosted bool, token string) string {
+	if hosted {
+		return hostedAttachmentPrefix + token
+	}
+	return attachmentPrefix + token
+}
+
+// Hosted reports whether the terminal that owns runtime session id is one the
+// desktop workspace hosts. The workspace keeps its own account of which
+// session each of its terminals shows, so such a terminal is never switched:
+// the workspace is asked to show the other session instead. A session nobody
+// owns, or one a plain terminal took, is not hosted.
+func (s Switcher) Hosted(id runtimesession.ID) (bool, error) {
+	registry, err := s.Store.Load()
+	if err != nil {
+		return false, err
+	}
+	record, err := registry.Get(id)
+	if err != nil || record.State != runtimesession.StateLive || record.Attachment == nil {
+		return false, nil
+	}
+	return strings.HasPrefix(record.Attachment.ID, hostedAttachmentPrefix), nil
+}
+
 // owner is the client that attached last.
 func (s Survey) owner() (Client, bool) {
 	var last Client

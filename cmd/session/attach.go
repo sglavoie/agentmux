@@ -112,12 +112,18 @@ type attachData struct {
 // binary `go run` built for itself is gone by the time a key is pressed, and
 // is not offered.
 func attachView() tmux.AttachView {
-	_, hosted := os.LookupEnv(tmux.WorkspaceHostEnv)
-	view := tmux.AttachView{StatusLine: !hosted}
+	view := tmux.AttachView{StatusLine: !attachHosted()}
 	if bin, err := attachBinary(); err == nil && !cli.TransientBinary(bin) {
 		view.Amx = bin
 	}
 	return view
+}
+
+// attachHosted reports whether the desktop workspace runs this attach in one
+// of its own terminals.
+func attachHosted() bool {
+	_, hosted := os.LookupEnv(tmux.WorkspaceHostEnv)
+	return hosted
 }
 
 // tmuxAttacher is what attaching needs from the tmux backend.
@@ -284,5 +290,8 @@ func newAttachment() (runtimesession.Attachment, error) {
 	if _, err := rand.Read(b[:]); err != nil {
 		return runtimesession.Attachment{}, fmt.Errorf("naming attachment: %w", err)
 	}
-	return runtimesession.Attachment{ID: "amx-attach-" + hex.EncodeToString(b[:]), Client: fmt.Sprintf("amx attach (pid %d)", os.Getpid())}, nil
+	// The ID says whether the workspace hosts this terminal: the agent's own
+	// environment never learns who is viewing it, so a command typed in the
+	// pane reads it from here (tmux.Switcher.Hosted).
+	return runtimesession.Attachment{ID: tmux.AttachmentID(attachHosted(), hex.EncodeToString(b[:])), Client: fmt.Sprintf("amx attach (pid %d)", os.Getpid())}, nil
 }

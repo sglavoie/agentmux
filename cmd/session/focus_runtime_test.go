@@ -2,6 +2,10 @@ package session
 
 import (
 	"errors"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -295,6 +299,148 @@ func TestFocusHostedByTheWorkspaceAsksItToShowTheSession(t *testing.T) {
 	}
 	// The workspace's own terminal was not moved from under it.
 	w.on(t, client, "alpha", 1)
+}
+
+// attachAs runs the real `amx attach` on a pseudo-terminal of its own, as the
+// desktop workspace does in one of its terminals (hosted) or as an operator
+// does in a plain one, and returns once that terminal is the session's one
+// owner. The marker is in the environment of that attach alone: it is gone
+// again before anything else runs.
+func (w *focusWorld) attachAs(t *testing.T, title string, hosted bool) string {
+	t.Helper()
+	before, err := w.f.Backend.Survey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hosted {
+		t.Setenv(tmux.WorkspaceHostEnv, "1")
+	}
+	// Ownership is recorded and the client started before the marker goes,
+	// and before the next attach touches the command's flags.
+	started := make(chan *tmuxtest.Viewer, 1)
+	attachRunClient = func(client *exec.Cmd) error {
+		viewer := tmuxtest.StartViewer(t, client, 90, 24)
+		started <- viewer
+		for !viewer.Exited(time.Second) {
+		}
+		return nil
+	}
+	finished := make(chan error, 1)
+	go func() {
+		_, err := attachRun(t, string(w.id(title)))
+		finished <- err
+	}()
+	var viewer *tmuxtest.Viewer
+	select {
+	case viewer = <-started:
+	case err := <-finished:
+		t.Fatalf("attaching to %s: %v", title, err)
+	}
+	t.Cleanup(func() {
+		// Its terminal closes, and the attach releases what it still owns.
+		viewer.Close()
+		if err := <-finished; err != nil {
+			t.Errorf("attach to %s: %v", title, err)
+		}
+	})
+	if hosted {
+		if err := os.Unsetenv(tmux.WorkspaceHostEnv); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var name string
+	w.eventually(t, "the new terminal alone on "+title, func(s tmux.Survey) bool {
+		clients := s.ClientsOf(w.pane(title))
+		if len(clients) != 1 {
+			return false
+		}
+		name = clients[0].Name
+		_, old := before.Client(name)
+		return !old
+	})
+	return name
+}
+
+// A focus command typed in an agent's pane has that session's environment,
+// which never says who is viewing it. Whether the terminal showing the pane
+// is the workspace's is read from the session's recorded owner, and follows
+// ownership as it moves between the workspace and a plain terminal.
+func TestFocusHostedPaneUsesWorkspaceOwner(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("uses BSD script(1) for a pseudo-terminal")
+	}
+	w := newFocusWorld(t)
+	previousTerminal, previousRun := attachIsTerminal, attachRunClient
+	attachIsTerminal = func() bool { return true }
+	t.Cleanup(func() { attachIsTerminal, attachRunClient = previousTerminal, previousRun })
+	// The production answers: nothing here says "hosted" but the attach the
+	// workspace ran.
+	focusWorkspaceHosted = attachHosted
+	inPane := func(title string) {
+		t.Helper()
+		currentRuntimeSession = func() string { return string(w.id(title)) }
+		if _, marked := os.LookupEnv(tmux.WorkspaceHostEnv); marked {
+			t.Fatal("the pane's command carries the workspace's marker")
+		}
+		if err := runFocus(t, focusNextManagedCmd, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view := func(title string) protocol.WorkspaceViewRequest {
+		return protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(w.id(title))}
+	}
+
+	// The workspace shows alpha: it is asked for bravo, and its terminal is
+	// not moved from under it.
+	embedded := w.attachAs(t, "alpha", true)
+	inPane("alpha")
+	if len(w.views) != 1 || w.views[0] != view("bravo") {
+		t.Fatalf("workspace views = %+v, want %+v", w.views, view("bravo"))
+	}
+	w.on(t, embedded, "alpha", 1)
+	if record, err := w.f.Load(t).Get(w.id("bravo")); err != nil || record.Attachment != nil {
+		t.Fatalf("bravo's owner = %+v, %v; the workspace was only asked", record.Attachment, err)
+	}
+	// The agent's environment was told nothing about its viewer.
+	for _, scope := range [][]string{{"-g"}, {"-t", w.pane("alpha").ID}} {
+		args := append([]string{"-S", w.f.Server.Socket(), "show-environment"}, scope...)
+		environment, err := exec.Command(w.f.Server.Binary(), args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("show-environment %v: %v: %s", scope, err, environment)
+		}
+		if strings.Contains(string(environment), tmux.WorkspaceHostEnv) {
+			t.Fatalf("the environment (%v) names the session's viewer:\n%s", scope, environment)
+		}
+	}
+
+	// A plain terminal takes alpha: the workspace's terminal is detached, and
+	// the same command now switches the plain one.
+	plain := w.attachAs(t, "alpha", false)
+	if plain == embedded {
+		t.Fatalf("the plain terminal is the workspace's (%s)", plain)
+	}
+	inPane("alpha")
+	w.on(t, plain, "bravo", 1)
+	if len(w.views) != 1 {
+		t.Fatalf("a plain terminal's command asked the workspace: %+v", w.views)
+	}
+
+	// The workspace takes bravo back from it, and is asked again.
+	embedded = w.attachAs(t, "bravo", true)
+	inPane("bravo")
+	if len(w.views) != 2 || w.views[1] != view("charlie") {
+		t.Fatalf("workspace views = %+v, want a second one for %+v", w.views, view("charlie"))
+	}
+	w.on(t, embedded, "bravo", 1)
+
+	// A terminal that is named is switched whoever owns the session.
+	if err := runFocus(t, focusNextManagedCmd, map[string]string{"runtime-session": string(w.id("bravo")), "client": embedded}); err != nil {
+		t.Fatal(err)
+	}
+	w.on(t, embedded, "charlie", 1)
+	if len(w.views) != 2 {
+		t.Fatalf("a named terminal asked the workspace: %+v", w.views)
+	}
 }
 
 func TestMuteToggleWithoutAFlagMutesTheCurrentRuntimeSession(t *testing.T) {

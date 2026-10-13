@@ -921,8 +921,10 @@ What changes for a tmux session, and only for it:
   terminal that arrives is the session's one owner: any other terminal there
   is detached. It never arrives at an agent that exited or was lost, which is
   refused with the same codes `amx attach` uses. Run from a view the desktop
-  workspace hosts, the same commands ask the workspace to show the session
-  instead.
+  workspace hosts, or typed in a session the workspace is showing, the same
+  commands ask the workspace to show the session instead; once a plain
+  terminal attaches to that session they switch that terminal again. A
+  terminal named by `--client` is always switched.
 - **The dashboard is a popup over the session.** From an attached terminal
   the dashboard and the overview open over the session you are in, selected
   on it. `enter` on a row switches the terminal to that session and closes
