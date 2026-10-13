@@ -19,6 +19,18 @@ var focusPrevManagedWindowID int
 var focusNextManagedWindowID int
 var focusNextWindowID int
 
+// focusRuntimeHelp is the part of each focus command's help about sessions
+// outside Kitty.
+const focusRuntimeHelp = `
+
+A session on the tmux backend has no Kitty tab. From one, the command works on
+the runtime session it runs in (AMX_RUNTIME_SESSION_ID, or --runtime-session):
+the sessions are taken in the order the dashboard lists them, and the terminal
+attached to the current one is switched to the session chosen. --client names
+that terminal, as the keys bound in the private tmux configuration do. The
+terminal never lands on an agent that exited or was lost, and the session it
+arrives at has no other terminal left attached.`
+
 var focusPrevManagedCmd = &cobra.Command{
 	Use:   "focus-prev-managed",
 	Short: "Focus the previous managed tab",
@@ -26,8 +38,11 @@ var focusPrevManagedCmd = &cobra.Command{
 current Kitty OS window. Wraps around from the beginning.
 
 KITTY_WINDOW_ID must be set (provided automatically by Kitty launches),
-or supply --window-id explicitly.`,
-	RunE: func(_ *cobra.Command, _ []string) error {
+or supply --window-id explicitly.` + focusRuntimeHelp,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		if id, ok := focusRuntimeSession(cmd, focusPrevManagedWindowID); ok {
+			return runFocusRuntime(cmd, id, neighborSession(-1))
+		}
 		return runFocusManaged(focusPrevManagedWindowID, -1)
 	},
 }
@@ -39,8 +54,11 @@ var focusNextManagedCmd = &cobra.Command{
 Kitty OS window. Wraps around from the end.
 
 KITTY_WINDOW_ID must be set (provided automatically by Kitty launches),
-or supply --window-id explicitly.`,
-	RunE: func(_ *cobra.Command, _ []string) error {
+or supply --window-id explicitly.` + focusRuntimeHelp,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		if id, ok := focusRuntimeSession(cmd, focusNextManagedWindowID); ok {
+			return runFocusRuntime(cmd, id, neighborSession(1))
+		}
 		return runFocusManaged(focusNextManagedWindowID, 1)
 	},
 }
@@ -53,8 +71,13 @@ var focusNextCmd = &cobra.Command{
 Wraps around from the end.
 
 KITTY_WINDOW_ID must be set (provided automatically by harness hooks),
-or supply --window-id explicitly.`,
-	RunE: runFocusNext,
+or supply --window-id explicitly.` + focusRuntimeHelp,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if id, ok := focusRuntimeSession(cmd, focusNextWindowID); ok {
+			return runFocusRuntime(cmd, id, nextAttentionSession)
+		}
+		return runFocusNext(cmd, args)
+	},
 }
 
 func init() {
@@ -64,6 +87,9 @@ func init() {
 		"Kitty window ID of the current tab (defaults to $KITTY_WINDOW_ID)")
 	focusNextCmd.Flags().IntVar(&focusNextWindowID, "window-id", 0,
 		"Kitty window ID of the current tab (defaults to $KITTY_WINDOW_ID)")
+	for _, cmd := range []*cobra.Command{focusPrevManagedCmd, focusNextManagedCmd, focusNextCmd} {
+		addFocusRuntimeFlags(cmd)
+	}
 }
 
 func runFocusManaged(windowID, direction int) error {

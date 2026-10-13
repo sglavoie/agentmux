@@ -57,6 +57,13 @@ type PortableTerminals struct {
 	// workspace for a view of its own, and only a refusal falls back to
 	// taking over this terminal.
 	Desktop func(protocol.WorkspaceViewRequest) error
+	// Switch moves the terminal this surface is a popup over to a portable
+	// session. Nil for a surface that owns its terminal. When it is set the
+	// surface is the dashboard of that one terminal: showing a session
+	// switches the terminal to it, and the surface then ends, which closes
+	// the popup. Attaching from inside the popup would nest a second client
+	// in it instead.
+	Switch func(session.RunningSession) error
 	// Send writes input to a portable session's agent with nothing attached,
 	// under every rule `amx send` holds it to. Nil means sessions cannot be
 	// sent to from this surface.
@@ -244,6 +251,16 @@ func portableID(rs session.RunningSession) int {
 	return id
 }
 
+// PortableSelection is the ID a surface is started with to open on the
+// portable session of runtime session id: the process-local ID that session
+// is listed under once it is discovered.
+func PortableSelection(id runtimesession.ID) int {
+	if id == "" {
+		return 0
+	}
+	return portableID(session.RunningSession{RuntimeSessionID: id})
+}
+
 // IsPortable reports a session hosted outside Kitty.
 func IsPortable(rs session.RunningSession) bool {
 	return rs.BackendKind() != runtimesession.BackendKitty
@@ -397,14 +414,27 @@ func overlayPortableState(sessions []session.RunningSession, resp *protocol.Resp
 }
 
 // AttachDoneMsg reports that an attached view ended: the operator detached,
-// or the attach could not start.
-type AttachDoneMsg struct{ Err error }
+// or the attach could not start. Switched says the session is now shown by
+// the terminal under this surface, so the surface has nothing left to do but
+// get out of its way.
+type AttachDoneMsg struct {
+	Err      error
+	Switched bool
+}
 
 // Attach shows a portable session. Hosted by the desktop workspace, that is
 // the workspace's own view of the session, and this surface carries on at
-// once. Anywhere else, or when the workspace cannot show it, this terminal is
-// handed to the session until the operator detaches.
+// once. In a popup over an attached terminal, that terminal is switched to
+// the session and the surface ends. Anywhere else, or when the workspace
+// cannot show it, this terminal is handed to the session until the operator
+// detaches.
 func Attach(rs session.RunningSession) tea.Cmd {
+	if switchTo := Portable.Switch; switchTo != nil {
+		return func() tea.Msg {
+			err := switchTo(rs)
+			return AttachDoneMsg{Err: err, Switched: err == nil}
+		}
+	}
 	here := attachHere(rs)
 	desktop := Portable.Desktop
 	if desktop == nil || rs.RuntimeSessionID == "" {

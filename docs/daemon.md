@@ -388,7 +388,8 @@ companion snapshot within about 2s. A notification raised inside that window
 is not yet suppressed.
 
 A tmux session is muted the same way, by `amx mute-toggle --runtime-session`
-or the dashboard: the variable is on its pane, and the daemon reads it in the
+(or with no flag from inside the session, which is what F10 in an attached
+terminal runs) or the dashboard: the variable is on its pane, and the daemon reads it in the
 runtime reconciliation pass (`observeRuntimeMutes`), which is that session's
 only source of a mute. Its own hooks carry no Kitty snapshot and leave the
 cache alone. The lag is that pass's interval.

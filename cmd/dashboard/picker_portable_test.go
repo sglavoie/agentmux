@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
@@ -284,7 +285,7 @@ func TestDashboardOutsideKittyOpensInThisTerminalAndAsksKittyNothing(t *testing.
 
 	// Twice: a second invocation is a second view, not a search for the first.
 	for range 2 {
-		if err := Run(0, ""); err != nil {
+		if err := Run(0, "", View{}); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 	}
@@ -299,14 +300,20 @@ func TestDashboardOutsideKittyOpensInThisTerminalAndAsksKittyNothing(t *testing.
 }
 
 // The keybinding reference outside Kitty opens in this terminal without
-// looking for another.
+// looking for another, and lists the keys the tmux configuration binds.
 func TestKeybindingsOutsideKittyOpenInThisTerminal(t *testing.T) {
 	newPortableWorld(t)
-	old := runKeybindingsOverlay
-	t.Cleanup(func() { runKeybindingsOverlay = old })
-	opened := 0
-	runKeybindingsOverlay = func() error { opened++; return nil }
-	if err := KeybindingsCommand().RunE(KeybindingsCommand(), nil); err != nil || opened != 1 {
-		t.Fatalf("keybindings: %v, opened %d times", err, opened)
+	old := runKeybindingsReference
+	t.Cleanup(func() { runKeybindingsReference = old })
+	var shown [][]kittykeys.Action
+	runKeybindingsReference = func(actions []kittykeys.Action) error {
+		shown = append(shown, actions)
+		return nil
+	}
+	if err := KeybindingsCommand().RunE(KeybindingsCommand(), nil); err != nil || len(shown) != 1 {
+		t.Fatalf("keybindings: %v, opened %d times", err, len(shown))
+	}
+	if len(shown[0]) != len(kittykeys.Tmux) || shown[0][0] != kittykeys.Tmux[0] {
+		t.Fatalf("the reference outside Kitty lists %d keys; want the tmux table", len(shown[0]))
 	}
 }

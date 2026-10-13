@@ -207,6 +207,12 @@ func liveLine(live *liveConversation) string {
 	if live == nil {
 		return "no"
 	}
+	if live.RuntimeSessionID != "" {
+		if live.Here {
+			return fmt.Sprintf("open in this session (%s)", live.RuntimeSessionID)
+		}
+		return fmt.Sprintf("open in tmux session %s (amx attach shows it)", live.RuntimeSessionID)
+	}
 	if live.Here {
 		return fmt.Sprintf("open in this Kitty window (%d)", live.WindowID)
 	}

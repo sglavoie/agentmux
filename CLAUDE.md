@@ -101,6 +101,17 @@ attention, or launch anything. A waiting row's Answer… button
 answer panel; whether anything may be sent stays theirs and `amx send`'s to
 decide.
 
+A plain terminal attached to a tmux session has the same keys from the
+private tmux configuration: `kittykeys.Tmux` generates the `bind-key` lines
+`tmux.Config` holds (overlays as `display-popup`, the rest as `run-shell`),
+and `TestTmuxFunctionKeysMatchKitty` holds that table to `kittykeys.Actions`.
+A key's amx runs in the session's environment, so it learns its runtime
+session from `AMX_RUNTIME_SESSION_ID`; only `run-shell` expands formats, so
+only the focus keys name `#{client_name}`. The amx they run is `AMX_BIN` in
+the server's environment, which `amx attach` sets (`tmux.AttachView.Amx`),
+because a server keeps the PATH of whatever started it. A popup is a view,
+never a session.
+
 F1 to F11 do in the workspace what Kitty binds them to
 (`WorkspaceMenu.functionKeys`, the main menu's only keys with no modifier):
 the reference and the icon and color pickers are overlay views of their own
@@ -266,6 +277,16 @@ Shared and domain packages (`internal/...`):
   pass is the focus observation of a tmux session: a terminal that attached
   or was used after the session came to rest clears its unseen bit
   (`observeRuntimeViewers`); one merely still attached clears nothing.
+  A terminal already attached goes to another session by
+  `tmux.Backend.SwitchClient` (`internal/tmux/switch.go`), never by `Focus`,
+  which stays unsupported: the move detaches the target's other terminals in
+  the same client invocation and refuses a pane that is gone or exited, and
+  `tmux.Switcher` adds the registry validation and the owner record
+  `amx attach` keeps. `amx focus-next`, `focus-next-managed`, and
+  `focus-prev-managed` (`cmd/session/focus_runtime.go`) take the neighbour in
+  `session.Order` from `AMX_RUNTIME_SESSION_ID` or `--runtime-session` and
+  switch `--client` (else the terminal attached to that session), or send a
+  `workspace_view` request when the workspace hosts them.
   `amx send <runtime-session-id>` (`cmd/session/send.go`) writes text or
   named keys to an agent nobody is attached to, through `backend.Typist`
   (tmux only; `OpInput` is deliberately outside `backend.Operations`).
@@ -344,6 +365,14 @@ TUI (`tui/...`):
   ended, keeps its rows on the list (`commands.PortableOutage`, carried as
   `SessionsMsg.PortableErr`); rows kept that way are not evidence that
   anything is running, so `LiveSessions` never counts them.
+- In a popup over a terminal attached to a tmux session
+  (`commands.Portable.Switch`, set only by `cmd/dashboard`'s `terminalView`
+  for `--popup` or `--client`), showing a session switches that terminal
+  (`tmux.Switcher`) and the surface ends, which closes the popup; it never
+  attaches from inside one. The popup is that terminal's one dashboard: tmux
+  ignores a second popup. A surface opens on a session's row through
+  `commands.PortableSelection`, not `amx_dashboard_select`, which stays
+  Kitty's.
 - Hosted by the desktop workspace (`commands.Portable.Desktop`, set only by
   `amx workspace-view`), the TUI asks the daemon to have the workspace show
   things instead of taking over its own terminal: `commands.Attach`, the pager,

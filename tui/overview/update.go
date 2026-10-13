@@ -364,6 +364,11 @@ func (m model) focusCapturedTab(tabID int) (model, tea.Cmd) {
 func (m model) handleAttachDone(msg commands.AttachDoneMsg) (tea.Model, tea.Cmd) {
 	m.focusTabID = 0
 	m.focusErr = msg.Err
+	// An overview that is a popup over the terminal it just switched is in
+	// the way of the session it was asked to show.
+	if msg.Switched {
+		return m.dismiss()
+	}
 	return m, nil
 }
 

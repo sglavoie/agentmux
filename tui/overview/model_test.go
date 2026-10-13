@@ -1606,3 +1606,21 @@ func TestFeedbackNamesATmuxOutageWhileItsTilesAreKept(t *testing.T) {
 		t.Fatalf("feedback after recovery = %q; want silence", got)
 	}
 }
+
+// An overview that is a popup over a terminal switched that terminal to the
+// tile chosen, so it gets out of the way; an attached view that came back, or
+// a switch that was refused, leaves it up.
+func TestAPopupOverviewEndsOnceItsTerminalIsSwitched(t *testing.T) {
+	m, _ := newTestModel(0)
+	if _, cmd := m.Update(commands.AttachDoneMsg{Switched: true}); !quits(t, cmd) {
+		t.Fatal("the popup stayed over the session it switched the terminal to")
+	}
+	if _, cmd := m.Update(commands.AttachDoneMsg{}); quits(t, cmd) {
+		t.Fatal("returning from an attached session ended the overview")
+	}
+	failure := errors.New("the agent exited")
+	next, cmd := m.Update(commands.AttachDoneMsg{Err: failure})
+	if quits(t, cmd) || !errors.Is(next.(model).focusErr, failure) {
+		t.Fatalf("refused switch: quit=%v err=%v, want the reason shown and the overview kept", quits(t, cmd), next.(model).focusErr)
+	}
+}

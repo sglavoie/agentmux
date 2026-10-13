@@ -14,6 +14,12 @@
 // (status.go) that AgentMux's daemon renders. The server decides nothing
 // about a session's state.
 //
+// A plain terminal attached to a session gets from the configuration the keys
+// Kitty bound for its tabs (internal/kittykeys.Tmux). Going to another session
+// is a client switched to it (switch.go), under the rule attaching follows:
+// one owner, and never an agent that is not running. An overlay is a popup
+// over the terminal, which is a view and never a session.
+//
 // The tmux executable is chosen here too (runtime.go): an explicit choice,
 // the runtime bundled with the desktop app (verified against its checksums
 // and copied out of the bundle), or a supported tmux on PATH. A server that is
@@ -45,13 +51,16 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/atomicfile"
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // Config is the whole configuration of the private server. The server is
 // started with `-f` this file, so tmux reads neither /etc/tmux.conf nor any
 // personal ~/.tmux.conf or $XDG_CONFIG_HOME/tmux/tmux.conf.
-const Config = `# Written by AgentMux; changes are overwritten. This private server never
+var Config = configHead + kittykeys.TmuxConfig() + configTail
+
+const configHead = `# Written by AgentMux; changes are overwritten. This private server never
 # reads a personal tmux configuration.
 
 # Agents receive every key: there is no prefix, so ctrl+b and friends reach
@@ -60,8 +69,9 @@ set -g prefix None
 set -g prefix2 None
 unbind-key -a -T prefix
 
-# The one key tmux keeps: it detaches the viewing client, which is how an
-# attached terminal gets back to whatever attached it. The agent keeps running.
+# F12 detaches the viewing client, which is how an attached terminal gets back
+# to whatever attached it. The agent keeps running. The other function keys
+# are bound further down; everything else reaches the agent.
 bind-key -n F12 detach-client
 
 # Forward modified keys (shift+enter, ctrl+enter, alt+arrows) in the form the
@@ -145,7 +155,24 @@ bind-key -n User6 if-shell -F '#{pane_in_mode}' { send-keys -X search-reverse }
 # full-screen program keeps its own transcript, so there the key is handed on
 # as the F3 the viewer pressed, which is that program's own search.
 bind-key -n User7 if-shell -F '#{pane_in_mode}' { send-keys -X cancel } { if-shell -F '#{alternate_on}' { send-keys F3 } { copy-mode -e ; send-keys -X search-backward -- "(error|failed|warning|deprecated)" } }
+# F3 is that same key for a terminal with no menu to send it.
+bind-key -n F3 if-shell -F '#{pane_in_mode}' { send-keys -X cancel } { if-shell -F '#{alternate_on}' { send-keys F3 } { copy-mode -e ; send-keys -X search-backward -- "(error|failed|warning|deprecated)" } }
 bind-key -T copy-mode-vi Escape send-keys -X cancel
+
+# The keys Kitty bound for its tabs, for a plain terminal attached here: the
+# dashboard, the overview, the reference, and the pickers open in a popup over
+# the terminal that pressed the key, and the rest run amx in the background.
+# Each runs in the environment of the session the terminal is on. The desktop
+# app's menu takes these keys before they are sent, so there they never
+# arrive. The lines are generated from internal/kittykeys.Tmux.
+#
+# A popup's command is run by default-shell, so that is the shell the lines
+# are written for; no pane uses it, since every agent is started as an argv.
+# AMX_BIN is set by the terminal that attaches (amx attach), because this
+# server's PATH is that of whatever started it.
+set -g default-shell /bin/sh
+`
+const configTail = `
 
 # The mouse selects, scrolls, and reaches a program that asked for it. tmux's
 # own menus and pane shuffling are removed: a right click must never offer to

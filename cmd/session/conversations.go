@@ -308,7 +308,7 @@ func unknownProjectError(selector string, names []string) error {
 func addSessionSelectionFlags(cmd *cobra.Command) {
 	cmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h, 7d, or 2w")
 	cmd.Flags().Bool("here", false, "only sessions started in the current directory or below it")
-	cmd.Flags().Bool("live", false, "only conversations open in a Kitty tab right now")
+	cmd.Flags().Bool("live", false, "only conversations open right now, in a Kitty tab or a tmux session")
 	cmd.Flags().StringSlice("harness", nil, "only sessions of this harness (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
 	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
@@ -1128,7 +1128,7 @@ type sessionView struct {
 	// Ending is the opening of the agent's final prose reply; see
 	// transcript.SessionMeta.Ending.
 	Ending string `json:"ending,omitempty"`
-	// Live is the Kitty tab the conversation is open in, when the daemon and
+	// Live is the Kitty tab or tmux session the conversation is open in, when the daemon and
 	// Kitty could both be asked and agreed on exactly one.
 	Live *liveConversation `json:"live,omitempty"`
 }

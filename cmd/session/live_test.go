@@ -120,3 +120,74 @@ func TestLiveMarksTheConversationInThisWindow(t *testing.T) {
 		t.Fatal("outside Kitty, no conversation may be marked here")
 	}
 }
+
+// A session on the tmux backend has no Kitty tab: the daemon's binding of its
+// slot to a runtime session is what makes its conversation live, and Kitty is
+// not asked when no Kitty window holds a conversation, so the answer is known
+// in a terminal that is not Kitty.
+func TestLiveConversationsListBothBackends(t *testing.T) {
+	onTmux := conversation.Identity{Harness: "codex", SessionID: "tmux-1"}
+	inKitty := conversation.Identity{Harness: "claude", SessionID: "kitty-1"}
+	both := conversation.Identity{Harness: "claude", SessionID: "both-1"}
+	twice := conversation.Identity{Harness: "codex", SessionID: "twice-1"}
+	const slotA, slotB, slotC, slotD = 1<<40 + 1, 1<<40 + 2, 1<<40 + 3, 1<<40 + 4
+	slots := map[int]protocol.RuntimeSlot{
+		slotA: {RuntimeSessionID: "rs-a", Backend: "tmux"},
+		slotB: {RuntimeSessionID: "rs-b", Backend: "tmux"},
+		slotC: {RuntimeSessionID: "rs-c", Backend: "tmux"},
+		slotD: {RuntimeSessionID: "rs-d", Backend: "tmux"},
+	}
+	tmuxOnly := map[int]protocol.WindowStateSnapshot{
+		slotA: {Conversation: &onTmux},
+		slotC: {Conversation: &twice},
+		slotD: {Conversation: &twice},
+	}
+	respond := func(states map[int]protocol.WindowStateSnapshot) func(protocol.Request) (protocol.Response, error) {
+		return func(protocol.Request) (protocol.Response, error) {
+			return protocol.Response{OK: true, States: states, RuntimeSlots: slots}, nil
+		}
+	}
+
+	// No Kitty window holds a conversation: a Kitty that cannot be asked
+	// costs nothing.
+	noKitty := &sessionCommandKitty{listErr: errors.New("not running inside Kitty")}
+	live, known := liveConversations(respond(tmuxOnly), noKitty)
+	if !known {
+		t.Fatal("tmux sessions alone read as unknown because Kitty did not answer")
+	}
+	if len(live) != 1 || live["codex:tmux-1"] != (liveConversation{RuntimeSessionID: "rs-a"}) {
+		t.Fatalf("live = %+v, want only codex:tmux-1 in rs-a (the one two sessions claim is left out)", live)
+	}
+
+	window := kitty.Window{ID: 10, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"}}
+	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{
+		{ID: 100, Title: "api", Windows: []kitty.Window{window}},
+		{ID: 200, Title: "web", Windows: []kitty.Window{{ID: 20, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"}}}},
+	}}}
+	mixed := map[int]protocol.WindowStateSnapshot{
+		slotA: {Conversation: &onTmux},
+		10:    {Conversation: &inKitty},
+		// One conversation in a Kitty tab and in a tmux session: two claims.
+		20:    {Conversation: &both},
+		slotB: {Conversation: &both},
+	}
+	live, known = liveConversations(respond(mixed), &sessionCommandKitty{windows: windows})
+	if !known || len(live) != 2 ||
+		live["codex:tmux-1"] != (liveConversation{RuntimeSessionID: "rs-a"}) ||
+		live["claude:kitty-1"] != (liveConversation{WindowID: 10, TabID: 100}) {
+		t.Fatalf("live = %+v, %t; want the tmux session and the Kitty tab, each once", live, known)
+	}
+	// A Kitty conversation nobody can confirm is still unknown.
+	if _, known := liveConversations(respond(mixed), noKitty); known {
+		t.Fatal("a Kitty conversation read as known with Kitty not answering")
+	}
+
+	views := []sessionView{{Harness: "codex", ID: "tmux-1"}}
+	previous := currentRuntimeSession
+	currentRuntimeSession = func() string { return "rs-a" }
+	t.Cleanup(func() { currentRuntimeSession = previous })
+	markLive(views, live, 0)
+	if views[0].Live == nil || !views[0].Live.Here {
+		t.Fatalf("view = %+v, want it marked as the session this command runs in", views[0].Live)
+	}
+}

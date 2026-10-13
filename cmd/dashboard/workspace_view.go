@@ -54,7 +54,7 @@ var (
 		_, err := ipc.NewClient().WorkspaceView(view)
 		return err
 	}
-	workspaceViewDashboard = func() error { return Run(0, string(runtimesession.BackendTmux)) }
+	workspaceViewDashboard = func() error { return Run(0, string(runtimesession.BackendTmux), View{}) }
 	workspaceViewOverview  = func() error {
 		overviewBackend = string(runtimesession.BackendTmux)
 		return runOverviewCommand(0)

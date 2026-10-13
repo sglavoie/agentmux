@@ -322,3 +322,81 @@ func TestAKittyOnlySurfaceIsUnchanged(t *testing.T) {
 		t.Fatalf("ReadScrollback without a client = %v, want ErrNoTerminal", err)
 	}
 }
+
+// In a popup over an attached terminal, showing a session switches that
+// terminal: attaching would nest a second client inside the popup. The
+// completion says the terminal was switched, which is what ends the surface.
+func TestFocusInAPopupSwitchesTheTerminalInsteadOfAttaching(t *testing.T) {
+	runtime := newPortableRuntimeID(t)
+	server := &portableServer{panes: []backend.Pane{portablePane("$0", "%0", "api", runtime)}}
+	var switched []session.RunningSession
+	var refuse error
+	usePortable(t, PortableTerminals{
+		Tmux: server, Launch: runtimesession.BackendTmux,
+		Attach: func(session.RunningSession) (*exec.Cmd, error) {
+			t.Error("a popup attached its own terminal")
+			return nil, errors.New("attached")
+		},
+		Desktop: func(protocol.WorkspaceViewRequest) error {
+			t.Error("a popup asked the desktop workspace for a view")
+			return nil
+		},
+		Switch: func(rs session.RunningSession) error {
+			switched = append(switched, rs)
+			return refuse
+		},
+	})
+	stubLocalKittySocket(t, "")
+	stubStateQuery(t, func() (protocol.Response, error) { return protocol.Response{}, errors.New("no daemon") })
+	row := portableRefresh(t, nil).Sessions[0]
+
+	done, ok := Focus(nil, row.TabID)().(AttachDoneMsg)
+	if !ok || done.Err != nil || !done.Switched {
+		t.Fatalf("focus = %+v, want the terminal switched", done)
+	}
+	if len(switched) != 1 || switched[0].RuntimeSessionID != runtime {
+		t.Fatalf("switched to %+v, want the session's runtime", switched)
+	}
+	// A refused switch leaves the surface up, with the reason.
+	refuse = errors.New("the agent exited")
+	if done := Focus(nil, row.TabID)().(AttachDoneMsg); !errors.Is(done.Err, refuse) || done.Switched {
+		t.Fatalf("refused switch = %+v, want the error and the surface kept", done)
+	}
+}
+
+// A surface started on a runtime session opens on that session's row: the ID
+// it is started with is the one the session is listed under.
+func TestASurfaceOpensOnTheRowOfTheRuntimeSessionItWasStartedOn(t *testing.T) {
+	first, second := newPortableRuntimeID(t), newPortableRuntimeID(t)
+	server := &portableServer{panes: []backend.Pane{
+		portablePane("$0", "%0", "api", first),
+		portablePane("$1", "%1", "web", second),
+	}}
+	usePortable(t, PortableTerminals{Tmux: server, Launch: runtimesession.BackendTmux})
+	stubLocalKittySocket(t, "")
+	stubStateQuery(t, func() (protocol.Response, error) { return protocol.Response{}, errors.New("no daemon") })
+
+	// Asked before anything was listed, as a command does before its surface
+	// starts.
+	source := PortableSelection(second)
+	if source < PortableIDBase || PortableSelection("") != 0 {
+		t.Fatalf("selection = %d (and %d for no session)", source, PortableSelection(""))
+	}
+	msg, ok := Refresh(nil, &config.Config{}, "alpha", 1, source)().(SessionsMsg)
+	if !ok {
+		t.Fatal("refresh failed")
+	}
+	var want int
+	for _, rs := range msg.Sessions {
+		if rs.RuntimeSessionID == second {
+			want = rs.TabID
+		}
+	}
+	if want == 0 || msg.SelectionTabID != want {
+		t.Fatalf("selection = %d, want the row of the second session (%d)", msg.SelectionTabID, want)
+	}
+	live, err := readLiveSessions(nil, &config.Config{}, source)
+	if err != nil || live.SourceTabID != want {
+		t.Fatalf("source tab = %d, %v; want %d (the overview reads it the same way)", live.SourceTabID, err, want)
+	}
+}

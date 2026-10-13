@@ -44,6 +44,7 @@ const version = "0.8.0"
 var (
 	dashboardSourceWindowID int
 	dashboardBackend        string
+	dashboardView           dashboard.View
 )
 
 var rootCmd = &cobra.Command{
@@ -62,7 +63,7 @@ var rootCmd = &cobra.Command{
 		cli.ConfigureLogging(cli.DebugEnabled())
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return dashboard.Run(dashboardSourceWindowID, dashboardBackend)
+		return dashboard.Run(dashboardSourceWindowID, dashboardBackend, dashboardView)
 	},
 }
 
@@ -157,6 +158,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().StringVar(&dashboardBackend, cli.BackendFlag, "", "dashboard only: "+dashboard.BackendFlagUsage)
 	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "dashboard only: start with this Kitty window's tab selected (open-dashboard passes it)")
+	dashboard.AddViewFlags(rootCmd, &dashboardView, "dashboard only: ")
 	// Help groups exist so `amx --help` reads by purpose rather than as one
 	// alphabetical run of two dozen names. Hidden commands take no group.
 	rootCmd.AddGroup(

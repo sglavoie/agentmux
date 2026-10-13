@@ -28,6 +28,7 @@ import (
 
 type sessionCommandKitty struct {
 	windows  []kitty.OSWindow
+	listErr  error
 	launched []kitty.LaunchOpts
 	focuses  []string
 }
@@ -93,7 +94,9 @@ func resetSessionCommandsTestState(t *testing.T) {
 	sessionCommandsCurrentWindow = func() int { return 0 }
 }
 
-func (c *sessionCommandKitty) ListWindows() ([]kitty.OSWindow, error) { return c.windows, nil }
+func (c *sessionCommandKitty) ListWindows() ([]kitty.OSWindow, error) {
+	return c.windows, c.listErr
+}
 func (c *sessionCommandKitty) LaunchTab(opts kitty.LaunchOpts) error {
 	c.launched = append(c.launched, opts)
 	return nil

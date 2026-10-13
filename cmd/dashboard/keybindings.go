@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/tui/customization"
 	"github.com/spf13/cobra"
 )
@@ -19,9 +20,10 @@ var keybindingsCmd = &cobra.Command{
 	Short: "Show the Kitty keybinding reference as an overlay",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Outside Kitty there is no other instance to find: the reference
-		// simply opens in this terminal.
+		// simply opens in this terminal, and the keys it lists are the ones
+		// the private tmux configuration binds.
 		if !insideKitty() {
-			return runKeybindingsOverlay()
+			return runKeybindingsReference(kittykeys.Tmux)
 		}
 		client := cli.NewKittyClient()
 		if focusExistingKeybindings(client) {
@@ -31,8 +33,11 @@ var keybindingsCmd = &cobra.Command{
 	},
 }
 
-// runKeybindingsOverlay shows the reference in this terminal.
-var runKeybindingsOverlay = customization.RunKeybindingsOverlay
+// The reference in this terminal: Kitty's keys, or a table of its own.
+var (
+	runKeybindingsOverlay   = customization.RunKeybindingsOverlay
+	runKeybindingsReference = customization.RunKeybindingsReference
+)
 
 func focusExistingKeybindings(client kitty.KittyClient) bool {
 	osWindows, err := client.ListWindows()

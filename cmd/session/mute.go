@@ -37,7 +37,9 @@ not a managed Agent Mux session, the command is a silent no-op.
 With --runtime-session the session is named by its runtime session instead,
 which is how one on the tmux backend is muted: it has no Kitty window, and
 no Kitty is consulted. A runtime session that is not running there is an
-error rather than a no-op, because it was named exactly.
+error rather than a no-op, because it was named exactly. With neither flag
+and outside Kitty, a command that runs in a managed session
+(AMX_RUNTIME_SESSION_ID) mutes that session the same way.
 
 With --json it reports {window_id, muted, changed}: muted is the window's
 mute state after the command, and changed is false for the no-op. A session
@@ -79,7 +81,13 @@ type muteTerminal interface {
 func runMuteToggle(cmd *cobra.Command, _ []string) error {
 	var result muteToggleResult
 	var err error
-	if named := strings.TrimSpace(muteToggleRuntimeSession); named != "" {
+	named := strings.TrimSpace(muteToggleRuntimeSession)
+	if named == "" && muteToggleWindowID == 0 {
+		// With nothing named and no Kitty window around it, the session
+		// this command runs in is the one meant.
+		named = currentRuntimeSession()
+	}
+	if named != "" {
 		id, parseErr := runtimesession.ParseID(named)
 		if parseErr != nil {
 			return cli.CommandFailure(cmd, muteToggleJSON, "invalid_arguments", parseErr)

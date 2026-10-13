@@ -22,7 +22,7 @@ amx session list --since 7d   # only sessions active in the last week (or 2w, 12
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
 amx session list --harness codex --profile codex-work   # both repeatable
 amx session list --project amx   # one project's sessions; "amx" reaches "🐱amx" as project launch reads it, and a directory-named project works too (repeatable)
-amx session list --live       # only conversations open in a Kitty tab right now; refused, not empty, when the daemon or Kitty cannot say
+amx session list --live       # only conversations open right now, in a Kitty tab or a tmux session; refused, not empty, when the daemon (or Kitty, for a Kitty tab) cannot say
 amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
 amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts and a matched line (one you or the agent wrote before tool output); the conversation you search from comes last, and a terminal says how many automated sessions also match
@@ -881,6 +881,39 @@ What changes for a tmux session, and only for it:
   `less`; open-shell, open-editor, the plan editor, and the worktree shell and
   editor suspend the dashboard, run in place, and return to it. Inside Kitty a
   Kitty session keeps its native overlay pager and new tabs.
+- **The function keys work in the attached terminal.** The private tmux
+  configuration binds what `agent-mux.conf` binds in Kitty, so a plain
+  terminal attached to a session has the same keys: **F1** the keybinding
+  reference, **F2** the overview, **F5** and **F6** the icon and color
+  pickers, and **ctrl+shift+d** the dashboard, each as a popup over the
+  terminal; **F7** and **F9** the previous and next session, and **F4** the
+  next one waiting on you; **F8** clear, **F10** mute, **F11** mark active;
+  **F3** the scrollback markers; **F12** detach. A key acts on the session
+  the terminal is on. In Agent Mux.app the main menu takes these keys first,
+  as before. ctrl+shift+d needs a terminal that reports modified keys (the
+  kitty keyboard protocol or xterm's modifyOtherKeys); `amx open-dashboard`
+  opens the same popup from anywhere.
+- **Going to another session switches the terminal.** F7, F9, and F4 (and
+  `amx focus-prev-managed`, `focus-next-managed`, and `focus-next`, which
+  they run) take the sessions in the order the dashboard lists them and
+  switch the attached terminal to the one chosen. Typed by hand they start
+  from `$AMX_RUNTIME_SESSION_ID` or `--runtime-session`, and move the
+  terminal attached to that session or the one named by `--client`. The
+  terminal that arrives is the session's one owner: any other terminal there
+  is detached. It never arrives at an agent that exited or was lost, which is
+  refused with the same codes `amx attach` uses. Run from a view the desktop
+  workspace hosts, the same commands ask the workspace to show the session
+  instead.
+- **The dashboard is a popup over the session.** From an attached terminal
+  the dashboard and the overview open over the session you are in, selected
+  on it. `enter` on a row switches the terminal to that session and closes
+  the popup; `q` closes it and leaves you where you were. A terminal shows
+  one popup at a time, so there is one dashboard per terminal, as a Kitty
+  session had one dashboard tab. Peek, the project shell, and the editor run
+  inside the popup rather than taking over the terminal. `amx` typed in a
+  terminal that is attached to nothing is still an ordinary full-screen
+  dashboard, where `enter` attaches and F12 comes back. `amx --select
+  RUNTIME_SESSION_ID` opens either on a session's row.
 - **Sessions are always in sort order.** The order (`[defaults] sort`, pins
   first) is computed, not held by a terminal, and the dashboard, the overview,
   and what the daemon publishes to Agent Mux.app all list sessions in it.
@@ -987,6 +1020,15 @@ calling terminal: it focuses a running dashboard (the singleton rule) or opens
 one in a new tab, and `--json` reports `{window_id, tab_id, opened}`. It refuses
 rather than opening a second dashboard when Kitty cannot be listed or the
 running one cannot be focused.
+
+With no Kitty at all (neither `KITTY_LISTEN_ON` nor a Kitty window), the
+dashboard is the popup of a terminal attached to a tmux session:
+`amx open-dashboard` opens it over the terminal used last, selected on the
+session that terminal shows, and `--json` reports that terminal as `client`
+with `window_id` and `tab_id` zero. A terminal that already shows a popup
+keeps it. With no terminal attached anywhere, the dashboard starts in the
+terminal the command is typed in, and `--json` refuses with
+`no_attached_terminal` instead.
 
 Both work from outside Kitty when `KITTY_LISTEN_ON` names the instance's
 remote-control socket:

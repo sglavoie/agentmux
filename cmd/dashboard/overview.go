@@ -25,6 +25,7 @@ var (
 var (
 	overviewSourceWindowID int
 	overviewBackend        string
+	overviewView           View
 )
 
 // OverviewCommand returns the `overview` command so the root command can
@@ -47,6 +48,7 @@ var overviewCmd = &cobra.Command{
 func init() {
 	overviewCmd.Flags().StringVar(&overviewBackend, cli.BackendFlag, "", BackendFlagUsage)
 	overviewCmd.Flags().IntVar(&overviewSourceWindowID, "window-id", 0, "Kitty window ID whose session should be selected initially")
+	AddViewFlags(overviewCmd, &overviewView, "")
 }
 
 // runOverviewCommand performs the workflow behind `amx overview`: focus an
@@ -65,13 +67,19 @@ func runOverviewCommand(sourceWindowID int) error {
 		return err
 	}
 	// Outside Kitty there is no window tree in which a second overview could
-	// be found, and no source window to select.
+	// be found. It opens on the session it was asked for, or the one it runs
+	// in; as a popup over an attached terminal it is that terminal's one
+	// overview, and choosing a tile switches the terminal (popup.go).
 	if client == nil {
 		cfg, err := loadOverviewConfig()
 		if err != nil {
 			return err
 		}
-		return runOverview(cfg, nil, 0)
+		selected, err := terminalView(overviewView)
+		if err != nil {
+			return err
+		}
+		return runOverview(cfg, nil, selected)
 	}
 
 	focused, err := focusExistingOverview(client)

@@ -38,6 +38,7 @@ var (
 	attachRunClient    = runAttachedClient
 	attachFingerprint  = session.ProcessFingerprint
 	attachNow          = time.Now
+	attachBinary       = cli.AmxBinary
 )
 
 // runAttachedClient runs the interactive client on this terminal.
@@ -105,9 +106,18 @@ type attachData struct {
 // has nothing else to say which session it is on, so it gets the session's
 // status line; the desktop workspace lists every session beside the pane and
 // marks the terminals it runs.
+//
+// The keys bound in the tmux configuration run amx, and the server's PATH is
+// that of whatever started it, so this terminal says where its own amx is. A
+// binary `go run` built for itself is gone by the time a key is pressed, and
+// is not offered.
 func attachView() tmux.AttachView {
 	_, hosted := os.LookupEnv(tmux.WorkspaceHostEnv)
-	return tmux.AttachView{StatusLine: !hosted}
+	view := tmux.AttachView{StatusLine: !hosted}
+	if bin, err := attachBinary(); err == nil && !cli.TransientBinary(bin) {
+		view.Amx = bin
+	}
+	return view
 }
 
 // tmuxAttacher is what attaching needs from the tmux backend.

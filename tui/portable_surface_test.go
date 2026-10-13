@@ -49,6 +49,21 @@ func TestTheDashboardSurvivesAnAttachedView(t *testing.T) {
 	}
 }
 
+// A dashboard that is a popup over a terminal switched that terminal to the
+// session: it ends, which closes the popup and uncovers the session. A switch
+// that was refused keeps it up.
+func TestAPopupDashboardEndsOnceItsTerminalIsSwitched(t *testing.T) {
+	m := testModelWithSessions()
+	if _, cmd := m.Update(commands.AttachDoneMsg{Switched: true}); !producesQuit(cmd) {
+		t.Fatal("the popup stayed over the session it switched the terminal to")
+	}
+	failure := errors.New("the agent exited")
+	next, cmd := m.Update(commands.AttachDoneMsg{Err: failure})
+	if producesQuit(cmd) || !errors.Is(next.(Model).actionErr, failure) {
+		t.Fatalf("refused switch: quit=%v err=%v, want the error shown and the dashboard kept", producesQuit(cmd), next.(Model).actionErr)
+	}
+}
+
 func TestAViewThatRanInThisTerminalDoesNotQuitTheDashboard(t *testing.T) {
 	m := testModelWithSessions()
 	if _, cmd := m.Update(commands.PickerOpenDoneMsg{}); !producesQuit(cmd) {

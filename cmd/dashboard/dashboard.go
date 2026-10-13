@@ -37,7 +37,11 @@
 // Outside Kitty there are no Kitty tabs, and the rule that each surface is
 // open once is a rule about them: the dashboard, the overview, and the
 // keybinding reference open in the terminal they are typed in and look for no
-// other instance. The two pickers become portable views there
+// other instance. For a terminal attached to a tmux session the rule comes
+// back in another form (popup.go): the keys bound in the private tmux
+// configuration, and `open-dashboard`, open the dashboard and the overview as
+// a popup over that terminal, a terminal shows one popup at a time, and
+// choosing a session there switches the terminal to it and closes the popup. The two pickers become portable views there
 // (picker_portable.go): they open in this terminal and edit a tmux session,
 // its title for the icon and its metadata for the color, where inside Kitty
 // they stay overlays over the tab they were opened on.
@@ -66,8 +70,10 @@ import (
 // backendName is --backend. Outside Kitty the dashboard runs on the tmux
 // backend with no Kitty client at all: there is no other dashboard to find,
 // so the singleton rule does not apply, and every Kitty tab action is replaced
-// by its in-terminal counterpart.
-func Run(sourceWindowID int, backendName string) error {
+// by its in-terminal counterpart. view says how it opens there: on which
+// session's row, and whether as a popup over an attached terminal
+// (popup.go), where the one-dashboard rule is the terminal's one popup.
+func Run(sourceWindowID int, backendName string, view View) error {
 	cfg, err := loadRunnableConfig()
 	if err != nil {
 		return err
@@ -77,7 +83,11 @@ func Run(sourceWindowID int, backendName string) error {
 		return err
 	}
 	if client == nil {
-		return runDashboard(cfg, nil, 0)
+		selected, err := terminalView(view)
+		if err != nil {
+			return err
+		}
+		return runDashboard(cfg, nil, selected)
 	}
 	if sourceWindowID <= 0 {
 		sourceWindowID = cli.WindowIDFromEnv()

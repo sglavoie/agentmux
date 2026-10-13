@@ -26,6 +26,8 @@ var (
 	openDashboardSleep      = time.Sleep
 	openDashboardWait       = 3 * time.Second
 	openDashboardPoll       = 100 * time.Millisecond
+	openDashboardStartPopup = startPopup
+	openDashboardHere       = func() error { return Run(0, "", View{}) }
 )
 
 var (
@@ -49,7 +51,13 @@ which is what makes it usable from outside Kitty — set KITTY_LISTEN_ON to the
 instance's remote-control socket.
 
 --json reports {window_id, tab_id, opened}, where opened says whether a new
-dashboard tab was launched.`,
+dashboard tab was launched.
+
+Outside Kitty the dashboard of a terminal attached to a tmux session is a
+popup over it. The terminal used last gets that popup, opened on the session
+it is showing, and --json reports it as client; a terminal that already shows
+one keeps it. With no terminal attached, the dashboard starts in the terminal
+this command is typed in.`,
 	Args: cobra.NoArgs,
 	RunE: runOpenDashboard,
 }
@@ -64,6 +72,9 @@ type openDashboardData struct {
 	WindowID int  `json:"window_id"`
 	TabID    int  `json:"tab_id"`
 	Opened   bool `json:"opened"`
+	// Client is the terminal the dashboard was opened over as a popup,
+	// outside Kitty; window_id and tab_id are then zero.
+	Client string `json:"client,omitempty"`
 }
 
 // runOpenDashboard applies the singleton rule strictly, the way the overview
@@ -73,6 +84,9 @@ type openDashboardData struct {
 // the overview, the running instance is looked for before the configuration is
 // loaded, because focusing one needs none.
 func runOpenDashboard(cmd *cobra.Command, _ []string) error {
+	if !insideKitty() {
+		return openDashboardInTerminal(cmd)
+	}
 	client := newOpenDashboardClient()
 	sourceWindowID := cli.WindowIDOrEnv(openDashboardSourceWindowID)
 
@@ -116,6 +130,42 @@ func runOpenDashboard(cmd *cobra.Command, _ []string) error {
 		return cli.CommandFailure(cmd, openDashboardJSON, "dashboard_not_observed", err)
 	}
 	return reportOpenDashboard(cmd, openDashboardData{WindowID: loc.WindowID, TabID: loc.TabID, Opened: true})
+}
+
+// openDashboardInTerminal is open-dashboard outside Kitty. The dashboard of a
+// terminal attached to a tmux session is a popup over it, so the terminal the
+// operator used last gets one, opened on the session it is showing; tmux
+// leaves a popup that is already there alone, which is the singleton rule.
+// With no terminal attached anywhere there is nothing to bring forward, and
+// the dashboard starts in the calling terminal instead. --json cannot do
+// that, since its output is the JSON document, and says so.
+func openDashboardInTerminal(cmd *cobra.Command) error {
+	if _, err := loadOpenDashboardConfig(); err != nil {
+		return cli.CommandFailure(cmd, openDashboardJSON, "config_invalid", err)
+	}
+	popupErr := errNoAttachedTerminal
+	if opened, err := openTmux(); err == nil {
+		server, ok := opened.(tmuxPopups)
+		if !ok {
+			return cli.CommandFailure(cmd, openDashboardJSON, "backend_unavailable", errors.New("tmux backend cannot open popups"))
+		}
+		bin, err := openDashboardBinary()
+		if err != nil {
+			return cli.CommandFailure(cmd, openDashboardJSON, "binary_unavailable", err)
+		}
+		var client string
+		if client, popupErr = openDashboardPopup(server, bin, openDashboardStartPopup); popupErr == nil {
+			return reportOpenDashboard(cmd, openDashboardData{Opened: true, Client: client})
+		}
+	}
+	if !errors.Is(popupErr, errNoAttachedTerminal) {
+		return cli.CommandFailure(cmd, openDashboardJSON, "launch_failed", popupErr)
+	}
+	if openDashboardJSON {
+		return cli.CommandFailure(cmd, openDashboardJSON, "no_attached_terminal",
+			errors.New("no terminal is attached to a tmux session, so there is no dashboard to bring forward; run `amx` in a terminal"))
+	}
+	return openDashboardHere()
 }
 
 // awaitLaunchedDashboard waits, for at most openDashboardWait, for the
@@ -163,6 +213,10 @@ func newDashboardTab(osWindows []kitty.OSWindow, before map[int]bool) *kitty.Das
 func reportOpenDashboard(cmd *cobra.Command, data openDashboardData) error {
 	if openDashboardJSON {
 		return cli.WriteJSON(cmd, data)
+	}
+	if data.Client != "" {
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "Opened the Agent Mux dashboard over %s.\n", data.Client)
+		return err
 	}
 	verb := "Focused the running"
 	if data.Opened {

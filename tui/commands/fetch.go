@@ -119,6 +119,9 @@ func readLiveSessions(client kitty.KittyClient, cfg *config.Config, sourceWindow
 	if sourceWindowID > 0 {
 		if tab, _, found := kitty.FindTabByWindowID(osWindows, sourceWindowID); found {
 			live.SourceTabID = tab.ID
+		} else if _, listed := PortableSession(sourceWindowID); listed {
+			// A portable session is its own tab (PortableSelection).
+			live.SourceTabID = sourceWindowID
 		}
 	}
 	// The hosting tab is resolved from the same tree, on every refresh, rather

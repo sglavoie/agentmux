@@ -192,8 +192,8 @@ func (s Survey) Observation(record runtimesession.Record, fingerprint func(pid i
 // DetachClient detaches one terminal from the server. The agent it was
 // viewing is untouched. A client that is already gone is not an error.
 func (b *Backend) DetachClient(client Client) error {
-	if !strings.HasPrefix(client.Name, "/dev/") || strings.ContainsAny(client.Name, " \t\n;") {
-		return fmt.Errorf("tmux: %q is not a client terminal", client.Name)
+	if err := clientName(client.Name); err != nil {
+		return err
 	}
 	_, err := b.server.run([]string{"detach-client", "-t", client.Name})
 	var cmdErr *CommandError
@@ -204,6 +204,40 @@ func (b *Backend) DetachClient(client Client) error {
 		return nil
 	}
 	return err
+}
+
+// clientName accepts a client as tmux names one: its terminal device, with
+// nothing in it that a tmux command line or a format would read as syntax.
+func clientName(name string) error {
+	if !strings.HasPrefix(name, "/dev/") || strings.ContainsAny(name, " \t\n;'\"#{}$\\") {
+		return fmt.Errorf("tmux: %q is not a client terminal", name)
+	}
+	return nil
+}
+
+// Client returns the attached terminal called name.
+func (s Survey) Client(name string) (Client, bool) {
+	for _, client := range s.Clients {
+		if client.Name == name {
+			return client, true
+		}
+	}
+	return Client{}, false
+}
+
+// LastActive returns the terminal the operator used last: the one with the
+// latest activity, and among equals the one that attached last.
+func (s Survey) LastActive() (Client, bool) {
+	var last Client
+	found := false
+	for _, client := range s.Clients {
+		if !found || client.Activity > last.Activity ||
+			(client.Activity == last.Activity && (client.Created > last.Created ||
+				(client.Created == last.Created && client.Name > last.Name))) {
+			last, found = client, true
+		}
+	}
+	return last, found
 }
 
 // Competing returns, for every session with more than one terminal attached,

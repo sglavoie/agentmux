@@ -276,10 +276,16 @@ func (m Model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, 
 
 // handleAttachDone processes a commands.AttachDoneMsg: the operator came back
 // from an attached session, so the dashboard carries on and re-reads a list
-// that may have changed while it was not looking.
+// that may have changed while it was not looking. A dashboard that is a popup
+// over the terminal it just switched ends instead.
 func (m Model) handleAttachDone(msg commands.AttachDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		m.actionErr = msg.Err
+	}
+	// The terminal under this popup now shows the session: leaving is what
+	// uncovers it, as focusing a Kitty tab leaves the dashboard behind.
+	if msg.Switched {
+		return m, tea.Quit
 	}
 	return m, m.requestTopologyRefresh()
 }

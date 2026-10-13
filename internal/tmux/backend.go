@@ -16,6 +16,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cachefile"
+	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -392,6 +393,10 @@ type AttachView struct {
 	// title, on its color) under the pane. A terminal that lists sessions
 	// itself, as the desktop workspace does, leaves it off.
 	StatusLine bool
+	// Amx is the amx executable of the terminal that attaches, recorded in
+	// the server's environment for the keys bound in the configuration
+	// (kittykeys.TmuxAmxEnv). Empty leaves what is there.
+	Amx string
 }
 
 // AttachCommand is the interactive client that attaches a terminal to the
@@ -414,15 +419,23 @@ func (b *Backend) AttachCommand(pane backend.Ref, view AttachView) (*exec.Cmd, e
 	if view.StatusLine {
 		status = "on"
 	}
+	args := []string{"-S", b.server.socket, "-f", b.server.config, "source-file", b.server.config, ";"}
+	if view.Amx != "" {
+		if !filepath.IsAbs(view.Amx) || strings.ContainsRune(view.Amx, 0) {
+			return nil, fmt.Errorf("tmux: amx executable %q must be an absolute path", view.Amx)
+		}
+		args = append(args, "set-environment", "-g", kittykeys.TmuxAmxEnv, escapeArg(view.Amx), ";")
+	}
+	args = append(args, "set-option", "-t", pane.ID, "status", status, ";", "attach-session", "-d", "-t", pane.ID)
 	// #nosec G204 -- the binary was resolved at NewServer and the target is a canonical pane ID.
-	c := exec.Command(b.server.binary, "-S", b.server.socket, "-f", b.server.config,
-		"source-file", b.server.config, ";", "set-option", "-t", pane.ID, "status", status,
-		";", "attach-session", "-d", "-t", pane.ID)
+	c := exec.Command(b.server.binary, args...)
 	c.Env = clientEnv(os.Environ())
 	return c, nil
 }
 
-// Focus is unsupported: the server has no view of its own.
+// Focus is unsupported: the server has no view of its own. Showing a session
+// in a terminal that is already attached is SwitchClient, which names the
+// terminal it moves.
 func (b *Backend) Focus(ref backend.Ref) error {
 	if err := validRef(ref); err != nil {
 		return err
