@@ -123,11 +123,25 @@ func (b *Backend) Capture(ref backend.Ref, extent backend.Extent) (string, error
 	return b.client.GetText(MatchWindowByID(id), string(extent))
 }
 
-// Observe reads a window's visible screen. Kitty's get-text reports neither
-// the window size nor the screen mode, and a Kitty window closes with its
-// program, so those fields stay zero; the instance is named by kind only
-// because the client does not expose which socket it talks to.
+// Observe reads a window's visible screen and its title. Kitty's get-text
+// reports neither the window size nor the screen mode, and a Kitty window
+// closes with its program, so those fields stay zero; the instance is named
+// by kind only because the client does not expose which socket it talks to.
+// The title comes from the window tree, read before the screen so the text is
+// the later of the two.
 func (b *Backend) Observe(ref backend.Ref) (backend.Screen, error) {
+	id, err := paneID(ref)
+	if err != nil {
+		return backend.Screen{}, err
+	}
+	osWindows, err := b.client.ListWindows()
+	if err != nil {
+		return backend.Screen{}, err
+	}
+	_, _, win, found := FindWindowLocationByID(osWindows, id)
+	if !found {
+		return backend.Screen{}, fmt.Errorf("kitty: window %d not found", id)
+	}
 	text, err := b.Capture(ref, backend.ExtentScreen)
 	if err != nil {
 		return backend.Screen{}, err
@@ -136,6 +150,7 @@ func (b *Backend) Observe(ref backend.Ref) (backend.Screen, error) {
 		Instance:   runtimesession.BackendInstance{Kind: runtimesession.BackendKitty},
 		Pane:       ref,
 		Text:       text,
+		Title:      win.Title,
 		CapturedAt: time.Now(),
 	}, nil
 }

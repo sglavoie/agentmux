@@ -29,7 +29,10 @@ The checklist for adding a harness to Agent Mux. `CLAUDE.md` points here.
    capture the tmux backend returns, the styled (`-e`) capture, and the pane
    geometry and screen mode tmux reported, under
    `internal/screenstate/testdata/tmux/`. Include one capture after a live
-   resize to a narrow pane. Register each in `tmux_fixture_test.go` and add a
+   resize to a narrow pane. A probe that reads more than the screen needs that
+   captured too: `capture.sh title` writes the pane title the harness set, and
+   `capture.sh all` the screen with its history, each beside the capture it
+   belongs to. Register each in `tmux_fixture_test.go` and add a
    row per behaviour to its Kitty/tmux parity table: the two sets must read
    alike, and a difference is a finding about the adapter, not about tmux.
 

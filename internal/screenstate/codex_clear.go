@@ -123,6 +123,9 @@ func (c codexClauses) transcriptMarker(line string) bool {
 		return false
 	case codexLineLooksChrome(trimmed):
 		return false
+	case matchesLine(c.bannerRE, trimmed):
+		// The session header, which codex-cli 0.162.x draws unboxed.
+		return false
 	case strings.HasPrefix(trimmed, "›") || strings.HasPrefix(trimmed, ">"):
 		return true
 	case strings.HasPrefix(trimmed, "•") || strings.HasPrefix(trimmed, "◦"):

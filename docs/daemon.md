@@ -617,17 +617,20 @@ downgrade protected attention states (`key`, `question`, `error`, `warning`,
 busy-title active recovery is likewise narrow: it only fills an empty icon. The
 daemon runs these
 probes on the same periodic probe loop as the renderer tick (every 2s).
-A tmux session is probed on the same loop by the same Claude and Codex screen
-probes, reading its own pane on the private server with no terminal attached
-and no Kitty running: the context-limit banner, the prompt label, and the idle
-screen that settles a stuck `⚡` or confirms a held stop. A capture is used
-only when it is of the registered pane, under the server generation the
-session was registered on, while its agent is running; anything else, and a
-read that fails, is no evidence for that tick. A session showing no icon is
-read every fifth tick, a working one every tick, and one at rest on `🛑` not at
-all. The Claude busy-title recovery, the Codex cleared-screen check
-(`ScreenClearProbe`), and the Copilot transcript probe read Kitty windows
-only; a Copilot stop in a tmux session is therefore not held for confirmation.
+A tmux session is probed on the same loop by the same probes, reading its own
+pane on the private server with no terminal attached and no Kitty running:
+the Claude context-limit banner, prompt label, and busy-title recovery, the
+Codex prompt and cleared screen (`ScreenClearProbe`), the Copilot transcript
+probe, and for all three the evidence that settles a stuck `⚡` or confirms a
+held stop. A capture is used only when it is of the registered pane, under the
+server generation the session was registered on, while its agent is running;
+anything else, and a read that fails, is no evidence for that tick. The title
+Claude sets on its pane is read with the screen and judged with it. The pane's
+history, which the cleared-screen check reads second, counts only when the same
+server still answers for the pane afterwards. A session showing no icon is
+read every fifth tick, and so is a stopped Codex session, whose only question
+is whether `/clear` was typed; a working one is read every tick, and a Claude
+or Copilot session at rest on `🛑` not at all.
 
 In split Kitty tabs, screen probes read only the tab-title owner: the active
 managed pane, or the first managed pane if none is active. Sibling panes cannot

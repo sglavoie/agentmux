@@ -9,6 +9,13 @@
 #                                            write FIXTURE.txt (capture-pane -p),
 #                                            FIXTURE.ansi (capture-pane -p -e) and
 #                                            FIXTURE.json (pane geometry/modes)
+#   capture.sh title NAME FIXTURE           write FIXTURE.title, the pane title
+#                                            the harness set (pane_title), which
+#                                            the backend's Observe reads with the
+#                                            screen
+#   capture.sh all   NAME FIXTURE            write FIXTURE.all.txt, the screen and
+#                                            its history (capture-pane -p -S - -E -):
+#                                            the backend's Capture(ExtentAll)
 #   capture.sh stop
 #
 # The server is private (-S under AMX_CAPTURE_DIR) and started with the exact
@@ -58,6 +65,14 @@ grab)
 	t display-message -p -t "=$name:" \
 		'{"harness":"'"$harness"'","version":"'"$version"'","tmux":"#{version}","cols":#{pane_width},"rows":#{pane_height},"alternate_on":#{alternate_on},"cursor_x":#{cursor_x},"cursor_y":#{cursor_y},"history_size":#{history_size},"capture":"capture-pane -p"}' \
 		>"$here/$fixture.json"
+	;;
+title)
+	name=$1 fixture=$2
+	t display-message -p -t "=$name:" '#{pane_title}' >"$here/$fixture.title"
+	;;
+all)
+	name=$1 fixture=$2
+	t capture-pane -p -S - -E - -t "=$name:" >"$here/$fixture.all.txt"
 	;;
 stop)
 	t kill-server 2>/dev/null || true

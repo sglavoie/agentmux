@@ -306,10 +306,12 @@ var observeFields = []string{
 	"#{pane_height}",
 	"#{alternate_on}",
 	"#{pane_dead}",
+	// Last, so whatever a program put in its title cannot shift a field.
+	"#{pane_title}",
 }
 
 // Observe reads a pane's visible screen with the server generation, pane size,
-// screen mode, and exit state that were current for that read. capture-pane
+// screen mode, exit state, and title that were current for that read. capture-pane
 // reads whichever screen the pane is showing, so a program on the alternate
 // screen is captured as it appears.
 func (b *Backend) Observe(ref backend.Ref) (backend.Screen, error) {
@@ -324,7 +326,7 @@ func (b *Backend) Observe(ref backend.Ref) (backend.Screen, error) {
 		return backend.Screen{}, err
 	}
 	head, text, _ := strings.Cut(out, "\n")
-	f := strings.Split(head, fieldSep)
+	f := strings.SplitN(head, fieldSep, len(observeFields))
 	// display-message answers for another pane when the target is gone.
 	if len(f) != len(observeFields) || f[0] != ref.ID || f[1] == "" || f[2] == "" {
 		return backend.Screen{}, fmt.Errorf("tmux: pane %s not observable: %q", ref.ID, head)
@@ -335,6 +337,7 @@ func (b *Backend) Observe(ref backend.Ref) (backend.Screen, error) {
 		Instance:        b.server.instance(f[1], f[2]),
 		Pane:            ref,
 		Text:            text,
+		Title:           f[7],
 		Cols:            cols,
 		Rows:            rows,
 		AlternateScreen: f[5] == "1",

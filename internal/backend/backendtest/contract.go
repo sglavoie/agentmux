@@ -257,6 +257,10 @@ func testCapture(t *testing.T, c *contract) {
 	if screen.CapturedAt.Before(before) || screen.CapturedAt.After(time.Now()) {
 		t.Errorf("Observe CapturedAt = %v, outside the read", screen.CapturedAt)
 	}
+	// The title read with the screen is the one discovery reports for the pane.
+	if discovered := c.waitPane(t, l.id, func(backend.Pane) bool { return true }); screen.Title != discovered.Title {
+		t.Errorf("Observe title = %q, Discover reports %q", screen.Title, discovered.Title)
+	}
 	if _, err := observer.Observe(l.pane.Group); !errors.Is(err, backend.ErrInvalidRef) {
 		t.Errorf("Observe(group ref) err = %v, want ErrInvalidRef", err)
 	}

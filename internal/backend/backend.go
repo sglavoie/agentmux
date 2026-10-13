@@ -242,6 +242,10 @@ type Screen struct {
 	// without escape sequences. A soft-wrapped line is two rows and so two
 	// lines.
 	Text string
+	// Title is the title the pane's program set for it (OSC 0 or 2), or the
+	// backend's default when it set none. It is read with the screen, so a
+	// consumer may judge both by the same instance generation and instant.
+	Title string
 	// Cols and Rows are the pane's size at capture time, or zero when the
 	// backend does not report it.
 	Cols, Rows int

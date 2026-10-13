@@ -64,17 +64,17 @@
 // ends its dirty stretch (runtime_checkpoint.go).
 //
 // A session on a backend other than Kitty is probed by the bodies a Kitty
-// window is (runtime_screen_probes.go): the Claude context-limit banner and
-// the idle screen that settles a stuck turn or confirms a held stop, and the
-// Codex prompt and idle screen. Its binding comes from the slot table, not a
-// window tree, and its screen is read from the registered pane through
+// window is (runtime_screen_probes.go): the Claude context-limit banner,
+// busy-title recovery, and idle screen, the Codex prompt, idle, and cleared
+// screens, and the Copilot transcript probe, each of which settles a stuck
+// turn or confirms a held stop as it does for a window. Its binding comes
+// from the slot table, not a window tree, and its screen, the title read with
+// it, and its history are read from the registered pane through
 // RuntimeScreenReader and accepted only for that pane under the registered
 // server generation while its agent runs. A pane that cannot be read is no
 // evidence, as a failed get-text is: a held stop then waits for its deadline.
 // A stop of such a session is held for confirmation only when its pane can
-// confirm it (terminalStopHoldArmableLocked). The Claude busy-title recovery,
-// the Codex cleared-screen check, and the Copilot transcript probe still read
-// Kitty only.
+// confirm it (terminalStopHoldArmableLocked).
 //
 // Such a session has no focus to read either. What clears its unseen bit is
 // the reconciliation pass finding a terminal that attached to it, or was

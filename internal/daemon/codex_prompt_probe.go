@@ -137,11 +137,6 @@ func (h *Handler) probeCodexBinding(
 		return
 	}
 	if titleParts.State == "stop" {
-		if binding.OnRuntimeBackend() {
-			// The cleared-screen check reads a window's whole scrollback
-			// through Kitty; it has no reader for another backend's pane.
-			return
-		}
 		h.probeCodexClearWindow(now, binding, titleParts, userVars, screens)
 		return
 	}
@@ -748,7 +743,7 @@ func (h *Handler) probeCodexClearWindow(
 		return
 	}
 
-	allText, err := h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), "all")
+	allText, err := h.probeScrollbackText(binding)
 	if err != nil {
 		slog.Debug("codex clear probe: get full text failed", "source_window_id", binding.SourceWindowID,
 			"target_window_id", targetWindowID, "err", err)

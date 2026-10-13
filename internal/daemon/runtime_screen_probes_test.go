@@ -24,18 +24,44 @@ import (
 // below runs twice, on a Kitty window and on a tmux runtime session, through
 // the production probe tick, and has to end the same way on both.
 
-// probedSession is one Claude agent on one backend, with a screen the test
-// controls.
+// probedHarness is how one harness's hooks name a turn.
+type probedHarness struct {
+	name         string
+	prompt, stop string
+	payload      func(event string) hookevent.HookPayload
+}
+
+var (
+	probedClaude = probedHarness{name: harness.Claude, prompt: "UserPromptSubmit", stop: "Stop",
+		payload: func(string) hookevent.HookPayload { return hookevent.HookPayload{SessionID: "conv"} }}
+	probedCodex = probedHarness{name: harness.Codex, prompt: "UserPromptSubmit", stop: "Stop",
+		payload: func(string) hookevent.HookPayload { return hookevent.HookPayload{SessionID: "conv"} }}
+	probedCopilot = probedHarness{name: harness.Copilot, prompt: "userPromptSubmitted", stop: "agentStop",
+		payload: func(event string) hookevent.HookPayload {
+			payload := hookevent.HookPayload{SessionIDCamel: "conv"}
+			if event == "agentStop" {
+				payload.StopReasonCamel = "end_turn"
+			}
+			return payload
+		}}
+)
+
+// probedSession is one agent on one backend, with a screen the test controls.
 type probedSession struct {
-	t    *testing.T
-	h    *Handler
-	rec  *callRecorder
-	slot int
+	t       *testing.T
+	h       *Handler
+	rec     *callRecorder
+	slot    int
+	harness probedHarness
 	// show puts text on the agent's screen; unreadable makes the next reads
 	// fail, which is a pane with no capture.
 	show       func(text string)
 	unreadable func()
-	hook       func(event string) protocol.Response
+	// retitle sets the title the agent's program gave its pane, and
+	// showHistory what the pane's screen reads as together with its history.
+	retitle     func(title string)
+	showHistory func(text string)
+	hook        func(event string) protocol.Response
 	// tick is one pass of the daemon's screen probes.
 	tick func(now time.Time)
 }
@@ -47,10 +73,32 @@ const probedGeneration = "tmux-t-1"
 type fakePaneScreens struct {
 	mu         sync.Mutex
 	text       string
+	title      string
+	history    string
 	err        error
 	generation string
 	exited     bool
 	reads      int
+	// captures counts whole-history reads; duringCapture runs inside one,
+	// under the lock, as whatever happened to the server meanwhile.
+	captures      int
+	duringCapture func(*fakePaneScreens)
+}
+
+func (s *fakePaneScreens) Capture(pane backend.Ref, extent backend.Extent) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if extent != backend.ExtentAll {
+		return "", errors.New("the probes capture a pane only with its history")
+	}
+	s.captures++
+	if s.err != nil {
+		return "", s.err
+	}
+	if s.duringCapture != nil {
+		s.duringCapture(s)
+	}
+	return s.history, nil
 }
 
 func (s *fakePaneScreens) Observe(pane backend.Ref) (backend.Screen, error) {
@@ -64,6 +112,7 @@ func (s *fakePaneScreens) Observe(pane backend.Ref) (backend.Screen, error) {
 		Instance:   runtimesession.BackendInstance{Kind: runtimesession.BackendTmux, Address: tmuxT, Generation: s.generation},
 		Pane:       pane,
 		Text:       s.text,
+		Title:      s.title,
 		Exited:     s.exited,
 		CapturedAt: time.Now(),
 	}, nil
@@ -84,16 +133,17 @@ func newProbedHandler(t *testing.T) (*Handler, *callRecorder) {
 	return h, rec
 }
 
-func newProbedKittySession(t *testing.T) *probedSession {
+func newProbedKittySessionOf(t *testing.T, agent probedHarness) *probedSession {
 	t.Helper()
 	h, rec := newProbedHandler(t)
 	fake := &fakeKittyClient{
-		windows: codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{Profile: "work", Harness: harness.Claude}),
-		getText: map[string]string{},
+		windows:         codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{Profile: "work", Harness: agent.name}),
+		getText:         map[string]string{},
+		getTextByExtent: map[getTextKey]string{},
 	}
 	h.SetKittyClient(fake)
 	return &probedSession{
-		t: t, h: h, rec: rec, slot: 42,
+		t: t, h: h, rec: rec, slot: 42, harness: agent,
 		// The maintenance loop republishes the window tree between probe
 		// ticks; here the test does.
 		tick: func(now time.Time) {
@@ -110,9 +160,19 @@ func newProbedKittySession(t *testing.T) *probedSession {
 			defer fake.mu.Unlock()
 			fake.getTextErr = errors.New("get-text failed")
 		},
+		retitle: func(title string) {
+			fake.mu.Lock()
+			defer fake.mu.Unlock()
+			fake.windows[0].Tabs[0].Windows[0].Title = title
+		},
+		showHistory: func(text string) {
+			fake.mu.Lock()
+			defer fake.mu.Unlock()
+			fake.getTextByExtent[getTextKey{match: kitty.MatchWindowByID(42), extent: "all"}] = text
+		},
 		hook: func(event string) protocol.Response {
-			return h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: event, Harness: harness.Claude,
-				PayloadJSON: hookPayloadJSON(t, hookevent.HookPayload{SessionID: "conv"})})
+			return h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: event, Harness: agent.name,
+				PayloadJSON: hookPayloadJSON(t, agent.payload(event))})
 		},
 	}
 }
@@ -121,25 +181,34 @@ func newProbedKittySession(t *testing.T) *probedSession {
 // daemon with no Kitty at all.
 func newProbedTmuxSession(t *testing.T) (*probedSession, *fakePaneScreens) {
 	t.Helper()
+	return newProbedTmuxSessionOf(t, probedClaude)
+}
+
+func newProbedTmuxSessionOf(t *testing.T, agent probedHarness) (*probedSession, *fakePaneScreens) {
+	t.Helper()
 	h, rec := newProbedHandler(t)
 	directory := newFakeRuntimeDirectory()
 	h.SetRuntimeSessionDirectory(directory)
 	runtime := newRuntimeID(t)
 	directory.put(runtime, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, probedGeneration, "%7")
 	screens := &fakePaneScreens{generation: probedGeneration}
-	h.SetRuntimeScreenReader(func(instance runtimesession.BackendInstance) (backend.Observer, error) {
+	h.SetRuntimeScreenReader(func(instance runtimesession.BackendInstance) (RuntimeScreen, error) {
 		if instance.Kind != runtimesession.BackendTmux || instance.Address != tmuxT {
 			t.Errorf("screen reader asked for %+v; want the session's own server", instance)
 		}
 		return screens, nil
 	})
 	session := &probedSession{
-		t: t, h: h, rec: rec,
-		tick:       h.runScreenProbeTick,
-		show:       func(text string) { screens.set(func(s *fakePaneScreens) { s.text, s.err = text, nil }) },
-		unreadable: func() { screens.set(func(s *fakePaneScreens) { s.err = errors.New("capture-pane failed") }) },
+		t: t, h: h, rec: rec, harness: agent,
+		tick:        h.runScreenProbeTick,
+		show:        func(text string) { screens.set(func(s *fakePaneScreens) { s.text, s.err = text, nil }) },
+		unreadable:  func() { screens.set(func(s *fakePaneScreens) { s.err = errors.New("capture-pane failed") }) },
+		retitle:     func(title string) { screens.set(func(s *fakePaneScreens) { s.title = title }) },
+		showHistory: func(text string) { screens.set(func(s *fakePaneScreens) { s.history = text }) },
 		hook: func(event string) protocol.Response {
-			return h.Handle(runtimeHook(t, runtime, event, hookevent.HookPayload{SessionID: "conv"}))
+			req := runtimeHook(t, runtime, event, agent.payload(event))
+			req.Harness = agent.name
+			return h.Handle(req)
 		},
 	}
 	// The first hook is what gives the session its slot.
@@ -152,12 +221,17 @@ func newProbedTmuxSession(t *testing.T) (*probedSession, *fakePaneScreens) {
 
 func eachProbedBackend(t *testing.T, scenario func(t *testing.T, s *probedSession)) {
 	t.Helper()
+	eachProbedBackendOf(t, probedClaude, scenario)
+}
+
+func eachProbedBackendOf(t *testing.T, agent probedHarness, scenario func(t *testing.T, s *probedSession)) {
+	t.Helper()
 	t.Run("kitty", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) { scenario(t, newProbedKittySession(t)) })
+		synctest.Test(t, func(t *testing.T) { scenario(t, newProbedKittySessionOf(t, agent)) })
 	})
 	t.Run("tmux", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			s, _ := newProbedTmuxSession(t)
+			s, _ := newProbedTmuxSessionOf(t, agent)
 			scenario(t, s)
 		})
 	})
@@ -172,8 +246,8 @@ func (s *probedSession) icon() string {
 // startTurn sends the prompt that puts the agent to work.
 func (s *probedSession) startTurn() {
 	s.t.Helper()
-	if resp := s.hook("UserPromptSubmit"); !resp.OK {
-		s.t.Fatalf("UserPromptSubmit = %+v", resp)
+	if resp := s.hook(s.harness.prompt); !resp.OK {
+		s.t.Fatalf("%s = %+v", s.harness.prompt, resp)
 	}
 	if icon := s.icon(); icon != "bolt" {
 		s.t.Fatalf("icon after the prompt = %q; want bolt", icon)
@@ -183,8 +257,8 @@ func (s *probedSession) startTurn() {
 // stopHeld sends the native Stop and requires it to be held for confirmation.
 func (s *probedSession) stopHeld() {
 	s.t.Helper()
-	if resp := s.hook("Stop"); !resp.OK {
-		s.t.Fatalf("Stop = %+v", resp)
+	if resp := s.hook(s.harness.stop); !resp.OK {
+		s.t.Fatalf("%s = %+v", s.harness.stop, resp)
 	}
 	pending, armed := terminalHoldPending(s.t, s.h, s.slot)
 	if !armed || pending.class != stopHoldClassTerminal {
@@ -374,7 +448,8 @@ func TestTmuxStopIsHeldOnlyWhenItsPaneCanConfirmIt(t *testing.T) {
 	}{
 		{name: "claude with a reader", harness: harness.Claude, reader: true, want: true},
 		{name: "codex with a reader", harness: harness.Codex, reader: true, want: true},
-		{name: "copilot with a reader", harness: harness.Copilot, reader: true},
+		{name: "copilot with a reader", harness: harness.Copilot, reader: true, want: true},
+		{name: "copilot with no reader", harness: harness.Copilot},
 		{name: "claude with no reader", harness: harness.Claude},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -382,7 +457,7 @@ func TestTmuxStopIsHeldOnlyWhenItsPaneCanConfirmIt(t *testing.T) {
 			// A Kitty that is running changes nothing for a tmux session.
 			h.SetKittyClient(&fakeKittyClient{})
 			if tc.reader {
-				h.SetRuntimeScreenReader(func(runtimesession.BackendInstance) (backend.Observer, error) {
+				h.SetRuntimeScreenReader(func(runtimesession.BackendInstance) (RuntimeScreen, error) {
 					return &fakePaneScreens{generation: probedGeneration}, nil
 				})
 			}

@@ -41,6 +41,15 @@ context_zero_line = '(?i)\bcontext\b.*(?:^|[^0-9])0\s*%'
 # session's scrollback from reading as freshly cleared.
 labeled_transcript_line = '(?i)^\s*(?:user|codex|assistant|system)\s*:'
 
+# banner_line matches the first line of the header Codex draws at the top of a
+# fresh or cleared session (">_ OpenAI Codex (v0.162.1)"). Builds up to 0.149.x
+# drew that header inside a box, which the cleared-screen check already reads
+# as chrome; codex-cli 0.162.x draws it bare, and a bare line starting with ">"
+# is otherwise a transcript line there. It is the one exemption from that
+# negative test, so keep it anchored on the whole product name: see
+# testdata/tmux/codex_cleared.txt.
+banner_line = '^\s*>_ OpenAI Codex(?:\s|$)'
+
 # worked_for_line matches Codex's completed-turn status line ("Worked for
 # 1m 30s"). The trailing digit requirement anchors on a real duration so
 # transcript prose such as "worked for the previous release" cannot match.

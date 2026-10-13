@@ -227,12 +227,12 @@ Shared and domain packages (`internal/...`):
   errors; `internal/backend/backendtest` is the shared contract every adapter
   runs (`internal/kitty.Backend` is the Kitty adapter). `backend.Screen` is
   the backend-neutral screen observation (`Observer.Observe`): text plus the
-  instance generation, pane size, alternate-screen and exit state, and capture
-  time. Screen probes read it only through `probes.CheckScreen`, so a failed,
+  instance generation, pane title, pane size, alternate-screen and exit state,
+  and capture time. Screen probes read it only through `probes.CheckScreen`, so a failed,
   stale, wrong-pane, wrong-generation, or exited-pane capture is never read.
-  The daemon probes a tmux session through the same Claude and Codex bodies
-  as a Kitty window (`internal/daemon/runtime_screen_probes.go`), with a
-  binding built from its slot instead of a window tree; a stop there is held
+  The daemon probes a tmux session through the same Claude, Codex, and
+  Copilot bodies as a Kitty window (`internal/daemon/runtime_screen_probes.go`),
+  with a binding built from its slot instead of a window tree; a stop there is held
   for confirmation only when its pane can confirm it.
 - `internal/tmux`: the private tmux backend — AgentMux's own socket and
   configuration (never the operator's server or `~/.tmux.conf`), one session

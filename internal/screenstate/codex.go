@@ -37,6 +37,9 @@ import (
 //     positive terminal marker, so nothing settles. Withholds settling.
 //   - context_zero_line missing: CodexScreenLooksCleared cannot find its
 //     positive evidence and returns false. Withholds the clear transition.
+//   - banner_line missing: the bare header of a cleared session reads as a
+//     transcript line, so CodexScreenLooksCleared returns false. Withholds the
+//     clear transition.
 //   - working_status_line, live_elapsed_status_line, interrupt_hint,
 //     background_terminal_footer missing: these are ONE-WAY vetoes, and a
 //     missing one weakens the refusal. They sit alongside each other so that no
@@ -54,6 +57,7 @@ const (
 	codexClauseComposerPlaceholder = "composer_placeholder"
 	codexClauseContextZeroLine     = "context_zero_line"
 	codexClauseLabeledTranscript   = "labeled_transcript_line"
+	codexClauseBannerLine          = "banner_line"
 	codexClauseWorkedForLine       = "worked_for_line"
 	codexClauseCompletedMarker     = "completed_marker_line"
 	codexClauseWorkingStatusLine   = "working_status_line"
@@ -73,7 +77,7 @@ const (
 // same clauses against a set that never went through Load.
 //
 // The clauses left OUT are the positive-evidence ones — worked_for_line,
-// completed_marker_line, interrupted_line, context_zero_line,
+// completed_marker_line, interrupted_line, context_zero_line, banner_line,
 // composer_placeholder. Codex settles only on a positive marker, so losing one
 // costs a settle it would otherwise have made; that is the safe direction and
 // an override that predates a new marker shape must keep working.
@@ -130,6 +134,7 @@ type codexClauses struct {
 	placeholders      []string
 	contextZeroRE     *regexp.Regexp
 	labeledRE         *regexp.Regexp
+	bannerRE          *regexp.Regexp
 	workedForRE       *regexp.Regexp
 	completedMarkerRE *regexp.Regexp
 	workingRE         *regexp.Regexp
@@ -145,6 +150,7 @@ func codexClausesFor(patterns Patterns) codexClauses {
 		placeholders:      patterns.Phrases(codexClauseComposerPlaceholder),
 		contextZeroRE:     patterns.Regexp(codexClauseContextZeroLine),
 		labeledRE:         patterns.Regexp(codexClauseLabeledTranscript),
+		bannerRE:          patterns.Regexp(codexClauseBannerLine),
 		workedForRE:       patterns.Regexp(codexClauseWorkedForLine),
 		completedMarkerRE: patterns.Regexp(codexClauseCompletedMarker),
 		workingRE:         patterns.Regexp(codexClauseWorkingStatusLine),

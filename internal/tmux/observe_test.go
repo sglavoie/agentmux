@@ -168,3 +168,38 @@ func TestObserveNeverAnswersForAnotherPaneOrGeneration(t *testing.T) {
 	}
 	t.Logf("observed: exited pane Exited=true; group ref ErrInvalidRef; missing and closed panes error; dead server ErrServerNotRunning; pane %s of generation %s became pane %s of generation %s", live.Pane.ID, before.Instance.Generation, next.Pane.ID, after.Instance.Generation)
 }
+
+// Claude Code names its turn in the terminal title (OSC 0), and the daemon
+// reads that title with the screen. The private configuration lets a pane
+// program set it and nothing else: the window keeps its name.
+func TestObserveReportsTheTitleThePaneProgramSet(t *testing.T) {
+	f := newFixture(t, Options{})
+	const working, resting = "⠐ Fix the flaky test", "✳ Fix the flaky test"
+	l := f.launch(t, "titled", []string{
+		"/bin/sh", "-c",
+		`printf '\033]0;%s\007' "$1"; echo first-marker; read -r _; printf '\033]2;%s\033\\' "$2"; echo second-marker; exec sleep 600`,
+		"amx", working, resting,
+	}, nil)
+	windowName := f.tmux(t, "display-message", "-p", "-t", l.Pane.ID, "#{window_name}")
+	if got := f.tmux(t, "show-options", "-gwv", "allow-set-title"); got != "on" {
+		t.Fatalf("allow-set-title = %q under the private configuration; want on", got)
+	}
+
+	screen := f.observeUntil(t, l.Pane, func(s backend.Screen) bool {
+		return strings.Contains(s.Text, "first-marker") && s.Title == working
+	})
+	if discovered := f.waitFor(t, "titled", func(p backend.Pane) bool { return p.Title == working }); discovered.Title != screen.Title {
+		t.Errorf("Discover title %q, Observe title %q", discovered.Title, screen.Title)
+	}
+
+	f.tmux(t, "send-keys", "-t", l.Pane.ID, "Enter")
+	screen = f.observeUntil(t, l.Pane, func(s backend.Screen) bool {
+		return strings.Contains(s.Text, "second-marker") && s.Title == resting
+	})
+	if screen.Pane != l.Pane || screen.Cols == 0 || screen.Exited {
+		t.Errorf("a titled pane observed as %+v", screen)
+	}
+	if got := f.tmux(t, "display-message", "-p", "-t", l.Pane.ID, "#{window_name}"); got != windowName {
+		t.Errorf("the title renamed the window: %q, was %q", got, windowName)
+	}
+}

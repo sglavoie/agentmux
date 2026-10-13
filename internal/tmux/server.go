@@ -88,6 +88,9 @@ set -s exit-unattached off
 set -g remain-on-exit on
 set -g allow-rename off
 set -g automatic-rename off
+# The pane title is the agent's to set: Claude Code names its turn there, and
+# the daemon reads it with the screen. It names no window and no session.
+set -g allow-set-title on
 
 # History is held here, in the server, so it outlives every viewer: lines that
 # scrolled off a pane are tmux's (history-limit above), and a full-screen

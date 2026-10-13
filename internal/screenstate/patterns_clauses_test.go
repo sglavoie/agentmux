@@ -43,6 +43,7 @@ func TestEmbeddedPatternsDefineEveryAdapterClause(t *testing.T) {
 			codexClauseComposerPlaceholder,
 			codexClauseContextZeroLine,
 			codexClauseLabeledTranscript,
+			codexClauseBannerLine,
 			codexClauseWorkedForLine,
 			codexClauseCompletedMarker,
 			codexClauseWorkingStatusLine,

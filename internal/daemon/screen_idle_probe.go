@@ -322,6 +322,18 @@ func probeScreenText(screens *activity.ScreenTextCache, binding probes.Binding) 
 	return probes.FreshScreenText(screen, err, binding.ScreenExpectation(), time.Now())
 }
 
+// probeScreenTitle returns the title this tick's observation of the binding's
+// producer pane was read with, and nothing for an observation probeScreenText
+// would refuse: a title is evidence about the pane under the same rules as
+// its screen.
+func probeScreenTitle(screens *activity.ScreenTextCache, binding probes.Binding) string {
+	screen, err := screens.Observe(binding.SourcePane())
+	if probes.CheckScreen(screen, err, binding.ScreenExpectation(), time.Now()) != probes.ScreenFresh {
+		return ""
+	}
+	return screen.Title
+}
+
 // Handler-side entry points for screen-probe declines. The counters, the
 // fingerprint comparison, and the export projection all live in
 // internal/daemon/activity as a caller-locked activity.Declines tracker; what

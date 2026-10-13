@@ -15,11 +15,18 @@ import (
 // The tmux captures under testdata/tmux were taken with testdata/tmux/capture.sh
 // against live panes on a private tmux 3.7c server running the production
 // configuration (internal/tmux.Config): Claude Code 2.1.296, codex-cli 0.162.0
-// and GitHub Copilot CLI 1.0.95. Each NAME.txt is `capture-pane -p` byte for
+// (codex_cleared: 0.162.1) and GitHub Copilot CLI 1.0.95. Each NAME.txt is `capture-pane -p` byte for
 // byte — what the tmux backend's Capture and Observe return — NAME.ansi is the
 // same screen with `-e`, and NAME.json is the pane geometry and screen mode
 // tmux reported for it. None is hand-edited; re-take a capture when a harness
 // release moves the copy.
+//
+// Three later captures feed the probes that read more than a screen. The two
+// claude_*_titled ones carry NAME.title, the pane title Claude had set
+// (pane_title, which the backend's Observe reads with the screen), and
+// codex_cleared carries NAME.all.txt, the screen with its history
+// (`capture-pane -p -S - -E -`, the backend's Capture(ExtentAll)), taken from
+// codex-cli 0.162.1 after a turn and a /clear.
 //
 // They are the second fixture set. The captures directly under testdata are
 // Kitty `get-text --extent=screen` reads, and the tests here hold the two sets
@@ -66,6 +73,8 @@ var tmuxFixtures = []tmuxFixture{
 	{"claude_rejected_tool", "claude", behaviourFailure, Terminal, TierQuiescent, 0, 120, 36, true},
 	{"claude_interrupted_restored_input", "claude", behaviourFailure, Unknown, TierNone, VetoComposerBusy, 120, 36, true},
 	{"claude_exited_pane_dead", "claude", behaviourFailure, Blocked, TierNone, VetoBlockingPrompt | VetoComposerBusy, 120, 36, false},
+	{"claude_working_streaming_titled", "claude", behaviourBusy, Terminal, TierQuiescent, 0, 120, 36, true},
+	{"claude_idle_completed_titled", "claude", behaviourCompletion, Terminal, TierQuiescent, 0, 120, 36, true},
 
 	// codex-cli 0.162.0.
 	{"codex_trust_prompt", "codex", behaviourPrompt, Unknown, TierNone, VetoComposerBusy, 120, 36, true},
@@ -77,6 +86,7 @@ var tmuxFixtures = []tmuxFixture{
 	{"codex_idle_completed_t0", "codex", behaviourCompletion, Terminal, TierTerminalExplicit, 0, 120, 36, true},
 	{"codex_idle_completed_t1", "codex", behaviourCompletion, Terminal, TierTerminalExplicit, 0, 120, 36, true},
 	{"codex_rejected_command", "codex", behaviourFailure, Terminal, TierTerminalExplicit, 0, 120, 36, true},
+	{"codex_cleared", "codex", behaviourPrompt, Unknown, TierNone, 0, 120, 36, true},
 
 	// GitHub Copilot CLI 1.0.95. Its adapter has no Terminal branch: the
 	// screen never reports a finished Copilot turn on either backend.
@@ -98,6 +108,27 @@ var tmuxFixtureVersions = map[string]string{
 	"claude":  "2.1.296",
 	"codex":   "0.162.0",
 	"copilot": "1.0.95",
+}
+
+// tmuxFixtureVersionOf names the captures taken from a later build than the
+// rest of their harness's set.
+var tmuxFixtureVersionOf = map[string]string{
+	"codex_cleared": "0.162.1",
+}
+
+func tmuxFixtureVersion(fixture tmuxFixture) string {
+	if version, ok := tmuxFixtureVersionOf[fixture.name]; ok {
+		return version
+	}
+	return tmuxFixtureVersions[fixture.harness]
+}
+
+// tmuxFixtureExtras names what a capture carries beside its screen: the pane
+// title (capture.sh title) or the screen with its history (capture.sh all).
+var tmuxFixtureExtras = map[string]string{
+	"claude_working_streaming_titled": ".title",
+	"claude_idle_completed_titled":    ".title",
+	"codex_cleared":                   ".all.txt",
 }
 
 // tmuxFixtureMeta is the NAME.json sidecar capture.sh writes from tmux formats.
@@ -135,6 +166,9 @@ func TestTmuxFixturesAreAllRegistered(t *testing.T) {
 		for _, ext := range []string{".txt", ".ansi", ".json"} {
 			want[fixture.name+ext] = true
 		}
+	}
+	for name, ext := range tmuxFixtureExtras {
+		want[name+ext] = true
 	}
 	entries, err := os.ReadDir(tmuxFixtureRoot)
 	if err != nil {
@@ -207,9 +241,9 @@ func TestTmuxFixtureGeometry(t *testing.T) {
 			if err := json.Unmarshal([]byte(readTmuxFixture(t, fixture.name, ".json")), &meta); err != nil {
 				t.Fatalf("sidecar: %v", err)
 			}
-			if meta.Harness != fixture.harness || meta.Version != tmuxFixtureVersions[fixture.harness] {
+			if meta.Harness != fixture.harness || meta.Version != tmuxFixtureVersion(fixture) {
 				t.Errorf("sidecar says %s %s, want %s %s",
-					meta.Harness, meta.Version, fixture.harness, tmuxFixtureVersions[fixture.harness])
+					meta.Harness, meta.Version, fixture.harness, tmuxFixtureVersion(fixture))
 			}
 			if meta.Capture != "capture-pane -p" || meta.Tmux == "" {
 				t.Errorf("sidecar capture=%q tmux=%q", meta.Capture, meta.Tmux)
@@ -412,6 +446,83 @@ func TestTmuxExitedPaneScreenIsNotAFinishedTurn(t *testing.T) {
 	}
 }
 
+// TestTmuxClaudeTitleCaptures holds the two pane titles to what they were
+// taken to show: Claude 2.1.296 sets its title through tmux under the private
+// configuration, names the turn there while it streams, and leaves that name
+// in place once the turn is over. The title therefore says a turn was started,
+// never that one is running; the screens beside it are what differ.
+func TestTmuxClaudeTitleCaptures(t *testing.T) {
+	working := readTmuxFixture(t, "claude_working_streaming_titled", ".title")
+	resting := readTmuxFixture(t, "claude_idle_completed_titled", ".title")
+	for name, title := range map[string]string{"working": working, "resting": resting} {
+		body, marked := strings.CutPrefix(title, "✳ ")
+		if !marked || !strings.HasSuffix(body, "\n") || strings.Count(title, "\n") != 1 {
+			t.Fatalf("the %s title %q is not one line under Claude's marker", name, title)
+		}
+		if strings.TrimSpace(body) == "" || strings.TrimSpace(body) == "Claude Code" {
+			t.Errorf("the %s title %q names no turn", name, title)
+		}
+	}
+	if working != resting {
+		t.Errorf("the title changed when the turn ended (%q, then %q); the pair no longer shows a title outliving its turn", working, resting)
+	}
+	streaming := readTmuxFixture(t, "claude_working_streaming_titled", ".txt")
+	done := readTmuxFixture(t, "claude_idle_completed_titled", ".txt")
+	if strings.Contains(streaming, "✻ Worked for") || !strings.Contains(done, "✻ Worked for") {
+		t.Error("the pair is no longer a turn in flight and the same turn finished")
+	}
+	if Fingerprint(streaming) == Fingerprint(done) {
+		t.Error("the streaming and finished screens share a fingerprint")
+	}
+}
+
+// TestTmuxCodexClearedCapture is the trap codex_cleared was taken for.
+// codex-cli 0.162.1 draws its header bare, so a cleared session's first line
+// starts with ">" like a quoted transcript line, and it runs on the alternate
+// screen, where a pane has no history: the screen and the screen with its
+// history are the same bytes, and both must read as cleared.
+func TestTmuxCodexClearedCapture(t *testing.T) {
+	screen := readTmuxFixture(t, "codex_cleared", ".txt")
+	all := readTmuxFixture(t, "codex_cleared", ".all.txt")
+	if !strings.HasPrefix(screen, "\n  >_ OpenAI Codex (v0.162.1)\n") {
+		t.Fatal("the capture no longer opens on a bare session header")
+	}
+	if !strings.Contains(screen, "Context 0% used") {
+		t.Fatal("the capture no longer reports an empty context")
+	}
+	if all != screen {
+		t.Error("the history capture differs from the screen; the pane was not on the alternate screen")
+	}
+	if !CodexScreenLooksCleared(screen) || !ClassifyCodexClearScreen(screen, all) {
+		t.Errorf("a cleared session reads looks-cleared=%v cleared=%v",
+			CodexScreenLooksCleared(screen), ClassifyCodexClearScreen(screen, all))
+	}
+
+	// Without the banner clause the header is a transcript line again.
+	embedded, _ := PatternsFor("codex")
+	clauses := codexClausesFor(embedded)
+	if !clauses.transcriptMarker("  > quoted by the model") || clauses.transcriptMarker("  >_ OpenAI Codex (v0.162.1)") {
+		t.Error("the banner exemption is not exactly the session header")
+	}
+	clauses.bannerRE = nil
+	if clauses.screenLooksCleared(screen) {
+		t.Error("the capture reads as cleared with no banner clause; it no longer poses the trap")
+	}
+
+	// No screen that still shows a turn, a prompt, or live work is cleared.
+	// The bare composer of a new session is: it is the same screen.
+	for _, fixture := range tmuxFixtures {
+		if fixture.harness != "codex" {
+			continue
+		}
+		text := readTmuxFixture(t, fixture.name, ".txt")
+		want := fixture.name == "codex_cleared" || fixture.name == "codex_idle_bare_composer"
+		if got := ClassifyCodexClearScreen(text, text); got != want {
+			t.Errorf("%s: cleared = %v, want %v", fixture.name, got, want)
+		}
+	}
+}
+
 // backendParity pairs a Kitty capture with a tmux capture of the same kind of
 // screen. Kitty captures are from earlier harness builds, so copy has moved;
 // what must not move is the reading.
@@ -473,6 +584,36 @@ func TestBackendFixtureParity(t *testing.T) {
 		})
 		covered[row.harness+"/"+row.behaviour] = true
 	}
+	// The cleared-screen check reads a screen and the screen with its history.
+	// A Kitty window keeps the session's primary-screen scrollback and a tmux
+	// pane on the alternate screen keeps none, so the second read differs in
+	// kind; the verdict must not.
+	for _, row := range []struct {
+		name        string
+		kitty, tmux string
+		cleared     bool
+	}{
+		{"cleared", "codex_cleared.txt", "codex_cleared", true},
+		{"completed", "codex_idle_completed_t0.txt", "codex_idle_completed_t0", false},
+		{"permission", "codex_prompt_command_approval.txt", "codex_permission_prompt", false},
+		{"busy", "codex_working.txt", "codex_working_t0", false},
+	} {
+		t.Run("codex/clear/"+row.name, func(t *testing.T) {
+			kitty := readScreenFixture(t, row.kitty)
+			tmux := readTmuxFixture(t, row.tmux, ".txt")
+			tmuxAll := tmux
+			if tmuxFixtureExtras[row.tmux] == ".all.txt" {
+				tmuxAll = readTmuxFixture(t, row.tmux, ".all.txt")
+			}
+			if got := ClassifyCodexClearScreen(kitty, kitty); got != row.cleared {
+				t.Errorf("kitty %s: cleared = %v, want %v", row.kitty, got, row.cleared)
+			}
+			if got := ClassifyCodexClearScreen(tmux, tmuxAll); got != row.cleared {
+				t.Errorf("tmux %s: cleared = %v, want %v", row.tmux, got, row.cleared)
+			}
+		})
+	}
+
 	var missing []string
 	for harnessName := range tmuxFixtureVersions {
 		for _, behaviour := range []string{
