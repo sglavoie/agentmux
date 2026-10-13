@@ -30,6 +30,10 @@ type gatedListRunner struct {
 	listCalls map[string]int
 	gates     map[string]chan struct{}
 	entered   map[string]chan struct{}
+	// latency is how long an ungated list takes. A real `kitten @ ls` is a
+	// subprocess; a list that returns at once can finish before the scheduler
+	// lets any other caller arrive, and then nothing is concurrent with it.
+	latency time.Duration
 }
 
 func newGatedListRunner(payload []byte) *gatedListRunner {
@@ -72,6 +76,8 @@ func (r *gatedListRunner) Run(_ string, args ...string) ([]byte, []byte, error) 
 	}
 	if gate != nil {
 		<-gate
+	} else if r.latency > 0 {
+		time.Sleep(r.latency)
 	}
 	return r.payload, nil, nil
 }
@@ -267,6 +273,11 @@ func TestBlockedDaemonSocketLeavesOtherSocketsIndependent(t *testing.T) {
 // and it pins the accounting: waiters are counted, never charged as attempts.
 func TestConcurrentDaemonPathsShareOneSubprocessRepeatedly(t *testing.T) {
 	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
+	// The lists take a moment, as a subprocess does, so the four paths overlap
+	// however few processors run them. With instant lists a loaded or
+	// single-processor machine runs the paths one after another and the
+	// coalescing asserted below never has the chance to happen.
+	runner.latency = time.Millisecond
 	h, client := newCoordinatedHandler(t, runner)
 	h.MarkReady()
 
