@@ -15,17 +15,22 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
+	"github.com/sglavoie/agentmux/internal/gitstate"
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
 // Fleet budgets: what the daemon's periodic work for tmux sessions costs with
 // one, ten, and thirty agents, idle and under sustained output.
 //
-// The work is the same two things at any size. A maintenance pass reconciles
+// The work is the same things at any size. A maintenance pass reconciles
 // the registry with the private server every rendering.Interval, and the
 // screen-probe loop reads the screen of each agent it has a question about,
-// one pane after another, on the same interval. What these tests measure is
+// one pane after another, on the same interval. The watchdog judges every
+// slot stale or not, and every profile silent or not, once a second, and
+// starts a Git round over the sessions' directories when their answers have
+// aged out; it needs no Kitty for a tmux session. What these tests measure is
 // how each grows with the fleet, against a real private tmux server running
 // the production configuration and whatever tmux the runtime resolves (the
 // reliability-stress recipe points it at the packaged runtime when one is
@@ -36,8 +41,9 @@ import (
 // Two kinds of assertion, and they are different in kind:
 //
 //   - The bounds are exact and hold at any load: a pass is one tmux client
-//     however many agents there are, and no more than tmux.MaxClientCommands
-//     clients ever run at once.
+//     however many agents there are, no more than tmux.MaxClientCommands
+//     clients ever run at once, and the watchdog and its Git round start
+//     none: a session's profile and directory are read once, with its label.
 //   - The budgets are wall-clock ceilings with room over what was measured
 //     (the table below), so they catch a regression in kind (a pass that
 //     starts one client per agent, a read that scans the history) and not a
@@ -62,6 +68,24 @@ import (
 // for each pane that has printed its 50,000 lines.
 //
 // The recorded run is docs/acceptance/ghostty-desktop/session-18/fleet-budgets.log.
+//
+// The watchdog's share, measured 2026-10-13 on the same machine and tmux, in
+// a daemon with no Kitty snapshot and every session active in a repository of
+// its own; p95 over 30 ticks, and the slowest of 5 Git rounds with nothing
+// cached:
+//
+//	fleet        watchdog tick   cold git round
+//	 1 idle       0.009ms          16.2ms
+//	 1 output     0.008ms          16.7ms
+//	10 idle       0.013ms          51.6ms
+//	10 output     0.014ms          54.9ms
+//	30 idle       0.025ms         144.1ms
+//	30 output     0.049ms         153.5ms
+//
+// A tick is daemon memory alone and starts no tmux client: a session's
+// profile and directory were read with its label, by the first pass that saw
+// it. A round is two git commands for each directory, four at a time, and is
+// owed once every gitstate.DefaultTTL, off the watchdog.
 
 const (
 	// fleetPassBudget is the ceiling on one maintenance pass (reconcile,
@@ -81,9 +105,25 @@ const (
 	// within a second and then stays there.
 	fleetServerMemoryPerSession = 48.0
 	fleetServerMemoryBase       = 32.0
-	// fleetPasses and fleetSweeps are how many of each are timed.
-	fleetPasses = 30
-	fleetSweeps = 10
+	// fleetWatchdogBudget is the ceiling on one watchdog tick over the fleet:
+	// the stale sweep of every slot, the hook-silence sweep of every profile,
+	// and starting the Git round. It is daemon memory under stateMu, which
+	// every hook acknowledgement waits on, so it is held to a small part of
+	// the hook budget and not to the watchdog's own interval: less than one
+	// subprocess costs, so a sweep that started one would not fit.
+	fleetWatchdogBudget = 5 * time.Millisecond
+	// fleetGitRoundBudget is the ceiling on one Git round over the fleet with
+	// nothing cached: two git commands for each session's directory,
+	// gitstate.DefaultWorkers at a time, off the watchdog and off stateMu. A
+	// round is owed once per gitstate.DefaultTTL; one that outlasted the
+	// watchdog's interval would hold the next tick's round back.
+	fleetGitRoundBudget = watchdogInterval
+	// fleetPasses and fleetSweeps are how many of each are timed, and
+	// fleetWatchdogTicks and fleetGitRounds likewise.
+	fleetPasses        = 30
+	fleetSweeps        = 10
+	fleetWatchdogTicks = 30
+	fleetGitRounds     = 5
 )
 
 // fleetMeasurement is one fleet's numbers, as logged and as recorded.
@@ -118,6 +158,16 @@ type fleetMeasurement struct {
 
 	// ServerCPUPercent is the tmux server's CPU over the measured window,
 	// and ServerRSSMiB its resident memory at the end of it.
+	// WatchdogP95Ms is one watchdog tick over the fleet, every slot active,
+	// and ClientsPerWatchdog the tmux clients its ticks and Git rounds
+	// started, which is none.
+	WatchdogP95Ms      float64 `json:"watchdog_p95_ms"`
+	ClientsPerWatchdog float64 `json:"clients_per_watchdog"`
+	// GitRoundP50Ms and GitRoundMaxMs are a Git round over the directories
+	// of the whole fleet with nothing cached.
+	GitRoundP50Ms float64 `json:"git_round_p50_ms"`
+	GitRoundMaxMs float64 `json:"git_round_max_ms"`
+
 	ServerCPUPercent float64 `json:"server_cpu_percent"`
 	ServerRSSMiB     float64 `json:"server_rss_mib"`
 	// ClientCPUMs is the CPU the tmux clients of the window used, in total.
@@ -194,6 +244,8 @@ func measureFleet(t *testing.T, sessions int, workload string) fleetMeasurement 
 	}
 	h, _ := w.startDaemon(time.Now())
 	h.SetScreenObserver(w.tmux.Backend)
+	// As Run installs it: a session's profile and directory are its pane's.
+	h.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
 	m := fleetMeasurement{Sessions: sessions, Workload: workload, ClientLimit: tmux.MaxClientCommands}
 	if out, err := exec.Command(w.tmux.Server.Binary(), "-V").Output(); err == nil {
 		m.Tmux = strings.TrimSpace(string(out))
@@ -212,8 +264,10 @@ func measureFleet(t *testing.T, sessions int, workload string) fleetMeasurement 
 		t.Fatalf("server generation %q names no PID", survey.Instance.Generation)
 	}
 	// One pass and one sweep outside the window: the first of each pays for
-	// what is paid once.
-	now := time.Now()
+	// what is paid once, which for a pass is reading each session's label
+	// off its pane. It is dated an interval on so that it reconciles however
+	// little time the launches took, and so adopts and labels the fleet.
+	now := time.Now().Add(runtimeReconcileInterval)
 	h.maintainRuntimeSessions(now)
 	for _, agent := range agents {
 		if _, err := h.screenTextCacheFor().Observe(agent.launched.Pane); err != nil {
@@ -295,6 +349,8 @@ func measureFleet(t *testing.T, sessions int, workload string) fleetMeasurement 
 	m.ServerRSSMiB = rss
 	m.ClientCPUMs = msOf(childCPU() - clientCPUBefore)
 
+	measureFleetWatchdog(t, h, agents, &m)
+
 	health := runtimeHealthOf(t, h)
 	if health.Sessions.Live != sessions || health.Reconcile.Failures != 0 || health.Capture.Failures != 0 {
 		t.Errorf("health after the window: sessions = %+v reconcile = %+v capture = %+v", health.Sessions, health.Reconcile, health.Capture)
@@ -303,6 +359,95 @@ func measureFleet(t *testing.T, sessions int, workload string) fleetMeasurement 
 		w.requireSameAgent(agent, "the measured window")
 	}
 	return m
+}
+
+// measureFleetWatchdog times the watchdog over the fleet's slots, in a daemon
+// that has no Kitty snapshot: every session is made active, so each tick
+// advances a slot's and a fact's idle time for all of them, its profile is
+// judged for silence, and its directory is a repository the Git round reads.
+// It runs after the measured window, whose client CPU is tmux's alone.
+func measureFleetWatchdog(t *testing.T, h *Handler, agents []faultAgent, m *fleetMeasurement) {
+	t.Helper()
+	if _, _, ready := h.cachedSnapshot(); ready {
+		t.Fatal("the fleet's daemon has a Kitty snapshot; the watchdog is measured without one")
+	}
+	h.SetStaleThresholds(map[string]time.Duration{"active": time.Hour, "subagent": time.Hour, "compact": time.Hour}, nil)
+	h.SetHookSilenceThresholds(time.Hour, nil)
+	base := time.Now()
+	directories := make(map[int]string, len(agents))
+	for _, agent := range agents {
+		slot := h.runtimeSessionSlot(string(agent.id))
+		h.stateMu.Lock()
+		st, tracked := h.store[slot]
+		label := h.runtimeLabels[string(agent.id)]
+		if tracked {
+			st.LastAction, st.LastAccount, st.Activity = "active", label.profile, base
+			h.lastSeenEventAt[strings.ToLower(label.profile)] = base
+		}
+		h.stateMu.Unlock()
+		directory, ok := gitstate.Key(label.directory)
+		if !tracked || !isRuntimeSyntheticSlot(slot) || label.profile == "" || !ok {
+			t.Fatalf("%s: slot %d tracked=%v label=%+v; the watchdog has nothing of it to sweep", agent.id, slot, tracked, label)
+		}
+		seedReducerFact(h, slot, base, protocol.ReducerEvent{
+			Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "main"},
+			Action: "active", Seq: 1, At: base.Unix(),
+		})
+		// A branch has a name once it has a commit.
+		for _, args := range [][]string{
+			{"init", "--quiet", "--initial-branch", "fleet"},
+			{"-c", "user.name=fleet", "-c", "user.email=fleet@example.invalid", "-c", "commit.gpgsign=false",
+				"commit", "--quiet", "--allow-empty", "--no-verify", "-m", "fleet"},
+		} {
+			if out, err := exec.Command("git", append([]string{"-C", directory}, args...)...).CombinedOutput(); err != nil {
+				t.Fatalf("git %v in %s: %v: %s", args, directory, err, out)
+			}
+		}
+		directories[slot] = directory
+	}
+
+	before := tmux.Stats()
+	// The round a tick starts is held back, so a tick is timed without one
+	// running beside it; the rounds are timed on their own below.
+	var started []func()
+	h.probeRunner = func(fn func()) { started = append(started, fn) }
+	h.SetGitProbe(true, 0, 0)
+	ticks := make([]time.Duration, fleetWatchdogTicks)
+	now := base
+	for i := range ticks {
+		now = now.Add(watchdogInterval)
+		tickStarted := time.Now()
+		h.watchdogTick(now, watchdogInterval)
+		ticks[i] = time.Since(tickStarted)
+	}
+	if len(started) != 1 {
+		t.Fatalf("%d watchdog ticks started %d Git rounds; one is in flight at a time", fleetWatchdogTicks, len(started))
+	}
+	for slot := range directories {
+		if got := effectiveState(h, slot).Icon; got != "bolt" {
+			t.Fatalf("slot %d icon = %q after %d ticks; the measured sweep was to leave an active session active", slot, got, fleetWatchdogTicks)
+		}
+	}
+
+	rounds := make([]time.Duration, fleetGitRounds)
+	for i := range rounds {
+		// A new cache has no answers, so every directory is probed.
+		h.SetGitProbe(true, 0, 0)
+		roundStarted := time.Now()
+		h.runGitStateRefresh(nil)
+		rounds[i] = time.Since(roundStarted)
+	}
+	for slot, directory := range directories {
+		if got := windowGitState(t, h, slot); got.GitDirectory != directory || got.GitBranch != "fleet" {
+			t.Fatalf("slot %d git state = %q %q; want branch fleet in %s", slot, got.GitDirectory, got.GitBranch, directory)
+		}
+	}
+	h.probeRunner = nil
+	h.SetGitProbe(false, 0, 0)
+
+	m.WatchdogP95Ms = msOf(percentile(ticks, 0.95))
+	m.GitRoundP50Ms, m.GitRoundMaxMs = msOf(percentile(rounds, 0.5)), msOf(percentile(rounds, 1))
+	m.ClientsPerWatchdog = float64(tmux.Stats().Commands-before.Commands) / fleetWatchdogTicks
 }
 
 func TestPerformance_FleetBudgets(t *testing.T) {
@@ -314,10 +459,11 @@ func TestPerformance_FleetBudgets(t *testing.T) {
 			t.Run(fmt.Sprintf("%d-sessions-%s", sessions, workload), func(t *testing.T) {
 				m := measureFleet(t, sessions, workload)
 				recorded = append(recorded, m)
-				t.Logf("%s: launch %.0fms; pass p50 %.1fms p95 %.1fms max %.1fms (%.2f tmux clients per pass); read p50 %.1fms p95 %.1fms max %.1fms; sweep of %d p95 %.1fms; %d-wide round p95 %.1fms; tick p95 %.1fms of %s; at most %d clients at once; server %.1f%% CPU, %.1f MiB; clients %.0fms CPU over %.0fms",
+				t.Logf("%s: launch %.0fms; pass p50 %.1fms p95 %.1fms max %.1fms (%.2f tmux clients per pass); read p50 %.1fms p95 %.1fms max %.1fms; sweep of %d p95 %.1fms; %d-wide round p95 %.1fms; tick p95 %.1fms of %s; at most %d clients at once; server %.1f%% CPU, %.1f MiB; clients %.0fms CPU over %.0fms; watchdog tick p95 %.3fms (%.2f tmux clients); cold git round p50 %.1fms max %.1fms",
 					m.Tmux, m.LaunchMs, m.PassP50Ms, m.PassP95Ms, m.PassMaxMs, m.ClientsPerPass,
 					m.ReadP50Ms, m.ReadP95Ms, m.ReadMaxMs, sessions, m.SweepP95Ms, m.ClientLimit, m.RoundP95Ms,
-					m.TickP95Ms, rendering.Interval, m.MaxClientsAtOnce, m.ServerCPUPercent, m.ServerRSSMiB, m.ClientCPUMs, m.WindowMs)
+					m.TickP95Ms, rendering.Interval, m.MaxClientsAtOnce, m.ServerCPUPercent, m.ServerRSSMiB, m.ClientCPUMs, m.WindowMs,
+					m.WatchdogP95Ms, m.ClientsPerWatchdog, m.GitRoundP50Ms, m.GitRoundMaxMs)
 
 				// Bounds: exact, whatever the load.
 				if m.ClientsPerPass > 1 {
@@ -332,12 +478,21 @@ func TestPerformance_FleetBudgets(t *testing.T) {
 				if limit := fleetServerMemoryBase + fleetServerMemoryPerSession*float64(sessions); m.ServerRSSMiB > limit {
 					t.Errorf("tmux server holds %.0f MiB for %d sessions; budget is %.0f MiB", m.ServerRSSMiB, sessions, limit)
 				}
+				if m.ClientsPerWatchdog != 0 {
+					t.Errorf("the watchdog over %d sessions started %.2f tmux clients a tick; it reads daemon memory alone", sessions, m.ClientsPerWatchdog)
+				}
 				// Budgets: ceilings over what was measured.
 				if got := time.Duration(m.PassP95Ms * float64(time.Millisecond)); got > fleetPassBudget {
 					t.Errorf("maintenance pass p95 = %s; budget is %s", got, fleetPassBudget)
 				}
 				if got := time.Duration(m.ReadP95Ms * float64(time.Millisecond)); got > fleetReadBudget {
 					t.Errorf("screen read p95 = %s; budget is %s", got, fleetReadBudget)
+				}
+				if got := time.Duration(m.WatchdogP95Ms * float64(time.Millisecond)); got > fleetWatchdogBudget {
+					t.Errorf("watchdog tick p95 = %s; budget is %s", got, fleetWatchdogBudget)
+				}
+				if got := time.Duration(m.GitRoundMaxMs * float64(time.Millisecond)); got > fleetGitRoundBudget {
+					t.Errorf("cold Git round over %d directories took %s; budget is %s", sessions, got, fleetGitRoundBudget)
 				}
 				if got := time.Duration(m.TickP95Ms * float64(time.Millisecond)); got > fleetTickBudget {
 					t.Errorf("one tick's work (a pass and a read of all %d panes) p95 = %s; budget is %s", sessions, got, fleetTickBudget)
@@ -353,10 +508,12 @@ func TestPerformance_FleetBudgets(t *testing.T) {
 			"measured_at": time.Now().UTC().Format(time.RFC3339),
 			"budgets_ms": map[string]float64{
 				"pass_p95": msOf(fleetPassBudget), "read_p95": msOf(fleetReadBudget), "tick_p95": msOf(fleetTickBudget),
+				"watchdog_p95": msOf(fleetWatchdogBudget), "git_round_max": msOf(fleetGitRoundBudget),
 			},
 			"budget_server_mib_per_session": fleetServerMemoryPerSession, "budget_server_mib_base": fleetServerMemoryBase,
-			"bounds":      map[string]any{"tmux_clients_per_pass": 1, "tmux_clients_at_once": tmux.MaxClientCommands},
+			"bounds":      map[string]any{"tmux_clients_per_pass": 1, "tmux_clients_at_once": tmux.MaxClientCommands, "tmux_clients_per_watchdog": 0},
 			"interval_ms": msOf(rendering.Interval), "passes": fleetPasses, "sweeps": fleetSweeps,
+			"watchdog_ticks": fleetWatchdogTicks, "git_rounds": fleetGitRounds,
 			"fleets": recorded,
 		}, "", "  ")
 		if err != nil {

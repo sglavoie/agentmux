@@ -51,6 +51,11 @@ func (h *Handler) runWatchdog(ctx context.Context) {
 // as suspended as the daemon was — and first refreshes the Kitty snapshot and
 // the ASL lease reconciliation so expiry is never judged against evidence
 // captured before the gap.
+//
+// A Kitty window is judged only against a published Kitty snapshot. A session
+// on another backend has no window and needs none: its slot, profile, and
+// directory are the daemon's own, so its sweeps run on every tick, in a
+// daemon with no Kitty at all as in one whose Kitty has not answered yet.
 func (h *Handler) watchdogTick(now time.Time, elapsed time.Duration) {
 	credit := elapsed
 	if credit < 0 {
@@ -63,9 +68,9 @@ func (h *Handler) watchdogTick(now time.Time, elapsed time.Duration) {
 	}
 	windows, _, ready := h.cachedSnapshot()
 	if !ready {
-		return
+		windows = nil
 	}
-	h.sweepStale(now, windows, credit, gapTick)
+	h.sweepStale(now, credit, gapTick, ready)
 	h.sweepHookSilence(now, windows, credit, gapTick)
 	// The gitstate refresh rides this loop rather than the render path or the
 	// TUI: it forks processes, so it belongs where nothing is waiting on it.

@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/gitstate"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // SetKittyClient injects the Kitty client used by the stale sweep to clear
@@ -169,7 +170,8 @@ func (h *Handler) appendWatchdogEventLocked(windowID, originWindowID int, at tim
 // SweepHookSilence detects accounts whose most recent event predates the
 // configured hook-silence threshold and fires a one-shot notification per
 // silence stretch. Unlike SweepStale, which is per-window, this sweep is
-// account-level: it iterates running Kitty windows (cc_account user var) so
+// account-level: it iterates running Kitty windows (cc_account user var) and
+// the sessions bound on other backends (the profile of their label) so
 // notifications are not produced for accounts the user has not launched.
 //
 // Behavior:
@@ -214,9 +216,6 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 			}
 		}
 	}
-	if len(running) == 0 {
-		return
-	}
 
 	type silentEntry struct {
 		account string
@@ -224,6 +223,16 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 	var silent []silentEntry
 
 	h.stateMu.Lock()
+	// A session on another backend is in no window listing; the profile its
+	// pane named is its account, for as long as it holds a slot.
+	for _, b := range h.runtimeRoutes.bySlot {
+		if b.target.backend == string(runtimesession.BackendKitty) {
+			continue
+		}
+		if profile := h.runtimeLabels[b.runtime].profile; profile != "" && !runningAccount(running, profile) {
+			running[profile] = true
+		}
+	}
 	for account := range running {
 		threshold := h.hookSilence.Resolve(account)
 		if threshold <= 0 {
@@ -269,6 +278,18 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 	}
 }
 
+// runningAccount reports whether account is already in running under another
+// spelling: thresholds and silence are kept per lowercased account, so two
+// spellings of one must not be judged, or notified, twice.
+func runningAccount(running map[string]bool, account string) bool {
+	for known := range running {
+		if strings.EqualFold(known, account) {
+			return true
+		}
+	}
+	return false
+}
+
 // SweepStale detects "active"-class sessions whose last incoming event predates
 // the per-action threshold and resolves them: it fires a single-shot "Session
 // idle" notification, clears the in-memory state so future events restart
@@ -303,8 +324,8 @@ func (h *Handler) SweepStale(now time.Time) {
 // from their wall-clock age, so a one-shot call over pre-aged state expires it
 // immediately. The production watchdog loop calls sweepStale directly with the
 // tick's observed elapsed credit instead.
-func (h *Handler) SweepStaleWithSnapshot(now time.Time, windows []kitty.OSWindow) bool {
-	return h.sweepStale(now, windows, 0, false)
+func (h *Handler) SweepStaleWithSnapshot(now time.Time, _ []kitty.OSWindow) bool {
+	return h.sweepStale(now, 0, false, true)
 }
 
 // sweepStale evaluates reducer retention plus per-fact and per-window
@@ -317,7 +338,11 @@ func (h *Handler) SweepStaleWithSnapshot(now time.Time, windows []kitty.OSWindow
 // on their own thresholds (SourceExpired); the whole-window legacy scalar
 // clears — with its one-shot "Session idle" notification — only when the
 // window as a whole has been idle past its threshold (WatchdogStale).
-func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Duration, gapTick bool) bool {
+//
+// kittySlots is false while no Kitty snapshot is published: the pass then
+// covers only the slots of sessions on other backends, which no snapshot
+// describes, and leaves every Kitty window as it is.
+func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, kittySlots bool) bool {
 	staleThresholdsEnabled := h.staleThresholds.AnySet()
 	type staleEntry struct {
 		windowID int
@@ -331,6 +356,9 @@ func (h *Handler) sweepStale(now time.Time, _ []kitty.OSWindow, credit time.Dura
 
 	h.stateMu.Lock()
 	for windowID, st := range h.store {
+		if !kittySlots && !isRuntimeSyntheticSlot(windowID) {
+			continue
+		}
 		compacted := 0
 		if st.Reducer != nil {
 			compacted = st.Reducer.Compact(now.Unix())

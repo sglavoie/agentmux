@@ -25,7 +25,8 @@ import (
 )
 
 // refreshGitState starts one probe round for the windows in a published
-// snapshot. It is called from watchdogTick and returns immediately: the round
+// snapshot and for the sessions on other backends, which need none (windows is
+// nil while no snapshot is published). It is called from watchdogTick and returns immediately: the round
 // runs off the watchdog goroutine, because the watchdog measures idleness by
 // the elapsed time it observes between ticks and a tick that waited on git
 // would credit that wait to every session on the machine.
@@ -65,22 +66,21 @@ func (h *Handler) runGitStateRefresh(windows []kitty.OSWindow) {
 }
 
 // gitStateTargets collects, under stateMu, the directory of every tracked
-// window that the snapshot can place. It is the only step that reads the store,
-// and it runs no git.
+// window that the snapshot can place, and of every tracked session on another
+// backend, which no snapshot lists: its directory is the one its label holds
+// (runtimeSlotDirectoryLocked). It is the only step that reads the store, and
+// it runs no git.
 //
 // Directories are normalized to gitstate's key spelling here so the write-back
 // can index the result map directly; a window whose directory is unusable
 // (blank, or relative, which would resolve against the daemon's working
 // directory rather than the user's) is simply not a target.
 func (h *Handler) gitStateTargets(windows []kitty.OSWindow) map[int]string {
-	if len(windows) == 0 {
-		return nil
-	}
 	targets := make(map[int]string)
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	for windowID := range h.store {
-		if key, ok := gitStateDirectory(windows, windowID); ok {
+		if key, ok := h.gitStateDirectoryLocked(windows, windowID); ok {
 			targets[windowID] = key
 		}
 	}
@@ -102,11 +102,6 @@ func (h *Handler) applyGitState(targets map[int]string, states map[string]gitsta
 		return
 	}
 	current, _, ready := h.cachedSnapshot()
-	if !ready {
-		// The snapshot cache went cold while the probes ran, so there is no
-		// evidence left to check the results against.
-		return
-	}
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	for windowID, directory := range targets {
@@ -114,7 +109,12 @@ func (h *Handler) applyGitState(targets map[int]string, states map[string]gitsta
 		if !ok {
 			continue
 		}
-		observed, ok := gitStateDirectory(current, windowID)
+		if !ready && !isRuntimeSyntheticSlot(windowID) {
+			// The snapshot cache went cold while the probes ran, so there is
+			// no evidence left to check a window's result against.
+			continue
+		}
+		observed, ok := h.gitStateDirectoryLocked(current, windowID)
 		if !ok || observed != directory {
 			st.GitDirectory, st.GitBranch, st.GitDirty = "", "", false
 			continue
@@ -122,6 +122,30 @@ func (h *Handler) applyGitState(targets map[int]string, states map[string]gitsta
 		state := states[directory]
 		st.GitDirectory, st.GitBranch, st.GitDirty = directory, state.Branch, state.Dirty
 	}
+}
+
+// gitStateDirectoryLocked is the directory a slot's Git facts are probed in:
+// a Kitty window's from the snapshot, any other session's from its label.
+// Callers hold stateMu.
+func (h *Handler) gitStateDirectoryLocked(windows []kitty.OSWindow, slot int) (string, bool) {
+	if isRuntimeSyntheticSlot(slot) {
+		return h.runtimeSlotDirectoryLocked(slot)
+	}
+	return gitStateDirectory(windows, slot)
+}
+
+// runtimeSlotDirectoryLocked resolves the directory of a session with no
+// Kitty window: the one its launch recorded on its pane, read with the rest of
+// its label. It is daemon memory, so no Kitty snapshot is involved and nothing
+// is read from the backend here; a slot nothing holds, or one not labeled yet,
+// has none. Slots are never reused, so a directory read for a slot is always
+// that of the session the slot was collected for. Callers hold stateMu.
+func (h *Handler) runtimeSlotDirectoryLocked(slot int) (string, bool) {
+	b, ok := h.runtimeRoutes.binding(slot)
+	if !ok {
+		return "", false
+	}
+	return gitstate.Key(h.runtimeLabels[b.runtime].directory)
 }
 
 // gitStateDirectory resolves a window's working directory from a snapshot and

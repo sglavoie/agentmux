@@ -23,6 +23,9 @@ The daemon includes a watchdog that turns three independent signals into a
    a misconfigured `settings.json` or a daemon-down window where every
    session simply looks idle.
 
+All three apply to a tmux session as they do to a Kitty window, and need no
+Kitty: a daemon with none running sweeps its tmux sessions every second.
+
 Configure the four thresholds under `[defaults.watchdog]`:
 
 ```toml

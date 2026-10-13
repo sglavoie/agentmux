@@ -103,12 +103,14 @@ func TestRuntimeSessionsAreLabeledForCompanions(t *testing.T) {
 func TestTmuxRuntimeSessionLabelReadsPaneMetadata(t *testing.T) {
 	fixture := tmuxtest.New(t)
 	id := newRuntimeID(t)
+	directory := t.TempDir()
 	launched, err := fixture.Backend.LaunchTarget(backend.LaunchSpec{
 		Title:     "api",
-		Directory: t.TempDir(),
+		Directory: directory,
 		Vars: map[string]string{
 			"amx_project":            "api",
 			"amx_profile":            "work",
+			"amx_directory":          directory,
 			"amx_runtime_session_id": string(id),
 		},
 		Argv: []string{"/bin/sh", "-c", "exec sleep 600"},
@@ -124,7 +126,7 @@ func TestTmuxRuntimeSessionLabelReadsPaneMetadata(t *testing.T) {
 	}
 
 	label, err := TmuxRuntimeSessionLabel(record)
-	if err != nil || label != (RuntimeSessionLabel{Project: "api", Profile: "work"}) {
+	if err != nil || label != (RuntimeSessionLabel{Project: "api", Profile: "work", Directory: directory}) {
 		t.Fatalf("label = %+v, %v", label, err)
 	}
 
