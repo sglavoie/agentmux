@@ -28,7 +28,10 @@ final class GhosttySurfaceConfigurationTests: XCTestCase {
             configuration.commandLine,
             "'/usr/bin/env' '/Applications/Agent Mux.app/Contents/Resources/bin/amx' 'attach' 'rs-0123456789abcdef0123456789abcdef'"
         )
-        XCTAssertEqual(configuration.passedEnvironment.map(\.name), ["AMX_CONFIG", "PATH"])
+        // The marker is what keeps the session's status line off in a
+        // terminal the workspace hosts.
+        XCTAssertEqual(configuration.passedEnvironment.map(\.name), ["AMX_CONFIG", "AMX_WORKSPACE_HOSTED", "PATH"])
+        XCTAssertEqual(configuration.environment["AMX_WORKSPACE_HOSTED"], "1")
     }
 
     func testEnvironmentDropsWhatGhosttyOwnsOrCannotCarry() {

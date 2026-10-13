@@ -158,6 +158,7 @@ func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 		Others:       maps.Clone(h.otherKittyTrees),
 		Runtime:      h.companionRuntimeSlotsLocked(),
 		HarnessIcons: h.harnessIcons,
+		Sort:         h.sessionSort,
 		ASLTargets:   h.aslSupervisors.Targets(),
 		ASLPending:   h.aslSupervisors.Pending(),
 		Now:          now,

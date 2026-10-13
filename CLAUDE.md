@@ -237,12 +237,19 @@ Shared and domain packages (`internal/...`):
 - `internal/tmux`: the private tmux backend — AgentMux's own socket and
   configuration (never the operator's server or `~/.tmux.conf`), one session
   and one agent pane per runtime session, exited panes retained until
-  `Close`, generation-checked `Instance`. Its tests run a real tmux and skip
+  `Close`, generation-checked `Instance`. What an attached terminal shows of
+  a session (its title, and a status line `amx attach` turns on outside the
+  workspace) is built by `Config` from the `@amx_status` options, which only
+  the daemon writes (`internal/daemon/runtime_status.go`: after the
+  checkpoint settles a slot, one client per pass, none when nothing
+  changed). Its tests run a real tmux and skip
   only when tmux is not installed; `internal/tmux/tmuxtest` gives other
   packages the same isolated server, a registry, and a stand-in agent shell.
 - `internal/session`, `internal/harness`: lifecycle (still reading Kitty
   topology, issuing commands through `internal/backend`) and harness
-  argv/capabilities. `session.Runtime` selects the launch backend (`--backend`
+  argv/capabilities. `session.Order` is the one order sessions are listed
+  in; the dashboard, navigation, and the v2 companion projection all sort
+  through it, and nothing asks a backend to hold it except Kitty's `Resort`. `session.Runtime` selects the launch backend (`--backend`
   on launch entrypoints, else `[defaults] launch_backend`, else Kitty): tmux launches dedup,
   register (`Begin`, launch, `Commit`), and compensate under one lock beside
   the registry, and actions on a live session follow its recorded backend.

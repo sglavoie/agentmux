@@ -78,19 +78,28 @@ func TestAPortableLaunchLeavesTheDashboardRunning(t *testing.T) {
 	}
 }
 
-// Tab order is a Kitty presentation: without Kitty the command explains why it
-// is unavailable instead of failing when run.
-func TestResortTabsNeedsKitty(t *testing.T) {
+// The sort order is computed, never held by a terminal: without Kitty the
+// command is still offered, moves nothing, and says the sessions are in order.
+func TestResortWithoutKittySaysSessionsAreAlwaysInSortOrder(t *testing.T) {
 	m := testModelWithSessions()
 	resort := commandByID(t, commands.ResortTabs)
 	if availability := resort.AvailabilityFor(m, commands.Context{}); !availability.Available {
 		t.Fatalf("resort inside Kitty is unavailable: %s", availability.Reason)
 	}
 	m.client = nil
-	if availability := resort.AvailabilityFor(m, commands.Context{}); availability.Available || availability.Reason != commands.ReasonNoKittyTabs {
-		t.Fatalf("resort without Kitty = %+v, want it unavailable with the reason", availability)
+	if availability := resort.AvailabilityFor(m, commands.Context{}); !availability.Available {
+		t.Fatalf("resort without Kitty is refused: %s", availability.Reason)
 	}
-	if msg := commands.Resort(nil, "alpha")(); msg != (commands.ResortDoneMsg{}) {
-		t.Fatalf("resort without Kitty returned %#v, want a no-op", msg)
+	msg := commands.Resort(nil, "alpha")()
+	if msg != (commands.ResortDoneMsg{AlwaysSorted: true}) {
+		t.Fatalf("resort without Kitty returned %#v, want it to report the sessions always sorted", msg)
+	}
+	updated, _ := m.Update(msg)
+	got := updated.(Model)
+	if got.actionErr != nil {
+		t.Fatalf("resort without Kitty left an error: %v", got.actionErr)
+	}
+	if len(got.toasts) == 0 || got.toasts[len(got.toasts)-1].Text != resortAlwaysSortedText {
+		t.Fatalf("toasts = %+v, want %q", got.toasts, resortAlwaysSortedText)
 	}
 }

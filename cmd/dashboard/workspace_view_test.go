@@ -335,7 +335,8 @@ func TestWorkspacePickersEditOnlyTheNamedSession(t *testing.T) {
 	if err := w.colors[0].Apply("red"); err != nil {
 		t.Fatal(err)
 	}
-	if got := w.sessions(); got["web"].Color != "red" || got["api"].Color != "" {
+	// api keeps the color its launch recorded: its profile's.
+	if got := w.sessions(); got["web"].Color != "red" || got["api"].Color != "blue" {
 		t.Fatalf("colors after picking red for web: web=%q api=%q", got["web"].Color, got["api"].Color)
 	}
 

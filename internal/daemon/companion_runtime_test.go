@@ -66,7 +66,11 @@ func TestCompanionSnapshotVersionIsNegotiated(t *testing.T) {
 	if v2.V != protocol.CompanionSnapshotVersionRuntime || len(v2.Sessions) != 2 {
 		t.Fatalf("v2 snapshot = %+v; want Kitty window 1 and the tmux session", v2)
 	}
-	tmux := v2.Sessions[1]
+	// The two are listed in the session order, not Kitty's first.
+	tmux := v2.Sessions[0]
+	if tmux.WindowID != 0 {
+		tmux = v2.Sessions[1]
+	}
 	if tmux.Runtime == nil || tmux.Runtime.SessionID != string(onTmux) || tmux.Runtime.Backend != "tmux" ||
 		tmux.Runtime.Pane != "%4" || tmux.WindowID != 0 || tmux.TabID != 0 || tmux.OSWindowID != 0 ||
 		tmux.KittySocket != "" || tmux.IconState != "key" || !tmux.Attention {

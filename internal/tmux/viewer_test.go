@@ -28,7 +28,7 @@ func attachViewer(t *testing.T, f *fixture, pane backend.Ref) *viewer {
 	if runtime.GOOS != "darwin" {
 		t.Skip("uses BSD script(1) for a pseudo-terminal")
 	}
-	client, err := f.backend.AttachCommand(pane)
+	client, err := f.backend.AttachCommand(pane, AttachView{})
 	if err != nil {
 		t.Fatal(err)
 	}

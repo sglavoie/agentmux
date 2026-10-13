@@ -289,3 +289,27 @@ func TestLaunchOnTmuxAbandonsInterruptedRegistrations(t *testing.T) {
 		t.Fatalf("interrupted registration = %+v, want abandoned", record)
 	}
 }
+
+// A tmux launch records its profile's color where the picker records a pick,
+// so the session is drawn in it from the start; a profile with no color
+// records none.
+func TestLaunchOnTmuxRecordsTheProfileColor(t *testing.T) {
+	f := tmuxtest.New(t)
+	cfg, project := tmuxTestConfig(t)
+	if _, err := LaunchOn(tmuxRuntime(f), project, cfg.Accounts[0], cfg); err != nil {
+		t.Fatalf("LaunchOn: %v", err)
+	}
+	plain := config.Session{Title: "notes", Directory: t.TempDir(), Profile: "plain"}
+	cfg.Accounts = append(cfg.Accounts, config.Account{Name: "plain", Harness: harness.Claude})
+	cfg.Sessions = append(cfg.Sessions, plain)
+	if _, err := LaunchOn(tmuxRuntime(f), plain, cfg.Accounts[2], cfg); err != nil {
+		t.Fatalf("LaunchOn: %v", err)
+	}
+	colors := map[string]string{}
+	for _, rs := range runningOnTmux(t, f, cfg) {
+		colors[rs.EffectiveProject()] = rs.Color
+	}
+	if len(colors) != 2 || colors["api"] != "blue" || colors["notes"] != "" {
+		t.Fatalf("colors = %v, want api in its profile's blue and notes in none", colors)
+	}
+}

@@ -89,14 +89,43 @@ func ComputeInsertLocation(client kitty.KittyClient, mode, account, baseTitle st
 	return "after", prevID, nil
 }
 
-// SortRunning returns a copy of sessions sorted by the given mode.
+// OrderEntry is what the session order reads of one session: the profile it
+// runs under, its base title, and whether it is pinned.
+type OrderEntry struct {
+	Profile string
+	Base    string
+	Starred bool
+}
+
+// Order sorts items in place into the one order sessions are listed in:
+// pinned first, then by project title ("alpha") or by profile ("account"),
+// as SortKey spells it. Sessions with equal keys keep their relative order.
+//
+// The dashboard, session navigation, and the daemon's companion projection
+// all order through here, so the session after this one is the same session
+// on every surface. The order is a fact AgentMux computes, not something a
+// terminal is asked to hold: Kitty's tabs are moved into it (Resort), and a
+// backend with no tabs has nothing to move.
+func Order[T any](items []T, mode string, entry func(T) OrderEntry) {
+	keys := make(map[OrderEntry]string, len(items))
+	key := func(item T) string {
+		e := entry(item)
+		k, ok := keys[e]
+		if !ok {
+			k = SortKey(e.Profile, e.Base, e.Starred, mode)
+			keys[e] = k
+		}
+		return k
+	}
+	sort.SliceStable(items, func(i, j int) bool { return key(items[i]) < key(items[j]) })
+}
+
+// SortRunning returns a copy of sessions in the session order (Order).
 func SortRunning(sessions []RunningSession, mode string) []RunningSession {
 	sorted := make([]RunningSession, len(sessions))
 	copy(sorted, sessions)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		ki := SortKey(sorted[i].Account, sorted[i].Base, sorted[i].Starred, mode)
-		kj := SortKey(sorted[j].Account, sorted[j].Base, sorted[j].Starred, mode)
-		return ki < kj
+	Order(sorted, mode, func(s RunningSession) OrderEntry {
+		return OrderEntry{Profile: s.Account, Base: s.Base, Starred: s.Starred}
 	})
 	return sorted
 }

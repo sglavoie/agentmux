@@ -29,7 +29,9 @@ const RuntimeSessionVar = "amx_runtime_session_id"
 // ColorVar is the metadata key holding the color an operator picked for one
 // session (`amx color-picker`). On Kitty the pick is drawn by the tab bar and
 // this key is only its record; a session on another backend has no tab bar,
-// and the key is what its rows are drawn from (RunningSession.Color).
+// and the key is what its rows are drawn from (RunningSession.Color). A tmux
+// launch starts it at the profile's color, which is what a new Kitty tab is
+// painted in.
 const ColorVar = "cc_color"
 
 // NameVar is the metadata key holding the name an operator gave one session
@@ -250,6 +252,12 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 	env[runtimesession.EnvVar] = string(id)
 	vars := buildLaunchUserVars(sess, acc, cfg.Defaults, invocation)
 	vars[RuntimeSessionVar] = string(id)
+	// Kitty paints a new tab in its profile's color. A tmux session has no
+	// tab, so the color is recorded where the picker records a pick, and
+	// whatever lists or frames the session draws it from there.
+	if acc.Color != "" {
+		vars[ColorVar] = acc.Color
+	}
 	nativeReport := maintainNativeForActive(cfg, active, invocation.LaunchID)
 	spec := backend.LaunchSpec{
 		Title:     formattedTitle,

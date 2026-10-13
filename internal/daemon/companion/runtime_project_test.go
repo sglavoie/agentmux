@@ -10,6 +10,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // These tests pin the negotiated mixed-backend contract: a v1 projection is
@@ -158,5 +160,72 @@ func TestProject_ARuntimeSessionIsMutedByTheDaemonsReading(t *testing.T) {
 	}
 	if snap.Sessions[0].Muted {
 		t.Fatalf("the Kitty session took its mute from the daemon's cache instead of Kitty: %+v", snap.Sessions[0])
+	}
+}
+
+// TestProject_V2ListsSessionsInTheDashboardsOrder: a v2 snapshot lists Kitty
+// and tmux sessions together in the order the dashboard sorts the same
+// sessions into, in either sort mode, whatever order Kitty's tabs or the
+// runtime-session IDs are in. v1 still lists Kitty's tabs as they stand.
+func TestProject_V2ListsSessionsInTheDashboardsOrder(t *testing.T) {
+	star := palette.StarIcon()
+	const (
+		slotA = tmuxSlot + iota
+		slotB
+		slotC
+	)
+	input := func(version int, sort string) Input {
+		return Input{
+			Kitty: tree(sockA,
+				kitty.Tab{ID: 10, Title: "web", Windows: []kitty.Window{managed(7, "home", "claude")}},
+				kitty.Tab{ID: 11, Title: "docs", Windows: []kitty.Window{managed(8, "home", "claude")}},
+			),
+			States: map[int]protocol.WindowStateSnapshot{7: {}, 8: {}, slotA: {}, slotB: {}, slotC: {}},
+			Runtime: map[int]RuntimeSlot{
+				slotA: {SessionID: "rs-00000000000000000000000000000001", Backend: "tmux", Profile: "work", Title: "zeta"},
+				slotB: {SessionID: "rs-00000000000000000000000000000002", Backend: "tmux", Profile: "work", Title: "api"},
+				slotC: {SessionID: "rs-00000000000000000000000000000003", Backend: "tmux", Profile: "work", Title: star + "notes"},
+			},
+			Sort:            sort,
+			SnapshotVersion: version,
+		}
+	}
+	// The same sessions as the dashboard reads them.
+	running := []session.RunningSession{
+		{Key: "web", Account: "home", Base: "web"},
+		{Key: "docs", Account: "home", Base: "docs"},
+		{Key: "zeta", Account: "work", Base: "zeta"},
+		{Key: "api", Account: "work", Base: "api"},
+		{Key: "notes", Account: "work", Base: "notes", Starred: true},
+	}
+	name := func(s protocol.CompanionSession) string {
+		switch {
+		case s.WindowID == 7:
+			return "web"
+		case s.WindowID == 8:
+			return "docs"
+		case s.Runtime == nil:
+			return "?"
+		}
+		return map[string]string{"1": "zeta", "2": "api", "3": "notes"}[s.Runtime.SessionID[len(s.Runtime.SessionID)-1:]]
+	}
+	for mode, want := range map[string][]string{
+		"alpha":   {"notes", "api", "docs", "web", "zeta"},
+		"account": {"notes", "docs", "web", "api", "zeta"},
+	} {
+		var dashboard, listed []string
+		for _, rs := range session.SortRunning(running, mode) {
+			dashboard = append(dashboard, rs.Key)
+		}
+		for _, s := range Project(input(protocol.CompanionSnapshotVersionRuntime, mode)).Sessions {
+			listed = append(listed, name(s))
+		}
+		if !reflect.DeepEqual(listed, dashboard) || !reflect.DeepEqual(listed, want) {
+			t.Fatalf("mode %q: v2 lists %v, the dashboard %v, want %v", mode, listed, dashboard, want)
+		}
+	}
+	v1 := Project(input(protocol.CompanionSnapshotVersion, "alpha")).Sessions
+	if len(v1) != 2 || v1[0].WindowID != 7 || v1[1].WindowID != 8 {
+		t.Fatalf("v1 sessions = %+v, want Kitty's tabs in tab order", v1)
 	}
 }

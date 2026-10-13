@@ -101,10 +101,19 @@ type attachData struct {
 	Command []string `json:"command,omitempty"`
 }
 
+// attachView is what this terminal shows around the pane. A plain terminal
+// has nothing else to say which session it is on, so it gets the session's
+// status line; the desktop workspace lists every session beside the pane and
+// marks the terminals it runs.
+func attachView() tmux.AttachView {
+	_, hosted := os.LookupEnv(tmux.WorkspaceHostEnv)
+	return tmux.AttachView{StatusLine: !hosted}
+}
+
 // tmuxAttacher is what attaching needs from the tmux backend.
 type tmuxAttacher interface {
 	Survey() (tmux.Survey, error)
-	AttachCommand(pane backend.Ref) (*exec.Cmd, error)
+	AttachCommand(pane backend.Ref, view tmux.AttachView) (*exec.Cmd, error)
 }
 
 func runAttach(cmd *cobra.Command, args []string) error {
@@ -161,7 +170,7 @@ func attachTmux(cmd *cobra.Command, store *runtimesession.Store, record runtimes
 		return cli.CommandFailure(cmd, attachJSON, notLiveCode(stale), notLiveError(stale))
 	}
 	data.Clients = len(survey.ClientsOf(backend.PaneID(record.Target.Ref)))
-	client, err := server.AttachCommand(backend.PaneID(record.Target.Ref))
+	client, err := server.AttachCommand(backend.PaneID(record.Target.Ref), attachView())
 	if err != nil {
 		return cli.CommandFailure(cmd, attachJSON, "invalid_target", err)
 	}

@@ -39,7 +39,7 @@ var (
 
 // tmuxAttacher is the part of the tmux backend that attaches a terminal.
 type tmuxAttacher interface {
-	AttachCommand(pane backend.Ref) (*exec.Cmd, error)
+	AttachCommand(pane backend.Ref, view tmux.AttachView) (*exec.Cmd, error)
 }
 
 // selectTerminals decides which terminals a surface works with and installs
@@ -114,6 +114,6 @@ func attachCommandFor(server backend.TargetLauncher) func(session.RunningSession
 		if !ok {
 			return nil, errors.New("tmux backend cannot attach terminals")
 		}
-		return attacher.AttachCommand(rs.PaneRef())
+		return attacher.AttachCommand(rs.PaneRef(), tmux.AttachView{StatusLine: true})
 	}
 }

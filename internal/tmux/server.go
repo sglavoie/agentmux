@@ -9,6 +9,11 @@
 // reports. Exited panes stay in place (remain-on-exit) with their exit status
 // and screen until AgentMux closes the group explicitly.
 //
+// What a terminal attached to a session shows of it, its title and an
+// optional status line, is built by the configuration from two pane options
+// (status.go) that AgentMux's daemon renders. The server decides nothing
+// about a session's state.
+//
 // The tmux executable is chosen here too (runtime.go): an explicit choice,
 // the runtime bundled with the desktop app (verified against its checksums
 // and copied out of the bundle), or a supported tmux on PATH. A server that is
@@ -73,9 +78,23 @@ set -s set-clipboard on
 set -g default-terminal tmux-256color
 set -g history-limit 50000
 set -g mouse on
-set -g status off
 set -g base-index 0
 set -g window-size latest
+
+# What a session shows about itself is rendered by the AgentMux daemon into
+# @amx_status (state icon and title) and @amx_status_color on the agent's
+# pane; nothing here decides it. The outer terminal's title is that text, so
+# its tab reads as a Kitty tab did. The one-line status shows the same text on
+# the session's color; it is off unless the terminal that attaches asks for it
+# (amx attach turns it on for a plain terminal and off for the desktop
+# workspace, which lists every session itself). It is a view of the session,
+# never a session: nothing is bound on it and it takes no key.
+set -g set-titles on
+set -g set-titles-string '#{?@amx_status,#{@amx_status},Agent Mux}'
+set -g status off
+set -g status-position bottom
+set -g status-style default
+set -g status-format[0] '#{?@amx_status_color,#[bg=#{@amx_status_color}#,fg=black],} #{?@amx_status,#{q/h:@amx_status},Agent Mux} '
 
 # A session's environment is exactly the launch environment AgentMux passes
 # with -e; a later client never copies its own variables in.
@@ -430,7 +449,7 @@ func clientEnv(environ []string) []string {
 
 func strippedEnv(key string) bool {
 	switch key {
-	case "TMUX", "TMUX_PANE", "WINDOWID", "CLAUDECODE", runtimesession.EnvVar:
+	case "TMUX", "TMUX_PANE", "WINDOWID", "CLAUDECODE", runtimesession.EnvVar, WorkspaceHostEnv:
 		return true
 	}
 	return strings.HasPrefix(key, "KITTY_")

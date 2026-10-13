@@ -117,7 +117,7 @@ func (w *runtimeFaultWorld) eventually(what string, ok func(tmux.Survey) bool) t
 // `amx attach` does, and waits until it owns the session.
 func (w *runtimeFaultWorld) attach(agent faultAgent, cols, rows int) (*tmuxtest.Viewer, tmux.Client) {
 	w.t.Helper()
-	client, err := w.tmux.Backend.AttachCommand(agent.launched.Pane)
+	client, err := w.tmux.Backend.AttachCommand(agent.launched.Pane, tmux.AttachView{})
 	if err != nil {
 		w.t.Fatal(err)
 	}

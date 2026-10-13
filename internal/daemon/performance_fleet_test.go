@@ -41,7 +41,8 @@ import (
 // Two kinds of assertion, and they are different in kind:
 //
 //   - The bounds are exact and hold at any load: a pass is one tmux client
-//     however many agents there are, no more than tmux.MaxClientCommands
+//     however many agents there are (and one more, once, when it has rendered
+//     statuses to write: runtime_status.go), no more than tmux.MaxClientCommands
 //     clients ever run at once, and the watchdog and its Git round start
 //     none: a session's profile and directory are read once, with its label.
 //   - The budgets are wall-clock ceilings with room over what was measured
@@ -246,6 +247,8 @@ func measureFleet(t *testing.T, sessions int, workload string) fleetMeasurement 
 	h.SetScreenObserver(w.tmux.Backend)
 	// As Run installs it: a session's profile and directory are its pane's.
 	h.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
+	// And each session's rendered status goes to its pane.
+	h.SetRuntimeStatusWriter(NewTmuxRuntimeStatusWriter())
 	m := fleetMeasurement{Sessions: sessions, Workload: workload, ClientLimit: tmux.MaxClientCommands}
 	if out, err := exec.Command(w.tmux.Server.Binary(), "-V").Output(); err == nil {
 		m.Tmux = strings.TrimSpace(string(out))
@@ -263,11 +266,15 @@ func measureFleet(t *testing.T, sessions int, workload string) fleetMeasurement 
 	if err != nil {
 		t.Fatalf("server generation %q names no PID", survey.Instance.Generation)
 	}
-	// One pass and one sweep outside the window: the first of each pays for
+	// Two passes and one sweep outside the window: the first of each pays for
 	// what is paid once, which for a pass is reading each session's label
 	// off its pane. It is dated an interval on so that it reconciles however
-	// little time the launches took, and so adopts and labels the fleet.
+	// little time the launches took, and so adopts and labels the fleet. The
+	// second has the titles the first one's reconciliation could not yet
+	// attach to a label, and writes every session's status, once.
 	now := time.Now().Add(runtimeReconcileInterval)
+	h.maintainRuntimeSessions(now)
+	now = now.Add(runtimeReconcileInterval)
 	h.maintainRuntimeSessions(now)
 	for _, agent := range agents {
 		if _, err := h.screenTextCacheFor().Observe(agent.launched.Pane); err != nil {

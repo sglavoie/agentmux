@@ -53,6 +53,13 @@
 // every maintenance tick, and is spaced out to thirty seconds while passes
 // fail, so a server that does not answer cannot hold the loop.
 //
+// A tmux session has no tab to render its state into, so the root renders it
+// into two options on the agent's pane (runtime_status.go), which the private
+// server's configuration builds the attached terminal's title and status line
+// from. It is written once the checkpoint holds the state, in one tmux client
+// per server for everything a pass has to write, and not at all by a pass
+// with nothing new. The root is still the only writer of rendered state.
+//
 // What that work looks like from outside is runtime_health.go: a tally of the
 // passes, the sessions and how many have a terminal attached, the screen
 // reads, and the tmux clients, published through health as

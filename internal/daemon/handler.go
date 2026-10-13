@@ -191,6 +191,18 @@ type Handler struct {
 	// session's title is read against for the icon it carries. Installed
 	// once at startup by SetHarnessIcons.
 	harnessIcons []string
+	// sessionSort is the configured sort mode ([defaults] sort): the order
+	// the v2 companion snapshot lists sessions in (session.Order). Installed
+	// once at startup by SetSessionSort.
+	sessionSort string
+	// runtimeStatusWriter writes rendered statuses to their backends
+	// (runtime_status.go), installed once at startup. runtimeStatusSent is
+	// what was last written for each runtime session, and
+	// runtimeStatusResendAt when everything is written again after a failed
+	// write; same goroutines as lastRuntimeReconcile.
+	runtimeStatusWriter   RuntimeStatusWriter
+	runtimeStatusSent     map[string]RuntimeStatus
+	runtimeStatusResendAt time.Time
 	// runtimeCheckpointPath is the backend-neutral reducer checkpoint
 	// (runtime_checkpoint.go), set once at startup; empty disables it.
 	// runtimeRestorePending holds checkpointed sessions the registry could

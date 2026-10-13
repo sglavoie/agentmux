@@ -9,12 +9,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 type stubTmux struct{ backend.TargetLauncher }
 
-func (stubTmux) AttachCommand(pane backend.Ref) (*exec.Cmd, error) {
+func (stubTmux) AttachCommand(pane backend.Ref, _ tmux.AttachView) (*exec.Cmd, error) {
 	return exec.Command("tmux", "attach-session", "-t", pane.ID), nil
 }
 

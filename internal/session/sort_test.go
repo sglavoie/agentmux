@@ -226,3 +226,40 @@ func TestSortRunning_Account(t *testing.T) {
 		t.Errorf("sorted[2]: got account=%q base=%q", sorted[2].Account, sorted[2].Base)
 	}
 }
+
+// Order is the one order every surface lists sessions in: whatever carries
+// the sessions, the same profile, base title, and pin sort the same way
+// SortRunning sorts them, and equal sessions keep their places.
+func TestOrderMatchesSortRunningForAnyCarrier(t *testing.T) {
+	sessions := []session.RunningSession{
+		{WindowID: 1, Account: "work", Base: "🤖 dashboard"},
+		{WindowID: 2, Account: "personal", Base: "dotfiles"},
+		{WindowID: 3, Account: "work", Base: "api"},
+		{WindowID: 4, Account: "work", Base: "zeta", Starred: true},
+		{WindowID: 5, Account: "work", Base: "api"},
+	}
+	type row struct {
+		id    int
+		entry session.OrderEntry
+	}
+	for mode, want := range map[string][]int{
+		"alpha":   {4, 3, 5, 1, 2},
+		"account": {4, 2, 3, 5, 1},
+		"":        {4, 3, 5, 1, 2},
+	} {
+		rows := make([]row, len(sessions))
+		for i, s := range sessions {
+			rows[i] = row{id: s.WindowID, entry: session.OrderEntry{Profile: s.Account, Base: s.Base, Starred: s.Starred}}
+		}
+		session.Order(rows, mode, func(r row) session.OrderEntry { return r.entry })
+		sorted := session.SortRunning(sessions, mode)
+		for i, id := range want {
+			if rows[i].id != id || sorted[i].WindowID != id {
+				t.Fatalf("mode %q: position %d is row %d and session %d, want %d in both", mode, i, rows[i].id, sorted[i].WindowID, id)
+			}
+		}
+	}
+	if sessions[0].WindowID != 1 {
+		t.Fatal("SortRunning reordered its argument")
+	}
+}

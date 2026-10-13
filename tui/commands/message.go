@@ -169,7 +169,12 @@ type CopyDoneMsg struct {
 }
 
 // ResortDoneMsg is sent when a session.Resort call completes.
-type ResortDoneMsg struct{ Err error }
+type ResortDoneMsg struct {
+	Err error
+	// AlwaysSorted reports that there were no Kitty tabs to move: the
+	// sessions are listed in the sort order whatever the command does.
+	AlwaysSorted bool
+}
 
 // PickerOpenDoneMsg is sent when one or more open-dir actions, or an
 // open-in-editor action, complete from any entry point (list, picker, actions

@@ -132,7 +132,7 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 		"plan-view-narrow-fit.json":                            false,
 		"portable-dashboard-narrow-fit.json":                   false,
 		"portable-dashboard-wide.json":                         false,
-		"portable-kitty-only-command-explains.json":            false,
+		"portable-resort-always-sorted.json":                   false,
 		"project-scope-survives-resize.json":                   false,
 		"project-switcher-keyboard-apply.json":                 false,
 		"project-switcher-narrow-fit.json":                     false,

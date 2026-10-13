@@ -26,6 +26,11 @@ extension Ghostty {
         /// the host hears about the exit through `GhosttySurfaceDelegate`.
         var waitAfterCommand = false
 
+        /// Tells `amx attach` that the workspace hosts its terminal
+        /// (`tmux.WorkspaceHostEnv`): the sidebar already says which session
+        /// this is, so the session's own status line stays off.
+        static let workspaceHostEnvironment = "AMX_WORKSPACE_HOSTED"
+
         /// A view attached to a runtime session: `amx attach <id>`, which
         /// validates the target, records the attachment, and takes over
         /// interactive ownership from any other view.
@@ -34,7 +39,9 @@ extension Ghostty {
             runtimeSessionID: String,
             environment: [String: String] = [:]
         ) -> SurfaceConfiguration {
-            SurfaceConfiguration(program: amx, arguments: ["attach", runtimeSessionID], environment: environment)
+            var hosted = environment
+            hosted[workspaceHostEnvironment] = "1"
+            return SurfaceConfiguration(program: amx, arguments: ["attach", runtimeSessionID], environment: hosted)
         }
 
         /// Ghostty sets these for the terminal it is; a caller's value would

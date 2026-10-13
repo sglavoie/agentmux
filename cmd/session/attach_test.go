@@ -20,6 +20,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
 
@@ -306,7 +307,7 @@ func TestAttachJSONCountsTheTerminalsAttached(t *testing.T) {
 	if got := clients(); got != 0 {
 		t.Fatalf("clients with nobody attached = %d", got)
 	}
-	client, err := f.Backend.AttachCommand(launched.Pane)
+	client, err := f.Backend.AttachCommand(launched.Pane, tmux.AttachView{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,5 +383,20 @@ func TestAttachedClientOutlivesAHangup(t *testing.T) {
 	client := exec.Command("/bin/sh", "-c", "kill -HUP $PPID; sleep 0.2")
 	if err := runAttachedClient(client); err != nil {
 		t.Fatalf("client: %v", err)
+	}
+}
+
+// A plain terminal gets the session's status line; a terminal the desktop
+// workspace hosts, which marks the attach it runs, does not.
+func TestAttachShowsTheStatusLineOnlyOutsideTheWorkspace(t *testing.T) {
+	t.Setenv(tmux.WorkspaceHostEnv, "1")
+	if attachView().StatusLine {
+		t.Fatal("an attach hosted by the workspace asked for the status line")
+	}
+	if err := os.Unsetenv(tmux.WorkspaceHostEnv); err != nil {
+		t.Fatal(err)
+	}
+	if !attachView().StatusLine {
+		t.Fatal("an attach from a plain terminal asked for no status line")
 	}
 }

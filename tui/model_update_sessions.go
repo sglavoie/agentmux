@@ -231,15 +231,22 @@ func (m Model) handleCopyDone(msg commands.CopyDoneMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// resortAlwaysSortedText is what Resort Tabs answers on a surface with no
+// Kitty tabs.
+const resortAlwaysSortedText = "Sessions are always in sort order"
+
 // handleResortDone processes a commands.ResortDoneMsg: records any error, pushes a
 // success or failure toast, and triggers a session refresh.
 func (m Model) handleResortDone(msg commands.ResortDoneMsg) (tea.Model, tea.Cmd) {
 	m.actionErr = msg.Err
 	var cmds []tea.Cmd
 	var t Toast
-	if msg.Err != nil {
+	switch {
+	case msg.Err != nil:
 		t = Toast{Severity: toastError, Text: "Resort failed: " + msg.Err.Error()}
-	} else {
+	case msg.AlwaysSorted:
+		t = Toast{Severity: toastInfo, Text: resortAlwaysSortedText}
+	default:
 		t = Toast{Severity: toastSuccess, Text: "Tabs resorted"}
 	}
 	if c := m.pushToast(t); c != nil {

@@ -463,7 +463,8 @@ func (h *Handler) settleRuntimeSlots(captured map[int]uint64, capturedAt time.Ti
 // maintainRuntimeSessions is the runtime-session half of maintenance:
 // reconcile the registry with the backends, retire the sessions it no longer
 // lists as live, retry deferred restores, adopt the live sessions no hook has
-// claimed a slot for, and checkpoint what is left. It
+// claimed a slot for, checkpoint what is left, and render the settled state
+// into the sessions' terminals. It
 // needs no Kitty listing, so it runs whether or not Kitty answered.
 func (h *Handler) maintainRuntimeSessions(now time.Time) {
 	h.reconcileRuntimeSessions(now)
@@ -474,4 +475,5 @@ func (h *Handler) maintainRuntimeSessions(now time.Time) {
 	if err := h.flushRuntimeCheckpoint(); err != nil {
 		slog.Warn("maintenance: runtime checkpoint write failed", "err", err)
 	}
+	h.renderRuntimeStatuses(now)
 }

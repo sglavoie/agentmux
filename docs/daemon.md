@@ -403,6 +403,33 @@ the next listing anyway. If the lag becomes observable, the change to make is
 a request that asks the daemon to refresh its Kitty listing now, which keeps
 Kitty the only source.
 
+## Rendered state of a tmux session
+
+A Kitty session's state is rendered into its tab: the daemon writes the title
+and Kitty's tab bar paints the color. A tmux session has no tab, so the daemon
+renders the same thing into two options on the agent's pane, `@amx_status`
+(the state icon and markers ahead of the session's title, exactly as
+`palette.BuildTitleParts` titles a tab) and `@amx_status_color` (the session's
+color as `#rrggbb`). The private server's configuration builds the attached
+terminal's title (`set-titles-string`) and its one-line status
+(`status-format[0]`) from them and from nothing else, so the daemon is still
+the only writer of rendered state. `amx attach` decides only whether the line
+is shown: on for a plain terminal, off in a terminal Agent Mux.app hosts
+(which sets `AMX_WORKSPACE_HOSTED` for the `amx attach` it runs).
+
+A status is written once the runtime checkpoint holds the state it renders,
+which is what settles a slot of a non-Kitty backend, and again when the
+session's title or color changes. Everything a maintenance pass has to write
+goes out in one tmux client per server, each status guarded by the server
+generation it was rendered for; a pass with nothing new starts none, so a
+quiet pass is still the one reconciliation client. A write the server refused
+is not repeated by the next pass: everything is written once more thirty
+seconds later.
+
+Sessions are listed in one order everywhere (`session.Order`: pins first, then
+`[defaults] sort`). The v2 companion snapshot lists Kitty and tmux sessions
+together in it; v1 keeps Kitty's tab order.
+
 ## Investigating hook event flow
 
 `amx daemon export-events` writes a schema v13 JSON snapshot for investigation.

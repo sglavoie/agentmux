@@ -105,12 +105,12 @@ func Restart(client kitty.KittyClient, running session.RunningSession, cfg *conf
 }
 
 // Resort reorders managed Kitty tabs to match SortRunning's expected order and
-// returns ResortDoneMsg.
+// returns ResortDoneMsg. Without Kitty there is no tab to move: every surface
+// lists sessions in the sort order already (session.Order).
 func Resort(client kitty.KittyClient, sortMode string) tea.Cmd {
 	return func() tea.Msg {
 		if client == nil {
-			// Tab order is a Kitty presentation; there are no tabs to move.
-			return ResortDoneMsg{}
+			return ResortDoneMsg{AlwaysSorted: true}
 		}
 		return ResortDoneMsg{Err: session.Resort(client, sortMode)}
 	}

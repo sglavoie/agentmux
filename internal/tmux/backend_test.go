@@ -565,7 +565,7 @@ func TestRefsRejectForeignTargetSyntax(t *testing.T) {
 
 func TestClientEnvStripsTerminalIdentity(t *testing.T) {
 	got := clientEnv([]string{"PATH=/bin", "TMUX=x", "TMUX_PANE=%1", "KITTY_WINDOW_ID=3", "KITTY_PID=9",
-		"WINDOWID=5", "CLAUDECODE=1", "AMX_RUNTIME_SESSION_ID=rs-x", "CLAUDE_CONFIG_DIR=/p", "TMUX_TMPDIR=/t"})
+		"WINDOWID=5", "CLAUDECODE=1", "AMX_RUNTIME_SESSION_ID=rs-x", "AMX_WORKSPACE_HOSTED=1", "CLAUDE_CONFIG_DIR=/p", "TMUX_TMPDIR=/t"})
 	want := []string{"PATH=/bin", "CLAUDE_CONFIG_DIR=/p", "TMUX_TMPDIR=/t"}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("clientEnv = %q, want %q", got, want)

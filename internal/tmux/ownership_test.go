@@ -56,7 +56,7 @@ func eventually(t *testing.T, f *tmuxtest.Fixture, what string, ok func(tmux.Sur
 
 func attach(t *testing.T, f *tmuxtest.Fixture, pane backend.Ref, cols, rows int) *tmuxtest.Viewer {
 	t.Helper()
-	client, err := f.Backend.AttachCommand(pane)
+	client, err := f.Backend.AttachCommand(pane, tmux.AttachView{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -154,8 +154,10 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		handler.SetRuntimeSessionLabeler(TmuxRuntimeSessionLabel)
 		handler.SetProfileColors(profileColors(cfg))
 		handler.SetHarnessIcons(cfg.HarnessIcons())
+		handler.SetSessionSort(cfg.Defaults.Sort)
 		handler.SetRuntimeSessionReconciler(NewTmuxRuntimeReconciler(store, reader))
 		handler.SetRuntimeScreenReader(NewTmuxRuntimeScreenReader())
+		handler.SetRuntimeStatusWriter(NewTmuxRuntimeStatusWriter())
 		if recorder != nil {
 			handler.SetRuntimeJournal(recorder.record)
 		}

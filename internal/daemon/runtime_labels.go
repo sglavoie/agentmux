@@ -91,6 +91,12 @@ func (h *Handler) SetHarnessIcons(icons []string) {
 	h.harnessIcons = slices.Clone(icons)
 }
 
+// SetSessionSort installs the configured sort mode, "alpha" or "account". It
+// is called once at startup, before any snapshot is built.
+func (h *Handler) SetSessionSort(mode string) {
+	h.sessionSort = mode
+}
+
 // runtimeColorLocked is the palette color a non-Kitty session is shown in:
 // the one picked for it, else its profile's. Callers hold stateMu.
 func (h *Handler) runtimeColorLocked(label runtimeLabel) string {

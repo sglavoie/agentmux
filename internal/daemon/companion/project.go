@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // Input is everything one projection reads. Every field is a value the caller
@@ -48,6 +49,9 @@ type Input struct {
 	// HarnessIcons is the configured harness emojis, longest first: the
 	// badges a session's title may carry.
 	HarnessIcons []string
+	// Sort is the configured sort mode, "alpha" or "account": the order a v2
+	// snapshot lists its sessions in (session.Order).
+	Sort string
 	// SnapshotVersion selects the shape: CompanionSnapshotVersionRuntime
 	// projects v2, anything else the v1 snapshot old clients read.
 	SnapshotVersion int
@@ -126,6 +130,8 @@ var workingStates = map[string]bool{"bolt": true, "subagent": true, "compact": t
 type candidate struct {
 	session protocol.CompanionSession
 	order   int
+	// entry is what the session order reads of the session.
+	entry session.OrderEntry
 }
 
 // Project builds the companion snapshot for one moment of daemon state.
@@ -154,6 +160,15 @@ func Project(in Input) protocol.CompanionSnapshot {
 	candidates = append(candidates, foreignSessions(in, runs, len(candidates))...)
 	if runtime {
 		candidates = append(candidates, runtimeSessions(in, runs, len(candidates))...)
+		// v2 lists every session in the order the dashboard does, whatever
+		// terminal holds it, so the session after this one is the same one on
+		// both. Sessions the order cannot tell apart stay as they were found:
+		// Kitty's in tab order, the rest by runtime-session ID. v1 keeps the
+		// order its clients have always read.
+		session.Order(candidates, in.Sort, func(c candidate) session.OrderEntry { return c.entry })
+		for i := range candidates {
+			candidates[i].order = i
+		}
 	}
 
 	sockets := map[string]bool{}
@@ -271,7 +286,7 @@ func treeSessions(in Input, runs map[int]string) []candidate {
 					s.Runtime = kittyRuntime(in.Runtime, win.ID, in.Kitty.Socket)
 				}
 				s.Attention = protocol.AttentionStates[s.IconState] || tab.NeedsAttention
-				out = append(out, candidate{session: s, order: len(out)})
+				out = append(out, candidate{session: s, order: len(out), entry: orderEntry(vars.EffectiveProfile(), tab.Title)})
 			}
 		}
 	}
@@ -337,9 +352,11 @@ func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 			ASLRunID:    identifier(runs[id]),
 		}
 		needsAttention := false
+		var entry session.OrderEntry
 		if osw, tab, win, ok := kitty.FindWindowLocationByID(in.Others[in.Sockets[id]], id); ok {
 			s = windowSession(*osw, *tab, palette.ParseTitleParts(tab.Title), *win, in.Sockets[id], runs)
 			needsAttention = tab.NeedsAttention
+			entry = orderEntry(win.UserVars.EffectiveProfile(), tab.Title)
 		}
 		applyState(&s, in.States[id])
 		if s.Harness == "" && s.Conversation != nil {
@@ -349,7 +366,7 @@ func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 			s.Runtime = kittyRuntime(in.Runtime, id, in.Sockets[id])
 		}
 		s.Attention = protocol.AttentionStates[s.IconState] || needsAttention
-		out = append(out, candidate{session: s, order: base + len(out)})
+		out = append(out, candidate{session: s, order: base + len(out), entry: entry})
 	}
 	return out
 }
@@ -393,8 +410,8 @@ func companionRuntime(r RuntimeSlot) *protocol.CompanionRuntime {
 }
 
 // runtimeSessions projects the v2-only sessions: daemon state held by a
-// runtime session on a backend other than Kitty, ordered by runtime-session
-// ID. They are addressed by their runtime block alone; no Kitty field is set,
+// runtime session on a backend other than Kitty, by runtime-session ID
+// (Project then puts them in the session order). They are addressed by their runtime block alone; no Kitty field is set,
 // because the session has no Kitty identity to report.
 func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 	var slots []int
@@ -424,9 +441,30 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 			s.Harness = display(s.Conversation.Harness)
 		}
 		s.Attention = protocol.AttentionStates[s.IconState]
-		out = append(out, candidate{session: s, order: base + len(out)})
+		out = append(out, candidate{
+			session: s, order: base + len(out),
+			entry: runtimeOrderEntry(in.Runtime[slot]),
+		})
 	}
 	return out
+}
+
+// orderEntry is what the session order reads of a session with this profile
+// and tab or group title: the dashboard reads the same two of a running
+// session.
+func orderEntry(profile, title string) session.OrderEntry {
+	parts := palette.ParseTitleParts(title)
+	return session.OrderEntry{Profile: profile, Base: parts.Base, Starred: parts.Starred}
+}
+
+// runtimeOrderEntry is orderEntry for a session with no tab. Until the daemon
+// has read its group's title it is placed by its project, which is what the
+// title is built around.
+func runtimeOrderEntry(r RuntimeSlot) session.OrderEntry {
+	if r.Title == "" {
+		return session.OrderEntry{Profile: r.Profile, Base: r.Project}
+	}
+	return orderEntry(r.Profile, r.Title)
 }
 
 // tabColor is the named palette color's bright background, which black text

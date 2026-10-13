@@ -126,7 +126,8 @@ func TestColorPickerOpensAsAPortableViewForATmuxSession(t *testing.T) {
 		t.Fatalf("apply: %v", err)
 	}
 	running := w.sessions()
-	if running["api"].Color != "purple" || running["web"].Color != "" {
+	// web keeps the color its launch recorded: its profile's.
+	if running["api"].Color != "purple" || running["web"].Color != "blue" {
 		t.Fatalf("colors = api %q web %q; want purple on api only", running["api"].Color, running["web"].Color)
 	}
 	profiles := tuidashboard.ProfileColorMap(w.cfg)

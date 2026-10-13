@@ -881,8 +881,20 @@ What changes for a tmux session, and only for it:
   `less`; open-shell, open-editor, the plan editor, and the worktree shell and
   editor suspend the dashboard, run in place, and return to it. Inside Kitty a
   Kitty session keeps its native overlay pager and new tabs.
-- **Kitty presentations are unavailable and say so.** `Resort Tabs` reports that
-  there are no Kitty tabs to reorder.
+- **Sessions are always in sort order.** The order (`[defaults] sort`, pins
+  first) is computed, not held by a terminal, and the dashboard, the overview,
+  and what the daemon publishes to Agent Mux.app all list sessions in it.
+  Only Kitty's tabs can be out of it, so without Kitty `Resort Tabs` moves
+  nothing and says so.
+- **The terminal shows the session's state.** The daemon renders what a Kitty
+  tab showed, the state icon ahead of the session's title, into the session,
+  and the terminal attached to it takes that as its own title, so the tab of
+  whatever terminal emulator you use reads like a Kitty tab. A plain terminal
+  also gets one line under the pane with the same text on the session's
+  color; in Agent Mux.app the sidebar says all of that, and the line stays
+  off. The line belongs to whichever terminal attached last. It follows the
+  daemon within a couple of seconds, and with no daemon running it keeps what
+  was last rendered.
 - **The pickers edit a tmux session.** Outside Kitty `amx color-picker` and
   `amx icon-picker` open in the terminal they are typed in and edit a tmux
   session instead of a Kitty tab: the one named by `--runtime-session`, else
@@ -890,9 +902,10 @@ What changes for a tmux session, and only for it:
   none named they list them and open nothing. The icon goes into the session's
   title, where its launch already put its harness's `[harness_emojis]` icon,
   and Agent Mux.app shows the one the title carries ahead of the session's
-  profile in its sidebar. The color is kept with the session: the dashboard draws the
-  session's rows in it, and Agent Mux.app draws the session's sidebar line on
-  it. "reset" returns to the
+  profile in its sidebar. The color is kept with the session, which starts in its
+  profile's: the dashboard draws the
+  session's rows in it, Agent Mux.app draws the session's sidebar line on
+  it, and a plain terminal's status line is drawn on it. "reset" returns to the
   profile's color. Inside Kitty
   both stay overlays on the tab, and `--runtime-session` reaches a tmux session
   from there. `amx keybindings` opens in place.

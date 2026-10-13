@@ -386,6 +386,14 @@ func (b *Backend) SetMetadata(ref backend.Ref, vars map[string]string) error {
 // Instance identifies the running server; see Server.Instance.
 func (b *Backend) Instance() (runtimesession.BackendInstance, error) { return b.server.Instance() }
 
+// AttachView is what the terminal that attaches shows around the pane.
+type AttachView struct {
+	// StatusLine shows the session's one-line status (its rendered state and
+	// title, on its color) under the pane. A terminal that lists sessions
+	// itself, as the desktop workspace does, leaves it off.
+	StatusLine bool
+}
+
 // AttachCommand is the interactive client that attaches a terminal to the
 // session holding pane. It detaches every other client of that session, so
 // attaching transfers interactive ownership (input and size) instead of
@@ -395,13 +403,21 @@ func (b *Backend) Instance() (runtimesession.BackendInstance, error) { return b.
 // The configuration is sourced again in the same invocation, because a server
 // started by an earlier build read one without the keys and mouse bindings
 // this build's viewers rely on. Every line of it can be applied twice.
-func (b *Backend) AttachCommand(pane backend.Ref) (*exec.Cmd, error) {
+//
+// The status line is set for the session in the same invocation. One terminal
+// owns a session, so the line always follows the terminal attached last.
+func (b *Backend) AttachCommand(pane backend.Ref, view AttachView) (*exec.Cmd, error) {
 	if err := paneOnly(pane); err != nil {
 		return nil, err
 	}
+	status := "off"
+	if view.StatusLine {
+		status = "on"
+	}
 	// #nosec G204 -- the binary was resolved at NewServer and the target is a canonical pane ID.
 	c := exec.Command(b.server.binary, "-S", b.server.socket, "-f", b.server.config,
-		"source-file", b.server.config, ";", "attach-session", "-d", "-t", pane.ID)
+		"source-file", b.server.config, ";", "set-option", "-t", pane.ID, "status", status,
+		";", "attach-session", "-d", "-t", pane.ID)
 	c.Env = clientEnv(os.Environ())
 	return c, nil
 }

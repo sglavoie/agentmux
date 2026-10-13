@@ -140,7 +140,6 @@ const (
 	ReasonNoProject       = "project is not configured"
 	ReasonPreviewTooSmall = "terminal is too small for preview"
 	ReasonNothingToUndo   = "nothing to undo"
-	ReasonNoKittyTabs     = "there are no Kitty tabs to reorder"
 	ReasonSendNeedsTmux   = "only a tmux session can be sent to; type in its Kitty tab"
 	ReasonSendLost        = "the session's tmux server is gone"
 	ReasonSendASLQuestion = "answer its agent-session-loop question from Runs"
