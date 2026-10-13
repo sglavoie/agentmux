@@ -59,6 +59,9 @@ struct WorkspaceRow: Equatable {
     /// `WorkspaceSidebar.pinnedSection`, above every project, instead of
     /// under its own.
     var pinned = false
+    /// The conversation the session's agent is having, once the daemon knows
+    /// it: what Past Sessions is opened on if the agent stops.
+    var conversation: ConversationIdentity?
 
     var embeddedRuntimeSessionID: String? {
         if case let .embedded(id) = target { return id }
@@ -258,7 +261,8 @@ enum WorkspaceSidebar {
             tabColor: embedded == nil ? nil : WorkspaceTabColor(hex: session.tabColor),
             name: embedded == nil ? "" : session.name,
             harnessIcon: embedded == nil ? "" : session.harnessIcon,
-            harness: session.harness
+            harness: session.harness,
+            conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil }
         )
     }
 

@@ -111,7 +111,9 @@ on, and at launch `WorkspaceWindowController.restore(_:)` returns there once a
 live snapshot lists the session and `amx attach --json` reports no terminal
 attached to it. Restoring never takes a session from another terminal, and
 nothing in the workspace launches an agent: one that stopped is shown as
-exited or lost, with the Dashboard as the only way on.
+exited or lost, and the way on is the Dashboard or, when its conversation is
+known, Past Sessions opened on it (`amx workspace-view history`), where the
+operator presses `c`.
 
 A session's terminal only views a pane the private tmux server holds, so its
 scrollback is the server's (`Ghostty.Scrollback.server`): the View and Edit

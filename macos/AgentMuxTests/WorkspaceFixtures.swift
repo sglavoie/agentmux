@@ -12,8 +12,10 @@ enum WorkspaceFixture {
 
     /// A session on the private tmux server: no window, a runtime identity.
     static func tmux(_ n: Int, project: String, profile: String = "work", harness: String = "claude",
-                     icon: String = "", attention: Bool = false, changedAtMS: Int64 = 0) -> CompanionSession {
+                     icon: String = "", attention: Bool = false, changedAtMS: Int64 = 0,
+                     conversation: String? = nil) -> CompanionSession {
         var session = CompanionSession()
+        session.conversation = conversation.map { ConversationIdentity(harness: harness, sessionID: $0) }
         session.project = project
         session.profile = profile
         session.harness = harness
@@ -121,6 +123,10 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     /// Every place the workspace reported moving to, in order.
     private(set) var places: [WorkspaceRestoration.Place?] = []
     func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?) { places.append(place) }
+
+    /// Every conversation the workspace reported for the session shown.
+    private(set) var conversations: [ConversationIdentity?] = []
+    func workspaceConversationChanged(_ conversation: ConversationIdentity?) { conversations.append(conversation) }
 
     /// Every time the sidebar was hidden (true) or shown, in order.
     private(set) var sidebarCollapses: [Bool] = []

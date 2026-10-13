@@ -47,6 +47,13 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertEqual(terminal.arguments, ["workspace-view", "session-shell", F.runtimeID(2)])
         XCTAssertNil(WorkspaceUtilityView.from(WorkspaceViewRequest(kind: "terminal", runtimeSessionID: F.runtimeID(2))),
                      "a terminal beside a session is the operator's to open, not a request's")
+        let history = WorkspaceUtilityView.history(ConversationIdentity(harness: "claude", sessionID: "0b6f-1c2e"))
+        XCTAssertEqual(history.arguments, ["workspace-view", "history", "claude:0b6f-1c2e"])
+        XCTAssertFalse(history.isPermanent || history.isOverlay)
+        XCTAssertNil(history.aboutRuntimeSessionID, "it is about a conversation, not a session that is running")
+        XCTAssertNil(WorkspaceUtilityView.from(WorkspaceViewRequest(kind: "history", title: "claude:0b6f-1c2e")),
+                     "Past Sessions on a conversation is the operator's to open, not a request's")
+        XCTAssertNil(WorkspaceRestoration.Place(encoded: "view:\(history.id)"), "and it is not brought back at launch")
     }
 
     func testTheKeybindingReferenceAndThePickersAreTheOperatorsToOpen() {

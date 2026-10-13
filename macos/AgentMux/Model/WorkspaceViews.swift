@@ -42,7 +42,8 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 }
 
 /// A terminal the workspace runs beside the agents: its Dashboard, its
-/// Overview, or a shell, editor, or pager one of those asked for.
+/// Overview, a shell, editor, or pager one of those asked for, or Past
+/// Sessions opened on the conversation of an agent that stopped.
 ///
 /// A utility view is not a session. It has no `AttentionCycler.Key`, no
 /// runtime session of its own, and no state glyph; nothing about it is read
@@ -57,6 +58,8 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 struct WorkspaceUtilityView: Equatable {
     enum Kind: String, Equatable {
         case dashboard, overview, shell, editor, pager, terminal
+        /// Past Sessions on one conversation, `harness:session_id`.
+        case history
         case keybindings
         case iconPicker = "icon-picker"
         case colorPicker = "color-picker"
@@ -87,7 +90,7 @@ struct WorkspaceUtilityView: Equatable {
     var aboutRuntimeSessionID: String? {
         switch kind {
         case .terminal, .pager, .iconPicker, .colorPicker: return target
-        case .dashboard, .overview, .shell, .editor, .keybindings: return nil
+        case .dashboard, .overview, .shell, .editor, .history, .keybindings: return nil
         }
     }
 
@@ -109,6 +112,7 @@ struct WorkspaceUtilityView: Equatable {
         case .editor: return ["workspace-view", "edit", target]
         case .pager: return ["workspace-view", "pager", target]
         case .terminal: return ["workspace-view", "session-shell", target]
+        case .history: return ["workspace-view", "history", target]
         case .keybindings: return ["workspace-view", "keybindings"]
         case .iconPicker: return ["workspace-view", "icon-picker", target]
         case .colorPicker: return ["workspace-view", "color-picker", target]
@@ -122,6 +126,7 @@ struct WorkspaceUtilityView: Equatable {
         case .shell, .terminal: return "❯"
         case .editor: return "✎"
         case .pager: return "≡"
+        case .history: return "↺"
         case .keybindings: return "⌨"
         case .iconPicker, .colorPicker: return "◉"
         }
@@ -136,6 +141,7 @@ struct WorkspaceUtilityView: Equatable {
         case .editor: return "Editor · \(Self.abbreviated(target))"
         case .pager: return "Scrollback"
         case .terminal: return "Shell"
+        case .history: return "Continue or fork a conversation"
         case .keybindings: return "What the function keys do"
         case .iconPicker: return "Harness icon"
         case .colorPicker: return "Session color"
@@ -145,6 +151,12 @@ struct WorkspaceUtilityView: Equatable {
     static let dashboard = WorkspaceUtilityView(kind: .dashboard, target: "", title: "Dashboard")
     static let overview = WorkspaceUtilityView(kind: .overview, target: "", title: "Overview")
     static let keybindings = WorkspaceUtilityView(kind: .keybindings, target: "", title: "Keybindings")
+
+    /// Past Sessions on a conversation, where the operator continues or
+    /// forks it. The workspace only opens the list: it resumes nothing.
+    static func history(_ conversation: ConversationIdentity) -> WorkspaceUtilityView {
+        WorkspaceUtilityView(kind: .history, target: conversation.encoded, title: "Past Sessions")
+    }
 
     /// The icon or color picker for a session; nil for any other kind.
     static func picker(_ kind: Kind, runtimeSessionID: String) -> WorkspaceUtilityView? {
@@ -180,7 +192,7 @@ struct WorkspaceUtilityView: Equatable {
             guard isRuntimeSessionID(request.runtimeSessionID) else { return nil }
             return WorkspaceUtilityView(kind: .pager, target: request.runtimeSessionID,
                                         title: label.isEmpty ? "Scrollback" : label)
-        case .terminal, .keybindings, .iconPicker, .colorPicker:
+        case .terminal, .history, .keybindings, .iconPicker, .colorPicker:
             // Only the operator opens one, from the workspace itself.
             return nil
         }

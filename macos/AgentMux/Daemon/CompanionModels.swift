@@ -298,6 +298,25 @@ struct ConversationIdentity: Decodable, Equatable {
         case sessionID = "session_id"
     }
 
+    /// `harness:session_id`, the selector `amx` reads a conversation from.
+    var encoded: String { "\(harness):\(sessionID)" }
+
+    /// Reads a selector back; nil for anything that could not be passed to
+    /// `amx` as one argument naming one conversation.
+    init?(encoded: String) {
+        guard let colon = encoded.firstIndex(of: ":") else { return nil }
+        self.init(harness: String(encoded[..<colon]), sessionID: String(encoded[encoded.index(after: colon)...]))
+        guard isUsable else { return nil }
+    }
+
+    /// Whether both halves are there and are plain words: a harness of
+    /// letters and digits, and a session ID with no space or control
+    /// character in it.
+    var isUsable: Bool {
+        !harness.isEmpty && harness.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
+            && !sessionID.isEmpty && sessionID.unicodeScalars.allSatisfy { $0.value > 0x20 && $0.value != 0x7f }
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         harness = c.lenient(.harness, "")

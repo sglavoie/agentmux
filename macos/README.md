@@ -399,8 +399,14 @@ ASL answer panel work the same either way.
   the pane was on, or the session being restored, the app asks amx what
   became of it (`WorkspaceSessionStatus`) and the pane says **Agent exited**
   (`runtime_session_exited`: its process ended, with the status) or **Agent
-  lost** (`runtime_session_lost`: its pane or server is gone). The only thing
-  offered is the Dashboard. No code path in the workspace launches an agent.
+  lost** (`runtime_session_lost`: its pane or server is gone). A session whose
+  conversation is known (`WorkspaceRow.conversation`, and for the session the
+  pane was on at the last quit the `amxWorkspaceConversation` preference)
+  offers **Resume from Past Sessions**, which opens a `history` view:
+  `amx workspace-view history HARNESS:SESSION_ID`, the TUI started in Past
+  Sessions with that conversation selected, where the operator presses `c`.
+  Any other is offered the Dashboard. No code path in the workspace launches
+  an agent: the view only lists, and the key is the operator's.
 - **Main menu.** The terminals offer every key equivalent to the main menu
   before encoding it for their program, so the menu is the list of shortcuts
   the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘⇧-, ⌘⇧A (next needing attention),

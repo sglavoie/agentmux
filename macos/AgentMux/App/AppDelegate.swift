@@ -147,7 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let controller = workspaceController()
         controller.show()
         if let place = restoration.place {
-            controller.restore(place)
+            controller.restore(place, conversation: restoration.conversation)
         } else if controller.state.selection == nil, controller.viewSelection == nil {
             controller.showView(WorkspaceUtilityView.dashboard.id)
         }
@@ -325,6 +325,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard !Self.isRunningTests, !isTerminating else { return }
         Self.logger.notice("workspace: now on \(place?.encoded ?? "nothing", privacy: .public)")
         WorkspaceRestoration.savePlace(place)
+    }
+
+    func workspaceConversationChanged(_ conversation: ConversationIdentity?) {
+        guard !Self.isRunningTests, !isTerminating else { return }
+        WorkspaceRestoration.saveConversation(conversation)
     }
 
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool) {

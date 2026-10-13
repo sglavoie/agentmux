@@ -30,6 +30,9 @@ protocol WorkspaceDelegate: AnyObject {
     func workspaceVisibilityChanged(_ visible: Bool)
     /// The pane moved to another session or view, or to none.
     func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?)
+    /// The conversation of the session the pane is on became known, changed,
+    /// or the pane left that session.
+    func workspaceConversationChanged(_ conversation: ConversationIdentity?)
     /// The sidebar was hidden or shown.
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
     /// The inspector was hidden or shown, or turned to another tab.
@@ -244,7 +247,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private(set) var restoring: WorkspaceRestoration.Place?
     /// The session the pane was on when it stopped running, and what became
     /// of it once amx has answered.
-    private(set) var gone: (runtimeSessionID: String, name: String, status: WorkspaceSessionStatus?)?
+    private(set) var gone: (runtimeSessionID: String, name: String, status: WorkspaceSessionStatus?, conversation: ConversationIdentity?)?
+    /// The conversation last known for the session the pane is on or is
+    /// coming back to. It outlives the row, so a session that stops being
+    /// listed can still be resumed from Past Sessions.
+    private var shownConversation: (runtimeSessionID: String, conversation: ConversationIdentity)?
+    private var reportedConversation: ConversationIdentity?
     /// Counts status questions, so an answer to one that was overtaken by
     /// the operator, or by a newer question, is dropped.
     private var statusQuestion = 0
@@ -369,8 +377,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// shown at once. A session is shown once a live snapshot lists it and
     /// amx confirms nobody else attached to it meanwhile; until then the pane
     /// says it is waiting. A session that is not running any more is reported
-    /// as exited or lost. Nothing is ever started.
-    func restore(_ place: WorkspaceRestoration.Place) {
+    /// as exited or lost, with the conversation saved for it when there is
+    /// one. Nothing is ever started.
+    func restore(_ place: WorkspaceRestoration.Place, conversation: ConversationIdentity? = nil) {
         Self.logger.notice("workspace: restoring \(place.encoded, privacy: .public)")
         switch place {
         case let .view(id):
@@ -381,6 +390,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             gone = nil
             restoring = place
             reportedPlace = place
+            shownConversation = nil
+            if case let .session(id) = place, let conversation {
+                shownConversation = (id, conversation)
+            }
+            reportedConversation = shownConversation?.conversation
             syncSidebarSelection()
             continueRestoring()
             updateContent(focus: false)
@@ -455,7 +469,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         detached.remove(id)
         statusQuestion += 1
         let question = statusQuestion
-        gone = (id, name, known)
+        gone = (id, name, known, shownConversation?.runtimeSessionID == id ? shownConversation?.conversation : nil)
         if let known {
             Self.logger.notice("workspace: \(id, privacy: .public) is not running: \(String(describing: known), privacy: .public); nothing is relaunched")
             reportPlace()
@@ -495,9 +509,29 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         } else {
             now = nil
         }
+        reportConversation(of: now)
         guard now != reportedPlace else { return }
         reportedPlace = now
         delegate?.workspacePlaceChanged(now)
+    }
+
+    /// Tells the app the conversation of the session the pane is on, when
+    /// that changed. A session whose row stops naming one keeps the last it
+    /// had: an agent between two conversations is still that agent.
+    private func reportConversation(of place: WorkspaceRestoration.Place?) {
+        if case let .session(id)? = place {
+            if let conversation = state.row(.embedded(id))?.conversation {
+                shownConversation = (id, conversation)
+            } else if shownConversation?.runtimeSessionID != id {
+                shownConversation = nil
+            }
+        } else if gone == nil {
+            shownConversation = nil
+        }
+        let now = place == nil ? nil : shownConversation?.conversation
+        guard now != reportedConversation else { return }
+        reportedConversation = now
+        delegate?.workspaceConversationChanged(now)
     }
 
     /// Selects a listed session and shows what there is to show for it. With
@@ -1153,6 +1187,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         reportPlace()
     }
 
+    static let resumeTitle = "Resume from Past Sessions"
+
     private func fillPlaceholder(_ content: Content) {
         let row = state.selectedRow
         switch content {
@@ -1194,12 +1230,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             ) { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }
         case let .gone(_, status):
             let name = gone?.name ?? "This session"
-            let notice = status?.notice(for: name)
+            let conversation = gone?.conversation
+            let notice = status?.notice(for: name, resumable: conversation != nil)
                 ?? ("No longer listed", status == nil
                     ? "\(name) is no longer running. Checking what became of it."
                     : "\(name) is no longer listed by the daemon. Nothing was restarted.")
-            placeholder.show(title: notice.0, message: notice.1, button: "Open Dashboard") { [weak self] in
-                self?.showView(WorkspaceUtilityView.dashboard.id)
+            guard let conversation else {
+                placeholder.show(title: notice.0, message: notice.1, button: "Open Dashboard") { [weak self] in
+                    self?.showView(WorkspaceUtilityView.dashboard.id)
+                }
+                break
+            }
+            // Past Sessions on that conversation, where resuming is a key the
+            // operator presses: the workspace still starts no agent.
+            placeholder.show(title: notice.0, message: notice.1, button: Self.resumeTitle) { [weak self] in
+                self?.open(.history(conversation))
             }
         case let .detached(id):
             placeholder.show(

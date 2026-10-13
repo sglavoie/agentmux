@@ -53,6 +53,25 @@ final class WorkspaceRestorationTests: XCTestCase {
         XCTAssertNil(WorkspaceRestoration.load(from: defaults).place, "a damaged preference restores nothing")
     }
 
+    func testTheConversationShownIsKeptInDefaults() throws {
+        let suite = "amx.tests.restoration.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let conversation = ConversationIdentity(harness: "claude", sessionID: "0b6f:1c2e")
+        WorkspaceRestoration.saveConversation(conversation, to: defaults)
+        XCTAssertEqual(defaults.string(forKey: WorkspaceRestoration.conversationKey), "claude:0b6f:1c2e")
+        XCTAssertEqual(WorkspaceRestoration.load(from: defaults).conversation, conversation, "only the first colon divides it")
+        WorkspaceRestoration.saveConversation(nil, to: defaults)
+        XCTAssertNil(WorkspaceRestoration.load(from: defaults).conversation)
+
+        // Anything that would not reach amx as one argument naming one
+        // conversation is not one.
+        for damaged in ["claude", "claude:", ":0b6f", "--help:0b6f", "claude:0b6f 1c2e", "claude:0b6f\n"] {
+            XCTAssertNil(ConversationIdentity(encoded: damaged), damaged)
+        }
+    }
+
     func testAnAttachCheckSaysWhetherTheAgentRunsExitedOrWasLost() {
         func failure(_ code: String, _ message: String = "why") -> AMXCommandResult<AttachCheck> {
             .failure(.command(AMXJSONError(code: code, message: message), status: 1))
@@ -88,6 +107,12 @@ final class WorkspaceRestorationTests: XCTestCase {
             XCTAssertTrue(notice.message.contains("It was not restarted"), notice.message)
         }
         XCTAssertTrue(exited.message.contains("agent exited (status 1)"))
+        for notice in [exited, lost] {
+            XCTAssertFalse(notice.message.contains("press c"), "nothing is promised without a conversation")
+        }
+        let resumable = try XCTUnwrap(WorkspaceSessionStatus.lost("").notice(for: "api — work", resumable: true))
+        XCTAssertTrue(resumable.message.contains("It was not restarted"))
+        XCTAssertTrue(resumable.message.contains("press c"))
         XCTAssertNil(WorkspaceSessionStatus.live(clients: 0).notice(for: "x"))
         XCTAssertNil(WorkspaceSessionStatus.unknown("x").notice(for: "x"))
     }
@@ -246,6 +271,54 @@ final class WorkspaceRecoveryTests: XCTestCase {
         workspace.placeholder.press()
         XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.dashboard.id)
         XCTAssertNil(workspace.gone)
+    }
+
+    func testAStoppedAgentWithAConversationOffersItInPastSessions() throws {
+        let conversation = ConversationIdentity(harness: "claude", sessionID: "c-1")
+        app.store.apply(snapshot: F.snapshot([F.tmux(1, project: "api", conversation: "c-1"), sessions[1]]))
+        workspace.activate(try row("api", "work"))
+        XCTAssertEqual(app.conversations, [conversation], "the conversation shown is kept for the next launch")
+        app.statuses[F.runtimeID(1)] = .exited("agent exited (status 1)")
+        app.store.apply(snapshot: F.snapshot([sessions[1]]))
+
+        XCTAssertEqual(workspace.gone?.conversation, conversation)
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Agent exited")
+        let message = workspace.placeholder.messageLabel.stringValue
+        XCTAssertTrue(message.contains("It was not restarted"), message)
+        XCTAssertTrue(message.contains("press c"), message)
+        XCTAssertEqual(workspace.placeholder.button.title, "Resume from Past Sessions")
+        XCTAssertEqual(app.conversations.last, .some(nil), "a session that is gone is not where the next launch returns")
+
+        workspace.placeholder.press()
+        let history = WorkspaceUtilityView.history(conversation)
+        XCTAssertEqual(workspace.viewSelection, history.id)
+        XCTAssertEqual(app.madeViews, [history.id], "the list is opened and nothing else")
+        XCTAssertEqual(app.made, [F.runtimeID(1)], "no terminal is attached and no agent started for it")
+        XCTAssertNil(workspace.gone)
+    }
+
+    func testASessionGoneAtLaunchIsResumedFromTheConversationSavedForIt() throws {
+        let saved = ConversationIdentity(harness: "codex", sessionID: "c-9")
+        app.statuses[F.runtimeID(9)] = .lost("runtime session was lost (backend generation changed)")
+        workspace.restore(.session(runtimeSessionID: F.runtimeID(9)), conversation: saved)
+        XCTAssertEqual(app.conversations, [], "a pending restore keeps the saved conversation")
+        app.store.apply(snapshot: F.snapshot(sessions))
+
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Agent lost")
+        XCTAssertEqual(workspace.placeholder.button.title, "Resume from Past Sessions")
+        workspace.placeholder.press()
+        XCTAssertEqual(app.madeViews, ["history:codex:c-9"])
+        XCTAssertEqual(app.made, [], "nothing is attached or started")
+    }
+
+    func testTheConversationFollowsThePaneAndOutlivesARowThatStopsNamingIt() throws {
+        app.store.apply(snapshot: F.snapshot([F.tmux(1, project: "api", conversation: "c-1"), sessions[1], sessions[2]]))
+        workspace.activate(try row("api", "work"))
+        // Between two conversations the agent names none; the last one stays.
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(app.conversations, [ConversationIdentity(harness: "claude", sessionID: "c-1")])
+        workspace.activate(try row("api", "personal"))
+        XCTAssertEqual(app.conversations.last, .some(nil), "another session's conversation is never kept for this one")
     }
 
     func testRestoringAViewShowsItAndAKittySessionIsSelectedNotRaised() throws {

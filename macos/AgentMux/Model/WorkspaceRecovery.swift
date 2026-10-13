@@ -58,6 +58,7 @@ struct WorkspaceRestoration: Equatable {
 
     static let windowOpenKey = "amxWorkspaceWindowOpen"
     static let placeKey = "amxWorkspacePlace"
+    static let conversationKey = "amxWorkspaceConversation"
     static let sidebarCollapsedKey = "amxWorkspaceSidebarCollapsed"
     static let inspectorShownKey = "amxWorkspaceInspectorShown"
     static let inspectorTabKey = "amxWorkspaceInspectorTab"
@@ -65,6 +66,10 @@ struct WorkspaceRestoration: Equatable {
     /// Whether the window was open when the app last ran.
     var windowOpen = false
     var place: Place?
+    /// The conversation of the session the pane was on, so that one found
+    /// gone at launch — after a reboot, say — can still be resumed from Past
+    /// Sessions.
+    var conversation: ConversationIdentity?
     /// Whether the sidebar was hidden.
     var sidebarCollapsed = false
     /// Whether the inspector was shown; it is hidden until asked for.
@@ -75,6 +80,7 @@ struct WorkspaceRestoration: Equatable {
         WorkspaceRestoration(
             windowOpen: defaults.bool(forKey: windowOpenKey),
             place: defaults.string(forKey: placeKey).flatMap(Place.init(encoded:)),
+            conversation: defaults.string(forKey: conversationKey).flatMap(ConversationIdentity.init(encoded:)),
             sidebarCollapsed: defaults.bool(forKey: sidebarCollapsedKey),
             inspectorShown: defaults.bool(forKey: inspectorShownKey),
             inspectorTab: defaults.string(forKey: inspectorTabKey).flatMap(WorkspaceInspectorTab.init(rawValue:)) ?? .waiting
@@ -92,6 +98,14 @@ struct WorkspaceRestoration: Equatable {
 
     static func saveWindowOpen(_ open: Bool, to defaults: UserDefaults = .standard) {
         defaults.set(open, forKey: windowOpenKey)
+    }
+
+    static func saveConversation(_ conversation: ConversationIdentity?, to defaults: UserDefaults = .standard) {
+        if let conversation {
+            defaults.set(conversation.encoded, forKey: conversationKey)
+        } else {
+            defaults.removeObject(forKey: conversationKey)
+        }
     }
 
     static func savePlace(_ place: Place?, to defaults: UserDefaults = .standard) {
@@ -135,15 +149,17 @@ enum WorkspaceSessionStatus: Equatable {
     }
 
     /// The pane's title and message for a session that is not running. Nil
-    /// for one that is, or that could not be asked about.
-    func notice(for name: String) -> (title: String, message: String)? {
+    /// for one that is, or that could not be asked about. With `resumable`,
+    /// the pane offers Past Sessions on its conversation and says so.
+    func notice(for name: String, resumable: Bool = false) -> (title: String, message: String)? {
+        let resume = "Past Sessions opens on its conversation: press c there to resume it."
         switch self {
         case .live, .unknown:
             return nil
         case let .exited(reason):
-            return ("Agent exited", "\(name) is no longer running: its agent ended on its own. \(Self.detail(reason))It was not restarted. Start it again, or resume its conversation, from the Dashboard.")
+            return ("Agent exited", "\(name) is no longer running: its agent ended on its own. \(Self.detail(reason))It was not restarted. \(resumable ? resume : "Start it again, or resume its conversation, from the Dashboard.")")
         case let .lost(reason):
-            return ("Agent lost", "\(name) can no longer be found: the terminal it ran in is gone, as after a restart of the computer or of the tmux server. \(Self.detail(reason))It was not restarted. Resume its conversation from the Dashboard.")
+            return ("Agent lost", "\(name) can no longer be found: the terminal it ran in is gone, as after a restart of the computer or of the tmux server. \(Self.detail(reason))It was not restarted. \(resumable ? resume : "Resume its conversation from the Dashboard.")")
         case .ended:
             return ("Session ended", "\(name) was closed. Nothing was restarted.")
         }

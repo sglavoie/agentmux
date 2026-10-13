@@ -145,7 +145,11 @@ the tab titles use and a count of waiting sessions beside each project.
 - An agent that is no longer running is never started again by the app. The
   pane says what happened instead: **Agent exited** when the agent ended on
   its own (with its exit status), **Agent lost** when the terminal it ran in
-  is gone, as after a reboot. Starting or resuming is done from the Dashboard.
+  is gone, as after a reboot. When the agent's conversation is known the pane
+  offers **Resume from Past Sessions**: Past Sessions opens with that
+  conversation selected, and `c` continues it (`f` forks it) in a new session
+  shown in the workspace. Otherwise starting or resuming is done from the
+  Dashboard.
 - A click on a **Kitty** session brings Kitty forward on its window, as the
   menu does. Its row is marked `Kitty`. Moving through the sidebar with the
   arrow keys only selects; it never switches apps.
