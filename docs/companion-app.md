@@ -227,7 +227,12 @@ Whatever has the keyboard decides where a key goes.
   asked for. Its **Waiting** tab lists every session waiting on you, in the
   order the session list has them (the order **F4** steps through), with why
   and for how long; a click goes to the session as a click on its line in
-  the session list does. Its **Session** tab says what the daemon knows
+  the session list does. A row that can be answered from where you are has
+  an **Answer…** button, which opens the panel a banner's Answer… opens and
+  leaves the pane on the session it shows: the supervisor question of an
+  agent-session-loop run, or the prompt a session in the workspace is
+  showing. A stopped agent, an error, and a prompt in a Kitty session have
+  no button; go there. Its **Session** tab says what the daemon knows
   about the session the pane is on (state, reason, times, flags, profile,
   conversation and runtime-session IDs, branch), copies an identifier when
   its line is clicked, and has buttons for what ⌘R and F5, F6, F8, F10, and

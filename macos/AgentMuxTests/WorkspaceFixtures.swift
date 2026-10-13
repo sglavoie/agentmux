@@ -141,6 +141,10 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     private(set) var inspectorActions: [WorkspaceInspectorAction] = []
     func workspaceInspectorAction(_ action: WorkspaceInspectorAction) { inspectorActions.append(action) }
 
+    /// What the inspector's Answer… buttons asked to answer, in order.
+    private(set) var answers: [WorkspaceWaitingAnswer] = []
+    func workspaceAnswer(_ answer: WorkspaceWaitingAnswer) { answers.append(answer) }
+
     /// Every order the sessions were dragged into, in order.
     private(set) var orders: [WorkspaceOrder] = []
     func workspaceOrderChanged(_ order: WorkspaceOrder) { orders.append(order) }

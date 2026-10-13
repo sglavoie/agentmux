@@ -40,6 +40,9 @@ protocol WorkspaceDelegate: AnyObject {
     /// Does what one of the inspector's buttons asks for the session the
     /// pane is on.
     func workspaceInspectorAction(_ action: WorkspaceInspectorAction)
+    /// Answer… on a waiting session of the inspector: opens the panel that
+    /// answers it. The pane stays where it is.
+    func workspaceAnswer(_ answer: WorkspaceWaitingAnswer)
     /// A project's sessions were dragged into another order.
     func workspaceOrderChanged(_ order: WorkspaceOrder)
     /// Asks whether a session's agent is running and whether a terminal is
@@ -1655,7 +1658,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         inspector.show(WorkspaceInspectorView.Model(
             tab: inspectorTab,
-            waiting: WorkspaceInspector.waiting(sessions, snapshotSocket: socket, now: now(), glyphs: glyphs, order: order),
+            waiting: WorkspaceInspector.waiting(
+                sessions, asl: store.snapshot?.asl.waiting ?? [], snapshotSocket: socket, now: now(), glyphs: glyphs, order: order
+            ),
             inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs) },
             current: state.current
         ))
@@ -1764,6 +1769,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             self.activate(row)
         }
         inspector.onAction = { [weak self] action in self?.delegate?.workspaceInspectorAction(action) }
+        inspector.onAnswer = { [weak self] answer in self?.delegate?.workspaceAnswer(answer) }
         let inspectorController = NSViewController()
         inspectorController.view = inspector
         let inspectorItem = NSSplitViewItem(viewController: inspectorController)

@@ -343,6 +343,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     /// The inspector's buttons do what ⌘R and the session function keys do.
+    /// Answer… in the inspector: the panels the menu and the banners open.
+    /// Whether anything may be sent is still each panel's to find out.
+    func workspaceAnswer(_ answer: WorkspaceWaitingAnswer) {
+        switch answer {
+        case let .asl(target): self.answer(target)
+        case let .prompt(runtimeSessionID): answerPrompt(PromptAnswerTarget(runtimeSessionID: runtimeSessionID))
+        }
+    }
+
     func workspaceInspectorAction(_ action: WorkspaceInspectorAction) {
         switch action {
         case .name: nameSession(nil)

@@ -4,7 +4,8 @@ import AppKit
 /// what there is to say about the session the pane is on.
 ///
 /// Nothing in it takes the keyboard. A click on a waiting session goes to
-/// it, a click on an identifier copies it, and the buttons do what the
+/// it, Answer… on one opens the panel that answers it without going there,
+/// a click on an identifier copies it, and the buttons do what the
 /// session function keys do; the terminal that had the keyboard keeps it.
 @MainActor
 final class WorkspaceInspectorView: NSView {
@@ -24,6 +25,7 @@ final class WorkspaceInspectorView: NSView {
 
     var onTab: ((WorkspaceInspectorTab) -> Void)?
     var onWaiting: ((AttentionCycler.Key) -> Void)?
+    var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
     var onAction: ((WorkspaceInspectorAction) -> Void)?
     /// Takes a copied identifier; the general pasteboard unless a test says
     /// otherwise.
@@ -109,6 +111,7 @@ final class WorkspaceInspectorView: NSView {
             for row in model.waiting {
                 let line = WorkspaceWaitingRowView(row)
                 line.onPress = { [weak self] in self?.onWaiting?(row.key) }
+                line.onAnswer = { [weak self] answer in self?.onAnswer?(answer) }
                 add(line)
             }
         case .session:
@@ -213,11 +216,17 @@ final class WorkspaceInspectorStack: NSStackView {
 }
 
 /// One waiting session: a click goes to it, as a click on its line in the
-/// session list does.
+/// session list does. One that can be answered from here has an Answer…
+/// button, which opens a panel and leaves the pane where it is.
 @MainActor
 final class WorkspaceWaitingRowView: NSBox {
+    static let answerTitle = "Answer…"
+
     let row: WorkspaceWaitingRow
     var onPress: (() -> Void)?
+    var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
+    /// Nil on a row with nothing to answer from here.
+    private(set) var answerButton: NSButton?
     let titleLabel = NSTextField(labelWithString: "")
     let detailLabel = NSTextField(labelWithString: "")
 
@@ -239,11 +248,29 @@ final class WorkspaceWaitingRowView: NSBox {
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
 
-        let stack = NSStackView(views: [titleLabel, detailLabel])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 1
+        let text = NSStackView(views: [titleLabel, detailLabel])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 1
+        let stack = NSStackView(views: [text])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
+        if row.answer != nil {
+            let button = NSButton(title: Self.answerTitle, target: self, action: #selector(answerPressed(_:)))
+            button.controlSize = .small
+            button.bezelStyle = .rounded
+            button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            // The terminal that has the keyboard keeps it.
+            button.refusesFirstResponder = true
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+            button.setAccessibilityLabel("Answer \(row.title)")
+            stack.addArrangedSubview(button)
+            answerButton = button
+        }
+        text.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let content = NSView()
         content.addSubview(stack)
         contentView = content
@@ -266,8 +293,15 @@ final class WorkspaceWaitingRowView: NSBox {
     }
 
     // The whole line is one target; its labels take no clicks of their own.
+    // Its button does.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        super.hitTest(point) == nil ? nil : self
+        guard let hit = super.hitTest(point) else { return nil }
+        if let answerButton, hit.isDescendant(of: answerButton) { return hit }
+        return self
+    }
+
+    @objc private func answerPressed(_ sender: Any?) {
+        if let answer = row.answer { onAnswer?(answer) }
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }

@@ -15,6 +15,17 @@ enum WorkspaceInspectorTab: String, CaseIterable, Equatable {
     }
 }
 
+/// What Answer… on a waiting session opens: one of the two panels the menu
+/// and the banners already open. Neither is decided here to be sendable;
+/// each panel asks before it offers anything.
+enum WorkspaceWaitingAnswer: Equatable {
+    /// The supervisor question of the agent-session-loop run bound to the
+    /// session, whichever terminal it runs in.
+    case asl(ASLAnswerTarget)
+    /// The prompt an embedded session is showing.
+    case prompt(runtimeSessionID: String)
+}
+
 /// One session waiting on the operator, as the right sidebar lists it.
 struct WorkspaceWaitingRow: Equatable {
     let key: AttentionCycler.Key
@@ -24,6 +35,9 @@ struct WorkspaceWaitingRow: Equatable {
     let detail: String
     let glyph: String
     let toolTip: String
+    /// What can be answered from the row without going to the session; nil
+    /// when there is nothing to answer here, and the row only goes there.
+    var answer: WorkspaceWaitingAnswer?
 }
 
 /// What the right sidebar says about the session the pane is on.
@@ -106,17 +120,30 @@ enum WorkspaceInspector {
         iconState.isEmpty ? idle : stateWords[iconState] ?? iconState
     }
 
+    /// The states in which a session shows a prompt a key can answer.
+    static let promptStates: Set<String> = ["key", "question"]
+
     /// The sessions waiting on the operator, in the order `AttentionCycler`
-    /// steps through: the sidebar's.
+    /// steps through: the sidebar's. `asl` is the snapshot's waiting runs: a
+    /// session one is bound to is answered through its run's mailbox, never
+    /// through its pane.
     static func waiting(
         _ sessions: [CompanionSession],
+        asl: [CompanionASLWaiting] = [],
         snapshotSocket: String = "",
         now: Date = Date(),
         glyphs: Glyphs = .bundled,
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceWaitingRow] {
-        AttentionCycler.ordered(sessions, snapshotSocket: snapshotSocket, order: order).map { session in
+        let runs = MenuBuilder.waitingBySession(asl, sessions: sessions, snapshotSocket: snapshotSocket).bySession
+        return AttentionCycler.ordered(sessions, snapshotSocket: snapshotSocket, order: order).map { session in
             let row = WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
+            var answer: WorkspaceWaitingAnswer?
+            if let run = runs[row.key] {
+                answer = .asl(MenuBuilder.target(run))
+            } else if let id = row.embeddedRuntimeSessionID, promptStates.contains(session.iconState) {
+                answer = .prompt(runtimeSessionID: id)
+            }
             var detail = [session.reason.isEmpty ? word(for: session.iconState) : session.reason]
             if let changed = session.changedAt { detail.append(MenuBuilder.age(since: changed, now: now)) }
             if row.embeddedRuntimeSessionID == nil { detail.append(WorkspaceSidebar.kittyBadge) }
@@ -125,7 +152,8 @@ enum WorkspaceInspector {
                 title: title(of: row),
                 detail: detail.joined(separator: " · "),
                 glyph: row.glyph,
-                toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)"
+                toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)",
+                answer: answer
             )
         }
     }

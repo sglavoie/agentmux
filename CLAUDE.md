@@ -96,7 +96,10 @@ built as data by `Model/WorkspaceInspector.swift`) lists the sessions waiting
 on the operator in `AttentionCycler` order and describes the session the pane
 is on, from the snapshot alone. It is hidden until asked for (⌘⇧B), is
 neither a session nor a view, and must never take the keyboard, count toward
-attention, or launch anything.
+attention, or launch anything. A waiting row's Answer… button
+(`WorkspaceWaitingAnswer`) only opens the ASL answer panel or the prompt
+answer panel; whether anything may be sent stays theirs and `amx send`'s to
+decide.
 
 F1 to F11 do in the workspace what Kitty binds them to
 (`WorkspaceMenu.functionKeys`, the main menu's only keys with no modifier):

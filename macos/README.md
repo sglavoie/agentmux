@@ -425,6 +425,18 @@ ASL answer panel work the same either way.
   up; Escape and ⌘P give it back to what had it, and a click elsewhere leaves
   it where the click put it. A snapshot that changes the places re-filters
   an open list.
+- **Inspector.** ⌘⇧B shows `WorkspaceInspectorView` on the pane's other
+  side, built as data by `Model/WorkspaceInspector.swift`. A Waiting row
+  carries a `WorkspaceWaitingAnswer` when it can be answered without going
+  to its session: `.asl` when `MenuBuilder.waitingBySession` binds a waiting
+  run to it, on either backend, else `.prompt` when the workspace embeds it
+  and its state is `key` or `question`, else none. The row's **Answer…**
+  button reports it through `workspaceAnswer(_:)`, and the app opens the
+  panel the menu and the banners open (`answer(_:)`, `answerPrompt(_:)`).
+  The inspector decides nothing about sending: the prompt panel runs
+  `amx send --look` before it enables a key, and `amx send` refuses a session
+  with a supervisor question open. The button refuses first responder, so
+  the terminal keeps the keyboard.
 - **Session names.** ⌘R and the sidebar's right-click menu
   (`menuNeedsUpdate`, `contextMenuItems(forRow:)`) ask for a name in a sheet
   and run `amx name-session --runtime-session <id> --json -- <name>`, which writes

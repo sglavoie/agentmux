@@ -52,6 +52,40 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertTrue(waiting[0].toolTip.hasPrefix("api — personal"), "the name does not hide where the session is")
     }
 
+    func testAWaitingSessionIsAnsweredThroughItsRunElseItsPromptElseNotFromHere() {
+        var looping = F.tmux(3, project: "loop", icon: "question", attention: true)
+        looping.aslRunID = "run-3"
+        let waiting = [
+            F.tmux(1, project: "api", icon: "key", attention: true),
+            F.tmux(2, project: "docs", icon: "stop", attention: true),
+            looping,
+            F.kitty(4, project: "web", icon: "key", attention: true),
+            F.kitty(5, project: "zed", icon: "question", attention: true),
+            F.tmux(6, project: "ops", icon: "error", attention: true),
+        ]
+        var tmuxRun = CompanionASLWaiting()
+        tmuxRun.runID = "run-3"
+        tmuxRun.planDir = "/plans/loop"
+        var kittyRun = CompanionASLWaiting()
+        kittyRun.runID = "run-5"
+        kittyRun.planDir = "/plans/zed"
+        kittyRun.windowID = 5
+
+        let rows = WorkspaceInspector.waiting(waiting, asl: [tmuxRun, kittyRun], snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
+        let answers = Dictionary(uniqueKeysWithValues: rows.map { ($0.title.components(separatedBy: " — ")[0], $0.answer) })
+        XCTAssertEqual(answers["api"], .some(.prompt(runtimeSessionID: F.runtimeID(1))), "a prompt in a session the workspace embeds")
+        XCTAssertEqual(answers["docs"], .some(nil), "a stopped agent asks nothing")
+        XCTAssertEqual(answers["ops"], .some(nil))
+        XCTAssertEqual(answers["loop"], .some(.asl(ASLAnswerTarget(runID: "run-3", planDir: "/plans/loop"))),
+                       "a supervisor question is the run's mailbox to answer, never the pane's")
+        XCTAssertEqual(answers["web"], .some(nil), "a Kitty session's prompt is answered in Kitty")
+        XCTAssertEqual(answers["zed"], .some(.asl(ASLAnswerTarget(runID: "run-5", planDir: "/plans/zed", windowID: 5))),
+                       "a run is answered whichever terminal it is in")
+        XCTAssertEqual(WorkspaceInspector.waiting(waiting, now: now, glyphs: .fallback).compactMap(\.answer),
+                       [.prompt(runtimeSessionID: F.runtimeID(1)), .prompt(runtimeSessionID: F.runtimeID(3))],
+                       "with no waiting run known, only prompts are offered")
+    }
+
     func testAnInspectionLeavesOutWhatIsNotKnown() {
         let idle = WorkspaceInspector.inspection(sessions[0], now: now, glyphs: .fallback)
         XCTAssertEqual(idle.title, "api — work")
@@ -165,6 +199,54 @@ final class WorkspaceInspectorTests: XCTestCase {
         app.store.apply(snapshot: F.snapshot(settled))
         XCTAssertEqual(workspace.inspector.tabs.label(forSegment: 0), "Waiting")
         XCTAssertEqual((workspace.inspector.lines.first as? NSTextField)?.stringValue, WorkspaceInspectorView.nothingWaiting)
+    }
+
+    func testAnswerOnAWaitingRowAsksTheAppAndLeavesThePaneAndTheKeyboard() throws {
+        var asking = sessions
+        asking[1] = F.tmux(2, project: "api", profile: "personal", icon: "key", attention: true, changedAtMS: 300_000)
+        asking.append(F.tmux(3, project: "docs", icon: "stop", attention: true))
+        app.store.apply(snapshot: F.snapshot(asking))
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        workspace.setInspectorCollapsed(false)
+        workspace.window.layoutIfNeeded()
+
+        let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 api — personal", "🛑 docs — work", "🔑 web — work"])
+        XCTAssertEqual(lines.map { $0.answerButton?.title }, ["Answer…", nil, nil], "only what can be answered from here has the button")
+
+        let button = try XCTUnwrap(lines[0].answerButton)
+        XCTAssertTrue(button.refusesFirstResponder)
+        let onButton = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: lines[0].superview)
+        XCTAssertTrue(lines[0].hitTest(onButton)?.isDescendant(of: button) == true, "the button takes its own clicks")
+        let beside = lines[0].convert(NSPoint(x: 6, y: lines[0].bounds.midY), to: lines[0].superview)
+        XCTAssertTrue(lines[0].hitTest(beside) === lines[0], "the rest of the line is still one target")
+
+        button.performClick(nil)
+        XCTAssertEqual(app.answers, [.prompt(runtimeSessionID: F.runtimeID(2))])
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)), "the pane stays where it is")
+        XCTAssertTrue(workspace.window.firstResponder === terminal, "and the terminal keeps the keyboard")
+        XCTAssertEqual(app.made, [F.runtimeID(1)], "nothing is attached to answer")
+
+        lines[0].press()
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)), "a click on the line still goes there")
+        XCTAssertEqual(app.answers.count, 1)
+    }
+
+    func testAWaitingRunIsAnsweredFromItsSessionsRow() throws {
+        var snapshot = F.snapshot(sessions)
+        var run = CompanionASLWaiting()
+        run.runID = "run-2"
+        run.planDir = "/plans/api"
+        run.runtimeSessionID = F.runtimeID(2)
+        snapshot.asl.waiting = [run]
+        app.store.apply(snapshot: snapshot)
+        workspace.setInspectorCollapsed(false)
+
+        let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
+        try XCTUnwrap(lines.first?.answerButton).performClick(nil)
+        XCTAssertEqual(app.answers, [.asl(ASLAnswerTarget(runID: "run-2", planDir: "/plans/api"))])
+        XCTAssertNil(lines.last?.answerButton, "the Kitty session next to it has no run and no button")
     }
 
     func testTheSessionTabFollowsThePaneAndItsButtonsAskTheApp() throws {
