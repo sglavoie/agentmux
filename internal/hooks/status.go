@@ -105,6 +105,10 @@ func (s HookHealthSummary) Healthy() bool {
 // the partial summary so callers can decide whether to degrade or surface.
 func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, error) {
 	statuses, err := StatusAll(cfg, amxBin)
+	return summarizeHookHealth(statuses), err
+}
+
+func summarizeHookHealth(statuses []AccountStatus) HookHealthSummary {
 	var summary HookHealthSummary
 	for _, s := range statuses {
 		if s.Err != nil {
@@ -119,7 +123,7 @@ func OverallHookHealth(cfg *config.Config, amxBin string) (HookHealthSummary, er
 			summary.Missing = append(summary.Missing, s.Account)
 		}
 	}
-	return summary, err
+	return summary
 }
 
 // StatusAll returns hook-file synchronization and activation evidence for every

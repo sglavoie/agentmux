@@ -361,10 +361,17 @@ func (m Model) handleTick(msg commands.TickMsg) (tea.Model, tea.Cmd) {
 		commands.Tick(m.interval),
 	}
 	now := time.Now()
-	checkDaemon := now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval
-	checkHooks := now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval
-	if checkDaemon || checkHooks {
-		cmds = append(cmds, m.runHealthCmd(checkDaemon, checkHooks))
+	// A check that outlasts the tick must not be joined by another: the hooks
+	// scan reads the diagnostic journal, and scans started every tick on top of
+	// one another only slow each other down. The two checks run as separate
+	// commands so the daemon ping never waits on that scan.
+	if !m.daemonHealthInFlight && now.Sub(m.daemonHealthCheckedAt) >= daemonHealthInterval {
+		m.daemonHealthInFlight = true
+		cmds = append(cmds, m.runHealthCmd(true, false))
+	}
+	if !m.hookHealthInFlight && now.Sub(m.hookHealthCheckedAt) >= hookHealthInterval {
+		m.hookHealthInFlight = true
+		cmds = append(cmds, m.runHealthCmd(false, true))
 	}
 	if m.mode == ModeDetail && m.detailWindowID != 0 {
 		cmds = append(cmds, m.runSessionDetailCmd(m.detailWindowID))
@@ -387,11 +394,13 @@ func (m Model) handleHealth(msg commands.HealthMsg) (tea.Model, tea.Cmd) {
 	if msg.DaemonChecked {
 		m.daemonAlive = msg.DaemonAlive
 		m.daemonHealthCheckedAt = now
+		m.daemonHealthInFlight = false
 	}
 	if msg.HookChecked {
 		m.hookHealth = msg.HookSummary
 		m.hookHealthErr = msg.HookErr
 		m.hookHealthCheckedAt = now
+		m.hookHealthInFlight = false
 	}
 	// A check that resolved can shorten the body under an open details overlay —
 	// a hooks error carries three detail lines and the clean reading carries

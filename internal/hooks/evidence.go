@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -251,15 +252,15 @@ func normalizeEvidenceHome(path string) string {
 	return filepath.Clean(config.ExpandTilde(path))
 }
 
-var activationEvidenceSnapshot = func(ctx context.Context, journal *diagnostics.Journal, visitor diagnostics.SnapshotVisitor) error {
+var activationEvidenceSnapshot = func(ctx context.Context, journal *diagnostics.Journal, cursor *diagnostics.SnapshotCursor, visitor diagnostics.SnapshotVisitor) (diagnostics.SnapshotCursor, error) {
 	// The selector intentionally matches no production stage. The visitor still
 	// observes every valid deduplicated record without retaining the journal in
 	// the returned snapshot.
-	_, err := journal.SnapshotWithVisitor(ctx, diagnostics.Selector{
+	snapshot, err := journal.SnapshotWithVisitor(ctx, diagnostics.Selector{
 		Stages: []string{"hook.status.__evidence_only__"},
 		Limit:  1,
-	}, nil, visitor)
-	return err
+	}, cursor, visitor)
+	return snapshot.Cursor, err
 }
 
 var activationEvidenceProbe = probeStatusEvidence
@@ -274,29 +275,110 @@ func ProbeStatusEvidence(ctx context.Context, cfg *config.Config) (*StatusEviden
 
 func probeStatusEvidence(ctx context.Context, cfg *config.Config) (*StatusEvidence, error) {
 	evidence := NewStatusEvidence()
+	journal, err := openEvidenceJournal(cfg)
+	if err != nil || journal == nil {
+		return evidence, err
+	}
+	if _, err := activationEvidenceSnapshot(ctx, journal, nil, evidence.Visit); err != nil {
+		return evidence, err
+	}
+	return evidence, nil
+}
+
+// openEvidenceJournal opens the diagnostic journal hook evidence is read from.
+// A journal directory that does not exist yet is no journal and no error.
+func openEvidenceJournal(cfg *config.Config) (*diagnostics.Journal, error) {
 	if cfg != nil && !cfg.Defaults.Diagnostics.JournalEnabledValue() {
-		return evidence, errDiagnosticJournalDisabled
+		return nil, errDiagnosticJournalDisabled
 	}
 	paths, err := diagnostics.DefaultPaths()
 	if err != nil {
-		return evidence, err
+		return nil, err
 	}
 	if _, err := os.Stat(paths.JournalDir); os.IsNotExist(err) {
-		return evidence, nil
+		return nil, nil
 	} else if err != nil {
-		return evidence, err
+		return nil, err
 	}
 	options := diagnostics.JournalOptions{}
 	if cfg != nil {
 		options.KeepDays = cfg.Defaults.Diagnostics.JournalKeepDays
 		options.MaxBytes = int64(cfg.Defaults.Diagnostics.JournalMaxMiB) << 20
 	}
-	journal, err := diagnostics.NewJournal(paths, options)
+	return diagnostics.NewJournal(paths, options)
+}
+
+// EvidenceTracker gathers hook status evidence for a caller that asks again
+// and again, such as the dashboard's health pip. The first probe traverses the
+// whole journal; every later one reads only the bytes appended since, because
+// a full traversal costs seconds of CPU on a journal near its size limit.
+//
+// The evidence is everything the tracker has read, so it outlives records the
+// journal has since pruned: Horizon reaches back to the oldest record ever
+// seen. Visit is idempotent, so a segment that compaction rewrote under a new
+// inode is read again and changes nothing.
+type EvidenceTracker struct {
+	mu         sync.Mutex
+	journalDir string
+	cursor     *diagnostics.SnapshotCursor
+	evidence   *StatusEvidence
+}
+
+// NewEvidenceTracker returns a tracker that has read nothing yet.
+func NewEvidenceTracker() *EvidenceTracker {
+	return &EvidenceTracker{}
+}
+
+// Probe folds the journal records written since the last probe into the
+// tracked evidence and returns a copy of it. Concurrent probes run one at a
+// time. A failed traversal keeps the previous cursor, so the next probe reads
+// the same range again.
+func (t *EvidenceTracker) Probe(ctx context.Context, cfg *config.Config) (*StatusEvidence, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	journal, err := openEvidenceJournal(cfg)
+	if err != nil || journal == nil {
+		return NewStatusEvidence(), err
+	}
+	paths, err := diagnostics.DefaultPaths()
 	if err != nil {
-		return evidence, err
+		return NewStatusEvidence(), err
 	}
-	if err := activationEvidenceSnapshot(ctx, journal, evidence.Visit); err != nil {
-		return evidence, err
+	if t.evidence == nil || t.journalDir != paths.JournalDir {
+		t.journalDir = paths.JournalDir
+		t.cursor = nil
+		t.evidence = NewStatusEvidence()
 	}
-	return evidence, nil
+	cursor, err := activationEvidenceSnapshot(ctx, journal, t.cursor, t.evidence.Visit)
+	if err != nil {
+		return t.evidence.clone(), err
+	}
+	t.cursor = &cursor
+	return t.evidence.clone(), nil
+}
+
+// OverallHookHealth is the package-level OverallHookHealth over the tracked
+// evidence.
+func (t *EvidenceTracker) OverallHookHealth(ctx context.Context, cfg *config.Config, amxBin string) (HookHealthSummary, error) {
+	evidence, evidenceErr := t.Probe(ctx, cfg)
+	statuses, err := StatusAllWithEvidence(cfg, amxBin, evidence, evidenceErr)
+	return summarizeHookHealth(statuses), err
+}
+
+func (e *StatusEvidence) clone() *StatusEvidence {
+	copied := &StatusEvidence{
+		lastSeen:         make(map[statusEvidenceKey]time.Time, len(e.lastSeen)),
+		earliestObserved: e.earliestObserved,
+		latestObserved:   e.latestObserved,
+		observedAny:      e.observedAny,
+		deliveries:       make(map[string]*deliveryTerminal, len(e.deliveries)),
+	}
+	for key, seen := range e.lastSeen {
+		copied.lastSeen[key] = seen
+	}
+	for key, terminal := range e.deliveries {
+		value := *terminal
+		copied.deliveries[key] = &value
+	}
+	return copied
 }

@@ -324,9 +324,9 @@ func TestStatusAllTraversesJournalOnceForMixedProfilesAndCorruptRecords(t *testi
 
 	oldSnapshot := activationEvidenceSnapshot
 	traversals := 0
-	activationEvidenceSnapshot = func(ctx context.Context, journal *diagnostics.Journal, visitor diagnostics.SnapshotVisitor) error {
+	activationEvidenceSnapshot = func(ctx context.Context, journal *diagnostics.Journal, cursor *diagnostics.SnapshotCursor, visitor diagnostics.SnapshotVisitor) (diagnostics.SnapshotCursor, error) {
 		traversals++
-		return oldSnapshot(ctx, journal, visitor)
+		return oldSnapshot(ctx, journal, cursor, visitor)
 	}
 	t.Cleanup(func() { activationEvidenceSnapshot = oldSnapshot })
 
@@ -409,4 +409,77 @@ func stubActivationRuntimeWithoutEvidence(t *testing.T, versions map[string]stri
 		activationVersionProbe = oldVersionProbe
 		activationClaudeManagedRoot = oldClaudeRoot
 	})
+}
+
+func TestEvidenceTrackerReadsOnlyNewRecordsAfterTheFirstProbe(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	paths, err := diagnostics.DefaultPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	base := time.Now().UTC().Add(-time.Hour)
+	sequence := uint64(0)
+	appendHook := func(observedAt time.Time) {
+		t.Helper()
+		sequence++
+		if err := journal.Append(t.Context(), diagnostics.TraceEnvelope{
+			Stage: "hook.received", Harness: "claude", Evidence: map[string]string{"config_dir": home},
+			ObservedAt: observedAt, SourceID: "evidence-tracker", SourceSequence: sequence,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	oldSnapshot := activationEvidenceSnapshot
+	visited := 0
+	activationEvidenceSnapshot = func(ctx context.Context, journal *diagnostics.Journal, cursor *diagnostics.SnapshotCursor, visitor diagnostics.SnapshotVisitor) (diagnostics.SnapshotCursor, error) {
+		return oldSnapshot(ctx, journal, cursor, func(envelope diagnostics.TraceEnvelope) error {
+			visited++
+			return visitor(envelope)
+		})
+	}
+	t.Cleanup(func() { activationEvidenceSnapshot = oldSnapshot })
+
+	appendHook(base)
+	appendHook(base.Add(time.Minute))
+	tracker := NewEvidenceTracker()
+	first, err := tracker.Probe(t.Context(), &config.Config{})
+	if err != nil {
+		t.Fatalf("first probe: %v", err)
+	}
+	if visited != 2 {
+		t.Fatalf("first probe visited %d records, want 2", visited)
+	}
+
+	appendHook(base.Add(2 * time.Minute))
+	visited = 0
+	second, err := tracker.Probe(t.Context(), &config.Config{})
+	if err != nil {
+		t.Fatalf("second probe: %v", err)
+	}
+	if visited != 1 {
+		t.Fatalf("second probe visited %d records, want only the new one", visited)
+	}
+	if got := second.latestForHome("claude", home); !got.Equal(base.Add(2 * time.Minute)) {
+		t.Fatalf("last seen = %s, want %s", got, base.Add(2*time.Minute))
+	}
+	if !second.earliestObserved.Equal(base) {
+		t.Fatalf("earliest observed = %s, want the first probe's %s", second.earliestObserved, base)
+	}
+	if got := first.latestForHome("claude", home); !got.Equal(base.Add(time.Minute)) {
+		t.Fatalf("the first probe's evidence changed under its reader: last seen = %s", got)
+	}
+
+	visited = 0
+	if _, err := tracker.Probe(t.Context(), &config.Config{}); err != nil {
+		t.Fatalf("third probe: %v", err)
+	}
+	if visited != 0 {
+		t.Fatalf("a probe of an unchanged journal visited %d records, want 0", visited)
+	}
 }

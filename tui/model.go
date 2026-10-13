@@ -272,13 +272,16 @@ type Model struct {
 	// health pip + deprecation banner bookkeeping. daemonAlive and
 	// hookHealth are refreshed at the daemonHealthInterval /
 	// hookHealthInterval cadences via a health command; deprecations is captured
-	// once at startup from cfg.Deprecations.
+	// once at startup from cfg.Deprecations. The in-flight flags keep a tick
+	// from starting a check while the previous one of its kind is still out.
 	amxBin                string
 	daemonAlive           bool
 	daemonHealthCheckedAt time.Time
+	daemonHealthInFlight  bool
 	hookHealth            commands.HookHealth
 	hookHealthErr         error
 	hookHealthCheckedAt   time.Time
+	hookHealthInFlight    bool
 	deprecations          []config.Deprecation
 	deprecationDismissed  bool
 
