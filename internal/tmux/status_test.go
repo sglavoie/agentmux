@@ -42,9 +42,40 @@ func (o *terminal) wait(t *testing.T, what string, ok func(received string) bool
 	}
 }
 
-// attachTerminal attaches a real client to pane the way `amx attach` does and
-// returns what its terminal receives.
-func attachTerminal(t *testing.T, f *fixture, pane backend.Ref, view AttachView) *terminal {
+// colors is what the terminal a client attaches through says it can draw.
+// tmux reads it from TERM and COLORTERM, so a test names both rather than
+// taking whichever the terminal that started it happened to export.
+type colors struct {
+	name      string
+	colorterm string // COLORTERM, or empty to leave it unset
+	// background is the SGR parameter the terminal is sent for a "#89b4fa"
+	// background: the color itself, or the nearest of the 256 indexed ones.
+	background string
+}
+
+var (
+	indexedColors = colors{name: "256 colors", background: "48;5;111"}
+	trueColors    = colors{name: "true color", colorterm: "truecolor", background: "48;2;137;180;250"}
+)
+
+// env is environ with the terminal's capabilities replaced by c's.
+func (c colors) env(environ []string) []string {
+	env := make([]string, 0, len(environ)+2)
+	for _, kv := range environ {
+		if !strings.HasPrefix(kv, "TERM=") && !strings.HasPrefix(kv, "COLORTERM=") {
+			env = append(env, kv)
+		}
+	}
+	env = append(env, "TERM=xterm-256color")
+	if c.colorterm != "" {
+		env = append(env, "COLORTERM="+c.colorterm)
+	}
+	return env
+}
+
+// attachTerminal attaches a real client to pane the way `amx attach` does,
+// through a terminal that draws c, and returns what that terminal receives.
+func attachTerminal(t *testing.T, f *fixture, pane backend.Ref, view AttachView, c colors) *terminal {
 	t.Helper()
 	if runtime.GOOS != "darwin" {
 		t.Skip("uses BSD script(1) for a pseudo-terminal")
@@ -55,7 +86,7 @@ func attachTerminal(t *testing.T, f *fixture, pane backend.Ref, view AttachView)
 	}
 	sized := `stty cols 80 rows 12; exec "$@"`
 	script := exec.Command("script", append([]string{"-q", "/dev/null", "/bin/sh", "-c", sized, "viewer", client.Path}, client.Args[1:]...)...)
-	script.Env = append(client.Env, "TERM=xterm-256color")
+	script.Env = c.env(client.Env)
 	out := &terminal{}
 	script.Stdout = out
 	stdin, err := script.StdinPipe()
@@ -143,8 +174,14 @@ func TestWriteStatusesIsOneClientAndEachPaneStandsAlone(t *testing.T) {
 // The terminal attached to a session is titled with the rendered status and,
 // when it asked for the line, shows it on the session's color; both follow
 // the option as the daemon rewrites it, and nothing in the text is read as
-// tmux styling.
+// tmux styling. The color reaches a terminal in the form it can draw.
 func TestAnAttachedTerminalShowsTheRenderedStatus(t *testing.T) {
+	for _, c := range []colors{indexedColors, trueColors} {
+		t.Run(c.name, func(t *testing.T) { testAnAttachedTerminalShowsTheRenderedStatus(t, c) })
+	}
+}
+
+func testAnAttachedTerminalShowsTheRenderedStatus(t *testing.T, c colors) {
 	f := newFixture(t, Options{})
 	l := f.launch(t, "status", []string{"/bin/sh", "-c", "exec cat"}, nil)
 	generation := f.generation(t)
@@ -155,7 +192,7 @@ func TestAnAttachedTerminalShowsTheRenderedStatus(t *testing.T) {
 		}
 	}
 
-	out := attachTerminal(t, f, l.Pane, AttachView{StatusLine: true})
+	out := attachTerminal(t, f, l.Pane, AttachView{StatusLine: true}, c)
 	out.wait(t, "the title of a session nothing was rendered for", func(got string) bool {
 		return strings.Contains(got, title("Agent Mux"))
 	})
@@ -166,7 +203,7 @@ func TestAnAttachedTerminalShowsTheRenderedStatus(t *testing.T) {
 	write("⚡api #[fg=red]x", "#89b4fa")
 	out.wait(t, "the rendered title", func(got string) bool { return strings.Contains(got, title("⚡api #[fg=red]x")) })
 	out.wait(t, "the status line on the session's color", func(got string) bool {
-		return strings.Contains(got, "48;2;137;180;250") && strings.Contains(got, " ⚡api #[fg=red]x ")
+		return strings.Contains(got, c.background) && strings.Contains(got, " ⚡api #[fg=red]x ")
 	})
 
 	write("✅api", "")
@@ -175,7 +212,7 @@ func TestAnAttachedTerminalShowsTheRenderedStatus(t *testing.T) {
 
 	// The workspace's terminal takes the session over and shows no line; the
 	// title is still the session's.
-	hosted := attachTerminal(t, f, l.Pane, AttachView{})
+	hosted := attachTerminal(t, f, l.Pane, AttachView{}, c)
 	hosted.wait(t, "the hosted terminal's title", func(got string) bool { return strings.Contains(got, title("✅api")) })
 	if got := f.tmux(t, "display-message", "-p", "-t", l.Pane.ID, "#{status}"); got != "off" {
 		t.Fatalf("status of a session attached by the workspace = %q, want off", got)
