@@ -3,7 +3,9 @@ package kitty
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -14,6 +16,11 @@ import (
 // must not be allowed to hang the hook indefinitely. Exposed as a var so
 // tests can shrink it without sleeping for production duration.
 var runTimeout = 10 * time.Second
+
+// ErrNoKittyTerminal reports a kitten remote-control call that names no socket
+// from a terminal that is not a Kitty window, so there is no Kitty it could
+// reach.
+var ErrNoKittyTerminal = errors.New("no Kitty socket is named and this terminal is not a Kitty window")
 
 // CommandRunner abstracts exec.Command for testability.
 type CommandRunner interface {
@@ -27,6 +34,9 @@ type RealRunner struct{}
 func NewRealRunner() *RealRunner { return &RealRunner{} }
 
 func (r *RealRunner) Run(name string, args ...string) ([]byte, []byte, error) {
+	if speaksThroughTerminal(args) && !terminalIsKitty(os.Getenv) {
+		return nil, nil, ErrNoKittyTerminal
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
@@ -42,4 +52,29 @@ func (r *RealRunner) Run(name string, args ...string) ([]byte, []byte, error) {
 		err = fmt.Errorf("%w: %w", ctx.Err(), err)
 	}
 	return stdout.Bytes(), stderr.Bytes(), err
+}
+
+// speaksThroughTerminal reports a `kitten @` call with no --to. Kitten then
+// speaks to Kitty through the controlling terminal: it puts the terminal in
+// raw mode, writes the command as an escape sequence, and waits for the reply.
+// A terminal that is not Kitty never replies, so the call ends at runTimeout
+// with a kill, and a killed kitten leaves the terminal raw for whatever prints
+// next.
+func speaksThroughTerminal(args []string) bool {
+	if len(args) == 0 || args[0] != "@" {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if arg == "--to" {
+			return false
+		}
+	}
+	return true
+}
+
+// terminalIsKitty reports whether the controlling terminal can be a Kitty
+// window. Inside tmux it is tmux's pane whatever Kitty variables were
+// inherited.
+func terminalIsKitty(getenv func(string) string) bool {
+	return getenv(WindowIDEnv) != "" && getenv("TMUX") == ""
 }

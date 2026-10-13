@@ -67,3 +67,39 @@ func TestRealRunner_OrdinaryFailureIsNotATimeout(t *testing.T) {
 		t.Fatalf("classify: got %q, want %q", classifyListError(err), ListErrorCommand)
 	}
 }
+
+// TestRealRunner_RefusesTheTerminalOutsideKitty pins that a kitten call with
+// no socket is never started from a terminal that is not a Kitty window: it
+// would take the terminal raw, wait for a reply that cannot come, and be
+// killed without restoring it.
+func TestRealRunner_RefusesTheTerminalOutsideKitty(t *testing.T) {
+	t.Setenv(WindowIDEnv, "")
+	_, _, err := NewRealRunner().Run("kitten", "@", "ls")
+	if !errors.Is(err, ErrNoKittyTerminal) {
+		t.Fatalf("err = %v, want ErrNoKittyTerminal", err)
+	}
+
+	t.Setenv(WindowIDEnv, "7")
+	t.Setenv("TMUX", "/tmp/tmux-501/default,1,0")
+	_, _, err = NewRealRunner().Run("kitten", "@", "ls")
+	if !errors.Is(err, ErrNoKittyTerminal) {
+		t.Fatalf("inside tmux: err = %v, want ErrNoKittyTerminal", err)
+	}
+}
+
+func TestSpeaksThroughTerminal(t *testing.T) {
+	cases := []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"@", "ls"}, true},
+		{[]string{"@", "--to", "unix:/tmp/kitty", "ls"}, false},
+		{[]string{"60"}, false},
+		{nil, false},
+	}
+	for _, tc := range cases {
+		if got := speaksThroughTerminal(tc.args); got != tc.want {
+			t.Errorf("speaksThroughTerminal(%q) = %v, want %v", tc.args, got, tc.want)
+		}
+	}
+}
