@@ -202,41 +202,37 @@ func TestOpeningOrderRanksAttentionThenDoneThenNonWorkingThenWorking(t *testing.
 	}
 }
 
-func TestRetainOrderPromotesOnlyAttentionAndPreservesGroupOrder(t *testing.T) {
+func TestRetainOrderMovesATileToItsTierAndPreservesTierOrder(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		state     string
-		unseen    bool
-		attention bool
+		name   string
+		state  string
+		unseen bool
+		want   []string
 	}{
-		{name: "permission", state: "key", attention: true},
-		{name: "question", state: "question", attention: true},
-		{name: "error", state: "error", attention: true},
-		{name: "unseen completion", state: "stop", unseen: true, attention: true},
-		{name: "seen completion", state: "stop"},
-		{name: "working", state: "bolt"},
-		{name: "warning", state: "warning"},
-		{name: "compacting", state: "compact"},
-		{name: "subagent", state: "subagent"},
-		{name: "iconless"},
+		{name: "permission", state: "key", want: []string{"z-existing", "x-changing", "a-new", "w-idle", "y-running"}},
+		{name: "question", state: "question", want: []string{"z-existing", "x-changing", "a-new", "w-idle", "y-running"}},
+		{name: "error", state: "error", want: []string{"z-existing", "x-changing", "a-new", "w-idle", "y-running"}},
+		{name: "unseen completion", state: "stop", unseen: true, want: []string{"z-existing", "x-changing", "a-new", "w-idle", "y-running"}},
+		{name: "seen completion", state: "stop", want: []string{"z-existing", "a-new", "x-changing", "w-idle", "y-running"}},
+		{name: "working", state: "bolt", want: []string{"z-existing", "a-new", "w-idle", "y-running", "x-changing"}},
+		{name: "warning", state: "warning", want: []string{"z-existing", "a-new", "w-idle", "x-changing", "y-running"}},
+		{name: "compacting", state: "compact", want: []string{"z-existing", "a-new", "w-idle", "x-changing", "y-running"}},
+		{name: "subagent", state: "subagent", want: []string{"z-existing", "a-new", "w-idle", "x-changing", "y-running"}},
+		{name: "iconless", want: []string{"z-existing", "a-new", "w-idle", "x-changing", "y-running"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			previous := []session.RunningSession{row(1, 10, "z-existing"), row(2, 20, "y-running"), row(3, 30, "x-changing"), row(4, 40, "closed")}
+			previous := []session.RunningSession{row(1, 10, "z-existing"), row(6, 60, "w-idle"), row(2, 20, "y-running"), row(3, 30, "x-changing"), row(4, 40, "closed")}
 			previous[0].State = "question"
-			previous[1].State, previous[2].State = "bolt", "bolt"
-			current := []session.RunningSession{row(5, 50, "a-new"), previous[2], previous[1], previous[0]}
+			previous[2].State, previous[3].State = "bolt", "bolt"
+			current := []session.RunningSession{row(5, 50, "a-new"), previous[3], previous[2], previous[1], previous[0]}
 			current[0].State = "key"
 			current[1].State, current[1].Unseen = tc.state, tc.unseen
-			current[3].State = "error" // changing severity must not reorder attention cards
+			current[4].State = "error" // changing severity must not reorder attention cards
 			beforePrevious := append([]session.RunningSession(nil), previous...)
 			beforeCurrent := append([]session.RunningSession(nil), current...)
-			want := []string{"z-existing", "a-new", "y-running", "x-changing"}
-			if tc.attention {
-				want = []string{"z-existing", "x-changing", "a-new", "y-running"}
-			}
 			got := RetainOrder(previous, current, nil, 5*time.Minute)
-			if !reflect.DeepEqual(names(got), want) {
-				t.Fatalf("refresh order = %v, want %v", names(got), want)
+			if !reflect.DeepEqual(names(got), tc.want) {
+				t.Fatalf("refresh order = %v, want %v", names(got), tc.want)
 			}
 			if !reflect.DeepEqual(previous, beforePrevious) || !reflect.DeepEqual(current, beforeCurrent) {
 				t.Fatal("RetainOrder modified an input snapshot")

@@ -414,13 +414,14 @@ is running it — and a live preview of that pane's screen below a divider. It
 answers "what is every session doing right now" in one glance, which the list
 answers one row at a time.
 
-On opening, the tiles put sessions needing attention first, followed by other
-statuses that are not Working, then Working sessions. Within each tier they use
-project and tab identity order. While the overview remains open, refreshes
-update statuses and previews and move sessions needing attention to the top.
-Relative order within the attention and non-attention groups stays stable;
-new sessions join the end of their group. Selection stays on the same session.
-Closing and reopening F2 takes a fresh triage order.
+The tiles put sessions needing attention first, followed by Done sessions,
+then other statuses that are not Working, then Working sessions. On opening,
+each tier uses project and tab identity order. While the overview remains
+open, refreshes update statuses and previews and move a session to the tier
+its status now belongs in. Relative order within a tier stays stable, so a
+tile moves only when its own tier changes; new sessions join the end of their
+tier. Selection stays on the same session. Closing and reopening F2 takes a
+fresh identity order within each tier.
 
 The header is the full inspector's six-line metadata block cut to the three
 questions asked of a session you are *not* currently looking at. Branch,

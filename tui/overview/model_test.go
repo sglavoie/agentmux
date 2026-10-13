@@ -741,7 +741,7 @@ func TestOpeningPutsDoneBeforeCompacting(t *testing.T) {
 	}
 }
 
-func TestRefreshSurfacesAttentionWhileRetainingRelativeOrderAndSelection(t *testing.T) {
+func TestRefreshMovesTilesToTheirTierWhileRetainingTierOrderAndSelection(t *testing.T) {
 	working := viewSession(1, "alpha", "work", "codex")
 	working.State = "bolt"
 	idle := viewSession(2, "zeta", "work", "codex")
@@ -757,30 +757,30 @@ func TestRefreshSurfacesAttentionWhileRetainingRelativeOrderAndSelection(t *test
 		t.Fatalf("opening selection = %d, want first attention tab 3", m.selectedTabID)
 	}
 
-	// Newly attention-needing cards move ahead of the others, but neither
-	// group is sorted again when Kitty returns the rows in a different order.
+	// A card moves to the tier its new status belongs in, but no tier is
+	// sorted again when Kitty returns the rows in a different order.
 	working.State = "key"
 	attention.State = "bolt"
 	newcomer := viewSession(4, "aardvark", "work", "codex")
 	newcomer.State = "error"
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, []session.RunningSession{newcomer, attention, working, idle}))
-	if got, want := tabs(m), []int{1, 4, 3, 2}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("refreshed tiles = %v, want stable attention and non-attention groups %v", got, want)
+	if got, want := tabs(m), []int{1, 4, 2, 3}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("refreshed tiles = %v, want attention, then Done, then Working: %v", got, want)
 	}
-	if m.sessions[0].State != "key" || m.sessions[2].State != "bolt" {
+	if m.sessions[0].State != "key" || m.sessions[3].State != "bolt" {
 		t.Fatal("the cards did not receive the refreshed status")
 	}
-	if m.selectedTabID != 3 || m.selected != 2 {
-		t.Fatalf("selection = index %d/tab %d, want index 2 still on tab 3", m.selected, m.selectedTabID)
+	if m.selectedTabID != 3 || m.selected != 3 {
+		t.Fatalf("selection = index %d/tab %d, want index 3 still on tab 3", m.selected, m.selectedTabID)
 	}
-	// Severity and metadata changes within a group do not reshuffle it.
+	// Severity and metadata changes within a tier do not reshuffle it.
 	working.State = "question"
 	newcomer.Project = "aaa-renamed"
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, []session.RunningSession{idle, newcomer, attention, working}))
-	if got, want := tabs(m), []int{1, 4, 3, 2}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("repeat refresh tiles = %v, want unchanged group order %v", got, want)
+	if got, want := tabs(m), []int{1, 4, 2, 3}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("repeat refresh tiles = %v, want unchanged tier order %v", got, want)
 	}
 
 	// A new F2 program gets a fresh triage snapshot rather than the old order.
