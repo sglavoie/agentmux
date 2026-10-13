@@ -276,9 +276,22 @@ func (r *deliveryRecorder) captureRawPayload(event string, windowID int, produce
 		return
 	}
 	r.payloadCaptureAttempted = true
-	resolvedWindowID := windowID
-	if candidate, err := resolveHookWindowID(windowID); err == nil {
-		resolvedWindowID = candidate
+	// A managed hook is its runtime session and nothing else: a pane in a
+	// tmux server started from a Kitty window inherits that window's ID,
+	// which names the wrong place, so it is not captured under it.
+	runtimeSessionID := r.runtimeSessionID
+	if runtimeSessionID == "" {
+		runtimeSessionID = strings.TrimSpace(getenv(runtimesession.EnvVar))
+	}
+	if _, err := runtimesession.ParseID(runtimeSessionID); err != nil {
+		runtimeSessionID = ""
+	}
+	resolvedWindowID := 0
+	if runtimeSessionID == "" {
+		resolvedWindowID = windowID
+		if candidate, err := resolveHookWindowID(windowID); err == nil {
+			resolvedWindowID = candidate
+		}
 	}
 	rawProducer := strings.TrimSpace(producerHarness)
 	if known := harness.NormalizeKnown(rawProducer); known != "" {
@@ -288,7 +301,8 @@ func (r *deliveryRecorder) captureRawPayload(event string, windowID int, produce
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	result, err := captureHookPayload(ctx, diagnostics.CapturePayloadRequest{
-		WindowID: resolvedWindowID, Harness: producerHarness, Event: event, TraceID: r.traceID,
+		WindowID: resolvedWindowID, RuntimeSessionID: runtimeSessionID,
+		Harness: producerHarness, Event: event, TraceID: r.traceID,
 		RequestID: r.requestID, Payload: []byte(payloadJSON), Truncated: truncated,
 	})
 	cancel()

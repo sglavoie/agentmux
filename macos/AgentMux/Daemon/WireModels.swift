@@ -52,6 +52,7 @@ struct DaemonRequest: Encodable, Equatable {
     let type: String
     var subscribe: SubscribeParams?
     var focusWindow: FocusWindowParams?
+    var focusSession: FocusSessionParams?
     var snooze: SnoozeRequest?
     var disposition: DispositionParams?
     var asl: ASLRequestParams?
@@ -59,6 +60,7 @@ struct DaemonRequest: Encodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case type, subscribe, snooze, disposition, asl
         case focusWindow = "focus_window"
+        case focusSession = "focus_session"
     }
 
     static let health = DaemonRequest(type: "health")
@@ -69,6 +71,10 @@ struct DaemonRequest: Encodable, Equatable {
 
     static func focusing(socket: String, windowID: Int) -> DaemonRequest {
         DaemonRequest(type: "focus_window", focusWindow: FocusWindowParams(kittySocket: socket, windowID: windowID))
+    }
+
+    static func focusing(runtimeSessionID: String) -> DaemonRequest {
+        DaemonRequest(type: "focus_session", focusSession: FocusSessionParams(runtimeSessionID: runtimeSessionID))
     }
 
     static func snoozing(_ request: SnoozeRequest) -> DaemonRequest {
@@ -234,6 +240,15 @@ struct FocusWindowParams: Encodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case kittySocket = "kitty_socket"
         case windowID = "window_id"
+    }
+}
+
+/// `protocol.FocusSessionRequest`.
+struct FocusSessionParams: Encodable, Equatable {
+    let runtimeSessionID: String
+
+    enum CodingKeys: String, CodingKey {
+        case runtimeSessionID = "runtime_session_id"
     }
 }
 

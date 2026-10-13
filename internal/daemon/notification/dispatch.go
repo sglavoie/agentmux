@@ -106,7 +106,8 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	// Production wires focus before accepting requests. The focusAvailable
 	// guard preserves isolated reducer tests whose intentionally incomplete
 	// handler topology has no Kitty client at all.
-	if target.Navigable && focusAvailable && !kitty.IsReusableListenAddress(target.KittyListenOn) {
+	// A runtime session's click needs no Kitty socket: it is shown by session.
+	if target.Navigable && !target.sessionFocus() && focusAvailable && !kitty.IsReusableListenAddress(target.KittyListenOn) {
 		emit("decision", "suppressed", "focus_unavailable")
 		return
 	}
@@ -255,7 +256,31 @@ func (n *Notifier) settleInteraction(target NotificationTarget, action string, t
 	}
 	n.mu.Lock()
 	focus := n.focus
+	sessionFocus := n.sessionFocus
 	n.mu.Unlock()
+	if target.sessionFocus() {
+		// The companion shows a runtime session itself and asks with
+		// focus_session; doing it here as well would show it twice.
+		if backend == BackendApp {
+			emit("suppressed", "focus_delegated")
+			return
+		}
+		if sessionFocus == nil {
+			emit("suppressed", "focus_unavailable")
+			return
+		}
+		switch err := sessionFocus(target.RuntimeSessionID); {
+		case err == nil:
+			emit("focused", "focus_success")
+		case errors.Is(err, ErrFocusTargetStale):
+			emit("suppressed", "focus_target_stale")
+		case errors.Is(err, ErrFocusNoViewer):
+			emit("suppressed", "focus_no_viewer")
+		default:
+			emit("failed", "focus_failed")
+		}
+		return
+	}
 	if focus == nil {
 		emit("suppressed", "focus_unavailable")
 		return

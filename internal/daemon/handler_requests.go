@@ -81,6 +81,8 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = h.handleNotificationTest()
 	case protocol.TypeWorkspaceView:
 		resp = h.handleWorkspaceView(req)
+	case protocol.TypeFocusSession:
+		resp = h.handleFocusSession(req)
 	case protocol.TypeHealth:
 		resp = h.handleHealth()
 	case protocol.TypeShutdown:
@@ -242,11 +244,11 @@ func (h *Handler) notificationTitle(windowID int, sessionTitle string) string {
 
 // notificationTarget names what a notification for slot is about and what a
 // click on it may focus. The runtime session holding the slot travels with the
-// target so a notice can be traced, and acted on, by session identity. Only a
-// Kitty pane is navigable: its click focuses the exact window through the
-// socket the daemon learned for it. A session on another backend has no Kitty
-// window behind its slot, so its notification is delivered all the same but
-// carries no focus target, and never a slot number dressed as a window ID.
+// target so a notice can be traced, and acted on, by session identity. A
+// Kitty pane is focused as the exact window, through the socket the daemon
+// learned for it. A session on another backend has no Kitty window behind its
+// slot: its click shows the runtime session (focus_session), and the target
+// never carries a slot number dressed as a window ID or a socket to dial.
 func (h *Handler) notificationTarget(windowID int, account string) notification.NotificationTarget {
 	target := notification.NotificationTarget{WindowID: windowID, Account: account, Navigable: windowID > 0}
 	if windowID <= 0 {
@@ -260,7 +262,7 @@ func (h *Handler) notificationTarget(windowID int, account string) notification.
 	}
 	h.stateMu.Unlock()
 	if isRuntimeSyntheticSlot(windowID) {
-		target.Navigable = false
+		target.Navigable = target.RuntimeSessionID != "" && target.Backend != ""
 		target.KittyListenOn = ""
 		return target
 	}

@@ -415,7 +415,7 @@ func openWorktree(ctx context.Context, deps Dependencies, request Request, edito
 		return Result{}, &Error{Code: "metadata_invalid", Action: action, Message: "worktree checkout is missing"}
 	}
 	if deps.Kitty == nil {
-		return Result{}, dependencyError(action, "Kitty client")
+		return deps.openUtility(action, editor, entry.Path)
 	}
 	project, matched := configuredWorktreeProject(deps.Config, entry)
 	opened := false

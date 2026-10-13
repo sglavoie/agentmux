@@ -361,6 +361,11 @@ TUI (`tui/...`):
   terminal (`commands.Attach`, **F12** detaches) and the surface keeps running;
   Kitty-only actions report why they are unavailable. Build action dependencies
   with `commands.TerminalDependencies`, never a bare `actions.Dependencies{Kitty: …}`.
+  The open actions (`OpenDirectory`, `OpenEditor`, the worktree shell and
+  editor) open a Kitty tab only when there is a Kitty client; without one
+  they ask `Dependencies.Utility` (the workspace's utility view) and
+  otherwise return `actions.DataContinuationHere`, leaving the shell or the
+  editor to the caller's own terminal, since an action starts no program.
   A tmux that fails to answer, or a server that vanished under agents nobody
   ended, keeps its rows on the list (`commands.PortableOutage`, carried as
   `SessionsMsg.PortableErr`); rows kept that way are not evidence that
@@ -381,6 +386,14 @@ TUI (`tui/...`):
   subscribers that named the `workspace_views` feature
   (`internal/daemon/workspace_view.go`); a refusal falls back to this terminal.
   The request names a kind and a target, never a command line.
+- A click on a session with no Kitty window (a notification, the app's menu)
+  is the daemon's `focus_session {runtime_session_id}` request
+  (`internal/daemon/focus_session.go`), never `focus_window`: a connected
+  workspace is sent a session view with `raise` set, which only the daemon
+  sets and which is what lets the workspace open its window for it; with no
+  workspace the terminal used last is switched (`tmux.Switcher`). That
+  selects the session in the terminal and raises no window. A notification
+  target for a runtime slot is its runtime session, never the slot number.
 
 ### Identity and safety rules
 
@@ -482,7 +495,11 @@ amx daemon export-events --current-window --last 50
 ```
 
 `--current-window` is the session the command is typed in: its runtime session
-(`AMX_RUNTIME_SESSION_ID`) when it has one, else its Kitty window.
+(`AMX_RUNTIME_SESSION_ID`) when it has one, else its Kitty window. `amx debug
+probe` and `amx debug capture start` default to the same session and take
+`--runtime-session`; doctor's `kitty`, `kitty_snapshot_stale`, and
+`renderer_drift` findings are raised only where Kitty is in use
+(`kittyInUse`, `cmd/debug/doctor_backend.go`).
 
 Release acceptance must keep explicit coverage for warm Past Sessions,
 partial transcript/plan failures, CLI and TUI continuity, handoff/worktree

@@ -202,13 +202,18 @@ func backendSummary(status cli.BackendStatus) string {
 	return fmt.Sprintf("launches go to %s; %s; %s", status.LaunchBackend, tmux, server)
 }
 
-// kittyNotInUse reports whether a Kitty that does not answer is simply a
-// Kitty that is not part of this installation: launches go to tmux, and this
-// process is not running in a Kitty window that could be asked. Where
-// launches go to Kitty and neither this terminal nor the daemon names one,
-// runDoctor warns instead; a named Kitty that does not answer is a failure.
-func kittyNotInUse(status cli.BackendStatus) bool {
-	return status.LaunchBackend == config.LaunchBackendTmux && strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON")) == ""
+// kittyInUse reports whether Kitty is part of this installation as it runs
+// now: launches go to it, this process is in one of its windows, or the
+// daemon holds a current topology of one. Doctor's Kitty findings (`kitty`,
+// `kitty_snapshot_stale`, `renderer_drift`) are raised only then. Where
+// launches go to tmux and nothing names a live Kitty, a Kitty that does not
+// answer, a topology that aged after Kitty quit, and tabs nobody renders are
+// how the installation looks, not faults in it.
+func kittyInUse(status cli.BackendStatus, snapshot *protocol.KittySnapshot) bool {
+	if status.LaunchBackend != config.LaunchBackendTmux || strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON")) != "" {
+		return true
+	}
+	return snapshot != nil && snapshot.Ready && !snapshot.Stale
 }
 
 // backendFindingSeverity maps a backend problem onto doctor's severities.

@@ -272,6 +272,7 @@ connection the client is still waiting on:
 | --- | --- | --- |
 | everything else | 1s | hook acknowledgement and state queries stay fast |
 | `focus_window` | 3s | three sequential Kitty remote-control calls |
+| `focus_session` | 3s | with no workspace connected, a tmux survey and a client switch |
 | `notification_test` | 5s | waits up to 3s for the app to confirm delivery |
 | `asl_snapshot`, `asl_question` | 3s | the bridge read timeout (2s) plus 1s |
 | `asl_action`, `asl_workbench` | 6s | the bridge action timeout (5s) plus 1s |
@@ -293,6 +294,38 @@ connection deadline. A successful answer names the window's tab and OS window:
 printf '%s\n' '{"type":"focus_window","focus_window":{"kitty_socket":"unix:/tmp/kitty-123","window_id":7}}' \
   | nc -U ~/.local/share/agent-mux/daemon.sock
 ```
+
+A session with no Kitty window is shown with `focus_session`, a request of its
+own that names a runtime session and nothing else:
+
+```bash
+printf '%s\n' '{"type":"focus_session","focus_session":{"runtime_session_id":"rs-0123456789abcdef0123456789abcdef"}}' \
+  | nc -U ~/.local/share/agent-mux/daemon.sock
+```
+
+The daemon looks the session up in the registry and refuses one it cannot
+show: `invalid_session` for no ID, `runtime_session_unknown` for a session
+that is not registered or runs in Kitty (which `focus_window` names), and
+`stale_target` for an agent that stopped. A live one goes to whoever can show
+it:
+
+- **A connected workspace.** Every subscriber that named `workspace_views` is
+  sent a `workspace_view` frame of kind `session` with `await` and `raise`
+  set. `raise` is what tells the workspace this is the operator's own click:
+  it opens its window for it, where a request from a surface it embeds is
+  dropped while the window is closed. Only `focus_session` sets it; the
+  daemon clears it from a `workspace_view` request. The answer carries
+  `focused_session.workspaces`.
+- **Otherwise, a terminal.** The terminal the operator used last on the
+  session's private tmux server is switched to it (`tmux.Switcher`, with the
+  registry validation and the one-owner rule of `amx attach`), and the answer
+  names it in `focused_session.client`. With no terminal attached the answer
+  is `no_viewer`: the daemon attaches nothing and starts nothing.
+
+The second path selects the session **in the terminal**. The daemon knows a
+tmux client by its tty and nothing about the emulator that draws it, so it
+cannot bring that terminal's window forward: with no app running, a click
+leaves the right session selected and raising the window to the operator.
 
 A companion snoozes notifications with one `notification_snooze` request whose
 `snooze.mode` is `until` (with a Unix-second `until` that must lie in the
@@ -323,12 +356,15 @@ ASL question) `answer`, and a permission prompt offers none, or `respond` alone 
 session runs on tmux — and waits up to
 3s for a `notification_disposition` request reporting `delivered`. A notice
 about a runtime session also carries `runtime_session_id` and `backend`; when
-the backend is not Kitty, `window_id` is 0, `navigable` is false, and `mute`
-is not offered, because no Kitty window stands behind the session. Without it
+the backend is not Kitty, `window_id` is 0 and `mute` is not offered, because
+no Kitty window stands behind the session; the notice is still `navigable`,
+by its runtime session, which the app asks for with `focus_session`. Without it
 the notice is retracted, `dispatch:fallback:app_fallback` is recorded, and
 Alerter shows the notification instead; with no app connected Alerter is used
 exactly as before. After `delivered` the app reports one terminal disposition:
-`clicked` (the daemon focuses the pane exactly as an Alerter click does),
+`clicked` (the daemon focuses a Kitty pane exactly as an Alerter click does;
+for a session with no Kitty window the app sends `focus_session` itself and
+the daemon records the click as `focus:suppressed:focus_delegated`),
 `dismissed`, `action_mute`, `action_snooze`, `action_answer`, `action_respond`,
 or `failed`. `action_respond` follows the one action a `permission` notice can
 offer, `respond`, and only for a tmux runtime session: the app shows the
@@ -676,8 +712,12 @@ amx debug bundle --window "$KITTY_WINDOW_ID" --mode share
 amx debug replay agent-mux-debug-*-share.tar.gz
 ```
 
-Use `amx debug probe --window "$KITTY_WINDOW_ID"` for a live, read-only
-transport/routing check. `export-events` remains the compatibility and daemon
+Use `amx debug probe` for a live, read-only transport/routing check of the
+session it is typed in: its runtime session (`AMX_RUNTIME_SESSION_ID`) when it
+has one, else its Kitty window. `--runtime-session ID` and `--window ID` name
+another. A probe of a runtime session reports where that session's hooks
+would be routed or the reason they would be refused; it claims no slot and
+names no window. `export-events` remains the compatibility and daemon
 snapshot surface:
 
 Trim every exported window to its trailing events without changing cumulative

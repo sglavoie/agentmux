@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
@@ -23,6 +24,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/spf13/cobra"
 )
 
@@ -55,6 +57,50 @@ type debugSelectorFlagValues struct {
 }
 
 var debugSelectorFlags debugSelectorFlagValues
+
+// debugRuntimeSession is --runtime-session on the two commands that act on
+// one live session, probe and capture start.
+var debugRuntimeSession string
+
+// debugGetenv is the environment a command reads its current session from.
+var debugGetenv = os.Getenv
+
+const debugRuntimeSessionFlag = "runtime-session"
+
+func addDebugRuntimeSessionFlag(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&debugRuntimeSession, debugRuntimeSessionFlag, "",
+		"select a runtime session ID (default: $"+runtimesession.EnvVar+" when set, else the Kitty window of --window or $KITTY_WINDOW_ID)")
+}
+
+// debugSessionTarget is the one live session probe and capture act on: the
+// runtime session or the Kitty window that was named, and otherwise the
+// session the command is typed in — its runtime session when it has one, else
+// its Kitty window, the rule `daemon export-events --current-window` follows.
+// A pane of a tmux session started from a Kitty window inherits that window's
+// ID, so the Kitty variable is believed only when no runtime session is named.
+// Both results are zero when nothing names a session.
+func debugSessionTarget(windowID int) (int, string, error) {
+	named := strings.TrimSpace(debugRuntimeSession)
+	if named != "" && windowID != 0 {
+		return 0, "", fmt.Errorf("--%s cannot be used with --window", debugRuntimeSessionFlag)
+	}
+	if windowID != 0 {
+		return windowID, "", nil
+	}
+	source := "--" + debugRuntimeSessionFlag
+	if named == "" {
+		named, source = strings.TrimSpace(debugGetenv(runtimesession.EnvVar)), runtimesession.EnvVar
+	}
+	if named == "" {
+		return cli.WindowIDFromEnv(), "", nil
+	}
+	id, err := runtimesession.ParseID(named)
+	if err != nil {
+		return 0, "", fmt.Errorf("%s requires a valid runtime session ID, got %q", source, named)
+	}
+	return 0, string(id), nil
+}
+
 var debugStatusJSON bool
 var debugTailJSON bool
 var debugTailFollow bool
@@ -130,6 +176,7 @@ func init() {
 	debugTailCmd.Flags().BoolVarP(&debugTailFollow, "follow", "f", false, "continue following new persisted records")
 	debugTailCmd.Flags().IntVarP(&debugTailLimit, "last", "n", 50, "show the last N matching records (0 means all)")
 	debugProbeCmd.Flags().BoolVar(&debugProbeJSON, "json", false, "write schema-versioned JSON")
+	addDebugRuntimeSessionFlag(debugProbeCmd)
 	debugExplainCmd.Flags().BoolVar(&debugExplainJSON, "json", false, "write the complete schema-versioned evidence graph as JSON")
 	debugExplainCmd.Flags().IntVarP(&debugExplainLast, "last", "n", 10, "explain the last N matching causal histories")
 	debugExplainCmd.Flags().IntVar(&debugExplainGraphDepth, "graph-depth", debugger.DefaultExplainGraphDepth, "follow causal links up to N hops (1-4)")

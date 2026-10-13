@@ -20,11 +20,14 @@ type ProbeClient interface {
 }
 
 type ProbeOptions struct {
-	WindowID  int
-	Harness   string
-	TraceID   string
-	RequestID string
-	AMXBin    string
+	WindowID int
+	// RuntimeSessionID names the session to probe when it has no Kitty
+	// window; it takes the place of WindowID.
+	RuntimeSessionID string
+	Harness          string
+	TraceID          string
+	RequestID        string
+	AMXBin           string
 }
 
 type ProbeStage struct {
@@ -36,17 +39,18 @@ type ProbeStage struct {
 }
 
 type ProbeReport struct {
-	SchemaVersion int                               `json:"schema_version"`
-	GeneratedAt   time.Time                         `json:"generated_at"`
-	WindowID      int                               `json:"window_id"`
-	Harness       string                            `json:"harness,omitempty"`
-	TraceID       string                            `json:"trace_id"`
-	RequestID     string                            `json:"request_id"`
-	Success       bool                              `json:"success"`
-	Stages        []ProbeStage                      `json:"stages"`
-	Delivery      *protocol.DeliveryAcknowledgement `json:"delivery,omitempty"`
-	Error         string                            `json:"error,omitempty"`
-	Scope         string                            `json:"scope"`
+	SchemaVersion  int                               `json:"schema_version"`
+	GeneratedAt    time.Time                         `json:"generated_at"`
+	WindowID       int                               `json:"window_id"`
+	RuntimeSession string                            `json:"runtime_session_id,omitempty"`
+	Harness        string                            `json:"harness,omitempty"`
+	TraceID        string                            `json:"trace_id"`
+	RequestID      string                            `json:"request_id"`
+	Success        bool                              `json:"success"`
+	Stages         []ProbeStage                      `json:"stages"`
+	Delivery       *protocol.DeliveryAcknowledgement `json:"delivery,omitempty"`
+	Error          string                            `json:"error,omitempty"`
+	Scope          string                            `json:"scope"`
 }
 
 // Probe exercises the real bounded transport and daemon routing path using the
@@ -70,12 +74,15 @@ func Probe(client ProbeClient, options ProbeOptions) ProbeReport {
 		report.Error = "probe client is unavailable"
 		return report
 	}
-	if report.WindowID <= 0 {
-		report.Error = "a positive Kitty window ID is required"
+	report.RuntimeSession = strings.TrimSpace(options.RuntimeSessionID)
+	if report.RuntimeSession != "" {
+		report.WindowID = 0
+	} else if report.WindowID <= 0 {
+		report.Error = "a runtime session ID or a positive Kitty window ID is required"
 		return report
 	}
 	request := protocol.Request{
-		Type: protocol.TypeDiagnosticProbe, WindowID: report.WindowID,
+		Type: protocol.TypeDiagnosticProbe, WindowID: report.WindowID, RuntimeSessionID: report.RuntimeSession,
 		ProducerHarness: report.Harness, Harness: report.Harness,
 		TraceID: report.TraceID, RequestID: report.RequestID,
 	}

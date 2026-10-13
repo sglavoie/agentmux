@@ -21,12 +21,17 @@ func TestClientGateNeverAdmitsMoreThanItsLimit(t *testing.T) {
 	gate := newClientGate(limit)
 	release := make(chan struct{})
 	var admitted sync.WaitGroup
+	var asking sync.WaitGroup
 	var done sync.WaitGroup
 	admitted.Add(limit)
+	asking.Add(callers - limit)
 	for i := 0; i < callers; i++ {
 		done.Add(1)
 		go func(first bool) {
 			defer done.Done()
+			if !first {
+				asking.Done()
+			}
 			finish, err := gate.acquire(context.Background())
 			if err != nil {
 				t.Errorf("acquire: %v", err)
@@ -52,6 +57,12 @@ func TestClientGateNeverAdmitsMoreThanItsLimit(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	// A goroutine that was started has not necessarily run: released at once,
+	// the slots could come free before anyone else asked, and nobody would
+	// queue. Every other caller has reached its acquire, and the pause gives
+	// each the processor to block in it, however few processors there are.
+	asking.Wait()
+	time.Sleep(20 * time.Millisecond)
 	close(release)
 	done.Wait()
 

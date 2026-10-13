@@ -147,11 +147,15 @@ const checkKittySnapshotStale = "kitty_snapshot_stale"
 // only place that turns the verdict into a finding. A nil block is a daemon
 // that predates the field: unknown, reported as such, and never a finding,
 // because a version gap is not a health fault.
-func writeDoctorKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, verbose bool, addFinding func(string, string, string, ...any)) error {
+//
+// inUse is kittyInUse: a topology that aged because the Kitty it described is
+// no longer part of the installation is printed like any other and is not a
+// finding.
+func writeDoctorKittySnapshot(out io.Writer, snapshot *protocol.KittySnapshot, verbose, inUse bool, addFinding func(string, string, string, ...any)) error {
 	if err := writeKittySnapshot(out, snapshot, false, verbose); err != nil {
 		return err
 	}
-	if snapshot == nil || !snapshot.Ready || !snapshot.Stale {
+	if !inUse || snapshot == nil || !snapshot.Ready || !snapshot.Stale {
 		return nil
 	}
 	addFinding(severityWarning, checkKittySnapshotStale,

@@ -215,9 +215,16 @@ Raw hook payload capture is separate and off by default:
 
 ```bash
 amx debug capture start --window 42 --duration 10m --include-hook-payloads
+amx debug capture start --runtime-session rs-0123456789abcdef0123456789abcdef --include-hook-payloads
 amx debug capture status
 amx debug capture stop
 ```
+
+A capture is scoped to a Kitty window, a runtime session, and/or a harness.
+With none named it is scoped to the session the command is typed in: its
+runtime session when it has one, else its Kitty window. A tmux session's hooks
+carry no window ID, so `--runtime-session` (or that default) is the only way
+to scope a capture to one.
 
 Non-interactive capture start also requires `--yes`. Captures expire after at
 most 60 minutes, share a fixed 64 MiB quota, are purged after 24 hours, and are
@@ -359,7 +366,7 @@ request, or source-event ID from `tail`.
 | Missing terminal hook / process exit | `hook.process_detection`, a committed `daemon.process_lifecycle`, `HarnessProcessExited`, and explanation `process_lifecycle_recovery` share the exact fingerprint and render generation | Use the tracing commands above; distinguish `missing` from `replaced_instance`, then confirm the linked renderer generation completed |
 | Render failure | `daemon.renderer.failed`, retained dirty generation, and doctor renderer drift | Restore Kitty remote control; the same generation remains retryable |
 | Notification dispatch failure | `daemon.notification.dispatch` or `daemon.notification.focus` failed with `send_failed`, `backend_timeout`, or `focus_failed`; explanation `notification_failure` | Inspect the backend error and daemon lifecycle; do not treat delivery failure as policy suppression |
-| Notification suppression | `daemon.notification.decision` or `daemon.notification.focus` suppressed with `muted`, `pipe_mode`, `config_disabled`, `quiet_hours`, `snoozed`, `cooldown`, `backend_unavailable`, `focus_unavailable`, `focus_target_missing`, `focus_target_stale`, `unsupported_action`, `interaction_timeout`, or dismissal; `daemon.notification.dispatch` cancelled with `daemon_shutdown`; explanation `notification_suppression` | Run `amx daemon status` and `amx doctor` for Alerter capability failures. For focus failures, verify the originating Kitty socket and window still exist. Change notification policy only if the suppression was unintended |
+| Notification suppression | `daemon.notification.decision` or `daemon.notification.focus` suppressed with `muted`, `pipe_mode`, `config_disabled`, `quiet_hours`, `snoozed`, `cooldown`, `backend_unavailable`, `focus_unavailable`, `focus_target_missing`, `focus_target_stale`, `focus_no_viewer`, `focus_delegated`, `unsupported_action`, `interaction_timeout`, or dismissal; `daemon.notification.dispatch` cancelled with `daemon_shutdown`; explanation `notification_suppression` | Run `amx daemon status` and `amx doctor` for Alerter capability failures. For focus failures, verify the originating Kitty socket and window still exist; for a tmux session, `focus_no_viewer` means no workspace was connected and no terminal was attached to switch, and `focus_delegated` means the companion app asked for the session itself. Change notification policy only if the suppression was unintended |
 | Quota exhaustion | Capture/native status reports the bounded quota and denied or pruned write | Stop/purge capture or reduce retention; active native launches remain protected |
 | Restart recovery | Daemon lifecycle boundary plus restored reducer facts and later render generation | Compare CLI/daemon build, then replay the journal or bundle offline |
 | Failed paired release gate | `<pair-id>.json` in the evidence directory: the failing step's `exit_code` and `output_tail`, with every later step recorded `not-run` | Read the record, not the terminal scrollback. See below |

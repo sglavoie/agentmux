@@ -48,8 +48,10 @@ type AppNotice struct {
 	// app needs both to know which Kitty to raise and which pane to mute. It
 	// is empty when the notice is not navigable or no socket was recorded.
 	KittySocket string `json:"kitty_socket,omitempty"`
-	// Navigable says a click can focus a pane. Profile-wide notices, such as
-	// hook silence, are informational and have no pane to focus.
+	// Navigable says a click can show a session: a Kitty pane named by
+	// KittySocket and WindowID, or the runtime session named below, which the
+	// app asks for with focus_session. Profile-wide notices, such as hook
+	// silence, are informational and have nothing to show.
 	Navigable bool     `json:"navigable"`
 	Title     string   `json:"title"`
 	Subtitle  string   `json:"subtitle,omitempty"`
@@ -144,7 +146,7 @@ func appActions(target NotificationTarget, action string, trace NotificationTrac
 		return nil
 	}
 	var actions []string
-	if target.Navigable && target.WindowID > 0 {
+	if target.Navigable && target.WindowID > 0 && !target.sessionFocus() {
 		actions = append(actions, protocol.NotificationActionMute)
 	}
 	actions = append(actions, protocol.NotificationActionSnooze)

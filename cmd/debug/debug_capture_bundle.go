@@ -17,7 +17,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/aslexport"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
-	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -95,6 +94,7 @@ func init() {
 	debugCaptureStartCmd.Flags().BoolVar(&debugCaptureInclude, "include-hook-payloads", false, "authorize temporary raw hook-payload storage")
 	debugCaptureStartCmd.Flags().BoolVar(&debugCaptureYes, "yes", false, "confirm raw capture without an interactive prompt (required non-interactively)")
 	debugCaptureStartCmd.Flags().BoolVar(&debugCaptureJSON, "json", false, "write schema-versioned JSON")
+	addDebugRuntimeSessionFlag(debugCaptureStartCmd)
 	debugCaptureStopCmd.Flags().BoolVar(&debugCaptureJSON, "json", false, "write schema-versioned JSON")
 	debugCaptureStatusCmd.Flags().BoolVar(&debugCaptureJSON, "json", false, "write schema-versioned JSON")
 	debugCaptureCmd.AddCommand(debugCaptureStartCmd, debugCaptureStopCmd, debugCaptureStatusCmd)
@@ -126,11 +126,16 @@ func runDebugCaptureStart(cmd *cobra.Command, _ []string) error {
 	if selector.Profile != "" || selector.SessionID != "" || selector.ASLRunID != "" || selector.Event != "" ||
 		selector.TraceID != "" || selector.RequestID != "" || selector.SourceEventID != "" || len(selector.Outcomes) != 0 ||
 		len(selector.Stages) != 0 || !selector.After.IsZero() || !selector.Before.IsZero() {
-		return fmt.Errorf("capture scope accepts only --window and/or --harness selectors")
+		return fmt.Errorf("capture scope accepts only --window, --%s, and/or --harness selectors", debugRuntimeSessionFlag)
 	}
-	windowID := selector.WindowID
-	if windowID == 0 && selector.Harness == "" {
-		windowID = cli.WindowIDFromEnv()
+	// A capture scoped by harness alone is machine-wide for that harness; the
+	// current session is the default only when nothing else scopes it.
+	windowID, runtimeSession := selector.WindowID, ""
+	if windowID != 0 || strings.TrimSpace(debugRuntimeSession) != "" || selector.Harness == "" {
+		windowID, runtimeSession, err = debugSessionTarget(selector.WindowID)
+		if err != nil {
+			return err
+		}
 	}
 	authorized := debugCaptureYes
 	if !authorized {
@@ -157,7 +162,7 @@ func runDebugCaptureStart(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	report, err := service.Start(cmd.Context(), debugger.CaptureStartOptions{
-		WindowID: windowID, Harness: selector.Harness, Duration: debugCaptureDuration,
+		WindowID: windowID, RuntimeSessionID: runtimeSession, Harness: selector.Harness, Duration: debugCaptureDuration,
 		IncludeHookPayloads: true, Authorized: authorized,
 	})
 	if err != nil {
@@ -199,9 +204,13 @@ func writeCaptureReport(out io.Writer, report debugger.CaptureReport) error {
 		return err
 	}
 	descriptor := report.Descriptor
+	scope := fmt.Sprintf("window=%d", descriptor.Scope.WindowID)
+	if descriptor.Scope.RuntimeSessionID != "" {
+		scope = "runtime_session=" + descriptor.Scope.RuntimeSessionID
+	}
 	_, err := fmt.Fprintf(out,
-		"Agent Mux debug capture (schema %d)\nstatus: %s\nid: %s\nscope: window=%d harness=%s\nstarted: %s\nexpires: %s\npayloads: %d\nbytes: %d/%d\n",
-		report.SchemaVersion, descriptor.Status, descriptor.ID, descriptor.Scope.WindowID, emptyDash(descriptor.Scope.Harness),
+		"Agent Mux debug capture (schema %d)\nstatus: %s\nid: %s\nscope: %s harness=%s\nstarted: %s\nexpires: %s\npayloads: %d\nbytes: %d/%d\n",
+		report.SchemaVersion, descriptor.Status, descriptor.ID, scope, emptyDash(descriptor.Scope.Harness),
 		descriptor.StartedAt.Format(time.RFC3339), descriptor.ExpiresAt.Format(time.RFC3339),
 		descriptor.CapturedPayloads, descriptor.CapturedBytes, descriptor.QuotaBytes)
 	return err

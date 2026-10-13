@@ -224,6 +224,11 @@ type Handler struct {
 	// installed once on the startup goroutine by SetFocusClient, before the
 	// server can dispatch a request; nil answers focus_window with an error.
 	focusClient notification.FocusClient
+	// runtimeSwitcher is the terminal half of focus_session: it switches the
+	// terminal the operator used last to a runtime session. Installed once at
+	// startup by SetRuntimeSessionSwitcher; nil leaves a session shown only
+	// by a connected workspace.
+	runtimeSwitcher RuntimeSessionSwitcher
 
 	// snapshots holds the immutable Kitty snapshot cache. The render/restore
 	// loop is the single lister and publishes into it; hook routing reads it

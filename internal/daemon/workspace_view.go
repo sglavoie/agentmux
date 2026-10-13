@@ -43,6 +43,8 @@ func (h *Handler) handleWorkspaceView(req protocol.Request) protocol.Response {
 	view := *req.WorkspaceView
 	view.Kind = strings.TrimSpace(view.Kind)
 	view.Title = clampWorkspaceViewTitle(view.Title)
+	// Only focus_session, an operator's click, may bring a workspace forward.
+	view.Raise = false
 	if !slices.Contains(protocol.WorkspaceViewKinds, view.Kind) {
 		return refuse(protocol.WorkspaceViewErrorInvalid)
 	}

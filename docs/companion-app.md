@@ -353,8 +353,9 @@ beeps and leaves the reason in the menu.
 
 With the app running and allowed, the daemon still applies every gate (quiet
 hours, mute, snooze, cooldown) and then hands each notification to the app,
-which shows it through Notification Center. Clicking it focuses the pane the
-way an Alerter click does; the banner's actions mute the session, snooze for an
+which shows it through Notification Center. Clicking it focuses a Kitty pane
+the way an Alerter click does, and shows a tmux session in the workspace,
+opening the window if it is closed; the banner's actions mute the session, snooze for an
 hour, or open the ASL answer panel. A permission prompt's banner offers no
 approval. For a session in the workspace it offers **Answer…**, which opens a
 small panel showing the session's screen: you read the prompt there and press

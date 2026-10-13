@@ -33,7 +33,7 @@ func defaultDefinitions() []Definition {
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
 				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
-					return Result{}, dependencyError(Focus, "Kitty client")
+					return Result{}, missingTerminal(Focus, *request.Session)
 				}
 				if err := term.Focus(request.Session.GroupRef()); err != nil {
 					return Result{}, err
@@ -108,6 +108,12 @@ func defaultDefinitions() []Definition {
 		{
 			ID: OpenDirectory, Label: "open directory", Description: "open the project directory in a shell", Requires: projectRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
+				// With no Kitty there is no tab to open: the directory is
+				// shown where the surface's host shows a shell, or left to
+				// the caller's own terminal.
+				if deps.Kitty == nil {
+					return deps.openUtility(OpenDirectory, false, request.Project.Directory)
+				}
 				account, err := requireProjectAccount(OpenDirectory, deps, *request.Project)
 				if err != nil {
 					return Result{}, err
@@ -121,6 +127,9 @@ func defaultDefinitions() []Definition {
 		{
 			ID: OpenEditor, Label: "open in editor", Description: "open the project directory in an editor", Requires: projectRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
+				if deps.Kitty == nil {
+					return deps.openUtility(OpenEditor, true, request.Project.Directory)
+				}
 				account, err := requireProjectAccount(OpenEditor, deps, *request.Project)
 				if err != nil {
 					return Result{}, err
@@ -178,7 +187,7 @@ func defaultDefinitions() []Definition {
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
 				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
-					return Result{}, dependencyError(ToggleLock, "Kitty client")
+					return Result{}, missingTerminal(ToggleLock, *request.Session)
 				}
 				var err error
 				if request.Session.Locked {
@@ -206,7 +215,7 @@ func defaultDefinitions() []Definition {
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
 				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
-					return Result{}, dependencyError(ToggleMute, "Kitty client")
+					return Result{}, missingTerminal(ToggleMute, *request.Session)
 				}
 				var err error
 				if request.Session.Muted {
@@ -237,7 +246,7 @@ func defaultDefinitions() []Definition {
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
 				term := deps.sessionTerminal(*request.Session)
 				if term == nil {
-					return Result{}, dependencyError(Close, "Kitty client")
+					return Result{}, missingTerminal(Close, *request.Session)
 				}
 				observation, err := session.CloseObserved(term, request.Session.GroupRef())
 				if err != nil && !errors.Is(err, session.ErrCloseTimeout) {

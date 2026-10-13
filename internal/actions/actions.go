@@ -8,6 +8,7 @@ package actions
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/backend"
@@ -146,7 +147,12 @@ type Dependencies struct {
 	// Launched, when set, is told about every launch or dedup that ended on a
 	// registered runtime session, so a surface can show the agent where its
 	// host shows agents. It is a notification: it cannot fail the action.
-	Launched        func(session.LaunchResult)
+	Launched func(session.LaunchResult)
+	// Utility, when set, shows a shell or an editor where the surface's host
+	// shows such views: the desktop workspace. It is asked only when there is
+	// no Kitty to open a tab in, and an error means the host did not take the
+	// view, which is then left to the caller (DataContinuationHere).
+	Utility         func(UtilityView) error
 	ActiveLoops     func() ([]agentloop.Candidate, error)
 	TranscriptIndex func() (*transcript.Index, error)
 	// ASL answers whether a plan may be started and how a supervising agent
@@ -178,6 +184,59 @@ type Request struct {
 	Selector     string
 	Parameters   map[string]string
 	Confirmed    bool
+}
+
+// UtilityView is a shell in a directory or an editor on a path, opened beside
+// the agents. It is never a session, and it names a place, never a command
+// line: whoever shows it decides what runs.
+type UtilityView struct {
+	// Editor asks for the configured editor on Path instead of a shell in it.
+	Editor bool
+	// Path is absolute.
+	Path string
+}
+
+// The continuations an open reports when there was no Kitty tab to open.
+const (
+	// DataContinuationWorkspace: the desktop workspace took the view.
+	DataContinuationWorkspace = "workspace"
+	// DataContinuationHere: nothing was opened. The caller runs the shell or
+	// the editor in its own terminal, since an action starts no program
+	// there itself.
+	DataContinuationHere = "here"
+)
+
+// UtilityHere reads off an open's result the view it left to the caller's own
+// terminal.
+func UtilityHere(result Result) (UtilityView, bool) {
+	if continuation, _ := result.Data["continuation"].(string); continuation != DataContinuationHere {
+		return UtilityView{}, false
+	}
+	path, _ := result.Data["path"].(string)
+	editor, _ := result.Data["editor"].(bool)
+	return UtilityView{Editor: editor, Path: path}, path != ""
+}
+
+// openUtility opens a shell or an editor with no Kitty tab to put it in: in
+// the host's own view when there is one, and otherwise by handing the view
+// back to the caller.
+func (d Dependencies) openUtility(id ID, editor bool, path string) (Result, error) {
+	abs, err := filepath.Abs(config.ExpandTilde(path))
+	if err != nil {
+		return Result{}, &Error{Code: "launch_failed", Action: id, Message: err.Error()}
+	}
+	view := UtilityView{Editor: editor, Path: abs}
+	noun := "shell"
+	if editor {
+		noun = "editor"
+	}
+	data := map[string]any{"path": abs, "editor": editor}
+	if d.Utility != nil && d.Utility(view) == nil {
+		data["continuation"] = DataContinuationWorkspace
+		return Result{Changed: true, Message: "opened " + noun + " in the workspace", Data: data}, nil
+	}
+	data["continuation"] = DataContinuationHere
+	return Result{Message: noun + " for " + abs + " runs in this terminal", Data: data}, nil
 }
 
 // DataCloseConfirmed is the Close result's Data key: whether the tab was
@@ -294,6 +353,15 @@ func (d Dependencies) runtimeFor(id ID, running session.RunningSession) (session
 		return session.Runtime{}, dependencyError(id, "Kitty client and configuration")
 	}
 	return session.Runtime{Kitty: d.Kitty, Registry: d.Runtimes}, nil
+}
+
+// missingTerminal names the terminal an action on running needs and lacks: the
+// backend that session runs on, not Kitty whatever it is.
+func missingTerminal(id ID, running session.RunningSession) error {
+	if running.BackendKind() == runtimesession.BackendTmux {
+		return dependencyError(id, "tmux server")
+	}
+	return dependencyError(id, "Kitty client")
 }
 
 // sessionTerminal is the terminal of the backend hosting running, or nil.

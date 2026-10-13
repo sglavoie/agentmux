@@ -12,6 +12,7 @@ const CaptureSchemaVersion = 1
 
 type CaptureStartOptions struct {
 	WindowID            int
+	RuntimeSessionID    string
 	Harness             string
 	Duration            time.Duration
 	IncludeHookPayloads bool
@@ -53,7 +54,7 @@ func (s *CaptureService) Start(ctx context.Context, options CaptureStartOptions)
 		return CaptureReport{}, errors.New("raw hook capture requires explicit confirmation")
 	}
 	descriptor, err := s.store.Start(ctx, diagnostics.CaptureStartRequest{
-		Scope:    diagnostics.CaptureScope{WindowID: options.WindowID, Harness: options.Harness},
+		Scope:    diagnostics.CaptureScope{WindowID: options.WindowID, RuntimeSessionID: options.RuntimeSessionID, Harness: options.Harness},
 		Duration: options.Duration, IncludeHookPayloads: true,
 	})
 	if err != nil {

@@ -288,6 +288,17 @@ func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.
 			})
 		}
 	}
+	if desktop := Portable.Desktop; desktop != nil {
+		// With no Kitty tab to open a shell or an editor in, the workspace's
+		// own utility view is the place for it.
+		deps.Utility = func(view actions.UtilityView) error {
+			request := protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewShell, Directory: view.Path, Title: filepath.Base(view.Path)}
+			if view.Editor {
+				request = protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewEditor, Path: view.Path, Title: filepath.Base(view.Path)}
+			}
+			return desktop(request)
+		}
+	}
 	if Portable.Tmux != nil {
 		// The actions' own live-session probe reads Kitty alone. With a
 		// portable backend in play, "is anything running here" has to count
@@ -633,6 +644,15 @@ func RunHere(dir string, argv []string, done func(error) tea.Msg) tea.Cmd {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = config.ExpandTilde(dir)
 	return tea.ExecProcess(cmd, done)
+}
+
+// OpenHere runs in this terminal the shell or editor an open action left to
+// its caller (actions.UtilityHere).
+func OpenHere(cfg *config.Config, view actions.UtilityView, done func(error) tea.Msg) tea.Cmd {
+	if view.Editor {
+		return RunHere(view.Path, append(utilityEditor(cfg), view.Path), done)
+	}
+	return RunHere(view.Path, []string{utilityShell()}, done)
 }
 
 // ShellHere opens a shell in dir: a shell view of the desktop workspace when

@@ -94,7 +94,13 @@
 // learned itself (a kittySockets value, lastKittyListenOn, or the snapshot's
 // socket), copies that allowlist under stateMu, and runs the list, verify,
 // tab, and window steps through notification.FocusKittyWindow — the same
-// helper click-to-focus uses — with the lock released. The
+// helper click-to-focus uses — with the lock released. A session with no
+// Kitty window is shown by the focus_session request instead
+// (focus_session.go), which names a runtime session: a connected workspace is
+// sent a raised session view, and with none the terminal the operator used
+// last is switched to it (tmux.Switcher), off stateMu. A clicked notification
+// about such a session is the same request, and its target carries the
+// runtime session, never a slot as a window ID. The
 // notification_snooze request sets, clears, or reads the notifier's in-memory
 // snooze and rings companionDirty on every change; a timed snooze that simply
 // runs out reaches subscribers on the 5s safety tick.

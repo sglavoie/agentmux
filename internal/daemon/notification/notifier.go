@@ -9,6 +9,7 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -70,17 +71,17 @@ type NotificationTrace struct {
 	RunID         string
 }
 
-// NotificationTarget identifies what a notification is about and the only
-// Kitty pane a click may focus. WindowID is the daemon's slot for the session:
-// it keys cooldown, debounce, mute, and retraction, and is a Kitty window ID
-// only when Navigable is true. Navigable is false for profile-wide
-// informational notifications such as hook-silence alerts, which intentionally
-// have no arbitrary pane fallback, and for a runtime session on a backend with
-// no Kitty window to focus.
+// NotificationTarget identifies what a notification is about and the one
+// thing a click may focus. WindowID is the daemon's slot for the session: it
+// keys cooldown, debounce, mute, and retraction, and is a Kitty window ID only
+// for a Kitty session. Navigable is false for profile-wide informational
+// notifications such as hook-silence alerts, which intentionally have no
+// arbitrary pane fallback.
 //
 // RuntimeSessionID and Backend name the runtime session holding the slot, when
-// one does. They are identity, not a focus target: a notice carries them so a
-// viewer that knows runtime sessions can open the right one.
+// one does. For a session on a backend other than Kitty they are also the
+// focus target: its click shows the runtime session (SetSessionFocus), and
+// neither WindowID nor KittyListenOn is ever handed to Kitty.
 type NotificationTarget struct {
 	WindowID         int
 	Account          string
@@ -89,6 +90,21 @@ type NotificationTarget struct {
 	RuntimeSessionID string
 	Backend          string
 }
+
+// sessionFocus reports whether a click on the target shows a runtime session
+// rather than focusing a Kitty window.
+func (t NotificationTarget) sessionFocus() bool {
+	return t.Navigable && t.RuntimeSessionID != "" && t.Backend != "" && t.Backend != BackendKindKitty
+}
+
+// SessionFocus shows the runtime session a clicked notification is about. It
+// returns ErrFocusTargetStale for a session that stopped and ErrFocusNoViewer
+// when nothing is there to show it.
+type SessionFocus func(runtimeSessionID string) error
+
+// ErrFocusNoViewer reports that no workspace is connected and no terminal is
+// attached, so a clicked notification's session could be shown nowhere.
+var ErrFocusNoViewer = errors.New("nothing is attached to show the session")
 
 // NotificationDisposition is one explicit notification decision or terminal
 // asynchronous outcome. It intentionally excludes notification body content.
@@ -169,6 +185,7 @@ type Notifier struct {
 	dispatch         dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
 	capability       protocol.NotificationCapability
 	focus            FocusClient     // optional; nil when the daemon has no Kitty client wired
+	sessionFocus     SessionFocus    // optional; shows the runtime session of a clicked notice
 	isMuted          func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
 	ctx              context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
 	app              AppBackend      // optional companion backend; see app_backend.go
@@ -245,6 +262,15 @@ func (n *Notifier) SetFocus(f FocusClient) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.focus = f
+}
+
+// SetSessionFocus installs what a click does for a notification about a
+// runtime session with no Kitty window. Wiring is optional; without it such a
+// click is recorded as focus_unavailable.
+func (n *Notifier) SetSessionFocus(f SessionFocus) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.sessionFocus = f
 }
 
 // SetIsMuted installs the closure MaybeNotify consults to suppress

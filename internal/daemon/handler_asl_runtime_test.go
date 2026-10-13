@@ -278,9 +278,10 @@ func TestASLRunStaysRoutedWithNoKitty(t *testing.T) {
 			t.Fatalf("notifications without Kitty = %+v; want one for slot %d", got, slot)
 		}
 
-		// The notification names the session and offers no Kitty focus target.
+		// The notification's focus target is the session, and nothing Kitty
+		// could be asked for.
 		target := h.notificationTarget(slot, "")
-		if target.Navigable || target.KittyListenOn != "" || target.RuntimeSessionID != string(onTmux) || target.Backend != "tmux" {
+		if !target.Navigable || target.KittyListenOn != "" || target.RuntimeSessionID != string(onTmux) || target.Backend != "tmux" {
 			t.Fatalf("tmux notification target = %+v", target)
 		}
 

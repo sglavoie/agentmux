@@ -704,7 +704,7 @@ func doctorHookState(sync hooks.SyncStatus, activation hooks.ActivationVerdict) 
 	return syncWords + ", " + activationWords
 }
 
-func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID map[int]protocol.WindowLiveMetadata, kittyOK bool, reportIssue func(string, ...any)) error {
+func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID map[int]protocol.WindowLiveMetadata, kittyOK, inUse bool, reportIssue func(string, ...any)) error {
 	sockets := make(map[string]struct{})
 	ids := ExportWindowIDs(snapshot, 0)
 	for _, id := range ids {
@@ -727,6 +727,12 @@ func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID
 		}
 	}
 
+	if !inUse {
+		// The renderer writes Kitty tab titles; with no Kitty in use there is
+		// no tab for a desired state to have drifted from.
+		_, err := fmt.Fprintln(out, "renderer drift: not checked (Kitty is not in use)")
+		return err
+	}
 	if !kittyOK {
 		_, err := fmt.Fprintln(out, "renderer drift: unavailable (Kitty is unreachable)")
 		return err

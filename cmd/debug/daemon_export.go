@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"sort"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -81,4 +82,40 @@ func ExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExpo
 		out[id] = live
 	}
 	return out
+}
+
+// ExportRuntimeLiveMetadata fills the live half of every exported slot a
+// runtime session on a backend other than Kitty holds, from what that
+// backend's panes say now. Such a slot is a number only the daemon names, so
+// it is joined by its runtime session and never looked up as a Kitty window;
+// it has no tab and no OS window, and its icon is the daemon's, not a title's.
+// A session whose pane is gone, or whose backend was not read, stays
+// not-found.
+func ExportRuntimeLiveMetadata(into map[int]protocol.WindowLiveMetadata, running []session.RunningSession, snapshot protocol.EventsExport) {
+	byRuntime := make(map[string]session.RunningSession, len(running))
+	for _, rs := range running {
+		if rs.RuntimeSessionID != "" {
+			byRuntime[string(rs.RuntimeSessionID)] = rs
+		}
+	}
+	for id, slot := range snapshot.RuntimeSlots {
+		if _, exported := into[id]; !exported || !RuntimeSlotOffKitty(slot) {
+			continue
+		}
+		rs, ok := byRuntime[slot.RuntimeSessionID]
+		if !ok {
+			continue
+		}
+		into[id] = protocol.WindowLiveMetadata{
+			Found: true, TabTitle: rs.Title, BaseTitle: rs.Base, IconState: rs.State,
+			Looping: rs.Looping, Starred: rs.Starred, Project: rs.Project,
+			Profile: rs.Profile, Harness: rs.Harness, Directory: rs.Directory,
+		}
+	}
+}
+
+// RuntimeSlotOffKitty reports whether a slot's session runs on a backend
+// other than Kitty, where the slot is not a window ID.
+func RuntimeSlotOffKitty(slot protocol.RuntimeSlot) bool {
+	return slot.Backend != "" && slot.Backend != string(runtimesession.BackendKitty)
 }

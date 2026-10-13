@@ -20,15 +20,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/spf13/cobra"
@@ -41,6 +49,39 @@ var (
 	worktreeCommandsLiveSessions = func(client kitty.KittyClient, cfg *config.Config) ([]session.RunningSession, error) {
 		running, _, err := session.ListWithConfig(client, cfg)
 		return running, err
+	}
+	// worktreeCommandsTmuxSessions lists what runs on the private tmux
+	// server, for the commands that must know whether a worktree is in use.
+	worktreeCommandsTmuxSessions = func(server backend.TargetLauncher, cfg *config.Config) ([]session.RunningSession, error) {
+		panes, err := server.Discover()
+		if err != nil {
+			return nil, err
+		}
+		return session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg), nil
+	}
+	// worktreeCommandsInsideKitty says the command was typed in a Kitty
+	// window, where Kitty's sessions count even for a tmux launch.
+	worktreeCommandsInsideKitty = func() bool {
+		return os.Getenv("KITTY_LISTEN_ON") != "" || cli.WindowIDFromEnv() > 0
+	}
+	// worktreeCommandsWorkspace asks the desktop workspace for a utility
+	// view. It refuses unless the workspace hosts this terminal, so a shell
+	// is never opened in an app the operator is not looking at.
+	worktreeCommandsWorkspace = func(view protocol.WorkspaceViewRequest) error {
+		if _, hosted := os.LookupEnv(tmux.WorkspaceHostEnv); !hosted {
+			return errors.New("not hosted by the workspace")
+		}
+		_, err := ipc.NewClient().WorkspaceView(view)
+		return err
+	}
+	// worktreeCommandsRunHere runs a shell or an editor in the terminal the
+	// command was typed in and returns when it ends.
+	worktreeCommandsRunHere = func(cmd *cobra.Command, dir string, argv []string) error {
+		// #nosec G204 -- the operator's own shell or configured editor.
+		program := exec.CommandContext(cli.CommandContext(cmd), argv[0], argv[1:]...)
+		program.Dir = dir
+		program.Stdin, program.Stdout, program.Stderr = cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
+		return program.Run()
 	}
 	worktreeCommandsActiveLoops = func() ([]agentloop.Candidate, error) {
 		return agentloop.Discover(agentloop.DiscoverOptions{})
@@ -178,6 +219,9 @@ func newWorktreeSelectorCommand(name string, actionID actions.ID, short string) 
 			if actionErr != nil {
 				return worktreeCommandError(cmd, jsonOutput, result, actionErr)
 			}
+			if view, here := actions.UtilityHere(result); here && !jsonOutput {
+				return runWorktreeViewHere(cmd, view)
+			}
 			if actionID == actions.WorktreeShow {
 				view, _ := result.Data["worktree"].(actions.WorktreeView)
 				warnings, _ := result.Data["warnings"].([]string)
@@ -193,19 +237,103 @@ func newWorktreeSelectorCommand(name string, actionID actions.ID, short string) 
 	}
 }
 
+// runWorktreeViewHere runs the shell or editor an open left to this
+// terminal: outside Kitty and outside the workspace there is no tab or view
+// to open, so the worktree is opened where the command was typed. A --json
+// caller is told so instead (continuation "here") and runs it itself.
+func runWorktreeViewHere(cmd *cobra.Command, view actions.UtilityView) error {
+	action := actions.WorktreeShell
+	argv := []string{"/bin/sh"}
+	if shell := os.Getenv("SHELL"); shell != "" {
+		argv = []string{shell}
+	}
+	dir := view.Path
+	if view.Editor {
+		action = actions.WorktreeEditor
+		cfg, _ := worktreeCommandsLoadConfig()
+		editor, err := session.EditorCommand(cfg)
+		if err != nil {
+			return cli.ActionErrorText(&actions.Error{Code: "launch_failed", Action: action, Message: err.Error()})
+		}
+		argv = append(editor, view.Path)
+	}
+	if err := worktreeCommandsRunHere(cmd, dir, argv); err != nil {
+		// A shell that ends with a failing status reports its last command,
+		// not a failure to open it.
+		var exit *exec.ExitError
+		if !view.Editor && errors.As(err, &exit) {
+			return nil
+		}
+		return cli.ActionErrorText(&actions.Error{Code: "launch_failed", Action: action, Message: err.Error()})
+	}
+	return nil
+}
+
 func executeWorktreeAction(cmd *cobra.Command, actionID actions.ID, request actions.Request) (actions.Result, error) {
 	cfg, err := worktreeCommandsLoadConfig()
 	if err != nil {
 		return actions.Result{}, &actions.Error{Code: "config_error", Action: actionID, Message: err.Error()}
 	}
-	client := worktreeCommandsNewKitty()
 	deps := actions.Dependencies{
-		Kitty: client, Config: cfg, WorktreeManager: worktreeCommandsNewManager(), Readers: worktreeCommandsReaders(),
-		LiveSessions: func(current *config.Config) ([]session.RunningSession, error) {
-			return worktreeCommandsLiveSessions(client, current)
-		},
+		Config: cfg, WorktreeManager: worktreeCommandsNewManager(), Readers: worktreeCommandsReaders(),
 		ActiveLoops:     worktreeCommandsActiveLoops,
 		TranscriptIndex: worktreeCommandsTranscriptIndex,
+	}
+	// A tmux that cannot be used stops a reopen, which launches on it. The
+	// other commands still run: what is running on it is then unknown, which
+	// the usage probe reports and a removal refuses on.
+	var tmuxErr error
+	if err := cli.SelectBackend(cmd, &deps); err != nil {
+		var actionErr *actions.Error
+		if !errors.As(err, &actionErr) {
+			return actions.Result{}, err
+		}
+		if actionErr.Code != "backend_unavailable" || actionID == actions.WorktreeReopen {
+			tagged := *actionErr
+			tagged.Action = actionID
+			return actions.Result{}, &tagged
+		}
+		tmuxErr = err
+	}
+	// Only the Kitty backend opens Kitty tabs: on tmux a reopen launches on
+	// the private server, and a shell or an editor goes to the workspace or
+	// this terminal. Kitty is still read for what is running in it when the
+	// command was typed in a Kitty window.
+	var client kitty.KittyClient
+	if deps.Backend != runtimesession.BackendTmux {
+		client = worktreeCommandsNewKitty()
+		deps.Kitty = client
+	} else if worktreeCommandsInsideKitty() {
+		client = worktreeCommandsNewKitty()
+	}
+	server := deps.Tmux
+	deps.LiveSessions = func(current *config.Config) ([]session.RunningSession, error) {
+		var running []session.RunningSession
+		if client != nil {
+			listed, err := worktreeCommandsLiveSessions(client, current)
+			if err != nil {
+				return nil, err
+			}
+			running = listed
+		}
+		if tmuxErr != nil {
+			return nil, tmuxErr
+		}
+		if server != nil {
+			onTmux, err := worktreeCommandsTmuxSessions(server, current)
+			if err != nil {
+				return nil, err
+			}
+			running = append(running, onTmux...)
+		}
+		return running, nil
+	}
+	deps.Utility = func(view actions.UtilityView) error {
+		request := protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewShell, Directory: view.Path, Title: filepath.Base(view.Path)}
+		if view.Editor {
+			request = protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewEditor, Path: view.Path, Title: filepath.Base(view.Path)}
+		}
+		return worktreeCommandsWorkspace(request)
 	}
 	return actions.DefaultRegistry().Execute(cli.CommandContext(cmd), deps, actionID, request)
 }
@@ -385,6 +513,11 @@ func nonNilStrings(values []string) []string {
 func init() {
 	for _, command := range []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeShellCmd, worktreeEditCmd} {
 		command.Flags().Bool("json", false, "emit schema-v1 JSON")
+	}
+	// Where a reopen launches, and so whether a shell or an editor opens a
+	// Kitty tab or runs outside Kitty.
+	for _, command := range []*cobra.Command{worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd} {
+		cli.AddBackendFlag(command)
 	}
 	worktreeReopenCmd.Flags().String("session", "", "live-session candidate identifier")
 	worktreeReopenCmd.Flags().String("profile", "", "replacement profile for a fresh launch")

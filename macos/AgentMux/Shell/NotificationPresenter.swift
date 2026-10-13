@@ -274,7 +274,8 @@ final class SystemNotificationCenter: NotificationCenterClient {
 /// - `delivered` is reported once `add` succeeds; a failed `add`, a denied
 ///   permission, or app notifications switched off report `failed`, which
 ///   sends the notification through Alerter instead.
-/// - A click reports `clicked` (the daemon focuses the pane), a dismissal
+/// - A click reports `clicked` (the daemon focuses a Kitty pane; the app
+///   asks for any other session with `focus_session`), a dismissal
 ///   `dismissed`, and an action `action_*`; the app carries the action out
 ///   through `onAction`.
 /// - `notification_retract` removes the banner, including one still waiting

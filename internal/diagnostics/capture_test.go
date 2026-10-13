@@ -226,3 +226,48 @@ func TestCaptureQuarantinesUnsafeDescriptorOnRestart(t *testing.T) {
 		t.Fatalf("quarantined descriptors = %v, err = %v", matches, err)
 	}
 }
+
+// A capture scoped to a runtime session takes that session's payloads and no
+// other's: a hook from another session, or a Kitty hook that carries none, is
+// outside it. A scope cannot name a window and a runtime session at once.
+func TestCaptureScopedToARuntimeSession(t *testing.T) {
+	const scoped, other = "rs-0123456789abcdef0123456789abcdef", "rs-ffffffffffffffffffffffffffffffff"
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	store, err := NewCaptureStore(PathsForRoot(filepath.Join(t.TempDir(), "state")), CaptureOptions{Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Start(t.Context(), CaptureStartRequest{
+		Scope: CaptureScope{WindowID: 42, RuntimeSessionID: scoped}, Duration: time.Minute, IncludeHookPayloads: true,
+	}); err == nil {
+		t.Fatal("a capture scoped to a window and a runtime session unexpectedly started")
+	}
+	descriptor, err := store.Start(t.Context(), CaptureStartRequest{
+		Scope: CaptureScope{RuntimeSessionID: " " + scoped + " "}, Duration: time.Minute, IncludeHookPayloads: true,
+	})
+	if err != nil || descriptor.Scope != (CaptureScope{RuntimeSessionID: scoped}) {
+		t.Fatalf("descriptor = %+v, err = %v", descriptor, err)
+	}
+	inside, err := store.Record(t.Context(), CapturePayloadRequest{RuntimeSessionID: scoped, Harness: "claude", RequestID: "request-1", Payload: []byte("yes")})
+	if err != nil || !inside.Captured {
+		t.Fatalf("inside = %+v, err = %v", inside, err)
+	}
+	for name, request := range map[string]CapturePayloadRequest{
+		"another session": {RuntimeSessionID: other, Harness: "claude", RequestID: "request-2", Payload: []byte("no")},
+		"a Kitty window":  {WindowID: 42, Harness: "claude", RequestID: "request-3", Payload: []byte("no")},
+	} {
+		outside, err := store.Record(t.Context(), request)
+		if err != nil || outside.Captured || outside.Reason != "scope_mismatch" {
+			t.Errorf("%s: %+v, err = %v; want a scope mismatch", name, outside, err)
+		}
+	}
+	// The scope survives a restart of whatever reads it.
+	reopened, err := NewCaptureStore(PathsForRoot(filepath.Dir(store.paths.CaptureDir)), CaptureOptions{Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := reopened.Record(t.Context(), CapturePayloadRequest{RuntimeSessionID: scoped, Harness: "claude", RequestID: "request-4", Payload: []byte("yes")})
+	if err != nil || !again.Captured {
+		t.Fatalf("after reopening: %+v, err = %v", again, err)
+	}
+}

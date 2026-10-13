@@ -158,6 +158,8 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		handler.SetRuntimeSessionReconciler(NewTmuxRuntimeReconciler(store, reader))
 		handler.SetRuntimeScreenReader(NewTmuxRuntimeScreenReader())
 		handler.SetRuntimeStatusWriter(NewTmuxRuntimeStatusWriter())
+		handler.SetRuntimeSessionSwitcher(NewTmuxRuntimeSwitcher(store))
+		notifier.SetSessionFocus(handler.focusSessionForClick)
 		if recorder != nil {
 			handler.SetRuntimeJournal(recorder.record)
 		}

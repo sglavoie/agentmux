@@ -199,6 +199,11 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 
 	client := newDoctorDaemonClient()
 	health := client.Health()
+	// The backend is read by this process and so is reported with the daemon
+	// down. It is read before anything about Kitty is judged because, with
+	// the daemon's own view of Kitty, it decides whether Kitty is in use.
+	report.Backend = doctorBackendStatus()
+	inUse := kittyInUse(report.Backend, health.KittySnapshot)
 	report.Daemon = doctorDaemonStatus{
 		Alive:          health.Alive,
 		Ready:          health.Ready,
@@ -247,7 +252,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		// `kitten @ ls` below, because a stale daemon snapshot is compatible with
 		// a Kitty that answers this process immediately: the two lines together
 		// are what separate "Kitty is wedged" from "the daemon stopped asking".
-		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, doctorVerbose, addFinding); err != nil {
+		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, doctorVerbose, inUse, addFinding); err != nil {
 			return err
 		}
 		if err := writeDoctorCompanion(textOut, health.Companion, health.Build, addFinding); err != nil {
@@ -280,11 +285,6 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	// The backend is read by this process and so is reported with the daemon
-	// down. It is read before Kitty is asked because it decides what a Kitty
-	// that does not answer means.
-	report.Backend = doctorBackendStatus()
-
 	// Outside a Kitty window this process has no socket of its own, so it asks
 	// the Kitty the daemon reads. With neither there is no Kitty to judge, and
 	// a `kitten @ ls` that cannot find one says nothing about its health.
@@ -300,13 +300,13 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		addFinding(severityWarning, "kitty", "Kitty was not asked for its windows: this is not a Kitty window and the daemon reads no Kitty, while launches go to Kitty; run doctor in a Kitty window to check it, or set [defaults] launch_backend = \"tmux\"")
-	} else if kittyErr != nil && kittyNotInUse(report.Backend) {
-		// Launches go to tmux and this is not a Kitty window: there is no
-		// Kitty to ask, which is how a desktop-only installation looks.
+	} else if kittyErr != nil && !inUse {
+		// Launches go to tmux and nothing names a live Kitty: there is none
+		// to ask, which is how a tmux-only installation looks. It is said,
+		// and is not a finding.
 		if _, err := fmt.Fprintln(textOut, "kitty: not in use (launches go to tmux, and no Kitty is listening here)"); err != nil {
 			return err
 		}
-		addFinding(severityInfo, "kitty", "Kitty was not asked for its windows: launches go to tmux and KITTY_LISTEN_ON is not set")
 	} else if kittyErr != nil {
 		if _, err := fmt.Fprintf(textOut, "kitty: unavailable (%s)\n", kittyErr); err != nil {
 			return err
@@ -366,7 +366,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if kittyOK {
 		liveByID = ExportLiveMetadata(windows, snapshot, 0)
 	}
-	if err := writeDoctorRenderer(textOut, snapshot, liveByID, kittyOK, reportIssue("renderer_drift")); err != nil {
+	if err := writeDoctorRenderer(textOut, snapshot, liveByID, kittyOK, inUse || kittyOK, reportIssue("renderer_drift")); err != nil {
 		return err
 	}
 	if err := writeDoctorSuppressions(textOut, snapshot, now, doctorVerbose); err != nil {

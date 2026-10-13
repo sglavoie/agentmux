@@ -11,21 +11,25 @@ struct WorkspaceViewRequest: Decodable, Equatable {
     var directory = ""
     var path = ""
     var title = ""
+    /// The operator asked for the session from outside the workspace
+    /// (`focus_session`): it is shown even when the window is closed.
+    var raise = false
 
     static let sessionKind = "session"
 
     init(kind: String = "", runtimeSessionID: String = "", awaited: Bool = false,
-         directory: String = "", path: String = "", title: String = "") {
+         directory: String = "", path: String = "", title: String = "", raise: Bool = false) {
         self.kind = kind
         self.runtimeSessionID = runtimeSessionID
         self.awaited = awaited
         self.directory = directory
         self.path = path
         self.title = title
+        self.raise = raise
     }
 
     enum CodingKeys: String, CodingKey {
-        case kind, directory, path, title
+        case kind, directory, path, title, raise
         case awaited = "await"
         case runtimeSessionID = "runtime_session_id"
     }
@@ -38,6 +42,7 @@ struct WorkspaceViewRequest: Decodable, Equatable {
         directory = c.lenient(.directory, "")
         path = c.lenient(.path, "")
         title = c.lenient(.title, "")
+        raise = c.lenient(.raise, false)
     }
 }
 

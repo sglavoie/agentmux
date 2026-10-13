@@ -33,7 +33,9 @@ func deadlineFor(t protocol.MessageType) time.Duration {
 		return asl.ActionDeadline
 	case protocol.TypeASLQuestion, protocol.TypeASLSnapshot:
 		return asl.ReadDeadline
-	case protocol.TypeFocusWindow:
+	case protocol.TypeFocusWindow, protocol.TypeFocusSession:
+		// A focus_session with no workspace connected is a tmux survey and a
+		// client switch, subprocesses too.
 		return FocusWindowDeadline
 	case protocol.TypeNotificationTest:
 		return NotificationTestDeadline

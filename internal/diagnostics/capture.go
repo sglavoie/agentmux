@@ -22,9 +22,18 @@ const (
 
 // CaptureScope limits a temporary raw-payload capture. At least one field is
 // required so an operator cannot accidentally enable a machine-wide capture.
+//
+// RuntimeSessionID scopes a capture to one runtime session, which is how a
+// session with no Kitty window is named: its hooks carry no window ID.
 type CaptureScope struct {
-	WindowID int    `json:"window_id,omitempty"`
-	Harness  string `json:"harness,omitempty"`
+	WindowID         int    `json:"window_id,omitempty"`
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
+	Harness          string `json:"harness,omitempty"`
+}
+
+// named reports whether the scope limits the capture to anything.
+func (s CaptureScope) named() bool {
+	return s.WindowID != 0 || strings.TrimSpace(s.RuntimeSessionID) != "" || strings.TrimSpace(s.Harness) != ""
 }
 
 // CaptureDescriptor is the restart-safe control plane consumed independently
@@ -58,13 +67,16 @@ type CaptureStartRequest struct {
 }
 
 type CapturePayloadRequest struct {
-	WindowID  int
-	Harness   string
-	Event     string
-	TraceID   string
-	RequestID string
-	Payload   []byte
-	Truncated bool
+	WindowID int
+	// RuntimeSessionID is the runtime session the hook ran in, when it is a
+	// managed one.
+	RuntimeSessionID string
+	Harness          string
+	Event            string
+	TraceID          string
+	RequestID        string
+	Payload          []byte
+	Truncated        bool
 }
 
 type CaptureWriteResult struct {
@@ -115,8 +127,12 @@ func (s *CaptureStore) Start(ctx context.Context, request CaptureStartRequest) (
 	if request.Scope.WindowID < 0 {
 		return CaptureDescriptor{}, errors.New("diagnostics: capture window ID must not be negative")
 	}
-	if request.Scope.WindowID == 0 && request.Scope.Harness == "" {
-		return CaptureDescriptor{}, errors.New("diagnostics: capture requires --window and/or --harness scope")
+	request.Scope.RuntimeSessionID = strings.TrimSpace(request.Scope.RuntimeSessionID)
+	if request.Scope.WindowID != 0 && request.Scope.RuntimeSessionID != "" {
+		return CaptureDescriptor{}, errors.New("diagnostics: capture scope names a window or a runtime session, not both")
+	}
+	if !request.Scope.named() {
+		return CaptureDescriptor{}, errors.New("diagnostics: capture requires --window, --runtime-session, and/or --harness scope")
 	}
 	if !request.IncludeHookPayloads {
 		return CaptureDescriptor{}, errors.New("diagnostics: raw capture requires explicit hook-payload inclusion")
@@ -257,23 +273,26 @@ func (s *CaptureStore) Record(ctx context.Context, request CapturePayloadRequest
 		}
 		result.CaptureID = descriptor.ID
 		if descriptor.Scope.WindowID != 0 && descriptor.Scope.WindowID != request.WindowID ||
+			descriptor.Scope.RuntimeSessionID != "" && descriptor.Scope.RuntimeSessionID != strings.TrimSpace(request.RuntimeSessionID) ||
 			descriptor.Scope.Harness != "" && descriptor.Scope.Harness != strings.ToLower(strings.TrimSpace(request.Harness)) {
 			result.Reason = "scope_mismatch"
 			return nil
 		}
 		entry := struct {
-			SchemaVersion int       `json:"schema_version"`
-			CapturedAt    time.Time `json:"captured_at"`
-			WindowID      int       `json:"window_id,omitempty"`
-			Harness       string    `json:"harness,omitempty"`
-			Event         string    `json:"event,omitempty"`
-			TraceID       string    `json:"trace_id,omitempty"`
-			RequestID     string    `json:"request_id,omitempty"`
-			Payload       string    `json:"payload"`
-			Truncated     bool      `json:"truncated,omitempty"`
+			SchemaVersion  int       `json:"schema_version"`
+			CapturedAt     time.Time `json:"captured_at"`
+			WindowID       int       `json:"window_id,omitempty"`
+			RuntimeSession string    `json:"runtime_session_id,omitempty"`
+			Harness        string    `json:"harness,omitempty"`
+			Event          string    `json:"event,omitempty"`
+			TraceID        string    `json:"trace_id,omitempty"`
+			RequestID      string    `json:"request_id,omitempty"`
+			Payload        string    `json:"payload"`
+			Truncated      bool      `json:"truncated,omitempty"`
 		}{
 			SchemaVersion: CaptureSchemaVersion, CapturedAt: s.now().UTC(), WindowID: request.WindowID,
-			Harness: strings.TrimSpace(request.Harness), Event: strings.TrimSpace(request.Event),
+			RuntimeSession: strings.TrimSpace(request.RuntimeSessionID),
+			Harness:        strings.TrimSpace(request.Harness), Event: strings.TrimSpace(request.Event),
 			TraceID: strings.TrimSpace(request.TraceID), RequestID: strings.TrimSpace(request.RequestID),
 			Payload: string(request.Payload), Truncated: request.Truncated,
 		}
@@ -467,7 +486,7 @@ func (s *CaptureStore) loadLocked(quarantine bool) (*CaptureDescriptor, error) {
 
 func validCaptureDescriptor(descriptor CaptureDescriptor) bool {
 	if descriptor.SchemaVersion != CaptureSchemaVersion || !validLaunchID(descriptor.ID) || descriptor.Scope.WindowID < 0 ||
-		descriptor.Scope.WindowID == 0 && strings.TrimSpace(descriptor.Scope.Harness) == "" || !descriptor.IncludeHookPayloads ||
+		!descriptor.Scope.named() || !descriptor.IncludeHookPayloads ||
 		descriptor.StartedAt.IsZero() || descriptor.ExpiresAt.Before(descriptor.StartedAt) ||
 		descriptor.ExpiresAt.Sub(descriptor.StartedAt) > CaptureMaximumTTL || descriptor.QuotaBytes <= 0 ||
 		descriptor.QuotaBytes > CaptureMaximumBytes || descriptor.CapturedBytes < 0 || descriptor.CapturedPayloads < 0 {

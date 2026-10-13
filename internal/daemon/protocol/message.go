@@ -254,6 +254,9 @@ type Request struct {
 	// WorkspaceView is the view a TypeWorkspaceView request asks a desktop
 	// workspace to show.
 	WorkspaceView *WorkspaceViewRequest `json:"workspace_view,omitempty"`
+	// FocusSession names the runtime session a TypeFocusSession request asks
+	// to have shown.
+	FocusSession *FocusSessionRequest `json:"focus_session,omitempty"`
 }
 
 // ASLRequest is the typed parameter block for the ASL message types. Text is
@@ -390,6 +393,9 @@ type Response struct {
 	// WorkspaceView answers TypeWorkspaceView with how many workspaces were
 	// handed the view.
 	WorkspaceView *WorkspaceViewResult `json:"workspace_view,omitempty"`
+	// FocusedSession answers TypeFocusSession with who was asked to show the
+	// session.
+	FocusedSession *FocusSessionResult `json:"focused_session,omitempty"`
 	// Companion is the TypeHealth view of companion subscribers. It is omitted
 	// by daemons that predate the companion protocol.
 	Companion *CompanionHealth `json:"companion,omitempty"`

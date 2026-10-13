@@ -117,6 +117,10 @@ final class CompanionFrameTests: XCTestCase {
         let block = try XCTUnwrap(focus["focus_window"] as? [String: Any])
         XCTAssertEqual(block["kitty_socket"] as? String, "unix:/tmp/kitty-1")
         XCTAssertEqual(block["window_id"] as? Int, 4)
+        let session = try object(.focusing(runtimeSessionID: "rs-0123456789abcdef0123456789abcdef"))
+        XCTAssertEqual(session.keys.sorted(), ["focus_session", "type"])
+        XCTAssertEqual(session["type"] as? String, "focus_session")
+        XCTAssertEqual((session["focus_session"] as? [String: Any])?["runtime_session_id"] as? String, "rs-0123456789abcdef0123456789abcdef")
         let subscribe = try object(.subscribing(SubscribeParams()))
         let params = try XCTUnwrap(subscribe["subscribe"] as? [String: Any])
         XCTAssertEqual(params["protocol"] as? Int, 1)
@@ -133,6 +137,34 @@ final class CompanionFrameTests: XCTestCase {
         XCTAssertEqual(outcome(#"{"ok":false,"error":"unknown_socket"}"#), .unknownSocket)
         XCTAssertEqual(outcome(#"{"ok":false,"error":"unknown request type: focus_window"}"#), .unsupported)
         XCTAssertEqual(outcome("nope"), .failed("unreadable focus_window reply"))
+    }
+
+    // MARK: focus_session replies
+
+    func testFocusSessionOutcomes() {
+        func outcome(_ json: String) -> FocusSessionOutcome { DaemonClient.focusSessionOutcome(fromReply: Data(json.utf8)) }
+        XCTAssertEqual(outcome(#"{"ok":true,"focused_session":{"runtime_session_id":"rs-1","workspaces":1}}"#), .shown)
+        XCTAssertEqual(outcome(#"{"ok":true,"focused_session":{"runtime_session_id":"rs-1","client":"/dev/ttys004"}}"#), .shown)
+        XCTAssertEqual(outcome(#"{"ok":false,"error":"stale_target"}"#), .staleTarget)
+        XCTAssertEqual(outcome(#"{"ok":false,"error":"no_viewer"}"#), .noViewer)
+        XCTAssertEqual(outcome(#"{"ok":false,"error":"runtime_session_unknown"}"#), .failed("runtime_session_unknown"))
+        XCTAssertEqual(outcome(#"{"ok":false,"error":"unknown request type: focus_session"}"#), .unsupported)
+        XCTAssertEqual(outcome("nope"), .failed("unreadable focus_session reply"))
+    }
+
+    func testFocusSessionRoundTrip() {
+        var sent: Data?
+        let client = DaemonClient(socketPath: "/x", roundTrip: { _, request, timeout in
+            sent = request
+            XCTAssertEqual(timeout, DaemonClient.focusTimeout)
+            return Data(#"{"ok":true,"focused_session":{"runtime_session_id":"rs-1","workspaces":1}}"#.utf8)
+        })
+        XCTAssertEqual(client.focusSession(runtimeSessionID: "rs-1"), .shown)
+        let text = String(decoding: sent ?? Data(), as: UTF8.self)
+        XCTAssertTrue(text.contains(#""type":"focus_session""#))
+        XCTAssertTrue(text.contains(#""runtime_session_id":"rs-1""#))
+        let down = DaemonClient(socketPath: "/x", roundTrip: { _, _, _ in throw LineSocketError.noSocket })
+        XCTAssertEqual(down.focusSession(runtimeSessionID: "rs-1"), .notRunning)
     }
 
     func testFocusWindowRoundTrip() {

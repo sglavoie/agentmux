@@ -586,8 +586,10 @@ func TestAppNoticePreservesKittySocket(t *testing.T) {
 }
 
 // A notice for a runtime session on a backend other than Kitty names the
-// session and nothing Kitty could act on: no window ID, no socket, no mute. A
-// click on it is recorded, focuses nothing, and never reaches the focus client.
+// session and nothing Kitty could act on: no window ID, no socket, no mute. It
+// is navigable by its runtime session, which the app asks the daemon to show
+// (focus_session), so the click is recorded as delegated: the notifier shows
+// nothing a second time and never reaches the Kitty focus client.
 func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		app := newFakeApp()
@@ -595,10 +597,12 @@ func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
 		n, rec, log := newAppTestNotifier(t, &config.NotificationConfig{Permission: true}, app)
 		focus := &fakeFocusClient{live: focusTestWindows(42)}
 		n.SetFocus(focus)
+		var shown []string
+		n.SetSessionFocus(func(id string) error { shown = append(shown, id); return nil })
 
 		const slot = 1<<40 + 3
 		n.MaybeNotifyTracedTarget(NotificationTarget{
-			WindowID: slot, Account: "work", RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: "tmux",
+			WindowID: slot, Account: "work", Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: "tmux",
 		}, "W:api", "elicitation", false, NotificationTrace{RunID: "run-1"})
 		synctest.Wait()
 
@@ -607,15 +611,15 @@ func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
 			t.Fatalf("app notices = %d, alerter dispatches = %d; want 1 and 0", len(notices), rec.len())
 		}
 		got := notices[0]
-		if got.WindowID != 0 || got.KittySocket != "" || got.Navigable ||
+		if got.WindowID != 0 || got.KittySocket != "" || !got.Navigable ||
 			got.RuntimeSessionID != "rs-0123456789abcdef0123456789abcdef" || got.Backend != "tmux" || got.RunID != "run-1" {
 			t.Fatalf("notice = %+v", got)
 		}
 		if !slices.Equal(got.Actions, []string{protocol.NotificationActionSnooze, protocol.NotificationActionAnswer}) {
 			t.Fatalf("actions = %v; a session with no Kitty pane offers no mute", got.Actions)
 		}
-		if !log.has("focus:suppressed:focus_target_missing") {
-			t.Fatalf("click on a non-Kitty notice was not recorded as targetless: %v", log.entries)
+		if !log.has("focus:suppressed:focus_delegated") || len(shown) != 0 {
+			t.Fatalf("click on the app's non-Kitty notice: log %v, shown %v; want it left to the app", log.entries, shown)
 		}
 		if tabs, windows := focus.snapshot(); len(tabs) != 0 || len(windows) != 0 {
 			t.Fatalf("a non-Kitty notice reached the Kitty focus client: %v / %v", tabs, windows)

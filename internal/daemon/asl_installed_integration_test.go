@@ -506,7 +506,7 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 		t.Fatalf("the private tmux server has attached clients:\n%s", clients)
 	}
 	target := first.h.notificationTarget(tmuxSlot, "")
-	if target.Navigable || target.KittyListenOn != "" || target.RuntimeSessionID != string(onTmux) || target.Backend != "tmux" {
+	if !target.Navigable || target.KittyListenOn != "" || target.RuntimeSessionID != string(onTmux) || target.Backend != "tmux" {
 		t.Fatalf("tmux notification target = %+v", target)
 	}
 	t.Logf("OBSERVED viewer-absent: question %s raised the question icon and %d notification on the tmux slot with no Kitty client, no companion app, and zero clients attached to the private tmux server (list-clients empty); target runtime_session=%s backend=%s navigable=%v",

@@ -222,7 +222,7 @@ func TestDoctorRendererTreatsSharedTabAsConvergedWhenAnyPaneMatches(t *testing.T
 
 	var out bytes.Buffer
 	var failures []string
-	if err := writeDoctorRenderer(&out, snapshot, liveByID, true, func(format string, args ...any) {
+	if err := writeDoctorRenderer(&out, snapshot, liveByID, true, true, func(format string, args ...any) {
 		failures = append(failures, fmt.Sprintf(format, args...))
 	}); err != nil {
 		t.Fatal(err)
@@ -250,7 +250,7 @@ func TestDoctorRendererIgnoresSessionsOnOtherBackends(t *testing.T) {
 
 	var out bytes.Buffer
 	var failures []string
-	if err := writeDoctorRenderer(&out, snapshot, map[int]protocol.WindowLiveMetadata{}, true, func(format string, args ...any) {
+	if err := writeDoctorRenderer(&out, snapshot, map[int]protocol.WindowLiveMetadata{}, true, true, func(format string, args ...any) {
 		failures = append(failures, fmt.Sprintf(format, args...))
 	}); err != nil {
 		t.Fatal(err)

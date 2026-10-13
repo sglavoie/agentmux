@@ -843,8 +843,12 @@ The daemon reads the private server once every two seconds, with one tmux
 client however many agents there are, and spaces failing passes out to thirty
 seconds so a server that does not answer cannot hold its maintenance loop. No
 program runs more than four tmux clients at once; the rest wait their turn.
-A Kitty that does not answer is a failure wherever Kitty is in use, and a note
-(`kitty`) where launches go to tmux and `KITTY_LISTEN_ON` is not set.
+Doctor's Kitty findings — `kitty`, `kitty_snapshot_stale`, and
+`renderer_drift` — are raised only where Kitty is in use: launches go to it,
+the command runs in a Kitty window, or the daemon holds a current topology of
+one. There, a Kitty that does not answer is a failure. Where launches go to
+tmux and nothing names a live Kitty, the report says `kitty: not in use` and
+`renderer drift: not checked`, and raises none of the three.
 
 None of this reads a pane. The lines, the JSON, the `daemon.runtime_reconcile`
 journal records (one when passes start failing, one when they recover, one for
@@ -1096,13 +1100,22 @@ amx worktree list [--json]
 amx worktree show <selector> [--json]
 amx worktree diff <selector> [--committed] [--patch] [--json]
 amx worktree land <selector> --yes [--remove] [--json]
-amx worktree reopen <selector> [--session <candidate>] [--profile <name>] [--json]
-amx worktree shell <selector> [--json]
-amx worktree edit <selector> [--json]
+amx worktree reopen <selector> [--session <candidate>] [--profile <name>] [--backend kitty|tmux] [--json]
+amx worktree shell <selector> [--backend kitty|tmux] [--json]
+amx worktree edit <selector> [--backend kitty|tmux] [--json]
 amx worktree remove <selector> --yes [--delete-branch] [--json]
 amx worktree forget <selector> --yes [--json]
 amx worktree prune [--merged] [--yes] [--delete-branch] [--json]
 ```
+
+The worktree commands follow the launch backend (`--backend`, else
+`[defaults] launch_backend`). On Kitty, `reopen` launches a tab and `shell`
+and `edit` open one. On tmux nothing reads Kitty: `reopen` launches on the
+private server, what runs there is what counts as a live session in a
+worktree, and `shell` and `edit` open a workspace view when Agent Mux.app
+hosts the terminal and otherwise run the shell or the editor in the terminal
+the command was typed in. With `--json` they run nothing there and report
+`"continuation": "here"` with the path, for the caller to open.
 
 `prune` selects every worktree `remove` would accept on its own — present,
 valid, clean, unlocked, and used by no live session or loop — and with

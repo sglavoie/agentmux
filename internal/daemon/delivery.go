@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"log/slog"
 	"strings"
 
@@ -120,6 +121,9 @@ func (h *Handler) attachHookDeliveryAcknowledgement(req protocol.Request, resp p
 // hook ingress but never enters the reducer queue and never mutates handler
 // state. It is the stable IPC primitive used by debugger probes.
 func (h *Handler) handleDiagnosticProbe(req protocol.Request) protocol.Response {
+	if strings.TrimSpace(req.RuntimeSessionID) != "" {
+		return h.probeRuntimeSession(req)
+	}
 	if req.WindowID <= 0 {
 		return protocol.Response{
 			OK:       false,
@@ -145,6 +149,74 @@ func (h *Handler) handleDiagnosticProbe(req protocol.Request) protocol.Response 
 		ack.RouteDecision = events.RouteDecisionOwner
 	} else if ctx.lookupFailed {
 		ack.RouteDecision = events.RouteDecisionSourceFallback
+	}
+	return protocol.Response{OK: true, Delivery: ack}
+}
+
+// probeRuntimeSession answers a diagnostic probe that names a runtime session:
+// where a managed hook from that session would be routed, or why it would be
+// refused. It reads the registry and the routes and changes neither; unlike
+// translateHookOrigin it claims no slot and releases none, so probing a
+// session that has not reported yet leaves it unreported.
+//
+// The acknowledgement names the session, not a window: a slot only the daemon
+// can name is never returned as a window ID.
+func (h *Handler) probeRuntimeSession(req protocol.Request) protocol.Response {
+	req.WindowID = 0
+	reject := func(reason string) protocol.Response {
+		ack := baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementRejected, reason)
+		ack.RuntimeSessionID = strings.TrimSpace(req.RuntimeSessionID)
+		ack.RouteDecision = events.RouteDecisionRejected
+		return protocol.Response{OK: false, Error: reason, Retryable: protocol.RetryableOriginReason(reason), Delivery: ack}
+	}
+	id, err := runtimesession.ParseID(strings.TrimSpace(req.RuntimeSessionID))
+	if err != nil {
+		return reject(protocol.OriginReasonInvalidRuntimeSession)
+	}
+	req.RuntimeSessionID = string(id)
+	if h.runtimeDirectory == nil {
+		return reject(protocol.OriginReasonRuntimeRegistryUnavailable)
+	}
+	record, found, err := h.runtimeDirectory.Lookup(id)
+	switch {
+	case !found && err != nil:
+		return reject(protocol.OriginReasonRuntimeRegistryUnavailable)
+	case !found:
+		return reject(protocol.OriginReasonRuntimeSessionUnknown)
+	}
+	switch record.State {
+	case runtimesession.StateLive:
+	case runtimesession.StatePending:
+		return reject(protocol.OriginReasonRuntimeSessionPending)
+	default:
+		return reject(protocol.OriginReasonRuntimeSessionEnded)
+	}
+	target, ok := runtimeTargetOf(record.Target)
+	if !ok {
+		return reject(protocol.OriginReasonInvalidRuntimeTarget)
+	}
+
+	h.stateMu.Lock()
+	slot, bound := h.runtimeRoutes.byRuntime[string(id)]
+	binding, _ := h.runtimeRoutes.binding(slot)
+	label := h.runtimeLabels[string(id)]
+	_, held := h.windowStateLocked(slot)
+	h.stateMu.Unlock()
+	if bound && binding.target != target {
+		// The session is routed at another target generation: its next hook
+		// would be refused until the registry and the routes agree.
+		return reject(protocol.OriginReasonTargetConflict)
+	}
+
+	ack := baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementAccepted, "routing_discovered")
+	ack.RuntimeSessionID = string(id)
+	ack.Profile = label.profile
+	ack.TargetHarness = label.harness
+	ack.WindowFound = bound && held
+	if target.backend == string(runtimesession.BackendKitty) {
+		ack.SourceWindowID, _ = kittyWindowSlot(target.pane)
+		ack.TargetWindowID = ack.SourceWindowID
+		_, _, ack.SnapshotReady = h.cachedSnapshot()
 	}
 	return protocol.Response{OK: true, Delivery: ack}
 }

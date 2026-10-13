@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 const exportRuntimeID = "rs-0123456789abcdef0123456789abcdef"
@@ -40,8 +41,18 @@ func (f *runtimeExportClient) ExportRuntimeSessionEvents(id string) (protocol.Ev
 func runRuntimeExport(t *testing.T, client *runtimeExportClient) (protocol.ExportEventsPayload, error) {
 	t.Helper()
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	// Kitty lists no window for the slot: the entry is the daemon's alone.
-	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
+	// The slot is the daemon's alone and no Kitty window: Kitty is not asked
+	// about it, and the session's pane on tmux is what says how it looks now.
+	newDaemonExportKitty = func() cli.KittyWindowLister {
+		t.Error("an export of a tmux session asked Kitty for its windows")
+		return fakeKittyWindowLister{}
+	}
+	newDaemonExportRuntime = func() ([]session.RunningSession, error) {
+		return []session.RunningSession{
+			{RuntimeSessionID: "rs-ffffffffffffffffffffffffffffffff", Backend: runtimesession.BackendTmux, Project: "other"},
+			{RuntimeSessionID: exportRuntimeID, Backend: runtimesession.BackendTmux, Title: "W:api", Base: "W:api", Project: "api", Profile: "work", Harness: "claude", Directory: "/work/api"},
+		}, nil
+	}
 	daemonExportNow = func() time.Time { return time.Unix(700, 0) }
 	daemonExportEventsWindow, daemonExportEventsLast = 0, 0
 	daemonExportEventsOutput, daemonExportEventsPretty = "", false
@@ -77,8 +88,12 @@ func requireRuntimeWindow(t *testing.T, payload protocol.ExportEventsPayload, cl
 	if window.WindowID != client.slot || window.RuntimeSessionID != exportRuntimeID || window.Backend != "tmux" {
 		t.Fatalf("window = id %d runtime %q backend %q; want slot %d of %s on tmux", window.WindowID, window.RuntimeSessionID, window.Backend, client.slot, exportRuntimeID)
 	}
-	if len(window.Events) != 1 || window.Events[0].Event != "Stop" || window.Live.Found {
-		t.Fatalf("window events = %+v live.found = %v; want the session's one event and no Kitty window", window.Events, window.Live.Found)
+	if len(window.Events) != 1 || window.Events[0].Event != "Stop" {
+		t.Fatalf("window events = %+v; want the session's one event", window.Events)
+	}
+	want := protocol.WindowLiveMetadata{Found: true, TabTitle: "W:api", BaseTitle: "W:api", Project: "api", Profile: "work", Harness: "claude", Directory: "/work/api"}
+	if window.Live != want {
+		t.Fatalf("live = %+v; want the session's own pane, joined by runtime session with no tab or OS window: %+v", window.Live, want)
 	}
 }
 

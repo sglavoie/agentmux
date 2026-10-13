@@ -78,6 +78,7 @@ var CompanionMessageTypes = []MessageType{
 	TypeNotificationDisposition,
 	TypeNotificationTest,
 	TypeWorkspaceView,
+	TypeFocusSession,
 }
 
 // AttentionStates is the set of icon states that mean a human is being waited
@@ -518,10 +519,58 @@ type WorkspaceViewRequest struct {
 	Path string `json:"path,omitempty"`
 	// Title labels a utility view in the workspace.
 	Title string `json:"title,omitempty"`
+	// Raise marks a session view the operator asked for from outside the
+	// workspace, by a click on a notification or a menu: the workspace shows
+	// it even when its window is closed. Only the daemon sets it, for a
+	// focus_session request; it is cleared from a workspace_view request, so
+	// a surface can never bring the app forward.
+	Raise bool `json:"raise,omitempty"`
 }
 
 // WorkspaceViewResult answers TypeWorkspaceView: how many workspaces were
 // handed the request.
 type WorkspaceViewResult struct {
 	Delivered int `json:"delivered"`
+}
+
+// TypeFocusSession asks the daemon to bring one runtime session in front of
+// the operator, wherever it can be shown. It is the click of a notification
+// or a menu row for a session with no Kitty window, and deliberately a
+// request of its own: focus_window names a window in a Kitty instance, and a
+// runtime session has neither.
+//
+// A connected workspace is asked to show the session (a FrameWorkspaceView
+// with Raise set). With none, the terminal the operator used last on the
+// session's private tmux server is switched to it. That selects the session
+// in the terminal; the daemon has no way to bring a terminal emulator's
+// window forward, so raising it is left to the operator.
+const TypeFocusSession MessageType = "focus_session"
+
+// FocusSessionRequest names the runtime session to show.
+type FocusSessionRequest struct {
+	RuntimeSessionID string `json:"runtime_session_id"`
+}
+
+// Focus-session refusal codes, in Response.Error. A session that stopped
+// answers FocusErrorStaleTarget, as a closed window does for focus_window.
+const (
+	// FocusSessionErrorInvalid: the request names no runtime session.
+	FocusSessionErrorInvalid = "invalid_session"
+	// FocusSessionErrorUnknown: the runtime session is not a live session on
+	// a backend the daemon can show.
+	FocusSessionErrorUnknown = "runtime_session_unknown"
+	// FocusSessionErrorNoViewer: no workspace is connected and no terminal is
+	// attached to the session's server, so there is nowhere to show it.
+	FocusSessionErrorNoViewer = "no_viewer"
+	// FocusSessionErrorFailed: the terminal could not be switched.
+	FocusSessionErrorFailed = "focus_failed"
+)
+
+// FocusSessionResult reports who was asked to show the session: Workspaces
+// counts the workspaces handed the view, and Client names the terminal that
+// was switched when there was none.
+type FocusSessionResult struct {
+	RuntimeSessionID string `json:"runtime_session_id"`
+	Workspaces       int    `json:"workspaces,omitempty"`
+	Client           string `json:"client,omitempty"`
 }

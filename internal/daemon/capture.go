@@ -23,7 +23,8 @@ func (h *Handler) captureHookPayload(request protocol.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	_, _ = h.captureStore.Record(ctx, diagnostics.CapturePayloadRequest{
-		WindowID: request.WindowID, Harness: request.ProducerHarness, Event: request.Event,
+		WindowID: request.WindowID, RuntimeSessionID: request.RuntimeSessionID,
+		Harness: request.ProducerHarness, Event: request.Event,
 		TraceID: request.TraceID, RequestID: request.RequestID, Payload: []byte(request.PayloadJSON),
 	})
 }

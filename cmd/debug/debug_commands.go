@@ -89,13 +89,13 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	windowID := selector.WindowID
-	if windowID == 0 {
-		windowID = cli.WindowIDFromEnv()
+	windowID, runtimeSession, err := debugSessionTarget(selector.WindowID)
+	if err != nil {
+		return err
 	}
 	bin, _ := debugExecutable()
 	report := debugger.Probe(debugProbeClient(), debugger.ProbeOptions{
-		WindowID: windowID, Harness: selector.Harness, TraceID: selector.TraceID, RequestID: selector.RequestID, AMXBin: bin,
+		WindowID: windowID, RuntimeSessionID: runtimeSession, Harness: selector.Harness, TraceID: selector.TraceID, RequestID: selector.RequestID, AMXBin: bin,
 	})
 	if debugProbeJSON {
 		if err := writeIndentedJSON(cmd.OutOrStdout(), report); err != nil {
@@ -113,6 +113,11 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 			}
 		}
 		if report.Delivery != nil {
+			if report.Delivery.RuntimeSessionID != "" {
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "runtime session: %s\n", report.Delivery.RuntimeSessionID); err != nil {
+					return err
+				}
+			}
 			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "route: %s source=%d target=%d producer=%s target_harness=%s profile=%s snapshot_ready=%t window_found=%t\n",
 				report.Delivery.RouteDecision, report.Delivery.SourceWindowID, report.Delivery.TargetWindowID,
 				emptyDash(report.Delivery.ProducerHarness), emptyDash(report.Delivery.TargetHarness),

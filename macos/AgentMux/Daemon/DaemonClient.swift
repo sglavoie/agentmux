@@ -32,6 +32,21 @@ enum FocusOutcome: Equatable {
     case failed(String)
 }
 
+/// What one focus_session request did.
+enum FocusSessionOutcome: Equatable {
+    /// The daemon asked something to show the session: this workspace, by a
+    /// `workspace_view` frame, or a terminal attached to the session's server.
+    case shown
+    /// The session's agent stopped.
+    case staleTarget
+    /// Nothing is connected to show it.
+    case noViewer
+    /// The daemon predates focus_session.
+    case unsupported
+    case notRunning
+    case failed(String)
+}
+
 /// What one notification_snooze request did.
 enum SnoozeOutcome: Equatable {
     /// The snooze now in force.
@@ -103,6 +118,34 @@ struct DaemonClient {
         case "stale_target": return .staleTarget
         case "unknown_socket": return .unknownSocket
         case "": return .failed("focus_window refused")
+        case let message where message.hasPrefix("unknown request type"): return .unsupported
+        case let message: return .failed(message)
+        }
+    }
+
+    /// Asks the daemon to show a runtime session that has no Kitty window.
+    func focusSession(runtimeSessionID: String, timeout: TimeInterval = focusTimeout) -> FocusSessionOutcome {
+        let reply: Data
+        do {
+            let request = try JSONEncoder().encode(DaemonRequest.focusing(runtimeSessionID: runtimeSessionID))
+            reply = try roundTrip(socketPath, request, timeout)
+        } catch let error as LineSocketError {
+            return error.meansNotRunning ? .notRunning : .failed(error.message)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        return Self.focusSessionOutcome(fromReply: reply)
+    }
+
+    static func focusSessionOutcome(fromReply reply: Data) -> FocusSessionOutcome {
+        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+            return .failed("unreadable focus_session reply")
+        }
+        if response.ok { return .shown }
+        switch response.error ?? "" {
+        case "stale_target": return .staleTarget
+        case "no_viewer": return .noViewer
+        case "": return .failed("focus_session refused")
         case let message where message.hasPrefix("unknown request type"): return .unsupported
         case let message: return .failed(message)
         }

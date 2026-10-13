@@ -68,6 +68,11 @@ func resetDebugTestState(t *testing.T) {
 	oldProbe := debugProbeClient
 	oldNewJournal := debugNewJournal
 	oldSelector := debugSelectorFlags
+	oldRuntimeSession, oldGetenv := debugRuntimeSession, debugGetenv
+	// A test run typed inside a managed session must not select it.
+	debugRuntimeSession, debugGetenv = "", func(string) string { return "" }
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Cleanup(func() { debugRuntimeSession, debugGetenv = oldRuntimeSession, oldGetenv })
 	oldStatusJSON := debugStatusJSON
 	oldTailJSON := debugTailJSON
 	oldTailFollow := debugTailFollow

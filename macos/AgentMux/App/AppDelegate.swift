@@ -270,6 +270,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// that arrives while the window is closed is from nothing on screen and
     /// is dropped rather than raising the app.
     private func handle(_ request: WorkspaceViewRequest) {
+        if request.raise, request.kind == WorkspaceViewRequest.sessionKind {
+            // The operator's own click, by way of focus_session: unlike a
+            // surface's request it opens the window.
+            let controller = workspaceController()
+            controller.show()
+            controller.open(request)
+            return
+        }
         guard let workspace, workspace.isOpen else {
             Self.logger.notice("workspace view request (\(request.kind, privacy: .public)) with no workspace open; ignored")
             return
@@ -655,7 +663,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Kitty one in Kitty, which is then brought forward.
     func focus(_ row: MenuSessionRow) {
         if !row.runtimeSessionID.isEmpty {
-            showWorkspace(focusing: row.runtimeSessionID)
+            focusSession(row.runtimeSessionID)
             return
         }
         let candidates = KittyEndpoint.candidates(
@@ -679,6 +687,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.finishFocus(row, outcome: outcome, socket: used) }
+            }
+        }
+    }
+
+    /// Shows a session that has no Kitty window. The daemon is asked
+    /// (`focus_session`) and answers this workspace with a view frame; when it
+    /// cannot be asked, or shows nothing, the workspace shows the session
+    /// itself, as it did before the daemon knew the request.
+    func focusSession(_ runtimeSessionID: String) {
+        focusQueue.async { [weak self] in
+            let outcome = DaemonClient().focusSession(runtimeSessionID: runtimeSessionID)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, outcome != .shown else { return }
+                    Self.logger.notice("focus_session \(runtimeSessionID, privacy: .public): \(String(describing: outcome), privacy: .public); showing it here")
+                    self.showWorkspace(focusing: runtimeSessionID)
+                }
             }
         }
     }
@@ -950,14 +975,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     /// What the app does after reporting a banner response. The daemon
-    /// focuses the pane on `clicked`; the app brings that Kitty forward, and
-    /// carries out the actions the daemon only names.
+    /// focuses a Kitty pane on `clicked` and the app brings that Kitty
+    /// forward; a session with no Kitty window is asked for by
+    /// `focus_session`. The app carries out the actions the daemon only names.
     private func respond(to response: NotificationPresenter.Response) {
         let origin = Self.origin(of: response, in: store.sessions, snapshotKitty: store.snapshot?.kitty ?? CompanionKitty())
         switch response.disposition {
         case .clicked:
             if !response.embeddedRuntimeSessionID.isEmpty {
-                return showWorkspace(focusing: response.embeddedRuntimeSessionID)
+                return focusSession(response.embeddedRuntimeSessionID)
             }
             guard response.navigable, let socket = origin.socket else { return }
             _ = KittyActivator.activate(socket: socket)

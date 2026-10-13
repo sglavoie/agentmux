@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/session"
 )
 
 type fakeDaemonExportClient struct {
@@ -48,6 +49,9 @@ func resetDaemonExportTestState(t *testing.T) {
 	t.Helper()
 	oldClient := newDaemonExportClient
 	oldKitty := newDaemonExportKitty
+	oldRuntimeLister := newDaemonExportRuntime
+	// No test reads the operator's tmux server.
+	newDaemonExportRuntime = func() ([]session.RunningSession, error) { return nil, nil }
 	oldNow := daemonExportNow
 	oldWindow := daemonExportEventsWindow
 	oldCurrentWindow := daemonExportEventsCurrentWindow
@@ -64,6 +68,7 @@ func resetDaemonExportTestState(t *testing.T) {
 	t.Cleanup(func() {
 		newDaemonExportClient = oldClient
 		newDaemonExportKitty = oldKitty
+		newDaemonExportRuntime = oldRuntimeLister
 		daemonExportNow = oldNow
 		daemonExportEventsWindow = oldWindow
 		daemonExportEventsCurrentWindow = oldCurrentWindow

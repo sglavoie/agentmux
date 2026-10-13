@@ -30,8 +30,8 @@ func accountByName(cfg *config.Config, profile string) (config.Account, bool) {
 }
 
 func requireProjectAccount(id ID, deps Dependencies, project config.Session) (config.Account, error) {
-	if deps.Kitty == nil || deps.Config == nil {
-		return config.Account{}, dependencyError(id, "Kitty client and configuration")
+	if deps.Config == nil {
+		return config.Account{}, dependencyError(id, "configuration")
 	}
 	account, ok := accountByName(deps.Config, project.EffectiveProfile())
 	if !ok {

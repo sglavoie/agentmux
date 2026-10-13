@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/spf13/cobra"
 )
 
@@ -31,11 +32,26 @@ var (
 	// export client is this family's one daemon-query seam.
 	newDaemonExportClient = cli.NewDaemonExportClient
 	newDaemonExportKitty  = func() cli.KittyWindowLister { return cli.NewKittyClient() }
-	daemonExportNow       = time.Now
+	// newDaemonExportRuntime lists what runs on the private tmux server now,
+	// for the live half of the slots runtime sessions hold. It starts no
+	// server: none running lists nothing.
+	newDaemonExportRuntime = func() ([]session.RunningSession, error) {
+		server, err := cli.NewTmuxBackend()
+		if err != nil {
+			return nil, err
+		}
+		panes, err := server.Discover()
+		if err != nil {
+			return nil, err
+		}
+		return session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, nil), nil
+	}
+	daemonExportNow = time.Now
 )
 
-func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
+func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, running []session.RunningSession, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
 	liveByID := debug.ExportLiveMetadata(osWindows, snapshot, requestedWindowID)
+	debug.ExportRuntimeLiveMetadata(liveByID, running, snapshot)
 	ids := debug.ExportWindowIDs(snapshot, requestedWindowID)
 	windows := make([]protocol.ExportWindow, 0, len(ids))
 	for _, id := range ids {
@@ -213,14 +229,33 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 			return fmt.Errorf("export events: %w", err)
 		}
 
+		// The live half of an entry comes from where its session runs: a
+		// Kitty window from Kitty, a runtime session on another backend from
+		// that backend. Neither is asked when no exported entry is its own,
+		// so an export of tmux sessions runs with no Kitty at all. Both are
+		// best effort: an entry whose terminal cannot be read is not-found.
 		var osWindows []kitty.OSWindow
-		if ids := debug.ExportWindowIDs(snapshot, requestedWindowID); len(ids) > 0 {
+		var running []session.RunningSession
+		inKitty, offKitty := false, false
+		for _, id := range debug.ExportWindowIDs(snapshot, requestedWindowID) {
+			if slot, ok := snapshot.RuntimeSlots[id]; ok && debug.RuntimeSlotOffKitty(slot) {
+				offKitty = true
+			} else {
+				inKitty = true
+			}
+		}
+		if inKitty {
 			if liveWindows, liveErr := newDaemonExportKitty().ListWindows(); liveErr == nil {
 				osWindows = liveWindows
 			}
 		}
+		if offKitty {
+			if listed, liveErr := newDaemonExportRuntime(); liveErr == nil {
+				running = listed
+			}
+		}
 
-		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, requestedWindowID, daemonExportEventsLast, daemonExportNow())
+		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, running, requestedWindowID, daemonExportEventsLast, daemonExportNow())
 		projected, err := protocol.ProjectExportEventsPayload(payload, daemonExportEventsSchema)
 		if err != nil {
 			return err

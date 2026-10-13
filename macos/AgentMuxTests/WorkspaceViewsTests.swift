@@ -21,6 +21,12 @@ final class WorkspaceViewsModelTests: XCTestCase {
         )
         // A daemon that predates the feature never sends the frame; one that
         // sends a shape this app cannot read must not end the stream.
+        let raised = Data(#"{"v":1,"seq":12,"type":"workspace_view","data":{"kind":"session","runtime_session_id":"\#(F.runtimeID(3))","await":true,"raise":true}}"#.utf8)
+        XCTAssertEqual(
+            SubscriptionClient.decodeFrame(raised),
+            .workspaceView(seq: 12, WorkspaceViewRequest(kind: "session", runtimeSessionID: F.runtimeID(3), awaited: true, raise: true))
+        )
+
         let empty = Data(#"{"v":1,"seq":11,"type":"workspace_view","data":{}}"#.utf8)
         XCTAssertEqual(SubscriptionClient.decodeFrame(empty), .workspaceView(seq: 11, WorkspaceViewRequest()))
     }

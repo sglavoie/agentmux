@@ -94,6 +94,21 @@ func resolveEditor(cfgEditor string) (string, []string, error) {
 	return "", nil, fmt.Errorf("no editor configured (cfg.Defaults.Editor, $VISUAL, $EDITOR all empty)")
 }
 
+// EditorCommand is the configured editor as an argument list, resolved the
+// way OpenInEditor resolves it, for a caller that runs the editor in its own
+// terminal because there is no Kitty tab to open.
+func EditorCommand(cfg *config.Config) ([]string, error) {
+	configured := ""
+	if cfg != nil {
+		configured = cfg.Defaults.Editor
+	}
+	name, args, err := resolveEditor(configured)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{name}, args...), nil
+}
+
 // OpenInEditor opens a session's directory in a new Kitty tab running the
 // user's configured editor. The tab gets the correct title and account color
 // but no user vars, so it won't appear in the dashboard's session list
