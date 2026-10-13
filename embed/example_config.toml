@@ -79,12 +79,15 @@ confirm_destructive = false
 # Each top-level directory under this root is treated as one plan.
 # plans_directory = "~/.local/share/agent-plans"
 
-# Where a launch goes when the command gives no --backend: "kitty" (a new Kitty
-# tab, the default) or "tmux" (the private tmux server, whose agents outlive
-# every terminal and are shown by Agent Mux.app's workspace or `amx attach`).
-# Agent Mux.app launches into tmux whenever there is no Kitty to launch into,
-# whatever is set here; its own Preferences can make that the rule.
-# launch_backend = "kitty"
+# Where a launch goes when the command gives no --backend: "tmux" (the private
+# tmux server, whose agents outlive every terminal and are shown by `amx
+# attach`, the dashboard in any terminal, or Agent Mux.app's workspace) or
+# "kitty" (a new Kitty tab; needs Kitty and `just install-kitty`). Unset means
+# "kitty" for now, so a configuration written before the tmux backend keeps
+# launching where it did; set "tmux" to need no Kitty at all. The dashboard
+# started outside Kitty launches on tmux either way, and Agent Mux.app
+# launches into its workspace unless its own Preferences name Kitty.
+# launch_backend = "tmux"
 # Plans in that directory and harness transcript files remain authoritative.
 # Agent Mux keeps only disposable filesystem caches at:
 #   ~/.local/share/agent-mux/transcripts.json + transcripts.search/

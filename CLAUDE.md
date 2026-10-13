@@ -4,14 +4,19 @@ Guidance for coding agents working in Agent Mux.
 
 ## Project overview
 
-Agent Mux is a Kitty-first, multi-harness session manager for Claude Code,
-GitHub Copilot CLI, and OpenAI Codex. The `amx` binary owns:
+Agent Mux is a multi-harness session manager for Claude Code, GitHub Copilot
+CLI, and OpenAI Codex. Agents run on a private tmux server, shown by `amx` in
+any terminal and by the macOS workspace; Kitty is an optional legacy backend
+that nothing in the default install, the docs, the gates, or doctor requires
+(`docs/backend-migration.md`, "Kitty (optional legacy backend)"). The `amx`
+binary owns:
 
 - a live-session Bubble Tea dashboard with Past Sessions and Plans views;
 - exact conversation continuity (focus live, resume closed, native or portable fork);
 - isolated managed Git worktrees and deterministic cross-harness handoff packs;
 - filesystem-backed transcript and plan caches with disposable search sidecars;
-- an always-on local daemon that reduces hook events and exclusively renders Kitty state.
+- an always-on local daemon that reduces hook events and is the only writer of
+  rendered session state (tmux status options, Kitty tab titles and colors).
 
 Kitty operations stay behind `internal/kitty` and the `internal/backend` seams.
 Domain services must not invoke `kitten @` or spell Kitty match expressions;
@@ -20,8 +25,15 @@ Domain services must not invoke `kitten @` or spell Kitty match expressions;
 
 ## Build and acceptance
 
-Requires Go 1.26+, Kitty, and `just`. tmux 3.5 or newer is needed for the tmux
-backend and its tests (they skip without it); Agent Mux.app brings its own.
+Requires Go 1.26+, `just`, and tmux 3.5 or newer for the tmux backend and its
+tests (they skip without it); Agent Mux.app brings its own. Kitty is needed
+only to launch into Kitty or to run `just kitty-smoke`.
+
+`launch_backend` unset still means Kitty (`config.LaunchBackendOrDefault`,
+pinned by `TestLaunchBackendDefaultsToKitty`). It moves to tmux only once
+`docs/acceptance/ghostty-desktop/session-20.json` records a passed,
+operator-confirmed trial; a *recorded* empty backend keeps meaning Kitty
+either way.
 
 ```bash
 just build
@@ -31,7 +43,9 @@ just check        # acceptance plus golangci-lint
 just install-restart-smoke
 just update          # install-restart-smoke plus hooks-sync and mac-install, from any terminal (needs Xcode)
 just crash-restart   # fault injection and restart equivalence, under -race
-just cockpit-smoke   # real Kitty + installed pair; fails rather than skips
+just cockpit-smoke   # real tmux + installed pair, from any terminal; fails rather than skips
+just install-kitty   # opt-in: link agent-mux.conf into ~/.config/kitty (`just install` does not)
+just kitty-smoke     # opt-in: real Kitty + installed amx, from a Kitty window; in no gate
 just overseer-integration asl_root=~/scripts   # installed amx + installed asl, isolated world
 ```
 
@@ -153,9 +167,10 @@ leaves that modifier held system-wide.
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both
 repositories' gates, installs the pair (ASL first), restarts the real daemon,
-drives a real Kitty smoke, and writes a signed evidence record. The gate lives
-in `internal/release` and is tested in isolation; see
-`docs/paired-releases.md`.
+drives a real tmux smoke, and writes a signed evidence record. No step runs or
+names Kitty (`TestGateRequiresNoKitty`); the record's `environment.kitty` is
+optional from schema 2, and schema-1 records still load. The gate lives in
+`internal/release` and is tested in isolation; see `docs/paired-releases.md`.
 
 The app is released through a separate gate, `just mac-release-gate` (the
 hidden `desktop-release-gate`, `internal/release/desktop.go`): it builds the

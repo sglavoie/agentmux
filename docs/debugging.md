@@ -387,7 +387,7 @@ The step names map to what to look at next:
 | Failing step | What it means | First response |
 | --- | --- | --- |
 | (no steps ran, a repository is `clean: false`) | A working tree had uncommitted changes | Commit or stash; `dirty` in the record names the paths |
-| `kitty-version`, `cockpit-smoke` | No real Kitty, no `KITTY_WINDOW_ID`, or remote control is off | Run the gate from a Kitty window with `allow_remote_control` enabled |
+| `cockpit-smoke` at `backend status --check` or the tmux round trip | No usable tmux: none on `PATH` (or at `[defaults.tmux] path`), older than 3.5, or it started no live pane | `amx backend status` names the tmux tried and why; install tmux 3.5 or newer. The gate needs no Kitty |
 | `harness-compat` | A harness is outside the pinned window or unreadable | `asl harness-compat --json`; `unknown` warns, `incompatible` blocks |
 | `contract-sync` | The vendored corpus drifted from ASL's canonical one | Re-vendor `internal/aslcontract/corpus`, then `just test` |
 | `paired-integration` | The installed `asl` is missing or speaks a different protocol | `amx config asl-sync --check`, then the ASL dimension table above |

@@ -1,7 +1,7 @@
 // Package backend defines the narrow terminal-backend seams AgentMux domain
 // services use: discovery, launch, termination, capture, metadata, and
-// presentation. A backend (Kitty today, a private tmux server later) owns its
-// own addressing grammar and topology; domain code only ever holds an opaque
+// presentation. A backend (the private tmux server, or Kitty) owns its own
+// addressing grammar and topology; domain code only ever holds an opaque
 // Ref and asks for an operation by intent.
 //
 // Every operation is synchronous and reports exactly what the backend did.

@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -72,8 +73,10 @@ func TestGateRecordsSignedEvidenceForACleanPair(t *testing.T) {
 	if ev.Environment.OSVersion != fakeOSVersion {
 		t.Errorf("os_version = %q, want %q", ev.Environment.OSVersion, fakeOSVersion)
 	}
-	if ev.Environment.Kitty != fakeKittyVersion {
-		t.Errorf("kitty = %q, want %q", ev.Environment.Kitty, fakeKittyVersion)
+	// The fixture's `kitty` and `kitten` fail, so a gate that asked either
+	// would not have passed; the record names no Kitty it never exercised.
+	if ev.Environment.Kitty != "" {
+		t.Errorf("kitty = %q, want none: the gate releases the pair without one", ev.Environment.Kitty)
 	}
 	wantHarnesses := []HarnessVersion{
 		{Harness: "claude", Version: "2.1.231", Status: "supported"},
@@ -174,11 +177,66 @@ func TestGateRunsPhasesInTheDocumentedOrder(t *testing.T) {
 	if order["asl-install-verify"] < order["asl-install"] {
 		t.Error("the installed-wrapper verification runs before ASL is installed")
 	}
-	if order["cockpit-smoke"] != len(steps)-1 {
-		t.Error("the real-Kitty cockpit smoke must be last, against the installation just produced")
+	if order[StepCockpitSmoke] != len(steps)-1 {
+		t.Error("the real-tmux cockpit smoke must be last, against the installation just produced")
 	}
 	if order[StepBuildAgentMux] > order["amx-check"] {
 		t.Error("the artifact must be built before anything claims to have tested it")
+	}
+}
+
+// TestGateRequiresNoKitty holds the plan to the backend migration's end state:
+// Kitty is an optional backend, so no step of the gate may run it, name it, or
+// run the opt-in recipes that need it.
+func TestGateRequiresNoKitty(t *testing.T) {
+	for _, step := range Plan("/amx", "/asl") {
+		for _, word := range append([]string{step.Name}, step.Argv...) {
+			if strings.Contains(strings.ToLower(word), "kitty") || strings.Contains(word, "kitten") {
+				t.Errorf("step %q names Kitty (%q); the gate must pass on a machine without it", step.Name, word)
+			}
+		}
+	}
+}
+
+// TestLoadEvidenceStillReadsASchemaOneRecord keeps the releases signed before
+// environment.kitty became optional readable, and a record from a later schema
+// refused.
+func TestLoadEvidenceStillReadsASchemaOneRecord(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, ev Evidence) string {
+		data, err := json.Marshal(ev)
+		if err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+		path := filepath.Join(dir, name)
+		writeFile(t, path, string(data))
+		return path
+	}
+	pair := PairIDPrefix + "0000000000000000"
+
+	old, err := LoadEvidence(write("old.json", Evidence{
+		SchemaVersion: 1, PairID: pair, Result: StatusPassed,
+		Environment: Environment{Kitty: "kitty 0.44.1"},
+	}))
+	if err != nil {
+		t.Fatalf("a schema-1 record was refused: %v", err)
+	}
+	if old.Environment.Kitty != "kitty 0.44.1" {
+		t.Errorf("kitty = %q, want the version the schema-1 record named", old.Environment.Kitty)
+	}
+
+	current, err := json.Marshal(Evidence{SchemaVersion: SchemaVersion, PairID: pair})
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if strings.Contains(string(current), `"kitty"`) {
+		t.Errorf("a record that names no Kitty still carries the field: %s", current)
+	}
+
+	for _, version := range []int{0, SchemaVersion + 1} {
+		if _, err := LoadEvidence(write("other.json", Evidence{SchemaVersion: version, PairID: pair})); err == nil {
+			t.Errorf("a schema-%d record was read; only %d to %d are understood", version, OldestSchemaVersion, SchemaVersion)
+		}
 	}
 }
 

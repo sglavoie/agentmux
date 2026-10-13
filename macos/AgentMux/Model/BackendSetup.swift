@@ -2,7 +2,8 @@ import Foundation
 
 /// Where Launch Project starts an agent (`amxLaunchBackend`).
 enum LaunchBackendPreference: String, CaseIterable, Equatable {
-    /// A Kitty tab when a Kitty is running, else the workspace.
+    /// The workspace. A running Kitty changes nothing: Kitty is launched
+    /// into only when chosen.
     case automatic
     /// Always a Kitty tab; with no Kitty the launch fails and says so.
     case kitty
@@ -11,19 +12,18 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
 
     var label: String {
         switch self {
-        case .automatic: return "Kitty when it is running, else the workspace"
+        case .automatic: return "Automatic (the workspace)"
         case .kitty: return "Kitty"
         case .workspace: return "The workspace (tmux)"
         }
     }
 
-    /// Whether a launch goes to the workspace, given whether any Kitty could
-    /// take a new tab.
-    func launchesInWorkspace(kittyAvailable: Bool) -> Bool {
+    /// Whether a launch goes to the workspace. What happens to be running
+    /// never decides it.
+    var launchesInWorkspace: Bool {
         switch self {
-        case .automatic: return !kittyAvailable
+        case .automatic, .workspace: return true
         case .kitty: return false
-        case .workspace: return true
         }
     }
 }

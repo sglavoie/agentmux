@@ -3,7 +3,9 @@
 ## Dashboard views and continuity
 
 The default TUI opens on the live-session dashboard and selects the session
-from the Kitty tab that opened it when possible. `/` filters the live-session
+it was opened from when possible: the tmux session a popup is over, or the
+Kitty tab. It runs in any terminal; Kitty is one of two backends and is never
+required ([The tmux backend](#the-tmux-backend-and-kitty)). `/` filters the live-session
 list; `:` opens the command palette, from which **Search All Past Sessions**
 opens Past Sessions and **Search Plans** opens Plans.
 
@@ -698,13 +700,16 @@ is an explicit request for new tab(s): if the selected project/profile is
 already running, Agent Mux opens another instance instead of skipping or
 focusing the existing tab.
 
-### Outside Kitty: the tmux backend
+### The tmux backend, and Kitty
 
-The dashboard and the overview also run in any other terminal — stock Ghostty,
+The dashboard and the overview run in any terminal — stock Ghostty, Terminal,
 or Kitty without its tab integration — by hosting agents on AgentMux's private
-tmux server instead of in Kitty tabs. Nothing about that server is the
-operator's: it has its own socket and configuration and never reads
-`~/.tmux.conf`.
+tmux server. Nothing about that server is the operator's: it has its own
+socket and configuration and never reads `~/.tmux.conf`. Kitty is the other
+backend, where a session is a Kitty tab; it is optional, set up by
+`just install-kitty` and the `kitty.conf` lines in the README, and nothing
+here needs it: install, `amx doctor`, the release gate, and every command
+below work on a machine that has none.
 
 | Where `amx` runs | New agents launch on | Sessions listed |
 | --- | --- | --- |
@@ -717,9 +722,19 @@ operator's: it has its own socket and configuration and never reads
 
 The launch commands (`amx project launch`, `amx session continue|fork|
 fork-worktree|handoff`) take `--backend` too. Without it they launch where
-`[defaults] launch_backend` says, which is `kitty` unless you set it to
-`tmux`, so a configuration written before the tmux backend existed keeps
-launching into Kitty.
+`[defaults] launch_backend` says. Set it to `tmux` to use no Kitty at all:
+
+```toml
+[defaults]
+launch_backend = "tmux"
+```
+
+Unset, it still means `kitty`, so a configuration written before the tmux
+backend existed keeps launching into Kitty; that default moves to `tmux` once
+the [daily-driver trial](daily-driver-trial.md) has passed, and
+`launch_backend = "kitty"` and `--backend kitty` keep working after it does.
+A session already running is always reached on the backend it was launched
+on, whatever is set now.
 
 **Which tmux.** The private server needs tmux 3.5 or newer. `amx` uses, in
 order: `[defaults.tmux] path` from `config.toml` or `AMX_TMUX`, either of

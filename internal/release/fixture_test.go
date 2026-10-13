@@ -10,12 +10,12 @@ import (
 )
 
 // The paired release gate installs both programs, restarts the operator's real
-// daemon, drives a real Kitty window, and writes annotated tags. None of that is
+// daemon, drives a real tmux, and writes annotated tags. None of that is
 // acceptable in a test, and a gate whose logic is only exercised during a
 // release is a gate that is discovered to be broken during a release.
 //
 // So the whole procedure runs here against a stand-in world: two throwaway Git
-// repositories, an ephemeral SSH signing key, a fake `just`, a fake `kitty`, a
+// repositories, an ephemeral SSH signing key, a fake `just`, a `kitty` that fails, a
 // fake `sw_vers`, and a fake ASL wrapper, all under t.TempDir() with the fakes
 // staged ahead of everything else on PATH.
 //
@@ -37,7 +37,6 @@ type fixture struct {
 	publicKey    string
 }
 
-const fakeKittyVersion = "kitty 0.44.1 created by Kovid Goyal"
 const fakeOSVersion = "26.6"
 
 // harnessCompatPayload is a canned `asl harness-compat --json` report. It is
@@ -117,7 +116,11 @@ func (f *fixture) stageAgentMuxCheckout(t *testing.T) {
 func (f *fixture) stageFakeCommands(t *testing.T) {
 	t.Helper()
 	writeScript(t, filepath.Join(f.fakeBin, "sw_vers"), "#!/bin/sh\necho "+fakeOSVersion+"\n")
-	writeScript(t, filepath.Join(f.fakeBin, "kitty"), "#!/bin/sh\necho '"+fakeKittyVersion+"'\n")
+	// Kitty is an optional backend: a gate that runs it fails here, as it
+	// would on a machine that has none.
+	for _, name := range []string{"kitty", "kitten"} {
+		writeScript(t, filepath.Join(f.fakeBin, name), "#!/bin/sh\necho 'the release gate must not run "+name+"' >&2\nexit 1\n")
+	}
 	writeScript(t, filepath.Join(f.fakeBin, "just"), `#!/bin/sh
 recipe="$1"
 if [ -n "${FAKE_JUST_LOG:-}" ]; then

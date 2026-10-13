@@ -8,18 +8,18 @@ final class BackendSetupTests: XCTestCase {
 
     // MARK: Where a launch goes
 
-    func testAutomaticLaunchesInKittyOnlyWhenOneIsRunning() {
-        XCTAssertFalse(LaunchBackendPreference.automatic.launchesInWorkspace(kittyAvailable: true))
-        XCTAssertTrue(LaunchBackendPreference.automatic.launchesInWorkspace(kittyAvailable: false))
+    func testAutomaticLaunchesInTheWorkspace() {
+        // No Kitty is consulted: one that happens to be running takes no
+        // launch the operator did not send there.
+        XCTAssertTrue(LaunchBackendPreference.automatic.launchesInWorkspace)
     }
 
-    func testAnExplicitChoiceIsNeverOverriddenByWhatIsRunning() {
-        for kitty in [true, false] {
-            XCTAssertTrue(LaunchBackendPreference.workspace.launchesInWorkspace(kittyAvailable: kitty))
-            // Kitty with no Kitty fails where it is asked; it does not
-            // quietly become a tmux launch the operator did not choose.
-            XCTAssertFalse(LaunchBackendPreference.kitty.launchesInWorkspace(kittyAvailable: kitty))
-        }
+    func testKittyIsLaunchedIntoOnlyWhenChosen() {
+        XCTAssertTrue(LaunchBackendPreference.workspace.launchesInWorkspace)
+        // Kitty with no Kitty fails where it is asked; it does not quietly
+        // become a tmux launch the operator did not choose.
+        XCTAssertFalse(LaunchBackendPreference.kitty.launchesInWorkspace)
+        XCTAssertEqual(LaunchBackendPreference.allCases.filter { !$0.launchesInWorkspace }, [.kitty])
     }
 
     func testEveryChoiceHasItsOwnLabel() {

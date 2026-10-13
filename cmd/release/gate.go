@@ -52,7 +52,7 @@ var releaseGateCmd = &cobra.Command{
 		"revisions to be clean, builds and hashes the exact artifacts, runs both " +
 		"full suites plus lint, the paired bridge integration, the reliability " +
 		"stress and crash/restart gates, installs the pair in the documented " +
-		"order, restarts the real daemon, drives a real Kitty cockpit smoke, and " +
+		"order, restarts the real daemon, drives a real tmux cockpit smoke, and " +
 		"writes a signed JSON evidence record.\n\n" +
 		"It has real side effects on the machine that runs it. It is a release " +
 		"operator's tool, not a diagnostic.",

@@ -27,7 +27,7 @@ func TestReleaseGateJSONSurfaceIsVersioned(t *testing.T) {
 	if releaseGateCmd.Flags().Lookup("json") == nil {
 		t.Fatal("release-gate does not declare --json")
 	}
-	if release.SchemaVersion != 1 {
+	if release.SchemaVersion != 2 {
 		t.Errorf("unexpected release evidence schema version %d", release.SchemaVersion)
 	}
 	if release.SigningNamespace != "agentmux-asl-release" {
@@ -88,17 +88,19 @@ func TestJustCrashRestartCannotPassWithoutRunning(t *testing.T) {
 }
 
 // TestJustCockpitSmokeFailsRatherThanSkips is the property that makes the
-// smoke's result mean something. A smoke that passes because Kitty was absent
+// smoke's result mean something. A smoke that passes because tmux was absent
 // is worse than no smoke: it reports a boundary as exercised that was never
 // touched.
 func TestJustCockpitSmokeFailsRatherThanSkips(t *testing.T) {
 	recipe := justfileParameterizedRecipe(t, readJustfile(t), "cockpit-smoke")
 
 	for _, want := range []string{
-		"kitten @ ls",             // a real Kitty remote-control round trip
-		"KITTY_WINDOW_ID",         // driven from a real window, not a headless shell
+		"{{ prefix_bin }}/amx",    // the installed amx, not a build
+		"backend status --check",  // the tmux amx would start agents on is usable
+		"new-session -d",          // a real tmux round trip
+		`-S "$socket"`,            // on a socket of its own, never the private server's
 		"ready: true",             // the real daemon, not just a reachable socket
-		"export-events",           // the daemon is reducing facts for that window
+		"export-events",           // the daemon answers for the sessions it holds
 		"doctor --strict",         // invariants hold on the installed pair
 		"config asl-sync --check", // the ASL pairing preflight, writing nothing
 	} {
@@ -111,11 +113,92 @@ func TestJustCockpitSmokeFailsRatherThanSkips(t *testing.T) {
 			t.Errorf("cockpit-smoke contains %q; it must fail rather than skip:\n%s", absent, recipe)
 		}
 	}
+	// It runs from any terminal: nothing in it may ask for Kitty.
+	for _, kitty := range []string{"kitty", "kitten", "KITTY_", "--current-window"} {
+		if strings.Contains(recipe, kitty) {
+			t.Errorf("cockpit-smoke names %q; it must run from any terminal with no Kitty:\n%s", kitty, recipe)
+		}
+	}
 	// Read-only over the operator's live installation.
-	for _, mutation := range []string{"session launch", "worktree remove", "config init", "daemon stop"} {
+	for _, mutation := range []string{"session launch", "worktree remove", "config init", "daemon stop", "backend stop", "amx send", "kill-session"} {
 		if strings.Contains(recipe, mutation) {
 			t.Errorf("cockpit-smoke runs %q; the smoke must observe, not mutate", mutation)
 		}
+	}
+	// Every tmux it runs names the smoke's own socket, so the server holding
+	// the operator's agents is never the one started, listed, or killed.
+	for _, line := range strings.Split(recipe, "\n") {
+		if strings.Contains(line, `"$tmux_bin" -`) && !strings.Contains(line, `"$tmux_bin" -S "$socket"`) {
+			t.Errorf("cockpit-smoke runs tmux outside its own socket: %s", strings.TrimSpace(line))
+		}
+	}
+}
+
+// TestJustKittySmokeIsOptInAndFailsRatherThanSkips keeps the Kitty smoke what
+// it was while it was the cockpit smoke, and out of every gate: Kitty is an
+// optional backend, so nothing an operator without it runs may depend on it.
+func TestJustKittySmokeIsOptInAndFailsRatherThanSkips(t *testing.T) {
+	justfile := readJustfile(t)
+	recipe := justfileParameterizedRecipe(t, justfile, "kitty-smoke")
+
+	for _, want := range []string{
+		"kitten @ ls",                    // a real Kitty remote-control round trip
+		"KITTY_WINDOW_ID",                // driven from a real window, not a headless shell
+		"ready: true",                    // the real daemon, not just a reachable socket
+		"export-events --current-window", // the daemon is reducing facts for that window
+		"doctor --strict",                // invariants hold on the installed amx
+	} {
+		if !strings.Contains(recipe, want) {
+			t.Errorf("kitty-smoke does not exercise %q:\n%s", want, recipe)
+		}
+	}
+	for _, absent := range []string{"exit 0", "skip"} {
+		if strings.Contains(recipe, absent) {
+			t.Errorf("kitty-smoke contains %q; it must fail rather than skip:\n%s", absent, recipe)
+		}
+	}
+	for _, mutation := range []string{"session launch", "worktree remove", "config init", "daemon stop"} {
+		if strings.Contains(recipe, mutation) {
+			t.Errorf("kitty-smoke runs %q; the smoke must observe, not mutate", mutation)
+		}
+	}
+
+	for _, optIn := range []string{"kitty-smoke", "install-kitty"} {
+		for _, gate := range []string{"check", "acceptance", "install", "install-restart-smoke", "update"} {
+			header := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(gate) + `:.*$`).FindString(justfile)
+			if header == "" {
+				t.Fatalf("Justfile has no %q recipe", gate)
+			}
+			if strings.Contains(header, optIn) {
+				t.Errorf("%s depends on %s; Kitty setup and its smoke are opt-in: %s", gate, optIn, header)
+			}
+		}
+		for _, step := range release.Plan("/amx", "/asl") {
+			if strings.Contains(strings.Join(step.Argv, " "), optIn) {
+				t.Errorf("the paired gate's %s step runs %s", step.Name, optIn)
+			}
+		}
+	}
+}
+
+// TestJustInstallCreatesNothingOfKittys is the install half of the same rule:
+// the Kitty directory and snippet link are `install-kitty`'s, and `uninstall`
+// still removes a link somebody made.
+func TestJustInstallCreatesNothingOfKittys(t *testing.T) {
+	justfile := readJustfile(t)
+
+	install := justfileRecipe(t, justfile, "install")
+	for _, kitty := range []string{"prefix_kitty", "agent-mux.conf"} {
+		if strings.Contains(install, kitty) {
+			t.Errorf("install touches %s; only install-kitty may:\n%s", kitty, install)
+		}
+	}
+	link := `ln -sf "{{root}}/agent-mux.conf" "{{prefix_kitty}}/agent-mux.conf"`
+	if got := justfileRecipe(t, justfile, "install-kitty"); !strings.Contains(got, link) {
+		t.Errorf("install-kitty does not link the Kitty snippet:\n%s", got)
+	}
+	if got := justfileRecipe(t, justfile, "uninstall"); !strings.Contains(got, `rm -f "{{prefix_kitty}}/agent-mux.conf"`) {
+		t.Errorf("uninstall no longer removes the Kitty snippet link:\n%s", got)
 	}
 }
 
@@ -151,9 +234,9 @@ func TestJustOverseerIntegrationFailsRatherThanSkips(t *testing.T) {
 
 // TestOverseerIntegrationSmokesBeforeTheCockpit pins the smoke phase's internal
 // order. The overseer smoke needs only the two installed programs; the cockpit
-// smoke needs a live Kitty window. Running the terminal-dependent step last is
-// what lets a headless failure be reported as a real regression rather than as
-// the operator's shell being wrong.
+// smoke needs a real tmux and the restarted daemon. Running the step that
+// depends on the machine last is what lets an earlier failure be reported as a
+// real regression rather than as the machine being wrong.
 func TestOverseerIntegrationSmokesBeforeTheCockpit(t *testing.T) {
 	steps := release.Plan("/amx", "/asl")
 

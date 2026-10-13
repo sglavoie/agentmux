@@ -101,7 +101,7 @@ native workspace (Session 14's completion gate is that every row is reachable).
 | W28 | Paired ASL installation and overseer integration | asl | `just asl-integration`, `just overseer-integration` | pending | 10 | 19 | Both recipes pass against the installed pair with tmux-backed sessions. |
 | W29 | Doctor, debug status, and stable finding identifiers | diagnostics | `cmd/debug` doctor tests; `cmd/debug.TestDoctorJSONCommandSurfaceIsVersioned` | pass | 18 | — | Existing identifiers unchanged; backend availability, reconciliation, capture freshness, and viewer attachment reported. |
 | W30 | Event export, debug capture, probe, bundle, and replay | diagnostics | `cmd/daemon/export_events_shape_test.go`; `internal/debugger` bundle and replay tests | pass | 18 | — | `--current-window` style selection works by runtime session; bundles redact prompts and credentials by default. |
-| W31 | Install, restart smoke, and real Kitty cockpit smoke | diagnostics | `just install-restart-smoke`, `just cockpit-smoke` | pending | 17 | 19 | Desktop release installs on a clean Mac; updates preserve detached agents. |
+| W31 | Install, restart smoke, and real Kitty cockpit smoke | diagnostics | `just install-restart-smoke`, `just cockpit-smoke` (the Kitty smoke is `just kitty-smoke` since Session 21) | pending | 17 | 19 | Desktop release installs on a clean Mac; updates preserve detached agents. |
 | W32 | Paired release gate and evidence record | diagnostics | `internal/release` tests; `just paired-release-gate` | pending | 19 | 19 | Core gate unchanged and Xcode-free; a separate desktop gate records its own evidence. |
 
 ## Session 19 acceptance record
@@ -155,6 +155,81 @@ is the summary record, and says which run each log is of.
 | W30 | passed | Selection by runtime session: `TestEventsExportSelectsByRuntimeSession`, `TestEventsExportRefusesAnUnknownRuntimeSession` (daemon), `TestDaemonExportEventsCommand_CurrentWindowResolvesRuntimeSession` (in a tmux session `--current-window` is the session, and the inherited Kitty window is not believed), `TestDaemonExportEventsCommand_RuntimeSessionFlag`, `TestDaemonExportEventsCommand_RuntimeSessionRefusals`, `TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv`; an exported tmux slot's live half is read from its pane by runtime session with Kitty never asked. Probe and capture by runtime session: `TestDebugProbeTargetsARuntimeSession`, `TestDiagnosticProbeNamesARuntimeSession` (claims no slot, names no window), `TestDebugCaptureScopesToTheCurrentRuntimeSession`, `TestCaptureScopedToARuntimeSession`. Doctor's Kitty findings only where Kitty is in use: `TestDoctorKittyIsNotAFailureWhereItIsNotInUse`. Redaction: `TestShareBundleKeepsBackendHealthAndDropsWhatItCouldCarry`, `TestShareBundleExcludesSecretCorpusRawSourcesAndIsDeterministic`, `TestForensicBundleRemainsRedactedAndCarriesLocalOnlyWarning`. |
 | W31 | passed | Session 19 on the MacBook: the Session 17 installation acceptance run again against this session's Release bundle, `docs/acceptance/ghostty-desktop/session-19/packaged/install-acceptance.log` (107 passed, 0 failed), and the installed app as a workspace, `docs/acceptance/ghostty-desktop/session-19/live/packaged-workspace.log` (36 passed, 0 failed). The bundle is ad-hoc signed; a Developer ID signature and notarization are not shown. `just install-restart-smoke` and `just cockpit-smoke` were rehearsed in an isolated world only (`docs/acceptance/ghostty-desktop/session-19/live/isolated-install-cockpit.log`). |
 | W32 | passed | `TestMacAppRecipesStayOutOfTheGates`, `TestJustMacReleaseGateIsTheDesktopGateAndNothingElse`, `TestTheTwoGatesStayApart`, `TestDesktopGatePassesAndRecordsWhatItBuilt`, `TestDesktopGateReportsMissingInfrastructureAsPending`; the desktop gate run as a rehearsal with its record in `docs/acceptance/ghostty-desktop/session-19/desktop-release`, and two runs that reported pending in `docs/acceptance/ghostty-desktop/session-19/desktop-release/pending-runs.log`. `just paired-release-gate` itself was not run: it installs tools and restarts the operator's daemon. |
+
+## Kitty (optional legacy backend)
+
+Kitty is where Agent Mux started and it stays supported, behind
+`internal/backend`, as a backend an operator opts into. No Kitty code was
+removed. What changed is that nothing else depends on it:
+
+| Surface | Without Kitty | To use Kitty |
+| --- | --- | --- |
+| Install | `just install` builds and installs `amx` and seeds `config.toml`; it creates no `~/.config/kitty` and links nothing | `just install-kitty` links `agent-mux.conf`; `kitty.conf` includes it and enables remote control. `just uninstall` removes the link if there is one |
+| Launch | `launch_backend = "tmux"` or `--backend tmux`; the dashboard in a terminal that is not Kitty launches on tmux unasked | `launch_backend = "kitty"` (or unset, until the default moves; see below) or `--backend kitty` |
+| A running session | reached on the backend it was launched on; a *recorded* empty backend means Kitty, so sessions and checkpoints from before the tmux backend read as they always did | the same |
+| Paired release gate | no step runs or names Kitty; `cockpit-smoke` is a real-tmux smoke that runs from any terminal and fails without a usable tmux | `just kitty-smoke`, from a Kitty window, in no gate |
+| Evidence record | schema 2: no `kitty-version` step, `environment.kitty` absent | schema-1 records, which name a Kitty, still load |
+| Agent Mux.app | **Launch projects in** › *Automatic* is the workspace, whatever is running | **Launch projects in** › *Kitty*; **Show in Kitty** and the Kitty socket preference are unchanged |
+| `amx doctor` | `kitty`, `kitty_snapshot_stale`, and `renderer_drift` are raised only where Kitty is in use | unchanged |
+
+Still Kitty-shaped inside, and out of scope here: `kitty.UserVars` and
+`kitty.OSWindow` as the shared data model, Kitty launches not being registered
+in the runtime-session registry, the `internal/kittykeys` package name, and the
+TUI scenarios built on Kitty fixtures. The compatibility requirements below
+are unchanged: companion v1, `focus_window`, legacy `KITTY_WINDOW_ID` hooks,
+`amx_state` restore, and the ASL `kitty_window_id` contract.
+
+**The default.** `launch_backend` unset still means Kitty. Requirement 9 below
+holds it there until the daily-driver trial passes
+(`docs/acceptance/ghostty-desktop/session-20.json`, `docs/daily-driver-trial.md`).
+When that record says `passed` with `operator_confirmed: true`,
+`config.LaunchBackendOrDefault` returns tmux and
+`TestLaunchBackendDefaultsToKitty` is replaced; `--backend kitty` and
+`launch_backend = "kitty"` keep working. Until then an installation with no
+Kitty sets `launch_backend = "tmux"`: left unset, doctor counts Kitty as in
+use and raises `kitty` as a warning (never a `--strict` failure) saying so.
+
+## Session 21 record
+
+Session 21 is the session that stopped requiring Kitty (plan "Make tmux a
+complete backend so Kitty is needed for nothing", session 6). It follows the
+five sessions that gave every Kitty-only workflow a tmux path.
+
+Done, with what holds it:
+
+- **Install.** `just install` no longer creates `~/.config/kitty` or links the
+  snippet; `just install-kitty` does. `cmd/release.TestJustInstallCreatesNothingOfKittys`.
+- **Release gate.** `kitty-version` is gone from the plan and `cockpit-smoke`
+  is the real-tmux smoke; the Kitty one is `just kitty-smoke`.
+  `internal/release.TestGateRequiresNoKitty` (and a fixture whose `kitty` and
+  `kitten` fail if run), `cmd/release.TestJustCockpitSmokeFailsRatherThanSkips`,
+  `cmd/release.TestJustKittySmokeIsOptInAndFailsRatherThanSkips`.
+- **Evidence record.** `schema_version` 2 with `environment.kitty` optional;
+  schema 1 still loads. `internal/release.TestLoadEvidenceStillReadsASchemaOneRecord`.
+- **App.** `LaunchBackendPreference.automatic` launches in the workspace.
+  `BackendSetupTests.testAutomaticLaunchesInTheWorkspace`,
+  `testKittyIsLaunchedIntoOnlyWhenChosen`.
+- **Coverage.** `portable_tmux` scenarios, narrow and wide, for resort, open
+  shell and editor, the launch picker, and an action naming the tmux server
+  (`docs/tui-testing/README.md`).
+- **Docs.** The README, `CLAUDE.md`, usage, companion app, paired releases,
+  testing, and acceptance pages describe tmux as the backend and Kitty as
+  optional.
+
+Pending, and not counted as done:
+
+- **The default flip.** Not made. On 2026-10-13
+  `docs/acceptance/ghostty-desktop/session-20.json` is `pending` with
+  `operator_confirmed: false` and no workday logged, so `launch_backend` unset
+  still launches into Kitty and `TestLaunchBackendDefaultsToKitty` stands.
+- **The hosted app suite.** The app and its test target compile
+  (`xcodebuild build-for-testing`); `just mac-test` on the remote Mac has not
+  run the changed `BackendSetupTests`, and the launch-target default has not
+  been driven live.
+- **The gate on a machine with no Kitty.** `just cockpit-smoke` was run from a
+  terminal that is not Kitty, with every `KITTY_*` variable unset, on a machine
+  that has Kitty installed. `just paired-release-gate` on a machine without
+  Kitty has not been run.
 
 ## Baseline fixtures
 

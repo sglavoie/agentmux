@@ -319,20 +319,28 @@ crash-restart:
 
     echo "crash-restart: ok ($passed scenarios)"
 
-# Real-Kitty cockpit smoke over the *installed* pair. Read-only: it observes,
+# Real-tmux cockpit smoke over the *installed* pair. Read-only: it observes,
 # it never mutates a session, a plan, or config.toml.
 #
-# Everything else in this repository simulates the terminal. This recipe is the
-# one place a real `kitten @` round trip, a real daemon, and a real ASL pairing
-# preflight are all required at once, which is why it belongs to the release
-# gate rather than to `just check`. It fails rather than skips: a cockpit smoke
-# that quietly passes because Kitty was absent is worse than no smoke.
+# Everything else in this repository runs tmux in a world of its own. This
+# recipe is the one place the installed amx, the tmux it would start agents
+# on, a real daemon, and a real ASL pairing preflight are all required at
+# once, which is why it belongs to the release gate rather than to
+# `just check`. It runs from any terminal and needs no Kitty. A missing or
+# unusable tmux is a failure: a cockpit smoke that quietly passes because
+# there was no backend to observe is worse than no smoke.
 #
-# Scope note, so the evidence is not read as more than it is: this half proves
-# the cockpit observes a live Kitty window through the daemon. The intervention
-# half -- fetching a question body, refusing a stale token, accepting a mutation
-# and getting a body-free receipt -- is proven against the installed ASL wrapper
-# by `just asl-integration`, which the release gate runs separately.
+# The tmux round trip runs the executable `amx backend status` resolved, in a
+# server of its own on a socket in a temporary directory, so the operator's
+# agents and the private server that holds them are never touched.
+#
+# Scope note, so the evidence is not read as more than it is: this proves the
+# installed amx resolves a tmux that runs, that the daemon is ready and
+# answers for the sessions it holds, and that its invariants hold. Reducing a
+# real tmux session's hooks is proven by `just asl-integration`, and the
+# intervention half -- fetching a question body, refusing a stale token,
+# accepting a mutation and getting a body-free receipt -- by the same recipe
+# against the installed ASL wrapper; the release gate runs it separately.
 cockpit-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -344,8 +352,76 @@ cockpit-smoke:
         exit 1
     fi
 
+    echo "== tmux backend =="
+    "$amx" backend status
+    "$amx" backend status --check || {
+        echo "the tmux backend cannot start agents on this machine" >&2
+        exit 1
+    }
+    tmux_bin="$("$amx" backend status | sed -n 's/^tmux: \(.*\) ([^()]*)$/\1/p')"
+    if [ -z "$tmux_bin" ] || [ ! -x "$tmux_bin" ]; then
+        echo "amx backend status named no tmux executable" >&2
+        exit 1
+    fi
+
+    echo "== tmux round trip =="
+    world="$(mktemp -d "${TMPDIR:-/tmp}/amx-smoke.XXXXXX")"
+    socket="$world/t.sock"
+    cleanup() {
+        "$tmux_bin" -S "$socket" kill-server > /dev/null 2>&1 || true
+        rm -rf "$world"
+    }
+    trap cleanup EXIT
+    "$tmux_bin" -S "$socket" -f /dev/null new-session -d -s smoke -x 80 -y 24 'sleep 120'
+    pane="$("$tmux_bin" -S "$socket" list-panes -a -F '#{pane_id} #{pane_dead}')"
+    case "$pane" in
+        "%"*" 0") echo "$tmux_bin: one live pane ($pane)" ;;
+        *)
+            echo "$tmux_bin started no live pane: '$pane'" >&2
+            exit 1
+            ;;
+    esac
+    "$tmux_bin" -S "$socket" kill-server
+
+    echo "== daemon =="
+    "$amx" daemon status | grep -q '^ready: true' || {
+        echo "daemon is not ready" >&2
+        "$amx" daemon status >&2
+        exit 1
+    }
+    "$amx" daemon status
+
+    # Proves the daemon answers for the sessions it holds, not merely that
+    # its socket is reachable.
+    echo "== session events =="
+    "$amx" daemon export-events --last 50 > /dev/null
+    echo "export-events: ok"
+
+    echo "== invariants =="
+    "$amx" doctor --strict
+
+    echo "== asl pairing preflight =="
+    "$amx" config asl-sync --check
+
+    echo "cockpit-smoke: ok"
+
+# Real-Kitty smoke over the installed amx, for an operator who launches into
+# Kitty. Opt-in: no gate runs it, since Kitty is an optional backend. Run it
+# from a Kitty window; like the cockpit smoke it observes and never mutates,
+# and it fails when there is no Kitty to observe.
+kitty-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    amx="{{ prefix_bin }}/amx"
+
+    if [ ! -x "$amx" ]; then
+        echo "no installed amx at $amx; run just install-restart-smoke first" >&2
+        exit 1
+    fi
+
     if [ -z "${KITTY_WINDOW_ID:-}" ]; then
-        echo "KITTY_WINDOW_ID is unset: run the cockpit smoke from a Kitty window" >&2
+        echo "KITTY_WINDOW_ID is unset: run the Kitty smoke from a Kitty window" >&2
         exit 1
     fi
 
@@ -371,10 +447,7 @@ cockpit-smoke:
     echo "== invariants =="
     "$amx" doctor --strict
 
-    echo "== asl pairing preflight =="
-    "$amx" config asl-sync --check
-
-    echo "cockpit-smoke: ok"
+    echo "kitty-smoke: ok"
 
 # Run the paired agent-session-loop / Agent Mux release gate.
 #
@@ -462,7 +535,8 @@ lint:
 # Run the full repository gate.
 check: acceptance lint
 
-# Install binary, Kitty config, and a starter app config if missing.
+# Install binary and a starter app config if missing. Nothing of Kitty's is
+# created or linked; `just install-kitty` does that for the Kitty backend.
 # The binary is staged beside the destination and renamed into place so the
 # replacement is atomic: no window where amx is absent or half-copied, and a
 # running daemon keeps its already-open executable.
@@ -470,10 +544,13 @@ install: build
     @mkdir -p "{{prefix_bin}}"
     cp amx "{{prefix_bin}}/.amx.staging"
     mv -f "{{prefix_bin}}/.amx.staging" "{{prefix_bin}}/amx"
-    @mkdir -p "{{prefix_kitty}}"
-    ln -sf "{{root}}/agent-mux.conf" "{{prefix_kitty}}/agent-mux.conf"
     @if [ ! -f "{{prefix_config}}/config.toml" ]; then "{{prefix_bin}}/amx" config init >/dev/null; echo "Seeded {{prefix_config}}/config.toml"; fi
     @echo "Installed {{prefix_bin}}/amx"
+
+# Link the Kitty snippet for the optional Kitty backend (include it from kitty.conf)
+install-kitty:
+    @mkdir -p "{{prefix_kitty}}"
+    ln -sf "{{root}}/agent-mux.conf" "{{prefix_kitty}}/agent-mux.conf"
     @echo "Symlinked {{prefix_kitty}}/agent-mux.conf"
 
 # Build, install atomically, restart the daemon, wait for it to report ready,
@@ -488,8 +565,10 @@ install-restart-smoke: install restart-verify
 #
 # It runs from any terminal: outside Kitty the restarted daemon keeps the
 # Kitty its predecessor read, and with none running it is ready without one.
+# The Kitty snippet is a link into this checkout, so one made by
+# `just install-kitty` already follows it.
 #
-# Update everything from this checkout: amx, Kitty config, hooks, menu bar app, daemon
+# Update everything from this checkout: amx, hooks, menu bar app, daemon
 update: install sync-hooks mac-install restart-verify
     @echo "update: ok ($("{{prefix_bin}}/amx" --version))"
 
@@ -573,7 +652,7 @@ mac-release-gate *flags:
 mac-uninstall *flags:
     ./macos/scripts/uninstall-app.sh {{ flags }}
 
-# Stop the daemon, then remove the binary and the Kitty snippet (config.toml and data are kept)
+# Stop the daemon, then remove the binary and the Kitty snippet if linked (config.toml and data are kept)
 uninstall:
     -"{{prefix_bin}}/amx" daemon stop
     rm -f "{{prefix_bin}}/amx"

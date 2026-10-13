@@ -16,8 +16,6 @@ func (g *gate) absorb(step Step, output string, ev *Evidence) error {
 	switch step.Name {
 	case StepOSVersion:
 		ev.Environment.OSVersion = firstLine(output)
-	case StepKittyVersion:
-		ev.Environment.Kitty = firstLine(output)
 	case StepHarnessCompat:
 		harnesses, err := parseHarnessCompat(output)
 		if err != nil {

@@ -1,0 +1,17 @@
+{
+  "name": "portable-session-action-names-tmux-wide",
+  "fixture": "portable_tmux",
+  "size": { "width": 140, "height": 36 },
+  "actions": [
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "m" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "web" },
+    { "type": "contains_text", "text": "action \"session.toggle_mute\" requires tmux server" },
+    { "type": "excludes_text", "text": "Kitty" },
+    { "type": "no_layout_issues" }
+  ]
+}

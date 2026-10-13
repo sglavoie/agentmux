@@ -1,0 +1,21 @@
+{
+  "name": "portable-open-here-wide",
+  "fixture": "portable_tmux",
+  "size": { "width": 140, "height": 36 },
+  "actions": [
+    { "type": "key", "key": "j" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "o" },
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "O" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "web" },
+    { "type": "excludes_text", "text": "requires" },
+    { "type": "excludes_text", "text": "Action error" },
+    { "type": "excludes_text", "text": "failed" },
+    { "type": "excludes_text", "text": "Kitty" },
+    { "type": "no_layout_issues" }
+  ]
+}

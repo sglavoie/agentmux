@@ -1,0 +1,18 @@
+{
+  "name": "portable-resort-always-sorted-wide",
+  "fixture": "portable_tmux",
+  "size": { "width": 140, "height": 36 },
+  "actions": [
+    { "type": "key", "key": ":" },
+    { "type": "text", "text": "resort" },
+    { "type": "key", "key": "enter" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "contains_text", "text": "Sessions are always in sort order" },
+    { "type": "excludes_text", "text": "Unavailable" },
+    { "type": "contains_text", "text": "Needs you (1)" },
+    { "type": "contains_text", "text": "Running (2)" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -1,11 +1,13 @@
 # Menu bar companion
 
 `Agent Mux.app` is an optional native macOS menu bar app for Agent Mux. It
-shows the live managed sessions with attention counts in the menu bar, focuses
-a session's Kitty tab from a menu row or a global shortcut, shows the daemon's
+shows the live managed sessions with attention counts in the menu bar, shows
+a session from a menu row or a global shortcut, shows the daemon's
 notifications as native banners, and answers ASL supervisor questions in a
-native panel. Kitty stays the terminal for Kitty sessions; sessions launched
-on the tmux backend open in the app's own [workspace window](#workspace). The
+native panel. Sessions run on the tmux backend and open in the app's own
+[workspace window](#workspace), which is also where Launch Project starts a
+new one. The app needs no Kitty; a session that runs as a Kitty tab is focused
+in Kitty ([Kitty](#kitty-optional)). The
 daemon stays the source of truth: the app subscribes to the daemon's companion
 stream and runs the `amx` CLI for actions. Nothing in Agent Mux depends on it,
 and quitting it returns every behavior to what it was without it; agents on
@@ -101,10 +103,18 @@ ad-hoc build (no certificate in the keychain, or `AMX_CODESIGN_IDENTITY=-`)
 looks like a new app every time, so both grants are asked for again after each
 install. See [Signing](../macos/README.md#signing).
 
-## Kitty requirements
+## Kitty (optional)
 
-Focus, the dashboard shortcut, Launch Project, Recent, and Mute all reach Kitty
-through its remote-control socket, so `kitty.conf` needs:
+Nothing in the app needs Kitty. **Launch projects in** (Preferences ›
+Workspace) is *Automatic* by default, which means the workspace: a Kitty that
+happens to be running takes no launch. Kitty is launched into only when that
+preference says **Kitty**, and then a launch with no Kitty to open a tab in
+fails and says so instead of becoming a tmux launch nobody chose. **Show in
+Kitty** and the Kitty socket preference are unchanged.
+
+For sessions that do run as Kitty tabs, focus, Recent, Mute, a dashboard shown
+in Kitty, and Launch Project sent to Kitty all reach it through its
+remote-control socket, so `kitty.conf` needs:
 
 ```conf
 allow_remote_control yes

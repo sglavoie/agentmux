@@ -1294,18 +1294,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         )
     }
 
-    /// Launch Project: `amx project launch` in the Kitty used last, then that
-    /// Kitty is brought forward on the new tab. With no Kitty to open a tab
-    /// in, or when Preferences says so, the project launches on tmux and the
-    /// workspace shows it. A `directory` replaces the project's configured
-    /// one for this launch.
+    /// Launch Project: the project launches on tmux and the workspace shows
+    /// it. Only when Preferences names Kitty is it `amx project launch` in
+    /// the Kitty used last, which is then brought forward on the new tab. A
+    /// `directory` replaces the project's configured one for this launch.
     private func launch(_ project: ProjectEntry, directory: String? = nil) {
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
         if let reason = gate.unavailableReason(.project) { return report(reason) }
-        let candidates = newTabCandidates()
-        if preferencesModel.preferences.launchBackend.launchesInWorkspace(kittyAvailable: !candidates.isEmpty) {
+        if preferencesModel.preferences.launchBackend.launchesInWorkspace {
             return launchInWorkspace(project, directory: directory, command: command)
         }
+        let candidates = newTabCandidates()
         let arguments = ProjectCatalog.launchArguments(for: project, directory: directory)
         focusQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in

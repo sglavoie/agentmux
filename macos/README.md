@@ -506,8 +506,8 @@ and Kitty variable from its environment before running it.
   `amxDashboardPlace` is `kitty`. Then `DashboardOpener.destination(for:)`
   sends it to the workspace only when there is no Kitty socket to try; a Kitty
   that answered with a failure, or sockets nobody answers on, are still
-  reported. **Launch Project** with no Kitty socket runs
-  `amx project launch --backend tmux` and shows the session in the workspace.
+  reported. **Launch Project** runs `amx project launch --backend tmux` and
+  shows the session in the workspace, unless `amxLaunchBackend` is `kitty`.
 
 ## Which amx the app runs
 
@@ -867,7 +867,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxSnoozeUntil` | none | The last snooze the daemon reported, re-applied after a daemon restart (see Menu actions). The daemon owns the snooze, and Preferences shows the daemon's while the feed is live. |
 | `amxKittySocketOverride` | empty | A Kitty socket tried first by focus and the dashboard shortcut. |
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
-| `amxLaunchBackend` | `automatic` | Where Launch Project starts an agent: `automatic` (a Kitty tab when a Kitty is running, else the workspace), `kitty`, or `workspace` (always the private tmux server). An explicit choice is never overridden by what happens to be running. |
+| `amxLaunchBackend` | `automatic` | Where Launch Project starts an agent: `automatic` (the workspace), `kitty` (a tab in the Kitty used last; with no Kitty the launch fails and says so), or `workspace` (always the private tmux server). A Kitty that happens to be running never decides it: Kitty is launched into only when chosen. |
 | `amxDashboardPlace` | `workspace` | Where the dashboard shortcut and Open Dashboard show the dashboard: `workspace` (the workspace's own view), or `kitty` (a dashboard tab in Kitty when a Kitty is running, else the workspace). |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |

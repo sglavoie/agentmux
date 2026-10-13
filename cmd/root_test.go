@@ -49,7 +49,7 @@ func TestRootHelp(t *testing.T) {
 	if strings.Contains(stdout, "hook-indicator") {
 		t.Errorf("root help must not list the internal hook-indicator command, got:\n%s", stdout)
 	}
-	for _, group := range []string{"Sessions and projects:", "Kitty tabs:", "Setup and diagnostics:"} {
+	for _, group := range []string{"Sessions and projects:", "Session controls:", "Setup and diagnostics:"} {
 		if !strings.Contains(stdout, group) {
 			t.Errorf("root help is missing the %q group, got:\n%s", group, stdout)
 		}

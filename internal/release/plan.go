@@ -20,18 +20,23 @@ const (
 // rather than by position.
 const (
 	StepOSVersion     = "os-version"
-	StepKittyVersion  = "kitty-version"
 	StepHarnessCompat = "harness-compat"
 	StepBuildAgentMux = "build-amx"
 )
+
+// StepCockpitSmoke is the last step: the installed pair against a real tmux.
+const StepCockpitSmoke = "cockpit-smoke"
 
 // Plan returns the ordered command list for a gate run over the two named
 // checkouts.
 //
 // The order is the gate's argument, not an implementation detail:
 //
-//   - environment first, because a missing Kitty or an unsupported harness
-//     should cost seconds rather than surfacing after a twenty-minute stress run;
+//   - environment first, because an unsupported harness should cost seconds
+//     rather than surfacing after a twenty-minute stress run. No terminal is
+//     probed here: Kitty is an optional backend, so a machine without it
+//     releases the pair, and the tmux the pair runs on is judged by the cockpit
+//     smoke against the installation rather than by a version string;
 //   - build next, so the artifact being released exists before anything claims
 //     to have tested it;
 //   - verify next, cheapest gate first (`just check`) and the long stress and
@@ -41,9 +46,11 @@ const (
 //     restarted against a stale ASL proves nothing about the pair;
 //   - smoke last, against the installation the previous phase just produced,
 //     with the overseer pair before the cockpit: the overseer smoke needs only
-//     the two installed programs, while the cockpit smoke needs a live Kitty
-//     window, and a gate should exhaust what it can judge on its own before it
-//     depends on the operator's terminal being what it expects.
+//     the two installed programs, while the cockpit smoke needs a real tmux
+//     and the daemon the install phase restarted, and a gate should exhaust
+//     what it can judge on its own before it depends on the machine around it.
+//     The smoke runs from any terminal; the Kitty one is `just kitty-smoke`,
+//     which no gate runs.
 //
 // A step that fails stops the run. Continuing past a failure would produce
 // evidence in which later steps ran against a state the record does not
@@ -52,7 +59,6 @@ func Plan(agentMuxRoot, aslRoot string) []Step {
 	aslWrapper := filepath.Join(aslRoot, aslWrapperPath)
 	return []Step{
 		{Name: StepOSVersion, Repo: AgentMuxRepo, Phase: PhaseEnvironment, Argv: []string{"sw_vers", "-productVersion"}},
-		{Name: StepKittyVersion, Repo: AgentMuxRepo, Phase: PhaseEnvironment, Argv: []string{"kitty", "--version"}},
 		{Name: StepHarnessCompat, Repo: ASLRepo, Phase: PhaseEnvironment, Argv: []string{aslWrapper, "harness-compat", "--json"}},
 
 		{Name: StepBuildAgentMux, Repo: AgentMuxRepo, Phase: PhaseBuild, Argv: []string{"just", "build"}},
@@ -71,6 +77,6 @@ func Plan(agentMuxRoot, aslRoot string) []Step {
 		{Name: "amx-install-restart", Repo: AgentMuxRepo, Phase: PhaseInstall, Argv: []string{"just", "install-restart-smoke"}},
 
 		{Name: "overseer-integration", Repo: AgentMuxRepo, Phase: PhaseSmoke, Argv: []string{"just", "overseer-integration", "asl_root=" + aslRoot}},
-		{Name: "cockpit-smoke", Repo: AgentMuxRepo, Phase: PhaseSmoke, Argv: []string{"just", "cockpit-smoke"}},
+		{Name: StepCockpitSmoke, Repo: AgentMuxRepo, Phase: PhaseSmoke, Argv: []string{"just", "cockpit-smoke"}},
 	}
 }

@@ -375,7 +375,7 @@ func LoadEvidence(path string) (*Evidence, error) {
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return nil, fmt.Errorf("release: parsing evidence %s: %w", path, err)
 	}
-	if ev.SchemaVersion != SchemaVersion {
+	if ev.SchemaVersion < OldestSchemaVersion || ev.SchemaVersion > SchemaVersion {
 		return nil, fmt.Errorf("release: evidence %s has schema version %d, expected %d", path, ev.SchemaVersion, SchemaVersion)
 	}
 	// The evidence directory also holds desktop records, which share the

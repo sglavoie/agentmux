@@ -8,20 +8,20 @@
 // untested peer is exactly the failure this gate exists to prevent, so the gate
 // refuses to reason about either repository in isolation: it reads both source
 // revisions, hashes both artifacts, runs both full suites, installs the pair in
-// the documented order, restarts the real daemon, and drives a real Kitty
-// window before it will sign anything.
+// the documented order, restarts the real daemon, and drives the installed
+// pair against a real tmux before it will sign anything.
 //
 // Everything the gate learns is written to a single deterministic JSON evidence
 // record and signed with `ssh-keygen -Y sign` under the
 // "agentmux-asl-release" namespace. The record is the release artifact that
 // outlives the terminal it ran in: it names the revisions, the binary hashes,
-// the contract set, the OS/Kitty/harness versions, and every command with its
+// the contract set, the OS and harness versions, and every command with its
 // result and duration. A step that did not run is recorded as `not-run` rather
 // than omitted, so a truncated gate can never read as a complete one.
 //
 // Every external command goes through a CommandRunner, and time comes from a
 // clock function. That seam is what makes the gate testable: the isolated test
-// in cmd/release points the whole procedure at throwaway repositories, a fake Kitty,
+// in cmd/release points the whole procedure at throwaway repositories, a fake `just`,
 // an ephemeral signing key, and a temporary evidence directory, so the gate
 // logic stays continuously exercised without touching the operator's real
 // installation.
@@ -46,7 +46,15 @@ import (
 const (
 	// SchemaVersion is the evidence record's schema version. Consumers must
 	// refuse a record they do not recognize rather than reading it optimistically.
-	SchemaVersion = 1
+	//
+	// Version 2 made environment.kitty optional and took kitty-version out of
+	// the steps: the gate no longer needs a Kitty to release the pair.
+	SchemaVersion = 2
+
+	// OldestSchemaVersion is the oldest record LoadEvidence still reads. A
+	// schema-1 record is a schema-2 record that happens to name a Kitty, so
+	// the releases already signed stay verifiable.
+	OldestSchemaVersion = 1
 
 	// SigningNamespace is the `ssh-keygen -Y sign` namespace for release
 	// evidence. A signature made under any other namespace does not verify as a

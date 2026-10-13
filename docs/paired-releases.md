@@ -12,7 +12,9 @@ just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release
 just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release tag=yes
 ```
 
-Run it from a Kitty window, on the machine the pair is installed on. It has real
+Run it from any terminal, on the machine the pair is installed on. It needs a
+tmux the installed `amx` can start agents on (`amx backend status --check`)
+and no Kitty: no step runs or names one. It has real
 side effects: it installs both programs, restarts the running daemon, and with
 `tag=yes` writes annotated tags into both repositories. Omitting `signing_key`
 is allowed and produces an unsigned record — a rehearsal, not a release.
@@ -44,11 +46,11 @@ truncated gate can never read as a complete one.
 | Phase | Steps | Why here |
 | --- | --- | --- |
 | `source` | both revisions, both working trees | A release built from an unrecorded tree is unreproducible. Uncommitted changes stop the run before anything else executes. |
-| `environment` | `sw_vers`, `kitty --version`, `asl harness-compat --json` | Seconds, not minutes. A missing Kitty or an unsupported harness should not surface after a twenty-minute stress run. No model is used and no provider is contacted. |
+| `environment` | `sw_vers`, `asl harness-compat --json` | Seconds, not minutes. An unsupported harness should not surface after a twenty-minute stress run. No terminal is probed: Kitty is an optional backend, and the tmux the pair runs on is judged by the smoke, against the installation. No model is used and no provider is contacted. |
 | `build` | `just build`, then hash the artifacts | The artifact exists before anything claims to have tested it. |
 | `verify` | `just check`; ASL `test-all` and `lint`; `asl-contract-sync`; `asl-integration`; `crash-restart`; both `reliability-stress` gates | Cheapest gate first, the long stress and crash/restart runs last, so an ordinary regression fails fast. |
 | `install` | ASL `just all`, ASL `just verify-asl-install`, Agent Mux `just install-restart-smoke` | **ASL first, then Agent Mux.** The Agent Mux install restarts the daemon, and a daemon restarted against a stale ASL proves nothing about the pair. |
-| `smoke` | `just overseer-integration`, then `just cockpit-smoke` | Against the installation the previous phase just produced. The overseer smoke needs only the two installed programs; the cockpit smoke needs a real Kitty window, so the terminal-dependent step goes last. |
+| `smoke` | `just overseer-integration`, then `just cockpit-smoke` | Against the installation the previous phase just produced. The overseer smoke needs only the two installed programs; the cockpit smoke also needs a real tmux and the daemon the install phase restarted, so the step that depends on the machine goes last. |
 
 Three artifact hashes are recorded: the built `amx` binary, the ASL wrapper, and
 a digest over ASL's Python sources. The source-tree digest exists because ASL
@@ -57,12 +59,23 @@ will run, and hashing only the wrapper would pin a twenty-line launcher while
 the program it launches changed underneath it. Paths participate in the digest,
 so a renamed module changes it.
 
-**The gate does not prove intervention through Kitty.** `cockpit-smoke` proves
-the cockpit observes a live window through the real daemon. Fetching a question
+**The cockpit smoke observes; it does not intervene.** `cockpit-smoke` proves
+that the installed `amx` resolves a tmux that runs (a round trip in a server of
+its own, on a socket in a temporary directory, never the one holding your
+agents), that the real daemon is ready and answers for the sessions it holds,
+and that `amx doctor --strict` passes. It launches nothing and writes to no
+pane. Reducing a real tmux session's hooks is proven by `just asl-integration`,
+which drives real `asl run`s inside a private tmux session. Fetching a question
 body, refusing a stale token, accepting a mutation, and receiving a body-free
 receipt are proven against the installed ASL wrapper by `just asl-integration`,
 which the gate runs separately in the verify phase. The two halves are recorded
 as two steps because they are two claims.
+
+**Kitty is not part of the gate.** `just kitty-smoke` is the smoke the cockpit
+step used to be: run from a Kitty window, it requires a real `kitten @ ls`
+round trip and the daemon's events for that window, and fails when there is no
+Kitty. It is opt-in, for an operator who launches into Kitty; no gate runs it
+and no record names it.
 
 **What the overseer smoke proves.** `just overseer-integration asl_root=…` is
 the only step that judges the two *installed* programs against each other. It
@@ -106,8 +119,14 @@ Every run writes `<pair-id>.json` under the evidence directory —
 `[defaults.release] evidence_dir`, `--evidence-dir`, or
 `~/.local/share/agent-mux/release-evidence` — with a detached `<pair-id>.json.sig`
 beside it. The record names the two revisions, the three artifact hashes, the
-contract set ID and the manifest SHA-256, the OS/Kitty/Go/harness versions, and
+contract set ID and the manifest SHA-256, the OS, Go, and harness versions, and
 every command with its exit code, status, and duration.
+
+The record is `"schema_version": 2`. Schema 2 differs from 1 in one way: the
+gate no longer runs `kitty --version`, so there is no `kitty-version` step and
+`environment.kitty` is absent. A schema-1 record, which names the Kitty it was
+exercised in, is still read (`release.LoadEvidence` accepts 1 and 2), so the
+releases already signed stay verifiable; any other version is refused.
 
 The pair ID is `amx-asl-1.` plus the first sixteen hex characters of
 `sha256(agentmux_revision \n asl_revision \n contract_set_id \n)`. Nothing
@@ -151,7 +170,7 @@ namespace, so a release key that also signs commits or Git objects cannot have
 one of those signatures replayed as a release approval. Verifying without `-n`,
 or with a different namespace, fails — that is the point.
 
-Then check the record itself: `"result": "passed"`, `"schema_version": 1`,
+Then check the record itself: `"result": "passed"`, `"schema_version": 2`,
 `"signature": {"signed": true, ...}` naming this namespace, the revisions match
 the tags, and the artifact hashes match what is installed (`amx --version`
 reports the installed binary's own hash).
@@ -337,7 +356,7 @@ half-working.
 
 ## Maintenance installation
 
-Reinstalling the current pair — after a Go toolchain upgrade, a Homebrew Kitty
+Reinstalling the current pair — after a Go toolchain upgrade, a Homebrew tmux
 update, or a machine restore — does not need the full gate. It needs the install
 phase and the smoke:
 
@@ -377,7 +396,8 @@ the pinned window honest between releases.
 A gate whose logic is only exercised during a release is a gate that is
 discovered to be broken during a release. `go test ./internal/release` runs the
 entire procedure against a stand-in world: two throwaway Git repositories, an
-ephemeral SSH key, a fake `just`, a fake `kitty`, and a fake ASL wrapper, all
+ephemeral SSH key, a fake `just`, a `kitty` and a `kitten` that fail if anything
+runs them, and a fake ASL wrapper, all
 under `t.TempDir()`. Git and `ssh-keygen` are real — the signature the test
 produces is verified with the same command this document gives an operator — and
 nothing in it touches the live installation.

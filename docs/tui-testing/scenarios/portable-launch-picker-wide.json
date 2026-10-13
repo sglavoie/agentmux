@@ -1,0 +1,18 @@
+{
+  "name": "portable-launch-picker-wide",
+  "fixture": "portable_tmux",
+  "size": { "width": 140, "height": 36 },
+  "actions": [
+    { "type": "key", "key": "a" },
+    { "type": "key", "key": "C" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "config_picker" },
+    { "type": "contains_text", "text": "Launch new session with profile: api" },
+    { "type": "contains_text", "text": "~/.claude-work (current)" },
+    { "type": "contains_text", "text": "codex-work" },
+    { "type": "excludes_text", "text": "requires" },
+    { "type": "excludes_text", "text": "Kitty" },
+    { "type": "no_layout_issues" }
+  ]
+}

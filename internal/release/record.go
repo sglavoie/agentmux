@@ -69,11 +69,15 @@ type HarnessVersion struct {
 
 // Environment records the machine the pair was actually exercised on.
 type Environment struct {
-	OS        string           `json:"os"`
-	Arch      string           `json:"arch"`
-	OSVersion string           `json:"os_version"`
-	Go        string           `json:"go"`
-	Kitty     string           `json:"kitty"`
+	OS        string `json:"os"`
+	Arch      string `json:"arch"`
+	OSVersion string `json:"os_version"`
+	Go        string `json:"go"`
+	// Kitty is the Kitty version a schema-1 record named. The gate stopped
+	// asking in schema 2, when Kitty became an optional backend it no longer
+	// exercises: a version there would read as a terminal the release was
+	// tested in.
+	Kitty     string           `json:"kitty,omitempty"`
 	Harnesses []HarnessVersion `json:"harnesses"`
 }
 

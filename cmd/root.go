@@ -49,8 +49,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "amx",
-	Short: "Agent Mux multi-harness session manager for Kitty",
-	Long:  "Agent Mux is a multi-harness session manager for Kitty. It manages Claude Code, Copilot, Codex, and other supported harness sessions as color-coded tabs with an interactive dashboard.",
+	Short: "Agent Mux multi-harness session manager",
+	Long:  "Agent Mux is a multi-harness session manager. It manages Claude Code, Copilot, Codex, and other supported harness sessions with an interactive dashboard, on its own tmux server from any terminal or Agent Mux.app, or as color-coded Kitty tabs.",
 	// A failed command reports its error; it does not reprint its own usage.
 	// The usage block is longer than most errors and pushed the one line that
 	// says what went wrong — and how to answer it — off the top of the screen.
@@ -163,7 +163,7 @@ func init() {
 	// alphabetical run of two dozen names. Hidden commands take no group.
 	rootCmd.AddGroup(
 		&cobra.Group{ID: groupSessions, Title: "Sessions and projects:"},
-		&cobra.Group{ID: groupTabs, Title: "Kitty tabs:"},
+		&cobra.Group{ID: groupTabs, Title: "Session controls:"},
 		&cobra.Group{ID: groupSetup, Title: "Setup and diagnostics:"},
 	)
 	addGrouped(groupSessions, session.Command(), project.Command(), session.AttachCommand(), session.SendCommand(), session.CloseCommand(), worktree.Command(), plans.Command(), dashboard.OverviewCommand(), dashboard.OpenDashboardCommand())

@@ -20,23 +20,31 @@ suite does not have:
 | --- | --- | --- |
 | `just crash-restart` | tmux | Does state survive a crash, a restart, or a degraded start? Fault injection plus restart-equivalence replay, under `-race`. Its tmux scenarios run real agents on a private server: the same process after a daemon restart, a killed viewer, or a change of owner; exited or lost, and never relaunched, when the agent or its server dies. |
 | `just reliability-stress` | a quiet machine; tmux for the fleet budgets | Do the daemon lifecycle scenarios still hold under repetition and contention (including health asked while maintenance reconciles a real tmux server), and are the latency budgets met? The budgets include the fleet ones: one, ten, and thirty tmux agents, idle and printing, against the packaged tmux when `just mac-tmux` has built it (`internal/daemon/performance_fleet_test.go` holds the measured table and the ceilings). |
-| `just cockpit-smoke` | a real Kitty window and an installed pair | Does the cockpit observe a live window through the real daemon? |
+| `just cockpit-smoke` | tmux and an installed pair, from any terminal | Does the installed `amx` resolve a tmux that runs, is the real daemon ready and answering for its sessions, and do its invariants hold? |
+| `just kitty-smoke` | a real Kitty window and an installed `amx` | Opt-in, in no gate: does the daemon observe a live Kitty window? |
 
 `crash-restart` counts the scenarios that ran and fails if the count collapses.
 `go test -run PATTERN` exits 0 when the pattern matches nothing, so a renamed
 scenario would otherwise turn the gate into a green step that checked nothing.
 
-`cockpit-smoke` is read-only and fails rather than skips. It requires
+`cockpit-smoke` is read-only and fails rather than skips. It requires a clean
+`amx backend status --check`, a round trip of the tmux that names (a session
+started, listed, and ended in a server of its own, never the one holding the
+operator's agents), a ready daemon, `export-events`, strict doctor, and a clean
+`config asl-sync --check`. A smoke that passes because tmux was absent reports
+a boundary as exercised that was never touched. It names no Kitty, and
+`TestJustCockpitSmokeFailsRatherThanSkips` holds it to that.
+
+`kitty-smoke` is what the cockpit smoke was while Kitty was required:
 `KITTY_WINDOW_ID`, a working `kitten @ ls`, a ready daemon, live
-`export-events` for the current window, strict doctor, and a clean
-`config asl-sync --check`. A smoke that passes because Kitty was absent reports
-a boundary as exercised that was never touched.
+`export-events --current-window`, and strict doctor. It fails without a Kitty
+and belongs to no gate.
 
 CI runs `linux-portable`, `macos-full`, and `cross-repository-contract`
 (`.github/workflows/check.yml`). The macOS lane speaks for a release; the Linux
 lane is deliberately partial. Neither lane runs `cockpit-smoke` — no hosted
-runner has a real Kitty — so that boundary is exercised only by an operator, in
-`just paired-release-gate`.
+runner has an installed pair and a running daemon — so that boundary is
+exercised only by an operator, in `just paired-release-gate`.
 
 The app's suite, `just mac-test`, needs Xcode and is outside every gate above.
 Its release gate is `just mac-release-gate`, which records its own evidence and
