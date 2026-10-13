@@ -243,6 +243,11 @@ Whatever has the keyboard decides where a key goes.
   those are turned off in System Settings › Keyboard › Keyboard Shortcuts.
 - **⌘L** goes back to the session or view shown before this one, and again
   returns: the two most recently shown.
+- **⌘P** (**Session › Go to…**) lists every session and view over the pane.
+  Type any words of a name, project, profile, or harness to narrow it, move
+  with the arrow keys, and press Return to go there as a click on its line
+  would; Escape, ⌘P again, or a click elsewhere puts the list away. It only
+  goes to what is already running.
 - **⌘R** names the session shown (**Session › Name Session…**), and so does
   **Name Session…** in the menu a right-click on a session's line opens. A
   named session has the name on a first line of its own, bold and dark blue,

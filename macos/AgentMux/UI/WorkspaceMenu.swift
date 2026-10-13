@@ -17,7 +17,8 @@ import AppKit
 /// in the workspace; with Shift, a session that lives in Kitty comes forward
 /// there. ⌘] and ⌘[ stop at every session and every terminal under one; with
 /// Shift they go from session to session. ⌘L goes back to where the pane was
-/// before, and again returns.
+/// before, and again returns. ⌘P lists every session and view to go to by
+/// name.
 enum WorkspaceMenu {
     /// What each function key does, in the order the menu lists them: the
     /// keys Kitty binds for its tabs, acting on the workspace's sessions.
@@ -94,6 +95,7 @@ enum WorkspaceMenu {
         view.addItem(item("Close", #selector(AppDelegate.closeWorkspaceView(_:)), "w", target: target))
 
         let session = submenu("Session", in: main)
+        session.addItem(item("Go to…", #selector(AppDelegate.showSwitcher(_:)), "p", target: target))
         session.addItem(item("Next Needing Attention", #selector(AppDelegate.nextAttention(_:)), "A", target: target))
         session.addItem(item("New Terminal Below", #selector(AppDelegate.newSessionTerminal(_:)), "\r", target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))

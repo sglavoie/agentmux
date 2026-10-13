@@ -224,7 +224,7 @@ only to hand the app to someone else.
 | `AgentMux/CLI/` | Resolving, describing, and running `amx`: binary resolver, version, `--help` capabilities, action gating, login-shell environment, detached spawn. |
 | `AgentMux/Kitty/` | Choosing a Kitty socket and bringing the owning Kitty forward. |
 | `AgentMux/Ghostty/` | The libghostty embedding: the app object and its runtime callbacks, layered configuration, per-surface configuration, the surface view, and its input handling. |
-| `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, the workspace sidebar and its selection, project and recent catalogs, snooze, and the ASL response rules. |
+| `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, the workspace sidebar and its selection, the Go to… list, project and recent catalogs, snooze, and the ASL response rules. |
 | `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter. |
 | `AgentMux/UI/` | The status item, menu builder, daemon line, workspace window and its main menu, Preferences window, and ASL answer panel. |
 | `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
@@ -407,8 +407,18 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
   ⌘, and ⌘Q.
+- **Go to.** ⌘P shows `WorkspaceSwitcherView` above the pane: a field over
+  the places `Model/WorkspaceSwitcher.swift` lists, which are the sidebar's
+  sessions in its order and then the views, overlays left out. A query keeps
+  the entries that hold every word of it, those whose title starts with it
+  first. Return or a click calls `activate(_:)` for a session and
+  `showView(_:focus:)` for a view, what a click on the sidebar line calls, so
+  nothing is launched from it. The field has the keyboard while the list is
+  up; Escape and ⌘P give it back to what had it, and a click elsewhere leaves
+  it where the click put it. A snapshot that changes the places re-filters
+  an open list.
 - **Session names.** ⌘R and the sidebar's right-click menu
   (`menuNeedsUpdate`, `contextMenuItems(forRow:)`) ask for a name in a sheet
   and run `amx name-session --runtime-session <id> --json -- <name>`, which writes

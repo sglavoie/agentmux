@@ -192,6 +192,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var inspectorObservation: NSKeyValueObservation?
     let feedLabel = NSTextField(labelWithString: "")
     let placeholder = WorkspacePlaceholderView()
+    /// The Go to… list, above whatever the pane shows while it is up.
+    let switcher = WorkspaceSwitcherView()
+    /// What had the keyboard when the Go to… list took it.
+    private weak var switcherReturn: NSResponder?
     private let pane = NSView()
     private(set) lazy var window: NSWindow = makeWindow()
 
@@ -299,6 +303,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         // The utility views keep their programs: an editor with unsaved work
         // or a running shell is not an attachment that can simply be remade.
         for terminal in viewTerminals.values { terminal.view.isHidden = true }
+        closeSwitcher(restoring: false)
         awaited = nil
         leaveRecovery()
         content = .empty
@@ -531,6 +536,49 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             return
         }
         activate(row)
+    }
+
+    // MARK: Go to
+
+    /// Whether the Go to… list is up.
+    var isSwitching: Bool { !switcher.isHidden }
+
+    /// ⌘P: lists every session and view to go to by name, or puts the list
+    /// away when it is up. It goes only where a click on the sidebar would.
+    func toggleSwitcher() {
+        guard isOpen else { return }
+        if isSwitching { return closeSwitcher(restoring: true) }
+        switcherReturn = window.firstResponder
+        switcher.show(switcherEntries())
+        switcher.isHidden = false
+        window.makeFirstResponder(switcher.field)
+    }
+
+    private func switcherEntries() -> [WorkspaceSwitcher.Entry] {
+        WorkspaceSwitcher.entries(rows: state.rows, views: views.all)
+    }
+
+    /// Puts the list away. With `restoring`, the keyboard goes back to what
+    /// had it; without, it stays where a click has just put it.
+    private func closeSwitcher(restoring: Bool) {
+        guard isSwitching else { return }
+        switcher.isHidden = true
+        let back = switcherReturn
+        switcherReturn = nil
+        if restoring, let back, (back as? NSView)?.isHiddenOrHasHiddenAncestor != true {
+            window.makeFirstResponder(back)
+        }
+    }
+
+    /// Goes to a place of the list as a click on its sidebar line does.
+    private func go(to entry: WorkspaceSwitcher.Entry) {
+        closeSwitcher(restoring: true)
+        switch entry.place {
+        case let .session(key):
+            if let row = state.row(key) { activate(row) }
+        case let .view(id):
+            showView(id, focus: true)
+        }
     }
 
     // MARK: Utility views
@@ -1209,6 +1257,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         syncSidebarSelection()
         reloadInspector()
+        if isSwitching { switcher.update(switcherEntries()) }
     }
 
     private func syncSidebarSelection() {
@@ -1635,6 +1684,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         placeholder.frame = pane.bounds
         placeholder.autoresizingMask = [.width, .height]
         pane.addSubview(placeholder)
+        // Above the placeholder, and so above every terminal.
+        pane.addSubview(switcher)
+        let switcherWidth = switcher.widthAnchor.constraint(equalToConstant: 520)
+        switcherWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            switcher.topAnchor.constraint(equalTo: pane.topAnchor, constant: 48),
+            switcher.centerXAnchor.constraint(equalTo: pane.centerXAnchor),
+            switcher.widthAnchor.constraint(lessThanOrEqualTo: pane.widthAnchor, constant: -32),
+            switcherWidth,
+        ])
+        switcher.onChoose = { [weak self] entry in self?.go(to: entry) }
+        switcher.onCancel = { [weak self] in self?.closeSwitcher(restoring: true) }
+        switcher.onLeave = { [weak self] in self?.closeSwitcher(restoring: false) }
         let paneController = NSViewController()
         paneController.view = pane
 

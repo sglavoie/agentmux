@@ -471,6 +471,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func toggleRecentPlace(_ sender: Any?) {
         if workspace?.toggleRecentPlace() != true { NSSound.beep() }
     }
+    /// ⌘P: the list of sessions and views to go to by name.
+    @objc func showSwitcher(_ sender: Any?) { workspace?.toggleSwitcher() }
 
     // MARK: Function keys
 

@@ -1,0 +1,232 @@
+import AppKit
+
+/// The Go to… list: a field to type in over the places that match, shown
+/// above the workspace's pane while it is asked for.
+///
+/// It is the one thing in the workspace besides a terminal and the session
+/// list that takes the keyboard, and only until a place is chosen or it is
+/// dismissed. It lists and reports; the window controller goes there.
+@MainActor
+final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSource, NSTableViewDelegate {
+    static let rowHeight: CGFloat = 36
+    /// The most places shown without scrolling.
+    static let visibleRows = 8
+
+    let field = NSTextField()
+    let table = NSTableView()
+    /// The places that match what is typed, in the order they are listed.
+    private(set) var shown: [WorkspaceSwitcher.Entry] = []
+    private var entries: [WorkspaceSwitcher.Entry] = []
+    private var listHeight: NSLayoutConstraint?
+
+    var onChoose: ((WorkspaceSwitcher.Entry) -> Void)?
+    var onCancel: (() -> Void)?
+    /// The field gave up the keyboard while the list was up: a click went
+    /// somewhere else.
+    var onLeave: (() -> Void)?
+
+    init() {
+        super.init(frame: .zero)
+        boxType = .custom
+        titlePosition = .noTitle
+        cornerRadius = 8
+        borderWidth = 1
+        borderColor = .separatorColor
+        fillColor = .windowBackgroundColor
+        contentViewMargins = .zero
+        isHidden = true
+        translatesAutoresizingMaskIntoConstraints = false
+
+        field.placeholderString = "Go to a session or view"
+        field.font = .systemFont(ofSize: 15)
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.delegate = self
+        field.setAccessibilityLabel("Go to")
+
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("place"))
+        column.resizingMask = .autoresizingMask
+        table.addTableColumn(column)
+        table.headerView = nil
+        table.style = .plain
+        table.backgroundColor = .clear
+        table.rowHeight = Self.rowHeight
+        table.allowsEmptySelection = true
+        table.allowsMultipleSelection = false
+        // The field keeps the keyboard; a click here only chooses.
+        table.refusesFirstResponder = true
+        table.dataSource = self
+        table.delegate = self
+        table.target = self
+        table.action = #selector(rowClicked(_:))
+        table.setAccessibilityLabel("Places")
+
+        let scroll = NSScrollView()
+        scroll.documentView = table
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+
+        let stack = NSStackView(views: [field, scroll])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        stack.edgeInsets = NSEdgeInsets(top: 10, left: 12, bottom: 8, right: 12)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        let content = NSView()
+        content.addSubview(stack)
+        contentView = content
+        let height = scroll.heightAnchor.constraint(equalToConstant: 0)
+        listHeight = height
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: content.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
+            scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
+            height,
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported for this view")
+    }
+
+    /// Starts over on these places with nothing typed.
+    func show(_ entries: [WorkspaceSwitcher.Entry]) {
+        field.stringValue = ""
+        self.entries = entries
+        filter(keeping: nil)
+    }
+
+    /// Brings the list in line with the places there are now, keeping what
+    /// is typed and, when it is still listed, the place that is selected.
+    func update(_ entries: [WorkspaceSwitcher.Entry]) {
+        guard entries != self.entries else { return }
+        self.entries = entries
+        filter(keeping: selected?.place)
+    }
+
+    /// Types a query, as the keyboard would.
+    func enter(_ query: String) {
+        field.stringValue = query
+        filter(keeping: nil)
+    }
+
+    var selected: WorkspaceSwitcher.Entry? {
+        shown.indices.contains(table.selectedRow) ? shown[table.selectedRow] : nil
+    }
+
+    /// Moves the selection, stopping at either end.
+    func move(_ offset: Int) {
+        guard !shown.isEmpty else { return }
+        select(min(max(table.selectedRow + offset, 0), shown.count - 1))
+    }
+
+    func choose() {
+        guard let selected else { return NSSound.beep() }
+        onChoose?(selected)
+    }
+
+    func cancel() { onCancel?() }
+
+    private func filter(keeping place: WorkspaceSwitcher.Entry.Place?) {
+        shown = WorkspaceSwitcher.matches(field.stringValue, in: entries)
+        table.reloadData()
+        listHeight?.constant = CGFloat(min(shown.count, Self.visibleRows)) * (Self.rowHeight + table.intercellSpacing.height)
+        select(shown.firstIndex { $0.place == place } ?? 0)
+    }
+
+    private func select(_ index: Int) {
+        guard shown.indices.contains(index) else { return table.deselectAll(nil) }
+        table.selectRowIndexes([index], byExtendingSelection: false)
+        table.scrollRowToVisible(index)
+    }
+
+    @objc private func rowClicked(_ sender: Any?) {
+        guard shown.indices.contains(table.clickedRow) else { return }
+        onChoose?(shown[table.clickedRow])
+    }
+
+    // MARK: Field
+
+    func controlTextDidChange(_ notification: Notification) {
+        filter(keeping: nil)
+    }
+
+    func controlTextDidEndEditing(_ notification: Notification) {
+        if !isHidden { onLeave?() }
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.moveUp(_:)): move(-1)
+        case #selector(NSResponder.moveDown(_:)): move(1)
+        case #selector(NSResponder.insertNewline(_:)): choose()
+        case #selector(NSResponder.cancelOperation(_:)): cancel()
+        default: return false
+        }
+        return true
+    }
+
+    // MARK: Table
+
+    func numberOfRows(in tableView: NSTableView) -> Int { shown.count }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        let cell = tableView.makeView(withIdentifier: WorkspaceSwitcherCellView.identifier, owner: nil) as? WorkspaceSwitcherCellView
+            ?? WorkspaceSwitcherCellView()
+        cell.show(shown[row])
+        return cell
+    }
+}
+
+/// One place in the Go to… list: its glyph, its title, and the line under it.
+final class WorkspaceSwitcherCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("workspace.switcher")
+    let glyphLabel = NSTextField(labelWithString: "")
+    let titleLabel = NSTextField(labelWithString: "")
+    let detailLabel = NSTextField(labelWithString: "")
+
+    init() {
+        super.init(frame: .zero)
+        identifier = Self.identifier
+        glyphLabel.alignment = .center
+        titleLabel.lineBreakMode = .byTruncatingTail
+        detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        detailLabel.textColor = .secondaryLabelColor
+        detailLabel.lineBreakMode = .byTruncatingTail
+        textField = titleLabel
+        let text = NSStackView(views: [titleLabel, detailLabel])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 1
+        let stack = NSStackView(views: [glyphLabel, text])
+        stack.orientation = .horizontal
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        for label in [titleLabel, detailLabel] {
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        NSLayoutConstraint.activate([
+            glyphLabel.widthAnchor.constraint(equalToConstant: 20),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported for this view")
+    }
+
+    func show(_ entry: WorkspaceSwitcher.Entry) {
+        glyphLabel.stringValue = entry.glyph
+        titleLabel.stringValue = entry.title
+        detailLabel.stringValue = entry.detail
+        detailLabel.isHidden = entry.detail.isEmpty
+        toolTip = entry.detail
+    }
+}

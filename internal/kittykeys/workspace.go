@@ -28,4 +28,5 @@ var Workspace = []Action{
 	{Key: "f9", Section: "Navigation", Description: "focus next session"},
 	{Key: "cmd+1 … cmd+0", Section: "Navigation", Description: "switch to session 1 … 10"},
 	{Key: "cmd+l", Section: "Navigation", Description: "toggle between two most recently shown sessions or views"},
+	{Key: "cmd+p", Section: "Navigation", Description: "go to a session or view by name"},
 }
