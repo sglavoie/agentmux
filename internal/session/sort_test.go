@@ -1,8 +1,11 @@
 package session_test
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -261,5 +264,29 @@ func TestOrderMatchesSortRunningForAnyCarrier(t *testing.T) {
 	}
 	if sessions[0].WindowID != 1 {
 		t.Fatal("SortRunning reordered its argument")
+	}
+}
+
+// Sessions with no tab to give them a place are told apart by their
+// runtime-session ID, whatever order their backend lists them in, and follow
+// the Kitty tabs they tie with.
+func TestSortRunningBreaksTiesByRuntimeSession(t *testing.T) {
+	tmux := func(id string) session.RunningSession {
+		return session.RunningSession{Account: "work", Base: "api", Backend: runtimesession.BackendTmux, RuntimeSessionID: runtimesession.ID(id)}
+	}
+	sessions := []session.RunningSession{
+		tmux("rs-c"), tmux("rs-a"),
+		{WindowID: 2, Account: "work", Base: "api"},
+		tmux("rs-b"),
+		{WindowID: 1, Account: "work", Base: "api"},
+	}
+	for _, mode := range []string{"alpha", "account"} {
+		var got []string
+		for _, s := range session.SortRunning(sessions, mode) {
+			got = append(got, fmt.Sprint(s.WindowID, s.RuntimeSessionID))
+		}
+		if want := []string{"2", "1", "0rs-a", "0rs-b", "0rs-c"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("mode %q: order = %v, want %v", mode, got, want)
+		}
 	}
 }

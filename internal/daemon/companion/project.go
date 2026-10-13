@@ -162,9 +162,9 @@ func Project(in Input) protocol.CompanionSnapshot {
 		candidates = append(candidates, runtimeSessions(in, runs, len(candidates))...)
 		// v2 lists every session in the order the dashboard does, whatever
 		// terminal holds it, so the session after this one is the same one on
-		// both. Sessions the order cannot tell apart stay as they were found:
-		// Kitty's in tab order, the rest by runtime-session ID. v1 keeps the
-		// order its clients have always read.
+		// both. Sessions the order cannot tell apart are Kitty's in tab order,
+		// then the rest by runtime-session ID, as the order itself places
+		// them. v1 keeps the order its clients have always read.
 		session.Order(candidates, in.Sort, func(c candidate) session.OrderEntry { return c.entry })
 		for i := range candidates {
 			candidates[i].order = i
@@ -459,12 +459,15 @@ func orderEntry(profile, title string) session.OrderEntry {
 
 // runtimeOrderEntry is orderEntry for a session with no tab. Until the daemon
 // has read its group's title it is placed by its project, which is what the
-// title is built around.
+// title is built around. Its runtime-session ID breaks ties, as it does for
+// the same session in session.SortRunning.
 func runtimeOrderEntry(r RuntimeSlot) session.OrderEntry {
-	if r.Title == "" {
-		return session.OrderEntry{Profile: r.Profile, Base: r.Project}
+	entry := session.OrderEntry{Profile: r.Profile, Base: r.Project}
+	if r.Title != "" {
+		entry = orderEntry(r.Profile, r.Title)
 	}
-	return orderEntry(r.Profile, r.Title)
+	entry.Tie = r.SessionID
+	return entry
 }
 
 // tabColor is the named palette color's bright background, which black text

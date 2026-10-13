@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // SortKey computes the sort key for a tab with the given account, base title,
@@ -95,11 +96,18 @@ type OrderEntry struct {
 	Profile string
 	Base    string
 	Starred bool
+	// Tie places a session among those the rest cannot tell apart: the
+	// runtime-session ID of a session on a backend with no tabs, empty for a
+	// Kitty tab, whose place among its equals is its tab's.
+	Tie string
 }
 
 // Order sorts items in place into the one order sessions are listed in:
 // pinned first, then by project title ("alpha") or by profile ("account"),
-// as SortKey spells it. Sessions with equal keys keep their relative order.
+// as SortKey spells it. Among sessions with equal keys, those with no Tie
+// come first and keep their relative order, and the rest follow by Tie:
+// nothing finds a backend's sessions in an order two readers share, so the
+// order they arrive in decides nothing.
 //
 // The dashboard, session navigation, and the daemon's companion projection
 // all order through here, so the session after this one is the same session
@@ -108,8 +116,8 @@ type OrderEntry struct {
 // backend with no tabs has nothing to move.
 func Order[T any](items []T, mode string, entry func(T) OrderEntry) {
 	keys := make(map[OrderEntry]string, len(items))
-	key := func(item T) string {
-		e := entry(item)
+	key := func(e OrderEntry) string {
+		e.Tie = ""
 		k, ok := keys[e]
 		if !ok {
 			k = SortKey(e.Profile, e.Base, e.Starred, mode)
@@ -117,7 +125,13 @@ func Order[T any](items []T, mode string, entry func(T) OrderEntry) {
 		}
 		return k
 	}
-	sort.SliceStable(items, func(i, j int) bool { return key(items[i]) < key(items[j]) })
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := entry(items[i]), entry(items[j])
+		if ka, kb := key(a), key(b); ka != kb {
+			return ka < kb
+		}
+		return a.Tie < b.Tie
+	})
 }
 
 // SortRunning returns a copy of sessions in the session order (Order).
@@ -125,7 +139,11 @@ func SortRunning(sessions []RunningSession, mode string) []RunningSession {
 	sorted := make([]RunningSession, len(sessions))
 	copy(sorted, sessions)
 	Order(sorted, mode, func(s RunningSession) OrderEntry {
-		return OrderEntry{Profile: s.Account, Base: s.Base, Starred: s.Starred}
+		e := OrderEntry{Profile: s.Account, Base: s.Base, Starred: s.Starred}
+		if s.Backend != "" && s.Backend != runtimesession.BackendKitty {
+			e.Tie = string(s.RuntimeSessionID)
+		}
+		return e
 	})
 	return sorted
 }

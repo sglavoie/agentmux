@@ -6,11 +6,13 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -227,5 +229,72 @@ func TestProject_V2ListsSessionsInTheDashboardsOrder(t *testing.T) {
 	v1 := Project(input(protocol.CompanionSnapshotVersion, "alpha")).Sessions
 	if len(v1) != 2 || v1[0].WindowID != 7 || v1[1].WindowID != 8 {
 		t.Fatalf("v1 sessions = %+v, want Kitty's tabs in tab order", v1)
+	}
+}
+
+// TestProject_V2TiedSessionOrderMatchesNavigation: sessions launched from one
+// project under one profile have nothing to sort them by, and tmux lists them
+// in an order unrelated to their runtime-session IDs. The v2 snapshot and
+// terminal navigation, which reads the panes itself, still agree on which
+// session follows which, wrapping at either end, in both sort modes.
+func TestProject_V2TiedSessionOrderMatchesNavigation(t *testing.T) {
+	const (
+		idA   = "rs-0000000000000000000000000000000a"
+		idB   = "rs-0000000000000000000000000000000b"
+		idC   = "rs-0000000000000000000000000000000c"
+		idZ   = "rs-00000000000000000000000000000001"
+		slotA = tmuxSlot + iota
+		slotB
+		slotC
+		slotZ
+	)
+	pane := func(id, profile, title string) backend.Pane {
+		return backend.Pane{GroupTitle: title, Vars: map[string]string{"amx_profile": profile, session.RuntimeSessionVar: id}}
+	}
+	// tmux finds the three tied sessions in the reverse of their IDs, with a
+	// session of another title, and the lowest ID, among them.
+	panes := []backend.Pane{pane(idC, "work", "api"), pane(idZ, "work", "zeta"), pane(idB, "work", "api"), pane(idA, "work", "api")}
+	want := []string{idA, idB, idC, idZ}
+	// Slots are handed out as sessions are met, so they follow no order either.
+	in := Input{
+		States: map[int]protocol.WindowStateSnapshot{slotA: {}, slotB: {}, slotC: {}, slotZ: {}},
+		Runtime: map[int]RuntimeSlot{
+			slotA: {SessionID: idC, Backend: "tmux", Profile: "work", Title: "api"},
+			slotB: {SessionID: idZ, Backend: "tmux", Profile: "work", Title: "zeta"},
+			slotC: {SessionID: idA, Backend: "tmux", Profile: "work", Title: "api"},
+			slotZ: {SessionID: idB, Backend: "tmux", Profile: "work", Title: "api"},
+		},
+		SnapshotVersion: protocol.CompanionSnapshotVersionRuntime,
+	}
+	// neighbours is the session after and the session before each one.
+	neighbours := func(ordered []string) map[string][2]string {
+		out := map[string][2]string{}
+		for i, id := range ordered {
+			out[id] = [2]string{ordered[(i+1)%len(ordered)], ordered[(i-1+len(ordered))%len(ordered)]}
+		}
+		return out
+	}
+	for _, mode := range []string{"alpha", "account"} {
+		var navigation, listed []string
+		running := session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, nil)
+		for _, rs := range session.SortRunning(running, mode) {
+			navigation = append(navigation, string(rs.RuntimeSessionID))
+		}
+		in.Sort = mode
+		for _, s := range Project(in).Sessions {
+			if s.Runtime == nil {
+				t.Fatalf("mode %q: a session with no runtime block: %+v", mode, s)
+			}
+			listed = append(listed, s.Runtime.SessionID)
+		}
+		if !reflect.DeepEqual(navigation, want) || !reflect.DeepEqual(listed, want) {
+			t.Fatalf("mode %q: navigation orders %v, v2 lists %v, want %v in both", mode, navigation, listed, want)
+		}
+		if got, wantN := neighbours(listed), neighbours(navigation); !reflect.DeepEqual(got, wantN) {
+			t.Fatalf("mode %q: next and previous differ: v2 %v, navigation %v", mode, got, wantN)
+		}
+		if n := neighbours(listed); n[idZ][0] != idA || n[idA][1] != idZ || n[idA][0] != idB || n[idC][1] != idB {
+			t.Fatalf("mode %q: next and previous = %v; want %s to wrap to %s and back, and %s between its equals", mode, n, idZ, idA, idB)
+		}
 	}
 }

@@ -464,7 +464,8 @@ is not repeated by the next pass: everything is written once more thirty
 seconds later.
 
 Sessions are listed in one order everywhere (`session.Order`: pins first, then
-`[defaults] sort`). The v2 companion snapshot lists Kitty and tmux sessions
+`[defaults] sort`; sessions that tie are Kitty's in tab order, then the rest by
+runtime-session ID). The v2 companion snapshot lists Kitty and tmux sessions
 together in it; v1 keeps Kitty's tab order.
 
 ## Investigating hook event flow
