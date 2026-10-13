@@ -400,8 +400,15 @@ func (s *Server) runChain(cmds [][]string) (string, error) {
 // runChainInput is runChain with stdin given to the client, for a command
 // that reads from it. What is read that way appears in no argument list and
 // so in no error.
+//
+// Every such client is started with -u. tmux rewrites what it prints to a
+// client it does not take for UTF-8 (control characters and multi-byte
+// sequences become '_'), and it decides that from the caller's locale, so
+// without the flag fieldSep and any title beside it are lost wherever LANG is
+// unset or C: launchd, cron, a minimal shell. The flag is the client's alone;
+// the environment, and so what a pane inherits, is left as the caller had it.
 func (s *Server) runChainInput(cmds [][]string, stdin []byte) (string, error) {
-	args := []string{"-S", s.socket, "-f", s.config}
+	args := []string{"-u", "-S", s.socket, "-f", s.config}
 	var shown []string
 	for i, cmd := range cmds {
 		if i > 0 {

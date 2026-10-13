@@ -188,6 +188,45 @@ func TestLaunchTargetMatchesDiscovery(t *testing.T) {
 	t.Logf("observed: launch %s/%s pid %d on instance %s matches discovery", l.Group.ID, l.Pane.ID, l.PID, inst.Generation)
 }
 
+// A caller with no UTF-8 locale (launchd, cron, a minimal shell) reads the
+// same fields, titles, and pane text as any other, and the pane still gets
+// the locale the caller had.
+func TestProtocolIsReadableInTheCLocale(t *testing.T) {
+	f := newFixture(t, Options{})
+	t.Setenv("LC_ALL", "C")
+	t.Setenv("LC_CTYPE", "C")
+	t.Setenv("LANG", "C")
+	const paneTitle, text = "✳ Répare le test", "écran-marker ⚡"
+	out := filepath.Join(f.dir, "locale.out")
+	l := f.launch(t, "locale", []string{
+		"/bin/sh", "-c",
+		`printf '\033]0;%s\007' "$1"; echo "$2"; printf '%s\0END\0' "$LC_ALL" > "$3"; exec sleep 600`,
+		"amx", paneTitle, text, out,
+	}, nil)
+	if got := string(waitFile(t, out)); got != "C" {
+		t.Errorf("the pane's LC_ALL = %q, want the caller's C", got)
+	}
+
+	p := f.waitFor(t, "locale", func(p backend.Pane) bool { return p.Title == paneTitle })
+	if p.Ref != l.Pane || p.Group != l.Group {
+		t.Fatalf("launch reported %v/%v, discovery %v/%v", l.Group, l.Pane, p.Group, p.Ref)
+	}
+	screen := f.observeUntil(t, l.Pane, func(s backend.Screen) bool { return strings.Contains(s.Text, text) })
+	if screen.Title != paneTitle || screen.Pane != l.Pane || screen.Instance != l.Instance {
+		t.Errorf("observed %q on %v of %+v, want %q on %v of %+v",
+			screen.Title, screen.Pane, screen.Instance, paneTitle, l.Pane, l.Instance)
+	}
+	survey, err := f.backend.Survey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	surveyed, ok := backend.FindPane(survey.Panes, l.Pane)
+	if !ok || !survey.Running || survey.Instance != l.Instance || surveyed.Title != paneTitle {
+		t.Errorf("survey = running %v instance %+v pane %+v (found %v), want %+v titled %q",
+			survey.Running, survey.Instance, surveyed, ok, l.Instance, paneTitle)
+	}
+}
+
 func TestPersonalConfigIsolation(t *testing.T) {
 	f := newFixture(t, Options{})
 	t.Setenv("TMUX", "/tmp/parent-tmux,1,0")

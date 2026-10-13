@@ -44,7 +44,8 @@ const (
 	// varsOption is the pane option holding the metadata map as JSON.
 	varsOption = "@amx_vars"
 	// fieldSep separates fields of one formatted tmux output line. tmux
-	// writes control characters in a -F format through unchanged.
+	// writes control characters in a -F format through unchanged to a UTF-8
+	// client, which runChainInput makes every command client.
 	fieldSep = "\x1f"
 )
 
