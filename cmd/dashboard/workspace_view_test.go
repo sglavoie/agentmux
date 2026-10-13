@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -60,6 +61,8 @@ func requireNoBorrowedIdentity(t *testing.T, env []string) {
 
 func restoreWorkspaceViewSeams(t *testing.T) {
 	t.Helper()
+	history := workspaceViewHistory
+	t.Cleanup(func() { workspaceViewHistory = history })
 	request, dash, over, execFn, edit, cfg, registry, page := workspaceViewRequest, workspaceViewDashboard, workspaceViewOverview,
 		workspaceViewExec, workspaceViewEdit, workspaceViewConfig, workspaceViewRegistry, workspaceViewPage
 	hosted, open, present, portable, desktop, overviewWas := insideKitty, openTmux, tmuxServerPresent, commands.Portable, desktopViews, overviewBackend
@@ -74,7 +77,7 @@ func restoreWorkspaceViewSeams(t *testing.T) {
 // on tmux, with no Kitty client even when the app inherited a Kitty
 // environment, and with the workspace as where their sessions are shown.
 func TestWorkspaceSurfacesRunOnTmuxWithoutKittyAndRouteToTheWorkspace(t *testing.T) {
-	for _, kind := range []string{"dashboard", "overview"} {
+	for _, kind := range []string{"dashboard", "overview", "history"} {
 		t.Run(kind, func(t *testing.T) {
 			restoreWorkspaceViewSeams(t)
 			borrowedIdentity(t)
@@ -107,14 +110,42 @@ func TestWorkspaceSurfacesRunOnTmuxWithoutKittyAndRouteToTheWorkspace(t *testing
 				return commands.Portable.Desktop(protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewDashboard})
 			}
 			workspaceViewDashboard, workspaceViewOverview = surface, surface
+			args := []string{kind}
+			if kind == "history" {
+				args = append(args, " Claude:0b6f1c2e-session ")
+				workspaceViewHistory = func(wanted conversation.Identity) error {
+					if want := (conversation.Identity{Harness: harness.Claude, SessionID: "0b6f1c2e-session"}); wanted != want {
+						t.Errorf("history view opened on %+v, want %+v", wanted, want)
+					}
+					return surface()
+				}
+			}
 
-			if err := runWorkspaceView(t, kind); err != nil {
+			if err := runWorkspaceView(t, args...); err != nil {
 				t.Fatalf("workspace-view %s: %v", kind, err)
 			}
 			if ran != 1 || len(asked) != 1 {
 				t.Fatalf("surface ran %d time(s) and asked the workspace %d time(s); want once each", ran, len(asked))
 			}
 		})
+	}
+}
+
+// A history view is opened on an exact conversation or not at all: a selector
+// that names no harness or no session draws nothing.
+func TestWorkspaceHistoryRefusesAMalformedConversation(t *testing.T) {
+	for _, selector := range []string{"0b6f1c2e-session", "claude:", ":0b6f1c2e-session", " "} {
+		restoreWorkspaceViewSeams(t)
+		workspaceViewHistory = func(conversation.Identity) error {
+			t.Errorf("history view ran for %q", selector)
+			return nil
+		}
+		if err := runWorkspaceView(t, "history", selector); err == nil {
+			t.Errorf("workspace-view history %q was accepted", selector)
+		}
+	}
+	if err := runWorkspaceView(t, "history"); err == nil {
+		t.Error("workspace-view history with no conversation was accepted")
 	}
 }
 

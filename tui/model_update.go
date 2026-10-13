@@ -11,7 +11,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
@@ -30,6 +32,19 @@ func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
 // unmapped ID leaves the dashboard's normal initial selection unchanged.
 func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) Model {
 	return newModel(cfg, client, sourceWindowID, ModeList)
+}
+
+// NewHistoryModel creates a model that starts in Past Sessions, across all
+// projects, and selects the conversation wanted when the results list it.
+func NewHistoryModel(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity) Model {
+	m := newModel(cfg, client, 0, ModeSessionSearch)
+	m.historyOnly = true
+	m.sessionWantedKey = transcript.IndexKey(wanted.Harness, wanted.SessionID)
+	// The entry every other route takes, for its loading state. Its command
+	// is dropped: it is the cache load Init dispatches, and marking that load
+	// in flight here keeps a second one from starting beside it.
+	entered, _ := m.enterAllSessionSearch()
+	return entered.(Model)
 }
 
 func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode) Model {
@@ -100,6 +115,18 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updated, cmd := m.dispatch(msg)
+	// A history view has no session list: whatever would settle on it — a
+	// closed palette, a dismissed prompt, a finished action — settles on Past
+	// Sessions instead. Leaving Past Sessions itself quits (exitSessionSearch).
+	if next, ok := updated.(Model); ok && next.historyOnly && next.mode == ModeList {
+		next.mode = ModeSessionSearch
+		return next, cmd
+	}
+	return updated, cmd
+}
+
+func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:

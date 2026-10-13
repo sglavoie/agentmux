@@ -13,11 +13,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/customization"
 )
@@ -25,6 +27,7 @@ import (
 // `amx workspace-view` is what the desktop workspace runs inside the terminals
 // it embeds beside the agents: its Dashboard, its Overview, and the utility
 // views — a shell, an editor, a pager — those two or the operator ask it for,
+// Past Sessions opened on one conversation, for an agent that stopped,
 // and the keybinding reference and the icon and color pickers its function
 // keys open. The workspace names a kind and a target and nothing else; what each kind runs is decided
 // here, so the request that travels through the daemon never carries a
@@ -56,6 +59,7 @@ var (
 		overviewBackend = string(runtimesession.BackendTmux)
 		return runOverviewCommand(0)
 	}
+	workspaceViewHistory  = runWorkspaceHistory
 	workspaceViewExec     = syscall.Exec
 	workspaceViewEdit     = session.EditPath
 	workspaceViewConfig   = cli.LoadRunnableConfig
@@ -79,7 +83,8 @@ var workspaceViewCmd = &cobra.Command{
 	Short:  "Run one view of the desktop workspace in this terminal",
 	Hidden: true,
 	Long: `Runs what the desktop workspace shows in a terminal of its own: the
-dashboard, the overview, or a utility view. Agent Mux.app starts it; it is not
+dashboard, the overview, Past Sessions on one conversation, or a utility view.
+Agent Mux.app starts it; it is not
 meant to be typed.
 
 A view is not a managed session. It runs with the session and Kitty variables
@@ -105,6 +110,20 @@ func init() {
 			RunE: func(*cobra.Command, []string) error {
 				hostedByWorkspace()
 				return workspaceViewOverview()
+			},
+		},
+		&cobra.Command{
+			Use:   "history HARNESS:SESSION_ID",
+			Short: "Past Sessions with one conversation selected, to continue or fork it",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(_ *cobra.Command, args []string) error {
+				harnessName, sessionID, _ := strings.Cut(strings.TrimSpace(args[0]), ":")
+				wanted, ok := conversation.New(harnessName, sessionID)
+				if !ok {
+					return fmt.Errorf("history view: %q is not HARNESS:SESSION_ID", args[0])
+				}
+				hostedByWorkspace()
+				return workspaceViewHistory(wanted)
 			},
 		},
 		&cobra.Command{
@@ -185,6 +204,21 @@ func scrubUtilityEnvironment() {
 func hostedByWorkspace() {
 	scrubUtilityEnvironment()
 	desktopViews = workspaceViewRequest
+}
+
+// runWorkspaceHistory runs the TUI in Past Sessions on one conversation, on
+// the tmux backend as the hosted dashboard does. It is not the Dashboard:
+// leaving Past Sessions ends it, so the workspace never holds a second one.
+func runWorkspaceHistory(wanted conversation.Identity) error {
+	cfg, err := loadRunnableConfig()
+	if err != nil {
+		return err
+	}
+	client, err := selectTerminals(string(runtimesession.BackendTmux))
+	if err != nil {
+		return err
+	}
+	return tui.RunHistory(cfg, client, wanted)
 }
 
 // runWorkspaceShell replaces this process with the operator's login shell in

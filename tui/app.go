@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -17,6 +18,15 @@ func Run(cfg *config.Config, client kitty.KittyClient) error {
 func RunFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) error {
 	m := NewModelFromWindow(cfg, client, sourceWindowID)
 	p := tea.NewProgram(m)
+	_, err := p.Run()
+	return err
+}
+
+// RunHistory launches the TUI in Past Sessions with the conversation wanted
+// selected once it is listed. It has no session list to return to: leaving
+// Past Sessions quits.
+func RunHistory(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity) error {
+	p := tea.NewProgram(NewHistoryModel(cfg, client, wanted))
 	_, err := p.Run()
 	return err
 }

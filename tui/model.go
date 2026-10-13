@@ -418,10 +418,17 @@ type Model struct {
 	// fields hold the current harness/profile/project filters. sessionLoading
 	// covers cache/query result loading; sessionRefreshInFlight tracks the
 	// slower background scan so warmed rows can remain visible while it runs.
-	sessionQuery        string
-	sessionResults      []transcript.Result
-	sessionCursor       int
-	sessionOffset       int
+	sessionQuery   string
+	sessionResults []transcript.Result
+	sessionCursor  int
+	sessionOffset  int
+	// sessionWantedKey is the transcript.IndexKey of the conversation a
+	// history view was opened on. Results select it the first time they list
+	// it, or until the operator moves; then it is spent.
+	sessionWantedKey string
+	// historyOnly marks a model started in Past Sessions with no session
+	// list behind it (NewHistoryModel).
+	historyOnly         bool
 	sessionSearchMode   bool
 	sessionLoading      bool
 	sessionRefreshErr   error

@@ -29,8 +29,9 @@
 //
 // `amx workspace-view` (workspace_view.go, hidden) is what the desktop
 // workspace runs in the terminals it embeds beside the agents: the dashboard
-// and the overview hosted by the workspace, and the shell, editor, and pager
-// utility views. It strips every session and Kitty variable first, so a view
+// and the overview hosted by the workspace, Past Sessions opened on the
+// conversation of an agent that stopped (`history`), and the shell, editor,
+// and pager utility views. It strips every session and Kitty variable first, so a view
 // never needs Kitty and never speaks as a managed session.
 //
 // Outside Kitty there are no Kitty tabs, and the rule that each surface is

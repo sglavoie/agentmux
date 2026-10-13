@@ -176,6 +176,9 @@ func (m *Model) exitSessionSearch() {
 // handleSessionSearchKey dispatches by sub-mode: free-text input (after
 // `/`) versus navigation. Mirrors handlePickerKey's split.
 func (m Model) handleSessionSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The operator has taken the list over; results arriving later must not
+	// move the cursor back to the conversation the view was opened on.
+	m.sessionWantedKey = ""
 	if m.sessionSearchMode {
 		return m.handleSessionSearchTextKey(msg)
 	}
@@ -215,6 +218,9 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if m.sessionQuery != "" {
 			m.sessionQuery = ""
 			return m, m.dispatchSessionSearch()
+		}
+		if m.historyOnly {
+			return m, tea.Quit
 		}
 		m.exitSessionSearch()
 		return m, nil

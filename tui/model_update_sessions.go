@@ -455,7 +455,8 @@ func (m Model) handleSessionSearchDone(msg sessionSearchDoneMsg) (tea.Model, tea
 }
 
 // publishSessionResults keeps the currently selected transcript selected when
-// a same-query refresh changes row ordering, then clamps if it disappeared.
+// a same-query refresh changes row ordering, then clamps if it disappeared. A
+// conversation the view was opened on is preferred until it has been found.
 func (m *Model) publishSessionResults(results []transcript.Result) {
 	selectedKey := ""
 	if m.sessionCursor >= 0 && m.sessionCursor < len(m.sessionResults) {
@@ -463,9 +464,15 @@ func (m *Model) publishSessionResults(results []transcript.Result) {
 		selectedKey = transcript.IndexKey(meta.Harness, meta.ID)
 	}
 	m.sessionResults = results
-	if selectedKey != "" {
+	for _, key := range []string{m.sessionWantedKey, selectedKey} {
+		if key == "" {
+			continue
+		}
 		for index, result := range m.sessionResults {
-			if transcript.IndexKey(result.Meta.Harness, result.Meta.ID) == selectedKey {
+			if transcript.IndexKey(result.Meta.Harness, result.Meta.ID) == key {
+				if key == m.sessionWantedKey {
+					m.sessionWantedKey = ""
+				}
 				m.sessionCursor = index
 				scrollSessionSearchToCursor(m)
 				return
