@@ -743,6 +743,8 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .closing(runtimeSessionID: F.runtimeID(1)))
         XCTAssertTrue(try cell(work.key).closeButton.isHidden)
         XCTAssertEqual(try cell(work.key).detailLabel.stringValue, "closing…")
+        XCTAssertTrue(try XCTUnwrap(cell(work.key).accessibilityLabel()).contains(", closing"),
+                      "VoiceOver hears what the line shows")
 
         // A second click, and snapshots that still list it, change nothing.
         workspace.closeSession(work.key)

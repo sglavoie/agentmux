@@ -441,6 +441,8 @@ final class WorkspaceInspectorFieldView: NSView {
         valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         for label in [nameLabel, valueLabel] {
             label.translatesAutoresizingMaskIntoConstraints = false
+            // The line is said as one; its labels are not said again.
+            label.setAccessibilityElement(false)
             addSubview(label)
         }
         NSLayoutConstraint.activate([
@@ -462,7 +464,12 @@ final class WorkspaceInspectorFieldView: NSView {
         nameLabel.stringValue = field.label
         if !showsCopied { valueLabel.stringValue = field.value }
         toolTip = field.copies ? "\(field.value) — click to copy" : field.value
+        // A view is not an accessibility element until it says so; an
+        // identifier's line is a button that copies it.
+        setAccessibilityElement(true)
+        setAccessibilityRole(field.copies ? .button : .staticText)
         setAccessibilityLabel("\(field.label): \(field.value)")
+        setAccessibilityHelp(field.copies ? "Copies the \(field.label.lowercased())" : nil)
     }
 
     required init?(coder: NSCoder) {
@@ -488,6 +495,9 @@ final class WorkspaceInspectorFieldView: NSView {
         guard field.copies else { return }
         onCopy?(field.value)
         valueLabel.stringValue = Self.copied
+        NSAccessibility.post(element: self, notification: .announcementRequested,
+                             userInfo: [.announcement: Self.copied,
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
         copies += 1
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
             MainActor.assumeIsolated {
@@ -496,5 +506,11 @@ final class WorkspaceInspectorFieldView: NSView {
                 if !self.showsCopied { self.valueLabel.stringValue = self.field.value }
             }
         }
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard field.copies else { return false }
+        copyValue()
+        return true
     }
 }

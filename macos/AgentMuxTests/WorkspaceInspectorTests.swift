@@ -291,6 +291,27 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual(runtime.valueLabel.stringValue, WorkspaceInspectorFieldView.copied)
     }
 
+    func testAnIdentifierIsAButtonVoiceOverCanPress() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.setInspectorTab(.session)
+        workspace.select(.embedded(F.runtimeID(1)))
+        var copied: [String] = []
+        workspace.inspector.onCopy = { copied.append($0) }
+        let fields = workspace.inspector.lines.compactMap { $0 as? WorkspaceInspectorFieldView }
+        let profile = try XCTUnwrap(fields.first { $0.field.label == "Profile" })
+        XCTAssertTrue(profile.isAccessibilityElement())
+        XCTAssertEqual(profile.accessibilityRole(), .staticText)
+        XCTAssertFalse(profile.accessibilityPerformPress(), "only an identifier is copied")
+        let runtime = try XCTUnwrap(fields.first { $0.field.label == "Runtime" })
+        XCTAssertTrue(runtime.isAccessibilityElement())
+        XCTAssertEqual(runtime.accessibilityRole(), .button)
+        XCTAssertEqual(runtime.accessibilityLabel(), "Runtime: \(F.runtimeID(1))")
+        XCTAssertFalse(runtime.valueLabel.isAccessibilityElement(), "the line is said once")
+        XCTAssertTrue(runtime.accessibilityPerformPress())
+        XCTAssertEqual(copied, [F.runtimeID(1)])
+        XCTAssertEqual(runtime.valueLabel.stringValue, WorkspaceInspectorFieldView.copied)
+    }
+
     // MARK: Updating in place
 
     func testLinesAreTheSameLinesWhenOnlyWhatTheySayChanged() {

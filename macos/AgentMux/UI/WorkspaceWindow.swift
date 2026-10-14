@@ -2973,19 +2973,30 @@ final class WorkspaceRowCellView: NSTableCellView {
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: row.attention ? .semibold : .regular)
-        detailLabel.stringValue = row.detail
+        detailLabel.stringValue = closing ? Self.closingDetail : row.detail
         toolTip = row.toolTip
-        var spoken = (row.name.isEmpty ? [] : [row.name]) + [row.project, row.label]
-        if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
-        if bell { spoken.append("bell") }
-        if !row.detail.isEmpty { spoken.append(row.detail) }
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
-        if let sessionKey { spoken.append("Command \(sessionKey)") }
-        setAccessibilityLabel(spoken.joined(separator: ", "))
-        if closing { detailLabel.stringValue = "closing…" }
+        setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))
         closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
         closeButton.toolTip = "End \(row.displayName)"
         closeButton.setAccessibilityLabel("End \(row.displayName)")
         syncTrailingRoom()
+    }
+
+    nonisolated static let closingDetail = "closing…"
+
+    /// What VoiceOver says of a session's line: what the line shows, in
+    /// words. A session asked to close is said to be closing instead of its
+    /// detail, as the line shows it.
+    nonisolated static func accessibilityLabel(_ row: WorkspaceRow, closing: Bool = false, sessionKey: String? = nil,
+                                   bell: Bool = false) -> String {
+        var spoken = (row.name.isEmpty ? [] : [row.name]) + [row.project, row.label]
+        if row.pinned { spoken.append("pinned") }
+        if row.muted { spoken.append("muted") }
+        if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
+        if bell { spoken.append("bell") }
+        if closing { spoken.append("closing") } else if !row.detail.isEmpty { spoken.append(row.detail) }
+        if let sessionKey { spoken.append("Command \(sessionKey)") }
+        return spoken.joined(separator: ", ")
     }
 }

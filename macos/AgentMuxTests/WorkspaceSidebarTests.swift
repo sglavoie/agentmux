@@ -343,6 +343,21 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(row.displayName, "release notes")
     }
 
+    func testARowIsSpokenAsItIsShown() {
+        var row = WorkspaceRow(key: .embedded("rs-1"), target: .embedded(runtimeSessionID: "rs-1"), project: "api", label: "work",
+                               detail: "claude · 4m", glyph: "", attention: true, working: false, muted: false, toolTip: "")
+        XCTAssertEqual(WorkspaceRowCellView.accessibilityLabel(row, sessionKey: "2"),
+                       "api, work, needs attention, claude · 4m, Command 2")
+        XCTAssertEqual(WorkspaceRowCellView.accessibilityLabel(row, closing: true),
+                       "api, work, needs attention, closing", "a closing session is said to be closing, not its detail")
+        row = WorkspaceRow(key: row.key, target: row.target, project: "api", label: "work",
+                           detail: "", glyph: "", attention: false, working: true, muted: true, toolTip: "")
+        row.pinned = true
+        row.name = "release notes"
+        XCTAssertEqual(WorkspaceRowCellView.accessibilityLabel(row, bell: true),
+                       "release notes, api, work, pinned, muted, working, bell")
+    }
+
     // MARK: State
 
     func testStateHoldsRowsAndSelectionWhileTheFeedIsDown() {
