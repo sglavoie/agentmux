@@ -1151,6 +1151,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
+    /// Reads `amx backend status` again for Settings, which otherwise shows
+    /// what the last resolve saw. It runs on the work queue, behind any
+    /// resolve already queued, and is dropped if amx changed meanwhile.
+    private func refreshBackendStatus() {
+        guard let amx = command else { return }
+        work.async { [weak self] in
+            let backend = BackendSetup(BackendStatus.fetch(amx))
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.command?.binary == amx.binary,
+                          self.command?.launchEnvironment == amx.launchEnvironment,
+                          self.preferences.backend != backend else { return }
+                    self.preferences.backend = backend
+                    self.publishPreferences()
+                }
+            }
+        }
+    }
+
     /// Resolves again once typing in Preferences pauses, so an environment
     /// value typed one key at a time does not run amx per key. The binary
     /// path arrives whole, when its field is submitted or left.
@@ -1177,6 +1196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         model.onChange = { [weak self] old, new in self?.preferencesChanged(from: old, to: new) }
         model.onResumeSnooze = { [weak self] in self?.snooze(.resume) }
         model.onRefreshAuthorization = { [weak self] in self?.notifications?.refreshAuthorization() }
+        model.onRefreshBackend = { [weak self] in self?.refreshBackendStatus() }
         model.onRecordingChange = { [weak self] recording in
             guard let self else { return }
             self.isRecordingHotKey = recording
@@ -1200,6 +1220,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             registerHotKeys()
         }
         applyMenuBarPreferences(new)
+        if recent.follow(days: new.recentDays) {
+            statusItem?.refreshSubmenus()
+        }
         if old.binaryPath != new.binaryPath || old.environment != new.environment {
             scheduleResolve()
         }
@@ -1563,15 +1586,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private func refreshRecent() {
+        let days = preferencesModel.preferences.recentDays
+        recent.follow(days: days)
         guard let command, gate.unavailableReason(.sessions) == nil,
               recent.needsRefresh(now: Date()), recent.state.begin() else { return }
-        let days = preferencesModel.preferences.recentDays
         statusItem?.refreshSubmenus()
         listQueue.async { [weak self] in
             let result = RecentSessions.fetch(command, days: days)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self, self.command?.binary == command.binary else { return }
+                    // A list for another Recent days preference is not this one.
+                    guard let self, self.command?.binary == command.binary, self.recent.days == days else { return }
                     if case let .failure(error) = result {
                         Self.logger.error("session list: \(error.message, privacy: .public)")
                     }
@@ -1856,13 +1881,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard snoozeProbedDaemon == daemon else { return probeSnooze(daemon) }
         guard snoozeSupported else { return }
         let now = Date()
+        let defaults = preferencesModel.defaults
+        let resumeQueued = defaults.bool(forKey: SnoozeMirror.resumeQueuedKey)
         let decision = SnoozeMirror.reconcile(
             daemon: daemon,
             live: SnoozeState(snapshot.notification),
             stored: preferencesModel.preferences.snoozeUntil,
-            storedDaemon: preferencesModel.defaults.string(forKey: SnoozeMirror.daemonKey),
+            storedDaemon: defaults.string(forKey: SnoozeMirror.daemonKey),
+            resumeQueued: resumeQueued,
             now: now
         )
+        // Any decision but .resume means the daemon has nothing left to
+        // resume, so a queued request is spent.
+        if resumeQueued, decision != .resume { defaults.removeObject(forKey: SnoozeMirror.resumeQueuedKey) }
         switch decision {
         case .keep:
             if preferencesModel.defaults.string(forKey: SnoozeMirror.daemonKey) != daemon {
@@ -1870,6 +1901,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
         case let .adopt(until):
             recordSnooze(until, daemon: daemon)
+        case .resume:
+            snoozeReapplyInFlight = true
+            Self.logger.notice("snooze: sending the resume queued while the feed was down")
+            focusQueue.async { [weak self] in
+                let outcome = DaemonClient().notificationSnooze(.resume)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.snoozeReapplyInFlight = false
+                        // A daemon that went away is asked again when it is
+                        // back; any answer from it spends the request.
+                        if outcome != .notRunning {
+                            self.preferencesModel.defaults.removeObject(forKey: SnoozeMirror.resumeQueuedKey)
+                        }
+                        self.finishSnooze(outcome, daemon: daemon)
+                    }
+                }
+            }
         case let .reapply(request):
             guard snoozeReapplyAttempted != daemon else { return }
             snoozeReapplyAttempted = daemon

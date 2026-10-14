@@ -136,8 +136,23 @@ struct RecentSessions: Equatable {
     static let minimumInterval: TimeInterval = 5
 
     var state = FetchState<[RecentConversation]>()
+    /// The Recent days preference the list is kept for.
+    private(set) var days: Int?
 
     func needsRefresh(now: Date) -> Bool { state.needsRefresh(now: now, maxAge: Self.minimumInterval) }
+
+    /// Keeps the list for `days`; a change forgets it, so a menu opened right
+    /// after the preference changes does not show the old window's list.
+    /// True when it was forgotten.
+    @discardableResult
+    mutating func follow(days: Int) -> Bool {
+        guard days != self.days else { return false }
+        let first = self.days == nil
+        self.days = days
+        guard !first else { return false }
+        state.reset()
+        return true
+    }
 
     static func listArguments(days: Int) -> [String] {
         ["session", "list", "--since", "\(max(1, days))d"]

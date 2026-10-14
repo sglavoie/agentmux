@@ -100,6 +100,9 @@ final class PreferencesModel: ObservableObject {
     var onResumeSnooze: (() -> Void)?
     /// Asks the app to read the notification authorization again.
     var onRefreshAuthorization: (() -> Void)?
+    /// Asks the app to read the tmux backend's status again, which only it
+    /// can do, off the main thread.
+    var onRefreshBackend: (() -> Void)?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -115,7 +118,7 @@ final class PreferencesModel: ObservableObject {
     }
 
     /// Re-reads what may have changed elsewhere: the login item in System
-    /// Settings, or a `defaults write`.
+    /// Settings, a `defaults write`, or the tmux backend.
     func refresh() {
         let stored = AppPreferences.load(from: defaults)
         if stored != preferences {
@@ -124,6 +127,7 @@ final class PreferencesModel: ObservableObject {
         }
         refreshLoginItem()
         onRefreshAuthorization?()
+        onRefreshBackend?()
     }
 
     func refreshLoginItem() {
@@ -200,11 +204,14 @@ final class PreferencesModel: ObservableObject {
     /// Clears the snooze `snoozeDescription` shows. The daemon's is the
     /// app's to clear, through `onResumeSnooze`; with no live feed there is
     /// only the stored one, and forgetting it is what stops it being
-    /// re-applied.
+    /// re-applied to a restarted daemon. The resume is also queued, so the
+    /// same daemon, still snoozed when the feed is back, is asked to resume
+    /// rather than having its snooze adopted again.
     func resumeSnooze() {
         if daemonNotification != nil {
             onResumeSnooze?()
         } else {
+            defaults.set(true, forKey: SnoozeMirror.resumeQueuedKey)
             preferences.snoozeUntil = nil
         }
     }
@@ -278,6 +285,8 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         window.delegate = self
+        dashboardRecorder.window = window
+        attentionRecorder.window = window
         // Open as tall as the content wants, within the screen less a margin;
         // the form scrolls whatever does not fit.
         if let visible = NSScreen.main?.visibleFrame {
@@ -295,6 +304,13 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     /// path.
     func windowWillClose(_ notification: Notification) {
         model.commitBinaryPath()
+        dashboardRecorder.stop()
+        attentionRecorder.stop()
+    }
+
+    /// Recording ends when Settings loses key, so the shortcuts are back
+    /// while the operator works in another window.
+    func windowDidResignKey(_ notification: Notification) {
         dashboardRecorder.stop()
         attentionRecorder.stop()
     }
@@ -560,8 +576,11 @@ struct HotKeyRecorderView: View {
 final class HotKeyRecorder: ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var hint: String?
+    /// The Settings window: the only one whose keys are recorded.
+    weak var window: NSWindow?
     private var monitor: Any?
     private var onStateChange: ((Bool) -> Void)?
+    private var onRecord: ((HotKeyCombo) -> Void)?
 
     func start(onStateChange: @escaping (Bool) -> Void, onRecord: @escaping (HotKeyCombo) -> Void) {
         stop()
@@ -569,21 +588,29 @@ final class HotKeyRecorder: ObservableObject {
         isRecording = true
         hint = nil
         onStateChange(true)
+        self.onRecord = onRecord
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
-            let chord = event.modifierFlags.intersection([.command, .control, .option, .shift])
-            if Int(event.keyCode) == HotKeyRecorder.escapeKeyCode, chord.isEmpty {
-                self.stop()
-            } else if let combo = HotKeyCombo(event: event) {
-                // Recorded before stopping, so the shortcuts the app
-                // registers again when recording ends are the new ones.
-                onRecord(combo)
-                self.stop()
-            } else {
-                self.hint = HotKeyCombo.refusal(event: event)
-            }
-            return nil
+            self?.handle(event) ?? event
         }
+    }
+
+    /// What the monitor does with a key: one typed in Settings is recorded
+    /// (or refused, or Esc cancels) and swallowed; any other window's key
+    /// goes on to it, since the app's shortcuts are unregistered meanwhile.
+    func handle(_ event: NSEvent) -> NSEvent? {
+        guard isRecording, let window, event.window === window else { return event }
+        let chord = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if Int(event.keyCode) == HotKeyRecorder.escapeKeyCode, chord.isEmpty {
+            stop()
+        } else if let combo = HotKeyCombo(event: event) {
+            // Recorded before stopping, so the shortcuts the app
+            // registers again when recording ends are the new ones.
+            onRecord?(combo)
+            stop()
+        } else {
+            hint = HotKeyCombo.refusal(event: event)
+        }
+        return nil
     }
 
     func stop() {
@@ -594,6 +621,7 @@ final class HotKeyRecorder: ObservableObject {
         guard isRecording else { return }
         isRecording = false
         hint = nil
+        onRecord = nil
         onStateChange?(false)
         onStateChange = nil
     }

@@ -187,4 +187,66 @@ final class HotKeyTests: XCTestCase {
             XCTAssertNotNil(HotKeyCombo(keyCode: combo.keyCode, modifiers: combo.modifiers))
         }
     }
+
+    // MARK: Recorder
+
+    private func keyDown(_ keyCode: UInt16, _ characters: String, modifiers: NSEvent.ModifierFlags = [], in window: NSWindow?) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
+                         windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters,
+                         charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)!
+    }
+
+    private func settingsWindow() -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.orderBack(nil)
+        return window
+    }
+
+    @MainActor
+    func testRecorderOnlyTakesKeysTypedInSettings() {
+        let settings = settingsWindow()
+        let other = settingsWindow()
+        defer { settings.close(); other.close() }
+        let recorder = HotKeyRecorder()
+        recorder.window = settings
+        var states: [Bool] = []
+        var recorded: [HotKeyCombo] = []
+        recorder.start(onStateChange: { states.append($0) }, onRecord: { recorded.append($0) })
+        defer { recorder.stop() }
+
+        let combo: NSEvent.ModifierFlags = [.control, .option, .command]
+        let elsewhere = keyDown(UInt16(kVK_ANSI_K), "k", modifiers: combo, in: other)
+        XCTAssertTrue(recorder.handle(elsewhere) === elsewhere, "another window's key goes on to it")
+        let windowless = keyDown(UInt16(kVK_ANSI_K), "k", modifiers: combo, in: nil)
+        XCTAssertTrue(recorder.handle(windowless) === windowless)
+        XCTAssertTrue(recorder.isRecording)
+        XCTAssertEqual(recorded, [])
+
+        XCTAssertNil(recorder.handle(keyDown(UInt16(kVK_ANSI_K), "k", modifiers: combo, in: settings)))
+        XCTAssertEqual(recorded, [HotKeyCombo(string: "ctrl+opt+cmd+k")!])
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertEqual(states, [true, false])
+
+        let after = keyDown(UInt16(kVK_ANSI_J), "j", modifiers: combo, in: settings)
+        XCTAssertTrue(recorder.handle(after) === after, "a stopped recorder takes nothing")
+    }
+
+    @MainActor
+    func testSettingsLosingKeyStopsRecording() {
+        let model = PreferencesModel(defaults: UserDefaults(suiteName: "HotKeyTests-\(UUID().uuidString)")!)
+        var recording: [Bool] = []
+        model.onRecordingChange = { recording.append($0) }
+        let controller = PreferencesWindowController(model: model)
+        let window = controller.window
+        XCTAssertTrue(controller.dashboardRecorder.window === window)
+        XCTAssertTrue(controller.attentionRecorder.window === window)
+        controller.dashboardRecorder.start(onStateChange: { model.onRecordingChange?($0) }, onRecord: { _ in })
+        XCTAssertTrue(controller.dashboardRecorder.isRecording)
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: controller.window))
+        XCTAssertFalse(controller.dashboardRecorder.isRecording)
+        XCTAssertEqual(recording, [true, false], "the global shortcuts are registered again")
+        controller.window.close()
+    }
 }

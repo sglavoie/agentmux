@@ -120,4 +120,19 @@ final class RecentSessionsTests: XCTestCase {
         input.recentDays = 3
         XCTAssertEqual(MenuBuilder.recentEntries(input), [.info("No conversations in the last 3 days")])
     }
+
+    func testChangingRecentDaysForgetsTheList() {
+        var recent = RecentSessions()
+        XCTAssertFalse(recent.follow(days: 7), "the first preference seen has no list to forget")
+        _ = recent.state.begin()
+        recent.state.finish(.success([RecentConversation(id: "a1", harness: "claude", cwd: "/p/api")]), at: now)
+        XCTAssertFalse(recent.needsRefresh(now: now.addingTimeInterval(1)))
+        XCTAssertFalse(recent.follow(days: 7))
+        XCTAssertNotNil(recent.state.value)
+
+        XCTAssertTrue(recent.follow(days: 30))
+        XCTAssertEqual(recent.days, 30)
+        XCTAssertNil(recent.state.value, "the menu does not show the 7-day list as the 30-day one")
+        XCTAssertTrue(recent.needsRefresh(now: now.addingTimeInterval(1)), "it is fetched again at once")
+    }
 }

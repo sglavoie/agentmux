@@ -292,10 +292,37 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(asked, 1, "nothing is sent to a daemon that is not there")
         XCTAssertNil(model.preferences.snoozeUntil)
         XCTAssertNil(defaults.object(forKey: "amxSnoozeUntil"), "so a restarted daemon is not snoozed again")
+        XCTAssertTrue(defaults.bool(forKey: SnoozeMirror.resumeQueuedKey),
+                      "and the same daemon, still snoozed when the feed is back, is asked to resume")
         XCTAssertFalse(model.isSnoozed)
         XCTAssertEqual(model.snoozeDescription, "Not snoozed")
 
         model.preferences.snoozeUntil = Date().addingTimeInterval(-60)
         XCTAssertFalse(model.isSnoozed, "a snooze that ran out is not one to clear")
+    }
+
+    @MainActor
+    func testResumeWithTheFeedLiveQueuesNothing() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        model.onResumeSnooze = {}
+        var notification = CompanionNotification()
+        notification.indefinite = true
+        model.daemonNotification = notification
+        model.resumeSnooze()
+        XCTAssertFalse(defaults.bool(forKey: SnoozeMirror.resumeQueuedKey))
+    }
+
+    @MainActor
+    func testOpeningSettingsReadsTheBackendStatusAgain() {
+        let model = PreferencesModel(defaults: freshDefaults())
+        var reads = 0
+        model.onRefreshBackend = { reads += 1 }
+        model.refresh()
+        XCTAssertEqual(reads, 1)
+        let controller = PreferencesWindowController(model: model)
+        controller.show()
+        defer { controller.window.close() }
+        XCTAssertEqual(reads, 2, "showing Settings re-reads it rather than showing the launch-time status")
     }
 }

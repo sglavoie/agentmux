@@ -136,6 +136,29 @@ final class SnoozeTests: XCTestCase {
         )
     }
 
+    func testQueuedResumeIsSentWhicheverDaemonHoldsTheSnooze() {
+        let snoozed = SnoozeState(snoozedUntil: 1_800_003_600)
+        XCTAssertEqual(
+            SnoozeMirror.reconcile(daemon: "1:10", live: snoozed, stored: nil, storedDaemon: "1:10", resumeQueued: true, now: now),
+            .resume,
+            "a reconnect to the same daemon does not adopt a snooze Resume Now cleared offline"
+        )
+        XCTAssertEqual(
+            SnoozeMirror.reconcile(daemon: "2:20", live: SnoozeState(indefinite: true), stored: nil, storedDaemon: "1:10", resumeQueued: true, now: now),
+            .resume
+        )
+        XCTAssertEqual(
+            SnoozeMirror.reconcile(daemon: "1:10", live: SnoozeState(), stored: nil, storedDaemon: "1:10", resumeQueued: true, now: now),
+            .keep,
+            "a daemon with no snooze has nothing to resume"
+        )
+        XCTAssertEqual(
+            SnoozeMirror.reconcile(daemon: "2:20", live: SnoozeState(), stored: nil, storedDaemon: "1:10", resumeQueued: true, now: now),
+            .keep,
+            "and a restarted daemon is not snoozed again"
+        )
+    }
+
     func testExpiredSnoozeIsNotReapplied() {
         XCTAssertEqual(
             SnoozeMirror.reconcile(daemon: "2:20", live: SnoozeState(), stored: now.addingTimeInterval(-1), storedDaemon: "1:10", now: now),

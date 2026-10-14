@@ -138,6 +138,10 @@ enum SnoozeMirror {
     /// The defaults key naming the daemon (`pid:started_at`) the stored
     /// snooze was last reconciled with.
     static let daemonKey = "amxSnoozeDaemon"
+    /// The defaults key set while a Resume Now pressed with no live feed is
+    /// still owed to the daemon: clearing the stored snooze alone would let
+    /// the next snapshot from the same daemon adopt it again.
+    static let resumeQueuedKey = "amxSnoozeResumeQueued"
 
     enum Decision: Equatable {
         /// The stored snooze already matches the daemon's.
@@ -147,14 +151,20 @@ enum SnoozeMirror {
         /// A new daemon came up without the snooze the app still holds; ask
         /// it to snooze again.
         case reapply(SnoozeRequest)
+        /// The operator asked to resume while the feed was down and the
+        /// daemon still snoozes; ask it to resume.
+        case resume
     }
 
     static func identity(of daemon: CompanionDaemon) -> String {
         "\(daemon.pid):\(daemon.startedAt)"
     }
 
-    static func reconcile(daemon: String, live: SnoozeState, stored: Date?, storedDaemon: String?, now: Date) -> Decision {
+    static func reconcile(daemon: String, live: SnoozeState, stored: Date?, storedDaemon: String?,
+                          resumeQueued: Bool = false, now: Date) -> Decision {
         let current = live.mirrored(now: now)
+        // Whichever daemon this is, a queued resume wins over its snooze.
+        if resumeQueued, current != nil { return .resume }
         let remembered = stored.flatMap { $0 > now ? $0 : nil }
         if storedDaemon != daemon, current == nil, let remembered {
             return .reapply(remembered == .distantFuture ? .untilResumed : .ending(at: remembered))
