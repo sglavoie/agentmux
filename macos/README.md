@@ -807,7 +807,8 @@ usually ends up on Alerter.
 **Banners.** Each banner's identifier is the daemon's `notification_id`, and
 its thread is the session's runtime session ID when the daemon names one,
 else its Kitty socket and window ID, so one session's banners group together.
-Permission and question (`elicitation`) banners play the default sound. The
+Permission and question (`elicitation`) banners play the default sound, also
+while the app is in the foreground (its menu open); other banners are silent. The
 category depends on the actions the daemon offered, and a banner never shows
 an action that was not offered:
 

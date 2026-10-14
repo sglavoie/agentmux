@@ -517,10 +517,17 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     // MARK: UNUserNotificationCenterDelegate
 
     /// An accessory app counts as foreground whenever its menu is open; show
-    /// the banner regardless.
+    /// the banner regardless, and play its sound when the request has one.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .list])
+        completionHandler(Self.foregroundPresentation(for: notification.request.content))
+    }
+
+    /// How a notification is shown while the app is in the foreground: always
+    /// as a banner and in the list, with a sound only when its content asks
+    /// for one (`.sound` is needed for that whatever the content says).
+    static func foregroundPresentation(for content: UNNotificationContent) -> UNNotificationPresentationOptions {
+        content.sound == nil ? [.banner, .list] : [.banner, .list, .sound]
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,

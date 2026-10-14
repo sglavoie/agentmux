@@ -191,6 +191,17 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertNil(NotificationPresenter.request(for: stop).content.sound)
     }
 
+    func testForegroundPresentationAllowsRequestedSound() {
+        for action in ["permission", "elicitation"] {
+            let request = NotificationPresenter.request(for: AppNotice(notificationID: "n-\(action)", action: action))
+            XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: request.content), [.banner, .list, .sound], action)
+        }
+        let silent = NotificationPresenter.request(for: stop)
+        XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: silent.content), [.banner, .list])
+        let terminal = NotificationPresenter.terminalRequest(title: "t", body: "b", source: "s", runtimeSessionID: nil)
+        XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: terminal.content), [.banner, .list])
+    }
+
     func testFrameDecodes() throws {
         let json = """
         {"notification_id":"n-9","window_id":3,"navigable":true,"title":"T","action":"elicitation",
