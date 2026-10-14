@@ -512,6 +512,51 @@ final class WorkspaceShortcutTests: XCTestCase {
         Ghostty.MenuShortcut.item(in: menu, matching: key.event())?.title
     }
 
+    /// With no workspace window in front — Settings or an answer panel has
+    /// the keyboard, or the workspace is closed — the shortcuts that act on
+    /// what it shows are disabled, as ⌘P, the digits, and the steps; what
+    /// opens it is not.
+    func testWorkspaceOnlyShortcutsNeedTheWorkspaceToBeKey() throws {
+        let delegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
+        XCTAssertFalse(delegate.workspaceIsKey, "an offscreen test window is never key")
+        let workspaceOnly: [(TestKey, String)] = [
+            (.command("p", keyCode: 35), "Go to…"),
+            (.command("1", keyCode: 18), "⌘1"),
+            (.command("1", keyCode: 18, shifted: "!"), "⌘⇧1"),
+            (.command("]", keyCode: 30), "⌘]"),
+            (.command("[", keyCode: 33), "⌘["),
+            (.command("]", keyCode: 30, shifted: "}"), "⌘}"),
+            (.command("[", keyCode: 33, shifted: "{"), "⌘{"),
+            (.command("l", keyCode: 37), "Back to Last Shown"),
+            (.command("b", keyCode: 11), "Toggle Sidebar"),
+            (.command("b", keyCode: 11, shifted: "B"), "Toggle Inspector"),
+            (.command("\r", keyCode: 36), "New Terminal Below"),
+            (.command("r", keyCode: 15), "Name Session…"),
+            (.function(NSF7FunctionKey, keyCode: 98), "F7"),
+            (.function(NSF9FunctionKey, keyCode: 101), "F9"),
+            (.function(NSF5FunctionKey, keyCode: 96), "F5"),
+            (.function(NSF10FunctionKey, keyCode: 109), "F10"),
+        ]
+        for (key, label) in workspaceOnly {
+            let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()), label)
+            XCTAssertTrue(AppDelegate.workspaceOnlyActions.contains(try XCTUnwrap(item.action)), label)
+            XCTAssertFalse(delegate.validateMenuItem(item), "\(label) is disabled unless the workspace is key")
+        }
+        let opening: [(TestKey, String)] = [
+            (.command("d", keyCode: 2), "Dashboard"),
+            (.command("o", keyCode: 31), "Overview"),
+            (.command("t", keyCode: 17), "New Shell"),
+            (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
+            (.command("l", keyCode: 37, shifted: "L"), "Session List"),
+            (.command("w", keyCode: 13), "Close"),
+            (.function(NSF1FunctionKey, keyCode: 122), "F1"),
+        ]
+        for (key, label) in opening {
+            let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()), label)
+            XCTAssertTrue(delegate.validateMenuItem(item), "\(label) opens the workspace, or closes the key window")
+        }
+    }
+
     func testEveryMenuShortcutIsClaimedForItsKey() {
         let expected: [(TestKey, String)] = [
             (.command(",", keyCode: 43), "Settings…"),
@@ -559,8 +604,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.function(NSF9FunctionKey, keyCode: 101), "Next Session"),
             (.function(NSF10FunctionKey, keyCode: 109), "Toggle Session Mute"),
             (.function(NSF11FunctionKey, keyCode: 103), "Mark Session Active"),
-            (.command("]", keyCode: 30, shifted: "}"), "Next Session in Kitty"),
-            (.command("[", keyCode: 33, shifted: "{"), "Previous Session in Kitty"),
+            (.command("]", keyCode: 30, shifted: "}"), WorkspaceMenu.nextSessionTitle),
+            (.command("[", keyCode: 33, shifted: "{"), WorkspaceMenu.previousSessionTitle),
             (.command("1", keyCode: 18, shifted: "!"), "Session 1 in Kitty"),
             (.command("2", keyCode: 19, shifted: "@"), "Session 2 in Kitty"),
             (.command("3", keyCode: 20, shifted: "#"), "Session 3 in Kitty"),

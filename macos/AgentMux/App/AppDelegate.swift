@@ -1967,14 +1967,45 @@ extension AppDelegate: NSMenuItemValidation {
     /// name the sessions they go to and are greyed out past the last one, and
     /// its items about the shown session are greyed out with none shown.
     /// Every other item the app targets stays enabled.
+    /// The items that act on what the workspace shows, and only make sense
+    /// while it has the keyboard: with Settings or an answer panel in front,
+    /// they would act on a window behind it, or one that is not even open.
+    /// What opens the workspace (the Dashboard, the Overview, a shell, the
+    /// next session needing attention, the session list) stays enabled, and
+    /// ⌘W closes whichever window has the keyboard.
+    static let workspaceOnlyActions: Set<Selector> = [
+        #selector(showSwitcher(_:)),
+        #selector(goToSession(_:)), #selector(showSessionInKitty(_:)),
+        #selector(selectNextSession(_:)), #selector(selectPreviousSession(_:)),
+        #selector(showNextSessionInKitty(_:)), #selector(showPreviousSessionInKitty(_:)),
+        #selector(toggleRecentPlace(_:)),
+        #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)),
+        #selector(newSessionTerminal(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
+        #selector(focusNextSession(_:)), #selector(focusPreviousSession(_:)),
+        #selector(pickSessionIcon(_:)), #selector(pickSessionColor(_:)),
+        #selector(clearSessionState(_:)), #selector(toggleSessionMute(_:)), #selector(markSessionActive(_:)),
+    ]
+
+    /// Whether the workspace is open and is the window with the keyboard.
+    var workspaceIsKey: Bool {
+        guard let workspace, workspace.isOpen, let key = NSApp.keyWindow else { return false }
+        return key === workspace.window
+    }
+
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        let enabled = validateWorkspaceItem(item)
+        guard let action = item.action, Self.workspaceOnlyActions.contains(action) else { return enabled }
+        return enabled && workspaceIsKey
+    }
+
+    private func validateWorkspaceItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(closeWorkspaceView(_:)):
             item.title = closeWorkspaceViewTitle
         case #selector(goToSession(_:)), #selector(showSessionInKitty(_:)):
             let name = workspace?.sessionName(at: item.tag)
-            item.title = WorkspaceWindowController.sessionItemTitle(
-                at: item.tag, name: name, inKitty: item.action == #selector(showSessionInKitty(_:)))
+            let inKitty = item.action == #selector(showSessionInKitty(_:)) && workspace?.sessionIsInKitty(at: item.tag) == true
+            item.title = WorkspaceWindowController.sessionItemTitle(at: item.tag, name: name, inKitty: inKitty)
             return name != nil
         case #selector(togglePinSession(_:)):
             item.title = workspace?.pinShownTitle ?? WorkspaceWindowController.pinShownSessionTitle
@@ -1985,6 +2016,14 @@ extension AppDelegate: NSMenuItemValidation {
             break
         }
         return true
+    }
+}
+
+extension AppDelegate: NSMenuDelegate {
+    /// The Session menu, as it opens: its Show in Kitty submenu follows the
+    /// sessions the digits go to.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        WorkspaceMenu.updateKittyItems(in: menu, workspace: workspace)
     }
 }
 

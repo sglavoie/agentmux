@@ -181,6 +181,10 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         switch selector {
         case #selector(NSResponder.moveUp(_:)): move(-1)
         case #selector(NSResponder.moveDown(_:)): move(1)
+        // Tab and Shift-Tab move in the list too, rather than taking the
+        // keyboard out of the field and so putting the list away.
+        case #selector(NSResponder.insertTab(_:)): move(1)
+        case #selector(NSResponder.insertBacktab(_:)): move(-1)
         case #selector(NSResponder.insertNewline(_:)): choose()
         case #selector(NSResponder.cancelOperation(_:)): cancel()
         default: return false

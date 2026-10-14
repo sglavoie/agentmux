@@ -968,6 +968,120 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.order, app.orders.last)
     }
 
+    /// ⌘1 to ⌘0 count the sessions of a collapsed project, so going to one
+    /// expands it; ⌘] steps from the session the pane is on even after its
+    /// row was collapsed away.
+    func testDigitsAndStepsAgreeAboutACollapsedProject() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        workspace.activate(work)
+        workspace.setCollapsed(project: "api", pinned: false, true)
+        XCTAssertNil(workspace.items.firstIndex { $0 == .row(work) }, "the row is collapsed away")
+
+        workspace.selectNeighbor(1)
+        XCTAssertEqual(workspace.content, .external(try row("web", "work").key), "the step is from api/work, not from the top")
+        XCTAssertTrue(workspace.state.groups.first { $0.project == "api" }?.collapsed == true, "a step expands nothing")
+
+        workspace.activate(work)
+        workspace.selectNeighbor(-1, sessionsOnly: true)
+        XCTAssertEqual(workspace.content, .external(try row("web", "work").key), "F7 wraps from api/work as well")
+
+        XCTAssertEqual(workspace.sessionName(at: 0), "api — personal")
+        workspace.selectSession(at: 0)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertTrue(workspace.state.groups.first { $0.project == "api" }?.collapsed == false, "going to a session expands its project")
+        XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(integer: try index(of: .embedded(F.runtimeID(2)))))
+        XCTAssertEqual(workspace.sessionKey(of: work.key), "2")
+    }
+
+    /// A project's header collapses and expands by a click, by its
+    /// accessibility action, and by ← and → in the list, and shows which it
+    /// is.
+    func testAProjectHeaderTogglesByClickKeyboardAndAccessibility() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        func header() throws -> Int {
+            try XCTUnwrap(workspace.items.firstIndex { if case let .group(group) = $0 { return group.project == "api" } else { return false } })
+        }
+        func collapsed() -> Bool? { workspace.state.groups.first { $0.project == "api" }?.collapsed }
+        func cell() throws -> WorkspaceGroupCellView {
+            try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try header()) as? WorkspaceGroupCellView)
+        }
+
+        var shown = try cell()
+        XCTAssertFalse(shown.disclosureLabel.isHidden, "an expanded project shows its disclosure too")
+        XCTAssertEqual(shown.disclosureLabel.stringValue, WorkspaceGroupCellView.expandedDisclosure)
+        XCTAssertTrue(shown.isAccessibilityDisclosed())
+        XCTAssertEqual(shown.accessibilityLabel(), "api, 1 waiting, expanded")
+        XCTAssertEqual(shown.accessibilityCustomActions()?.map(\.name), [WorkspaceGroupCellView.collapseAction])
+
+        // A click on the header.
+        workspace.focusItem(at: try header())
+        XCTAssertEqual(collapsed(), true)
+        shown = try cell()
+        XCTAssertEqual(shown.disclosureLabel.stringValue, WorkspaceGroupCellView.collapsedDisclosure)
+        XCTAssertFalse(shown.isAccessibilityDisclosed())
+        XCTAssertEqual(shown.accessibilityLabel(), "api, 1 waiting, collapsed")
+        workspace.focusItem(at: try header())
+        XCTAssertEqual(collapsed(), false)
+        XCTAssertEqual(workspace.state.selection, nil, "a header is not a session to go to")
+
+        // Its accessibility action.
+        let action = try XCTUnwrap(try cell().accessibilityCustomActions()?.first)
+        XCTAssertEqual(action.handler?(), true)
+        XCTAssertEqual(collapsed(), true)
+        let expand = try XCTUnwrap(try cell().accessibilityCustomActions()?.first)
+        XCTAssertEqual(expand.name, WorkspaceGroupCellView.expandAction)
+        XCTAssertEqual(expand.handler?(), true)
+        XCTAssertEqual(collapsed(), false)
+
+        // ← and → in the list, on one of the project's sessions.
+        let work = try row("api", "work")
+        workspace.activate(work)
+        workspace.focusSidebar()
+        workspace.sidebar.keyDown(with: TestKey.left.event())
+        XCTAssertEqual(collapsed(), true)
+        XCTAssertEqual(workspace.state.selection, work.key, "the pane stays where it is")
+        workspace.sidebar.keyDown(with: TestKey.function(NSRightArrowFunctionKey, keyCode: 124).event())
+        XCTAssertEqual(collapsed(), false, "→ expands the project of the session the pane is on")
+        XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(integer: try index(of: work.key)))
+        workspace.sidebar.keyDown(with: TestKey.function(NSRightArrowFunctionKey, keyCode: 124).event())
+        XCTAssertEqual(collapsed(), false, "→ on an expanded project leaves it so")
+        XCTAssertTrue(workspace.state.groups.first { $0.project == "web" }?.collapsed == false, "other projects are left alone")
+    }
+
+    /// The Show in Kitty items name Kitty only for a session in Kitty, and
+    /// the submenu is hidden when the digits reach none.
+    func testShowInKittyNamesKittyOnlyForKittySessions() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertFalse(workspace.sessionIsInKitty(at: 0))
+        XCTAssertTrue(workspace.sessionIsInKitty(at: 2))
+        XCTAssertFalse(workspace.sessionIsInKitty(at: 3))
+        XCTAssertTrue(workspace.digitsReachKitty)
+
+        let windows = NSApp.windowsMenu
+        defer { NSApp.windowsMenu = windows }
+        let delegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
+        let menu = WorkspaceMenu.make(target: delegate)
+        let session = try XCTUnwrap(menu.item(withTitle: "Session")?.submenu)
+        XCTAssertTrue(session.delegate === delegate)
+        let holder = try XCTUnwrap(session.item(withTitle: WorkspaceWindowController.showInKittyTitle))
+        let places = try XCTUnwrap(holder.submenu?.items)
+        XCTAssertEqual(places.count, 10, "only the places are in the submenu; the steps are in Session")
+        XCTAssertNotNil(session.item(withTitle: WorkspaceMenu.nextSessionTitle))
+
+        WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
+        XCTAssertFalse(holder.isHidden)
+        XCTAssertEqual(places.map(\.isHidden), [true, true, false, true, true, true, true, true, true, true])
+        XCTAssertTrue(places.allSatisfy(\.allowsKeyEquivalentWhenHidden), "a hidden place keeps its key")
+
+        app.store.apply(snapshot: F.snapshot(Array(sessions.prefix(2))))
+        XCTAssertFalse(workspace.digitsReachKitty)
+        WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
+        XCTAssertTrue(holder.isHidden, "nothing to show in Kitty")
+        WorkspaceMenu.updateKittyItems(in: session, workspace: nil)
+        XCTAssertTrue(holder.isHidden)
+    }
+
     func testReturnOrAClickOnADetachedSessionReattachesIt() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")

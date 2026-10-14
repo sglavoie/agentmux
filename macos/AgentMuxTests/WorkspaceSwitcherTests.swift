@@ -172,6 +172,20 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
         XCTAssertTrue(workspace.switcher.noMatchLabel.isHidden)
     }
 
+    /// Tab and Shift-Tab move like the arrows; neither takes the keyboard
+    /// out of the field, which would put the list away.
+    func testTabMovesThroughWhatMatchesAndKeepsTheListUp() throws {
+        workspace.toggleSwitcher()
+        workspace.switcher.enter("api")
+        let field = workspace.switcher.field
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        XCTAssertTrue(workspace.switcher.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertTab(_:))))
+        XCTAssertEqual(workspace.switcher.selected?.title, "api — work")
+        XCTAssertTrue(workspace.switcher.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertBacktab(_:))))
+        XCTAssertEqual(workspace.switcher.selected?.title, "api — personal")
+        XCTAssertTrue(workspace.isSwitching)
+    }
+
     func testAKittySessionComesForwardInKitty() {
         workspace.toggleSwitcher()
         workspace.switcher.enter("web")

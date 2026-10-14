@@ -1347,15 +1347,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func selectNeighbor(_ offset: Int, raising: Bool = false, sessionsOnly: Bool = false) {
         let listed = state.embeddedRuntimeSessionIDs
         let skipping = raising || sessionsOnly
-        let stops = items.filter { item in
+        let beside = skipping ? views.view(viewSelection)?.besideRuntimeSessionID : nil
+        // A collapsed project lists none of its sessions, but the one the
+        // pane is on still stands where its row would be, so the step is from
+        // there rather than from the top.
+        let stops = items.flatMap { item -> [Item] in
             switch item {
-            case .row: return true
-            case let .view(view): return !skipping && view.besideRuntimeSessionID.map(listed.contains) ?? false
-            case .section, .group: return false
+            case .row: return [item]
+            case let .view(view): return !skipping && view.besideRuntimeSessionID.map(listed.contains) ?? false ? [item] : []
+            case let .group(group) where group.collapsed:
+                return group.rows.filter { row in
+                    if let beside { return row.embeddedRuntimeSessionID == beside }
+                    return viewSelection == nil && row.key == state.selection
+                }.map(Item.row)
+            case .section, .group: return []
             }
         }
         guard !stops.isEmpty else { return }
-        let beside = skipping ? views.view(viewSelection)?.besideRuntimeSessionID : nil
         let here = stops.firstIndex { item in
             switch item {
             case let .row(row):
@@ -1378,10 +1386,36 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer
     /// sessions are listed. A Kitty row stays in the app unless `raising`.
+    /// The sessions of a collapsed project keep their places, so going to
+    /// one expands its project.
     func selectSession(at index: Int, raising: Bool = false) {
         let rows = state.rows
         guard rows.indices.contains(index) else { return }
-        go(to: rows[index], raising: raising)
+        let row = rows[index]
+        if let group = group(of: row.key), group.collapsed {
+            setCollapsed(project: group.project, pinned: group.pinned, false)
+        }
+        go(to: row, raising: raising)
+    }
+
+    /// The group a session is listed in.
+    private func group(of key: AttentionCycler.Key?) -> WorkspaceGroup? {
+        guard let key else { return nil }
+        return state.groups.first { $0.rows.contains { $0.key == key } }
+    }
+
+    /// Whether the session at `index` in sidebar order lives in Kitty, which
+    /// ⌘⇧ and that digit bring forward there.
+    func sessionIsInKitty(at index: Int) -> Bool {
+        let rows = state.rows
+        guard rows.indices.contains(index), case .kitty = rows[index].target else { return false }
+        return true
+    }
+
+    /// Whether any of the sessions the digits go to lives in Kitty: without
+    /// one, the Session menu has nothing to show in Kitty.
+    var digitsReachKitty: Bool {
+        WorkspaceMenu.sessionKeys.indices.contains { sessionIsInKitty(at: $0) }
     }
 
     /// The name of the session at `index` in sidebar order, which ⌘ and
@@ -2136,6 +2170,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
                 ?? WorkspaceGroupCellView()
             cell.show(group)
+            cell.onToggle = { [weak self] in
+                self?.setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed)
+            }
             return cell
         case let .row(row):
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
@@ -2302,7 +2339,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         return moveItem(at: index, to: row)
     }
 
-    /// A click on a row focuses it.
+    /// A click on a row focuses it; one on a project's header collapses or
+    /// expands the project.
     @objc private func rowClicked(_ sender: Any?) {
         focusItem(at: sidebar.clickedRow)
     }
@@ -2497,13 +2535,34 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         focusItem(at: sidebar.selectedRow)
     }
 
-    private func focusItem(at index: Int) {
+    /// Does what a click on the line at `index` does.
+    func focusItem(at index: Int) {
         guard index >= 0, index < items.count else { return }
         switch items[index] {
         case let .row(row): activate(row, reattaching: true)
         case let .view(view): showView(view.id, focus: true)
-        case .section, .group: break
+        case let .group(group): setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed)
+        case .section: break
         }
+    }
+
+    /// ← and → in the session list: collapse or expand the project of the
+    /// session the list is on, which is the one the pane is on once its row
+    /// was collapsed away.
+    func setSelectedProjectCollapsed(_ collapsed: Bool) {
+        let index = sidebar.selectedRow
+        var key = state.selection
+        if index >= 0, index < items.count {
+            switch items[index] {
+            case let .row(row): key = row.key
+            case let .view(view): key = view.besideRuntimeSessionID.map(AttentionCycler.Key.embedded)
+            case .section, .group: key = nil
+            }
+        } else if let beside = views.view(viewSelection)?.besideRuntimeSessionID {
+            key = .embedded(beside)
+        }
+        guard let group = group(of: key) else { return }
+        setCollapsed(project: group.project, pinned: group.pinned, collapsed)
     }
 
     // MARK: Window
@@ -2524,6 +2583,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.target = self
         sidebar.action = #selector(rowClicked(_:))
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
+        sidebar.onCollapse = { [weak self] collapsed in self?.setSelectedProjectCollapsed(collapsed) }
         sidebar.hasMenu = { [weak self] row in !(self?.contextMenuItems(forRow: row).isEmpty ?? true) }
         sidebar.registerForDraggedTypes([Self.dragType])
         sidebar.setDraggingSourceOperationMask(.move, forLocal: true)
@@ -2742,11 +2802,14 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
     }
 }
 
-/// The session list. It keeps the keys a list needs — the arrows, and Return
-/// to go into the selected row — and nothing typed here reaches a program.
+/// The session list. It keeps the keys a list needs — the arrows, Return
+/// to go into the selected row, and ← and → to collapse and expand its
+/// project — and nothing typed here reaches a program.
 @MainActor
 final class WorkspaceSidebarView: NSTableView {
     var onReturn: (() -> Void)?
+    /// ← (true) or → (false).
+    var onCollapse: ((Bool) -> Void)?
     /// Whether the line at an index has anything for its right-click menu;
     /// one that has nothing shows no menu rather than an empty one.
     var hasMenu: ((Int) -> Bool)?
@@ -2762,6 +2825,12 @@ final class WorkspaceSidebarView: NSTableView {
         if returnKeys.contains(event.keyCode),
            event.modifierFlags.isDisjoint(with: [.command, .control, .option]) {
             onReturn?()
+            return
+        }
+        let arrows: [UInt16: Bool] = [123: true, 124: false]
+        if let collapsed = arrows[event.keyCode],
+           event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]) {
+            onCollapse?(collapsed)
             return
         }
         super.keyDown(with: event)
@@ -2931,21 +3000,29 @@ final class WorkspacePlaceholderView: NSView {
     func press() { onPress?() }
 }
 
-/// A project's header line: its name, and how many of its sessions wait.
+/// A project's header line: its name, how many of its sessions wait, and
+/// whether it is collapsed. A click on it collapses or expands it, and so
+/// does its accessibility action.
 @MainActor
 final class WorkspaceGroupCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.group")
+    static let collapsedDisclosure = "▸"
+    static let expandedDisclosure = "▾"
+    static let expandAction = "Expand"
+    static let collapseAction = "Collapse"
     let nameLabel = NSTextField(labelWithString: "")
     let countLabel = NSTextField(labelWithString: "")
-    /// Shown while the project is collapsed to this line.
-    let disclosureLabel = NSTextField(labelWithString: "▸")
+    /// ▸ while the project is collapsed to this line, ▾ while it is not; a
+    /// heading that is not a project has none.
+    let disclosureLabel = NSTextField(labelWithString: "")
+    /// Collapses or expands the project.
+    var onToggle: (() -> Void)?
 
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
         disclosureLabel.textColor = .secondaryLabelColor
         disclosureLabel.isHidden = true
-        disclosureLabel.toolTip = "Collapsed: right-click to expand"
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
@@ -2972,7 +3049,10 @@ final class WorkspaceGroupCellView: NSTableCellView {
         countLabel.stringValue = ""
         countLabel.toolTip = nil
         disclosureLabel.isHidden = true
+        onToggle = nil
         setAccessibilityLabel(title)
+        setAccessibilityDisclosed(false)
+        setAccessibilityCustomActions(nil)
     }
 
     func show(_ group: WorkspaceGroup) {
@@ -2980,10 +3060,20 @@ final class WorkspaceGroupCellView: NSTableCellView {
         let waiting = group.attention
         countLabel.stringValue = waiting > 0 ? String(waiting) : ""
         countLabel.toolTip = waiting > 0 ? "\(waiting) waiting on you" : nil
-        disclosureLabel.isHidden = !group.collapsed
+        disclosureLabel.isHidden = false
+        disclosureLabel.stringValue = group.collapsed ? Self.collapsedDisclosure : Self.expandedDisclosure
+        disclosureLabel.toolTip = group.collapsed ? "Collapsed: click to expand" : "Click to collapse"
+        disclosureLabel.setAccessibilityLabel(group.collapsed ? "collapsed" : "expanded")
         var label = waiting > 0 ? "\(group.project), \(waiting) waiting" : group.project
-        if group.collapsed { label += ", collapsed" }
+        label += group.collapsed ? ", collapsed" : ", expanded"
         setAccessibilityLabel(label)
+        setAccessibilityDisclosed(!group.collapsed)
+        let action = NSAccessibilityCustomAction(name: group.collapsed ? Self.expandAction : Self.collapseAction) { [weak self] in
+            guard let onToggle = self?.onToggle else { return false }
+            onToggle()
+            return true
+        }
+        setAccessibilityCustomActions([action])
     }
 }
 
