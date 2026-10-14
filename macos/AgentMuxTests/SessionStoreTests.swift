@@ -31,16 +31,18 @@ final class SessionStoreTests: XCTestCase {
     }
 
     func testDisconnects() {
-        let store = SessionStore()
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = SessionStore(now: { clock })
         store.apply(.frame(.snapshot(seq: 1, snapshot([1]))))
         store.apply(.disconnected(.heartbeatLost, retryIn: 1))
-        XCTAssertEqual(store.feed, .reconnecting("no heartbeat"))
+        XCTAssertEqual(store.feed, .reconnecting("the daemon is not answering"))
         XCTAssertEqual(store.title(glyphs: .fallback), "", "no counts from a feed that is not live")
         XCTAssertNotNil(store.snapshot, "a reconnect keeps the last snapshot")
 
         store.apply(.disconnected(.bye("shutdown"), retryIn: 0.5))
-        XCTAssertEqual(store.feed, .reconnecting("daemon shutdown"))
+        XCTAssertEqual(store.feed, .reconnecting("the daemon is restarting"))
 
+        clock += SessionStore.byeHold
         store.apply(.disconnected(.notRunning, retryIn: 1))
         XCTAssertEqual(store.feed, .notRunning)
         XCTAssertNil(store.snapshot)
@@ -52,6 +54,95 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.daemonStatus, .ready(nil), "an old daemon's line comes from health")
         store.apply(health: .notRunning)
         XCTAssertEqual(store.feed, .daemonTooOld, "health does not override what subscribe learned")
+    }
+
+    func testDisconnectsReadAsOperatorPhrases() {
+        let store = SessionStore()
+        store.apply(.disconnected(.refused("subscriber_limit"), retryIn: 1))
+        XCTAssertEqual(store.feed, .reconnecting("too many app connections — quit other copies"))
+        store.apply(.disconnected(.refused("shutting_down"), retryIn: 1))
+        XCTAssertEqual(store.feed, .reconnecting("the daemon is shutting down"))
+        store.apply(.disconnected(.refused("something new"), retryIn: 1))
+        XCTAssertEqual(store.feed, .reconnecting("the daemon refused the connection"))
+        store.apply(.disconnected(.lost(LineSocketError.timedOut.operatorMessage), retryIn: 1))
+        XCTAssertEqual(store.feed, .reconnecting("the daemon is not answering"))
+        XCTAssertEqual(LineSocketError.system("read", ECONNRESET).operatorMessage, "could not reach the daemon")
+        XCTAssertEqual(LineSocketError.closed.operatorMessage, "the daemon closed the connection")
+    }
+
+    /// A daemon restart says `bye`, then nothing listens for a moment: the
+    /// last snapshot stays, marked reconnecting, until `byeHold` passes.
+    func testARestartKeepsTheLastSnapshotForAWhile() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = SessionStore(now: { clock })
+        store.apply(.frame(.snapshot(seq: 1, snapshot([1, 2]))))
+        store.apply(.disconnected(.bye("shutdown"), retryIn: 0.5))
+        XCTAssertTrue(store.holdingAfterBye)
+
+        clock += 1
+        store.apply(.disconnected(.notRunning, retryIn: 1))
+        store.apply(health: .notRunning)
+        XCTAssertEqual(store.feed, .reconnecting("the daemon is restarting"))
+        XCTAssertEqual(store.sessions.map(\.windowID), [1, 2], "the menu does not blank during a restart")
+
+        // The daemon comes back: the hold ends with the new snapshot.
+        store.apply(.subscribed(SubscriptionAck()))
+        store.apply(.frame(.snapshot(seq: 1, snapshot([1]))))
+        XCTAssertFalse(store.holdingAfterBye)
+        XCTAssertEqual(store.feed, .live)
+
+        // A daemon that does not come back is declared not running.
+        store.apply(.disconnected(.bye(""), retryIn: 0.5))
+        clock += SessionStore.byeHold
+        store.apply(.disconnected(.notRunning, retryIn: 1))
+        XCTAssertEqual(store.feed, .notRunning)
+        XCTAssertNil(store.snapshot)
+
+        // Without a bye, not running is at once.
+        store.apply(.frame(.snapshot(seq: 1, snapshot([1]))))
+        store.apply(.disconnected(.notRunning, retryIn: 1))
+        XCTAssertEqual(store.feed, .notRunning)
+    }
+
+    /// A health check that finds the daemon answering redials a feed that is
+    /// down, without waiting out the backoff.
+    func testHealthThatFindsTheDaemonRedialsADownFeed() {
+        XCTAssertTrue(AppDelegate.shouldReconnect(after: .ready(nil), feed: .notRunning))
+        XCTAssertTrue(AppDelegate.shouldReconnect(after: .degraded(reason: "x", build: nil), feed: .reconnecting("x")))
+        XCTAssertFalse(AppDelegate.shouldReconnect(after: .ready(nil), feed: .live))
+        XCTAssertFalse(AppDelegate.shouldReconnect(after: .ready(nil), feed: .daemonTooOld), "an old daemon cannot subscribe")
+        XCTAssertFalse(AppDelegate.shouldReconnect(after: .ready(nil), feed: .connecting), "already dialing")
+        XCTAssertFalse(AppDelegate.shouldReconnect(after: .notRunning, feed: .notRunning))
+        XCTAssertFalse(AppDelegate.shouldReconnect(after: .unresponsive("x"), feed: .reconnecting("x")))
+    }
+
+    func testANoticeStaysUntilSeenAndHeldLongEnough() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = SessionStore(now: { clock })
+        store.show(notice: "Could not toggle mute: the daemon is not answering")
+        clock += 60
+        store.apply(snapshot: snapshot([1]))
+        XCTAssertNotNil(store.notice, "unseen, a notice outlasts any number of snapshots")
+
+        store.noticeWasSeen()
+        store.apply(snapshot: snapshot([1]))
+        XCTAssertNil(store.notice, "seen and older than the hold: the next snapshot clears it")
+
+        store.show(notice: "Starting the daemon…")
+        store.noticeWasSeen()
+        clock += SessionStore.noticeHold - 1
+        store.apply(snapshot: snapshot([1]))
+        XCTAssertEqual(store.notice, "Starting the daemon…", "seen at once, it still stays the hold")
+        clock += 1
+        store.apply(snapshot: snapshot([1]))
+        XCTAssertNil(store.notice)
+
+        store.show(notice: "first")
+        store.noticeWasSeen()
+        store.show(notice: "second")
+        clock += SessionStore.noticeHold
+        store.apply(snapshot: snapshot([1]))
+        XCTAssertEqual(store.notice, "second", "a new notice is unseen again")
     }
 
     func testHealthNotRunningClearsALiveFeed() {
@@ -71,7 +162,7 @@ final class SessionStoreTests: XCTestCase {
 
         store.apply(.frame(.snapshot(seq: 2, snapshot([1, 2]))))
         XCTAssertEqual(store.sessions.map(\.windowID), [1], "still hidden while the daemon lags")
-        XCTAssertNil(store.notice)
+        XCTAssertEqual(store.notice, "That session has closed.", "a notice outlasts snapshots until it is seen")
 
         store.apply(.frame(.snapshot(seq: 3, snapshot([1]))))
         XCTAssertTrue(store.staleWindows.isEmpty)

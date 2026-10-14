@@ -603,7 +603,14 @@ state wholesale.
 - **Reconnect.** When the stream ends, the client dials again. The delay
   doubles from 0.5s to 10s and drops back to 0.5s once a subscription is
   acknowledged. After a `bye` (such as `amx daemon restart`) it retries at
-  0.5s, so a restart reconnects without relaunching the app.
+  0.5s, so a restart reconnects without relaunching the app. For 5 seconds
+  after a `bye` a daemon that is not running is taken to be restarting: the
+  last sessions stay listed under `reconnecting · the daemon is restarting`
+  rather than the menu emptying.
+- **Reconnect now.** A wake from sleep, **Start daemon**, and a health check
+  that finds the daemon answering while the feed is not live each dial at
+  once and start the backoff over. After **Start daemon** the app redials
+  every 0.25s for up to 5 seconds, until the feed is live.
 - **Heartbeat watchdog.** The daemon sends a heartbeat every 15s (the ack's
   `heartbeat_ms`). If no frame arrives for two intervals, the client treats the
   socket as half-open and reconnects. A wake from sleep reconnects at once.
@@ -631,6 +638,17 @@ The menu's first line says where the feed stands:
 | `not running` | There is no socket, or nothing accepts on it. A **Start daemon** item follows. |
 | `reconnecting · <reason>` | The stream ended; the client is dialing again. |
 | `unresponsive · <reason>` | Something accepted the connection but did not answer in time. |
+
+Reasons are operator phrases, never socket errors: "the daemon is not
+answering", "the daemon is restarting", "too many app connections — quit
+other copies" (`subscriber_limit`), "the daemon is shutting down". The raw
+error goes to the log (`log stream --predicate 'subsystem ==
+"io.github.sglavoie.agentmux"'`). Whenever the feed is not live the menu bar
+icon is dimmed.
+
+A notice (a refusal, "Starting the daemon…") stays in the menu until the
+menu has been opened on it and at least 30 seconds have passed. An open menu
+is rebuilt whenever what it shows changes.
 
 A daemon older than the companion protocol answers `subscribe` with
 "unknown request type". The menu then shows "daemon too old — run
@@ -753,7 +771,9 @@ covers the first permission prompt, so the notification that raised the prompt
 usually ends up on Alerter.
 
 **Banners.** Each banner's identifier is the daemon's `notification_id`, and
-its thread is the window ID, so one session's banners group together. The
+its thread is the session's runtime session ID when the daemon names one,
+else its Kitty socket and window ID, so one session's banners group together.
+Permission and question (`elicitation`) banners play the default sound. The
 category depends on the actions the daemon offered, and a banner never shows
 an action that was not offered:
 

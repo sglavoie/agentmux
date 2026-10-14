@@ -628,9 +628,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private var lastFeed: FeedState?
+    /// Whether the subscription is waiting out a retry delay, as against
+    /// dialing: only then does a reconnect request start a dial sooner, and
+    /// one sent mid-dial would drop the connection it was about to make.
+    private var subscriptionWaiting = false
+    private var lastDisconnect: SubscriptionClient.Disconnect?
 
     private func handle(_ event: SubscriptionClient.Event) {
         switch event {
+        case .connecting:
+            subscriptionWaiting = false
+        case .subscribed:
+            lastDisconnect = nil
+        case let .disconnected(reason, retryIn):
+            subscriptionWaiting = true
+            // The raw reason, once per change; the store shows an operator
+            // phrase.
+            if reason != lastDisconnect {
+                lastDisconnect = reason
+                Self.logger.notice("feed disconnected: \(String(describing: reason), privacy: .public); retry in \(retryIn)s")
+            }
+            if case .bye = reason {
+                // A restart is held as reconnecting; look again once the hold
+                // is over, in case nothing else does.
+                DispatchQueue.main.asyncAfter(deadline: .now() + SessionStore.byeHold + 0.1) { [weak self] in
+                    MainActor.assumeIsolated { self?.refreshDaemonStatus() }
+                }
+            }
         case let .frame(.notification(_, data)):
             notifications?.present(frame: data)
         case let .frame(.notificationRetract(_, frame)):
@@ -681,8 +705,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                         Self.logger.notice("daemon: \(DaemonStatusLine.text(for: status), privacy: .public)")
                     }
                     self.store.apply(health: status)
+                    if Self.shouldReconnect(after: status, feed: self.store.feed) { self.reconnectIfWaiting() }
                 }
             }
+        }
+    }
+
+    /// Whether a health answer means the feed should dial now: the daemon
+    /// answers, yet the feed is not live and not merely too old to subscribe.
+    nonisolated static func shouldReconnect(after status: DaemonStatus, feed: FeedState) -> Bool {
+        switch status {
+        case .ready, .degraded: break
+        case .notRunning, .unresponsive: return false
+        }
+        switch feed {
+        case .notRunning, .reconnecting: return true
+        case .live, .connecting, .daemonTooOld: return false
+        }
+    }
+
+    /// Asks the subscription to dial at once if it is waiting to retry.
+    private func reconnectIfWaiting() {
+        guard subscriptionWaiting else { return }
+        subscriptionWaiting = false
+        subscription?.reconnectNow()
+    }
+
+    /// How often, and for how long, the feed redials after Start Daemon.
+    static let startPollInterval: TimeInterval = 0.25
+    static let startPollDuration: TimeInterval = 5
+
+    /// Redials every `startPollInterval` until the feed is live or `deadline`
+    /// passes, so a daemon that just started is listed within a moment of
+    /// listening rather than after the backoff's next step.
+    private func reconnectWhileStarting(until deadline: Date) {
+        guard store.feed != .live, Date() < deadline else { return }
+        reconnectIfWaiting()
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.startPollInterval) { [weak self] in
+            MainActor.assumeIsolated { self?.reconnectWhileStarting(until: deadline) }
         }
     }
 
@@ -814,9 +874,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
         Self.logger.notice("started amx daemon (pid \(pid))")
         store.show(notice: "Starting the daemon…")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            MainActor.assumeIsolated { self?.subscription?.reconnectNow() }
-        }
+        reconnectWhileStarting(until: Date().addingTimeInterval(Self.startPollDuration))
     }
 
     // MARK: amx

@@ -99,7 +99,7 @@ final class DaemonClientTests: XCTestCase {
     }
 
     func testGarbageReplyIsUnresponsive() {
-        XCTAssertEqual(DaemonClient.status(fromHealthReply: Data("not json".utf8)), .unresponsive("unreadable health reply"))
+        XCTAssertEqual(DaemonClient.status(fromHealthReply: Data("not json".utf8)), .unresponsive(DaemonPhrase.unreadable))
     }
 
     func testStatusLineWording() {
@@ -149,7 +149,7 @@ final class DaemonClientTests: XCTestCase {
         let server = try FakeDaemon(directory: directory, reply: nil)
         let start = Date()
         let status = DaemonClient(socketPath: server.path).health(timeout: 0.3)
-        XCTAssertEqual(status, .unresponsive("no reply in time"))
+        XCTAssertEqual(status, .unresponsive("the daemon is not answering"), "the operator phrase, not the socket's")
         XCTAssertLessThan(Date().timeIntervalSince(start), 1.5)
         server.finish()
     }

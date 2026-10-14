@@ -434,7 +434,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         content.title = notice.title
         if !notice.subtitle.isEmpty { content.subtitle = notice.subtitle }
         content.categoryIdentifier = NotificationCategories.category(for: notice)
-        content.threadIdentifier = notice.windowID > 0 ? String(notice.windowID) : "amx"
+        content.threadIdentifier = threadIdentifier(for: notice)
+        if soundedActions.contains(notice.action) { content.sound = .default }
         content.userInfo = [
             UserInfoKey.windowID: notice.windowID,
             UserInfoKey.kittySocket: notice.kittySocket,
@@ -444,6 +445,18 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
             UserInfoKey.embeddedRuntimeSessionID: notice.embeddedRuntimeSessionID,
         ]
         return UNNotificationRequest(identifier: notice.notificationID, content: content, trigger: nil)
+    }
+
+    /// The actions that wait on the operator, whose banners make a sound.
+    static let soundedActions: Set<String> = ["permission", "elicitation"]
+
+    /// The thread a notice is grouped under: its runtime session when the
+    /// daemon names one, else its Kitty window (window IDs repeat across Kitty
+    /// instances, so with the socket), else one thread for profile-wide notices.
+    static func threadIdentifier(for notice: AppNotice) -> String {
+        if !notice.runtimeSessionID.isEmpty { return "runtime:\(notice.runtimeSessionID)" }
+        if notice.windowID > 0 { return "kitty:\(notice.kittySocket)#\(notice.windowID)" }
+        return "amx"
     }
 
     enum UserInfoKey {

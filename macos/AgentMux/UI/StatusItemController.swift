@@ -21,8 +21,9 @@ protocol StatusItemDelegate: AnyObject {
 }
 
 /// The menu bar icon, its attention counts, and its menu. Any click opens the
-/// menu, which is rebuilt from the store each time it opens; the title is
-/// redrawn on every store change.
+/// menu, which is rebuilt from the store each time it opens and again on any
+/// store change while it stays open; the title is redrawn on every store
+/// change, and the icon is dimmed whenever the feed is not live.
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     let statusItem: NSStatusItem
@@ -37,6 +38,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// The action submenus, kept across rebuilds so a list that arrives while
     /// the menu is open fills in where it is.
     private(set) var submenus: [MenuSubmenu: NSMenu] = [:]
+    /// Whether the main menu is open, so a store change rebuilds it in place.
+    private(set) var isMenuOpen = false
+    /// The entries the main menu was last built from.
+    private var builtEntries: [MenuEntry]?
 
     private let preferencesItem = NSMenuItem(title: "Preferences…", action: #selector(preferences(_:)), keyEquivalent: ",")
     private let quitItem = NSMenuItem(title: "Quit Agent Mux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -94,6 +99,30 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         button.title = title
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         button.toolTip = "Agent Mux — \(daemonLine)"
+        button.appearsDisabled = Self.appearsDisabled(store.feed)
+        if isMenuOpen { rebuildMenuIfChanged() }
+    }
+
+    /// Whether the icon is dimmed: whenever the feed is not live, so a down
+    /// daemon is visible without opening the menu.
+    nonisolated static func appearsDisabled(_ feed: FeedState) -> Bool {
+        feed != .live
+    }
+
+    /// The main menu's entries as the store and actions stand now.
+    private func currentEntries() -> [MenuEntry]? {
+        guard let store = delegate?.store, let actions = delegate?.actionsInput else { return nil }
+        return MenuBuilder.entries(menuInput(store)) + MenuBuilder.actionEntries(actions)
+    }
+
+    /// Rebuilds the open menu when what it would show has changed; a snapshot
+    /// that changes nothing visible leaves the items (and the highlight) be.
+    func rebuildMenuIfChanged() {
+        guard currentEntries() != builtEntries else {
+            refreshSubmenus()
+            return
+        }
+        rebuildMenu()
     }
 
     /// Whether focusing these sessions needs a Kitty socket nothing has named
@@ -130,8 +159,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             item.submenu = nil
         }
         menu.removeAllItems()
-        if let store = delegate?.store, let actions = delegate?.actionsInput {
-            let entries = MenuBuilder.entries(menuInput(store)) + MenuBuilder.actionEntries(actions)
+        builtEntries = currentEntries()
+        if let entries = builtEntries, let actions = delegate?.actionsInput {
             let items = MenuBuilder.items(
                 for: entries,
                 target: self,
@@ -147,6 +176,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(preferencesItem)
         menu.addItem(.separator())
         menu.addItem(quitItem)
+        if isMenuOpen { delegate?.store.noticeWasSeen() }
     }
 
     /// Refills the action submenus; safe while one is open.
@@ -171,6 +201,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         delegate?.menuWillOpen()
         rebuildMenu()
         delegate?.refreshDaemonStatus()
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        guard menu === self.menu else { return }
+        isMenuOpen = true
+        delegate?.store.noticeWasSeen()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        guard menu === self.menu else { return }
+        isMenuOpen = false
     }
 
     @objc private func sessionClicked(_ sender: NSMenuItem) {

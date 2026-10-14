@@ -49,7 +49,7 @@ final class SnoozeTests: XCTestCase {
                        .unsupported)
         XCTAssertEqual(DaemonClient.snoozeOutcome(fromReply: Data(#"{"ok":false,"error":"notification_snooze: until is not in the future"}"#.utf8)),
                        .failed("notification_snooze: until is not in the future"))
-        XCTAssertEqual(DaemonClient.snoozeOutcome(fromReply: Data("nope".utf8)), .failed("unreadable notification_snooze reply"))
+        XCTAssertEqual(DaemonClient.snoozeOutcome(fromReply: Data("nope".utf8)), .failed(DaemonPhrase.unreadable))
     }
 
     func testClientSendsOneSnoozeRequest() throws {

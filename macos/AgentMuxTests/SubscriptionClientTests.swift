@@ -182,6 +182,24 @@ final class SubscriptionClientTests: XCTestCase {
         XCTAssertEqual(Array(delays.prefix(3)), [0.05, 0.1, 0.2])
     }
 
+    /// After a run of failures the next dial is far off; asking for a
+    /// reconnect (the app just started the daemon) dials at once and starts
+    /// the backoff over, so the dials after it come quickly too.
+    func testReconnectNowResetsTheBackoff() {
+        let recorder = startClient(directory.appendingPathComponent("absent.sock").path,
+                                   backoff: ReconnectBackoff(initial: 0.05, maximum: 30))
+        XCTAssertTrue(recorder.wait { $0.disconnects.count >= 5 })
+        let before = recorder.events.count
+        let asked = Date()
+        client?.reconnectNow()
+        XCTAssertTrue(recorder.wait(timeout: 2) { !Array($0.dropFirst(before)).disconnects.isEmpty })
+        XCTAssertLessThan(Date().timeIntervalSince(asked), 0.5, "the 0.8s wait was cut short")
+        let after = Array(recorder.events.dropFirst(before))
+        XCTAssertEqual(after.first, .connecting(attempt: 0))
+        XCTAssertEqual(after.first { if case .disconnected = $0 { return true } else { return false } },
+                       .disconnected(.notRunning, retryIn: 0.05))
+    }
+
     func testReconnectNowDropsTheConnection() throws {
         server = try FakeStreamServer(directory: directory, scripts: [
             { conn in

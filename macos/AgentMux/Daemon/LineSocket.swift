@@ -21,6 +21,20 @@ enum LineSocketError: Error, Equatable {
         self == .noSocket || self == .refused
     }
 
+    /// What the operator is told: a few plain phrases, since the raw
+    /// `message` (a syscall and its errno) means nothing in a menu. Log
+    /// `message` beside it.
+    var operatorMessage: String {
+        switch self {
+        case .noSocket, .refused: return DaemonPhrase.notRunning
+        case .timedOut: return DaemonPhrase.notAnswering
+        case .closed: return DaemonPhrase.closedConnection
+        case .lineTooLong: return "the daemon's reply was too large"
+        case .pathTooLong, .system: return DaemonPhrase.unreachable
+        }
+    }
+
+    /// The raw transport error, for the log.
     var message: String {
         switch self {
         case let .pathTooLong(path): return "socket path is too long: \(path)"
@@ -30,6 +44,29 @@ enum LineSocketError: Error, Equatable {
         case .closed: return "connection closed before a reply"
         case .lineTooLong: return "reply exceeded the size limit"
         case let .system(call, code): return "\(call): \(String(cString: strerror(code)))"
+        }
+    }
+}
+
+/// The operator phrases daemon transport failures are shown as.
+enum DaemonPhrase {
+    static let notRunning = "the daemon is not running"
+    static let notAnswering = "the daemon is not answering"
+    static let closedConnection = "the daemon closed the connection"
+    static let unreachable = "could not reach the daemon"
+    static let unreadable = "the daemon sent a reply this app cannot read"
+    static let restarting = "the daemon is restarting"
+    static let tooManyConnections = "too many app connections — quit other copies"
+    static let shuttingDown = "the daemon is shutting down"
+    static let refused = "the daemon refused the connection"
+
+    /// A daemon refusal code (`subscriber_limit`, `shutting_down`, …) as a
+    /// phrase; an unknown one is a plain refusal.
+    static func refusal(_ code: String) -> String {
+        switch code {
+        case "subscriber_limit": return tooManyConnections
+        case "shutting_down": return shuttingDown
+        default: return refused
         }
     }
 }
@@ -44,6 +81,8 @@ final class LineSocket {
 
     private var fd: Int32 = -1
     private var buffer = Data()
+    /// One read buffer for the socket's life, rather than one per line.
+    private var chunk = [UInt8](repeating: 0, count: 64 * 1024)
     let maxLineBytes: Int
 
     init(maxLineBytes: Int = LineSocket.defaultMaxLineBytes) {
@@ -111,7 +150,6 @@ final class LineSocket {
     /// The next line, without its newline.
     func readLine(deadline: Date) throws -> Data {
         guard fd >= 0 else { throw LineSocketError.closed }
-        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
         while true {
             if let newline = buffer.firstIndex(of: 0x0A) {
                 guard newline - buffer.startIndex <= maxLineBytes else { throw LineSocketError.lineTooLong }
@@ -121,7 +159,8 @@ final class LineSocket {
             }
             guard buffer.count <= maxLineBytes else { throw LineSocketError.lineTooLong }
             try wait(for: Int16(POLLIN), deadline: deadline)
-            let count = Darwin.read(fd, &chunk, chunk.count)
+            let socketFD = fd
+            let count = chunk.withUnsafeMutableBytes { Darwin.read(socketFD, $0.baseAddress, $0.count) }
             if count < 0 {
                 if errno == EINTR || errno == EAGAIN { continue }
                 throw LineSocketError.system("read", errno)

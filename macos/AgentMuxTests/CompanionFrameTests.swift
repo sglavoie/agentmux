@@ -136,7 +136,7 @@ final class CompanionFrameTests: XCTestCase {
         XCTAssertEqual(outcome(#"{"ok":false,"error":"stale_target"}"#), .staleTarget)
         XCTAssertEqual(outcome(#"{"ok":false,"error":"unknown_socket"}"#), .unknownSocket)
         XCTAssertEqual(outcome(#"{"ok":false,"error":"unknown request type: focus_window"}"#), .unsupported)
-        XCTAssertEqual(outcome("nope"), .failed("unreadable focus_window reply"))
+        XCTAssertEqual(outcome("nope"), .failed(DaemonPhrase.unreadable))
     }
 
     // MARK: focus_session replies
@@ -149,7 +149,7 @@ final class CompanionFrameTests: XCTestCase {
         XCTAssertEqual(outcome(#"{"ok":false,"error":"no_viewer"}"#), .noViewer)
         XCTAssertEqual(outcome(#"{"ok":false,"error":"runtime_session_unknown"}"#), .failed("runtime_session_unknown"))
         XCTAssertEqual(outcome(#"{"ok":false,"error":"unknown request type: focus_session"}"#), .unsupported)
-        XCTAssertEqual(outcome("nope"), .failed("unreadable focus_session reply"))
+        XCTAssertEqual(outcome("nope"), .failed(DaemonPhrase.unreadable))
     }
 
     func testFocusSessionRoundTrip() {

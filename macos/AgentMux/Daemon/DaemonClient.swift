@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// What one health request found.
 enum DaemonStatus: Equatable {
@@ -66,13 +67,21 @@ struct DaemonClient {
     var socketPath: String = SocketPath.daemon()
     var roundTrip: (_ path: String, _ request: Data, _ timeout: TimeInterval) throws -> Data = LineSocket.roundTrip
 
+    private static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "daemon")
+
+    /// The operator phrase for a transport failure; the raw error is logged.
+    static func phrase(_ error: LineSocketError) -> String {
+        logger.notice("daemon request: \(error.message, privacy: .public)")
+        return error.operatorMessage
+    }
+
     func health(timeout: TimeInterval = healthTimeout) -> DaemonStatus {
         let reply: Data
         do {
             let request = try JSONEncoder().encode(DaemonRequest.health)
             reply = try roundTrip(socketPath, request, timeout)
         } catch let error as LineSocketError {
-            return error.meansNotRunning ? .notRunning : .unresponsive(error.message)
+            return error.meansNotRunning ? .notRunning : .unresponsive(Self.phrase(error))
         } catch {
             return .unresponsive(error.localizedDescription)
         }
@@ -81,7 +90,7 @@ struct DaemonClient {
 
     static func status(fromHealthReply reply: Data) -> DaemonStatus {
         guard let response = try? JSONDecoder().decode(HealthResponse.self, from: reply) else {
-            return .unresponsive("unreadable health reply")
+            return .unresponsive(DaemonPhrase.unreadable)
         }
         guard response.ok else {
             return .degraded(reason: response.error ?? "health refused", build: response.build)
@@ -100,7 +109,7 @@ struct DaemonClient {
             let request = try JSONEncoder().encode(DaemonRequest.focusing(socket: socket, windowID: windowID))
             reply = try roundTrip(socketPath, request, timeout)
         } catch let error as LineSocketError {
-            return error.meansNotRunning ? .notRunning : .failed(error.message)
+            return error.meansNotRunning ? .notRunning : .failed(Self.phrase(error))
         } catch {
             return .failed(error.localizedDescription)
         }
@@ -109,7 +118,7 @@ struct DaemonClient {
 
     static func focusOutcome(fromReply reply: Data) -> FocusOutcome {
         guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
-            return .failed("unreadable focus_window reply")
+            return .failed(DaemonPhrase.unreadable)
         }
         if response.ok {
             return .focused(response.focused ?? FocusWindowResult(windowID: 0))
@@ -130,7 +139,7 @@ struct DaemonClient {
             let request = try JSONEncoder().encode(DaemonRequest.focusing(runtimeSessionID: runtimeSessionID))
             reply = try roundTrip(socketPath, request, timeout)
         } catch let error as LineSocketError {
-            return error.meansNotRunning ? .notRunning : .failed(error.message)
+            return error.meansNotRunning ? .notRunning : .failed(Self.phrase(error))
         } catch {
             return .failed(error.localizedDescription)
         }
@@ -139,7 +148,7 @@ struct DaemonClient {
 
     static func focusSessionOutcome(fromReply reply: Data) -> FocusSessionOutcome {
         guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
-            return .failed("unreadable focus_session reply")
+            return .failed(DaemonPhrase.unreadable)
         }
         if response.ok { return .shown }
         switch response.error ?? "" {
@@ -161,7 +170,7 @@ struct DaemonClient {
             let encoded = try JSONEncoder().encode(DaemonRequest.snoozing(request))
             reply = try roundTrip(socketPath, encoded, timeout)
         } catch let error as LineSocketError {
-            return error.meansNotRunning ? .notRunning : .failed(error.message)
+            return error.meansNotRunning ? .notRunning : .failed(Self.phrase(error))
         } catch {
             return .failed(error.localizedDescription)
         }
@@ -170,7 +179,7 @@ struct DaemonClient {
 
     static func snoozeOutcome(fromReply reply: Data) -> SnoozeOutcome {
         guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
-            return .failed("unreadable notification_snooze reply")
+            return .failed(DaemonPhrase.unreadable)
         }
         if response.ok {
             return .state(response.snooze ?? SnoozeState())
@@ -192,7 +201,7 @@ struct DaemonClient {
             let encoded = try JSONEncoder().encode(DaemonRequest.disposing(params))
             reply = try roundTrip(socketPath, encoded, timeout)
         } catch let error as LineSocketError {
-            return error.message
+            return Self.phrase(error)
         } catch {
             return error.localizedDescription
         }
@@ -242,7 +251,7 @@ struct DaemonClient {
             let encoded = try JSONEncoder().encode(request)
             reply = try roundTrip(socketPath, encoded, timeout)
         } catch let error as LineSocketError {
-            return .failure(error.meansNotRunning ? .notRunning : .transport(error.message))
+            return .failure(error.meansNotRunning ? .notRunning : .transport(Self.phrase(error)))
         } catch {
             return .failure(.transport(error.localizedDescription))
         }
@@ -251,7 +260,7 @@ struct DaemonClient {
 
     static func aslResult(fromReply reply: Data) -> Result<ASLResult, ASLRequestError> {
         guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
-            return .failure(.transport("unreadable ASL reply"))
+            return .failure(.transport(DaemonPhrase.unreadable))
         }
         guard response.ok else {
             let message = response.error ?? ""

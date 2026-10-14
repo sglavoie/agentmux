@@ -218,6 +218,34 @@ final class AMXCommandTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 1.5)
     }
 
+    /// A login shell that leaves something in the background holding its
+    /// stdout: the run ends with the shell, keeping what it printed.
+    func testABackgroundedGrandchildHoldingThePipeDoesNotTimeOut() throws {
+        let start = Date()
+        let output = try XCTUnwrap(ProcessOutput.run("/bin/sh", arguments: ["-c", "echo report; sleep 5 & exit 0"], timeout: 3))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5)
+        XCTAssertEqual(output.status, 0)
+        XCTAssertEqual(String(decoding: output.stdout, as: UTF8.self), "report\n")
+    }
+
+    func testLongOutputIsReadWhole() throws {
+        let output = try XCTUnwrap(ProcessOutput.run("/bin/sh", arguments: ["-c", "head -c 300000 /dev/zero"], timeout: 5))
+        XCTAssertEqual(output.stdout.count, 300_000)
+    }
+
+    func testADetachedChildIsReapedWhenItExits() throws {
+        var pid: pid_t = 0
+        var argv: [UnsafeMutablePointer<CChar>?] = [strdup("/usr/bin/true"), nil]
+        defer { argv.forEach { free($0) } }
+        XCTAssertEqual(posix_spawn(&pid, "/usr/bin/true", nil, nil, &argv, nil), 0)
+        AMXCommand.reapWhenExited(pid)
+        let deadline = Date().addingTimeInterval(3)
+        // A zombie still answers signal 0; a reaped child does not.
+        while kill(pid, 0) == 0, Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+        XCTAssertEqual(kill(pid, 0), -1)
+        XCTAssertEqual(errno, ESRCH)
+    }
+
     func testChildThatIgnoresTerminateIsKilled() {
         let start = Date()
         XCTAssertNil(ProcessOutput.run("/bin/sh", arguments: ["-c", "trap '' TERM; exec 1>&- 2>&-; while :; do sleep 0.05; done"], timeout: 0.2))

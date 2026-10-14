@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// One line of a companion stream, decoded.
 enum StreamFrame: Equatable {
@@ -63,7 +64,8 @@ final class SubscriptionClient {
         case bye(String)
         /// No frame within the heartbeat watchdog.
         case heartbeatLost
-        /// The connection failed or closed.
+        /// The connection failed or closed; the text is an operator phrase
+        /// (`DaemonPhrase`), the raw error having gone to the log.
         case lost(String)
         /// Something asked for a fresh connection (a wake from sleep).
         case reconnectRequested
@@ -117,6 +119,13 @@ final class SubscriptionClient {
         lock.lock()
         guard !started else { lock.unlock(); return }
         started = true
+        // The thread holds the client strongly while `run()` runs, so the
+        // client outlives its last outside reference until `stop()`: `deinit`
+        // is not what ends it. That is deliberate, since a subscription
+        // dropped mid-read must still close its socket on this thread, and
+        // every owner stops its client (the app on quit and on resubscribe,
+        // tests in tearDown). `stop()` returns at once and the thread exits
+        // within one poll slice, releasing the client.
         let thread = Thread { [weak self] in
             self?.run()
         }
@@ -146,8 +155,9 @@ final class SubscriptionClient {
         if live { onEvent(event) }
     }
 
-    /// Drops the current connection, if any, and dials again at once. Sent on
-    /// wake from sleep, when the old socket may be half-open.
+    /// Drops the current connection, if any, and dials again at once, with
+    /// the backoff back at its start. Sent on wake from sleep, when the old
+    /// socket may be half-open, and after the app starts the daemon.
     func reconnectNow() {
         lock.lock()
         reconnectRequested = true
@@ -187,22 +197,40 @@ final class SubscriptionClient {
             default:
                 delay = backoff.delay(afterFailures: failures)
             }
-            failures += 1
+            // A requested reconnect is not a failure: whatever asked for it
+            // (a daemon just started) expects the next dials to come quickly.
+            failures = reason == .reconnectRequested ? 0 : failures + 1
             emit(.disconnected(reason, retryIn: delay))
-            sleep(delay)
+            if sleep(delay) { failures = 0 }
         }
     }
 
-    /// Waits `delay` unless stopped or asked to reconnect sooner.
-    private func sleep(_ delay: TimeInterval) {
+    /// Waits `delay` unless stopped or asked to reconnect sooner; true when
+    /// a reconnect request cut it short.
+    private func sleep(_ delay: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(delay)
         while !isStopped {
             let remaining = deadline.timeIntervalSinceNow
-            if remaining <= 0 { return }
+            if remaining <= 0 { return false }
             if wake.wait(timeout: .now() + remaining) == .success {
-                if isStopped || takeReconnectRequest() { return }
+                if isStopped { return false }
+                if takeReconnectRequest() { return true }
             }
         }
+        return false
+    }
+
+    private static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "subscription")
+
+    /// The operator phrase a transport failure is reported as; the raw error
+    /// goes to the log.
+    private static func lost(_ error: Error) -> Disconnect {
+        if let error = error as? LineSocketError {
+            logger.notice("subscription: \(error.message, privacy: .public)")
+            return .lost(error.operatorMessage)
+        }
+        logger.notice("subscription: \(error.localizedDescription, privacy: .public)")
+        return .lost(DaemonPhrase.unreachable)
     }
 
     /// One connection from dial to end; returns why it ended.
@@ -215,9 +243,9 @@ final class SubscriptionClient {
             let line = try JSONEncoder().encode(DaemonRequest.subscribing(request()))
             try socket.writeLine(line, deadline: Date().addingTimeInterval(Self.ackTimeout))
         } catch let error as LineSocketError {
-            return error.meansNotRunning ? .notRunning : .lost(error.message)
+            return error.meansNotRunning ? .notRunning : Self.lost(error)
         } catch {
-            return .lost(error.localizedDescription)
+            return Self.lost(error)
         }
 
         let ack: SubscriptionAck
@@ -240,10 +268,8 @@ final class SubscriptionClient {
             } catch LineSocketError.timedOut {
                 if Date().timeIntervalSince(lastFrame) >= watchdog { return .heartbeatLost }
                 continue
-            } catch let error as LineSocketError {
-                return .lost(error.message)
             } catch {
-                return .lost(error.localizedDescription)
+                return Self.lost(error)
             }
             guard let frame = Self.decodeFrame(line) else {
                 lock.lock(); badLinesCount += 1; lock.unlock()
@@ -265,13 +291,12 @@ final class SubscriptionClient {
         let line: Data
         do {
             line = try socket.readLine(deadline: deadline)
-        } catch let error as LineSocketError {
-            return .failure(.lost(error.message))
         } catch {
-            return .failure(.lost(error.localizedDescription))
+            return .failure(Self.lost(error))
         }
         guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: line) else {
-            return .failure(.lost("unreadable subscribe reply"))
+            Self.logger.notice("subscription: unreadable subscribe reply")
+            return .failure(.lost(DaemonPhrase.unreadable))
         }
         return Self.ackOutcome(response)
     }

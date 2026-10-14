@@ -66,7 +66,9 @@ struct LaunchEnvironment: Equatable {
     private static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "environment")
 
     /// Runs `shell -l [-i] -c` and reads the report. Nil on failure, on a
-    /// report without a `PATH`, or after `timeout`.
+    /// report without a `PATH`, or after `timeout`. A profile that leaves a
+    /// process in the background holding the shell's stdout does not run
+    /// into the timeout: the report is read once the shell itself exits.
     static func loginShellEnvironment(shell: String, interactive: Bool, timeout: TimeInterval = 5) -> [String: String]? {
         let arguments = (interactive ? ["-l", "-i"] : ["-l"]) + ["-c", reportScript]
         guard let output = ProcessOutput.run(shell, arguments: arguments, timeout: timeout) else {

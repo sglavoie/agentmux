@@ -69,8 +69,21 @@ final class SessionStore {
     /// The last health result, which is what the daemon line shows whenever
     /// the feed is not live.
     private(set) var health: DaemonStatus?
-    /// A one-line notice the menu shows until the next snapshot replaces it.
+    /// A one-line notice the menu shows. A snapshot clears it only once the
+    /// menu has been opened on it and `noticeHold` has passed, so a refusal
+    /// is never gone before the operator looks.
     private(set) var notice: String?
+    private var noticeSince = Date.distantPast
+    private var noticeSeen = false
+    /// The least time a notice stays, seen or not.
+    static let noticeHold: TimeInterval = 30
+    /// When the daemon last said goodbye, while that still explains a feed
+    /// that cannot reach it.
+    private var byeAt: Date?
+    /// How long after a `bye` a daemon that is not running is taken to be
+    /// restarting: the last snapshot stays, marked reconnecting, rather than
+    /// the menu emptying for the second a restart takes.
+    static let byeHold: TimeInterval = 5
     /// Windows a focus attempt found already closed, hidden until a snapshot
     /// that no longer lists them arrives. A window ID names a window only
     /// inside the Kitty instance that issued it, so each entry is the
@@ -99,6 +112,7 @@ final class SessionStore {
             return
         case .subscribed:
             feed = .live
+            byeAt = nil
         case let .frame(frame):
             guard case let .snapshot(_, snapshot) = frame else { return }
             apply(snapshot: snapshot)
@@ -106,28 +120,57 @@ final class SessionStore {
         case let .disconnected(reason, _):
             switch reason {
             case .notRunning:
-                feed = .notRunning
-                snapshot = nil
+                declareNotRunning()
             case .unsupported:
                 feed = .daemonTooOld
                 snapshot = nil
-            case let .refused(message):
-                feed = .reconnecting(message)
-            case let .bye(reason):
-                feed = .reconnecting(reason.isEmpty ? "daemon closed the stream" : "daemon \(reason)")
-            case .heartbeatLost:
-                feed = .reconnecting("no heartbeat")
-            case let .lost(message):
-                feed = .reconnecting(message)
-            case .reconnectRequested:
-                feed = .reconnecting("reconnecting")
+                byeAt = nil
+            case .bye:
+                byeAt = now()
+                feed = .reconnecting(DaemonPhrase.restarting)
+            default:
+                feed = .reconnecting(Self.phrase(for: reason))
             }
         }
         onChange?()
     }
 
+    /// What a disconnect is shown as while the feed is reconnecting. The
+    /// subscription logs the raw transport error; a refusal code becomes a
+    /// phrase here.
+    static func phrase(for reason: SubscriptionClient.Disconnect) -> String {
+        switch reason {
+        case .notRunning: return DaemonPhrase.notRunning
+        case .unsupported: return "the daemon is too old"
+        case let .refused(code): return DaemonPhrase.refusal(code)
+        case .bye: return DaemonPhrase.restarting
+        case .heartbeatLost: return DaemonPhrase.notAnswering
+        case let .lost(phrase): return phrase.isEmpty ? DaemonPhrase.notAnswering : phrase
+        case .reconnectRequested: return "reconnecting"
+        }
+    }
+
+    /// Whether a `bye` recent enough to mean a restart is being held.
+    var holdingAfterBye: Bool {
+        guard let byeAt else { return false }
+        return now().timeIntervalSince(byeAt) < Self.byeHold
+    }
+
+    /// Nothing listens: the feed is not running and the sessions go, unless a
+    /// recent `bye` says the daemon is only restarting.
+    private func declareNotRunning() {
+        if holdingAfterBye {
+            feed = .reconnecting(DaemonPhrase.restarting)
+            return
+        }
+        byeAt = nil
+        feed = .notRunning
+        snapshot = nil
+    }
+
     func apply(snapshot: CompanionSnapshot) {
         feed = .live
+        byeAt = nil
         self.snapshot = snapshot
         let listed = Set(snapshot.sessions.map { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) })
         staleWindows.formIntersection(listed)
@@ -137,15 +180,16 @@ final class SessionStore {
             let shown = snapshot.sessions.first { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) == key }
             return shown?.muted != expected.muted
         }
-        notice = nil
+        if noticeSeen, now().timeIntervalSince(noticeSince) >= Self.noticeHold {
+            notice = nil
+        }
         onChange?()
     }
 
     func apply(health: DaemonStatus) {
         self.health = health
         if health == .notRunning, feed != .daemonTooOld {
-            feed = .notRunning
-            snapshot = nil
+            declareNotRunning()
         }
         onChange?()
     }
@@ -155,7 +199,7 @@ final class SessionStore {
     func markStale(socket: String, windowID: Int) {
         let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
         staleWindows.insert(AttentionCycler.Key(socket: socket, windowID: windowID))
-        notice = "That session has closed."
+        setNotice("That session has closed.")
         onChange?()
     }
 
@@ -176,8 +220,20 @@ final class SessionStore {
     }
 
     func show(notice: String?) {
-        self.notice = notice
+        setNotice(notice)
         onChange?()
+    }
+
+    /// The menu is showing the current notice. Redraws nothing: what is
+    /// shown does not change, only how long it may stay.
+    func noticeWasSeen() {
+        if notice != nil { noticeSeen = true }
+    }
+
+    private func setNotice(_ text: String?) {
+        notice = text
+        noticeSince = now()
+        noticeSeen = false
     }
 
     /// The daemon status the daemon line shows: the snapshot's own view while

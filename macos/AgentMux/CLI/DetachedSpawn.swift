@@ -30,12 +30,24 @@ extension AMXCommand {
         var pid: pid_t = 0
         let result = posix_spawn(&pid, binary.path, &actions, &attributes, &cArgv, &cEnvp)
         guard result == 0 else { return nil }
-        // Reap it whenever it exits, so a daemon that fails at once does not
-        // linger as a zombie of this app.
-        DispatchQueue.global(qos: .utility).async {
-            var status: Int32 = 0
-            _ = waitpid(pid, &status, 0)
-        }
+        Self.reapWhenExited(pid)
         return pid
+    }
+
+    /// Reaps `pid` whenever it exits, so a daemon that fails at once does not
+    /// linger as a zombie of this app. A process source costs no thread while
+    /// the child runs, which for the daemon is the app's whole life.
+    static func reapWhenExited(_ pid: pid_t) {
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .global(qos: .utility))
+        source.setEventHandler {
+            var status: Int32 = 0
+            _ = waitpid(pid, &status, WNOHANG)
+            // The handler holds the source until it is cancelled here.
+            source.cancel()
+        }
+        source.activate()
+        // A child that exited before the source was armed raises no event.
+        var status: Int32 = 0
+        if waitpid(pid, &status, WNOHANG) == pid { source.cancel() }
     }
 }

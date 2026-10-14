@@ -67,7 +67,7 @@ final class ASLWireTests: XCTestCase {
                        .failure(.unsupported))
         XCTAssertEqual(DaemonClient.aslResult(fromReply: Data(#"{"ok":true}"#.utf8)),
                        .failure(.transport("daemon returned no ASL result")))
-        XCTAssertEqual(DaemonClient.aslResult(fromReply: Data("garbage".utf8)), .failure(.transport("unreadable ASL reply")))
+        XCTAssertEqual(DaemonClient.aslResult(fromReply: Data("garbage".utf8)), .failure(.transport(DaemonPhrase.unreadable)))
     }
 
     func testClientSendsOneRequestPerCall() throws {

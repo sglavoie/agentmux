@@ -160,11 +160,35 @@ final class NotificationPresenterTests: XCTestCase {
     func testRequestCarriesIdentityAndThread() {
         let request = NotificationPresenter.request(for: stop)
         XCTAssertEqual(request.identifier, "n-1")
-        XCTAssertEqual(request.content.threadIdentifier, "7")
+        XCTAssertEqual(request.content.threadIdentifier, "kitty:#7")
         XCTAssertEqual(request.content.title, "API")
         XCTAssertEqual(request.content.subtitle, "Stopped")
         XCTAssertEqual(request.content.categoryIdentifier, "amx.session")
         XCTAssertNil(request.trigger)
+    }
+
+    func testThreadsFollowTheRuntimeSessionThenTheKittyWindow() {
+        var tmux = AppNotice(notificationID: "n-2", windowID: 0, title: "API")
+        tmux.runtimeSessionID = "rs-1"
+        tmux.backend = "tmux"
+        XCTAssertEqual(NotificationPresenter.threadIdentifier(for: tmux), "runtime:rs-1")
+        var other = tmux
+        other.runtimeSessionID = "rs-2"
+        XCTAssertNotEqual(NotificationPresenter.threadIdentifier(for: other), NotificationPresenter.threadIdentifier(for: tmux),
+                          "two tmux sessions never share a thread")
+        let kittyA = AppNotice(notificationID: "n-3", windowID: 4, kittySocket: "unix:/tmp/a")
+        let kittyB = AppNotice(notificationID: "n-4", windowID: 4, kittySocket: "unix:/tmp/b")
+        XCTAssertEqual(NotificationPresenter.threadIdentifier(for: kittyA), "kitty:unix:/tmp/a#4")
+        XCTAssertNotEqual(NotificationPresenter.threadIdentifier(for: kittyA), NotificationPresenter.threadIdentifier(for: kittyB))
+        XCTAssertEqual(NotificationPresenter.threadIdentifier(for: AppNotice(notificationID: "n-5")), "amx")
+    }
+
+    func testOnlyNoticesWaitingOnTheOperatorMakeASound() {
+        for action in ["permission", "elicitation"] {
+            let request = NotificationPresenter.request(for: AppNotice(notificationID: "n-\(action)", action: action))
+            XCTAssertNotNil(request.content.sound, action)
+        }
+        XCTAssertNil(NotificationPresenter.request(for: stop).content.sound)
     }
 
     func testFrameDecodes() throws {
