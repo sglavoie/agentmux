@@ -224,6 +224,16 @@ final class SessionStore {
         onChange?()
     }
 
+    /// Replaces the notice only while it is still `old`, so a progress line
+    /// ("Starting the daemon…") gives way to its outcome without wiping a
+    /// newer notice. Returns whether it did.
+    @discardableResult
+    func replace(notice old: String, with new: String?) -> Bool {
+        guard notice == old else { return false }
+        show(notice: new)
+        return true
+    }
+
     /// The menu is showing the current notice. Redraws nothing: what is
     /// shown does not change, only how long it may stay.
     func noticeWasSeen() {

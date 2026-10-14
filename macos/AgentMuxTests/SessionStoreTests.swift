@@ -116,6 +116,52 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertFalse(AppDelegate.shouldReconnect(after: .unresponsive("x"), feed: .reconnecting("x")))
     }
 
+    func testAProgressNoticeGivesWayOnlyToItsOwnOutcome() {
+        let store = SessionStore()
+        store.show(notice: DaemonStart.startingNotice)
+        XCTAssertTrue(store.replace(notice: DaemonStart.startingNotice, with: DaemonStart.failedNotice))
+        XCTAssertEqual(store.notice, "The daemon did not start — run amx doctor")
+
+        store.show(notice: "Launching API…")
+        store.show(notice: "Could not toggle mute")
+        XCTAssertFalse(store.replace(notice: "Launching API…", with: nil), "a newer notice stays")
+        XCTAssertEqual(store.notice, "Could not toggle mute")
+
+        store.show(notice: "Launching API…")
+        XCTAssertTrue(store.replace(notice: "Launching API…", with: nil))
+        XCTAssertNil(store.notice)
+    }
+
+    func testLaunchProgressAndFailureLines() {
+        XCTAssertEqual(AppDelegate.launchingNotice("API"), "Launching API…")
+        XCTAssertEqual(AppDelegate.launchingNotice(""), "Launching…")
+        XCTAssertEqual(AppDelegate.failureLine(title: "Could not launch work/API", message: "no such profile"),
+                       "Could not launch work/API: no such profile")
+        XCTAssertEqual(AppDelegate.failureLine(title: "Could not launch", message: "Could not reach Kitty: gone"),
+                       "Could not reach Kitty: gone", "a message that already says it is not prefixed again")
+        XCTAssertEqual(AppDelegate.failureLine(title: "Could not restart the daemon", message: ""), "Could not restart the daemon")
+    }
+
+    func testDaemonStartVerdict() {
+        XCTAssertEqual(DaemonStart.verdict(feed: .notRunning, exitCode: nil, deadlinePassed: false), .waiting)
+        XCTAssertEqual(DaemonStart.verdict(feed: .connecting, exitCode: 0, deadlinePassed: false), .waiting,
+                       "an exit that reports success leaves it to the feed and the deadline")
+        XCTAssertEqual(DaemonStart.verdict(feed: .notRunning, exitCode: 1, deadlinePassed: false), .failed,
+                       "an early failing exit is reported at once")
+        XCTAssertEqual(DaemonStart.verdict(feed: .reconnecting("x"), exitCode: nil, deadlinePassed: true), .failed)
+        XCTAssertEqual(DaemonStart.verdict(feed: .live, exitCode: nil, deadlinePassed: false), .started)
+        XCTAssertEqual(DaemonStart.verdict(feed: .live, exitCode: 1, deadlinePassed: true), .started,
+                       "a live feed means some daemon answers")
+        XCTAssertEqual(DaemonStart.verdict(feed: .daemonTooOld, exitCode: nil, deadlinePassed: true), .started)
+    }
+
+    func testDaemonStartTailIsBounded() {
+        let text = (1...20).map { "line \($0)" }.joined(separator: "\n") + "\n\n"
+        XCTAssertEqual(DaemonStart.tail(Data(text.utf8)), "line 16\nline 17\nline 18\nline 19\nline 20")
+        XCTAssertEqual(DaemonStart.tail(Data(String(repeating: "x", count: 5000).utf8)).count, 1024)
+        XCTAssertEqual(DaemonStart.tail(Data()), "")
+    }
+
     func testANoticeStaysUntilSeenAndHeldLongEnough() {
         var clock = Date(timeIntervalSince1970: 1_000)
         let store = SessionStore(now: { clock })

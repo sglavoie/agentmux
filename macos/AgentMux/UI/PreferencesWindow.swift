@@ -6,6 +6,8 @@ import SwiftUI
 struct PreferencesSnapshot: Equatable {
     var binary: AMXBinaryResolver.Resolution?
     var binaryProblem: String?
+    /// `binaryProblem` in one line, for the menu and every other notice.
+    var binaryMenuProblem: String?
     var binaryVersion: AMXVersion?
     var capabilities: AMXCapabilities?
     var daemonStatus: DaemonStatus?

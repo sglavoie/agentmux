@@ -246,6 +246,37 @@ final class AMXCommandTests: XCTestCase {
         XCTAssertEqual(errno, ESRCH)
     }
 
+    func testADetachedChildReportsItsExitAndKeepsItsStandardErrorInAFile() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = directory.appendingPathComponent("stderr.log")
+        try Data("left from the last start\n".utf8).write(to: log)
+
+        let amx = AMXCommand(binary: URL(fileURLWithPath: "/bin/sh"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
+        let exited = expectation(description: "exit reported")
+        let reported = Reported()
+        let pid = amx.spawnDetached(
+            ["-c", "echo \"$AMX_DAEMON_DETACHED: no config\" >&2; echo ignored; exit 3"],
+            extraEnvironment: DaemonStart.detachedEnvironment,
+            stderrPath: log.path
+        ) { pid, code in
+            reported.set(pid, code)
+            exited.fulfill()
+        }
+        let spawned = try XCTUnwrap(pid)
+        wait(for: [exited], timeout: 5)
+        XCTAssertEqual(reported.value?.pid, spawned)
+        XCTAssertEqual(reported.value?.code, 3)
+        XCTAssertEqual(try String(contentsOf: log, encoding: .utf8), "1: no config\n", "truncated, and only standard error")
+    }
+
+    func testExitCodeFromAWaitStatus() {
+        XCTAssertEqual(AMXCommand.exitCode(waitStatus: 0), 0)
+        XCTAssertEqual(AMXCommand.exitCode(waitStatus: 3 << 8), 3)
+        XCTAssertEqual(AMXCommand.exitCode(waitStatus: SIGKILL), 128 + SIGKILL)
+    }
+
     func testChildThatIgnoresTerminateIsKilled() {
         let start = Date()
         XCTAssertNil(ProcessOutput.run("/bin/sh", arguments: ["-c", "trap '' TERM; exec 1>&- 2>&-; while :; do sleep 0.05; done"], timeout: 0.2))
@@ -346,5 +377,21 @@ final class AMXCommandTests: XCTestCase {
         }
         XCTAssertEqual(AMXCapabilities.probe(amx), AMXCapabilities(notificationsSnooze: true))
         XCTAssertEqual(recorder.calls.map(\.1), [["--help"], ["notifications", "--help"]])
+    }
+}
+
+/// What a detached child's exit callback reported, across queues.
+private final class Reported: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: (pid: pid_t, code: Int32)?
+
+    var value: (pid: pid_t, code: Int32)? {
+        lock.lock(); defer { lock.unlock() }
+        return stored
+    }
+
+    func set(_ pid: pid_t, _ code: Int32) {
+        lock.lock(); defer { lock.unlock() }
+        stored = (pid, code)
     }
 }

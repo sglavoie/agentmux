@@ -100,7 +100,8 @@ final class MenuBuilderTests: XCTestCase {
         var old = input([], feed: .daemonTooOld)
         old.daemonStatus = .ready(DaemonBuild(version: "0.7.0", revision: "abc"))
         XCTAssertEqual(MenuBuilder.entries(old),
-                       [.info("Daemon: ready · 0.7.0 (abc)"), .info("Daemon too old — run amx daemon restart")])
+                       [.info("Daemon: ready · 0.7.0 (abc)"), .info("Daemon too old for this app"),
+                        .action(.restartDaemon, "Restart Daemon")])
         XCTAssertEqual(MenuBuilder.entries(input([session(1, "")], feed: .reconnecting("no heartbeat"))),
                        [.info("Daemon: reconnecting · no heartbeat")], "no sessions shown from a feed that is not live")
         XCTAssertEqual(MenuBuilder.entries(input([], feed: .connecting)), [.info("Daemon: connecting…")])
@@ -118,16 +119,17 @@ final class MenuBuilderTests: XCTestCase {
     func testMenuItemsCarryTheirRows() {
         let rows = (1...11).map { MenuSessionRow(title: "r\($0)", windowID: $0, kittySocket: "", toolTip: "") }
         let entries: [MenuEntry] = [.info("x"), .header("H"), .session(rows[0]), .submenu("Idle (11)", rows),
-                                    .action(.startDaemon, "Start Daemon"), .separator]
+                                    .action(.startDaemon, "Start Daemon"), .separator, .action(.restartDaemon, "Restart Daemon")]
         let target = NSObject()
         let items = MenuBuilder.items(for: entries, target: target, sessionAction: #selector(NSObject.description), actionSelector: #selector(NSObject.hash))
-        XCTAssertEqual(items.count, 6)
+        XCTAssertEqual(items.count, 7)
         XCTAssertFalse(items[0].isEnabled)
         XCTAssertTrue(items[1].isSectionHeader)
         XCTAssertEqual((items[2].representedObject as? MenuBuilder.RowBox)?.row, rows[0])
         XCTAssertEqual(items[3].submenu?.items.count, 11)
         XCTAssertEqual((items[4].representedObject as? MenuBuilder.ActionBox)?.action, .startDaemon)
         XCTAssertTrue(items[5].isSeparatorItem)
+        XCTAssertEqual((items[6].representedObject as? MenuBuilder.ActionBox)?.action, .restartDaemon)
     }
 
     // MARK: Title

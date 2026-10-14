@@ -605,7 +605,10 @@ four cases:
   commit share, it wins when its content differs and its file was written
   more recently.
 
-Preferences shows which binary was chosen and why.
+Preferences shows which binary was chosen and why. When none is found, the
+menu and every notice say so in one line ("amx not found — set it in Settings
+› amx binary"); Preferences and the log keep the full message with every path
+tried.
 
 ## How the app runs amx
 
@@ -681,17 +684,29 @@ error goes to the log (`log stream --predicate 'subsystem ==
 icon is dimmed.
 
 A notice (a refusal, "Starting the daemon…") stays in the menu until the
-menu has been opened on it and at least 30 seconds have passed. An open menu
-is rebuilt whenever what it shows changes.
+menu has been opened on it and at least 30 seconds have passed. A progress
+line ("Starting the daemon…", "Launching API…", "Restarting the daemon…")
+instead gives way to its outcome as soon as there is one. An open menu is
+rebuilt whenever what it shows changes.
+
+A Launch Project, Recent, or Restart Daemon that fails says so at once: the
+menu line names the failure, and the app posts its own notification (never
+seen by the daemon) when app notifications are on and allowed, else beeps
+and blinks the menu bar icon.
 
 A daemon older than the companion protocol answers `subscribe` with
-"unknown request type". The menu then shows "daemon too old — run
-`amx daemon restart`". The app falls back to a `health` request every 10
+"unknown request type". The menu then says the daemon is too old for the app
+and offers **Restart Daemon**, which runs the resolved `amx daemon restart`
+and redials the feed once it returns. The app falls back to a `health` request every 10
 seconds and on every menu open, and it retries `subscribe` every 10 seconds.
 
 The app never starts the daemon on its own. **Start daemon** runs the resolved
 `amx daemon start` in a session of its own, detached from the app, only when
-the operator chooses it.
+the operator chooses it. Its standard error goes to `daemon-start.log` in the
+app's caches (`AMX_DAEMON_DETACHED=1` keeps the daemon's own log in its
+journal). When it exits with a failure, or the feed is still down 10 seconds
+later, "Starting the daemon…" becomes "The daemon did not start — run amx
+doctor", and the last lines of that file go to the log, not the menu.
 
 ## Focus
 

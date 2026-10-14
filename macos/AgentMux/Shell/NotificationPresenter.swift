@@ -513,6 +513,29 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         return UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
     }
 
+    /// Identifiers of the app's own notices about what the operator asked
+    /// of it (a launch that failed). The daemon never hears of them.
+    static let appPrefix = "amx-app:"
+
+    /// Shows the app's own notice, when app notifications are on and allowed;
+    /// false otherwise, so the caller can get the operator's attention some
+    /// other way. Like a terminal's, it never asks for permission.
+    @discardableResult
+    func presentApp(title: String, body: String) -> Bool {
+        guard enabled, authorization == .authorized else { return false }
+        center.add(Self.appRequest(title: title, body: body)) { _ in }
+        return true
+    }
+
+    static func appRequest(title: String, body: String) -> UNNotificationRequest {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.categoryIdentifier = NotificationCategories.plain
+        content.threadIdentifier = "app"
+        return UNNotificationRequest(identifier: "\(appPrefix)\(UUID().uuidString)", content: content, trigger: nil)
+    }
+
     /// A `notification_retract` frame.
     func retract(_ frame: NotificationRetractFrame) {
         let id = frame.notificationID
@@ -569,7 +592,9 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     /// One banner response: reports it, then hands it to the app.
     func handleResponse(notificationID: String, actionIdentifier: String, userInfo: [AnyHashable: Any]) {
         guard let disposition = NotificationCategories.disposition(forAction: actionIdentifier) else { return }
-        if !notificationID.hasPrefix(Self.terminalPrefix) { report(notificationID, disposition, nil) }
+        if !notificationID.hasPrefix(Self.terminalPrefix), !notificationID.hasPrefix(Self.appPrefix) {
+            report(notificationID, disposition, nil)
+        }
         onResponse(Response(
             notificationID: notificationID,
             disposition: disposition,

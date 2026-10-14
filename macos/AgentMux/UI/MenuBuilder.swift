@@ -24,6 +24,8 @@ struct MenuSessionRow: Equatable {
 /// Something a menu item does besides focusing a session.
 enum MenuAction: Equatable {
     case startDaemon
+    /// `amx daemon restart`, offered when the daemon is too old for the app.
+    case restartDaemon
     /// Shows the workspace window, where tmux sessions' terminals are.
     case openWorkspace
     case openDashboard
@@ -126,7 +128,8 @@ enum MenuBuilder {
             entries.append(.action(.startDaemon, "Start Daemon"))
         case .daemonTooOld:
             entries.append(.info(DaemonStatusLine.title(for: input.daemonStatus)))
-            entries.append(.info("Daemon too old — run amx daemon restart"))
+            entries.append(.info("Daemon too old for this app"))
+            entries.append(.action(.restartDaemon, "Restart Daemon"))
         case let .reconnecting(reason):
             entries.append(.info("Daemon: reconnecting · \(reason)"))
         }
@@ -326,7 +329,7 @@ enum MenuBuilder {
         return entries
     }
 
-    static let snoozeUnsupported = "Daemon too old to snooze — run amx daemon restart"
+    static let snoozeUnsupported = "Daemon too old to snooze — choose Restart Daemon"
 
     static func entries(for submenu: MenuSubmenu, _ input: ActionsInput) -> [MenuEntry] {
         switch submenu {

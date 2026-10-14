@@ -321,6 +321,28 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(responses.last?.workspaceViewID, "dashboard")
     }
 
+    func testTheAppsOwnNoticeIsShownOnlyWhenAllowedAndNeverReported() throws {
+        XCTAssertFalse(presenter(enabled: false).presentApp(title: "Launch failed", body: "x"))
+        XCTAssertFalse(presenter(status: .denied).presentApp(title: "Launch failed", body: "x"))
+        XCTAssertFalse(presenter(status: .notDetermined).presentApp(title: "Launch failed", body: "x"))
+        XCTAssertEqual(center.permissionRequests, 0)
+        XCTAssertEqual(center.added, [])
+
+        let shown = presenter()
+        XCTAssertTrue(shown.presentApp(title: "Could not launch", body: "work/API: no such profile"))
+        let request = try XCTUnwrap(center.added.first)
+        XCTAssertTrue(request.identifier.hasPrefix(NotificationPresenter.appPrefix))
+        XCTAssertEqual(request.content.title, "Could not launch")
+        XCTAssertEqual(request.content.body, "work/API: no such profile")
+        XCTAssertEqual(request.content.categoryIdentifier, NotificationCategories.plain)
+
+        shown.handleResponse(notificationID: request.identifier, actionIdentifier: UNNotificationDefaultActionIdentifier,
+                             userInfo: request.content.userInfo)
+        XCTAssertEqual(reports, [], "the daemon never hears of it")
+        XCTAssertEqual(responses.last?.navigable, false)
+        XCTAssertEqual(responses.last?.embeddedRuntimeSessionID, "")
+    }
+
     /// Snooze, mute, and being on screen hold a terminal notice back, as
     /// they do the daemon's.
     func testATerminalsNotificationObeysSnoozeMuteAndTheScreen() {

@@ -103,6 +103,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         if isMenuOpen { rebuildMenuIfChanged() }
     }
 
+    /// Blinks the icon a few times: a failure the operator asked about, when
+    /// app notifications cannot say so.
+    func flash(times: Int = 3, interval: TimeInterval = 0.15) {
+        guard let button = statusItem.button else { return }
+        for step in 0...(times * 2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(step)) {
+                MainActor.assumeIsolated { button.highlight(step < times * 2 && step % 2 == 0) }
+            }
+        }
+    }
+
     /// Whether the icon is dimmed: whenever the feed is not live, so a down
     /// daemon is visible without opening the menu.
     nonisolated static func appearsDisabled(_ feed: FeedState) -> Bool {

@@ -327,7 +327,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     func makeUtilityTerminal(_ view: WorkspaceUtilityView) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
         guard let configuration = utilityConfiguration(for: view) else {
-            return .failure(WorkspaceTerminalProblem(message: preferences.binaryProblem ?? "amx is still being resolved."))
+            return .failure(WorkspaceTerminalProblem(message: preferences.binaryMenuProblem ?? "amx is still being resolved."))
         }
         guard let runtime = terminalRuntime() else {
             return .failure(WorkspaceTerminalProblem(message: "The embedded terminal could not start. See the log for why."))
@@ -341,7 +341,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     func makeTerminal(runtimeSessionID: String) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
         guard let configuration = attachmentConfiguration(runtimeSessionID: runtimeSessionID) else {
-            return .failure(WorkspaceTerminalProblem(message: preferences.binaryProblem ?? "amx is still being resolved."))
+            return .failure(WorkspaceTerminalProblem(message: preferences.binaryMenuProblem ?? "amx is still being resolved."))
         }
         guard let runtime = terminalRuntime() else {
             return .failure(WorkspaceTerminalProblem(message: "The embedded terminal could not start. See the log for why."))
@@ -427,7 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard let command else {
             // At launch the workspace can ask before amx is found. The
             // question waits for it instead of being answered "unknown".
-            if let problem = preferences.binaryProblem {
+            if let problem = preferences.binaryMenuProblem {
                 completion(.unknown(problem))
             } else {
                 statusQuestions.append((runtimeSessionID, completion))
@@ -449,7 +449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// already asked the operator when there was something to ask.
     func closeSession(runtimeSessionID: String, completion: @escaping @MainActor (String?) -> Void) {
         guard let command else {
-            completion(preferences.binaryProblem ?? "amx has not been found yet.")
+            completion(preferences.binaryMenuProblem ?? "amx has not been found yet.")
             return
         }
         launchQueue.async {
@@ -512,7 +512,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// one it has. The sidebar shows the change once the daemon has read it.
     func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void) {
         guard let command else {
-            completion(preferences.binaryProblem ?? "amx has not been found yet.")
+            completion(preferences.binaryMenuProblem ?? "amx has not been found yet.")
             return
         }
         focusQueue.async {
@@ -631,7 +631,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// state, or marked it active, the way Kitty's own keys do.
     private func sendOperatorEvent(_ event: String) {
         guard let row = workspace?.shownSessionRow else { return refuse(Self.noSessionShown) }
-        guard let command else { return refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        guard let command else { return refuse(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.") }
         var socket: String?
         if case let .kitty(rowSocket, _) = row.target {
             socket = rowSocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : rowSocket
@@ -664,7 +664,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case let .kitty(socket, windowID):
             toggleMute(MenuSessionRow(title: row.project, windowID: windowID, kittySocket: socket, toolTip: "", muted: row.muted))
         case let .embedded(id):
-            guard command != nil else { return refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+            guard command != nil else { return refuse(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.") }
             toggleMute(runtimeSessionID: id)
         }
     }
@@ -748,6 +748,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             lastFeed = store.feed
             Self.logger.notice("feed: \(String(describing: self.store.feed), privacy: .public)")
             if store.feed != .live { refreshDaemonStatus() }
+            if store.feed == .live { store.replace(notice: DaemonStart.failedNotice, with: nil) }
         }
     }
 
@@ -810,15 +811,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         subscription?.reconnectNow()
     }
 
-    /// How often, and for how long, the feed redials after Start Daemon.
+    /// How often the feed redials after Start Daemon, for `DaemonStart.deadline`.
     static let startPollInterval: TimeInterval = 0.25
-    static let startPollDuration: TimeInterval = 5
 
     /// Redials every `startPollInterval` until the feed is live or `deadline`
     /// passes, so a daemon that just started is listed within a moment of
-    /// listening rather than after the backoff's next step.
+    /// listening rather than after the backoff's next step. Each pass also
+    /// decides whether the start has succeeded or failed.
     private func reconnectWhileStarting(until deadline: Date) {
-        guard store.feed != .live, Date() < deadline else { return }
+        let passed = Date() >= deadline
+        checkDaemonStart(deadlinePassed: passed)
+        guard daemonStartPID != nil, store.feed != .live, !passed else { return }
         reconnectIfWaiting()
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.startPollInterval) { [weak self] in
             MainActor.assumeIsolated { self?.reconnectWhileStarting(until: deadline) }
@@ -888,7 +891,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .unknownSocket:
             store.show(notice: "The daemon does not know this session's Kitty socket.")
         case .unsupported:
-            store.show(notice: "Daemon too old to focus sessions — run amx daemon restart")
+            store.show(notice: "Daemon too old to focus sessions — choose Restart Daemon")
         case .notRunning:
             store.apply(health: .notRunning)
         case let .failed(message):
@@ -903,6 +906,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         switch action {
         case .startDaemon:
             startDaemon()
+        case .restartDaemon:
+            restartDaemon()
         case .openWorkspace:
             showWorkspace()
         case .openDashboard:
@@ -949,19 +954,99 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     /// Runs `amx daemon start` detached, only ever because the operator chose
-    /// "Start daemon": the app never starts the daemon on its own.
+    /// "Start daemon": the app never starts the daemon on its own. Its
+    /// standard error goes to a file the log quotes when the start fails.
     private func startDaemon() {
         guard let command else {
-            store.show(notice: preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.")
+            store.show(notice: preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
             return
         }
-        guard let pid = command.spawnDetached(["daemon", "start"]) else {
+        let log = DaemonStart.stderrLog()
+        let exited: @Sendable (pid_t, Int32) -> Void = { [weak self] pid, code in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.daemonStartExited(pid: pid, code: code) }
+            }
+        }
+        guard let pid = command.spawnDetached(["daemon", "start"], extraEnvironment: DaemonStart.detachedEnvironment,
+                                              stderrPath: log?.path, onExit: exited) else {
             store.show(notice: "Could not run \(command.binary.path) daemon start.")
             return
         }
         Self.logger.notice("started amx daemon (pid \(pid))")
-        store.show(notice: "Starting the daemon…")
-        reconnectWhileStarting(until: Date().addingTimeInterval(Self.startPollDuration))
+        daemonStartPID = pid
+        daemonStartExit = nil
+        daemonStartLog = log
+        store.show(notice: DaemonStart.startingNotice)
+        reconnectWhileStarting(until: Date().addingTimeInterval(DaemonStart.deadline))
+    }
+
+    /// The `amx daemon start` the app is waiting on, until it has started or
+    /// failed, and its exit code once it has exited.
+    private var daemonStartPID: pid_t?
+    private var daemonStartExit: Int32?
+    private var daemonStartLog: URL?
+
+    private func daemonStartExited(pid: pid_t, code: Int32) {
+        Self.logger.notice("amx daemon start (pid \(pid)) exited \(code)")
+        guard pid == daemonStartPID else { return }
+        daemonStartExit = code
+        checkDaemonStart(deadlinePassed: false)
+    }
+
+    /// Replaces the Starting notice once the start is decided: cleared when
+    /// the daemon answers, "did not start" when it failed. The reason stays
+    /// in the log, never in the menu.
+    private func checkDaemonStart(deadlinePassed: Bool) {
+        guard let pid = daemonStartPID else { return }
+        switch DaemonStart.verdict(feed: store.feed, exitCode: daemonStartExit, deadlinePassed: deadlinePassed) {
+        case .waiting:
+            return
+        case .started:
+            daemonStartPID = nil
+            store.replace(notice: DaemonStart.startingNotice, with: nil)
+        case .failed:
+            daemonStartPID = nil
+            let exit = daemonStartExit.map { "exited \($0)" } ?? "still running"
+            let tail = daemonStartLog.flatMap { try? Data(contentsOf: $0) }.map { DaemonStart.tail($0) } ?? ""
+            Self.logger.error("amx daemon start (pid \(pid)) did not start the daemon (\(exit, privacy: .public)): \(tail, privacy: .public)")
+            store.show(notice: DaemonStart.failedNotice)
+        }
+    }
+
+    /// Restart Daemon, offered when the daemon is too old for this app:
+    /// `amx daemon restart`, which returns once the new daemon answers, so
+    /// the feed dials it at once.
+    private func restartDaemon() {
+        guard let command else {
+            return report(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
+        }
+        store.show(notice: DaemonStart.restartingNotice)
+        launchQueue.async { [weak self] in
+            let result = command.run(["daemon", "restart"], timeout: AMXCommand.actionTimeout, mutates: true)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.finishRestart(result) }
+            }
+        }
+    }
+
+    private func finishRestart(_ result: Result<ProcessOutput, AMXCommandError>) {
+        let failure: String?
+        switch result {
+        case let .failure(error):
+            failure = error.message
+        case let .success(output) where output.status != 0:
+            failure = DaemonStart.tail(output.stderr, lines: 1, characters: 200)
+            Self.logger.error("amx daemon restart exited \(output.status): \(DaemonStart.tail(output.stderr), privacy: .public)")
+        case let .success(output):
+            failure = nil
+            Self.logger.notice("\(DaemonStart.tail(output.stdout), privacy: .public)")
+        }
+        guard let failure else {
+            store.replace(notice: DaemonStart.restartingNotice, with: nil)
+            subscription?.reconnectNow()
+            return
+        }
+        reportFailure(title: "Could not restart the daemon", failure.isEmpty ? "amx daemon restart failed" : failure)
     }
 
     // MARK: amx
@@ -1016,6 +1101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                 Self.logger.notice("running \(binary.url.path, privacy: .public) (\(String(describing: binary.source), privacy: .public))")
             case let .failure(notFound):
                 snapshot.binaryProblem = notFound.message
+                snapshot.binaryMenuProblem = notFound.menuMessage
                 Self.logger.error("\(notFound.message, privacy: .public)")
             }
             DispatchQueue.main.async {
@@ -1033,7 +1119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                     self.statusQuestions = []
                     for (id, completion) in waiting {
                         if command == nil {
-                            completion(.unknown(self.preferences.binaryProblem ?? "amx was not found."))
+                            completion(.unknown(self.preferences.binaryMenuProblem ?? "amx was not found."))
                         } else {
                             self.sessionStatus(runtimeSessionID: id, completion: completion)
                         }
@@ -1194,7 +1280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     func answerPrompt(_ target: PromptAnswerTarget) {
         let controller = promptPanel ?? PromptAnswerPanelController(flow: PromptAnswerFlow(service: AMXPromptAnswerService(
             command: { [weak self] in self?.command },
-            problem: { [weak self] in self?.preferences.binaryProblem ?? "amx has not been found yet." }
+            problem: { [weak self] in self?.preferences.binaryMenuProblem ?? "amx has not been found yet." }
         )))
         controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
         promptPanel = controller
@@ -1298,7 +1384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return
         }
         guard let command else {
-            refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.")
+            refuse(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
             return
         }
         if let capabilities = preferences.capabilities, !capabilities.openDashboard {
@@ -1381,7 +1467,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var gate: ActionGate {
         ActionGate(
             capabilities: preferences.capabilities,
-            problem: command == nil ? preferences.binaryProblem : nil,
+            problem: command == nil ? preferences.binaryMenuProblem : nil,
             binaryPath: command?.binary.path ?? "amx"
         )
     }
@@ -1492,13 +1578,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// the Kitty used last, which is then brought forward on the new tab. A
     /// `directory` replaces the project's configured one for this launch.
     private func launch(_ project: ProjectEntry, directory: String? = nil) {
-        guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
-        if let reason = gate.unavailableReason(.project) { return report(reason) }
+        guard let command else {
+            return reportFailure(title: Self.launchFailedTitle, preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
+        }
+        if let reason = gate.unavailableReason(.project) { return reportFailure(title: Self.launchFailedTitle, reason) }
         if preferencesModel.preferences.launchBackend.launchesInWorkspace {
             return launchInWorkspace(project, directory: directory, command: command)
         }
         let candidates = newTabCandidates()
         let arguments = ProjectCatalog.launchArguments(for: project, directory: directory)
+        let progress = Self.launchingNotice(project.title)
+        store.show(notice: progress)
         launchQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
                 command.json(ProjectLaunchResult.self, arguments, kittyListenOn: socket,
@@ -1506,7 +1596,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.finishOpening(outcome, label: "launch \(project.profile)/\(project.title)") { $0.windowID }
+                    self?.finishOpening(outcome, label: "launch \(project.profile)/\(project.title)", progress: progress) { $0.windowID }
                 }
             }
         }
@@ -1537,11 +1627,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private func launchInWorkspace(_ project: ProjectEntry, directory: String?, command: AMXCommand) {
         let arguments = ProjectCatalog.workspaceLaunchArguments(for: project, directory: directory)
         let label = "launch \(project.profile)/\(project.title)"
+        let progress = Self.launchingNotice(project.title)
+        store.show(notice: progress)
         launchQueue.async { [weak self] in
             let result = command.json(ProjectLaunchResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label)
+                    self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label, progress: progress)
                 }
             }
         }
@@ -1550,11 +1642,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Shows the workspace on the runtime session a tmux launch or continue
     /// reports: its own view as soon as the daemon lists it, and the window
     /// meanwhile.
-    private func finishOpeningInWorkspace(_ result: AMXCommandResult<String>, label: String) {
+    private func finishOpeningInWorkspace(_ result: AMXCommandResult<String>, label: String, progress: String) {
+        store.replace(notice: progress, with: nil)
         switch result {
         case let .failure(error):
             Self.logger.error("\(label, privacy: .public) on tmux: \(error.message, privacy: .public)")
-            report("Could not \(label): \(error.message)")
+            reportFailure(title: "Could not \(label)", error.message)
         case let .success(runtimeSessionID), let .partial(runtimeSessionID, _):
             Self.logger.notice("\(label, privacy: .public) on tmux as \(runtimeSessionID, privacy: .public)")
             let controller = workspaceController()
@@ -1578,15 +1671,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             focus(.focusing(live, title: conversation.selector))
             return
         }
-        guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        guard let command else {
+            return reportFailure(title: Self.launchFailedTitle, preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
+        }
         let label = "continue \(conversation.selector)"
+        let progress = Self.launchingNotice(conversation.selector)
+        store.show(notice: progress)
         if preferencesModel.preferences.launchBackend.launchesInWorkspace {
             let arguments = RecentSessions.workspaceContinueArguments(for: conversation)
             launchQueue.async { [weak self] in
                 let result = command.json(SessionContinueResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label)
+                        self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label, progress: progress)
                     }
                 }
             }
@@ -1601,7 +1698,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.finishOpening(outcome, label: label) { $0.windowID }
+                    self?.finishOpening(outcome, label: label, progress: progress) { $0.windowID }
                 }
             }
         }
@@ -1609,17 +1706,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     /// Brings Kitty forward after a launch or continue, on the reported window
     /// when amx named one and the daemon knows that Kitty.
-    private func finishOpening<T>(_ outcome: KittyTargetedCommand.Outcome<T>, label: String, windowID: @escaping (T) -> Int) {
+    private func finishOpening<T>(_ outcome: KittyTargetedCommand.Outcome<T>, label: String, progress: String,
+                                  windowID: @escaping (T) -> Int) {
+        store.replace(notice: progress, with: nil)
         switch outcome {
         case .noSocket:
-            report(KittyEndpoint.listenOnMissing)
+            reportFailure(title: "Could not \(label)", KittyEndpoint.listenOnMissing)
         case let .unreachable(message):
-            report("Could not reach Kitty: \(message)")
+            reportFailure(title: "Could not \(label)", "Could not reach Kitty: \(message)")
         case let .done(result, socket):
             switch result {
             case let .failure(error):
                 Self.logger.error("\(label, privacy: .public): \(error.message, privacy: .public)")
-                report("Could not \(label): \(error.message)")
+                reportFailure(title: "Could not \(label)", error.message)
             case let .success(value):
                 Self.logger.notice("\(label, privacy: .public) via \(socket, privacy: .public)")
                 bringForward(socket: socket, windowID: windowID(value))
@@ -1647,7 +1746,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Window IDs mean something only inside the instance that issued them,
     /// so no other socket is tried.
     func toggleMute(_ row: MenuSessionRow) {
-        guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        guard let command else { return report(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.") }
         if let reason = gate.unavailableReason(.muteToggle) { return report(reason) }
         guard row.runtimeSessionID.isEmpty else { return toggleMute(runtimeSessionID: row.runtimeSessionID) }
         let socket = row.kittySocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : row.kittySocket
@@ -1802,6 +1901,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private func report(_ message: String) {
         Self.logger.notice("action: \(message, privacy: .public)")
         store.show(notice: message)
+    }
+
+    /// A launch, continue, or restart that failed after the menu closed: the
+    /// menu line says why, and the operator hears of it at once, by a
+    /// notification when app notifications are on and allowed, else by a
+    /// beep and the icon blinking.
+    private func reportFailure(title: String, _ message: String) {
+        let line = Self.failureLine(title: title, message: message)
+        report(line)
+        if notifications?.presentApp(title: title, body: message) != true {
+            NSSound.beep()
+            statusItem?.flash()
+        }
+    }
+
+    static let launchFailedTitle = "Could not launch"
+
+    /// The menu line while a launch or continue runs.
+    nonisolated static func launchingNotice(_ name: String) -> String {
+        name.isEmpty ? "Launching…" : "Launching \(name)…"
+    }
+
+    /// The menu line for a failure: the message, after the title unless the
+    /// message already says it.
+    nonisolated static func failureLine(title: String, message: String) -> String {
+        if message.isEmpty { return title }
+        if message.hasPrefix("Could not") { return message }
+        return "\(title): \(message)"
     }
 
     // MARK: StatusItemDelegate

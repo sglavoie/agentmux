@@ -63,6 +63,14 @@ struct AMXBinaryResolver {
             }
             return lines.joined(separator: "\n")
         }
+
+        /// The one line a menu or notice shows; `message`, with every path
+        /// tried, stays for Settings and the log.
+        var menuMessage: String {
+            invalidOverride == nil
+                ? "amx not found — set it in Settings › amx binary"
+                : "The amx binary override is not an executable — fix it in Settings › amx binary"
+        }
     }
 
     static let defaultsDomain = "io.github.sglavoie.agentmux"
