@@ -236,6 +236,72 @@ final class HotKeyTests: XCTestCase {
         XCTAssertTrue(recorder.handle(after) === after, "a stopped recorder takes nothing")
     }
 
+    /// A recorder whose key monitor is captured rather than installed, so
+    /// a test drives the callback the recorder registers.
+    private final class CapturedMonitor {
+        var callback: ((NSEvent) -> NSEvent?)?
+        var removed = 0
+
+        func attach(to recorder: HotKeyRecorder) {
+            recorder.addMonitor = { [unowned self] handler in
+                callback = handler
+                return NSObject()
+            }
+            recorder.removeMonitor = { [unowned self] _ in removed += 1 }
+        }
+    }
+
+    @MainActor
+    func testRegisteredMonitorSwallowsSettingsKeysAndPassesOthers() throws {
+        let settings = settingsWindow()
+        let other = settingsWindow()
+        defer { settings.close(); other.close() }
+        let monitor = CapturedMonitor()
+        let recorder = HotKeyRecorder()
+        recorder.window = settings
+        monitor.attach(to: recorder)
+        var recorded: [HotKeyCombo] = []
+        let combo: NSEvent.ModifierFlags = [.control, .option, .command]
+
+        recorder.start(onStateChange: { _ in }, onRecord: { recorded.append($0) })
+        var callback = try XCTUnwrap(monitor.callback)
+        let elsewhere = keyDown(UInt16(kVK_ANSI_K), "k", modifiers: combo, in: other)
+        XCTAssertTrue(callback(elsewhere) === elsewhere, "another window's key goes on to it")
+        let windowless = keyDown(UInt16(kVK_ANSI_K), "k", modifiers: combo, in: nil)
+        XCTAssertTrue(callback(windowless) === windowless, "a windowless key goes on")
+        XCTAssertNil(callback(keyDown(UInt16(kVK_ANSI_A), "a", in: settings)), "a refused key is swallowed")
+        XCTAssertNotNil(recorder.hint)
+        XCTAssertTrue(recorder.isRecording)
+        XCTAssertNil(callback(keyDown(UInt16(kVK_ANSI_K), "k", modifiers: combo, in: settings)),
+                     "a recorded shortcut is swallowed")
+        XCTAssertEqual(recorded, [HotKeyCombo(string: "ctrl+opt+cmd+k")!])
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertEqual(monitor.removed, 1)
+        let after = keyDown(UInt16(kVK_ANSI_J), "j", modifiers: combo, in: settings)
+        XCTAssertTrue(callback(after) === after, "a stopped recorder's monitor takes nothing")
+
+        recorder.start(onStateChange: { _ in }, onRecord: { recorded.append($0) })
+        callback = try XCTUnwrap(monitor.callback)
+        XCTAssertNil(callback(keyDown(UInt16(kVK_Escape), "\u{1b}", in: settings)), "Esc is swallowed")
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertEqual(recorded.count, 1)
+    }
+
+    @MainActor
+    func testRegisteredMonitorOfAGoneRecorderPassesKeysOn() throws {
+        let settings = settingsWindow()
+        defer { settings.close() }
+        let monitor = CapturedMonitor()
+        var recorder: HotKeyRecorder? = HotKeyRecorder()
+        recorder?.window = settings
+        monitor.attach(to: recorder!)
+        recorder?.start(onStateChange: { _ in }, onRecord: { _ in })
+        let callback = try XCTUnwrap(monitor.callback)
+        recorder = nil
+        let key = keyDown(UInt16(kVK_ANSI_K), "k", modifiers: [.control, .option, .command], in: settings)
+        XCTAssertTrue(callback(key) === key)
+    }
+
     @MainActor
     func testSettingsLosingKeyStopsRecording() {
         let model = PreferencesModel(defaults: UserDefaults(suiteName: "HotKeyTests-\(UUID().uuidString)")!)

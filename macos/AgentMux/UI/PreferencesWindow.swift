@@ -581,6 +581,12 @@ final class HotKeyRecorder: ObservableObject {
     private var monitor: Any?
     private var onStateChange: ((Bool) -> Void)?
     private var onRecord: ((HotKeyCombo) -> Void)?
+    /// How the key monitor is installed and removed; tests capture the
+    /// callback the recorder registers.
+    var addMonitor: (@escaping (NSEvent) -> NSEvent?) -> Any? = {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: $0)
+    }
+    var removeMonitor: (Any) -> Void = { NSEvent.removeMonitor($0) }
 
     func start(onStateChange: @escaping (Bool) -> Void, onRecord: @escaping (HotKeyCombo) -> Void) {
         stop()
@@ -589,8 +595,11 @@ final class HotKeyRecorder: ObservableObject {
         hint = nil
         onStateChange(true)
         self.onRecord = onRecord
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handle(event) ?? event
+        // A recorder that is gone passes the key on; a live one's nil
+        // swallows it, so it must not fall back to the event.
+        monitor = addMonitor { [weak self] event in
+            guard let self else { return event }
+            return self.handle(event)
         }
     }
 
@@ -615,7 +624,7 @@ final class HotKeyRecorder: ObservableObject {
 
     func stop() {
         if let monitor {
-            NSEvent.removeMonitor(monitor)
+            removeMonitor(monitor)
             self.monitor = nil
         }
         guard isRecording else { return }
