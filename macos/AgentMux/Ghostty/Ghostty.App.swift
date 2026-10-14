@@ -306,14 +306,6 @@ extension Ghostty {
                 // surface's own change is that surface's business.
                 return true
 
-            case GHOSTTY_ACTION_RING_BELL:
-                // The app has no Dock icon to bounce, so a bell is heard only
-                // while the app is the one in front.
-                Ghostty.onMain {
-                    if NSApp.isActive { NSSound.beep() }
-                }
-                return true
-
             default:
                 return false
             }
@@ -323,18 +315,80 @@ extension Ghostty {
         /// not open anything on the machine they run on.
         static var openLink: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
+        /// Shows a file a terminal linked to in the Finder. Replaced in tests.
+        static var revealFile: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
+
+        /// Stands in for the question asked before a link of an unusual
+        /// scheme is opened, for tests. Answers on the main thread.
+        static var confirmLink: ((URL, @escaping (Bool) -> Void) -> Void)?
+
+        /// What is done with a link a terminal asked to open.
+        enum LinkDisposition: Equatable {
+            /// The web and mail: opened at once.
+            case open
+            /// A file: shown in the Finder, never opened or run.
+            case reveal
+            /// Anything else may launch an app with arguments from the
+            /// terminal, so the operator is asked first.
+            case confirm
+        }
+
+        static let safeLinkSchemes: Set<String> = ["http", "https", "mailto"]
+
+        static func linkDisposition(_ url: URL) -> LinkDisposition {
+            if url.isFileURL { return .reveal }
+            return safeLinkSchemes.contains(url.scheme?.lowercased() ?? "") ? .open : .confirm
+        }
+
+        /// The link as Ghostty sent it: a URL with a scheme, else a path.
+        static func link(from str: String) -> URL {
+            if let parsed = URL(string: str), parsed.scheme != nil { return parsed }
+            return URL(fileURLWithPath: (str as NSString).expandingTildeInPath)
+        }
+
+        /// Opens, reveals, or asks about a link, on the main thread.
+        static func follow(_ url: URL) {
+            switch linkDisposition(url) {
+            case .open:
+                openLink(url)
+            case .reveal:
+                revealFile(url)
+            case .confirm:
+                let answer: (Bool) -> Void = { allowed in
+                    guard allowed else { return }
+                    openLink(url)
+                }
+                if let confirmLink { return confirmLink(url, answer) }
+                askToOpen(url, answer)
+            }
+        }
+
+        private static func askToOpen(_ url: URL, _ answer: @escaping (Bool) -> Void) {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Open this \(url.scheme ?? "") link?"
+            alert.informativeText = "A program in the terminal asked to open:\n\(url.absoluteString)\n\nIt may start another app."
+            alert.addButton(withTitle: "Open")
+            alert.addButton(withTitle: "Cancel")
+            present(alert, on: NSApp.keyWindow) { answer($0 == .alertFirstButtonReturn) }
+        }
+
+        /// A sheet on `window` when it can take one, else app-modal.
+        static func present(_ alert: NSAlert, on window: NSWindow?, _ done: @escaping (NSApplication.ModalResponse) -> Void) {
+            if let window, window.isVisible {
+                alert.beginSheetModal(for: window, completionHandler: done)
+            } else {
+                done(alert.runModal())
+            }
+        }
+
         private static func openURL(_ v: ghostty_action_open_url_s) -> Bool {
             guard let ptr = v.url else { return false }
             let data = Data(bytes: ptr, count: Int(v.len))
             guard let str = String(data: data, encoding: .utf8), !str.isEmpty else { return false }
-            let url: URL
-            if let parsed = URL(string: str), parsed.scheme != nil {
-                url = parsed
-            } else {
-                url = URL(fileURLWithPath: (str as NSString).expandingTildeInPath)
-            }
+            let url = link(from: str)
             Ghostty.logger.notice("opening a link with scheme \(url.scheme ?? "none", privacy: .public)")
-            Ghostty.onMain { openLink(url) }
+            Ghostty.onMain { follow(url) }
             return true
         }
 
@@ -356,10 +410,14 @@ extension Ghostty {
             location: ghostty_clipboard_e,
             state: UnsafeMutableRawPointer?
         ) -> Bool {
-            guard let surface = Ghostty.surfaceHost(from: userdata)?.surface,
-                  let pasteboard = pasteboard(for: location) else {
-                return false
+            guard let host = Ghostty.surfaceHost(from: userdata), let surface = host.surface else { return false }
+            // A drop of several lines pastes through here (`SurfaceView.paste`).
+            if let view = host as? SurfaceView, let text = view.pendingPaste {
+                view.pendingPaste = nil
+                completeClipboardRequest(surface, data: text, state: state)
+                return true
             }
+            guard let pasteboard = pasteboard(for: location) else { return false }
             // No text-like content: let a performable paste binding fall
             // through to the terminal.
             guard let str = stringContents(of: pasteboard) else { return false }
@@ -392,16 +450,25 @@ extension Ghostty {
             state: UnsafeMutableRawPointer?,
             request: ghostty_clipboard_request_e
         ) {
-            guard let host = Ghostty.surfaceHost(from: userdata),
-                  let string,
-                  let text = String(cString: string, encoding: .utf8) else {
+            guard let host = Ghostty.surfaceHost(from: userdata) else { return }
+            // Ghostty waits on every request it makes: one whose text cannot
+            // be read is answered with nothing rather than left hanging.
+            guard let string, let text = String(cString: string, encoding: .utf8) else {
+                if let surface = host.surface {
+                    completeClipboardRequest(surface, data: "", state: state, confirmed: true)
+                }
                 return
             }
+            // Held weakly: the terminal may close while the question is up,
+            // and then there is no request left to answer.
+            weak let asker = host
             DispatchQueue.main.async {
-                // The surface may be gone by the time the question is answered.
-                let allowed = confirmClipboard(text: text, request: request)
-                guard let surface = host.surface else { return }
-                completeClipboardRequest(surface, data: allowed ? text : "", state: state, confirmed: true)
+                guard let view = asker else { return }
+                let question = ClipboardQuestion(text: text, request: request, requester: (view as? SurfaceView)?.hostName ?? "")
+                askClipboard(question, window: (view as? NSView)?.window) { allowed in
+                    guard let surface = asker?.surface else { return }
+                    completeClipboardRequest(surface, data: allowed ? text : "", state: state, confirmed: true)
+                }
             }
         }
 
@@ -445,9 +512,13 @@ extension Ghostty {
             }
             // A confirmed write (OSC 52) asks about its plain-text half only.
             guard let text = items.first(where: { $0.type == .string })?.data else { return }
+            weak let asker = Ghostty.surfaceHost(from: userdata)
             DispatchQueue.main.async {
-                if confirmClipboard(text: text, request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE) {
-                    write()
+                let question = ClipboardQuestion(
+                    text: text, request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE,
+                    requester: (asker as? SurfaceView)?.hostName ?? "")
+                askClipboard(question, window: (asker as? NSView)?.window) { allowed in
+                    if allowed { write() }
                 }
             }
         }
@@ -458,25 +529,61 @@ extension Ghostty {
             return NSPasteboard.PasteboardType(utType.identifier)
         }
 
-        /// Asks, app-modally, whether a program may touch the clipboard.
-        private static func confirmClipboard(text: String, request: ghostty_clipboard_request_e) -> Bool {
+        /// What a program asked to do with the clipboard, and who asked.
+        struct ClipboardQuestion {
+            let text: String
+            let request: ghostty_clipboard_request_e
+            /// The view or session the terminal is, as the workspace names
+            /// it; empty when the host named none.
+            let requester: String
+        }
+
+        /// Stands in for the clipboard sheet, for tests. Answers on the main
+        /// thread.
+        static var confirmClipboard: ((ClipboardQuestion, @escaping (Bool) -> Void) -> Void)?
+
+        /// Asks whether a program may touch the clipboard: a sheet on the
+        /// asking terminal's window, app-modal when it has none.
+        private static func askClipboard(_ question: ClipboardQuestion, window: NSWindow?, _ answer: @escaping (Bool) -> Void) {
+            if let confirmClipboard { return confirmClipboard(question, answer) }
+            present(clipboardAlert(question), on: window) { answer($0 == .alertFirstButtonReturn) }
+        }
+
+        /// The question, with the whole text in a scrollable preview: what
+        /// is pasted is exactly what can be read here.
+        static func clipboardAlert(_ question: ClipboardQuestion) -> NSAlert {
             let alert = NSAlert()
-            switch request {
+            let who = question.requester.isEmpty ? "the program" : question.requester
+            switch question.request {
             case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ:
-                alert.messageText = "Allow the program to read the clipboard?"
+                alert.messageText = "Allow \(who) to read the clipboard?"
+                alert.informativeText = "This is what it would read."
             case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_WRITE:
-                alert.messageText = "Allow the program to write to the clipboard?"
+                alert.messageText = "Allow \(who) to write to the clipboard?"
+                alert.informativeText = "This is what it would write."
             default:
-                alert.messageText = "Paste this text?"
+                alert.messageText = question.requester.isEmpty ? "Paste this text?" : "Paste this text into \(question.requester)?"
                 alert.informativeText = "It may run commands when pasted."
             }
-            let preview = NSTextField(wrappingLabelWithString: String(text.prefix(2000)))
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 440, height: 180))
+            scroll.hasVerticalScroller = true
+            scroll.hasHorizontalScroller = false
+            scroll.borderType = .bezelBorder
+            let preview = NSTextView(frame: NSRect(origin: .zero, size: scroll.contentSize))
+            preview.isEditable = false
             preview.isSelectable = true
-            preview.frame = NSRect(x: 0, y: 0, width: 360, height: 120)
-            alert.accessoryView = preview
+            preview.isRichText = false
+            preview.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+            preview.textContainerInset = NSSize(width: 4, height: 4)
+            preview.autoresizingMask = [.width]
+            preview.isVerticallyResizable = true
+            preview.textContainer?.widthTracksTextView = true
+            preview.string = question.text
+            scroll.documentView = preview
+            alert.accessoryView = scroll
             alert.addButton(withTitle: "Allow")
             alert.addButton(withTitle: "Deny")
-            return alert.runModal() == .alertFirstButtonReturn
+            return alert
         }
     }
 }

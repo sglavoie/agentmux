@@ -256,6 +256,7 @@ final class GhosttyInteractionTests: XCTestCase {
         }
         let history: [(String, TestKey)] = [
             ("Shift+Page Up", .pageUp.with(.shift)), ("Shift+Page Down", .pageDown.with(.shift)),
+            ("Command+Page Up", .pageUp.with(.command)), ("Command+Page Down", .pageDown.with(.command)),
             ("Command+Home", .home.with(.command)), ("Command+End", .end.with(.command)),
             ("Command+F", .command("f", keyCode: 3)), ("Command+G", .command("g", keyCode: 5)),
             ("Command+Shift+G", .command("g", keyCode: 5, shifted: "G")),
@@ -422,6 +423,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("-", keyCode: 27, shifted: "_"), "Actual Size"),
             (.pageUp.with(.shift), "Page Up"),
             (.pageDown.with(.shift), "Page Down"),
+            (.pageUp.with(.command), "Page Up"),
+            (.pageDown.with(.command), "Page Down"),
             (.home.with(.command), "Scroll to Top"),
             (.end.with(.command), "Scroll to Bottom"),
             (.command("b", keyCode: 11), "Toggle Sidebar"),
@@ -640,7 +643,7 @@ final class GhosttyLinkTests: XCTestCase {
     /// Clicks the link with `flags` held, on a surface of its own whose
     /// program first turns on the given mouse-tracking modes, and returns
     /// what the app was asked to open and whether the program had the mouse.
-    private func click(_ flags: NSEvent.ModifierFlags, mouseModes: [Int] = []) throws -> (opened: [String], captured: Bool) {
+    private func click(_ flags: NSEvent.ModifierFlags, mouseModes: [Int] = []) throws -> (opened: [String], captured: Bool, hovered: String?) {
         var opened: [String] = []
         Ghostty.App.openLink = { opened.append($0.absoluteString) }
         let ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
@@ -673,17 +676,21 @@ final class GhosttyLinkTests: XCTestCase {
         view.mouseMoved(with: mouse(.mouseMoved, NSPoint(x: p.x - 3, y: p.y), flags, in: window))
         view.mouseMoved(with: mouse(.mouseMoved, p, flags, in: window))
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        let hovered = view.hoveredLink
         view.mouseDown(with: mouse(.leftMouseDown, p, flags, in: window))
         view.mouseUp(with: mouse(.leftMouseUp, p, flags, in: window))
         RunLoop.current.run(until: Date().addingTimeInterval(0.4))
-        return (opened, captured)
+        return (opened, captured, hovered)
     }
 
     func testCommandClickOpensALinkAndAPlainClickDoesNot() throws {
         let commanded = try click(.command)
         XCTAssertFalse(commanded.captured)
         XCTAssertEqual(commanded.opened, [Self.link])
-        XCTAssertEqual(try click([]).opened, [])
+        XCTAssertEqual(commanded.hovered, Self.link, "the link under the pointer is reported for the workspace to show")
+        let plain = try click([])
+        XCTAssertEqual(plain.opened, [])
+        XCTAssertNil(plain.hovered)
     }
 
     /// A program that tracks the mouse is sent the click instead, Command

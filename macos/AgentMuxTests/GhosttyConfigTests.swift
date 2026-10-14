@@ -156,6 +156,10 @@ final class GhosttyConfigTests: XCTestCase {
         for tag in [
             GHOSTTY_ACTION_SET_TITLE, GHOSTTY_ACTION_PWD, GHOSTTY_ACTION_SHOW_CHILD_EXITED,
             GHOSTTY_ACTION_DESKTOP_NOTIFICATION, GHOSTTY_ACTION_CLOSE_WINDOW,
+            // A bell, a hovered link, secure input, and key sequences belong
+            // to the terminal they happen in.
+            GHOSTTY_ACTION_RING_BELL, GHOSTTY_ACTION_MOUSE_OVER_LINK, GHOSTTY_ACTION_SECURE_INPUT,
+            GHOSTTY_ACTION_KEY_SEQUENCE, GHOSTTY_ACTION_KEY_TABLE,
         ] {
             XCTAssertEqual(Ghostty.disposition(of: tag), .surface, "action \(tag.rawValue)")
         }

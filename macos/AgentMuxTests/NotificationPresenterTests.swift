@@ -264,6 +264,40 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertFalse(responses[1].navigable)
     }
 
+    /// A program's own notification (OSC 9/777) is the app's: shown only when
+    /// it can be, never reported to the daemon, and a click on one goes to
+    /// the session it came from.
+    func testATerminalsNotificationIsShownButNeverReported() throws {
+        XCTAssertFalse(presenter(enabled: false).presentTerminal(title: "t", body: "b", source: "api", runtimeSessionID: nil))
+        XCTAssertFalse(presenter(status: .denied).presentTerminal(title: "t", body: "b", source: "api", runtimeSessionID: nil))
+        let undecided = presenter(status: .notDetermined)
+        XCTAssertFalse(undecided.presentTerminal(title: "t", body: "b", source: "api", runtimeSessionID: nil))
+        XCTAssertEqual(center.permissionRequests, 0, "a program does not get to ask for permission")
+        XCTAssertEqual(center.added, [])
+
+        let shown = presenter()
+        XCTAssertTrue(shown.presentTerminal(title: "Build", body: "done", source: "api — work", runtimeSessionID: "rs-1"))
+        XCTAssertTrue(shown.presentTerminal(title: "", body: "tests passed", source: "Dashboard", runtimeSessionID: nil))
+        XCTAssertEqual(center.added.count, 2)
+        let session = try XCTUnwrap(center.added.first)
+        XCTAssertTrue(session.identifier.hasPrefix(NotificationPresenter.terminalPrefix))
+        XCTAssertEqual(session.content.title, "Build")
+        XCTAssertEqual(session.content.subtitle, "api — work")
+        XCTAssertEqual(session.content.body, "done")
+        XCTAssertEqual(session.content.threadIdentifier, "runtime:rs-1")
+        XCTAssertEqual(session.content.categoryIdentifier, NotificationCategories.plain)
+        let view = center.added[1].content
+        XCTAssertEqual(view.title, "Dashboard", "OSC 9 has no title: the source is one")
+        XCTAssertEqual(view.subtitle, "")
+        XCTAssertEqual(reports, [], "the daemon never hears of it")
+
+        shown.handleResponse(notificationID: session.identifier, actionIdentifier: UNNotificationDefaultActionIdentifier,
+                                 userInfo: session.content.userInfo)
+        XCTAssertEqual(reports, [])
+        XCTAssertEqual(responses.last?.embeddedRuntimeSessionID, "rs-1")
+        XCTAssertEqual(responses.last?.disposition, .clicked)
+    }
+
     // MARK: Permission
 
     func testPermissionIsAskedOnTheFirstFrameNotAtLaunch() {

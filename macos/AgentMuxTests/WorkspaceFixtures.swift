@@ -185,6 +185,13 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
         daemonStarts += 1
     }
 
+    /// The desktop notifications terminals asked for, in order.
+    private(set) var terminalNotices: [(title: String, body: String, source: String, runtimeSessionID: String?)] = []
+
+    func workspaceTerminalNotification(title: String, body: String, source: String, runtimeSessionID: String?) {
+        terminalNotices.append((title, body, source, runtimeSessionID))
+    }
+
     /// The sessions amx was asked to close, in order.
     private(set) var ended: [String] = []
     /// Set to refuse every close with this message.

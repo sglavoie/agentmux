@@ -22,8 +22,7 @@ extension Ghostty {
              GHOSTTY_ACTION_OPEN_URL,
              GHOSTTY_ACTION_OPEN_CONFIG,
              GHOSTTY_ACTION_RELOAD_CONFIG,
-             GHOSTTY_ACTION_CONFIG_CHANGE,
-             GHOSTTY_ACTION_RING_BELL:
+             GHOSTTY_ACTION_CONFIG_CHANGE:
             return .app
 
         case GHOSTTY_ACTION_SET_TITLE,
@@ -34,7 +33,12 @@ extension Ghostty {
              GHOSTTY_ACTION_RENDERER_HEALTH,
              GHOSTTY_ACTION_SHOW_CHILD_EXITED,
              GHOSTTY_ACTION_CLOSE_WINDOW,
-             GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+             GHOSTTY_ACTION_DESKTOP_NOTIFICATION,
+             GHOSTTY_ACTION_RING_BELL,
+             GHOSTTY_ACTION_MOUSE_OVER_LINK,
+             GHOSTTY_ACTION_SECURE_INPUT,
+             GHOSTTY_ACTION_KEY_SEQUENCE,
+             GHOSTTY_ACTION_KEY_TABLE:
             return .surface
 
         // Tabs, splits, the quick terminal, and new windows: explicitly ignored.
@@ -76,9 +80,9 @@ extension Ghostty {
             return .ignored
 
         default:
-            // Cell size, secure input, link hover, search, progress, key
-            // tables, scrollbar, render, readonly, and anything a later pin
-            // adds: nothing Agent Mux.app draws reads them.
+            // Cell size, search, progress, scrollbar, render, readonly, and
+            // anything a later pin adds: nothing Agent Mux.app draws reads
+            // them.
             return .ignored
         }
     }

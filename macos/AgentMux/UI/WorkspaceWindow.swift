@@ -60,6 +60,10 @@ protocol WorkspaceDelegate: AnyObject {
     /// Runs `amx daemon start`, because the operator asked for it from the
     /// pane. It starts no agent.
     func workspaceStartDaemon()
+    /// A program in one of the workspace's terminals asked for a desktop
+    /// notification (OSC 9 or 777). `source` names the session or view it
+    /// came from; `runtimeSessionID` is set for a session's terminal.
+    func workspaceTerminalNotification(title: String, body: String, source: String, runtimeSessionID: String?)
 }
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -150,6 +154,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         /// listed: it was attached elsewhere, or detached with F12.
         case detached(runtimeSessionID: String)
         case unavailable(runtimeSessionID: String, String)
+        /// The session's terminal reported that its renderer failed: it
+        /// draws nothing new until it is made again.
+        case rendererFailed(runtimeSessionID: String)
         /// The session is being closed: its agent was asked to end.
         case closing(runtimeSessionID: String)
         /// The session the workspace is coming back to is not known to be
@@ -211,6 +218,28 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var terminals: [String: WorkspaceTerminal] = [:]
     /// Sessions whose terminal ended and is not remade until asked for.
     private var detached: Set<String> = []
+    /// Sessions whose terminal's renderer said it failed.
+    private(set) var rendererFailed: Set<String> = []
+
+    /// Sessions and views, by runtime session or view id, that rang the
+    /// bell while another was shown; marked on their line until shown or
+    /// until `bellHold` has passed.
+    private(set) var ringingSessions: Set<String> = []
+    private(set) var ringingViews: Set<String> = []
+    /// Counts bells, so an expiry overtaken by a later bell is dropped.
+    private var bellCount = 0
+    static let bellHold: TimeInterval = 60
+    /// What the bell does besides the mark, replaced in tests: the app in
+    /// front, the beep, and the Dock's attention request.
+    var isAppActive: () -> Bool = { NSApp.isActive }
+    var beep: () -> Void = { NSSound.beep() }
+    var requestAttention: () -> Void = { _ = NSApp.requestUserAttention(.informationalRequest) }
+
+    /// The title each utility view's program last set (OSC 0/2), by view id.
+    private(set) var programTitles: [String: String] = [:]
+    /// The link under the pointer in the terminal shown, at the pane's
+    /// bottom corner.
+    let linkLabel = NSTextField(labelWithString: "")
 
     /// Sessions amx was asked to close, until it has answered and a live
     /// snapshot no longer lists them: whether the pane was on each when it
@@ -1072,6 +1101,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     private func discardViewTerminal(_ id: String) {
         guard let terminal = viewTerminals.removeValue(forKey: id) else { return }
+        ringingViews.remove(id)
+        programTitles[id] = nil
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
             focusListOrPane()
         }
@@ -1194,6 +1225,144 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
+    // MARK: Terminal events
+
+    /// The terminal the pane shows, if it shows one.
+    var shownTerminalView: NSView? {
+        switch content {
+        case let .terminal(id): return terminals[id]?.view
+        case let .view(id): return viewTerminals[id]?.view
+        default: return nil
+        }
+    }
+
+    private func sessionID(of view: NSView) -> String? {
+        terminals.first(where: { $0.value.view === view })?.key
+    }
+
+    private func viewID(of view: NSView) -> String? {
+        viewTerminals.first(where: { $0.value.view === view })?.key
+    }
+
+    /// What a bell does, given where it rang.
+    struct BellResponse: Equatable {
+        /// Mark the line of the session or view it rang in.
+        var mark: Bool
+        var beep: Bool
+        /// Ask the Dock for attention, once.
+        var requestAttention: Bool
+
+        /// A bell in the terminal shown is heard, and only when the app is
+        /// in front and Ghostty's `bell-features` include `system`; one in a
+        /// hidden terminal marks its line instead. Either asks for attention
+        /// while another app is in front.
+        static func of(shown: Bool, appActive: Bool, systemBell: Bool) -> BellResponse {
+            BellResponse(mark: !shown, beep: shown && appActive && systemBell, requestAttention: !appActive)
+        }
+    }
+
+    /// A program rang the bell in one of the workspace's terminals.
+    func terminalRangBell(_ view: NSView, systemBell: Bool) {
+        let session = sessionID(of: view)
+        let utility = session == nil ? viewID(of: view) : nil
+        guard session != nil || utility != nil else { return }
+        let shown = isOpen && view === shownTerminalView
+        let response = BellResponse.of(shown: shown, appActive: isAppActive(), systemBell: systemBell)
+        if response.beep { beep() }
+        if response.requestAttention { requestAttention() }
+        guard response.mark else { return }
+        if let session { ringingSessions.insert(session) }
+        if let utility { ringingViews.insert(utility) }
+        reloadLines()
+        bellCount += 1
+        let count = bellCount
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.bellHold) { [weak self] in
+            guard let self, self.bellCount == count else { return }
+            self.clearBells(all: true)
+        }
+    }
+
+    /// Takes the bell mark off what the pane shows, or off every line.
+    private func clearBells(all: Bool = false) {
+        var changed = false
+        if all {
+            changed = !ringingSessions.isEmpty || !ringingViews.isEmpty
+            ringingSessions.removeAll()
+            ringingViews.removeAll()
+        } else {
+            switch content {
+            case let .terminal(id): changed = ringingSessions.remove(id) != nil
+            case let .view(id): changed = ringingViews.remove(id) != nil
+            default: break
+            }
+        }
+        if changed { reloadLines() }
+    }
+
+    /// Redraws the sidebar's lines in place, keeping its selection.
+    private func reloadLines() {
+        guard sidebar.numberOfRows > 0 else { return }
+        applying = true
+        sidebar.reloadData(forRowIndexes: IndexSet(integersIn: 0..<sidebar.numberOfRows), columnIndexes: IndexSet(integer: 0))
+        applying = false
+    }
+
+    /// A utility view's program set its title. A session's terminal shows
+    /// what tmux titles it, which says nothing the sidebar does not.
+    func terminalTitleChanged(_ view: NSView, title: String) {
+        guard let id = viewID(of: view) else { return }
+        guard programTitles[id] != title else { return }
+        programTitles[id] = title.isEmpty ? nil : title
+        reloadLines()
+        if viewSelection == id { window.title = windowTitle }
+    }
+
+    /// The window's title: the view or session the pane is on, and for a
+    /// view the title its program set.
+    private var windowTitle: String {
+        if let view = views.view(viewSelection) {
+            guard let program = programTitles[view.id], program != view.title else { return view.title }
+            return "\(view.title) — \(program)"
+        }
+        return state.selectedRow?.displayName ?? "Agent Mux"
+    }
+
+    /// The pointer moved onto a link, or off one, in a terminal.
+    func terminalHoveredLink(_ view: NSView, url: String?) {
+        guard view === shownTerminalView else { return }
+        showLink(url)
+    }
+
+    private func showLink(_ url: String?) {
+        linkLabel.stringValue = url ?? ""
+        linkLabel.isHidden = url == nil
+    }
+
+    /// A terminal's renderer failed or recovered. A session's terminal that
+    /// draws nothing is set aside for a placeholder offering to reattach.
+    func terminalRendererHealthChanged(_ view: NSView, healthy: Bool) {
+        guard let id = sessionID(of: view) else {
+            if !healthy { Self.logger.error("workspace: a view's renderer failed") }
+            return
+        }
+        Self.logger.notice("workspace: the renderer of \(id, privacy: .public) is \(healthy ? "healthy again" : "unhealthy", privacy: .public)")
+        if healthy {
+            guard rendererFailed.remove(id) != nil else { return }
+        } else {
+            guard rendererFailed.insert(id).inserted else { return }
+        }
+        updateContent(focus: false)
+    }
+
+    /// A program asked for a desktop notification.
+    func terminalNotification(_ view: NSView, title: String, body: String) {
+        if let id = sessionID(of: view) {
+            delegate?.workspaceTerminalNotification(title: title, body: body, source: sessionNames[id] ?? id, runtimeSessionID: id)
+        } else if let id = viewID(of: view), let utility = views.view(id) {
+            delegate?.workspaceTerminalNotification(title: title, body: body, source: utility.title, runtimeSessionID: nil)
+        }
+    }
+
     /// A utility view's program exited. A shell, editor, or pager is done
     /// and goes away; the Dashboard and the Overview stay listed, and say
     /// they stopped until they are started again.
@@ -1211,6 +1380,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     private func discardTerminal(_ id: String) {
         guard let terminal = terminals.removeValue(forKey: id) else { return }
+        ringingSessions.remove(id)
+        rendererFailed.remove(id)
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
             focusListOrPane()
         }
@@ -1235,6 +1406,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .success(terminal):
             Self.logger.notice("workspace: started view \(id, privacy: .public)")
             viewTerminals[id] = terminal
+            (terminal.view as? Ghostty.SurfaceView)?.hostName = view.title
             terminal.view.frame = pane.bounds
             terminal.view.autoresizingMask = [.width, .height]
             terminal.view.isHidden = true
@@ -1255,7 +1427,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard let id = row.embeddedRuntimeSessionID else { return .external(row.key) }
         if closing[id] != nil { return .closing(runtimeSessionID: id) }
         if detached.contains(id) { return .detached(runtimeSessionID: id) }
-        if terminals[id] != nil { return .terminal(runtimeSessionID: id) }
+        if terminals[id] != nil {
+            return rendererFailed.contains(id) ? .rendererFailed(runtimeSessionID: id) : .terminal(runtimeSessionID: id)
+        }
         // A terminal that could not be made is not asked for again on every
         // snapshot; something has to have changed first.
         if !retry, case let .unavailable(refused, _) = content, refused == id { return content }
@@ -1264,6 +1438,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .success(terminal):
             Self.logger.notice("workspace: attached a terminal to \(id, privacy: .public)")
             terminals[id] = terminal
+            (terminal.view as? Ghostty.SurfaceView)?.hostName = row.displayName
             terminal.view.frame = pane.bounds
             terminal.view.autoresizingMask = [.width, .height]
             terminal.view.isHidden = true
@@ -1292,8 +1467,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         shown?.isHidden = false
         placeholder.isHidden = shown != nil
         if shown == nil { fillPlaceholder(wanted) }
-        window.title = views.view(viewSelection)?.title
-            ?? state.selectedRow?.displayName ?? "Agent Mux"
+        window.title = windowTitle
+        clearBells()
+        showLink((shown as? Ghostty.SurfaceView)?.hoveredLink)
 
         if let shown, focus {
             window.makeFirstResponder(shown)
@@ -1389,7 +1565,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             }
         case .closing:
             placeholder.show(title: "Closing", message: "This session's agent is being ended.")
+        case let .rendererFailed(id):
+            placeholder.show(
+                title: "The terminal stopped drawing",
+                message: "Its renderer failed, so what the agent shows can no longer be seen here. The agent is still running; reattaching makes a new terminal for it.",
+                button: "Reattach",
+                isDefault: true
+            ) { [weak self] in self?.reattachAfterRendererFailure(id) }
         }
+    }
+
+    /// Lets go of a terminal whose renderer failed and attaches a new one.
+    private func reattachAfterRendererFailure(_ id: String) {
+        Self.logger.notice("workspace: reattaching \(id, privacy: .public) after a renderer failure")
+        discardTerminal(id)
+        reattach(id)
     }
 
     private func reattach(_ id: String) {
@@ -1417,7 +1607,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         // longer listed keeps running, among the workspace's own views.
         let listed = state.embeddedRuntimeSessionIDs
         for row in state.rows {
-            if let id = row.embeddedRuntimeSessionID { sessionNames[id] = row.displayName }
+            if let id = row.embeddedRuntimeSessionID {
+                sessionNames[id] = row.displayName
+                (terminals[id]?.view as? Ghostty.SurfaceView)?.hostName = row.displayName
+            }
         }
         let about = Set(views.all.compactMap(\.aboutRuntimeSessionID))
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
@@ -1487,7 +1680,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .view(view):
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
-            cell.show(view, session: view.aboutRuntimeSessionID.flatMap { sessionNames[$0] })
+            cell.show(view, session: view.aboutRuntimeSessionID.flatMap { sessionNames[$0] },
+                      program: programTitles[view.id], bell: ringingViews.contains(view.id))
             cell.onClose = { [weak self] in self?.closeView(view.id) }
             return cell
         case let .group(group):
@@ -1499,7 +1693,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
-                      sessionKey: sessionKey(of: row.key))
+                      sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false)
             cell.onClose = { [weak self] in self?.closeSession(row.key) }
             return cell
         }
@@ -1883,6 +2077,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         placeholder.frame = pane.bounds
         placeholder.autoresizingMask = [.width, .height]
         pane.addSubview(placeholder)
+        // Above every terminal, below the Go to… list; never takes a click.
+        linkLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        linkLabel.textColor = .secondaryLabelColor
+        linkLabel.drawsBackground = true
+        linkLabel.backgroundColor = .windowBackgroundColor
+        linkLabel.lineBreakMode = .byTruncatingMiddle
+        linkLabel.wantsLayer = true
+        linkLabel.layer?.cornerRadius = 4
+        linkLabel.isHidden = true
+        linkLabel.refusesFirstResponder = true
+        linkLabel.translatesAutoresizingMaskIntoConstraints = false
+        pane.addSubview(linkLabel)
+        NSLayoutConstraint.activate([
+            linkLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 6),
+            linkLabel.bottomAnchor.constraint(equalTo: pane.bottomAnchor, constant: -6),
+            linkLabel.trailingAnchor.constraint(lessThanOrEqualTo: pane.trailingAnchor, constant: -6),
+        ])
         // Above the placeholder, and so above every terminal.
         pane.addSubview(switcher)
         let switcherWidth = switcher.widthAnchor.constraint(equalToConstant: 520)
@@ -1969,6 +2180,26 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
 
     nonisolated func surfaceDidRequestClose(_ surface: Ghostty.SurfaceView, needsConfirm: Bool) {
         MainActor.assumeIsolated { terminalAskedToClose(surface, needsConfirm: needsConfirm) }
+    }
+
+    nonisolated func surfaceDidRingBell(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { terminalRangBell(surface, systemBell: surface.bellFeatures.contains(.system)) }
+    }
+
+    nonisolated func surfaceDidChangeTitle(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { terminalTitleChanged(surface, title: surface.title) }
+    }
+
+    nonisolated func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { terminalHoveredLink(surface, url: surface.hoveredLink) }
+    }
+
+    nonisolated func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { terminalRendererHealthChanged(surface, healthy: surface.rendererHealthy) }
+    }
+
+    nonisolated func surface(_ surface: Ghostty.SurfaceView, didRequestNotificationTitled title: String, body: String) {
+        MainActor.assumeIsolated { terminalNotification(surface, title: title, body: body) }
     }
 }
 
@@ -2309,6 +2540,9 @@ final class WorkspaceRowCellView: NSTableCellView {
         isHovered = false
     }
 
+    /// After the title of a line whose terminal rang the bell unseen.
+    static let bellGlyph = "🔔"
+
     /// A session's name on its color: a dark blue, which reads on every
     /// color the daemon publishes, as black does.
     static let nameOnTabColor = NSColor(srgbRed: 0, green: 0.16, blue: 0.55, alpha: 1)
@@ -2336,15 +2570,21 @@ final class WorkspaceRowCellView: NSTableCellView {
 
     /// A utility view's line: what it is and what it is about. It shows no
     /// session state, because it has none.
-    func show(_ view: WorkspaceUtilityView, session: String? = nil) {
+    /// `program` is the title its program set, shown under the view's own;
+    /// `bell` marks a bell rung while another was shown.
+    func show(_ view: WorkspaceUtilityView, session: String? = nil, program: String? = nil, bell: Bool = false) {
         nameLabel.stringValue = ""
         nameLabel.isHidden = true
         glyphLabel.stringValue = view.glyph
-        titleLabel.stringValue = view.title
+        titleLabel.stringValue = bell ? "\(view.title) \(Self.bellGlyph)" : view.title
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        detailLabel.stringValue = view.detail(session: session)
+        let program = program.flatMap { $0.isEmpty ? nil : $0 }
+        detailLabel.stringValue = program ?? view.detail(session: session)
         toolTip = view.toolTip(session: session)
-        setAccessibilityLabel("\(view.title), \(view.kind.rawValue) view")
+        var spoken = ["\(view.title), \(view.kind.rawValue) view"]
+        if let program { spoken.append(program) }
+        if bell { spoken.append("bell") }
+        setAccessibilityLabel(spoken.joined(separator: ", "))
         keyLabel.stringValue = ""
         closeButton.isHidden = view.isPermanent
         closeButton.toolTip = "Close \(view.title)"
@@ -2355,19 +2595,21 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// Only an embedded session can be closed from here; `closing` is set
     /// once it was asked to be. `sessionKey` is the digit that goes to the
     /// session with ⌘, when it has one.
-    func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil) {
+    func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil, bell: Bool = false) {
         nameLabel.stringValue = row.name
         nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
         // A pinned session is not under its project's line, so it names it.
         let place = row.pinned ? "\(row.project) — \(row.label)" : row.label
         let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
-        titleLabel.stringValue = row.muted ? "\(label) \(muteGlyph)" : label
+        let muted = row.muted ? "\(label) \(muteGlyph)" : label
+        titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: row.attention ? .semibold : .regular)
         detailLabel.stringValue = row.detail
         toolTip = row.toolTip
         var spoken = (row.name.isEmpty ? [] : [row.name]) + [row.project, row.label]
         if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
+        if bell { spoken.append("bell") }
         if !row.detail.isEmpty { spoken.append(row.detail) }
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
         if let sessionKey { spoken.append("Command \(sessionKey)") }

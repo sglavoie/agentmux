@@ -274,12 +274,44 @@ runs without embedded terminals.
   shortcut changes are not persisted.
 - **Callbacks.** Runtime actions are sorted by `Ghostty.disposition(of:)`. The
   app answers quit (passed to `GhosttyAppDelegate`, which ignores it), open
-  URL, open and reload config, and the bell. A surface-targeted title,
-  working directory, pointer, background, notification, child exit, or close
-  request goes to the surface it names and from there to its
-  `GhosttySurfaceDelegate`, on the main thread and after Ghostty's callback
-  has returned, so a delegate may close the surface in response. Tabs,
+  URL, and open and reload config. A surface-targeted title, working
+  directory, pointer, background, notification, bell, hovered link, renderer
+  health, child exit, or close request goes to the surface it names and from
+  there to its `GhosttySurfaceDelegate`, on the main thread and after
+  Ghostty's callback has returned, so a delegate may close the surface in
+  response. Secure input, key sequences, and key tables only change the
+  surface's state, at once when Ghostty calls on the main thread. Tabs,
   splits, extra windows, and Ghostty's own chrome are refused.
+- **What the workspace does with them.** A bell in the terminal shown beeps
+  only while the app is in front and `bell-features` includes `system`; a bell
+  in a hidden session or view marks its sidebar line with 🔔 until it is shown
+  (or for a minute), and with another app in front either asks the Dock for
+  attention. A utility view's program title is its line's second line and
+  follows its name in the window title; a session keeps its own name. The
+  link under the pointer is shown at the pane's bottom corner. A session
+  terminal whose renderer fails is set aside for a placeholder offering
+  **Reattach**, which makes a new terminal; it comes back by itself if the
+  renderer recovers. OSC 9 and 777 notifications become app notices (see
+  [Notifications](#notifications)).
+- **Links.** http, https, and mailto links open at once; a file (a `file:`
+  URL or a bare path) is shown in the Finder, never opened; any other scheme
+  is asked about first (`Ghostty.App.linkDisposition`).
+- **Clipboard.** A paste Ghostty finds unsafe, and an OSC 52 read or write,
+  is asked about in a sheet on the terminal's window naming the view or
+  session that asked, with the whole text in a scrollable preview. The
+  request is always answered, with nothing when denied or unreadable, and
+  dropped only if its terminal closed meanwhile.
+- **Drops.** Dropped files and URLs arrive as shell-escaped words; dropped
+  text of more than one line goes through Ghostty's paste (and so its paste
+  protection and bracketed paste) without touching the clipboard.
+- **Secure Keyboard Entry.** A program's `SECURE_INPUT` request holds one
+  system reference per surface, only while that surface has the keyboard,
+  and gives it back on unfocus and close (`Ghostty.SecureInput`).
+- **Keys.** While Ghostty is in a key sequence or key table, the menu claims
+  none of its keys. ⌘Page Up and ⌘Page Down page like ⇧Page Up and ⇧Page Down
+  (hidden menu aliases), so in a session view they page the server's
+  history. A hidden terminal is resized when it is shown, not on every frame
+  of a live resize. QuickLook is placed at the selection, as upstream does.
 - **Exit.** A surface with its own program stays open after the program exits;
   the delegate hears `surfaceChildDidExit` and closes it. No exit status is
   reported, because Ghostty only sees `login(1)`'s.
@@ -800,6 +832,12 @@ forward. A dismissal reports `dismissed` (every category sets
 A `notification_retract` frame removes the banner. A retracted notification
 that is still waiting on the permission prompt, or on `add`, is never shown.
 The `amx debug tail` dispositions name the `app` backend.
+
+**Terminal notices.** A program's own desktop notification (OSC 9 or 777) in
+an embedded terminal is shown as a plain banner titled by its session or view
+(`NotificationPresenter.presentTerminal`), only while app notifications are on
+and allowed: it never asks for permission, and the daemon never hears of it.
+Clicking one from a session shows that session.
 
 ## ASL answer panel
 

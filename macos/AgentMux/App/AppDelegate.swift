@@ -438,6 +438,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         startDaemon()
     }
 
+    func workspaceTerminalNotification(title: String, body: String, source: String, runtimeSessionID: String?) {
+        let shown = notifications?.presentTerminal(title: title, body: body, source: source, runtimeSessionID: runtimeSessionID) ?? false
+        if !shown {
+            Self.logger.notice("terminal notification from \(source, privacy: .public) not shown: app notifications are off or not allowed")
+        }
+    }
+
     /// Names a session with `amx name-session`; an empty name removes the
     /// one it has. The sidebar shows the change once the daemon has read it.
     func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void) {

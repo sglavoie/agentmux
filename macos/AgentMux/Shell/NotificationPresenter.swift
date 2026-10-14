@@ -418,6 +418,34 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         report(id, .delivered, nil)
     }
 
+    /// What a terminal notice's identifier starts with. Such a notice is
+    /// the app's own, raised by a program in an embedded terminal (OSC 9 or
+    /// 777): the daemon never heard of it, so nothing about it is reported.
+    static let terminalPrefix = "amx-terminal:"
+
+    /// Shows a program's desktop notification, titled by the session or view
+    /// it came from. Returns false when it cannot be shown now: app
+    /// notifications are off, or not allowed. It never asks for permission,
+    /// which belongs to the daemon's notices.
+    @discardableResult
+    func presentTerminal(title: String, body: String, source: String, runtimeSessionID: String?) -> Bool {
+        guard enabled, authorization == .authorized else { return false }
+        center.add(Self.terminalRequest(title: title, body: body, source: source, runtimeSessionID: runtimeSessionID)) { _ in }
+        return true
+    }
+
+    static func terminalRequest(title: String, body: String, source: String, runtimeSessionID: String?) -> UNNotificationRequest {
+        let content = UNMutableNotificationContent()
+        // OSC 9 carries a body alone; the source then titles it.
+        content.title = title.isEmpty ? source : title
+        if !title.isEmpty, !source.isEmpty { content.subtitle = source }
+        content.body = body
+        content.categoryIdentifier = NotificationCategories.plain
+        content.threadIdentifier = runtimeSessionID.map { "runtime:\($0)" } ?? "amx-terminal"
+        content.userInfo = [UserInfoKey.embeddedRuntimeSessionID: runtimeSessionID ?? ""]
+        return UNNotificationRequest(identifier: terminalPrefix + UUID().uuidString, content: content, trigger: nil)
+    }
+
     /// A `notification_retract` frame.
     func retract(_ frame: NotificationRetractFrame) {
         let id = frame.notificationID
@@ -473,7 +501,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     /// One banner response: reports it, then hands it to the app.
     func handleResponse(notificationID: String, actionIdentifier: String, userInfo: [AnyHashable: Any]) {
         guard let disposition = NotificationCategories.disposition(forAction: actionIdentifier) else { return }
-        report(notificationID, disposition, nil)
+        if !notificationID.hasPrefix(Self.terminalPrefix) { report(notificationID, disposition, nil) }
         onResponse(Response(
             notificationID: notificationID,
             disposition: disposition,

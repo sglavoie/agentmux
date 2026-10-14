@@ -10,6 +10,9 @@ private final class SurfaceEvents: GhosttySurfaceDelegate {
     var exits = 0
     var closeRequests: [Bool] = []
     var notifications: [String] = []
+    var bells = 0
+    var links: [String?] = []
+    var health: [Bool] = []
     /// Run on a close request, to prove a delegate may free the surface there.
     var onCloseRequest: ((Ghostty.SurfaceView) -> Void)?
 
@@ -25,6 +28,9 @@ private final class SurfaceEvents: GhosttySurfaceDelegate {
     func surface(_ surface: Ghostty.SurfaceView, didRequestNotificationTitled title: String, body: String) {
         notifications.append("\(title)|\(body)")
     }
+    func surfaceDidRingBell(_ surface: Ghostty.SurfaceView) { bells += 1 }
+    func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) { links.append(surface.hoveredLink) }
+    func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) { health.append(surface.rendererHealthy) }
 }
 
 /// Several real surfaces on one `Ghostty.App`: each runs its own program with
@@ -400,6 +406,143 @@ final class GhosttySurfaceLifecycleTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         XCTAssertEqual(eventsB.closeRequests, [])
         a.close()
+    }
+
+    /// A bell, a hovered link, and a failed renderer are the surface's own,
+    /// reported to its delegate after the callback; with no delegate a
+    /// desktop notification is refused.
+    func testABellALinkAndTheRendererAreReportedForTheirSurface() throws {
+        let cat = Ghostty.SurfaceConfiguration(program: URL(fileURLWithPath: "/bin/cat"))
+        let a = try XCTUnwrap(ghostty.makeSurface(cat))
+        let b = try XCTUnwrap(ghostty.makeSurface(cat))
+        let eventsA = SurfaceEvents()
+        a.delegate = eventsA
+        let app = try XCTUnwrap(ghostty.app)
+
+        var action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_RING_BELL
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(a), action: action))
+        var appTarget = ghostty_target_s()
+        appTarget.tag = GHOSTTY_TARGET_APP
+        XCTAssertFalse(Ghostty.App.action(app, target: appTarget, action: action), "a bell rings in a terminal, not the app")
+
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_MOUSE_OVER_LINK
+        let link = "https://example.com/a?b=1"
+        try link.withCString { ptr in
+            action.action.mouse_over_link = ghostty_action_mouse_over_link_s(url: ptr, len: link.utf8.count)
+            XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(a), action: action))
+        }
+        ghosttyWait("the bell and the link") { eventsA.bells == 1 && a.hoveredLink == link }
+        action.action.mouse_over_link = ghostty_action_mouse_over_link_s(url: nil, len: 0)
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(a), action: action))
+        ghosttyWait("the pointer off the link") { a.hoveredLink == nil }
+        XCTAssertEqual(eventsA.links, [link, nil])
+
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_RENDERER_HEALTH
+        action.action.renderer_health = GHOSTTY_RENDERER_HEALTH_UNHEALTHY
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(a), action: action))
+        ghosttyWait("the renderer failure") { !a.rendererHealthy }
+        action.action.renderer_health = GHOSTTY_RENDERER_HEALTH_HEALTHY
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(a), action: action))
+        ghosttyWait("the renderer recovery") { a.rendererHealthy }
+        XCTAssertEqual(eventsA.health, [false, true])
+
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_DESKTOP_NOTIFICATION
+        try "t".withCString { title in
+            try "b".withCString { body in
+                action.action.desktop_notification = ghostty_action_desktop_notification_s(title: title, body: body)
+                XCTAssertFalse(Ghostty.App.action(app, target: try surfaceTarget(b), action: action),
+                               "nobody shows b's notification, so Ghostty hears it was not shown")
+            }
+        }
+        XCTAssertNil(b.hoveredLink)
+        XCTAssertTrue(b.rendererHealthy)
+        a.close()
+        b.close()
+    }
+
+    /// Secure Keyboard Entry is held by a surface only while it is asked for
+    /// and the surface has the keyboard, and never past its close.
+    func testSecureInputIsHeldOnlyWhileFocusedAndReleasedOnClose() throws {
+        let (savedEnable, savedDisable) = (Ghostty.SecureInput.enable, Ghostty.SecureInput.disable)
+        var enabled = 0
+        var disabled = 0
+        Ghostty.SecureInput.enable = { enabled += 1 }
+        Ghostty.SecureInput.disable = { disabled += 1 }
+        defer {
+            Ghostty.SecureInput.enable = savedEnable
+            Ghostty.SecureInput.disable = savedDisable
+        }
+        let holders = Ghostty.SecureInput.holders
+        let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(program: URL(fileURLWithPath: "/bin/cat"))))
+        let app = try XCTUnwrap(ghostty.app)
+        func secure(_ change: ghostty_action_secure_input_e) throws {
+            var action = ghostty_action_s()
+            action.tag = GHOSTTY_ACTION_SECURE_INPUT
+            action.action.secure_input = change
+            XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(view), action: action))
+        }
+
+        // Taken at once on the main thread: the next key may be a password's.
+        try secure(GHOSTTY_SECURE_INPUT_ON)
+        XCTAssertTrue(view.secureInputRequested)
+        XCTAssertFalse(view.holdsSecureInput, "a surface without the keyboard secures nothing")
+        view.focusDidChange(true)
+        XCTAssertTrue(view.holdsSecureInput)
+        XCTAssertEqual(Ghostty.SecureInput.holders, holders + 1)
+        view.focusDidChange(false)
+        XCTAssertFalse(view.holdsSecureInput)
+        view.focusDidChange(true)
+        try secure(GHOSTTY_SECURE_INPUT_TOGGLE)
+        XCTAssertFalse(view.secureInputRequested)
+        XCTAssertFalse(view.holdsSecureInput)
+        try secure(GHOSTTY_SECURE_INPUT_TOGGLE)
+        XCTAssertTrue(view.holdsSecureInput)
+        XCTAssertEqual([enabled, disabled], [3, 2])
+
+        view.close()
+        XCTAssertFalse(view.holdsSecureInput)
+        XCTAssertEqual([enabled, disabled], [3, 3], "every reference taken is given back")
+        XCTAssertEqual(Ghostty.SecureInput.holders, holders)
+    }
+
+    /// A key sequence or key table in force is known before the callback
+    /// returns, so the next key is not taken by the menu.
+    func testKeySequencesAndKeyTablesAreTrackedAtOnce() throws {
+        let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(program: URL(fileURLWithPath: "/bin/cat"))))
+        let app = try XCTUnwrap(ghostty.app)
+        var action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_KEY_SEQUENCE
+        action.action.key_sequence.active = true
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(view), action: action))
+        XCTAssertTrue(view.inKeySequence)
+        action.action.key_sequence.active = false
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(view), action: action))
+        XCTAssertFalse(view.inKeySequence)
+
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_KEY_TABLE
+        for name in ["vi", "inner"] {
+            try name.withCString { ptr in
+                action.action.key_table.tag = GHOSTTY_KEY_TABLE_ACTIVATE
+                action.action.key_table.value.activate.name = ptr
+                action.action.key_table.value.activate.len = name.utf8.count
+                XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(view), action: action))
+            }
+        }
+        XCTAssertEqual(view.keyTables, ["vi", "inner"])
+        XCTAssertTrue(view.inKeySequence)
+        action.action.key_table.tag = GHOSTTY_KEY_TABLE_DEACTIVATE
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(view), action: action))
+        XCTAssertEqual(view.keyTables, ["vi"])
+        action.action.key_table.tag = GHOSTTY_KEY_TABLE_DEACTIVATE_ALL
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(view), action: action))
+        XCTAssertEqual(view.keyTables, [])
+        XCTAssertFalse(view.inKeySequence)
+        view.close()
     }
 
     func testADelegateMayCloseTheSurfaceFromItsCloseRequest() throws {

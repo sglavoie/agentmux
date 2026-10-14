@@ -104,8 +104,124 @@ final class GhosttySurfaceTests: XCTestCase {
         pasteboard.setString("https://example.com/x", forType: .string)
         XCTAssertEqual(Ghostty.SurfaceView.dropText(from: pasteboard), "https://example.com/x")
 
+        // A URL is one shell word: what it carries starts nothing.
+        pasteboard.clearContents()
+        pasteboard.writeObjects([try XCTUnwrap(URL(string: "https://example.com/a?b=1&c=(2)")) as NSURL])
+        XCTAssertEqual(Ghostty.SurfaceView.dropText(from: pasteboard), "https://example.com/a\\?b=1\\&c=\\(2\\)")
+
         pasteboard.clearContents()
         XCTAssertNil(Ghostty.SurfaceView.dropText(from: pasteboard))
+
+        XCTAssertFalse(Ghostty.SurfaceView.dropIsPaste("ls -la"))
+        XCTAssertTrue(Ghostty.SurfaceView.dropIsPaste("echo one\necho two"))
+    }
+
+    /// Dropped text of several lines is pasted, so Ghostty's paste protection
+    /// asks about it, naming the view, and the clipboard is not touched.
+    func testAMultiLineDropIsAskedAboutAsAPaste() throws {
+        let saved = Ghostty.App.confirmClipboard
+        defer { Ghostty.App.confirmClipboard = saved }
+        var asked: [Ghostty.App.ClipboardQuestion] = []
+        Ghostty.App.confirmClipboard = { question, answer in
+            asked.append(question)
+            answer(false)
+        }
+        let clipboard = NSPasteboard.general.changeCount
+        view.hostName = "api — work"
+        XCTAssertTrue(view.drop("echo one\necho two"))
+        XCTAssertNil(view.pendingPaste, "the dropped text is not left for a later paste")
+        ghosttyWait("the paste question") { !asked.isEmpty }
+        XCTAssertEqual(asked.first?.text, "echo one\necho two")
+        XCTAssertEqual(asked.first?.requester, "api — work")
+        XCTAssertEqual(asked.first?.request, GHOSTTY_CLIPBOARD_REQUEST_PASTE)
+        XCTAssertEqual(NSPasteboard.general.changeCount, clipboard)
+
+        // One line is typed: there is nothing to ask.
+        XCTAssertTrue(view.drop("ls"))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(asked.count, 1)
+    }
+
+    /// The question shows the whole text, scrollable, and who asked.
+    func testThePasteQuestionShowsAllOfTheTextAndWhoAsked() throws {
+        let long = (1...400).map { "line \($0)" }.joined(separator: "\n")
+        let alert = Ghostty.App.clipboardAlert(Ghostty.App.ClipboardQuestion(
+            text: long, request: GHOSTTY_CLIPBOARD_REQUEST_PASTE, requester: "Dashboard"))
+        XCTAssertEqual(alert.messageText, "Paste this text into Dashboard?")
+        let scroll = try XCTUnwrap(alert.accessoryView as? NSScrollView)
+        XCTAssertTrue(scroll.hasVerticalScroller)
+        let text = try XCTUnwrap(scroll.documentView as? NSTextView)
+        XCTAssertEqual(text.string, long, "nothing is cut from the preview")
+        XCTAssertFalse(text.isEditable)
+        XCTAssertEqual(alert.buttons.map(\.title), ["Allow", "Deny"])
+
+        let read = Ghostty.App.clipboardAlert(Ghostty.App.ClipboardQuestion(
+            text: "x", request: GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ, requester: ""))
+        XCTAssertEqual(read.messageText, "Allow the program to read the clipboard?")
+    }
+
+    func testOnlyTheWebAndMailOpenAtOnceAndFilesAreRevealed() throws {
+        let disposition = { (link: String) in Ghostty.App.linkDisposition(Ghostty.App.link(from: link)) }
+        XCTAssertEqual(disposition("https://example.com"), .open)
+        XCTAssertEqual(disposition("HTTP://example.com"), .open)
+        XCTAssertEqual(disposition("mailto:a@example.com"), .open)
+        XCTAssertEqual(disposition("file:///tmp/a.sh"), .reveal)
+        XCTAssertEqual(disposition("~/notes.txt"), .reveal, "a bare path is a file")
+        XCTAssertEqual(disposition("ssh://host"), .confirm)
+        XCTAssertEqual(disposition("x-apple.systempreferences:com.apple.preference"), .confirm)
+        XCTAssertEqual(disposition("vscode://file/tmp/a"), .confirm)
+
+        let saved = (Ghostty.App.openLink, Ghostty.App.revealFile, Ghostty.App.confirmLink)
+        defer { (Ghostty.App.openLink, Ghostty.App.revealFile, Ghostty.App.confirmLink) = saved }
+        var opened: [String] = []
+        var revealed: [String] = []
+        var allow = false
+        Ghostty.App.openLink = { opened.append($0.absoluteString) }
+        Ghostty.App.revealFile = { revealed.append($0.path) }
+        Ghostty.App.confirmLink = { _, answer in answer(allow) }
+        Ghostty.App.follow(Ghostty.App.link(from: "ssh://host"))
+        XCTAssertEqual(opened, [], "refused")
+        allow = true
+        Ghostty.App.follow(Ghostty.App.link(from: "ssh://host"))
+        Ghostty.App.follow(Ghostty.App.link(from: "https://example.com"))
+        Ghostty.App.follow(Ghostty.App.link(from: "/tmp/run me.sh"))
+        XCTAssertEqual(opened, ["ssh://host", "https://example.com"])
+        XCTAssertEqual(revealed, ["/tmp/run me.sh"], "a file is shown in the Finder, never opened")
+    }
+
+    /// A hidden terminal is not resized frame by frame; it takes the size it
+    /// has when it is shown again.
+    func testAHiddenSurfaceIsResizedWhenShown() throws {
+        let initial = try surfaceSize()
+        view.isHidden = true
+        window.setContentSize(NSSize(width: 400, height: 250))
+        XCTAssertTrue(view.sizePending)
+        XCTAssertEqual(try surfaceSize().columns, initial.columns, "nothing reaches the surface while hidden")
+        view.isHidden = false
+        XCTAssertFalse(view.sizePending)
+        let shown = try surfaceSize()
+        XCTAssertLessThan(shown.columns, initial.columns)
+        XCTAssertEqual(shown.width_px, UInt32(view.convertToBacking(view.bounds.size).width))
+    }
+
+    /// QuickLook asks for a range that is not the selection's: it is put at
+    /// the selection, above the cursor, rather than where the input method
+    /// draws.
+    func testQuickLookIsPlacedAtTheSelection() throws {
+        window.contentView = nil
+        view = nil
+        view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf 'first\\nsecond\\nthird\\n'; exec cat"])))
+        window.contentView = view
+        ghosttyWait("the text to be drawn") {
+            view.performBindingAction("select_all")
+            return view.selectedRange().length > 0
+        }
+        let selection = view.selectedRange()
+        let cursor = view.firstRect(forCharacterRange: NSRange(location: 0, length: 0), actualRange: nil)
+        let quickLook = view.firstRect(forCharacterRange: NSRange(location: selection.location + 1, length: 2), actualRange: nil)
+        XCTAssertGreaterThan(quickLook.minY, cursor.minY, "the selection starts on the first row, above the cursor")
     }
 
     func testFramebufferTracksTheViewInBackingPixels() throws {

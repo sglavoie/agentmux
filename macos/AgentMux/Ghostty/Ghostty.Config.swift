@@ -93,6 +93,11 @@ extension Ghostty {
             return String(cString: ptr)
         }
 
+        /// What a bell does (`bell-features`), packed as Ghostty packs it.
+        var bellFeatures: BellFeatures {
+            self.get("bell-features", as: CUnsignedInt.self, initial: 0).map(BellFeatures.init(rawValue:)) ?? []
+        }
+
         /// The configured default background, before any program changes it.
         var backgroundColor: NSColor? {
             self.get("background", as: ghostty_config_color_s.self, initial: ghostty_config_color_s()).map(Ghostty.color)
@@ -133,6 +138,17 @@ extension Ghostty {
 }
 
 extension Ghostty {
+    /// `bell-features`, in the order of Ghostty's packed struct.
+    struct BellFeatures: OptionSet, Equatable {
+        let rawValue: CUnsignedInt
+        /// The system beep.
+        static let system = BellFeatures(rawValue: 1 << 0)
+        static let audio = BellFeatures(rawValue: 1 << 1)
+        static let attention = BellFeatures(rawValue: 1 << 2)
+        static let title = BellFeatures(rawValue: 1 << 3)
+        static let border = BellFeatures(rawValue: 1 << 4)
+    }
+
     static func color(_ c: ghostty_config_color_s) -> NSColor {
         NSColor(srgbRed: CGFloat(c.r) / 255, green: CGFloat(c.g) / 255, blue: CGFloat(c.b) / 255, alpha: 1)
     }

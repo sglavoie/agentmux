@@ -20,6 +20,14 @@ protocol GhosttySurfaceDelegate: AnyObject {
     func surfaceDidRequestClose(_ surface: Ghostty.SurfaceView, needsConfirm: Bool)
     /// The program asked for a desktop notification (OSC 9 / OSC 777).
     func surface(_ surface: Ghostty.SurfaceView, didRequestNotificationTitled title: String, body: String)
+    /// The program rang the bell. Whether anything is heard or shown is the
+    /// host's: only it knows whether this terminal is the one in view.
+    func surfaceDidRingBell(_ surface: Ghostty.SurfaceView)
+    /// The pointer moved onto a link or off one (`hoveredLink`).
+    func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView)
+    /// The renderer reported itself unhealthy, or healthy again
+    /// (`rendererHealthy`). An unhealthy one draws nothing new.
+    func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView)
 }
 
 extension GhosttySurfaceDelegate {
@@ -29,6 +37,9 @@ extension GhosttySurfaceDelegate {
     func surfaceChildDidExit(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidRequestClose(_ surface: Ghostty.SurfaceView, needsConfirm: Bool) {}
     func surface(_ surface: Ghostty.SurfaceView, didRequestNotificationTitled title: String, body: String) {}
+    func surfaceDidRingBell(_ surface: Ghostty.SurfaceView) {}
+    func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) {}
+    func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) {}
 }
 
 extension Ghostty {
@@ -74,6 +85,38 @@ extension Ghostty {
 
         /// Whether the surface was last told it can be seen.
         private(set) var visible: Bool = true
+
+        /// The link under the pointer, as Ghostty reports it; nil when none.
+        private(set) var hoveredLink: String?
+
+        /// Whether the renderer last said it is drawing.
+        private(set) var rendererHealthy = true
+
+        /// Whether the program asked for Secure Keyboard Entry. It is in
+        /// force only while the surface is focused (`holdsSecureInput`).
+        private(set) var secureInputRequested = false
+
+        /// Whether this surface holds one of the system's secure input
+        /// references; see `Ghostty.SecureInput`.
+        private(set) var holdsSecureInput = false
+
+        /// Whether a multi-key binding has started and waits for its next
+        /// key, and the key tables in force, innermost last. While either
+        /// is set every key is Ghostty's, so the menu claims none.
+        private(set) var keySequenceActive = false
+        private(set) var keyTables: [String] = []
+
+        /// What the operator knows this terminal as, named when a program
+        /// in it asks for the clipboard; empty when the host set none.
+        var hostName = ""
+
+        /// Text a drop hands to Ghostty's paste, read back by the clipboard
+        /// request that paste makes; see `paste(_:)`.
+        var pendingPaste: String?
+
+        /// Set when the view was resized while hidden: the surface is told
+        /// once it is shown, not on every frame of a window's live resize.
+        private(set) var sizePending = false
 
         /// The last size requested in points, reused when only the scale
         /// changes, because mid-animation the frame may lag the target size.
@@ -197,6 +240,7 @@ extension Ghostty {
             guard let surface else { return }
             self.surface = nil
             focused = false
+            syncSecureInput()
             ghostty_surface_free(surface)
             owner = nil
         }
@@ -241,7 +285,25 @@ extension Ghostty {
 
         override func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
+            // A hidden terminal behind the one shown follows every frame of a
+            // window's live resize; its grid only matters once it is seen.
+            if isHiddenOrHasHiddenAncestor {
+                sizePending = true
+                return
+            }
             sizeDidChange(newSize)
+        }
+
+        /// Gives the surface a size deferred while it was hidden.
+        private func applyPendingSize() {
+            guard sizePending, !isHiddenOrHasHiddenAncestor else { return }
+            sizePending = false
+            sizeDidChange(frame.size)
+        }
+
+        override func viewDidEndLiveResize() {
+            super.viewDidEndLiveResize()
+            applyPendingSize()
         }
 
         override func viewDidChangeBackingProperties() {
@@ -312,6 +374,7 @@ extension Ghostty {
 
         override func viewDidUnhide() {
             super.viewDidUnhide()
+            applyPendingSize()
             updateOcclusion()
         }
 
@@ -367,6 +430,58 @@ extension Ghostty {
             guard let surface, self.focused != focused else { return }
             self.focused = focused
             ghostty_surface_set_focus(surface, focused)
+            syncSecureInput()
+        }
+
+        // MARK: Secure input
+
+        /// SECURE_INPUT from Ghostty: a program (or the binding) asked for
+        /// Secure Keyboard Entry, or to end it.
+        func setSecureInput(_ change: ghostty_action_secure_input_e) {
+            switch change {
+            case GHOSTTY_SECURE_INPUT_ON: secureInputRequested = true
+            case GHOSTTY_SECURE_INPUT_OFF: secureInputRequested = false
+            case GHOSTTY_SECURE_INPUT_TOGGLE: secureInputRequested.toggle()
+            default: return
+            }
+            syncSecureInput()
+        }
+
+        /// Takes or lets go of this surface's secure input reference: held
+        /// only while it is asked for and the surface has the keyboard, and
+        /// never past `close()`.
+        private func syncSecureInput() {
+            let wanted = secureInputRequested && focused && surface != nil
+            guard wanted != holdsSecureInput else { return }
+            holdsSecureInput = wanted
+            if wanted { Ghostty.SecureInput.take() } else { Ghostty.SecureInput.release() }
+        }
+
+        // MARK: Key sequences
+
+        /// Whether Ghostty is in the middle of a key sequence or a key table,
+        /// where the next key is its own whatever the menu holds.
+        var inKeySequence: Bool { keySequenceActive || !keyTables.isEmpty }
+
+        func setKeyTable(_ table: ghostty_action_key_table_s) {
+            switch table.tag {
+            case GHOSTTY_KEY_TABLE_ACTIVATE:
+                let value = table.value.activate
+                let name = value.name.map {
+                    String(data: Data(bytes: $0, count: Int(value.len)), encoding: .utf8) ?? ""
+                } ?? ""
+                keyTables.append(name)
+            case GHOSTTY_KEY_TABLE_DEACTIVATE:
+                _ = keyTables.popLast()
+            case GHOSTTY_KEY_TABLE_DEACTIVATE_ALL:
+                keyTables.removeAll()
+            default:
+                break
+            }
+        }
+
+        func setKeySequenceActive(_ active: Bool) {
+            keySequenceActive = active
         }
 
         // MARK: Color scheme
@@ -388,13 +503,48 @@ extension Ghostty {
 
         // MARK: Drag and drop
 
-        /// Files arrive as shell-escaped paths; URLs and text as text.
+        /// Files arrive as shell-escaped paths, other URLs shell-escaped
+        /// too, and text as text.
         static let dropTypes: [NSPasteboard.PasteboardType] = [.fileURL, .URL, .string]
 
-        /// What a drop types into the terminal: the same text a paste of that
-        /// pasteboard would.
+        /// What a drop types into the terminal. A URL is a word for the
+        /// shell, so `&` or `?` in it never start anything.
         static func dropText(from pasteboard: NSPasteboard) -> String? {
-            Ghostty.App.stringContents(of: pasteboard).flatMap { $0.isEmpty ? nil : $0 }
+            if let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL], !urls.isEmpty {
+                return urls
+                    .map { Ghostty.App.shellEscape($0.isFileURL ? $0.path : $0.absoluteString) }
+                    .joined(separator: " ")
+            }
+            return pasteboard.string(forType: .string).flatMap { $0.isEmpty ? nil : $0 }
+        }
+
+        /// Dropped text of more than one line is pasted, so Ghostty's paste
+        /// protection asks about it first and a bracketed paste stays one.
+        static func dropIsPaste(_ text: String) -> Bool {
+            text.contains(where: \.isNewline)
+        }
+
+        /// Types dropped text into the terminal, or pastes it when it spans
+        /// lines. Returns whether Ghostty took it.
+        @discardableResult
+        func drop(_ text: String) -> Bool {
+            guard let surface else { return false }
+            if Self.dropIsPaste(text) { return paste(text) }
+            let len = text.utf8CString.count
+            text.withCString { ptr in
+                ghostty_surface_text(surface, ptr, UInt(len - 1))
+            }
+            return true
+        }
+
+        /// Runs Ghostty's own paste on `text` instead of the clipboard's: the
+        /// request that paste makes is answered from `pendingPaste`
+        /// (`Ghostty.App.readClipboard`), and the clipboard is left alone.
+        @discardableResult
+        func paste(_ text: String) -> Bool {
+            pendingPaste = text
+            defer { pendingPaste = nil }
+            return performBindingAction("paste_from_clipboard")
         }
 
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -403,11 +553,7 @@ extension Ghostty {
         }
 
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-            guard let surface, let text = Self.dropText(from: sender.draggingPasteboard) else { return false }
-            let len = text.utf8CString.count
-            text.withCString { ptr in
-                ghostty_surface_text(surface, ptr, UInt(len - 1))
-            }
+            guard surface != nil, let text = Self.dropText(from: sender.draggingPasteboard), drop(text) else { return false }
             // A drop from Finder leaves Finder in front; keep typing here.
             NSApp.activate()
             window?.makeKeyAndOrderFront(nil)
@@ -453,16 +599,58 @@ extension Ghostty {
                 return true
 
             case GHOSTTY_ACTION_RENDERER_HEALTH:
-                if action.action.renderer_health != GHOSTTY_RENDERER_HEALTH_HEALTHY {
+                let healthy = action.action.renderer_health == GHOSTTY_RENDERER_HEALTH_HEALTHY
+                if !healthy {
                     Ghostty.logger.error("renderer reported unhealthy")
                 }
+                later { $0.setRendererHealthy(healthy) }
                 return true
 
             case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+                // Nobody to show it: Ghostty is told it was not.
+                guard delegate != nil else { return false }
                 let note = action.action.desktop_notification
                 let title = note.title.map { String(cString: $0) } ?? ""
                 let body = note.body.map { String(cString: $0) } ?? ""
                 later { $0.delegate?.surface($0, didRequestNotificationTitled: title, body: body) }
+                return true
+
+            case GHOSTTY_ACTION_RING_BELL:
+                later { $0.delegate?.surfaceDidRingBell($0) }
+                return true
+
+            case GHOSTTY_ACTION_MOUSE_OVER_LINK:
+                let link = action.action.mouse_over_link
+                let url = link.url.flatMap { ptr in
+                    link.len == 0 ? nil : String(data: Data(bytes: ptr, count: Int(link.len)), encoding: .utf8)
+                }
+                later { $0.setHoveredLink(url) }
+                return true
+
+            case GHOSTTY_ACTION_SECURE_INPUT:
+                let change = action.action.secure_input
+                now { $0.setSecureInput(change) }
+                return true
+
+            // The next key may already be on its way: these take effect
+            // before this callback returns whenever it runs on the main thread.
+            case GHOSTTY_ACTION_KEY_SEQUENCE:
+                let active = action.action.key_sequence.active
+                now { $0.setKeySequenceActive(active) }
+                return true
+
+            case GHOSTTY_ACTION_KEY_TABLE:
+                let table = action.action.key_table
+                // The name is Ghostty's only for the length of the callback.
+                if table.tag == GHOSTTY_KEY_TABLE_ACTIVATE, !Thread.isMainThread {
+                    let value = table.value.activate
+                    let name = value.name.map {
+                        String(data: Data(bytes: $0, count: Int(value.len)), encoding: .utf8) ?? ""
+                    } ?? ""
+                    later { $0.keyTables.append(name) }
+                    return true
+                }
+                now { $0.setKeyTable(table) }
                 return true
 
             case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
@@ -493,6 +681,29 @@ extension Ghostty {
                 guard let self, self.surface != nil else { return }
                 work(self)
             }
+        }
+
+        /// Runs `work` at once when on the main thread, else as `later`. Only
+        /// for state changes: it calls no delegate.
+        private func now(_ work: @escaping (SurfaceView) -> Void) {
+            guard Thread.isMainThread else { return later(work) }
+            guard surface != nil else { return }
+            work(self)
+        }
+
+        /// What a bell does, as the app's config says.
+        var bellFeatures: BellFeatures { owner?.config.bellFeatures ?? [] }
+
+        func setHoveredLink(_ url: String?) {
+            guard url != hoveredLink else { return }
+            hoveredLink = url
+            delegate?.surfaceDidChangeHoveredLink(self)
+        }
+
+        func setRendererHealthy(_ healthy: Bool) {
+            guard healthy != rendererHealthy else { return }
+            rendererHealthy = healthy
+            delegate?.surfaceDidChangeRendererHealth(self)
         }
 
         func setTitle(_ title: String) {

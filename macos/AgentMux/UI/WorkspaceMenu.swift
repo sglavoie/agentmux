@@ -79,6 +79,17 @@ enum WorkspaceMenu {
         view.addItem(.separator())
         view.addItem(item("Page Up", #selector(NSResponder.scrollPageUp(_:)), key(NSPageUpFunctionKey), mask: .shift))
         view.addItem(item("Page Down", #selector(NSResponder.scrollPageDown(_:)), key(NSPageDownFunctionKey), mask: .shift))
+        // ⌘Page Up and ⌘Page Down page too, as in Ghostty and Terminal: in a
+        // session view Ghostty's own binding would page an empty buffer.
+        for (title, action, pageKey) in [
+            ("Page Up", #selector(NSResponder.scrollPageUp(_:)), NSPageUpFunctionKey),
+            ("Page Down", #selector(NSResponder.scrollPageDown(_:)), NSPageDownFunctionKey),
+        ] {
+            let alias = item(title, action, key(pageKey))
+            alias.isHidden = true
+            alias.allowsKeyEquivalentWhenHidden = true
+            view.addItem(alias)
+        }
         view.addItem(item("Scroll to Top", #selector(NSResponder.scrollToBeginningOfDocument(_:)), key(NSHomeFunctionKey)))
         view.addItem(item("Scroll to Bottom", #selector(NSResponder.scrollToEndOfDocument(_:)), key(NSEndFunctionKey)))
         view.addItem(.separator())

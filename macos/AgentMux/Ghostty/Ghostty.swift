@@ -1,5 +1,6 @@
 // Ported and trimmed from Ghostty's macOS app (MIT); see macos/NOTICE-ghostty.
 import AppKit
+import Carbon.HIToolbox
 import GhosttyKit
 import os
 
@@ -135,6 +136,34 @@ extension Ghostty {
             guard index >= 0 else { return false }
             parent.performActionForItem(at: index)
             return true
+        }
+    }
+}
+
+extension Ghostty {
+    /// Secure Keyboard Entry, as the terminals ask for it. The system counts
+    /// `EnableSecureEventInput` calls, so each surface holds at most one
+    /// reference, taken while it is focused and asked for, and gives it back
+    /// when it loses focus or closes: a closed or background terminal never
+    /// leaves the whole system's keyboard secured.
+    enum SecureInput {
+        /// How many surfaces hold a reference now.
+        private(set) static var holders = 0
+
+        /// What takes and releases a reference; replaced in tests, which
+        /// must not secure the keyboard of the machine they run on.
+        static var enable: () -> Void = { _ = EnableSecureEventInput() }
+        static var disable: () -> Void = { _ = DisableSecureEventInput() }
+
+        static func take() {
+            holders += 1
+            enable()
+        }
+
+        static func release() {
+            guard holders > 0 else { return }
+            holders -= 1
+            disable()
         }
     }
 }

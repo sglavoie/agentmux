@@ -158,8 +158,10 @@ extension Ghostty.SurfaceView {
         }
         if isBinding {
             // A consumed binding the main menu also owns is the menu's:
-            // Cmd+, is Ghostty's open_config and the app's Preferences.
-            if Ghostty.menuMayClaim(flags),
+            // Cmd+, is Ghostty's open_config and the app's Preferences. Not
+            // mid-sequence, though: there the key continues what Ghostty
+            // started.
+            if !inKeySequence, Ghostty.menuMayClaim(flags),
                let menu = NSApp.mainMenu,
                Ghostty.MenuShortcut.perform(for: event, in: menu) {
                 return true
@@ -515,7 +517,18 @@ extension Ghostty.SurfaceView: NSTextInputClient {
         var y: Double = 0
         var width: Double = cell.width
         var height: Double = cell.height
-        ghostty_surface_ime_point(surface, &x, &y, &width, &height)
+        // QuickLook (force click, Look Up) asks for a range that is not the
+        // selection's; it is drawn at the selection's top left, as upstream
+        // does, rather than at the cursor where the input method wants it.
+        var text = ghostty_text_s()
+        if range.length > 0, range != selectedRange(), ghostty_surface_read_selection(surface, &text) {
+            // The -2/+2 is upstream's: QuickLook offsets its rectangle a little.
+            x = text.tl_px_x - 2
+            y = text.tl_px_y + 2
+            ghostty_surface_free_text(surface, &text)
+        } else {
+            ghostty_surface_ime_point(surface, &x, &y, &width, &height)
+        }
         if range.length == 0, width > 0 {
             // Dictation's indicator wants a zero-width rect at the insertion point.
             width = 0
