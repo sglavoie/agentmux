@@ -194,6 +194,36 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertTrue(workspace.linkLabel.isHidden, "another terminal shown has no link under the pointer")
     }
 
+    func testHoveredLinkOverlayDoesNotInterceptClicks() throws {
+        let window = workspace.window
+        workspace.activate(try row("work"))
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        workspace.terminalHoveredLink(terminal, url: "https://example.com/pr/1")
+        window.layoutIfNeeded()
+        let label = workspace.linkLabel
+        XCTAssertFalse(label.isHidden)
+        XCTAssertEqual(label.stringValue, "https://example.com/pr/1", "the link is still shown")
+
+        let root = try XCTUnwrap(window.contentView)
+        func hit(_ view: NSView, _ local: NSPoint) throws -> NSView {
+            let point = view.convert(local, to: nil)
+            return try XCTUnwrap(root.hitTest(root.superview!.convert(point, from: nil)))
+        }
+        let overLink = NSPoint(x: label.bounds.midX, y: label.bounds.midY)
+        XCTAssertTrue(terminal.frame.contains(terminal.superview!.convert(overLink, from: label)), "the link lies over the terminal")
+        let under = try hit(label, overLink)
+        XCTAssertFalse(under.isDescendant(of: label), "the overlay takes no click")
+        XCTAssertTrue(under.isDescendant(of: terminal), "the click reaches the terminal beneath")
+
+        // The Go to… list, above the overlay, still takes its own clicks.
+        workspace.toggleSwitcher()
+        window.layoutIfNeeded()
+        XCTAssertTrue(workspace.isSwitching)
+        let field = workspace.switcher.field
+        let onField = try hit(field, NSPoint(x: field.bounds.midX, y: field.bounds.midY))
+        XCTAssertTrue(onField.isDescendant(of: workspace.switcher), "the list takes its own clicks")
+    }
+
     func testARendererFailureOffersToReattach() throws {
         workspace.activate(try row("work"))
         let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))

@@ -242,8 +242,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The title each utility view's program last set (OSC 0/2), by view id.
     private(set) var programTitles: [String: String] = [:]
     /// The link under the pointer in the terminal shown, at the pane's
-    /// bottom corner.
-    let linkLabel = NSTextField(labelWithString: "")
+    /// bottom corner. Clicks go through it to the terminal beneath.
+    let linkLabel = WorkspaceLinkLabel(labelWithString: "")
 
     /// Sessions amx was asked to close, until it has answered and a live
     /// snapshot no longer lists them: whether the pane was on each when it
@@ -2346,6 +2346,13 @@ final class WorkspaceSelectionBorderView: NSView {
         layer?.borderColor = NSColor.controlAccentColor.cgColor
     }
 
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// The hovered link's overlay. It only shows the link: clicks under it go
+/// to the terminal beneath.
+@MainActor
+final class WorkspaceLinkLabel: NSTextField {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
