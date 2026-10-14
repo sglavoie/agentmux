@@ -67,9 +67,12 @@ protocol WorkspaceDelegate: AnyObject {
     /// pane. It starts no agent.
     func workspaceStartDaemon()
     /// A program in one of the workspace's terminals asked for a desktop
-    /// notification (OSC 9 or 777). `source` names the session or view it
-    /// came from; `runtimeSessionID` is set for a session's terminal.
-    func workspaceTerminalNotification(title: String, body: String, source: String, runtimeSessionID: String?)
+    /// notification (OSC 9 or 777). `onScreen` is set when the terminal it
+    /// came from is in the pane of the key window.
+    func workspaceTerminalNotification(_ notice: TerminalNotice, onScreen: Bool)
+    /// The pane shows the terminal of a session or view: it moved there, or
+    /// the window became key on it. Its terminal notices are now read.
+    func workspaceShowing(_ origin: TerminalNotice.Origin)
 }
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -225,6 +228,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     let sidebarToggle = WorkspaceWindowController.makeSidebarToggle()
     /// What the delegate was last told, so it hears of each change once.
     private var reportedCollapsed = false
+    private var reportedShowing: TerminalNotice.Origin?
     private var sidebarItem: NSSplitViewItem?
     private var sidebarObservation: NSKeyValueObservation?
     let inspector = WorkspaceInspectorView()
@@ -400,7 +404,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         awaited = nil
         leaveRecovery()
         content = .empty
+        reportedShowing = nil
         delegate?.workspaceVisibilityChanged(false)
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard isOpen, let origin = showing else { return }
+        reportedShowing = origin
+        delegate?.workspaceShowing(origin)
     }
 
     // MARK: State
@@ -1583,11 +1594,39 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// A program asked for a desktop notification.
     func terminalNotification(_ view: NSView, title: String, body: String) {
+        let notice: TerminalNotice
         if let id = sessionID(of: view) {
-            delegate?.workspaceTerminalNotification(title: title, body: body, source: sessionNames[id] ?? id, runtimeSessionID: id)
+            notice = TerminalNotice(title: title, body: body, source: sessionNames[id] ?? id, origin: .session(runtimeSessionID: id))
         } else if let id = viewID(of: view), let utility = views.view(id) {
-            delegate?.workspaceTerminalNotification(title: title, body: body, source: utility.title, runtimeSessionID: nil)
+            notice = TerminalNotice(title: title, body: body, source: utility.title, origin: .view(id: id))
+        } else {
+            return
         }
+        delegate?.workspaceTerminalNotification(notice, onScreen: Self.onScreen(notice.origin, showing: showing, key: window.isKeyWindow))
+    }
+
+    /// The terminal the pane shows, as a terminal notice names it.
+    var showing: TerminalNotice.Origin? {
+        guard isOpen else { return nil }
+        switch content {
+        case let .terminal(id): return .session(runtimeSessionID: id)
+        case let .view(id): return .view(id: id)
+        default: return nil
+        }
+    }
+
+    /// Whether a terminal notice's origin is being looked at: shown in the
+    /// pane of the key window, where a banner would only repeat it.
+    static func onScreen(_ origin: TerminalNotice.Origin, showing: TerminalNotice.Origin?, key: Bool) -> Bool {
+        key && origin == showing
+    }
+
+    /// Tells the app which terminal the pane shows, when that changed.
+    private func reportShowing() {
+        let now = showing
+        guard now != reportedShowing else { return }
+        reportedShowing = now
+        if let now { delegate?.workspaceShowing(now) }
     }
 
     /// A utility view's program exited. A shell, editor, or pager is done
@@ -1710,6 +1749,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         reloadInspector()
         reportPlace()
+        reportShowing()
     }
 
     static let resumeTitle = "Resume from Past Sessions"

@@ -196,12 +196,17 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
         daemonStarts += 1
     }
 
-    /// The desktop notifications terminals asked for, in order.
-    private(set) var terminalNotices: [(title: String, body: String, source: String, runtimeSessionID: String?)] = []
+    /// The desktop notifications terminals asked for, in order, and whether
+    /// each came from what the key window showed.
+    private(set) var terminalNotices: [(notice: TerminalNotice, onScreen: Bool)] = []
 
-    func workspaceTerminalNotification(title: String, body: String, source: String, runtimeSessionID: String?) {
-        terminalNotices.append((title, body, source, runtimeSessionID))
+    func workspaceTerminalNotification(_ notice: TerminalNotice, onScreen: Bool) {
+        terminalNotices.append((notice, onScreen))
     }
+
+    /// Every terminal the pane was reported to show, in order.
+    private(set) var showing: [TerminalNotice.Origin] = []
+    func workspaceShowing(_ origin: TerminalNotice.Origin) { showing.append(origin) }
 
     /// The sessions amx was asked to close, in order.
     private(set) var ended: [String] = []

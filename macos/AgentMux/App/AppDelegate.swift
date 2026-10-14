@@ -285,6 +285,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return controller
     }
 
+    /// A click on a utility view's terminal notice: opens the workspace on
+    /// that view, or where the workspace was when the view is gone. Only
+    /// navigation: a view never counts toward attention.
+    func showWorkspace(onView id: String) {
+        let controller = workspaceController()
+        controller.show()
+        guard !controller.showView(id) else { return }
+        Self.logger.notice("terminal notice from view \(id, privacy: .public): the view is gone")
+        if controller.state.selection == nil, controller.viewSelection == nil {
+            controller.showView(WorkspaceUtilityView.dashboard.id)
+        }
+    }
+
     /// Shows one of the workspace's utility views, opening the window for it.
     func showWorkspaceView(_ view: WorkspaceUtilityView) {
         let controller = workspaceController()
@@ -456,11 +469,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         startDaemon()
     }
 
-    func workspaceTerminalNotification(title: String, body: String, source: String, runtimeSessionID: String?) {
-        let shown = notifications?.presentTerminal(title: title, body: body, source: source, runtimeSessionID: runtimeSessionID) ?? false
-        if !shown {
-            Self.logger.notice("terminal notification from \(source, privacy: .public) not shown: app notifications are off or not allowed")
+    func workspaceTerminalNotification(_ notice: TerminalNotice, onScreen: Bool) {
+        let snoozed = Self.terminalNoticesSnoozed(
+            live: store.feed == .live ? store.snapshot.map { SnoozeState($0.notification) } : nil,
+            mirrored: preferencesModel.preferences.snoozeUntil,
+            now: Date()
+        )
+        let muted = Self.terminalNoticeMuted(notice.origin, in: store.sessions)
+        let outcome = notifications?.presentTerminal(notice, snoozed: snoozed, muted: muted, onScreen: onScreen) ?? .unavailable
+        if outcome != .shown {
+            Self.logger.notice("terminal notification from \(notice.source, privacy: .public) not shown: \(String(describing: outcome), privacy: .public)")
         }
+    }
+
+    func workspaceShowing(_ origin: TerminalNotice.Origin) {
+        notifications?.withdrawTerminal(origin)
+    }
+
+    /// Whether everything is snoozed, for a terminal notice: the daemon's
+    /// snooze while the feed is live, else the one mirrored into
+    /// `amxSnoozeUntil`.
+    nonisolated static func terminalNoticesSnoozed(live: SnoozeState?, mirrored: Date?, now: Date) -> Bool {
+        if let live { return live.isSnoozed(now: now) }
+        guard let mirrored else { return false }
+        return mirrored > now
+    }
+
+    /// Whether a terminal notice's session is muted. A view is never a
+    /// session and is never muted.
+    nonisolated static func terminalNoticeMuted(_ origin: TerminalNotice.Origin, in sessions: [CompanionSession]) -> Bool {
+        guard case let .session(id) = origin else { return false }
+        return session(runtimeSessionID: id, in: sessions)?.muted ?? false
+    }
+
+    /// The listed session the workspace embeds under a runtime session.
+    nonisolated static func session(runtimeSessionID id: String, in sessions: [CompanionSession]) -> CompanionSession? {
+        guard !id.isEmpty else { return nil }
+        return sessions.first { $0.embeddedRuntimeSessionID == id }
     }
 
     /// Names a session with `amx name-session`; an empty name removes the
@@ -1119,10 +1164,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             if !response.embeddedRuntimeSessionID.isEmpty {
                 return focusSession(response.embeddedRuntimeSessionID)
             }
+            if !response.workspaceViewID.isEmpty {
+                return showWorkspace(onView: response.workspaceViewID)
+            }
             guard response.navigable, let socket = origin.socket else { return }
             _ = KittyActivator.activate(socket: socket)
         case .actionMute:
-            guard let session = origin.session else { return report("Could not mute: the session is no longer listed.") }
+            // A session the workspace embeds has no window to match by.
+            let embedded = Self.session(runtimeSessionID: response.embeddedRuntimeSessionID, in: store.sessions)
+            guard let session = embedded ?? origin.session else { return report("Could not mute: the session is no longer listed.") }
             // mute-toggle toggles; a banner's Mute never unmutes.
             guard !session.muted else { return }
             toggleMute(.focusing(session))

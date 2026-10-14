@@ -814,8 +814,8 @@ an action that was not offered:
 
 | Category | Actions | Used for |
 | --- | --- | --- |
-| `amx.session` | Mute session, Snooze 1h | A session notification |
-| `amx.session.snooze` | Snooze 1h | One with no pane to mute |
+| `amx.session` | Mute session, Snooze All for 1 Hour | A session notification, of a Kitty window or a tmux session |
+| `amx.session.snooze` | Snooze All for 1 Hour | One with no session to mute |
 | `amx.asl` / `amx.asl.snooze` | Answer…, then the offered session actions | An ASL question |
 | `amx.prompt` | Answer… | A permission prompt of a tmux session, when the daemon offered `respond` |
 | `amx.plain` | none | Every other permission prompt, and any notification offered none |
@@ -826,8 +826,10 @@ forward. A dismissal reports `dismissed` (every category sets
 `customDismissAction`). An action reports `action_mute`, `action_snooze`,
 `action_answer`, or `action_respond`, and the app carries it out:
 - Mute runs `amx mute-toggle` on that session, unless the session is already
-  muted, and only when exactly one listed session has that window ID.
-- Snooze sets the same 1-hour snooze as the Notifications menu.
+  muted: `--runtime-session` for a session the workspace embeds, else only
+  when exactly one listed session has that window ID.
+- Snooze sets the same 1-hour snooze of every notification as the
+  Notifications menu.
 - Answer opens the [ASL answer panel](#asl-answer-panel) on the notice's run.
 - Answer on a permission prompt opens the [prompt answer
   panel](#prompt-answer-panel) on the notice's session.
@@ -840,7 +842,13 @@ The `amx debug tail` dispositions name the `app` backend.
 an embedded terminal is shown as a plain banner titled by its session or view
 (`NotificationPresenter.presentTerminal`), only while app notifications are on
 and allowed: it never asks for permission, and the daemon never hears of it.
-Clicking one from a session shows that session.
+It obeys the snooze (the daemon's, or the mirrored one while the feed is
+down) and its session's mute, and is not shown while its session or view is
+in the pane of the key workspace window. Its thread is its session or view,
+and the app withdraws that thread's notices when the pane moves to it or the
+workspace window becomes key on it. Clicking one from a session shows that
+session; from a utility view, it opens the workspace on that view, if it is
+still open (navigation only: a view never counts toward attention).
 
 ## ASL answer panel
 

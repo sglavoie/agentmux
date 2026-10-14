@@ -93,9 +93,10 @@ enum NotificationDisposition: String, Equatable {
 /// action the daemon did not offer it. Every category asks for
 /// `customDismissAction`, which is what makes a dismissal reach the app.
 enum NotificationCategories {
-    /// A session notice: Mute session, Snooze 1h.
+    /// A session notice: Mute session, Snooze All for 1 Hour.
     static let session = "amx.session"
-    /// A notice with no pane to mute (a profile-wide one): Snooze 1h.
+    /// A notice with no session to mute (a profile-wide one): Snooze All for
+    /// 1 Hour.
     static let sessionSnoozeOnly = "amx.session.snooze"
     /// An ASL question: Answer…, then the session actions it was offered.
     static let asl = "amx.asl"
@@ -127,7 +128,7 @@ enum NotificationCategories {
     }
 
     static let mute = Action(identifier: muteAction, title: "Mute session", foreground: false)
-    static let snooze = Action(identifier: snoozeAction, title: "Snooze 1h", foreground: false)
+    static let snooze = Action(identifier: snoozeAction, title: "Snooze All for 1 Hour", foreground: false)
     static let answer = Action(identifier: answerAction, title: "Answer…", foreground: true)
     static let respond = Action(identifier: respondAction, title: "Answer…", foreground: true)
 
@@ -266,6 +267,42 @@ final class SystemNotificationCenter: NotificationCenterClient {
     }
 }
 
+/// A desktop notification a program in one of the workspace's terminals
+/// asked for (OSC 9 or 777). The app's own: the daemon never hears of it.
+struct TerminalNotice: Equatable {
+    /// The terminal it came from: a session's, or a utility view's. A view
+    /// is never a session; its notices are navigation only.
+    enum Origin: Hashable {
+        case session(runtimeSessionID: String)
+        case view(id: String)
+
+        /// The banner thread, and what its notices are withdrawn by.
+        var thread: String {
+            switch self {
+            case let .session(id): return "runtime:\(id)"
+            case let .view(id): return "view:\(id)"
+            }
+        }
+    }
+
+    var title: String
+    var body: String
+    /// What titles it: the session's name or the view's title.
+    var source: String
+    var origin: Origin
+}
+
+/// What became of a terminal notice.
+enum TerminalOutcome: Equatable {
+    case shown
+    /// App notifications are off, or not allowed.
+    case unavailable
+    case snoozed
+    case muted
+    /// What it came from is in the pane of the key workspace window.
+    case onScreen
+}
+
 /// Shows the daemon's notification frames through the operating system's
 /// notification center and reports what became of each.
 ///
@@ -296,6 +333,9 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         let sessionID: String
         /// Set when the notice is about a session the workspace embeds.
         var embeddedRuntimeSessionID = ""
+        /// Set for a terminal notice from a utility view: the view a click
+        /// opens the workspace on.
+        var workspaceViewID = ""
     }
 
     private let center: NotificationCenterClient
@@ -317,6 +357,9 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var claim: NotificationClaim
     /// Notices waiting on the permission prompt.
     private var awaitingPermission: [AppNotice] = []
+    /// The terminal notices shown, by thread, oldest first: the center
+    /// removes by identifier only.
+    private var terminalIdentifiers: [String: [String]] = [:]
     private var permissionInFlight = false
     /// Notices retracted before `add` finished, which must not be shown.
     private var retracted: Set<String> = []
@@ -423,27 +466,51 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     /// 777): the daemon never heard of it, so nothing about it is reported.
     static let terminalPrefix = "amx-terminal:"
 
+    /// The most terminal notices of one thread remembered for withdrawal.
+    static let terminalNoticesKept = 32
+
     /// Shows a program's desktop notification, titled by the session or view
-    /// it came from. Returns false when it cannot be shown now: app
-    /// notifications are off, or not allowed. It never asks for permission,
-    /// which belongs to the daemon's notices.
+    /// it came from, unless it should not be shown now: app notifications
+    /// are off or not allowed, everything is snoozed, its session is muted,
+    /// or what it came from is on screen in the key window. It never asks
+    /// for permission, which belongs to the daemon's notices.
     @discardableResult
-    func presentTerminal(title: String, body: String, source: String, runtimeSessionID: String?) -> Bool {
-        guard enabled, authorization == .authorized else { return false }
-        center.add(Self.terminalRequest(title: title, body: body, source: source, runtimeSessionID: runtimeSessionID)) { _ in }
-        return true
+    func presentTerminal(_ notice: TerminalNotice, snoozed: Bool, muted: Bool, onScreen: Bool) -> TerminalOutcome {
+        guard enabled, authorization == .authorized else { return .unavailable }
+        if snoozed { return .snoozed }
+        if muted { return .muted }
+        if onScreen { return .onScreen }
+        let request = Self.terminalRequest(notice)
+        var kept = terminalIdentifiers[notice.origin.thread, default: []]
+        kept.append(request.identifier)
+        terminalIdentifiers[notice.origin.thread] = Array(kept.suffix(Self.terminalNoticesKept))
+        center.add(request) { _ in }
+        return .shown
     }
 
-    static func terminalRequest(title: String, body: String, source: String, runtimeSessionID: String?) -> UNNotificationRequest {
+    /// Removes the terminal notices of a session or view, which is being
+    /// shown: they have nothing left to say.
+    func withdrawTerminal(_ origin: TerminalNotice.Origin) {
+        guard let ids = terminalIdentifiers.removeValue(forKey: origin.thread), !ids.isEmpty else { return }
+        center.remove(identifiers: ids)
+    }
+
+    static func terminalRequest(_ notice: TerminalNotice) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         // OSC 9 carries a body alone; the source then titles it.
-        content.title = title.isEmpty ? source : title
-        if !title.isEmpty, !source.isEmpty { content.subtitle = source }
-        content.body = body
+        content.title = notice.title.isEmpty ? notice.source : notice.title
+        if !notice.title.isEmpty, !notice.source.isEmpty { content.subtitle = notice.source }
+        content.body = notice.body
         content.categoryIdentifier = NotificationCategories.plain
-        content.threadIdentifier = runtimeSessionID.map { "runtime:\($0)" } ?? "amx-terminal"
-        content.userInfo = [UserInfoKey.embeddedRuntimeSessionID: runtimeSessionID ?? ""]
-        return UNNotificationRequest(identifier: terminalPrefix + UUID().uuidString, content: content, trigger: nil)
+        content.threadIdentifier = notice.origin.thread
+        switch notice.origin {
+        case let .session(id):
+            content.userInfo = [UserInfoKey.embeddedRuntimeSessionID: id]
+        case let .view(id):
+            content.userInfo = [UserInfoKey.workspaceViewID: id]
+        }
+        let identifier = "\(terminalPrefix)\(notice.origin.thread):\(UUID().uuidString)"
+        return UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
     }
 
     /// A `notification_retract` frame.
@@ -494,6 +561,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         static let runID = "amx_run_id"
         static let sessionID = "amx_session_id"
         static let embeddedRuntimeSessionID = "amx_embedded_runtime_session_id"
+        static let workspaceViewID = "amx_workspace_view_id"
     }
 
     // MARK: Responses
@@ -510,7 +578,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
             navigable: userInfo[UserInfoKey.navigable] as? Bool ?? false,
             runID: userInfo[UserInfoKey.runID] as? String ?? "",
             sessionID: userInfo[UserInfoKey.sessionID] as? String ?? "",
-            embeddedRuntimeSessionID: userInfo[UserInfoKey.embeddedRuntimeSessionID] as? String ?? ""
+            embeddedRuntimeSessionID: userInfo[UserInfoKey.embeddedRuntimeSessionID] as? String ?? "",
+            workspaceViewID: userInfo[UserInfoKey.workspaceViewID] as? String ?? ""
         ))
     }
 

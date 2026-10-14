@@ -316,8 +316,31 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         let dashboard = try XCTUnwrap(workspace.utilityTerminalView(for: WorkspaceUtilityView.dashboard.id))
         workspace.terminalNotification(dashboard, title: "", body: "tests passed")
         workspace.terminalNotification(NSView(), title: "x", body: "not one of ours")
-        XCTAssertEqual(app.terminalNotices.map(\.source), [name, "Dashboard"])
-        XCTAssertEqual(app.terminalNotices.map(\.runtimeSessionID), [F.runtimeID(1), nil])
-        XCTAssertEqual(app.terminalNotices.map(\.body), ["done", "tests passed"])
+        XCTAssertEqual(app.terminalNotices.map(\.notice.source), [name, "Dashboard"])
+        XCTAssertEqual(app.terminalNotices.map(\.notice.origin), [.session(runtimeSessionID: F.runtimeID(1)), .view(id: WorkspaceUtilityView.dashboard.id)])
+        XCTAssertEqual(app.terminalNotices.map(\.notice.body), ["done", "tests passed"])
+        XCTAssertEqual(app.terminalNotices.map(\.onScreen), [false, false], "the test window is never key")
+    }
+
+    /// The app hears which terminal the pane shows each time that changes,
+    /// so it can withdraw that terminal's notices.
+    func testThePaneReportsTheTerminalItShows() throws {
+        workspace.activate(try row("work"))
+        XCTAssertTrue(workspace.showView(WorkspaceUtilityView.dashboard.id))
+        workspace.activate(try row("work"))
+        workspace.activate(try row("work"))
+        let work = TerminalNotice.Origin.session(runtimeSessionID: F.runtimeID(1))
+        let dashboard = TerminalNotice.Origin.view(id: WorkspaceUtilityView.dashboard.id)
+        XCTAssertEqual(Array(app.showing.suffix(3)), [work, dashboard, work])
+        XCTAssertEqual(app.showing.filter { $0 == work }.count, 2, "showing the same terminal again says nothing")
+        XCTAssertEqual(workspace.showing, work)
+    }
+
+    func testANoticeIsOnScreenOnlyInTheKeyWindowOnItsTerminal() {
+        let work = TerminalNotice.Origin.session(runtimeSessionID: "rs-1")
+        XCTAssertTrue(WorkspaceWindowController.onScreen(work, showing: work, key: true))
+        XCTAssertFalse(WorkspaceWindowController.onScreen(work, showing: work, key: false))
+        XCTAssertFalse(WorkspaceWindowController.onScreen(work, showing: .view(id: "dashboard"), key: true))
+        XCTAssertFalse(WorkspaceWindowController.onScreen(work, showing: nil, key: true))
     }
 }

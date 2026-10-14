@@ -136,8 +136,9 @@ const BackendKindTmux = "tmux"
 // appActions is what a notice offers besides its click. A permission prompt
 // offers no answer: the operator must look at the pane before answering it.
 // What it can offer is a way to look and answer without going there, for a
-// session `amx send` can write to. Muting needs a pane, and answering needs
-// an ASL run with a question.
+// session `amx send` can write to. Muting needs a session to mute: a Kitty
+// window, or a runtime session the app mutes with `mute-toggle
+// --runtime-session`. Answering needs an ASL run with a question.
 func appActions(target NotificationTarget, action string, trace NotificationTrace) []string {
 	if action == "permission" {
 		if target.RuntimeSessionID != "" && target.Backend == BackendKindTmux {
@@ -146,7 +147,7 @@ func appActions(target NotificationTarget, action string, trace NotificationTrac
 		return nil
 	}
 	var actions []string
-	if target.Navigable && target.WindowID > 0 && !target.sessionFocus() {
+	if target.Navigable && (target.WindowID > 0 || target.sessionFocus()) {
 		actions = append(actions, protocol.NotificationActionMute)
 	}
 	actions = append(actions, protocol.NotificationActionSnooze)

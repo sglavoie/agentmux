@@ -99,7 +99,7 @@ final class NotificationPresenterTests: XCTestCase {
         let byID = Dictionary(uniqueKeysWithValues: center.categories.map { ($0.identifier, $0) })
         XCTAssertEqual(Set(byID.keys), ["amx.session", "amx.session.snooze", "amx.asl", "amx.asl.snooze", "amx.prompt", "amx.plain"])
         let session = try XCTUnwrap(byID["amx.session"])
-        XCTAssertEqual(session.actions.map(\.title), ["Mute session", "Snooze 1h"])
+        XCTAssertEqual(session.actions.map(\.title), ["Mute session", "Snooze All for 1 Hour"])
         XCTAssertEqual(session.actions.map(\.identifier), ["amx.mute", "amx.snooze"])
         XCTAssertTrue(session.options.contains(.customDismissAction), "dismissals must reach the app")
         let asl = try XCTUnwrap(byID["amx.asl"])
@@ -198,7 +198,7 @@ final class NotificationPresenterTests: XCTestCase {
         }
         let silent = NotificationPresenter.request(for: stop)
         XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: silent.content), [.banner, .list])
-        let terminal = NotificationPresenter.terminalRequest(title: "t", body: "b", source: "s", runtimeSessionID: nil)
+        let terminal = NotificationPresenter.terminalRequest(TerminalNotice(title: "t", body: "b", source: "s", origin: .view(id: "dashboard")))
         XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: terminal.content), [.banner, .list])
     }
 
@@ -277,18 +277,21 @@ final class NotificationPresenterTests: XCTestCase {
 
     /// A program's own notification (OSC 9/777) is the app's: shown only when
     /// it can be, never reported to the daemon, and a click on one goes to
-    /// the session it came from.
+    /// the session or view it came from.
     func testATerminalsNotificationIsShownButNeverReported() throws {
-        XCTAssertFalse(presenter(enabled: false).presentTerminal(title: "t", body: "b", source: "api", runtimeSessionID: nil))
-        XCTAssertFalse(presenter(status: .denied).presentTerminal(title: "t", body: "b", source: "api", runtimeSessionID: nil))
+        let api = TerminalNotice(title: "t", body: "b", source: "api", origin: .session(runtimeSessionID: "rs-1"))
+        XCTAssertEqual(presenter(enabled: false).presentTerminal(api, snoozed: false, muted: false, onScreen: false), .unavailable)
+        XCTAssertEqual(presenter(status: .denied).presentTerminal(api, snoozed: false, muted: false, onScreen: false), .unavailable)
         let undecided = presenter(status: .notDetermined)
-        XCTAssertFalse(undecided.presentTerminal(title: "t", body: "b", source: "api", runtimeSessionID: nil))
+        XCTAssertEqual(undecided.presentTerminal(api, snoozed: false, muted: false, onScreen: false), .unavailable)
         XCTAssertEqual(center.permissionRequests, 0, "a program does not get to ask for permission")
         XCTAssertEqual(center.added, [])
 
         let shown = presenter()
-        XCTAssertTrue(shown.presentTerminal(title: "Build", body: "done", source: "api — work", runtimeSessionID: "rs-1"))
-        XCTAssertTrue(shown.presentTerminal(title: "", body: "tests passed", source: "Dashboard", runtimeSessionID: nil))
+        let build = TerminalNotice(title: "Build", body: "done", source: "api — work", origin: .session(runtimeSessionID: "rs-1"))
+        let tests = TerminalNotice(title: "", body: "tests passed", source: "Dashboard", origin: .view(id: "dashboard"))
+        XCTAssertEqual(shown.presentTerminal(build, snoozed: false, muted: false, onScreen: false), .shown)
+        XCTAssertEqual(shown.presentTerminal(tests, snoozed: false, muted: false, onScreen: false), .shown)
         XCTAssertEqual(center.added.count, 2)
         let session = try XCTUnwrap(center.added.first)
         XCTAssertTrue(session.identifier.hasPrefix(NotificationPresenter.terminalPrefix))
@@ -297,16 +300,109 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(session.content.body, "done")
         XCTAssertEqual(session.content.threadIdentifier, "runtime:rs-1")
         XCTAssertEqual(session.content.categoryIdentifier, NotificationCategories.plain)
-        let view = center.added[1].content
-        XCTAssertEqual(view.title, "Dashboard", "OSC 9 has no title: the source is one")
-        XCTAssertEqual(view.subtitle, "")
+        let view = center.added[1]
+        XCTAssertEqual(view.content.title, "Dashboard", "OSC 9 has no title: the source is one")
+        XCTAssertEqual(view.content.subtitle, "")
+        XCTAssertEqual(view.content.threadIdentifier, "view:dashboard")
+        XCTAssertNotEqual(view.identifier, session.identifier)
         XCTAssertEqual(reports, [], "the daemon never hears of it")
 
         shown.handleResponse(notificationID: session.identifier, actionIdentifier: UNNotificationDefaultActionIdentifier,
-                                 userInfo: session.content.userInfo)
+                             userInfo: session.content.userInfo)
         XCTAssertEqual(reports, [])
         XCTAssertEqual(responses.last?.embeddedRuntimeSessionID, "rs-1")
+        XCTAssertEqual(responses.last?.workspaceViewID, "")
         XCTAssertEqual(responses.last?.disposition, .clicked)
+
+        shown.handleResponse(notificationID: view.identifier, actionIdentifier: UNNotificationDefaultActionIdentifier,
+                             userInfo: view.content.userInfo)
+        XCTAssertEqual(reports, [])
+        XCTAssertEqual(responses.last?.embeddedRuntimeSessionID, "", "a view is never a session")
+        XCTAssertEqual(responses.last?.workspaceViewID, "dashboard")
+    }
+
+    /// Snooze, mute, and being on screen hold a terminal notice back, as
+    /// they do the daemon's.
+    func testATerminalsNotificationObeysSnoozeMuteAndTheScreen() {
+        let presenter = presenter()
+        let notice = TerminalNotice(title: "Build", body: "done", source: "api", origin: .session(runtimeSessionID: "rs-1"))
+        XCTAssertEqual(presenter.presentTerminal(notice, snoozed: true, muted: false, onScreen: false), .snoozed)
+        XCTAssertEqual(presenter.presentTerminal(notice, snoozed: false, muted: true, onScreen: false), .muted)
+        XCTAssertEqual(presenter.presentTerminal(notice, snoozed: false, muted: false, onScreen: true), .onScreen)
+        XCTAssertEqual(center.added, [])
+        presenter.withdrawTerminal(notice.origin)
+        XCTAssertEqual(center.removed, [], "nothing was shown, so nothing is withdrawn")
+    }
+
+    /// Showing a session or view withdraws its terminal notices, and only
+    /// its own.
+    func testShowingASessionOrViewWithdrawsItsTerminalNotices() {
+        let presenter = presenter()
+        let api = TerminalNotice.Origin.session(runtimeSessionID: "rs-1")
+        let web = TerminalNotice.Origin.session(runtimeSessionID: "rs-2")
+        let shell = TerminalNotice.Origin.view(id: "shell-1")
+        for origin in [api, web, api, shell] {
+            presenter.presentTerminal(TerminalNotice(title: "t", body: "b", source: "s", origin: origin), snoozed: false, muted: false, onScreen: false)
+        }
+        let ids = center.added.map(\.identifier)
+        XCTAssertEqual(Set(ids).count, 4, "every notice has its own identifier")
+
+        presenter.withdrawTerminal(api)
+        XCTAssertEqual(center.removed, [ids[0], ids[2]])
+        presenter.withdrawTerminal(api)
+        XCTAssertEqual(center.removed, [ids[0], ids[2]], "withdrawn once")
+        presenter.withdrawTerminal(shell)
+        XCTAssertEqual(center.removed, [ids[0], ids[2], ids[3]])
+        presenter.withdrawTerminal(.view(id: "rs-2"))
+        XCTAssertEqual(center.removed.count, 3, "a view is not the session of the same name")
+    }
+
+    func testOnlyTheLatestTerminalNoticesOfAThreadAreKept() {
+        let presenter = presenter()
+        let origin = TerminalNotice.Origin.view(id: "shell-1")
+        let count = NotificationPresenter.terminalNoticesKept + 3
+        for _ in 0..<count {
+            presenter.presentTerminal(TerminalNotice(title: "t", body: "b", source: "s", origin: origin), snoozed: false, muted: false, onScreen: false)
+        }
+        presenter.withdrawTerminal(origin)
+        XCTAssertEqual(center.removed, Array(center.added.map(\.identifier).suffix(NotificationPresenter.terminalNoticesKept)))
+    }
+
+    /// The snooze a terminal notice obeys: the daemon's while the feed is
+    /// live, else the mirrored one.
+    func testTerminalNoticesFollowTheLiveSnoozeElseTheMirroredOne() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let later = now.addingTimeInterval(3600)
+        XCTAssertTrue(AppDelegate.terminalNoticesSnoozed(live: SnoozeState(snoozedUntil: Int64(later.timeIntervalSince1970)), mirrored: nil, now: now))
+        XCTAssertTrue(AppDelegate.terminalNoticesSnoozed(live: SnoozeState(indefinite: true), mirrored: nil, now: now))
+        XCTAssertFalse(AppDelegate.terminalNoticesSnoozed(live: SnoozeState(), mirrored: later, now: now), "the live state wins")
+        XCTAssertFalse(AppDelegate.terminalNoticesSnoozed(live: SnoozeState(snoozedUntil: 10), mirrored: nil, now: now), "run out")
+        XCTAssertTrue(AppDelegate.terminalNoticesSnoozed(live: nil, mirrored: later, now: now))
+        XCTAssertTrue(AppDelegate.terminalNoticesSnoozed(live: nil, mirrored: .distantFuture, now: now))
+        XCTAssertFalse(AppDelegate.terminalNoticesSnoozed(live: nil, mirrored: now.addingTimeInterval(-1), now: now))
+        XCTAssertFalse(AppDelegate.terminalNoticesSnoozed(live: nil, mirrored: nil, now: now))
+    }
+
+    /// A muted session's terminal notices are held back; a view has no
+    /// mute, and a session is found by its runtime session, which is also
+    /// how a banner's Mute finds a tmux session.
+    func testTerminalNoticesFollowTheirSessionsMute() {
+        var muted = CompanionSession(windowID: 1 << 40)
+        muted.runtime = CompanionRuntime(sessionID: "rs-1", backend: "tmux")
+        muted.muted = true
+        var loud = CompanionSession(windowID: (1 << 40) + 1)
+        loud.runtime = CompanionRuntime(sessionID: "rs-2", backend: "tmux")
+        var kitty = CompanionSession(windowID: 4)
+        kitty.runtime = CompanionRuntime(sessionID: "rs-3", backend: "kitty")
+        kitty.muted = true
+        let sessions = [muted, loud, kitty]
+        XCTAssertTrue(AppDelegate.terminalNoticeMuted(.session(runtimeSessionID: "rs-1"), in: sessions))
+        XCTAssertFalse(AppDelegate.terminalNoticeMuted(.session(runtimeSessionID: "rs-2"), in: sessions))
+        XCTAssertFalse(AppDelegate.terminalNoticeMuted(.session(runtimeSessionID: "rs-9"), in: sessions), "an unlisted session is not muted")
+        XCTAssertFalse(AppDelegate.terminalNoticeMuted(.view(id: "rs-1"), in: sessions), "a view is never a session")
+        XCTAssertEqual(AppDelegate.session(runtimeSessionID: "rs-2", in: sessions), loud)
+        XCTAssertNil(AppDelegate.session(runtimeSessionID: "rs-3", in: sessions), "a Kitty session is matched by its window")
+        XCTAssertNil(AppDelegate.session(runtimeSessionID: "", in: sessions))
     }
 
     // MARK: Permission

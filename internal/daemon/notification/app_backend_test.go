@@ -410,6 +410,28 @@ func TestAppBackendOffersRespondOnlyWhereAPromptCanBeAnsweredInPlace(t *testing.
 	}
 }
 
+// A tmux session has no Kitty window, but the app mutes it by its runtime
+// session, so its banners offer Mute like a Kitty window's.
+func TestAppBackendOffersMuteForRuntimeSessions(t *testing.T) {
+	want := []string{protocol.NotificationActionMute, protocol.NotificationActionSnooze}
+	for name, target := range map[string]NotificationTarget{
+		"a tmux session":                {WindowID: 1 << 40, Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux},
+		"a tmux session with no window": {Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux},
+		"a Kitty window":                {WindowID: 3, Navigable: true},
+	} {
+		if got := appActions(target, "stop", NotificationTrace{}); !slices.Equal(got, want) {
+			t.Errorf("%s: stop actions = %v; want %v", name, got, want)
+		}
+	}
+	if got := appActions(NotificationTarget{WindowID: 1 << 40, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux}, "stop", NotificationTrace{}); slices.Contains(got, protocol.NotificationActionMute) {
+		t.Fatalf("a session nothing can show offered mute: %v", got)
+	}
+	tmux := NotificationTarget{WindowID: 1 << 40, Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux}
+	if got := appActions(tmux, "permission", NotificationTrace{}); !slices.Equal(got, []string{protocol.NotificationActionRespond}) {
+		t.Fatalf("tmux permission actions = %v; want respond alone", got)
+	}
+}
+
 func TestAppBackendOffersAnswerOnlyForASLQuestions(t *testing.T) {
 	target := NotificationTarget{WindowID: 3, Navigable: true}
 	if got := appActions(target, "elicitation", NotificationTrace{RunID: "run-1"}); !slices.Contains(got, protocol.NotificationActionAnswer) {
@@ -586,8 +608,8 @@ func TestAppNoticePreservesKittySocket(t *testing.T) {
 }
 
 // A notice for a runtime session on a backend other than Kitty names the
-// session and nothing Kitty could act on: no window ID, no socket, no mute. It
-// is navigable by its runtime session, which the app asks the daemon to show
+// session and nothing Kitty could act on: no window ID, no socket. It offers
+// mute, which the app carries out by runtime session. It is navigable by its runtime session, which the app asks the daemon to show
 // (focus_session), so the click is recorded as delegated: the notifier shows
 // nothing a second time and never reaches the Kitty focus client.
 func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
@@ -615,8 +637,8 @@ func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
 			got.RuntimeSessionID != "rs-0123456789abcdef0123456789abcdef" || got.Backend != "tmux" || got.RunID != "run-1" {
 			t.Fatalf("notice = %+v", got)
 		}
-		if !slices.Equal(got.Actions, []string{protocol.NotificationActionSnooze, protocol.NotificationActionAnswer}) {
-			t.Fatalf("actions = %v; a session with no Kitty pane offers no mute", got.Actions)
+		if !slices.Equal(got.Actions, []string{protocol.NotificationActionMute, protocol.NotificationActionSnooze, protocol.NotificationActionAnswer}) {
+			t.Fatalf("actions = %v; want mute by runtime session, snooze, and answer", got.Actions)
 		}
 		if !log.has("focus:suppressed:focus_delegated") || len(shown) != 0 {
 			t.Fatalf("click on the app's non-Kitty notice: log %v, shown %v; want it left to the app", log.entries, shown)
