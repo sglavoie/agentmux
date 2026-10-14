@@ -25,6 +25,9 @@ extension Ghostty {
         /// Ghostty forces this on for any surface with a program of its own;
         /// the host hears about the exit through `GhosttySurfaceDelegate`.
         var waitAfterCommand = false
+        /// Who holds what scrolls off the terminal. Fixed before the surface
+        /// exists, since Ghostty's threads read it from the first action.
+        var scrollback: Scrollback = .terminal
 
         /// Tells `amx attach` that the workspace hosts its terminal
         /// (`tmux.WorkspaceHostEnv`): the sidebar already says which session
@@ -33,7 +36,8 @@ extension Ghostty {
 
         /// A view attached to a runtime session: `amx attach <id>`, which
         /// validates the target, records the attachment, and takes over
-        /// interactive ownership from any other view.
+        /// interactive ownership from any other view. It only views a
+        /// session the tmux server holds, so the history is the server's.
         static func attachment(
             amx: URL,
             runtimeSessionID: String,
@@ -41,7 +45,8 @@ extension Ghostty {
         ) -> SurfaceConfiguration {
             var hosted = environment
             hosted[workspaceHostEnvironment] = "1"
-            return SurfaceConfiguration(program: amx, arguments: ["attach", runtimeSessionID], environment: hosted)
+            return SurfaceConfiguration(
+                program: amx, arguments: ["attach", runtimeSessionID], environment: hosted, scrollback: .server)
         }
 
         /// Ghostty sets these for the terminal it is; a caller's value would

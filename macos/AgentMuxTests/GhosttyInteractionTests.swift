@@ -58,13 +58,23 @@ final class GhosttyInteractionTests: XCTestCase {
         ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
         dir = FileManager.default.temporaryDirectory.appendingPathComponent("amx-ghostty-keys-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        out = dir.appendingPathComponent("bytes")
         window = GhosttyTestWindow.offscreen()
-        view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+        try record(scrollback: .terminal)
+    }
+
+    /// Replaces the terminal under test with a fresh recorder whose history
+    /// `scrollback` holds, which is fixed when a surface is made.
+    private func record(scrollback: Ghostty.Scrollback) throws {
+        view?.close()
+        out = dir.appendingPathComponent("bytes-\(UUID().uuidString)")
+        var recorder = Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", #"stty raw -echo; : > "$OUT.ready"; exec cat > "$OUT""#],
             environment: ["OUT": out.path]
-        )))
+        )
+        recorder.scrollback = scrollback
+        view = try XCTUnwrap(ghostty.makeSurface(recorder))
+        XCTAssertEqual(view.scrollback, scrollback)
         window.contentView = view
         XCTAssertTrue(window.makeFirstResponder(view))
         window.reportsKey = true
@@ -141,6 +151,40 @@ final class GhosttyInteractionTests: XCTestCase {
         expect("a", "zoom keys send nothing to the program")
     }
 
+    /// ⌘0 and ⌘⇧0 are the tenth session's. With fewer sessions that item
+    /// is disabled, and Ghostty must not reset the zoom behind it.
+    @MainActor
+    func testCommandZeroNeverResetsTheZoomBehindTheMenu() throws {
+        let savedMenu = NSApp.mainMenu
+        let savedWindowsMenu = NSApp.windowsMenu
+        NSApp.mainMenu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
+        defer {
+            NSApp.mainMenu = savedMenu
+            NSApp.windowsMenu = savedWindowsMenu
+        }
+        let menu = try XCTUnwrap(NSApp.mainMenu)
+        let surface = try XCTUnwrap(view.surface)
+        let zeros = [TestKey.command("0", keyCode: 29), .command("0", keyCode: 29, shifted: ")")]
+        for key in zeros {
+            var flags = ghostty_binding_flags_e(0)
+            let isBinding = key.characters.withCString { ptr in
+                var event = key.event().ghosttyKeyEvent(GHOSTTY_ACTION_PRESS)
+                event.text = ptr
+                return ghostty_surface_key_is_binding(surface, event, &flags)
+            }
+            XCTAssertFalse(isBinding, "\(key.characters) is not Ghostty's")
+        }
+        view.performBindingAction("increase_font_size:3")
+        let bigger = ghostty_surface_size(surface).cell_width_px
+        for key in zeros {
+            let event = key.event()
+            let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: event), "the menu owns \(key.characters)")
+            XCTAssertFalse(Ghostty.MenuShortcut.perform(for: event, in: menu), "\(item.title) is disabled with no sessions")
+            if !view.performKeyEquivalent(with: event) { view.keyDown(with: event) }
+        }
+        XCTAssertEqual(ghostty_surface_size(surface).cell_width_px, bigger, "the zoom is where it was")
+    }
+
     // MARK: Keys that are the program's
 
     func testModifiedKeysReachTheProgramDistinctFromTheirPlainForms() {
@@ -165,8 +209,8 @@ final class GhosttyInteractionTests: XCTestCase {
 
     // MARK: History
 
-    func testASessionViewAsksTheServerForHistory() {
-        view.scrollback = .server
+    func testASessionViewAsksTheServerForHistory() throws {
+        try record(scrollback: .server)
         var sent = ""
         for (action, request) in [
             (#selector(NSResponder.scrollPageUp(_:)), Ghostty.HistoryRequest.pageUp),
@@ -218,9 +262,10 @@ final class GhosttyInteractionTests: XCTestCase {
         press(TestKey.function(NSF3FunctionKey, keyCode: 99))
         expect("\u{1b}OR", "in a utility view F3 is the program's")
 
-        view.scrollback = .server
+        try record(scrollback: .server)
+        markers.target = view
         XCTAssertTrue(menu.performKeyEquivalent(with: TestKey.function(NSF3FunctionKey, keyCode: 99).event()))
-        expect("\u{1b}OR\u{1b}[5008~", "on a session view F3 asks the server for its markers")
+        expect("\u{1b}[5008~", "on a session view F3 asks the server for its markers")
     }
 
     /// A right-click the program does not take shows Copy, Paste, and Select
@@ -894,5 +939,67 @@ final class GhosttyLinkTests: XCTestCase {
         }
         XCTAssertEqual(plainMove.first, 1)
         XCTAssertEqual(plainMove.second, 0)
+    }
+}
+
+/// What a Control-click and Look Up do, each on a surface of its own that
+/// prints `hello world` and may first turn on mouse tracking.
+final class GhosttyClickMenuTests: XCTestCase {
+    private func surface(mouseModes: [Int] = [], _ body: (Ghostty.SurfaceView, NSWindow) throws -> Void) throws {
+        let ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
+        defer { ghostty.shutdown() }
+        let window = GhosttyTestWindow.offscreen()
+        defer { window.close() }
+        let enable = mouseModes.isEmpty ? "" : "printf '" + mouseModes.map { "\\033[?\($0)h" }.joined() + "'; "
+        let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", enable + "printf 'hello world\\n'; exec cat"])))
+        window.contentView = view
+        defer { window.contentView = nil }
+        XCTAssertTrue(window.makeFirstResponder(view))
+        let surface = try XCTUnwrap(view.surface)
+        if !mouseModes.isEmpty {
+            ghosttyWait("the program to take the mouse") { ghostty_surface_mouse_captured(surface) }
+        }
+        try body(view, window)
+    }
+
+    private func mouse(_ type: NSEvent.EventType, _ p: NSPoint, _ flags: NSEvent.ModifierFlags = [], in window: NSWindow) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: p, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    }
+
+    func testAControlClickShowsTheMenuUnlessTheProgramTracksTheMouse() throws {
+        try surface { view, window in
+            let p = NSPoint(x: 10, y: 10)
+            XCTAssertNil(view.menu(for: mouse(.leftMouseDown, p, in: window)), "a plain click has no menu")
+            XCTAssertEqual(view.menu(for: mouse(.leftMouseDown, p, .control, in: window))?.items.map(\.title),
+                           ["Copy", "Paste", "Select All"])
+            XCTAssertNotNil(view.menu(for: mouse(.rightMouseDown, p, in: window)))
+            XCTAssertNil(view.menu(for: mouse(.otherMouseDown, p, in: window)))
+        }
+        try surface(mouseModes: [1002, 1006]) { view, window in
+            XCTAssertNil(view.menu(for: mouse(.leftMouseDown, NSPoint(x: 10, y: 10), .control, in: window)),
+                         "a program tracking the mouse is sent the Control-click")
+        }
+    }
+
+    /// Look Up defines the word under the pointer, in the terminal's font.
+    func testLookUpNamesTheWordUnderThePointer() throws {
+        try surface { view, window in
+            XCTAssertTrue(view.responds(to: #selector(NSResponder.quickLook(with:))))
+            let cell = view.cellSize
+            let p = NSPoint(x: 2 + 7.5 * cell.width, y: view.bounds.height - 2 - cell.height / 2)
+            ghosttyWait("the line to be drawn") {
+                view.mouseMoved(with: self.mouse(.mouseMoved, p, in: window))
+                return view.lookUpWord()?.0.string == "world"
+            }
+            let (word, at) = try XCTUnwrap(view.lookUpWord())
+            XCTAssertNotNil(word.attribute(.font, at: 0, effectiveRange: nil), "drawn in the terminal's font")
+            XCTAssertEqual(at.x, 2 + 6 * cell.width, accuracy: 1, "where the word starts")
+
+            view.mouseMoved(with: mouse(.mouseMoved, NSPoint(x: view.bounds.width - 20, y: 20), in: window))
+            XCTAssertNil(view.lookUpWord(), "nothing to define over blank cells")
+        }
     }
 }

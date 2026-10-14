@@ -22,11 +22,19 @@ extension Ghostty {
             // to ask, and never does for an attachment, whose close only
             // detaches from its session.
             var lines = ["confirm-close-surface = true"]
+            // ⌘0 and ⌘⇧0 are the tenth session's in the main menu. With
+            // fewer sessions that item is disabled, which leaves a key
+            // Ghostty binds to it (`menuMayClaim`): Ghostty's reset_font_size
+            // would run behind a menu that says otherwise. Actual Size is ⌘_.
+            lines += Self.menuOwnedKeys.map { "keybind = \($0)=unbind" }
             if let fontSize {
                 lines.append("font-size = \(Self.number(fontSize))")
             }
             return lines + settings.filter(Ghostty.isSingleLine)
         }
+
+        /// Ghostty's default bindings for keys the main menu owns outright.
+        static let menuOwnedKeys = ["super+0", "super+shift+0"]
 
         /// A whole number without its ".0", so `14` rather than `14.0`.
         static func number(_ value: Float) -> String {

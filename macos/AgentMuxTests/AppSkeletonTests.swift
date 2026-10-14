@@ -13,6 +13,15 @@ final class AppSkeletonTests: XCTestCase {
         XCTAssertEqual(NSApp.activationPolicy(), .accessory)
     }
 
+    /// Held keys repeat and AutoFill stays out of the terminals: both are
+    /// registered at launch, below anything the user set.
+    func testLaunchTurnsOffPressAndHoldAndAutoFillHeuristics() {
+        let registered = UserDefaults.standard.volatileDomain(forName: UserDefaults.registrationDomain)
+        for key in ["ApplePressAndHoldEnabled", "NSAutoFillHeuristicControllerEnabled"] {
+            XCTAssertEqual(registered[key] as? Bool, false, key)
+        }
+    }
+
     @MainActor
     func testHostedTestsAreDetected() {
         XCTAssertTrue(AppDelegate.isRunningTests)

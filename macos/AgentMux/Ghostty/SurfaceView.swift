@@ -170,8 +170,9 @@ extension Ghostty {
         var pointerCursor: NSCursor = .iBeam
 
         /// Who holds what scrolled off this terminal; see
-        /// SurfaceView+History.swift.
-        var scrollback: Scrollback = .terminal
+        /// SurfaceView+History.swift. Part of the configuration, so it never
+        /// changes under Ghostty's threads.
+        var scrollback: Scrollback { configuration.scrollback }
 
         private var eventMonitor: Any?
 

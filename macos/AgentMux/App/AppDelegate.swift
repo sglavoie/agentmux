@@ -97,10 +97,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     }
 
+    /// AppKit defaults Ghostty's macOS app turns off at launch, as registered
+    /// defaults so a value the user set still wins. Press-and-hold shows the
+    /// accent picker instead of repeating a held key, which a terminal wants
+    /// repeated; AutoFill's heuristics watch every text view and cost a
+    /// terminal heavy CPU on macOS 26 and later.
+    static let launchDefaults: [String: Any] = [
+        "ApplePressAndHoldEnabled": false,
+        "NSAutoFillHeuristicControllerEnabled": false,
+    ]
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         // LSUIElement already keeps the app out of the Dock; this states it
         // for a build run straight from DerivedData.
         NSApp.setActivationPolicy(.accessory)
+        UserDefaults.standard.register(defaults: Self.launchDefaults)
         // The delegate must be in place before launch finishes, so a banner
         // clicked while the app was not running still reaches it.
         if !Self.isRunningTests { setUpNotifications() }
@@ -350,8 +361,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return .failure(WorkspaceTerminalProblem(message: "The terminal could not be created."))
         }
         surface.delegate = workspace
-        // An attachment only views a session the tmux server holds.
-        surface.scrollback = .server
         return .success(WorkspaceTerminal(view: surface) { surface.close() })
     }
 

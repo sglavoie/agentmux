@@ -32,6 +32,8 @@ final class GhosttySurfaceConfigurationTests: XCTestCase {
         // terminal the workspace hosts.
         XCTAssertEqual(configuration.passedEnvironment.map(\.name), ["AMX_CONFIG", "AMX_WORKSPACE_HOSTED", "PATH"])
         XCTAssertEqual(configuration.environment["AMX_WORKSPACE_HOSTED"], "1")
+        XCTAssertEqual(configuration.scrollback, .server, "an attachment's history is the tmux server's from the start")
+        XCTAssertEqual(Ghostty.SurfaceConfiguration().scrollback, .terminal)
     }
 
     func testEnvironmentDropsWhatGhosttyOwnsOrCannotCarry() {

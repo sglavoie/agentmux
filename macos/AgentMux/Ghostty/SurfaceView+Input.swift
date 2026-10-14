@@ -325,11 +325,59 @@ extension Ghostty.SurfaceView {
         else { return super.rightMouseDown(with: event) }
     }
 
-    /// What a right-click shows when the program did not take it: a
-    /// program tracking the mouse, tmux in every session view among them,
-    /// is sent the click instead (`rightMouseDown`), and there is no menu.
+    /// What a right-click or a Control-click shows, as upstream decides it.
+    /// A right-click the program takes never gets here: a program tracking
+    /// the mouse, tmux in every session view among them, is sent the click
+    /// instead (`rightMouseDown`). AppKit asks about a Control-click before
+    /// any mouse event, so while the program tracks the mouse there is no
+    /// menu and the click reaches it as a left one; otherwise the program is
+    /// sent the right press the menu stands for, since a shown menu keeps
+    /// every mouse event from the surface. A plain click has no menu.
     override func menu(for event: NSEvent) -> NSMenu? {
-        contextMenu()
+        switch event.type {
+        case .rightMouseDown:
+            break
+        case .leftMouseDown:
+            guard event.modifierFlags.contains(.control), let surface,
+                  !ghostty_surface_mouse_captured(surface) else { return nil }
+            sendMousePosition(event)
+            // Upstream sends no release either, as AppKit does not for a
+            // right-click that opened a menu.
+            ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, Ghostty.ghosttyMods(event.modifierFlags))
+        default:
+            return nil
+        }
+        return contextMenu()
+    }
+
+    /// Look Up (a three-finger tap, Control-Command-D, or a force click):
+    /// the definition of the word under the pointer, drawn in the
+    /// terminal's font, as upstream shows it.
+    override func quickLook(with event: NSEvent) {
+        guard let (word, point) = lookUpWord() else { return super.quickLook(with: event) }
+        showDefinition(for: word, at: point)
+    }
+
+    /// The word under the pointer in the terminal's font, and where it
+    /// starts in this view; nil over blank cells.
+    func lookUpWord() -> (NSAttributedString, NSPoint)? {
+        guard let surface else { return nil }
+        var text = ghostty_text_s()
+        guard ghostty_surface_quicklook_word(surface, &text) else { return nil }
+        defer { ghostty_surface_free_text(surface, &text) }
+        guard text.text_len > 0 else { return nil }
+
+        var attributes: [NSAttributedString.Key: Any] = [:]
+        if let fontRaw = ghostty_surface_quicklook_font(surface) {
+            // Ghostty hands over a retained copy of its CTFont; the
+            // dictionary retains its own, so the copy is released here.
+            let font = Unmanaged<CTFont>.fromOpaque(fontRaw)
+            attributes[.font] = font.takeUnretainedValue()
+            font.release()
+        }
+        // Ghostty measures from the top left, AppKit from the bottom left.
+        let point = NSPoint(x: text.tl_px_x, y: frame.size.height - text.tl_px_y)
+        return (NSAttributedString(string: String(cString: text.text), attributes: attributes), point)
     }
 
     static let openLinkTitle = "Open Link"

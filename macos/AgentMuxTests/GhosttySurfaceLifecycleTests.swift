@@ -348,8 +348,9 @@ final class GhosttySurfaceLifecycleTests: XCTestCase {
     func testSearchScrollbarAndProgressAreReportedForATerminalsOwnBuffer() throws {
         let cat = Ghostty.SurfaceConfiguration(program: URL(fileURLWithPath: "/bin/cat"))
         let utility = try XCTUnwrap(ghostty.makeSurface(cat))
-        let viewer = try XCTUnwrap(ghostty.makeSurface(cat))
-        viewer.scrollback = .server
+        var server = cat
+        server.scrollback = .server
+        let viewer = try XCTUnwrap(ghostty.makeSurface(server))
         let events = SurfaceEvents()
         let viewerEvents = SurfaceEvents()
         utility.delegate = events

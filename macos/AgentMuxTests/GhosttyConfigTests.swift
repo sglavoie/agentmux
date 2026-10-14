@@ -34,12 +34,14 @@ final class GhosttyConfigTests: XCTestCase {
 
     /// The app configuration names no program: what runs is each surface's own.
     func testOverridesForceOnlyWhatTheHostOwns() {
-        XCTAssertEqual(Ghostty.ConfigOverrides().lines, ["confirm-close-surface = true"])
+        let unbound = ["keybind = super+0=unbind", "keybind = super+shift+0=unbind"]
+        XCTAssertEqual(Ghostty.ConfigOverrides().lines, ["confirm-close-surface = true"] + unbound,
+                       "⌘0 and ⌘⇧0 are the main menu's")
 
         var sized = Ghostty.ConfigOverrides()
         sized.fontSize = 15
         sized.settings = ["cursor-style = bar", "split\ncommand = /bin/sh"]
-        XCTAssertEqual(sized.lines, ["confirm-close-surface = true", "font-size = 15", "cursor-style = bar"])
+        XCTAssertEqual(sized.lines, ["confirm-close-surface = true"] + unbound + ["font-size = 15", "cursor-style = bar"])
         sized.fontSize = 12.5
         XCTAssertTrue(sized.lines.contains("font-size = 12.5"))
         XCTAssertFalse(sized.lines.contains { $0.hasPrefix("command") })
