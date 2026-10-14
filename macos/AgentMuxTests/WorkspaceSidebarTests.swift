@@ -251,6 +251,41 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
     }
 
+    func testCollapsedGroupsAreKeptAndStillCountWhatWaits() throws {
+        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal", attention: true),
+                        F.tmux(3, project: "Pinned")]
+        var order = WorkspaceOrder()
+        func built() -> [WorkspaceGroup] {
+            WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback, order: order)
+        }
+        XCTAssertEqual(built().map(\.collapsed), [false, false], "nothing is collapsed until asked")
+
+        order.setCollapsed(project: "api", pinned: false, true)
+        order.setPinned(.embedded(F.runtimeID(1)), true)
+        var groups = built()
+        XCTAssertEqual(groups.map(\.project), ["Pinned", "api", "Pinned"])
+        XCTAssertEqual(groups.map(\.collapsed), [false, true, false], "the pinned group is not the project called Pinned")
+        XCTAssertEqual(groups[1].rows.count, 1, "a collapsed group keeps its rows")
+        XCTAssertEqual(groups[1].attention, 1)
+
+        order.setCollapsed(project: "Pinned", pinned: true, true)
+        XCTAssertEqual(built().map(\.collapsed), [true, true, false])
+        order.forget(notAmong: [])
+        XCTAssertTrue(order.isCollapsed(project: "api", pinned: false), "a project with nothing listed stays collapsed")
+
+        let suite = "amx.tests.collapsed.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        order.save(to: defaults)
+        XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
+        XCTAssertEqual(defaults.stringArray(forKey: WorkspaceOrder.collapsedDefaultsKey), ["pinned", "project:api"])
+
+        order.setCollapsed(project: "api", pinned: false, false)
+        order.setPinned(.embedded(F.runtimeID(1)), true)
+        groups = built()
+        XCTAssertEqual(groups.map(\.collapsed), [true, false, false])
+    }
+
     func testForgettingSessionsThatEndedPrunesTheDraggedOrders() {
         let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web"),
                         F.tmux(3, project: "docs")]

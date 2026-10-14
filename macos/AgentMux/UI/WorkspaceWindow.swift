@@ -1050,8 +1050,46 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             close.representedObject = view.id
             close.target = self
             return [close]
-        case .section, .group: return []
+        case let .group(group): return groupMenuItems(group)
+        case .section: return []
         }
+    }
+
+    static let collapseProjectTitle = "Collapse Project"
+    static let expandProjectTitle = "Expand Project"
+    static let collapsePinnedTitle = "Collapse Pinned"
+    static let expandPinnedTitle = "Expand Pinned"
+    static let showInKittyTitle = "Show in Kitty"
+    static let reattachTitle = "Reattach"
+
+    private func groupMenuItems(_ group: WorkspaceGroup) -> [NSMenuItem] {
+        let title = group.pinned
+            ? (group.collapsed ? Self.expandPinnedTitle : Self.collapsePinnedTitle)
+            : (group.collapsed ? Self.expandProjectTitle : Self.collapseProjectTitle)
+        let toggle = NSMenuItem(title: title, action: #selector(toggleClickedGroup(_:)), keyEquivalent: "")
+        toggle.representedObject = [group.project, group.pinned] as [Any]
+        toggle.target = self
+        return [toggle]
+    }
+
+    @objc private func toggleClickedGroup(_ sender: Any?) {
+        guard let named = (sender as? NSMenuItem)?.representedObject as? [Any],
+              let project = named.first as? String, let pinned = named.last as? Bool,
+              let group = state.groups.first(where: { $0.project == project && $0.pinned == pinned })
+        else { return }
+        setCollapsed(project: project, pinned: pinned, !group.collapsed)
+    }
+
+    /// Collapses a project's group, or the pinned one, to its header, or
+    /// expands it. It is kept with the order sessions were dragged into, so
+    /// it outlasts the window and the app. The pane stays where it is, even
+    /// on a session the collapse took off the list.
+    func setCollapsed(project: String, pinned: Bool, _ collapsed: Bool) {
+        guard order.isCollapsed(project: project, pinned: pinned) != collapsed else { return }
+        order.setCollapsed(project: project, pinned: pinned, collapsed)
+        state.arrange(order)
+        delegate?.workspaceOrderChanged(order)
+        reloadSidebar()
     }
 
     private func sessionMenuItems(_ row: WorkspaceRow) -> [NSMenuItem] {
@@ -1068,7 +1106,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                              action: #selector(pinClickedSession(_:)), keyEquivalent: "")
         pin.representedObject = row.key
         pin.target = self
-        guard let id = row.embeddedRuntimeSessionID else { return [name, pin] }
+        guard let id = row.embeddedRuntimeSessionID else {
+            // What a click on the line does: the window comes forward in Kitty.
+            let show = NSMenuItem(title: Self.showInKittyTitle, action: #selector(activateClickedSession(_:)), keyEquivalent: "")
+            show.representedObject = row.key
+            show.target = self
+            return [name, pin, .separator(), show]
+        }
         // What the × and the Session menu do, for the line under the pointer.
         let terminal = NSMenuItem(title: Self.newTerminalTitle, action: #selector(openTerminalBesideClickedSession(_:)), keyEquivalent: "")
         terminal.representedObject = id
@@ -1080,7 +1124,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         end.representedObject = row.key
         end.target = self
         end.isEnabled = closing[id] == nil
-        return [name, pin, .separator(), terminal, copy, .separator(), end]
+        guard detached.contains(id) else { return [name, pin, .separator(), terminal, copy, .separator(), end] }
+        // What a click or Return on the line does: attach again, taking the
+        // session from whichever terminal has it.
+        let reattach = NSMenuItem(title: Self.reattachTitle, action: #selector(reattachClickedSession(_:)), keyEquivalent: "")
+        reattach.representedObject = row.key
+        reattach.target = self
+        return [name, pin, .separator(), reattach, terminal, copy, .separator(), end]
+    }
+
+    @objc private func activateClickedSession(_ sender: Any?) {
+        guard let key = (sender as? NSMenuItem)?.representedObject as? AttentionCycler.Key, let row = state.row(key) else { return }
+        activate(row)
+    }
+
+    @objc private func reattachClickedSession(_ sender: Any?) {
+        guard let key = (sender as? NSMenuItem)?.representedObject as? AttentionCycler.Key, let row = state.row(key) else { return }
+        activate(row, reattaching: true)
     }
 
     @objc private func closeClickedView(_ sender: Any?) {
@@ -1802,7 +1862,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
         let wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
             + state.groups.flatMap { group in
-                [Item.group(group)] + group.rows.flatMap { row in
+                // A collapsed project lists its header only, which still
+                // counts what waits under it.
+                [Item.group(group)] + (group.collapsed ? [] : group.rows).flatMap { row in
                     [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
                 }
             }
@@ -2648,16 +2710,21 @@ final class WorkspaceGroupCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.group")
     let nameLabel = NSTextField(labelWithString: "")
     let countLabel = NSTextField(labelWithString: "")
+    /// Shown while the project is collapsed to this line.
+    let disclosureLabel = NSTextField(labelWithString: "▸")
 
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
+        disclosureLabel.textColor = .secondaryLabelColor
+        disclosureLabel.isHidden = true
+        disclosureLabel.toolTip = "Collapsed: right-click to expand"
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
         countLabel.textColor = .systemOrange
         textField = nameLabel
-        let stack = NSStackView(views: [nameLabel, NSView(), countLabel])
+        let stack = NSStackView(views: [nameLabel, NSView(), countLabel, disclosureLabel])
         stack.orientation = .horizontal
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
@@ -2677,6 +2744,7 @@ final class WorkspaceGroupCellView: NSTableCellView {
         nameLabel.stringValue = title
         countLabel.stringValue = ""
         countLabel.toolTip = nil
+        disclosureLabel.isHidden = true
         setAccessibilityLabel(title)
     }
 
@@ -2685,7 +2753,10 @@ final class WorkspaceGroupCellView: NSTableCellView {
         let waiting = group.attention
         countLabel.stringValue = waiting > 0 ? String(waiting) : ""
         countLabel.toolTip = waiting > 0 ? "\(waiting) waiting on you" : nil
-        setAccessibilityLabel(waiting > 0 ? "\(group.project), \(waiting) waiting" : group.project)
+        disclosureLabel.isHidden = !group.collapsed
+        var label = waiting > 0 ? "\(group.project), \(waiting) waiting" : group.project
+        if group.collapsed { label += ", collapsed" }
+        setAccessibilityLabel(label)
     }
 }
 

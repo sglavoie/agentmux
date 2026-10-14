@@ -290,6 +290,17 @@ Whatever has the keyboard decides where a key goes.
   The order sessions were dragged into within a project is kept too; a
   session that ended, or a project with none left, is dropped from it once
   the daemon lists the sessions again.
+- A right-click on a project's header offers **Collapse Project** (or
+  **Expand Project**; **Collapse Pinned** on the Pinned group). A collapsed
+  project lists its header only, marked ▸, which still counts its sessions
+  waiting on you; the digits and the next-attention shortcut still reach its
+  sessions. Collapsed projects are kept across launches. A Kitty session's
+  menu has **Show in Kitty**, and a detached session's **Reattach**, which do
+  what a click on the line does.
+- A right-click in a terminal offers **Copy**, **Paste**, and **Select All**,
+  and **Open Link** and **Copy Link** while the pointer is on a link (hold ⌘
+  to find one). A program that tracks the mouse is sent the click instead,
+  tmux in every session view among them, so there is no menu there.
 - Every shortcut of the menu bar holds ⌘, so none is taken from a program,
   with two exceptions: Shift+Page Up and Shift+Page Down, and the function
   keys below. The global shortcuts work whatever has the keyboard.

@@ -223,6 +223,21 @@ final class GhosttyInteractionTests: XCTestCase {
         expect("\u{1b}OR\u{1b}[5008~", "on a session view F3 asks the server for its markers")
     }
 
+    /// A right-click the program does not take shows Copy, Paste, and Select
+    /// All on this terminal, validated like the Edit menu's.
+    func testTheContextMenuEditsTheTerminal() throws {
+        let event = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .rightMouseDown, location: NSPoint(x: 10, y: 10), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        let menu = try XCTUnwrap(view.menu(for: event))
+        XCTAssertEqual(menu.items.map(\.title), ["Copy", "Paste", "Select All"])
+        XCTAssertTrue(menu.items.allSatisfy { $0.target === view })
+        XCTAssertEqual(menu.items.map(\.action), [#selector(NSText.copy(_:)), #selector(NSText.paste(_:)), #selector(NSText.selectAll(_:))])
+        XCTAssertFalse(view.validateMenuItem(menu.items[0]), "nothing selected, nothing to copy")
+        XCTAssertTrue(view.validateMenuItem(menu.items[1]))
+        XCTAssertTrue(view.validateMenuItem(menu.items[2]))
+    }
+
     /// The Edit menu's Undo and Redo are the text fields'; in a terminal they
     /// are disabled, so ⌘Z and ⌘⇧Z are not taken from the program even when
     /// the window's undo manager has something to undo.
@@ -680,7 +695,10 @@ final class GhosttyLinkTests: XCTestCase {
     /// Clicks the link with `flags` held, on a surface of its own whose
     /// program first turns on the given mouse-tracking modes, and returns
     /// what the app was asked to open and whether the program had the mouse.
-    private func click(_ flags: NSEvent.ModifierFlags, mouseModes: [Int] = []) throws -> (opened: [String], captured: Bool, hovered: String?) {
+    private func click(
+        _ flags: NSEvent.ModifierFlags, mouseModes: [Int] = [],
+        hovering: (Ghostty.SurfaceView) throws -> Void = { _ in }
+    ) throws -> (opened: [String], captured: Bool, hovered: String?) {
         var opened: [String] = []
         Ghostty.App.openLink = { opened.append($0.absoluteString) }
         let ghostty = Ghostty.App { Ghostty.Config(userConfig: nil) }
@@ -714,6 +732,7 @@ final class GhosttyLinkTests: XCTestCase {
         view.mouseMoved(with: mouse(.mouseMoved, p, flags, in: window))
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         let hovered = view.hoveredLink
+        try hovering(view)
         view.mouseDown(with: mouse(.leftMouseDown, p, flags, in: window))
         view.mouseUp(with: mouse(.leftMouseUp, p, flags, in: window))
         RunLoop.current.run(until: Date().addingTimeInterval(0.4))
@@ -728,6 +747,33 @@ final class GhosttyLinkTests: XCTestCase {
         let plain = try click([])
         XCTAssertEqual(plain.opened, [])
         XCTAssertNil(plain.hovered)
+    }
+
+    /// While the pointer is on a link, the terminal's right-click menu
+    /// opens it the way a click does, and copies it; off one it has neither.
+    func testTheContextMenuOpensAndCopiesTheLinkUnderThePointer() throws {
+        let savedCopier = Ghostty.SurfaceView.copyLink
+        defer { Ghostty.SurfaceView.copyLink = savedCopier }
+        var copied: [String] = []
+        Ghostty.SurfaceView.copyLink = { copied.append($0) }
+        var titles: [String] = []
+        let hovered = try click(.command) { view in
+            let menu = view.contextMenu()
+            titles = menu.items.map(\.title)
+            for title in [Ghostty.SurfaceView.openLinkTitle, Ghostty.SurfaceView.copyLinkTitle] {
+                let item = try XCTUnwrap(menu.item(withTitle: title))
+                XCTAssertTrue(item.target === view)
+                _ = view.perform(try XCTUnwrap(item.action), with: item)
+            }
+        }
+        XCTAssertEqual(titles, ["Copy", "Paste", "Select All", "", "Open Link", "Copy Link"])
+        XCTAssertEqual(copied, [Self.link])
+        // Opened once by the menu, once by the Command+click after it.
+        XCTAssertEqual(hovered.opened, [Self.link, Self.link])
+
+        _ = try click([]) { view in
+            XCTAssertEqual(view.contextMenu().items.map(\.title), ["Copy", "Paste", "Select All"], "no link, no link items")
+        }
     }
 
     /// A program that tracks the mouse is sent the click instead, Command

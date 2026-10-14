@@ -228,7 +228,7 @@ final class WorkspaceWindowTests: XCTestCase {
         // A Kitty window is named in Kitty; other lines have no menu.
         let kitty = try row("web", "work")
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top", "", "Show in Kitty"])
         XCTAssertNil(items[0].action, "listed, and greyed out")
         XCTAssertNotNil(items[1].action, "a Kitty session can be pinned")
         XCTAssertTrue(workspace.contextMenuItems(forRow: 0).isEmpty)
@@ -279,7 +279,8 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.refresh()
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[api]", "api/personal"])
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Unpin"], "a Kitty session is ended, and has its terminals, in Kitty")
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Unpin", "", "Show in Kitty"],
+                       "a Kitty session is ended, and has its terminals, in Kitty")
         workspace.setPinned(kitty.key, false)
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[api]", "api/personal", "[web]", "web/work"])
         XCTAssertTrue(workspace.togglePinOfShownSession())
@@ -885,6 +886,84 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNotNil(workspace.shownSessionRow)
         XCTAssertEqual(workspace.pinShownTitle, "Pin Session")
         XCTAssertFalse(workspace.canOpenTerminalBesideSession, "a Kitty session has its terminals in Kitty")
+    }
+
+    /// Show in Kitty does what a click on the line does; Reattach is offered
+    /// only on a detached session's line, and reattaches it even when the
+    /// pane is somewhere else.
+    func testKittyAndDetachedLinesOfferWhatAClickDoes() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        let kitty = try row("web", "work")
+        var items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
+        let show = try XCTUnwrap(items.first { $0.title == WorkspaceWindowController.showInKittyTitle })
+        _ = try XCTUnwrap(show.target).perform(try XCTUnwrap(show.action), with: show)
+        XCTAssertEqual(app.external, [kitty])
+        XCTAssertEqual(workspace.state.selection, kitty.key)
+
+        workspace.activate(work)
+        XCTAssertFalse(workspace.contextMenuItems(forRow: try index(of: work.key)).map(\.title).contains("Reattach"))
+        workspace.terminalEnded(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))))
+        XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
+        workspace.select(kitty.key)
+        items = workspace.contextMenuItems(forRow: try index(of: work.key))
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top", "", "Reattach", "New Terminal Below",
+                                            "Copy Runtime Session ID", "", "End Session…"])
+        _ = try XCTUnwrap(items[3].target).perform(try XCTUnwrap(items[3].action), with: items[3])
+        XCTAssertEqual(workspace.state.selection, work.key)
+        XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)])
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
+        XCTAssertFalse(workspace.contextMenuItems(forRow: try index(of: work.key)).map(\.title).contains("Reattach"))
+    }
+
+    /// A project header's menu collapses the project to its header, which
+    /// still counts what waits under it, and the collapse is kept with the
+    /// order so it outlasts the app.
+    func testAProjectCollapsesToItsHeaderFromItsMenu() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        workspace.activate(work)
+        func lines() -> [String] {
+            workspace.items.compactMap { item in
+                switch item {
+                case let .group(group): return group.collapsed ? "[\(group.project)]+" : "[\(group.project)]"
+                case let .row(row): return "\(row.project)/\(row.label)"
+                case .section, .view: return nil
+                }
+            }
+        }
+        func header(_ project: String) throws -> Int {
+            try XCTUnwrap(workspace.items.firstIndex { if case let .group(group) = $0 { return group.project == project } else { return false } })
+        }
+        var items = workspace.contextMenuItems(forRow: try header("api"))
+        XCTAssertEqual(items.map(\.title), ["Collapse Project"])
+        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        XCTAssertEqual(lines(), ["[api]+", "[web]", "web/work"])
+        XCTAssertEqual(app.orders.last?.collapsed, [WorkspaceOrder.groupToken(project: "api", pinned: false)])
+        XCTAssertEqual(workspace.state.selection, work.key, "the pane stays where it is")
+        XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(), "with no line to select")
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try header("api")) as? WorkspaceGroupCellView)
+        XCTAssertEqual(cell.countLabel.stringValue, "1", "the waiting session is still counted")
+        XCTAssertFalse(cell.disclosureLabel.isHidden)
+
+        // A new snapshot keeps it collapsed.
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(lines(), ["[api]+", "[web]", "web/work"])
+
+        // The pinned group collapses apart from the projects.
+        workspace.setPinned(try row("web", "work").key, true)
+        items = workspace.contextMenuItems(forRow: try header("Pinned"))
+        XCTAssertEqual(items.map(\.title), ["Collapse Pinned"])
+        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        XCTAssertEqual(lines(), ["[Pinned]+", "[api]+"])
+
+        items = workspace.contextMenuItems(forRow: try header("api"))
+        XCTAssertEqual(items.map(\.title), ["Expand Project"])
+        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        XCTAssertEqual(lines(), ["[Pinned]+", "[api]", "api/personal", "api/work"])
+        XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(integer: try index(of: work.key)))
+        XCTAssertEqual(app.orders.last?.collapsed, [WorkspaceOrder.groupToken(project: "Pinned", pinned: true)])
+        XCTAssertEqual(workspace.order, app.orders.last)
     }
 
     func testReturnOrAClickOnADetachedSessionReattachesIt() throws {

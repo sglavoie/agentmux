@@ -83,6 +83,9 @@ struct WorkspaceGroup: Equatable {
     /// True for the group of pinned sessions, whose rows keep the project
     /// they belong to.
     var pinned = false
+    /// True when the operator collapsed it: its header is listed, and still
+    /// counts its waiting sessions, but its rows are not.
+    var collapsed = false
 
     /// How many of the project's sessions wait on a human.
     var attention: Int { rows.filter(\.attention).count }
@@ -97,12 +100,17 @@ struct WorkspaceGroup: Equatable {
 struct WorkspaceOrder: Equatable {
     static let defaultsKey = "amxWorkspaceSessionOrder"
     static let pinnedDefaultsKey = "amxWorkspacePinnedSessions"
+    static let collapsedDefaultsKey = "amxWorkspaceCollapsedProjects"
 
     /// The sessions of each project that was dragged in, first to last.
     private(set) var projects: [String: [String]] = [:]
     /// The pinned sessions, first to last: in the order they were pinned,
     /// until they are dragged.
     private(set) var pinned: [String] = []
+    /// The groups the operator collapsed (`groupToken`). A project with no
+    /// session listed stays collapsed: projects are few, and one launched
+    /// into again comes back the way it was left.
+    private(set) var collapsed: Set<String> = []
 
     /// What a session is named by here: its runtime session, or its Kitty
     /// socket and window.
@@ -164,6 +172,22 @@ struct WorkspaceOrder: Equatable {
         }
     }
 
+    /// What a group is named by among the collapsed: the group of pinned
+    /// sessions apart from a project that happens to be called "Pinned".
+    static func groupToken(project: String, pinned: Bool) -> String {
+        pinned ? "pinned" : "project:\(project)"
+    }
+
+    func isCollapsed(project: String, pinned: Bool) -> Bool {
+        collapsed.contains(Self.groupToken(project: project, pinned: pinned))
+    }
+
+    /// Collapses a group, or expands it.
+    mutating func setCollapsed(project: String, pinned: Bool, _ wanted: Bool) {
+        let token = Self.groupToken(project: project, pinned: pinned)
+        if wanted { collapsed.insert(token) } else { collapsed.remove(token) }
+    }
+
     /// The pinned rows in the order they were pinned or dragged into.
     func arrangedPins(_ rows: [WorkspaceRow]) -> [WorkspaceRow] {
         let rank = Dictionary(pinned.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
@@ -176,13 +200,15 @@ struct WorkspaceOrder: Equatable {
     static func load(from defaults: UserDefaults = .standard) -> WorkspaceOrder {
         WorkspaceOrder(
             projects: defaults.dictionary(forKey: defaultsKey) as? [String: [String]] ?? [:],
-            pinned: defaults.stringArray(forKey: pinnedDefaultsKey) ?? []
+            pinned: defaults.stringArray(forKey: pinnedDefaultsKey) ?? [],
+            collapsed: Set(defaults.stringArray(forKey: collapsedDefaultsKey) ?? [])
         )
     }
 
     func save(to defaults: UserDefaults = .standard) {
         defaults.set(projects, forKey: Self.defaultsKey)
         defaults.set(pinned, forKey: Self.pinnedDefaultsKey)
+        defaults.set(collapsed.sorted(), forKey: Self.collapsedDefaultsKey)
     }
 }
 
@@ -231,10 +257,12 @@ enum WorkspaceSidebar {
             }
         }
         let projects = byProject.keys.sorted(by: projectOrder).map { project in
-            WorkspaceGroup(project: project, rows: order.arranged(byProject[project] ?? [], in: project))
+            WorkspaceGroup(project: project, rows: order.arranged(byProject[project] ?? [], in: project),
+                           collapsed: order.isCollapsed(project: project, pinned: false))
         }
         guard !pinned.isEmpty else { return projects }
-        return [WorkspaceGroup(project: pinnedSection, rows: order.arrangedPins(pinned), pinned: true)] + projects
+        return [WorkspaceGroup(project: pinnedSection, rows: order.arrangedPins(pinned), pinned: true,
+                               collapsed: order.isCollapsed(project: pinnedSection, pinned: true))] + projects
     }
 
     /// The sessions in the order `groups` lists them, which is the order the

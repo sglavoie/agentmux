@@ -325,6 +325,50 @@ extension Ghostty.SurfaceView {
         else { return super.rightMouseDown(with: event) }
     }
 
+    /// What a right-click shows when the program did not take it: a
+    /// program tracking the mouse, tmux in every session view among them,
+    /// is sent the click instead (`rightMouseDown`), and there is no menu.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        contextMenu()
+    }
+
+    static let openLinkTitle = "Open Link"
+    static let copyLinkTitle = "Copy Link"
+
+    /// Copy, Paste, and Select All, as the Edit menu has them and validated
+    /// the same way (Copy is greyed with nothing selected), then Open Link
+    /// and Copy Link while the pointer is on a link.
+    func contextMenu() -> NSMenu {
+        let menu = NSMenu()
+        for (title, action) in [("Copy", #selector(NSText.copy(_:))), ("Paste", #selector(NSText.paste(_:))),
+                                ("Select All", #selector(NSText.selectAll(_:)))] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        guard let link = hoveredLink else { return menu }
+        menu.addItem(.separator())
+        for (title, action) in [(Self.openLinkTitle, #selector(openContextLink(_:))),
+                                (Self.copyLinkTitle, #selector(copyContextLink(_:)))] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            item.representedObject = link
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    /// Opens, reveals, or asks about the link, as a click on it does.
+    @objc func openContextLink(_ sender: Any?) {
+        guard let link = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        Ghostty.App.follow(Ghostty.App.link(from: link))
+    }
+
+    @objc func copyContextLink(_ sender: Any?) {
+        guard let link = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        Self.copyLink(link)
+    }
+
     override func rightMouseUp(with event: NSEvent) {
         guard let surface,
               ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, Ghostty.ghosttyMods(event.modifierFlags))

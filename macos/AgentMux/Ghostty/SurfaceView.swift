@@ -508,6 +508,13 @@ extension Ghostty {
             ghostty_surface_set_color_scheme(surface, scheme)
         }
 
+        /// Takes a link the context menu's Copy Link copies; the general
+        /// pasteboard unless a test says otherwise.
+        static var copyLink: (String) -> Void = { link in
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(link, forType: .string)
+        }
+
         // MARK: Drag and drop
 
         /// Files arrive as shell-escaped paths, other URLs shell-escaped
