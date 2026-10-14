@@ -179,6 +179,7 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertFalse(state.canSubmit(state.buttons[0]))
         XCTAssertNil(state.submit(state.buttons[0], mint: mint))
         XCTAssertEqual(state.notice, "the answer is empty: type a reply before submitting")
+        XCTAssertEqual(state.noticeKind, .info, "a reply still to be typed is no error")
         XCTAssertFalse(state.inFlight)
         XCTAssertTrue(state.canSubmit(state.buttons[1]), "Continue needs no answer")
     }
@@ -240,6 +241,7 @@ final class ASLResponseStateTests: XCTestCase {
         state.setDraft("answer for two")
         XCTAssertNil(state.submit(state.buttons[0], mint: mint), "nothing is sent before the token is re-minted")
         XCTAssertEqual(state.notice, "the previous answer was accepted: this question is still being re-authorized")
+        XCTAssertEqual(state.noticeKind, .info)
 
         XCTAssertNil(state.questionLoaded(seq: fetchSeq, .success(ASLFixtures.body(row, "q-api-2", "Second?", token: "token-reply-2"))))
         XCTAssertFalse(state.reauthorize)
@@ -289,6 +291,7 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertTrue(state.active)
         XCTAssertEqual(state.status, "failed")
         XCTAssertEqual(state.notice, "the action did not complete; its outcome is unknown and it was not retried")
+        XCTAssertEqual(state.noticeKind, .error)
         XCTAssertEqual(state.draft.reveal(), "an answer", "the draft survives an ambiguous outcome")
 
         let retry = params(state.submit(state.buttons[0], mint: mint))
@@ -475,11 +478,14 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertNil(state.questionLoaded(seq: seq, .failure(.transport("read timed out"))))
         XCTAssertTrue(state.loadFailed)
         XCTAssertEqual(state.notice, "could not load the question: agent-session-loop did not answer")
+        XCTAssertEqual(state.noticeKind, .error)
         state.setDraft("an answer")
         XCTAssertFalse(state.canSubmit(state.buttons[0]))
         XCTAssertFalse(state.canSubmit(state.buttons[1]), "nothing is closed unseen")
         XCTAssertEqual(state.disabledReason(state.buttons[1]), "Load the question again first")
         XCTAssertNil(state.submit(state.buttons[1], mint: mint))
+        XCTAssertEqual(state.notice, "the question could not be loaded: load it again before answering")
+        XCTAssertEqual(state.noticeKind, .error)
         XCTAssertFalse(state.inFlight)
 
         XCTAssertEqual(state.reload(), .fetch(seq: seq + 1, planDir: row.planDir, questionID: "q-api-1"))

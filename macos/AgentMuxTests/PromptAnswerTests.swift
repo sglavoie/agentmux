@@ -78,6 +78,9 @@ final class PromptAnswerTests: XCTestCase {
         XCTAssertEqual(PromptKey.typed("2")?.name, "2")
         XCTAssertEqual(PromptKey.typed("y")?.name, "y")
         XCTAssertEqual(PromptKey.typed("\r")?.name, "enter")
+        XCTAssertEqual(PromptKey.typed("\u{F700}")?.name, "up", "↑ arrives as NSUpArrowFunctionKey")
+        XCTAssertEqual(PromptKey.typed("\u{F701}")?.name, "down", "↓ arrives as NSDownArrowFunctionKey")
+        XCTAssertNil(PromptKey.typed("\u{F702}"), "← is not a key the panel forwards")
         XCTAssertNil(PromptKey.typed("x"))
         XCTAssertNil(PromptKey.typed("\u{1b}"), "Escape closes the panel; the session's is the button")
     }
@@ -117,6 +120,7 @@ final class PromptAnswerTests: XCTestCase {
         _ = state.press(two)
         XCTAssertEqual(state.pressed(seq: 2, .success(PromptSent(delivery: "accepted"))), .look(seq: 3, settle: true))
         XCTAssertEqual(state.notice, "Sent.")
+        XCTAssertEqual(state.noticeKind, .info, "a key that was sent is no error")
         XCTAssertFalse(state.canPress, "not until the screen has been read again")
         state.looked(seq: 3, .success(PromptLook(project: "api", screen: "working", lines: ["⏺ Working"])))
         XCTAssertFalse(state.canPress)
@@ -129,6 +133,7 @@ final class PromptAnswerTests: XCTestCase {
         _ = state.press(two)
         XCTAssertNil(state.pressed(seq: 2, .failure(refusal("confirmation_required"))))
         XCTAssertTrue(state.notice.contains("again to confirm"))
+        XCTAssertEqual(state.noticeKind, .confirm)
         XCTAssertTrue(state.canPress)
         XCTAssertEqual(state.press(two), .press(seq: 3, arguments: ["send", id, "--key", "2", "--yes"]))
 
@@ -145,6 +150,7 @@ final class PromptAnswerTests: XCTestCase {
                        .look(seq: 3, settle: true))
         XCTAssertFalse(state.notice.contains("--any-screen"), "the panel has no flags")
         XCTAssertTrue(state.notice.contains("not asking"))
+        XCTAssertEqual(state.noticeKind, .error)
         for code in ["screen_unreadable", "asl_question_open", "unsupported_backend", "not_found", "runtime_session_exited"] {
             XCTAssertFalse(PromptAnswerState.text(refusal(code, "raw --flag text")).contains("--"), code)
         }
@@ -178,7 +184,12 @@ final class PromptAnswerTests: XCTestCase {
                        "the look after a key keeps that key's notice")
 
         _ = state.refresh()
-        state.looked(seq: 4, .success(asking))
+        state.looked(seq: 4, .failure(refusal("screen_unreadable")))
+        XCTAssertFalse(state.notice.isEmpty, "a look that fails after opening says why")
+        XCTAssertEqual(state.noticeKind, .error)
+
+        _ = state.refresh()
+        state.looked(seq: 5, .success(asking))
         XCTAssertEqual(state.notice, "", "a look the operator asked for shows the screen as it is now")
     }
 
@@ -198,6 +209,10 @@ final class PromptAnswerTests: XCTestCase {
         XCTAssertEqual(PromptAnswerView.key("2", modifiers: []), two)
         XCTAssertEqual(PromptAnswerView.key("y", modifiers: .shift), PromptKey.answers[0])
         XCTAssertEqual(PromptAnswerView.key("\r", modifiers: []), PromptKey.navigation[2])
+        // Arrow keys carry the function and numeric-pad flags; they are not shortcuts.
+        XCTAssertEqual(PromptAnswerView.key("\u{F700}", modifiers: [.function, .numericPad]), PromptKey.navigation[0])
+        XCTAssertEqual(PromptAnswerView.key("\u{F701}", modifiers: [.function, .numericPad]), PromptKey.navigation[1])
+        XCTAssertNil(PromptAnswerView.key("\u{F700}", modifiers: [.command, .function, .numericPad]))
         for modifiers: EventModifiers in [.command, .control, .option, [.command, .shift]] {
             XCTAssertNil(PromptAnswerView.key("2", modifiers: modifiers))
             XCTAssertNil(PromptAnswerView.key("n", modifiers: modifiers))
@@ -246,6 +261,7 @@ final class PromptAnswerTests: XCTestCase {
         flow.open(target)
         XCTAssertEqual(service.calls.count, 2)
         XCTAssertEqual(flow.state?.phase, .open)
+        XCTAssertEqual(flow.shown, 2, "each opening gives the panel's keys the keyboard again")
 
         let other = PromptAnswerTarget(runtimeSessionID: "rs-ffffffffffffffffffffffffffffffff")
         flow.open(other)

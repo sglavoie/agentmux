@@ -58,6 +58,9 @@ final class ASLQuestionFlow: ObservableObject {
 
     @Published private(set) var phase = Phase.idle
     @Published private(set) var state = ASLResponseState()
+    /// Counts the times the operator opened the panel, so the reply editor
+    /// takes the keyboard on each, even for the form already open.
+    @Published private(set) var shown = 0
     /// The run the panel was opened for.
     private(set) var answering: ASLAnswerTarget?
 
@@ -88,6 +91,7 @@ final class ASLQuestionFlow: ObservableObject {
     /// Opens the form for `target`. Asking again for the run already open
     /// keeps it, drafts and all.
     func open(_ target: ASLAnswerTarget) {
+        shown += 1
         if answering == target, phase == .loading || phase == .open { return }
         keepDrafts()
         reset()
@@ -98,6 +102,14 @@ final class ASLQuestionFlow: ObservableObject {
         runner.run({ service.snapshot() }) { [weak self] result in
             MainActor.assumeIsolated { self?.snapshotLoaded(seq: seq, target: target, result) }
         }
+    }
+
+    /// When this changes to a value, the reply editor takes the keyboard: the
+    /// operator opened the panel, or a reply was answered and the form moved
+    /// on to the next question. Nil while there is no editor to type in.
+    var editorFocus: ASLEditorFocus? {
+        guard phase == .open, !state.inFlight else { return nil }
+        return ASLEditorFocus(shown: shown, questionID: state.target.questionID)
     }
 
     /// Drops the form and its body without telling `onClose`: the operator
@@ -250,6 +262,12 @@ final class ASLQuestionFlow: ObservableObject {
     }
 }
 
+/// One occasion for the reply editor to take the keyboard.
+struct ASLEditorFocus: Equatable {
+    let shown: Int
+    let questionID: String
+}
+
 /// The panel's content.
 struct ASLQuestionView: View {
     @ObservedObject var flow: ASLQuestionFlow
@@ -276,6 +294,9 @@ struct ASLQuestionView: View {
         .frame(minWidth: 460, minHeight: 360)
         .onChange(of: editorFocused) { _, focused in
             if focused { onEditorFocus() }
+        }
+        .onChange(of: flow.editorFocus, initial: true) { _, focus in
+            if focus != nil { editorFocused = true }
         }
     }
 
@@ -325,7 +346,7 @@ struct ASLQuestionView: View {
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4)))
             .disabled(state.inFlight)
         if !state.notice.isEmpty {
-            Text(state.notice).font(.callout).foregroundStyle(.red)
+            Text(state.notice).font(.callout).foregroundStyle(state.noticeKind.color)
         } else if state.inFlight {
             Text("Submitting…").font(.callout).foregroundStyle(.secondary)
         } else if let reason = state.buttons.first.flatMap(state.disabledReason) {
@@ -374,8 +395,21 @@ final class ASLPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 }
 
-/// Owns the one answer panel. It floats above other windows and does not
-/// activate the app until the reply editor takes focus.
+extension PanelNoticeKind {
+    /// The colour a panel's notice is shown in: only an error is red.
+    var color: Color {
+        switch self {
+        case .info: return .secondary
+        case .confirm: return .orange
+        case .error: return .red
+        }
+    }
+}
+
+/// Owns the one answer panel. It floats above other windows. Every opening
+/// is the operator's (Answer…, a banner, the menu), so it takes the keyboard:
+/// the reply editor is focused, and Esc closes the panel rather than reaching
+/// the terminal that had the keyboard before.
 @MainActor
 final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     let flow: ASLQuestionFlow
@@ -397,6 +431,8 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
         let panel = self.panel ?? makePanel()
         if !panel.isVisible { panel.center() }
         panel.orderFrontRegardless()
+        NSApp.activate()
+        panel.makeKey()
     }
 
     /// An answer on its way keeps the panel open, so its result is shown.
@@ -431,7 +467,6 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
-        panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.delegate = self
@@ -439,7 +474,7 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
             flow: flow,
             onClose: { [weak panel] in panel?.close() },
             onEditorFocus: { [weak panel] in
-                // Typing needs the app active; it becomes so only now.
+                // Typing needs the app active and the panel key.
                 NSApp.activate()
                 panel?.makeKey()
             }

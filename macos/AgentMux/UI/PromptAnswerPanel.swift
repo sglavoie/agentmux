@@ -42,6 +42,9 @@ final class PromptAnswerFlow: ObservableObject {
     static let settle: TimeInterval = 0.6
 
     @Published private(set) var state: PromptAnswerState?
+    /// Counts the times the panel was opened, so its keys take the keyboard
+    /// on each, even for the session already shown.
+    @Published private(set) var shown = 0
 
     private let service: PromptAnswerService
     private let runner: ASLWorkRunner
@@ -59,6 +62,7 @@ final class PromptAnswerFlow: ObservableObject {
 
     /// Opens the panel on `target`, or looks again when it is already there.
     func open(_ target: PromptAnswerTarget) {
+        shown += 1
         if var current = state, current.target == target, !current.isRefused {
             let effect = current.refresh()
             state = current
@@ -131,6 +135,7 @@ final class PromptAnswerFlow: ObservableObject {
 struct PromptAnswerView: View {
     @ObservedObject var flow: PromptAnswerFlow
     var onClose: () -> Void
+    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -155,6 +160,13 @@ struct PromptAnswerView: View {
         .frame(minWidth: 560, minHeight: 420)
         .focusable()
         .focusEffectDisabled()
+        .focused($focused)
+        .defaultFocus($focused, true)
+        .onAppear { focused = true }
+        .onChange(of: flow.shown) { _, _ in focused = true }
+        .onChange(of: flow.state?.phase) { _, phase in
+            if phase == .open { focused = true }
+        }
         .onKeyPress { press in
             guard let key = Self.key(press.characters, modifiers: press.modifiers),
                   flow.state?.canPress == true else { return .ignored }
@@ -198,7 +210,7 @@ struct PromptAnswerView: View {
             keys(PromptKey.answers, state)
         }
         if !state.notice.isEmpty {
-            Text(state.notice).font(.callout).foregroundStyle(state.notice == "Sent." ? Color.secondary : Color.red)
+            Text(state.notice).font(.callout).foregroundStyle(state.noticeKind.color)
         } else if state.inFlight {
             Text("Working…").font(.callout).foregroundStyle(.secondary)
         }
@@ -239,6 +251,8 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
         let panel = self.panel ?? makePanel()
         if !panel.isVisible { panel.center() }
         panel.orderFrontRegardless()
+        // Typing a key needs the app active as well as the panel key.
+        NSApp.activate()
         panel.makeKey()
     }
 

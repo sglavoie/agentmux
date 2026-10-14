@@ -87,10 +87,13 @@ struct PromptKey: Equatable, Identifiable {
 
     /// The key a character typed in the panel presses; nil for one the panel
     /// does not forward. Escape is not here: in the panel it closes the panel,
-    /// and the session's Escape is the button.
+    /// and the session's Escape is the button. ↑ and ↓ arrive as AppKit's
+    /// function-key characters.
     static func typed(_ character: Character) -> PromptKey? {
         switch character {
         case "\r", "\n": return all.first { $0.name == "enter" }
+        case "\u{F700}": return all.first { $0.name == "up" }
+        case "\u{F701}": return all.first { $0.name == "down" }
         default: return (digits + answers.prefix(2)).first { $0.name == String(character) }
         }
     }
@@ -133,6 +136,8 @@ struct PromptAnswerState: Equatable {
     /// The key held back for that confirmation.
     private(set) var awaitingConfirmation: PromptKey?
     private(set) var notice = ""
+    /// How the notice is shown; it means nothing while there is none.
+    private(set) var noticeKind = PanelNoticeKind.info
     private(set) var seq = 0
     /// The look that follows a key, which keeps the key's notice on show.
     private var settleSeq = 0
@@ -228,7 +233,7 @@ struct PromptAnswerState: Equatable {
             if phase == .loading {
                 phase = .refused(Self.text(error))
             } else {
-                notice = Self.text(error)
+                note(Self.text(error), .error)
             }
         }
     }
@@ -242,19 +247,24 @@ struct PromptAnswerState: Equatable {
         switch result {
         case .success, .partial:
             confirmed = false
-            notice = "Sent."
+            note("Sent.", .info)
         case let .failure(.command(error, _)) where error.code == "confirmation_required":
             inFlight = false
             confirmed = true
             awaitingConfirmation = key
-            notice = "This session runs an agent-session-loop run, and what is sent reaches its supervisor. Press the key again to confirm."
+            note("This session runs an agent-session-loop run, and what is sent reaches its supervisor. Press the key again to confirm.", .confirm)
             return nil
         case let .failure(error):
-            notice = Self.text(error)
+            note(Self.text(error), .error)
         }
         seq += 1
         settleSeq = seq
         return .look(seq: seq, settle: true)
+    }
+
+    private mutating func note(_ text: String, _ kind: PanelNoticeKind) {
+        notice = text
+        noticeKind = kind
     }
 
     /// What a refusal means in the panel. `amx send`'s own sentences name its

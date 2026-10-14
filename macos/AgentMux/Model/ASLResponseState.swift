@@ -347,6 +347,8 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     var actionSeq = 0
     var status = ""
     var notice = ""
+    /// How the notice is shown; it means nothing while there is none.
+    var noticeKind = PanelNoticeKind.info
 
     init() {}
 
@@ -361,6 +363,11 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
             "active": active, "kind": kind, "row": target.rowID, "question": target.questionID,
             "bodyBytes": bodyBytes, "drafts": drafts.count, "status": status,
         ], displayStyle: .struct)
+    }
+
+    private mutating func note(_ text: String, _ kind: PanelNoticeKind) {
+        notice = text
+        noticeKind = kind
     }
 
     // MARK: Opening
@@ -443,7 +450,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         case let .failure(error):
             if ASLRefusal.isStale(error) { return invalidate() }
             loadFailed = true
-            notice = ASLRefusal.readText(error)
+            note(ASLRefusal.readText(error), .error)
             return nil
         case let .success(value):
             loaded = value
@@ -510,16 +517,17 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     mutating func submit(_ button: ASLResponseButton, mint: () -> String = ASLResponse.newOperationID) -> ASLPanelEffect? {
         guard active, !inFlight else { return nil }
         if loadFailed {
-            notice = "the question could not be loaded: load it again before answering"
+            note("the question could not be loaded: load it again before answering", .error)
             return nil
         }
         if reauthorize {
-            notice = "the previous answer was accepted: this question is still being re-authorized"
+            note("the previous answer was accepted: this question is still being re-authorized", .info)
             return nil
         }
         let text = draft
         if button.needsText, text.isBlank {
-            notice = "the answer is empty: type a reply before submitting"
+            // Nothing went wrong: the reply is still to be typed.
+            note("the answer is empty: type a reply before submitting", .info)
             return nil
         }
         if pending.operationID.isEmpty || pending.method != button.method || pending.resolution != button.resolution {
@@ -553,7 +561,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         case let .failure(error):
             if ASLRefusal.isStale(error) { return invalidate() }
             status = "failed"
-            notice = ASLRefusal.text(error)
+            note(ASLRefusal.text(error), .error)
             return nil
         case let .success(operation):
             status = ASLResponse.operationState(operation.status)

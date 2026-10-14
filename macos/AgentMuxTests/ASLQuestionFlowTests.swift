@@ -120,6 +120,32 @@ final class ASLQuestionFlowTests: XCTestCase {
         XCTAssertEqual(closes, [nil])
     }
 
+    func testTheEditorTakesTheKeyboardWhenOpenedAndAfterEachAnswer() {
+        let row = ASLFixtures.replyRow()
+        serve([row])
+        service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "First?"))
+        service.bodies["q-api-2"] = .success(ASLFixtures.body(row, "q-api-2", "Second?", token: "token-reply-2"))
+        let runner = HeldRunner()
+        let flow = flow(runner: runner)
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        XCTAssertNil(flow.editorFocus, "no editor before the form is open")
+        runner.release() // snapshot
+        let opened = flow.editorFocus
+        XCTAssertEqual(opened?.questionID, "q-api-1")
+
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        let reopened = flow.editorFocus
+        XCTAssertNotNil(reopened)
+        XCTAssertNotEqual(reopened, opened, "opening the form already open focuses the editor again")
+
+        runner.release() // body
+        flow.setDraft("one")
+        flow.submit(flow.state.buttons[0])
+        XCTAssertNil(flow.editorFocus, "the editor is disabled while the reply is on its way")
+        runner.release() // the reply is accepted; the form moves on
+        XCTAssertEqual(flow.editorFocus?.questionID, "q-api-2", "the next question's editor takes the keyboard")
+    }
+
     func testARunThatMovedClosesThePanelWithANotice() {
         let row = ASLFixtures.replyRow()
         serve([row])
