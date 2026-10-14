@@ -70,7 +70,7 @@ var notificationsTestCmd = &cobra.Command{
 
 		result, err := notificationsTestDelivery(cli.CommandContext(cmd), &cfg.Defaults.Notifications)
 		if errors.Is(err, notification.ErrNotificationDeliveryUnconfirmed) {
-			return errors.New("notification delivery could not be confirmed; in System Settings → Notifications → alerter, enable notifications and select Banners or Alerts, then turn off Focus and run `amx notifications test` again")
+			return errors.New("notification delivery could not be confirmed; in System Settings → Notifications → Terminal (the identity Alerter posts under), enable notifications and select Banners or Alerts, then turn off Focus and run `amx notifications test` again")
 		}
 		if err != nil {
 			return err

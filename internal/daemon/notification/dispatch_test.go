@@ -12,13 +12,30 @@ import (
 
 func TestAlerterArgs_UsesDoubleDashFlags(t *testing.T) {
 	got := alerterArgs("W:api", "Session stopped")
-	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", "", "--timeout", "300", "--sender", "fr.vjeantet.alerter"}
+	want := []string{"--title", "W:api", "--subtitle", "Session stopped", "--message", "", "--timeout", "300"}
 	if len(got) != len(want) {
 		t.Fatalf("alerterArgs len = %d, want %d (%v)", len(got), len(want), got)
 	}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("alerterArgs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// macOS 27 drops a notification whose sender names no installed application,
+// and Alerter is a bare executable, so no invocation may pick a sender: Alerter
+// posts under its default, Terminal, which every Mac has.
+func TestAlerterArgsNameNoSender(t *testing.T) {
+	for name, args := range map[string][]string{
+		"dispatch":          alerterArgs("W:api", "Session stopped"),
+		"dispatch timeout":  alerterArgsWithTimeout("W:api", "Session stopped", time.Minute),
+		"notification test": alerterArgsWithMessage("Agent Mux", "Notification test", "hello", notificationTestTimeout),
+	} {
+		for _, arg := range args {
+			if arg == "--sender" {
+				t.Errorf("%s: alerter args pass --sender: %v", name, args)
+			}
 		}
 	}
 }

@@ -33,15 +33,14 @@ const (
 	alerterProbeTimeout     = 500 * time.Millisecond
 	notificationTestTimeout = 5 * time.Second
 	notificationTestGrace   = 5 * time.Second
-	alerterBundleIdentifier = "fr.vjeantet.alerter"
 )
 
 const minimumAlerterMajor = 26
 
 // ErrNotificationDeliveryUnconfirmed means Alerter did not acknowledge the
 // test notification before the bounded probe expired. The most common cause is
-// disabled Alerter notifications, though a stuck Notification Center can produce
-// the same result.
+// disabled notifications for Terminal, the identity Alerter posts under, though
+// a stuck Notification Center can produce the same result.
 var ErrNotificationDeliveryUnconfirmed = errors.New("notification delivery could not be confirmed")
 
 // NotificationDeliveryTestResult describes a successful visible delivery
@@ -268,9 +267,15 @@ func alerterArgsWithTimeout(title, subtitle string, timeout time.Duration) []str
 	return alerterArgsWithMessage(title, subtitle, "", timeout)
 }
 
+// alerterArgsWithMessage passes no --sender, so Alerter posts under its own
+// default identity, Terminal. macOS presents a notification only for an
+// application it knows by that bundle identifier: an identifier no installed
+// application has, such as Alerter's own fr.vjeantet.alerter (Alerter is a bare
+// executable), is dropped without a banner or a Notification Center entry, so
+// no click ever comes back.
 func alerterArgsWithMessage(title, subtitle, message string, timeout time.Duration) []string {
 	timeoutSeconds := strconv.FormatInt(int64(timeout/time.Second), 10)
-	return []string{"--title", title, "--subtitle", subtitle, "--message", message, "--timeout", timeoutSeconds, "--sender", alerterBundleIdentifier}
+	return []string{"--title", title, "--subtitle", subtitle, "--message", message, "--timeout", timeoutSeconds}
 }
 
 func runAlerterAt(ctx context.Context, path string, _ int, _ string, title, subtitle string) (dispatchResult, error) {
@@ -286,7 +291,7 @@ func runAlerterAtWithTimeout(ctx context.Context, path, title, subtitle string, 
 }
 
 // TestNotificationDelivery sends a visible, short-lived notification under
-// Alerter's own bundle identity. It intentionally bypasses Agent Mux's per-event
+// Alerter's default identity, Terminal. It intentionally bypasses Agent Mux's per-event
 // notification switches because invoking the command is explicit consent to a
 // one-off test. A clean Alerter exit confirms delivery; expiration means the
 // backend never acknowledged delivery.

@@ -76,7 +76,7 @@ func TestNotificationsTestCommandExplainsUnconfirmedDelivery(t *testing.T) {
 	if err == nil {
 		t.Fatal("RunE returned nil; want unconfirmed-delivery error")
 	}
-	for _, text := range []string{"could not be confirmed", "System Settings → Notifications → alerter", "Banners or Alerts", "turn off Focus", "amx notifications test"} {
+	for _, text := range []string{"could not be confirmed", "System Settings → Notifications → Terminal", "Banners or Alerts", "turn off Focus", "amx notifications test"} {
 		if !strings.Contains(err.Error(), text) {
 			t.Errorf("error = %q; want %q", err, text)
 		}
