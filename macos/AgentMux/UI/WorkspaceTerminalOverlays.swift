@@ -24,6 +24,13 @@ final class WorkspaceFindBar: NSView, NSSearchFieldDelegate {
     /// Counts edits, so a needle overtaken by later typing is never sent.
     private var edits = 0
 
+    /// The search the field types into: which view, and which time Find
+    /// was opened there. A needle still waiting when it changes is dropped,
+    /// so it can never reach another view or a search opened again.
+    var context: AnyHashable? {
+        didSet { if context != oldValue { edits += 1 } }
+    }
+
     init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false

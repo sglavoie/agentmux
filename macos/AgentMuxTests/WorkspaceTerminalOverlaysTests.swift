@@ -12,6 +12,7 @@ final class WorkspaceTerminalOverlaysTests: XCTestCase {
     private var app: FakeWorkspaceApp!
     private var workspace: WorkspaceWindowController!
     private var performed: [String] = []
+    private var performedOn: [NSView] = []
 
     override func setUp() async throws {
         app = FakeWorkspaceApp()
@@ -19,8 +20,10 @@ final class WorkspaceTerminalOverlaysTests: XCTestCase {
         app.store.onChange = { [weak self] in self?.workspace.refresh() }
         workspace.openForTesting()
         performed = []
-        workspace.performTerminalAction = { [unowned self] _, action in
+        performedOn = []
+        workspace.performTerminalAction = { [unowned self] view, action in
             self.performed.append(action)
+            self.performedOn.append(view)
             return true
         }
         app.store.apply(snapshot: F.snapshot([F.tmux(1, project: "api", profile: "work")]))
@@ -156,6 +159,61 @@ final class WorkspaceTerminalOverlaysTests: XCTestCase {
         XCTAssertNil(workspace.searches[dashboard])
         workspace.findBarNavigate(next: true)
         XCTAssertEqual(performed, ["end_search"], "no search, nothing to go to")
+    }
+
+    /// Lets the find bar's short-needle delay run out.
+    private func waitOutTheFindDelay() {
+        let delivered = expectation(description: "the find delay ran out")
+        DispatchQueue.main.asyncAfter(deadline: .now() + (WorkspaceFindBar.delay(for: "ab") ?? 0) + 0.2) {
+            delivered.fulfill()
+        }
+        wait(for: [delivered], timeout: 5)
+    }
+
+    func testPendingFindNeedleCannotCrossUtilityViews() throws {
+        let overview = WorkspaceUtilityView.overview.id
+        XCTAssertTrue(workspace.showView(overview))
+        let other = try XCTUnwrap(workspace.utilityTerminalView(for: overview))
+        workspace.terminalSearch(other, .started(needle: "warn"))
+        XCTAssertTrue(workspace.showView(dashboard))
+        let terminal = try XCTUnwrap(workspace.utilityTerminalView(for: dashboard))
+        workspace.terminalSearch(terminal, .started(needle: ""))
+        performed = []
+        performedOn = []
+
+        workspace.findBar.needleChanged("ab")
+        XCTAssertEqual(performed, [], "a short needle waits")
+        XCTAssertTrue(workspace.showView(overview))
+        waitOutTheFindDelay()
+
+        XCTAssertEqual(performed, [], "typed in one view, it reaches no other")
+        XCTAssertFalse(performedOn.contains { $0 === other })
+        XCTAssertEqual(workspace.searches[overview]?.needle, "warn")
+        XCTAssertEqual(workspace.searches[dashboard]?.needle, "")
+    }
+
+    func testPendingFindNeedleCannotReachReopenedSearch() throws {
+        XCTAssertTrue(workspace.showView(dashboard))
+        let terminal = try XCTUnwrap(workspace.utilityTerminalView(for: dashboard))
+        workspace.terminalSearch(terminal, .started(needle: ""))
+
+        workspace.findBar.needleChanged("ab")
+        workspace.closeFindBar()
+        workspace.terminalSearch(terminal, .started(needle: ""))
+        performed = []
+        performedOn = []
+        waitOutTheFindDelay()
+        XCTAssertEqual(performed, [], "typed into a search since closed, it reaches no new one")
+        XCTAssertEqual(workspace.searches[dashboard]?.needle, "")
+
+        // Typing into the search open now still waits, then is sent.
+        workspace.findBar.needleChanged("cd")
+        XCTAssertEqual(performed, [])
+        workspace.terminalSearch(terminal, .total(4))
+        waitOutTheFindDelay()
+        XCTAssertEqual(performed, ["search:cd"])
+        XCTAssertTrue(performedOn.first === terminal)
+        XCTAssertEqual(workspace.searches[dashboard]?.needle, "cd")
     }
 
     func testOnlyAUtilityViewShowsAScrollbar() throws {

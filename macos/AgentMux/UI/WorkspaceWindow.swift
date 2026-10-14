@@ -286,6 +286,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The search open in each utility view, by view id, shown in the find
     /// bar while the pane is on that view.
     private(set) var searches: [String: Ghostty.Search] = [:]
+    /// Which time a search was opened in each utility view, so the find
+    /// bar can tell a search closed and opened again from the one it typed into.
+    private var searchGenerations: [String: Int] = [:]
+    private var searchGeneration = 0
     /// Where each utility view's viewport sits in its buffer, by view id.
     private(set) var scrollbars: [String: Ghostty.Scrollbar] = [:]
     /// The progress each utility view's program last reported (OSC 9;4), by
@@ -1299,6 +1303,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         rendererFailedViews.remove(id)
         programTitles[id] = nil
         searches[id] = nil
+        searchGenerations[id] = nil
         scrollbars[id] = nil
         progresses[id] = nil
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
@@ -1603,6 +1608,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func syncOverlays() {
         let shown = shownUtility
         let search = shown.flatMap { searches[$0.id] }
+        findBar.context = shown.flatMap { shown in
+            search == nil ? nil : AnyHashable("\(shown.id)#\(searchGenerations[shown.id] ?? 0)")
+        }
         if let search { findBar.show(search) }
         findBar.isHidden = search == nil
         scrollbarView.terminal = shown?.view
@@ -1614,7 +1622,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func terminalSearch(_ view: NSView, _ update: Ghostty.SearchUpdate) {
         guard let id = viewID(of: view) else { return }
         let hadKeyboard = findBar.hasKeyboard
+        let wasOpen = searches[id] != nil
         searches[id] = Ghostty.Search.applying(update, to: searches[id])
+        if wasOpen != (searches[id] != nil) {
+            searchGeneration += 1
+            searchGenerations[id] = searchGeneration
+        }
         guard shownUtility?.view === view else { return }
         syncOverlays()
         switch update {
