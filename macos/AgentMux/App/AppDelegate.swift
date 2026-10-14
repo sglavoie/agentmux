@@ -504,7 +504,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         showWorkspaceView(WorkspaceUtilityView(kind: .shell, target: home, title: "Shell"))
     }
     /// ⌘↩: a shell beside the session the workspace is on.
-    @objc func newSessionTerminal(_ sender: Any?) { workspace?.openTerminalBesideSession() }
+    @objc func newSessionTerminal(_ sender: Any?) {
+        guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
+        if !workspace.openTerminalBesideSession() { refuse(WorkspaceWindowController.terminalNeedsEmbedded) }
+    }
     /// ⌘W: closes what the workspace's pane is on, as the × on its row does,
     /// and never the workspace itself. Another window that has the keyboard,
     /// such as Preferences, closes as it would.
@@ -1755,11 +1758,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 }
 
 extension AppDelegate: NSMenuItemValidation {
-    /// Every item the app targets stays enabled, as it is without this; only
-    /// ⌘W's title follows what it would close.
+    /// ⌘W's title follows what it would close; the Session menu's places
+    /// name the sessions they go to and are greyed out past the last one, and
+    /// its items about the shown session are greyed out with none shown.
+    /// Every other item the app targets stays enabled.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        if item.action == #selector(closeWorkspaceView(_:)) {
+        switch item.action {
+        case #selector(closeWorkspaceView(_:)):
             item.title = closeWorkspaceViewTitle
+        case #selector(goToSession(_:)), #selector(showSessionInKitty(_:)):
+            let name = workspace?.sessionName(at: item.tag)
+            item.title = WorkspaceWindowController.sessionItemTitle(
+                at: item.tag, name: name, inKitty: item.action == #selector(showSessionInKitty(_:)))
+            return name != nil
+        case #selector(togglePinSession(_:)):
+            item.title = workspace?.pinShownTitle ?? WorkspaceWindowController.pinShownSessionTitle
+            return workspace?.shownSessionRow != nil
+        case #selector(newSessionTerminal(_:)):
+            return workspace?.canOpenTerminalBesideSession == true
+        default:
+            break
         }
         return true
     }

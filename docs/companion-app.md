@@ -200,7 +200,8 @@ terminals of their own beside the agents, and none of them needs Kitty.
   at every session and every terminal under one, in sidebar order; ⌘⇧] and
   ⌘⇧[ go from session to session, passing over the terminals. The digits
   (⌘1 to ⌘0) count sessions only. It applies to sessions whose terminal
-  is in the workspace, not to Kitty sessions. If the session ends first, the
+  is in the workspace, not to Kitty sessions; with no such session shown
+  the item is greyed out. If the session ends first, the
   shell keeps running and moves up to the **Workspace** section.
 
 A view is not a session. It is never counted as waiting, never shown in the
@@ -250,6 +251,8 @@ Whatever has the keyboard decides where a key goes.
   which tab it is on are kept across launches.
 - **⌘1** to **⌘0** go to the first ten sessions in the order the sidebar
   lists them, top to bottom: ⌘1 is the first session and ⌘0 the tenth.
+  Their items in the Session menu name the session each goes to, and are
+  greyed out past the last one.
   Shells and other opened views are not counted. **⌘]** and **⌘[** step to
   the next and the previous session or terminal under one, wrapping; **⌘⇧]**
   and **⌘⇧[** step to the next and the previous session, skipping the
@@ -276,8 +279,8 @@ Whatever has the keyboard decides where a key goes.
   it was given. Only a session embedded here can be named.
 - **Pin to Top**, in the same right-click menu, moves a session out of its
   project into a **Pinned** group at the top of the list, above every
-  project; its line then names its project. **Session › Pin or Unpin
-  Session** does it for the session shown. Pinned sessions are listed in the
+  project; its line then names its project. **Session › Pin Session**
+  (or **Unpin Session**, when it is pinned) does it for the session shown. Pinned sessions are listed in the
   order they were pinned and can be dragged among themselves; **Unpin** puts
   one back under its project. The digits, the next-attention shortcut, and
   the inspector follow the list, so the first pinned session is ⌘1. Pins are

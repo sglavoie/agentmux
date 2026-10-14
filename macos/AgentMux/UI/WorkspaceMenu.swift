@@ -125,7 +125,7 @@ enum WorkspaceMenu {
         session.addItem(item("Next Needing Attention", #selector(AppDelegate.nextAttention(_:)), "A", target: target))
         session.addItem(item("New Terminal Below", #selector(AppDelegate.newSessionTerminal(_:)), "\r", target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))
-        session.addItem(item("Pin or Unpin Session", #selector(AppDelegate.togglePinSession(_:)), "", target: target))
+        session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), "", target: target))
         session.addItem(.separator())
         session.addItem(item("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
         session.addItem(item("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
@@ -138,6 +138,8 @@ enum WorkspaceMenu {
                               target: own ? target : nil))
         }
         session.addItem(.separator())
+        // Titled with the sessions they go to, and greyed out past the last
+        // one, when the menu is shown (`AppDelegate.validateMenuItem`).
         for (index, key) in sessionKeys.enumerated() {
             let place = item("Session \(index + 1)", #selector(AppDelegate.goToSession(_:)), key, target: target)
             place.tag = index

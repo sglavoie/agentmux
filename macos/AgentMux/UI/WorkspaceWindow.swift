@@ -893,14 +893,27 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// right below that session, and gives it the keyboard. From one of a
     /// session's terminals it opens another beside the same session. A Kitty
     /// session has its terminals in Kitty, so there is nothing to do for one.
-    func openTerminalBesideSession() {
-        let id = views.view(viewSelection)?.besideRuntimeSessionID ?? state.selectedRow?.embeddedRuntimeSessionID
-        guard let id, state.row(.embedded(id)) != nil else {
+    /// Reports whether it opened one.
+    @discardableResult
+    func openTerminalBesideSession() -> Bool {
+        guard let id = sessionForTerminalBeside else {
             Self.logger.notice("workspace: no embedded session is shown; no terminal opened beside one")
-            return
+            return false
         }
         open(views.openTerminal(beside: id))
+        return true
     }
+
+    /// Whether ⌘↩ has an embedded session to open a terminal beside.
+    var canOpenTerminalBesideSession: Bool { sessionForTerminalBeside != nil }
+
+    private var sessionForTerminalBeside: String? {
+        let id = views.view(viewSelection)?.besideRuntimeSessionID ?? state.selectedRow?.embeddedRuntimeSessionID
+        guard let id, state.row(.embedded(id)) != nil else { return nil }
+        return id
+    }
+
+    static let terminalNeedsEmbedded = "A terminal opens below a session the workspace embeds; a Kitty session has its terminals in Kitty."
 
     /// The session the pane is on, or the one the terminal, pager, or picker
     /// it shows is about: what the session function keys act on.
@@ -1062,6 +1075,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     static let pinSessionTitle = "Pin to Top"
     static let unpinSessionTitle = "Unpin"
+    /// The Session menu's item, which says which of the two it does.
+    static let pinShownSessionTitle = "Pin Session"
+    static let unpinShownSessionTitle = "Unpin Session"
+
+    /// What the Session menu's pin item does to the session the pane is on.
+    var pinShownTitle: String {
+        shownSessionRow?.pinned == true ? Self.unpinShownSessionTitle : Self.pinShownSessionTitle
+    }
 
     /// Pins a listed session, which then leaves its project for the Pinned
     /// group above them all, or unpins it, which puts it back. Any session
@@ -1209,6 +1230,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let rows = state.rows
         guard rows.indices.contains(index) else { return }
         go(to: rows[index], raising: raising)
+    }
+
+    /// The name of the session at `index` in sidebar order, which ⌘ and
+    /// that digit go to; nil when fewer sessions are listed.
+    func sessionName(at index: Int) -> String? {
+        let rows = state.rows
+        return rows.indices.contains(index) ? rows[index].displayName : nil
+    }
+
+    /// What the Session menu's place items say: the session they go to, or
+    /// only their number when there is none there.
+    static func sessionItemTitle(at index: Int, name: String?, inKitty: Bool = false) -> String {
+        let place = "Session \(index + 1)" + (inKitty ? " in Kitty" : "")
+        guard let name else { return place }
+        return "\(place): \(name)"
     }
 
     /// The digit that goes to a session with ⌘, which its line shows; nil

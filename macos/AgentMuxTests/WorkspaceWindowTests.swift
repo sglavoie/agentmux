@@ -717,6 +717,41 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.closeShownTitle, "Close View")
     }
 
+    func testTheSessionMenuFollowsTheSessions() throws {
+        XCTAssertNil(workspace.sessionName(at: 0), "nothing listed, nothing to go to")
+        XCTAssertEqual(WorkspaceWindowController.sessionItemTitle(at: 6, name: nil), "Session 7")
+        XCTAssertEqual(WorkspaceWindowController.sessionItemTitle(at: 0, name: nil, inKitty: true), "Session 1 in Kitty")
+        XCTAssertEqual(workspace.pinShownTitle, "Pin Session")
+        XCTAssertNil(workspace.shownSessionRow, "so the pin item is greyed out")
+        XCTAssertFalse(workspace.canOpenTerminalBesideSession)
+        XCTAssertFalse(workspace.openTerminalBesideSession(), "refused with nothing shown")
+
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let rows = workspace.state.rows
+        XCTAssertEqual(rows.count, 3)
+        for (index, row) in rows.enumerated() {
+            XCTAssertEqual(workspace.sessionName(at: index), row.displayName)
+        }
+        for index in rows.count..<WorkspaceMenu.sessionKeys.count {
+            XCTAssertNil(workspace.sessionName(at: index), "⌘\(WorkspaceMenu.sessionKeys[index]) has no session to go to")
+        }
+        XCTAssertEqual(WorkspaceWindowController.sessionItemTitle(at: 0, name: rows[0].displayName),
+                       "Session 1: \(rows[0].displayName)")
+
+        let work = try row("api", "work")
+        workspace.activate(work)
+        XCTAssertEqual(workspace.pinShownTitle, "Pin Session")
+        XCTAssertTrue(workspace.canOpenTerminalBesideSession)
+        XCTAssertTrue(workspace.togglePinOfShownSession())
+        XCTAssertEqual(workspace.pinShownTitle, "Unpin Session")
+        XCTAssertEqual(workspace.sessionName(at: 0), work.displayName, "a pinned session is listed first")
+
+        workspace.select(try row("web", "work").key)
+        XCTAssertNotNil(workspace.shownSessionRow)
+        XCTAssertEqual(workspace.pinShownTitle, "Pin Session")
+        XCTAssertFalse(workspace.canOpenTerminalBesideSession, "a Kitty session has its terminals in Kitty")
+    }
+
     func testReturnOrAClickOnADetachedSessionReattachesIt() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")
