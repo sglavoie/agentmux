@@ -400,6 +400,13 @@ extension Ghostty.SurfaceView {
         performBindingAction("select_all")
     }
 
+    /// Undo and Redo stop here, disabled, rather than reaching the window's
+    /// undo manager: ⌘Z and ⌘⇧Z are the program's in a terminal, and an
+    /// enabled item would take them (`Ghostty.MenuShortcut.perform`).
+    @IBAction func undo(_ sender: Any?) {}
+
+    @IBAction func redo(_ sender: Any?) {}
+
     // MARK: View menu
 
     /// Zooms the running session only; the default zoom is Preferences'.
@@ -436,6 +443,8 @@ extension Ghostty.SurfaceView: NSMenuItemValidation {
             return ghostty_surface_has_selection(surface)
         case #selector(find(_:)), #selector(findNext(_:)), #selector(findPrevious(_:)):
             return surface != nil && Ghostty.HistoryRequest.find.bindingAction(for: scrollback) != nil
+        case #selector(undo(_:)), #selector(redo(_:)):
+            return false
         case #selector(toggleMarkers(_:)):
             // Disabled, F3 is the program's own key in a utility view.
             return surface != nil && Ghostty.HistoryRequest.markers.bindingAction(for: scrollback) != nil

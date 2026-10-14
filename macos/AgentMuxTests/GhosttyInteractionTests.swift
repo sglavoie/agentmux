@@ -223,6 +223,40 @@ final class GhosttyInteractionTests: XCTestCase {
         expect("\u{1b}OR\u{1b}[5008~", "on a session view F3 asks the server for its markers")
     }
 
+    /// The Edit menu's Undo and Redo are the text fields'; in a terminal they
+    /// are disabled, so ⌘Z and ⌘⇧Z are not taken from the program even when
+    /// the window's undo manager has something to undo.
+    @MainActor
+    func testUndoAndRedoAreDisabledInATerminalSoTheProgramKeepsTheirKeys() throws {
+        let savedMenu = NSApp.mainMenu
+        let savedWindowsMenu = NSApp.windowsMenu
+        NSApp.mainMenu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
+        defer {
+            NSApp.mainMenu = savedMenu
+            NSApp.windowsMenu = savedWindowsMenu
+        }
+        let menu = try XCTUnwrap(NSApp.mainMenu)
+        window.undoManager?.registerUndo(withTarget: self) { _ in }
+        XCTAssertEqual(window.undoManager?.canUndo, true)
+        let undo = TestKey.command("z", keyCode: 6)
+        let redo = TestKey.command("z", keyCode: 6, shifted: "Z")
+        for (key, title) in [(undo, "Undo"), (redo, "Redo")] {
+            let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()))
+            XCTAssertEqual(item.title, title)
+            XCTAssertNil(item.target, "\(title) goes to whatever has the keyboard")
+            XCTAssertTrue(view.responds(to: try XCTUnwrap(item.action)), "\(title) stops at the terminal")
+            XCTAssertFalse(view.validateMenuItem(item), "\(title) is disabled in a terminal")
+            // An offscreen test window is not NSApp's key window, so direct
+            // the item to the terminal it is exercising.
+            item.target = view
+            XCTAssertFalse(Ghostty.MenuShortcut.perform(for: key.event(), in: menu), "the menu leaves \(title)'s key to the terminal")
+        }
+        let cut = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: TestKey.command("x", keyCode: 7).event()))
+        XCTAssertEqual(cut.title, "Cut")
+        XCTAssertFalse(view.responds(to: try XCTUnwrap(cut.action)), "a terminal has nothing to cut")
+        window.undoManager?.removeAllActions()
+    }
+
     func testAUtilityViewScrollsItsOwnBufferAndSendsItsProgramNothing() {
         XCTAssertEqual(view.scrollback, .terminal)
         for request in [Ghostty.HistoryRequest.pageUp, .pageDown, .top, .bottom] {
@@ -411,6 +445,9 @@ final class WorkspaceShortcutTests: XCTestCase {
         let expected: [(TestKey, String)] = [
             (.command(",", keyCode: 43), "Settings…"),
             (.command("q", keyCode: 12), "Quit Agent Mux"),
+            (.command("z", keyCode: 6), "Undo"),
+            (.command("z", keyCode: 6, shifted: "Z"), "Redo"),
+            (.command("x", keyCode: 7), "Cut"),
             (.command("c", keyCode: 8), "Copy"),
             (.command("v", keyCode: 9), "Paste"),
             (.command("a", keyCode: 0), "Select All"),

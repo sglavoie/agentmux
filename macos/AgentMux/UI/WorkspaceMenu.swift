@@ -1,7 +1,8 @@
 import AppKit
 
-/// The main menu the app has while it is a regular app with the workspace
-/// open. The embedded terminals offer every key equivalent to it before they
+/// The app's main menu, installed at launch (`install(target:)`) so Settings
+/// and the answer panels have the standard editing keys before the workspace
+/// was ever opened. The embedded terminals offer every key equivalent to it before they
 /// encode the key for their program, so what is listed here is what the
 /// workspace keeps for itself; everything else reaches the agent.
 ///
@@ -46,6 +47,12 @@ enum WorkspaceMenu {
     /// What Shift types on each of `sessionKeys`.
     static let shiftedSessionKeys = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"]
 
+    /// Makes the app's main menu unless it already has one, which is kept.
+    @MainActor
+    static func install(target: AppDelegate) {
+        if NSApp.mainMenu == nil { NSApp.mainMenu = make(target: target) }
+    }
+
     @MainActor
     static func make(target: AppDelegate) -> NSMenu {
         let main = NSMenu()
@@ -57,7 +64,14 @@ enum WorkspaceMenu {
         app.addItem(.separator())
         app.addItem(item("Quit Agent Mux", #selector(NSApplication.terminate(_:)), "q"))
 
+        // Undo, Redo, and Cut are the text fields' (Settings, the answer
+        // panels, the switcher's search): a terminal implements none of them
+        // as enabled, so ⌘Z and ⌘⇧Z still reach the agent there.
         let edit = submenu("Edit", in: main)
+        edit.addItem(item("Undo", Selector(("undo:")), "z"))
+        edit.addItem(item("Redo", Selector(("redo:")), "Z"))
+        edit.addItem(.separator())
+        edit.addItem(item("Cut", #selector(NSText.cut(_:)), "x"))
         edit.addItem(item("Copy", #selector(NSText.copy(_:)), "c"))
         edit.addItem(item("Paste", #selector(NSText.paste(_:)), "v"))
         edit.addItem(item("Select All", #selector(NSResponder.selectAll(_:)), "a"))

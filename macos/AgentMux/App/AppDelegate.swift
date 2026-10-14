@@ -121,6 +121,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
         }
 
+        // Settings and the answer panels need the Edit menu's keys (⌘C, ⌘V,
+        // ⌘Z, ...) and ⌘W from the start, not once the workspace was opened.
+        WorkspaceMenu.install(target: self)
         statusItem = StatusItemController(delegate: self)
         setUpPreferences()
         setUpHotKeys()
@@ -273,9 +276,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             controller.setInspectorCollapsed(!restoration.inspectorShown)
             controller.order = WorkspaceOrder.load()
         }
-        // The terminals offer their shortcuts to the main menu first, and a
-        // regular app needs one; the accessory never shows it.
-        if NSApp.mainMenu == nil { NSApp.mainMenu = WorkspaceMenu.make(target: self) }
+        // The terminals offer their shortcuts to the main menu first. Launch
+        // has installed it already; a hosted test run has not.
+        WorkspaceMenu.install(target: self)
         return controller
     }
 
