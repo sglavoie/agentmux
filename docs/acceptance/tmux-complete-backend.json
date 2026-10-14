@@ -1,0 +1,142 @@
+{
+  "record": "tmux-complete-backend",
+  "status": "incomplete",
+  "status_reason": "Ten of eleven cases and the hosted tests passed. notification-without-app could not be executed on macOS 27 (the daemon's Alerter notification is never presented there), and the paired release gate has no passed record (three runs failed on things outside Agent Mux; the MacBook is not a healthy installation of the pair).",
+  "tested_revision": "8f063a9c2d3392b2929d39e0bd8fac1e5f7514fe",
+  "machine": {
+    "name": "Seb's MacBook Pro",
+    "host": "sglavoie@sebs-macbook-pro.local",
+    "os": "macOS 27.0.1",
+    "arch": "arm64",
+    "driver": "the Mac Studio, over SSH and a headless VNC viewer"
+  },
+  "kitty_installed": false,
+  "kitty_running": false,
+  "kitty_environment_unset": true,
+  "kitty_detail": "/Applications/kitty.app (0.48.2) was moved aside to a directory in the MacBook user's home with an operator-approved sudo mv at 2026-10-14T00:30:54Z and moved back at 2026-10-14T03:17:53Z (owner uid 501 and mode drwxr-xr-x as before). Between those times there was no kitty.app in /Applications, no kitty or kitten on PATH, no Kitty process, and no KITTY variable in any shell the runs used; ~/.config/kitty was left in place. Every result below was taken in that window.",
+  "mac_test": {
+    "status": "passed",
+    "exit_code": 0,
+    "remote_host": "sglavoie@sebs-macbook-pro.local",
+    "log": "docs/acceptance/tmux-complete-backend/mac-test/mac-test-remote.log",
+    "executed": 459,
+    "failures": 0,
+    "started": "2026-10-14T00:32:21Z",
+    "ended": "2026-10-14T00:33:07Z"
+  },
+  "paired_gate_record": null,
+  "paired_gate": {
+    "status": "failed",
+    "runs": [
+      {
+        "record": "docs/acceptance/tmux-complete-backend/gate/amx-asl-1.175b06686c0f4752.json",
+        "asl_revision": "dbf56767c86075f6abdcc6b7e32ebcc4bd941a62",
+        "failed_step": "asl-tests",
+        "cause": "ASL's committed tree: a capability-matrix row named a glob as a file (fixed in ASL by fae855c)"
+      },
+      {
+        "record": "docs/acceptance/tmux-complete-backend/gate/amx-asl-1.48e678dbfb4ea60d.json",
+        "asl_revision": "fae855c98e210de8e25e04ac2e8c81fcd4ac38a8",
+        "failed_step": "asl-lint",
+        "cause": "ruff and mypy were not installed on the MacBook; once installed, mypy reported 9 errors in ASL's committed tests (fixed in ASL by 61e23fe)"
+      },
+      {
+        "record": "docs/acceptance/tmux-complete-backend/gate/amx-asl-1.b2c864ae6197629d.json",
+        "log": "docs/acceptance/tmux-complete-backend/gate/gate-run-3.log",
+        "asl_revision": "61e23fe276c323b579aec285afbfb8744795d6db",
+        "failed_step": "asl-install",
+        "passed_steps": [
+          "os-version",
+          "harness-compat",
+          "build-amx",
+          "amx-check",
+          "asl-tests",
+          "asl-lint",
+          "contract-sync",
+          "paired-integration",
+          "crash-restart",
+          "amx-stress",
+          "asl-stress"
+        ],
+        "cause": "the MacBook had only /bin/bash 3.2 and ASL's installer needs mapfile"
+      }
+    ],
+    "by_hand_after_run_3": {
+      "log": "docs/acceptance/tmux-complete-backend/gate/install-and-smoke-by-hand.log",
+      "passed": [
+        "asl-install-verify",
+        "overseer-integration"
+      ],
+      "failed": {
+        "asl-install": "one LaunchAgent of that Mac cannot load because its program is not installed there",
+        "amx-install-restart": "amx doctor --strict: 7 [hooks] health failures in that Mac's real profiles (hooks never synced there, harnesses not signed in, Copilot CLI absent)",
+        "cockpit-smoke": "the same doctor --strict failures"
+      }
+    },
+    "no_step_ran_or_named_kitty": true
+  },
+  "cases": {
+    "launch-two-profiles": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/launch-two-profiles.log"
+    },
+    "function-keys-f1-f11": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/function-keys-f1-f11.log"
+    },
+    "navigation-f7-f9": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/navigation-f7-f9.log"
+    },
+    "dashboard-popup-return": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/dashboard-popup-return.log"
+    },
+    "claude-stop-held-confirmed": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/claude-stop-held-confirmed.log",
+      "harness": "Claude Code 2.1.296",
+      "stop_confirmed_by": "probe:claude_screen",
+      "stop_hold_waited_ms": 8211
+    },
+    "codex-stop-held-confirmed": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/codex-stop-held-confirmed.log",
+      "harness": "codex-cli 0.162.1",
+      "stop_confirmed_by": "probe:codex_screen",
+      "stop_hold_waited_ms": 6000
+    },
+    "copilot-stop-held-confirmed": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/copilot-stop-held-confirmed.log",
+      "harness": "GitHub Copilot CLI 1.0.97",
+      "stop_confirmed_by": "probe:copilot_transcript",
+      "stop_hold_waited_ms": 6001
+    },
+    "notification-with-app": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/notification-with-app.log",
+      "pictures": [
+        "docs/acceptance/tmux-complete-backend/live/app-notification.jpg",
+        "docs/acceptance/tmux-complete-backend/live/app-workspace.jpg"
+      ]
+    },
+    "notification-without-app": {
+      "status": "not-executed",
+      "evidence": "docs/acceptance/tmux-complete-backend/README.md",
+      "reason": "With no app connected the daemon posts through Alerter 26.5 with --sender fr.vjeantet.alerter. On macOS 27.0.1 that notification is never presented, as a banner or in Notification Center, so there was nothing to click. Tried: the binary copied into the world, the same binary under the home directory, the binary wrapped in a registered bundle of that identifier, a real brew install of vjeantet/tap/alerter, and a restart of usernoted and NotificationCenter. usernoted logs 'Unable to find notifier for identifier fr.vjeantet.alerter' and NotificationCenter 'Couldn't find application fr.vjeantet.alerter' each time. Run without --sender the same binary is presented as Terminal. No stand-in was used in place of a click."
+    },
+    "doctor-strict": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/doctor-strict.log"
+    },
+    "automatic-launch-workspace": {
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/automatic-launch-workspace.log",
+      "pictures": [
+        "docs/acceptance/tmux-complete-backend/live/auto-menu.jpg",
+        "docs/acceptance/tmux-complete-backend/live/auto-workspace.jpg"
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+start 2026-10-14T01:25:15Z on Seb’s MacBook Pro
+KITTY variables: 0
+kitty on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+agentmux 8f063a9c2d3392b2929d39e0bd8fac1e5f7514fe; asl 61e23fe276c323b579aec285afbfb8744795d6db
+warning: no signing_key given; the evidence record will be unsigned
+warning: an unsigned record is a rehearsal, not a release
+run  os-version [agentmux] sw_vers -productVersion
+ok   os-version (11ms)
+run  harness-compat [asl] /Users/sglavoie/scripts/bin/.local/bin/agent-session-loop harness-compat --json
+ok   harness-compat (201ms)
+run  build-amx [agentmux] just build
+ok   build-amx (200ms)
+run  amx-check [agentmux] just check
+ok   amx-check (15.675s)
+run  asl-tests [asl] env ASL_CLI_TRACE=0 just test-all
+ok   asl-tests (9m22.267s)
+run  asl-lint [asl] env ASL_CLI_TRACE=0 just lint
+ok   asl-lint (11.419s)
+run  contract-sync [agentmux] just asl-contract-sync asl_root=/Users/sglavoie/scripts
+ok   contract-sync (150ms)
+run  paired-integration [agentmux] just asl-integration
+ok   paired-integration (19.305s)
+run  crash-restart [agentmux] just crash-restart
+ok   crash-restart (5.454s)
+run  amx-stress [agentmux] just reliability-stress
+ok   amx-stress (3m5.959s)
+run  asl-stress [asl] just reliability-stress
+ok   asl-stress (18m57.304s)
+run  asl-install [asl] just all
+FAIL asl-install (exit 1)
+evidence /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.b2c864ae6197629d.json
+evidence is unsigned (no signing key given)
+pair amx-asl-1.b2c864ae6197629d (failed)
+  agentmux  8f063a9c2d33 clean
+  asl       61e23fe276c3 clean
+  artifact amx                  d7d4629f8a61a6368359bd9f343ff9ed5dbc6ae6e4b4fc6371b96d1a17f7a60d
+  artifact agent-session-loop   4d5184046ac13ca6363e3d3def927732652fa303ec1e21dcc3f3136f386cebfa
+  artifact agent_session_loop   5045ad32ff0a764251b34a08804e2a6b28fe2a510383db006eae567c5c096431
+  passed   os-version           0.0s
+  passed   harness-compat       0.2s
+  passed   build-amx            0.2s
+  passed   amx-check            15.7s
+  passed   asl-tests            562.3s
+  passed   asl-lint             11.4s
+  passed   contract-sync        0.1s
+  passed   paired-integration   19.3s
+  passed   crash-restart        5.5s
+  passed   amx-stress           186.0s
+  passed   asl-stress           1137.3s
+  failed   asl-install          1.2s
+  not-run  asl-install-verify   -
+  not-run  amx-install-restart  -
+  not-run  overseer-integration -
+  not-run  cockpit-smoke        -
+  evidence /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.b2c864ae6197629d.json
+  signature none (unsigned record)
+paired release gate failed: see /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.b2c864ae6197629d.json
+exit status 2
+error: recipe `paired-release-gate` failed with exit code 1
+exit=1
+end 2026-10-14T01:57:35Z

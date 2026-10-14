@@ -1,0 +1,50 @@
+# The gate's install and smoke steps, run by hand on the MacBook on 2026-10-14 (03:12Z) after gate run 3
+# stopped at asl-install, to list everything that Mac still lacks. Agent Mux 8f063a9c, ASL 61e23fe, Kitty moved
+# aside. This is an excerpt: the exit status of each step and the lines that decide it. The MacBook user's own
+# profile, project and LaunchAgent names are left out, except the one agent that fails.
+
+===== asl-install: exit 1 =====
+install-ccl: skipped, no checkout at <dev-helpers checkout>
+install-ddc: skipped, no checkout at <dev-helpers checkout>
+stow-unfold: skipping the folded packages above; `just unfold --apply` once their programs are closed
+UNLINK: .local/bin/ddc-brightnessd
+UNLINK: Library/LaunchAgents/com.sglavoie.ddc-brightnessd.plist
+LINK: Library/LaunchAgents/com.sglavoie.ddc-brightnessd.plist => ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.ddc-brightnessd.plist (reverts previous action)
+Reloading com.sglavoie.ddc-brightnessd...
+Bootstrap failed: 5: Input/output error
+FAIL com.sglavoie.ddc-brightnessd is not loaded
+1 problem(s). Run: launchagents-setup
+error: recipe `all` failed on line 29 with exit code 1
+
+===== asl-install-verify: exit 0 =====
+ok status-smoke: asl status --json succeeded and omitted parallel_validation_path
+warn agent-mux: /Users/sglavoie/.local/bin/amx reports doctor schema 4 and healthy=False
+warn agent-mux-bridge: the daemon reports no ASL integration block; run `amx config asl-sync` to pair this installation
+
+===== amx-install-restart: exit 2 =====
+Installed /Users/sglavoie/.local/bin/amx
+daemon: running (pid 40310, uptime 0s, /Users/sglavoie/.local/share/agent-mux/daemon.sock)
+daemon: running (pid 40310, uptime 0s)
+- [hooks] hooks for <profiles> require attention: hook file does not exist; run `amx config hooks-sync`; no hook event has been observed in the diagnostic journal for home dir <home> CLI 0.159.3 is newer than verified hook contrac
+- [hooks] hooks for <profiles> require attention: hook file exists but has no Agent Mux hooks; run `amx config hooks-sync`; no hook event has been observed in the diagnostic journal for home dir <home> CLI 2.1.296 is newer than ve
+- [hooks] hooks for <profiles> require attention: hook file exists but has no Agent Mux hooks; run `amx config hooks-sync`; no hook event has been observed in the diagnostic journal for home dir <home> CLI 2.1.296 is newer than ve
+- [hooks] hooks for <profiles> require attention: copilot CLI is not on PATH; no hook event has been observed in the diagnostic journal for home dir <home>
+overall: issues detected
+doctor: 7 health failures detected
+error: recipe `restart-verify` failed on line 599 with exit code 2
+
+===== overseer-integration: exit 0 =====
+Ran 11 tests in 5.717s
+OK
+overseer-integration: ok
+
+===== cockpit-smoke: exit 2 =====
+daemon: running (pid 40310, uptime 6s, /Users/sglavoie/.local/share/agent-mux/daemon.sock)
+daemon: running (pid 40310, uptime 6s)
+- [hooks] hooks for <profiles> require attention: hook file does not exist; run `amx config hooks-sync`; no hook event has been observed in the diagnostic journal for home dir <home> CLI 0.159.3 is newer than verified hook contrac
+- [hooks] hooks for <profiles> require attention: hook file exists but has no Agent Mux hooks; run `amx config hooks-sync`; no hook event has been observed in the diagnostic journal for home dir <home> CLI 2.1.296 is newer than ve
+- [hooks] hooks for <profiles> require attention: hook file exists but has no Agent Mux hooks; run `amx config hooks-sync`; no hook event has been observed in the diagnostic journal for home dir <home> CLI 2.1.296 is newer than ve
+- [hooks] hooks for <profiles> require attention: copilot CLI is not on PATH; no hook event has been observed in the diagnostic journal for home dir <home>
+overall: issues detected
+doctor: 7 health failures detected
+error: recipe `cockpit-smoke` failed with exit code 2
