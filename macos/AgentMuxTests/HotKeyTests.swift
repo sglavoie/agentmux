@@ -173,7 +173,10 @@ final class HotKeyTests: XCTestCase {
     func testShortcutsAreNamedAsTheMenuNamesThem() {
         XCTAssertEqual(HotKeyPreference.dashboard.label, "Open Dashboard")
         XCTAssertEqual(HotKeyPreference.nextAttention.label, "Next Waiting Session")
-        let titles = MenuBuilder.actionEntries(MenuBuilder.ActionsInput()).compactMap { entry -> String? in
+        var input = MenuBuilder.ActionsInput()
+        input.feedLive = true
+        input.waiting = 1
+        let titles = MenuBuilder.actionEntries(input).compactMap { entry -> String? in
             if case let .action(_, title) = entry { return title } else { return nil }
         }
         for preference in HotKeyPreference.all {
