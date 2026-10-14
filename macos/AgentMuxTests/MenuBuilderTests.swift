@@ -67,10 +67,39 @@ final class MenuBuilderTests: XCTestCase {
             return entries[(start + 1)...].prefix { if case .session = $0 { return true } else { return false } }
                 .compactMap { if case let .session(row) = $0 { return row.windowID } else { return nil } }
         }
-        // Longest-waiting attention row first.
-        XCTAssertEqual(ids(after: "Needs attention"), [4, 2])
+        // In the sidebar's order (projects p2, p4), however long each waited.
+        XCTAssertEqual(ids(after: "Needs attention"), [2, 4])
         XCTAssertEqual(ids(after: "Working"), [1, 5])
         XCTAssertEqual(ids(after: "Idle"), [3])
+    }
+
+    func testNeedsAttentionFollowsTheNextAttentionCycle() {
+        var embedded = session(6, "key", attention: true, project: "api", changedSecondsAgo: 900)
+        embedded.runtime = CompanionRuntime(sessionID: "rs-6", backend: "tmux", pane: "%6")
+        let sessions = [
+            session(1, "stop", attention: true, project: "web", changedSecondsAgo: 30),
+            session(2, "key", attention: true, project: "api", changedSecondsAgo: 60),
+            session(3, "bolt", project: "api"),
+            session(4, "question", attention: true, project: "api", changedSecondsAgo: 600),
+            session(5, "error", attention: true, project: "Docs", changedSecondsAgo: 10),
+            embedded,
+        ]
+        var order = WorkspaceOrder()
+        order.set([.embedded("rs-6"), AttentionCycler.Key(socket: "", windowID: 4),
+                   AttentionCycler.Key(socket: "", windowID: 3), AttentionCycler.Key(socket: "", windowID: 2)], for: "api")
+        var menuInput = input(sessions)
+        menuInput.order = order
+        let entries = MenuBuilder.entries(menuInput)
+        guard let start = entries.firstIndex(of: .header("Needs attention")) else { return XCTFail("no Needs attention") }
+        let listed = entries[(start + 1)...].prefix { if case .session = $0 { return true } else { return false } }
+            .compactMap { if case let .session(row) = $0 { return row.windowID } else { return nil } }
+        let cycle = AttentionCycler.ordered(sessions, order: order).map(\.windowID)
+        XCTAssertEqual(listed, cycle)
+        XCTAssertEqual(listed, [6, 4, 2, 5, 1], "the dragged api order, then Docs and web by name")
+
+        var cycler = AttentionCycler()
+        let presses = (0..<5).compactMap { _ in cycler.advance(in: sessions, order: order)?.windowID }
+        XCTAssertEqual(presses, listed, "⌃⌥⌘N visits them in the order the menu lists them")
     }
 
     func testManyIdleRowsCollapseIntoASubmenu() {

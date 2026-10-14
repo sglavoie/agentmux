@@ -347,6 +347,9 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     var onResponse: (Response) -> Void = { _ in }
     /// Called when the claim subscribe should carry changes.
     var onClaimChange: (NotificationClaim) -> Void = { _ in }
+    /// Called when the system's answer about notifications changes, whether
+    /// or not the claim does, so Settings can say it was denied.
+    var onAuthorizationChange: (NotificationAuthorization) -> Void = { _ in }
 
     /// Whether `amxUseAppNotifications` is on.
     var enabled: Bool {
@@ -387,6 +390,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     private func setAuthorization(_ value: NotificationAuthorization) {
         guard authorization != value else { return }
         authorization = value
+        onAuthorizationChange(value)
         publishClaim()
     }
 

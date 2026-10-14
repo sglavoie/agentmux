@@ -155,6 +155,32 @@ final class HotKeyTests: XCTestCase {
         XCTAssertEqual(other.keyEquivalent, "")
     }
 
+    @MainActor
+    func testNextWaitingSessionShowsItsGlobalShortcut() throws {
+        let open = NSMenuItem(title: "Open Dashboard", action: nil, keyEquivalent: "")
+        open.representedObject = MenuBuilder.ActionBox(.openDashboard)
+        let next = NSMenuItem(title: "Next Waiting Session", action: nil, keyEquivalent: "")
+        next.representedObject = MenuBuilder.ActionBox(.nextAttention)
+        var input = MenuBuilder.ActionsInput()
+        input.nextAttentionHotKey = HotKeyPreference.nextAttention.default
+        StatusItemController.showHotKeys(on: [open, next], input)
+        let expected = try XCTUnwrap(HotKeyPreference.nextAttention.default.menuKeyEquivalent)
+        XCTAssertEqual(next.keyEquivalent, expected.key)
+        XCTAssertEqual(next.keyEquivalentModifierMask, [.control, .option, .command])
+        XCTAssertEqual(open.keyEquivalent, "", "the dashboard's shortcut is turned off")
+    }
+
+    func testShortcutsAreNamedAsTheMenuNamesThem() {
+        XCTAssertEqual(HotKeyPreference.dashboard.label, "Open Dashboard")
+        XCTAssertEqual(HotKeyPreference.nextAttention.label, "Next Waiting Session")
+        let titles = MenuBuilder.actionEntries(MenuBuilder.ActionsInput()).compactMap { entry -> String? in
+            if case let .action(_, title) = entry { return title } else { return nil }
+        }
+        for preference in HotKeyPreference.all {
+            XCTAssertTrue(titles.contains(preference.label), "\(preference.label) is a status menu item")
+        }
+    }
+
     func testSystemCombosAreReadable() {
         // Whatever this Mac has enabled parses into valid combos.
         for combo in SystemHotKeys.enabledCombos() {

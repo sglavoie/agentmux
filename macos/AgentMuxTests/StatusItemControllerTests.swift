@@ -7,6 +7,7 @@ final class StatusItemControllerTests: XCTestCase {
     private final class FakeDelegate: StatusItemDelegate {
         let store: SessionStore
         var actionsInput = MenuBuilder.ActionsInput()
+        var attentionOrder = WorkspaceOrder()
         init(store: SessionStore) { self.store = store }
         func refreshDaemonStatus() {}
         func focus(_ row: MenuSessionRow) {}

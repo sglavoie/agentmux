@@ -29,6 +29,8 @@ enum MenuAction: Equatable {
     /// Shows the workspace window, where tmux sessions' terminals are.
     case openWorkspace
     case openDashboard
+    /// Focuses the next session waiting on a human, as ⌃⌥⌘N does.
+    case nextAttention
     case launchProject(ProjectEntry)
     /// Asks for a folder, then launches the project there instead of in its
     /// configured directory: a project item's ⌥ alternate.
@@ -90,6 +92,9 @@ enum MenuBuilder {
         var glyphs: Glyphs = .bundled
         /// What the resolved amx can do, for the per-row Mute alternates.
         var gate = ActionGate()
+        /// The workspace sidebar's arrangement, which orders Needs attention
+        /// the way the next-attention shortcut visits it.
+        var order = WorkspaceOrder()
     }
 
     /// What the action items and their submenus are built from.
@@ -99,6 +104,8 @@ enum MenuBuilder {
         var dashboardPlace: DashboardPlacePreference = .workspace
         /// The global shortcut Open Dashboard shows as its key; nil for none.
         var dashboardHotKey: HotKeyCombo?
+        /// The global shortcut Next Waiting Session shows as its key.
+        var nextAttentionHotKey: HotKeyCombo?
         var feedLive = false
         var projects = FetchState<[ProjectEntry]>()
         /// Project directories the last survey found missing on disk.
@@ -142,13 +149,12 @@ enum MenuBuilder {
             entries.append(.info(KittyEndpoint.listenOnMissing))
         }
 
-        let attention = input.sessions.filter(\.attention).sorted { lhs, rhs in
-            (lhs.changedAt ?? .distantFuture) < (rhs.changedAt ?? .distantFuture)
-        }
+        let snapshotSocket = input.snapshot?.kitty.socket ?? ""
+        // The order the next-attention shortcut visits them in.
+        let attention = AttentionCycler.ordered(input.sessions, snapshotSocket: snapshotSocket, order: input.order)
         let working = input.sessions.filter { !$0.attention && $0.isWorking }
         let idle = input.sessions.filter { !$0.attention && !$0.isWorking }
 
-        let snapshotSocket = input.snapshot?.kitty.socket ?? ""
         let waiting = waitingBySession(input.snapshot?.asl.waiting ?? [], sessions: input.sessions, snapshotSocket: snapshotSocket)
         /// A session row, then the Answer… item for its waiting run.
         func rowEntries(_ session: CompanionSession, showReason: Bool) -> [MenuEntry] {
@@ -306,8 +312,9 @@ enum MenuBuilder {
 
     // MARK: Actions
 
-    /// The action items after the sessions: Open Workspace and Open Dashboard,
-    /// then the Launch Project, Recent, and Notifications submenus.
+    /// The action items after the sessions: Open Workspace, Open Dashboard,
+    /// and Next Waiting Session, then the Launch Project, Recent, and
+    /// Notifications submenus.
     static func actionEntries(_ input: ActionsInput) -> [MenuEntry] {
         var entries: [MenuEntry] = [.separator, .action(.openWorkspace, "Open Workspace")]
         if input.dashboardPlace == .kitty, let reason = input.gate.unavailableReason(.openDashboard) {
@@ -315,6 +322,7 @@ enum MenuBuilder {
         } else {
             entries.append(.action(.openDashboard, "Open Dashboard"))
         }
+        entries.append(.action(.nextAttention, HotKeyPreference.nextAttention.label))
         entries.append(.submenuRef(.projects, "Launch Project", reason: input.gate.unavailableReason(.project)))
         entries.append(.submenuRef(.recent, "Recent", reason: input.gate.unavailableReason(.sessions)))
         let notifications: String?

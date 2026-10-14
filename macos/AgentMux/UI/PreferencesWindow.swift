@@ -86,6 +86,8 @@ final class PreferencesModel: ObservableObject {
     /// Why each shortcut is not working, or what it collides with, by its
     /// defaults key.
     @Published var hotKeyProblems: [String: String] = [:]
+    /// Whether macOS lets the app show notifications, as last read.
+    @Published var notificationAuthorization: NotificationAuthorization = .notDetermined
 
     @Published private(set) var launchAtLogin = false
     @Published private(set) var launchAtLoginNote: String?
@@ -96,6 +98,8 @@ final class PreferencesModel: ObservableObject {
     var onRecordingChange: ((Bool) -> Void)?
     /// Asks the app to clear the daemon's snooze.
     var onResumeSnooze: (() -> Void)?
+    /// Asks the app to read the notification authorization again.
+    var onRefreshAuthorization: (() -> Void)?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -119,6 +123,7 @@ final class PreferencesModel: ObservableObject {
             preferences = stored
         }
         refreshLoginItem()
+        onRefreshAuthorization?()
     }
 
     func refreshLoginItem() {
@@ -211,6 +216,15 @@ final class PreferencesModel: ObservableObject {
             ? SnoozeState(indefinite: true)
             : SnoozeState(snoozedUntil: Int64(until.timeIntervalSince1970))
     }
+
+    /// What Settings says under Use app notifications when macOS does not let
+    /// the app show them; nil while it does or has not been asked yet.
+    static func notificationPermissionNote(_ authorization: NotificationAuthorization) -> String? {
+        authorization == .denied ? "Not allowed — macOS blocks Agent Mux's notifications." : nil
+    }
+
+    /// System Settings › Notifications.
+    static let notificationSettingsURL = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
 
     /// Why Show the working count is greyed out; nil when it is not.
     static func workingCountNote(_ style: StatusTitleStyle) -> String? {
@@ -339,6 +353,13 @@ struct PreferencesView: View {
                 }
                 Toggle("Use app notifications", isOn: $model.preferences.useAppNotifications)
                 note("Delivers the daemon's notifications through Agent Mux; off leaves them to Alerter.")
+                if let denied = PreferencesModel.notificationPermissionNote(model.notificationAuthorization) {
+                    HStack {
+                        note(denied, warning: true)
+                        Spacer()
+                        Button("Open System Settings") { NSWorkspace.shared.open(PreferencesModel.notificationSettingsURL) }
+                    }
+                }
                 LabeledContent("Snooze") {
                     HStack {
                         Text(model.snoozeDescription).foregroundStyle(.secondary)

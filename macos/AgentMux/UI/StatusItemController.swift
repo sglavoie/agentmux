@@ -16,6 +16,8 @@ protocol StatusItemDelegate: AnyObject {
     func showPreferences(_ sender: Any?)
     /// What the action items and submenus show right now.
     var actionsInput: MenuBuilder.ActionsInput { get }
+    /// The workspace sidebar's arrangement, which orders Needs attention.
+    var attentionOrder: WorkspaceOrder { get }
     /// The menu is opening: refresh whatever lists are stale.
     func menuWillOpen()
 }
@@ -159,7 +161,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             snapshot: store.snapshot,
             notice: store.notice,
             kittyReachable: reachable,
-            gate: delegate?.actionsInput.gate ?? ActionGate()
+            gate: delegate?.actionsInput.gate ?? ActionGate(),
+            order: delegate?.attentionOrder ?? WorkspaceOrder()
         )
     }
 
@@ -191,13 +194,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         if isMenuOpen { delegate?.store.noticeWasSeen() }
     }
 
-    /// Shows the global shortcut as the key equivalent of the item it does
+    /// Shows each global shortcut as the key equivalent of the item it does
     /// the same as, where a menu can spell it.
     static func showHotKeys(on items: [NSMenuItem], _ actions: MenuBuilder.ActionsInput) {
-        guard let key = actions.dashboardHotKey?.menuKeyEquivalent else { return }
-        for item in items where (item.representedObject as? MenuBuilder.ActionBox)?.action == .openDashboard {
-            item.keyEquivalent = key.key
-            item.keyEquivalentModifierMask = key.modifiers
+        let shortcuts: [(MenuAction, HotKeyCombo?)] = [
+            (.openDashboard, actions.dashboardHotKey),
+            (.nextAttention, actions.nextAttentionHotKey),
+        ]
+        for (action, combo) in shortcuts {
+            guard let key = combo?.menuKeyEquivalent else { continue }
+            for item in items where (item.representedObject as? MenuBuilder.ActionBox)?.action == action {
+                item.keyEquivalent = key.key
+                item.keyEquivalentModifierMask = key.modifiers
+            }
         }
     }
 

@@ -912,6 +912,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             showWorkspace()
         case .openDashboard:
             openDashboard()
+        case .nextAttention:
+            focusNextAttention()
         case let .launchProject(project):
             launch(project)
         case let .launchProjectInFolder(project):
@@ -1166,6 +1168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         applyMenuBarPreferences(model.preferences)
         model.onChange = { [weak self] old, new in self?.preferencesChanged(from: old, to: new) }
         model.onResumeSnooze = { [weak self] in self?.snooze(.resume) }
+        model.onRefreshAuthorization = { [weak self] in self?.notifications?.refreshAuthorization() }
         model.onRecordingChange = { [weak self] recording in
             guard let self else { return }
             self.isRecordingHotKey = recording
@@ -1235,6 +1238,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
         }
         presenter.onResponse = { [weak self] response in self?.respond(to: response) }
+        presenter.onAuthorizationChange = { [weak self] authorization in
+            self?.preferencesModel.notificationAuthorization = authorization
+        }
         notifications = presenter
         presenter.refreshAuthorization()
     }
@@ -1429,8 +1435,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             refuse("The session feed is not live.")
             return
         }
-        let order = workspace?.order ?? (Self.isRunningTests ? WorkspaceOrder() : .load())
-        guard let session = cycler.advance(in: store.sessions, snapshotSocket: snapshot.kitty.socket, order: order) else {
+        guard let session = cycler.advance(in: store.sessions, snapshotSocket: snapshot.kitty.socket, order: attentionOrder) else {
             Self.logger.notice("next attention: nothing is waiting")
             NSSound.beep()
             return
@@ -1472,6 +1477,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         )
     }
 
+    /// The sidebar's arrangement, which both the shortcut and the menu's
+    /// Needs attention follow.
+    var attentionOrder: WorkspaceOrder {
+        workspace?.order ?? (Self.isRunningTests ? WorkspaceOrder() : .load())
+    }
+
     var actionsInput: MenuBuilder.ActionsInput {
         let live = store.feed == .live
         let prefs = preferencesModel.preferences
@@ -1479,6 +1490,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             gate: gate,
             dashboardPlace: prefs.dashboardPlace,
             dashboardHotKey: prefs.hotKeyDashboard,
+            nextAttentionHotKey: prefs.hotKeyNextAttention,
             feedLive: live,
             projects: projects.state,
             missingProjectDirectories: projects.missingDirectories,

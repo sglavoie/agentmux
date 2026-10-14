@@ -474,6 +474,19 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(claims.count, 3, "an unchanged claim is not republished")
     }
 
+    func testAuthorizationChangesReachSettingsEvenWhenTheClaimStays() {
+        let presenter = presenter(enabled: false, status: .authorized)
+        var seen: [NotificationAuthorization] = []
+        presenter.onAuthorizationChange = { seen.append($0) }
+        center.status = .denied
+        presenter.refreshAuthorization()
+        presenter.refreshAuthorization()
+        center.status = .authorized
+        presenter.refreshAuthorization()
+        XCTAssertEqual(seen, [.denied, .authorized], "each change once, with app notifications off")
+        XCTAssertEqual(claims, [], "the claim never changed")
+    }
+
     func testSubscribeCarriesTheClaim() throws {
         let params = SubscribeParams(clientVersion: "1", notificationBackend: true, notificationsAuthorized: true)
         let data = try JSONEncoder().encode(DaemonRequest.subscribing(params))

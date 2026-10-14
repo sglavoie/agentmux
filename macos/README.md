@@ -659,8 +659,9 @@ The status item's title shows only the non-zero counts, with the glyphs from
 `internal/palette/icons.json`, which is bundled as a resource: `⚡2 🛑1 🔑1`.
 The menu lists the sessions in three sections:
 
-- **Needs attention**: rows like `🔑 api · claude · 4m · permission`, with the
-  longest-waiting first.
+- **Needs attention**: rows like `🔑 api · claude · 4m · permission`, in the
+  order the next-attention shortcut visits them (`AttentionCycler.ordered`:
+  the workspace sidebar's order, dragged or not).
 - **Working**: the `bolt`, `subagent`, and `compact` sessions.
 - **Idle**: everything else. More than 10 rows collapse into a submenu.
 
@@ -748,6 +749,7 @@ After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
 | Item | Does |
 | --- | --- |
 | Open Dashboard | What the ⌃⌥⌘A shortcut does. |
+| Next Waiting Session | What the ⌃⌥⌘N shortcut does, and continues the same cycle. |
 | Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch, cached, and refreshed when the menu opens on one older than 60s. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip, and its ⌥ `… in Folder…` alternate still launches it in a folder you choose. Choosing one runs `amx project launch --title T --profile P --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
 | Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
 | ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --runtime-session ID --json` for a session on tmux, or `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket for a Kitty one. |
@@ -809,8 +811,10 @@ claims the role while it has never been asked, because the daemon sends frames
 only to a claimant. It asks for permission when the first frame arrives, not
 at launch. Turning the preference off, a denied prompt, or permission revoked
 in System Settings drops the claim, and the app subscribes again without it.
-The app reads the permission again every 10 seconds and whenever the menu
-opens, because macOS gives no notice of a change.
+The app reads the permission again every 10 seconds, whenever the menu
+opens, and when Settings opens, because macOS gives no notice of a change.
+While it is denied, Settings says so under Use app notifications, with an
+Open System Settings button for System Settings › Notifications.
 
 **Fallback.** The app reports `delivered` once `add` succeeds. A failed `add`,
 a denied permission, or the preference turned off reports `failed`. The daemon
@@ -982,8 +986,8 @@ The next-attention shortcut visits the attention rows (stop, key, error,
 question) in the order the workspace sidebar lists every session
 (`WorkspaceSidebar.ordered`): projects by name, then each project's sessions
 as they stand there, dragged or not. How long a session has waited moves
-nothing; the menu's Needs attention section is the one place that puts the
-longest-waiting first. Each press focuses the one after the session the last
+nothing, and the menu's Needs attention section lists them in the same order.
+Each press focuses the one after the session the last
 press focused, and wraps after the last one. A session is its Kitty socket
 plus its window ID, so the cycle spans Kitty instances. When the session it
 last focused no longer waits, or is gone, the cycle carries on from where
@@ -1002,7 +1006,9 @@ shortcuts are unregistered so they can be recorded; the recorded one is saved
 before the recorder stops, so registering again happens once, with the new
 shortcut. Shortcuts are shown with the key the current keyboard layout puts
 there (`UCKeyTranslate`; ⌃⌥⌘Q on AZERTY for the stored `ctrl+opt+cmd+a`), and
-the status menu's Open Dashboard shows the dashboard shortcut as its key.
+the status menu's Open Dashboard and Next Waiting Session show their
+shortcuts as their keys. Settings and the conflict warnings name each
+shortcut by its menu item (`HotKeyPreference.label`).
 
 ## Preferences
 

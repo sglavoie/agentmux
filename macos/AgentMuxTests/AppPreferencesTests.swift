@@ -230,6 +230,22 @@ final class AppPreferencesTests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsSaysWhenNotificationsAreNotAllowed() {
+        XCTAssertEqual(PreferencesModel.notificationPermissionNote(.denied),
+                       "Not allowed — macOS blocks Agent Mux's notifications.")
+        XCTAssertNil(PreferencesModel.notificationPermissionNote(.authorized))
+        XCTAssertNil(PreferencesModel.notificationPermissionNote(.notDetermined), "never asked is not denied")
+        XCTAssertEqual(PreferencesModel.notificationSettingsURL.absoluteString,
+                       "x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+
+        let model = PreferencesModel(defaults: freshDefaults())
+        var refreshes = 0
+        model.onRefreshAuthorization = { refreshes += 1 }
+        model.refresh()
+        XCTAssertEqual(refreshes, 1, "opening Settings reads the permission again")
+    }
+
+    @MainActor
     func testModelDescribesTheSnooze() {
         let model = PreferencesModel(defaults: freshDefaults())
         XCTAssertEqual(model.snoozeDescription, "Not snoozed")

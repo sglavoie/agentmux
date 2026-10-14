@@ -221,17 +221,18 @@ struct HotKeyCombo: Equatable, Hashable {
 struct HotKeyPreference: Equatable {
     let defaultsKey: String
     let `default`: HotKeyCombo
-    /// What Preferences and conflict warnings call it.
+    /// What Preferences, conflict warnings, and the status menu item that
+    /// does the same call it.
     let label: String
 
     /// Shows the dashboard where `amxDashboardPlace` says: the workspace's
     /// own, or a tab in Kitty.
     static let dashboard = HotKeyPreference(
-        defaultsKey: "amxHotKeyDashboard", default: HotKeyCombo(string: "ctrl+opt+cmd+a")!, label: "Show dashboard"
+        defaultsKey: "amxHotKeyDashboard", default: HotKeyCombo(string: "ctrl+opt+cmd+a")!, label: "Open Dashboard"
     )
     /// Focuses the next session waiting on a human.
     static let nextAttention = HotKeyPreference(
-        defaultsKey: "amxHotKeyNextAttention", default: HotKeyCombo(string: "ctrl+opt+cmd+n")!, label: "Next session needing attention"
+        defaultsKey: "amxHotKeyNextAttention", default: HotKeyCombo(string: "ctrl+opt+cmd+n")!, label: "Next Waiting Session"
     )
 
     static let all = [dashboard, nextAttention]
