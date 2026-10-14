@@ -194,7 +194,7 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertEqual(sent.method, ASLMethod.runResume)
         XCTAssertEqual(sent.text.reveal(), "proceed with the migration")
         let after = state.actionFinished(seq: seq, .success(ASLOperation(operationID: sent.operationID, status: "accepted")))
-        XCTAssertEqual(after, .close(notice: nil), "a resume closes the form")
+        XCTAssertEqual(after, .close(notice: "the answer to web was accepted"), "a resume closes the form and says so")
         XCTAssertFalse(state.active)
         XCTAssertTrue(state.drafts.isEmpty)
     }
@@ -237,6 +237,9 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertNil(state.drafts["q-api-1"], "the answered draft is dropped")
         XCTAssertEqual(state.questionIDs, ["q-api-2"])
         XCTAssertTrue(state.reauthorize)
+        XCTAssertEqual(state.notice, "Answer sent — question 2 of 2")
+        XCTAssertEqual(state.noticeKind, .info)
+        XCTAssertTrue(state.position == (2, 2), "the answered question still counts")
 
         state.setDraft("answer for two")
         XCTAssertNil(state.submit(state.buttons[0], mint: mint), "nothing is sent before the token is re-minted")
@@ -253,11 +256,12 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertEqual(second.text.reveal(), "answer for two")
         XCTAssertNotEqual(first.operationID, second.operationID)
 
-        XCTAssertEqual(state.actionFinished(seq: seq2, .success(ASLOperation(status: "accepted"))), .close(notice: nil))
+        XCTAssertEqual(state.actionFinished(seq: seq2, .success(ASLOperation(status: "accepted"))),
+                       .close(notice: "the answer to api migration was accepted"))
         XCTAssertEqual(state, ASLResponseState(), "the form is cleared after its last question")
     }
 
-    func testReauthorizingFetchWithoutATokenClosesTheForm() {
+    func testReauthorizingFetchWithoutATokenClosesTheQuestion() {
         let row = ASLFixtures.replyRow()
         var state = opened(row)
         state.setDraft("one")
@@ -266,8 +270,9 @@ final class ASLResponseStateTests: XCTestCase {
             return XCTFail("did not advance")
         }
         XCTAssertEqual(state.questionLoaded(seq: fetchSeq, .success(ASLFixtures.body(row, "q-api-2", "Second?"))),
-                       .close(notice: ASLRefusal.targetChanged))
-        XCTAssertFalse(state.active)
+                       .questionClosed)
+        XCTAssertTrue(state.closed)
+        XCTAssertNil(state.submit(state.buttons[1], mint: mint))
     }
 
     func testDoubleSubmitIsRefusedWhileInFlight() {
@@ -308,19 +313,67 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertNotEqual(pause?.operationID, other?.operationID, "another resolution is another call")
     }
 
-    func testStaleRefusalsCloseTheForm() {
+    func testStaleRefusalsCloseTheQuestionAndKeepTheDraft() {
         var state = opened()
         state.setDraft("x")
         guard case let .act(seq, _) = state.submit(state.buttons[0], mint: mint) else { return XCTFail("no submission") }
         XCTAssertEqual(state.actionFinished(seq: seq, .failure(.refused("stale-action-token: token expired"))),
-                       .close(notice: ASLRefusal.targetChanged))
-        XCTAssertEqual(state, ASLResponseState())
+                       .questionClosed)
+        XCTAssertTrue(state.closed)
+        XCTAssertFalse(state.inFlight)
+        XCTAssertEqual(state.draft.reveal(), "x", "the draft is kept to copy")
+        XCTAssertEqual(state.notice, ASLRefusal.targetChanged)
+        XCTAssertTrue(state.notice.hasPrefix("This question is no longer open"))
+        XCTAssertEqual(state.noticeKind, .error)
+        XCTAssertEqual(state.disabledReason(state.buttons[0]), ASLRefusal.questionClosed)
+        XCTAssertNil(state.submit(state.buttons[0], mint: mint), "nothing is sent from a closed question")
+        XCTAssertNil(state.move(by: 1))
 
         var fetching = opened()
         let effect = fetching.move(by: 1)
         guard case let .fetch(fetchSeq, _, _) = effect else { return XCTFail("no fetch") }
         XCTAssertEqual(fetching.questionLoaded(seq: fetchSeq, .failure(.refused("no-open-question: gone"))),
-                       .close(notice: ASLRefusal.targetChanged))
+                       .questionClosed)
+    }
+
+    func testARetryAfterAnUnknownOutcomeSendsTheFirstWords() {
+        var state = opened()
+        state.setDraft("first words")
+        guard case let .act(seq, first) = state.submit(state.buttons[0], mint: mint) else { return XCTFail("no submission") }
+        XCTAssertFalse(state.draftLocked, "the reply is not locked while it is on its way")
+        XCTAssertNil(state.actionFinished(seq: seq, .failure(.transport("read timed out"))))
+        XCTAssertTrue(state.draftLocked, "ASL replays a reused ID without reading the text again")
+
+        state.setDraft("edited words")
+        XCTAssertEqual(state.draft.reveal(), "first words", "the reply cannot be edited for the retry")
+
+        // Even a draft that changed some other way never goes under the old ID.
+        state.drafts[state.target.questionID] = "edited words"
+        XCTAssertNil(state.submit(state.buttons[0], mint: mint))
+        XCTAssertEqual(state.notice, ASLResponseState.retryCaption)
+        XCTAssertEqual(state.pending.operationID, first.operationID, "no new ID is minted silently")
+
+        state.drafts[state.target.questionID] = "first words"
+        let retry = params(state.submit(state.buttons[0], mint: mint))
+        XCTAssertEqual(retry?.operationID, first.operationID)
+        XCTAssertEqual(retry?.text.reveal(), "first words")
+    }
+
+    func testASnapshotWithoutTheRunClosesTheQuestion() {
+        var state = opened()
+        state.setDraft("typed")
+        XCTAssertNil(state.observe(listed: true))
+        XCTAssertFalse(state.closed)
+        XCTAssertEqual(state.observe(listed: false), .questionClosed)
+        XCTAssertEqual(state.notice, "This question is no longer open")
+        XCTAssertEqual(state.draft.reveal(), "typed")
+        XCTAssertNil(state.observe(listed: false), "closed once")
+
+        var sending = opened()
+        sending.setDraft("on its way")
+        XCTAssertNotNil(sending.submit(sending.buttons[0], mint: mint))
+        XCTAssertNil(sending.observe(listed: false), "an answer on its way reports its own outcome")
+        XCTAssertFalse(sending.closed)
     }
 
     func testFaultRefusalKeepsTheFormWithItsSentence() {
@@ -332,14 +385,14 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertEqual(state.notice, "agent-session-loop could not record the action; nothing was applied")
     }
 
-    func testABodyForAnotherQuestionClosesTheForm() {
+    func testABodyForAnotherQuestionClosesTheQuestion() {
         let row = ASLFixtures.replyRow()
         guard case let .opened(start, .fetch(seq, _, _)) = ASLResponseState.open(row: row, view: .live, status: ASLFixtures.liveStatus) else {
             return XCTFail("the form did not open")
         }
         var state = start
         XCTAssertEqual(state.questionLoaded(seq: seq, .success(ASLFixtures.body(row, "q-other", "?"))),
-                       .close(notice: ASLRefusal.targetChanged))
+                       .questionClosed)
 
         var otherPlan = ASLFixtures.body(row, "q-api-1", "?")
         otherPlan.planDir = "/tmp/plans/elsewhere"

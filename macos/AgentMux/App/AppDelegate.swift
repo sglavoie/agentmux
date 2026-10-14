@@ -775,6 +775,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         reconcileSnooze()
         statusItem?.refresh()
         workspace?.refresh()
+        // Only a live snapshot can say a question is no longer open.
+        if store.feed == .live, let snapshot = store.snapshot {
+            aslPanel?.flow.observe(waiting: snapshot.asl.waiting)
+        }
         preferences.daemonStatus = store.daemonStatus
         publishPreferences()
     }
@@ -967,8 +971,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return workspace.window.frame
     }
 
-    /// The panel closed itself: answered, or its run moved. The menu is
-    /// rebuilt now; the snapshot that drops the ❓ follows from the daemon.
+    /// The panel closed itself, its answer accepted; the notice says so. The
+    /// menu is rebuilt now; the snapshot that drops the ❓ follows from the
+    /// daemon.
     private func finishAnswer(_ notice: String?) {
         if let notice { store.show(notice: notice) }
         statusItem?.rebuildMenu()

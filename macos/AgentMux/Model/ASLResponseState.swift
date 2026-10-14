@@ -65,6 +65,10 @@ struct ASLPendingSubmission: Equatable {
     var operationID = ""
     var method = ""
     var resolution = ""
+    /// The answer the ID was minted with, for a button that carries one. The
+    /// bridge replays a reused ID by its identity alone and never reads the
+    /// text again, so a retry may only send these same words.
+    var text: SecretText?
 }
 
 /// What the flow must do next.
@@ -73,8 +77,12 @@ enum ASLPanelEffect: Equatable {
     case fetch(seq: Int, planDir: String, questionID: String)
     /// Submit one action; the reply is matched to `seq`.
     case act(seq: Int, ASLRequestParams)
-    /// Close the panel and refresh the menu, with a notice when the run moved.
+    /// Close the panel and refresh the menu, with a notice saying how the
+    /// answer went.
     case close(notice: String?)
+    /// The question closed under the form: the panel stays open, showing
+    /// why, with its draft to copy, and nothing may be submitted.
+    case questionClosed
 }
 
 /// How trustworthy the projection a form would open against is
@@ -202,8 +210,12 @@ enum ASLResponse {
 /// sentence, so no bridge-authored text — which may quote a question or an
 /// answer — can reach the panel, the menu, or a log.
 enum ASLRefusal {
+    /// The question the form is bound to was answered elsewhere, or its run
+    /// stopped waiting.
+    static let questionClosed = "This question is no longer open"
+
     /// `asl.TargetChangedText`, worded for the panel.
-    static let targetChanged = "this run changed since it was selected: the panel was closed and the menu refreshed"
+    static let targetChanged = "\(questionClosed): the run changed since it was selected"
 
     /// The refusals that mean the run moved: nothing was applied.
     static let staleCodes: Set<String> = [
@@ -288,6 +300,16 @@ enum ASLRefusal {
         }
     }
 
+    /// Why the run could not be read when the panel opened. A read applies
+    /// nothing, and a daemon that is up but did not answer is not the same
+    /// as agent-session-loop being unreachable.
+    static func snapshotText(_ error: ASLRequestError) -> String {
+        switch error {
+        case .notRunning, .unsupported: return text(error)
+        case .refused, .transport: return readText(error)
+        }
+    }
+
     /// `asl.MethodLabel`.
     static func methodLabel(_ method: String) -> String {
         switch method {
@@ -349,6 +371,13 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     var notice = ""
     /// How the notice is shown; it means nothing while there is none.
     var noticeKind = PanelNoticeKind.info
+    /// The question was answered elsewhere or the run moved. The form stays,
+    /// with its draft, so the operator can copy what they typed; nothing may
+    /// be submitted from it.
+    var closed = false
+    /// The questions this form has already answered, so the numbering stays
+    /// that of the whole set as answered ones leave it.
+    var answered = 0
 
     init() {}
 
@@ -413,9 +442,21 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     var draft: SecretText { drafts[target.questionID] ?? SecretText() }
 
     /// Stores the answer under the current question's own ID, so moving away
-    /// never discards a half-written answer.
+    /// never discards a half-written answer. Locked after an answer whose
+    /// outcome is unknown: its retry reuses the operation ID, and the bridge
+    /// would replay the first outcome without ever reading edited words.
     mutating func setDraft(_ text: SecretText) {
+        guard !draftLocked else { return }
         drafts[target.questionID] = text
+    }
+
+    /// An answer failed with its operation ID kept for a retry, so the reply
+    /// can no longer be edited.
+    var draftLocked: Bool { status == "failed" && pending.text != nil }
+
+    /// "question 2 of 3", counting the questions already answered here.
+    var position: (index: Int, total: Int) {
+        (answered + questionIndex + 1, answered + questionIDs.count)
     }
 
     /// The drafts worth keeping when the panel closes before they are sent.
@@ -473,7 +514,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     /// fetch that failed re-mints the token this way too, so its buttons do
     /// not stay disabled.
     mutating func reload() -> ASLPanelEffect? {
-        guard active, loadFailed, !fetching, !inFlight else { return nil }
+        guard active, !closed, loadFailed, !fetching, !inFlight else { return nil }
         return startFetch()
     }
 
@@ -482,7 +523,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     /// `moveASLQuestion`: walks the captured question set; each body is
     /// fetched on its own.
     mutating func move(by delta: Int) -> ASLPanelEffect? {
-        guard questionIDs.count > 1, !inFlight else { return nil }
+        guard questionIDs.count > 1, !inFlight, !closed else { return nil }
         let next = min(max(questionIndex + delta, 0), questionIDs.count - 1)
         guard next != questionIndex else { return nil }
         questionIndex = next
@@ -503,6 +544,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     /// and the caption under the reply; nil when it may.
     func disabledReason(_ button: ASLResponseButton) -> String? {
         if !active { return "Loading…" }
+        if closed { return ASLRefusal.questionClosed }
         if inFlight { return "Submitting…" }
         if fetching { return reauthorize ? "Re-authorizing…" : "Loading…" }
         if loadFailed { return "Load the question again first" }
@@ -516,6 +558,10 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     /// reuses the operation ID and returns the action to send.
     mutating func submit(_ button: ASLResponseButton, mint: () -> String = ASLResponse.newOperationID) -> ASLPanelEffect? {
         guard active, !inFlight else { return nil }
+        if closed {
+            note(ASLRefusal.questionClosed, .error)
+            return nil
+        }
         if loadFailed {
             note("the question could not be loaded: load it again before answering", .error)
             return nil
@@ -531,7 +577,13 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
             return nil
         }
         if pending.operationID.isEmpty || pending.method != button.method || pending.resolution != button.resolution {
-            pending = ASLPendingSubmission(operationID: mint(), method: button.method, resolution: button.resolution)
+            pending = ASLPendingSubmission(operationID: mint(), method: button.method, resolution: button.resolution,
+                                           text: button.needsText ? text : nil)
+        } else if button.needsText, let sent = pending.text, sent != text {
+            // Never a new ID behind the operator's back, and never other
+            // words under the old one.
+            note(Self.retryCaption, .error)
+            return nil
         }
         var params = ASLRequestParams(
             method: button.method,
@@ -551,8 +603,11 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         return .act(seq: actionSeq, params)
     }
 
+    /// The caption under a reply locked for its retry.
+    static let retryCaption = "Retry sends the answer as first submitted"
+
     /// `handleASLActionDone`. A refusal that means the run moved closes the
-    /// form; any other failure keeps it, with its pending operation ID, so a
+    /// question in place; any other failure keeps it, with its pending operation ID, so a
     /// manual retry of the same call replays rather than repeats.
     mutating func actionFinished(seq: Int, _ result: Result<ASLOperation, ASLRequestError>) -> ASLPanelEffect? {
         guard active, seq == actionSeq else { return nil }
@@ -571,28 +626,55 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
 
     /// `advanceASLResponse`: drops the answered question's draft and moves to
     /// a question still open in the captured set. A resume closes the form,
-    /// because the run it resumed is no longer paused.
+    /// because the run it resumed is no longer paused. Either way the
+    /// operator is told the answer went through.
     private mutating func advance() -> ASLPanelEffect {
-        let answered = target.questionID
-        drafts[answered] = nil
+        let answeredID = target.questionID
+        drafts[answeredID] = nil
         pending = ASLPendingSubmission()
-        let remaining = questionIDs.filter { $0 != answered }
+        let remaining = questionIDs.filter { $0 != answeredID }
         if kind == .paused || remaining.isEmpty {
+            let run = target.label.isEmpty ? "the run" : target.label
+            let notice = "the answer to \(run) was \(status)"
             self = ASLResponseState()
-            return .close(notice: nil)
+            return .close(notice: notice)
         }
+        answered += 1
         questionIDs = remaining
         questionIndex = min(max(questionIndex, 0), remaining.count - 1)
         target.questionID = remaining[questionIndex]
         reauthorize = true
         status = ""
-        return startFetch()
+        let effect = startFetch()
+        let (index, total) = position
+        note("Answer sent — question \(index) of \(total)", .info)
+        return effect
     }
 
     /// `invalidateASLResponse`: the run moved. The submission is not retried
-    /// under a fresh token; the operator re-selects deliberately.
+    /// under a fresh token; the operator re-selects deliberately. The form
+    /// stays, so what they typed is not lost.
     private mutating func invalidate() -> ASLPanelEffect {
-        self = ASLResponseState()
-        return .close(notice: ASLRefusal.targetChanged)
+        closeQuestion(ASLRefusal.targetChanged)
+        return .questionClosed
+    }
+
+    /// A companion snapshot no longer lists the run as waiting: its question
+    /// was answered elsewhere, or the run moved on. An answer on its way is
+    /// left to report its own outcome.
+    mutating func observe(listed: Bool) -> ASLPanelEffect? {
+        guard active, !closed, !inFlight, !listed else { return nil }
+        closeQuestion(ASLRefusal.questionClosed)
+        return .questionClosed
+    }
+
+    private mutating func closeQuestion(_ text: String) {
+        closed = true
+        fetching = false
+        fetchSeq += 1
+        reauthorize = false
+        pending = ASLPendingSubmission()
+        status = ""
+        note(text, .error)
     }
 }

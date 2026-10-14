@@ -29,9 +29,17 @@ protocol ASLWorkRunner {
     func run<T>(_ work: @escaping () -> T, then: @escaping (T) -> Void)
 }
 
-/// Work on a serial queue, results on main.
+/// Work on a queue, results on main: serial unless the caller gives one that
+/// is not.
 struct QueueWorkRunner: ASLWorkRunner {
     var queue = DispatchQueue(label: "io.github.sglavoie.agentmux.asl", qos: .userInitiated)
+
+    /// The answer panel's: a snapshot for another run never waits behind a
+    /// slow action, since every reply is matched by sequence and target.
+    static func concurrent() -> QueueWorkRunner {
+        QueueWorkRunner(queue: DispatchQueue(label: "io.github.sglavoie.agentmux.asl.panel", qos: .userInitiated,
+                                             attributes: .concurrent))
+    }
 
     func run<T>(_ work: @escaping () -> T, then: @escaping (T) -> Void) {
         queue.async {
@@ -64,8 +72,8 @@ final class ASLQuestionFlow: ObservableObject {
     /// The run the panel was opened for.
     private(set) var answering: ASLAnswerTarget?
 
-    /// The form closed itself: answered, or its run moved. The notice is set
-    /// when the run moved.
+    /// The form closed itself: its last answer was accepted, or the run
+    /// resumed. The notice says so.
     var onClose: (_ notice: String?) -> Void = { _ in }
     /// A submission sent before the operator closed the form, or opened
     /// another run, has answered; the notice says how it went.
@@ -81,7 +89,7 @@ final class ASLQuestionFlow: ObservableObject {
     /// another run keeps them until the run's questions move. Memory only.
     private var keptDrafts: [String: [String: SecretText]] = [:]
 
-    init(service: ASLService = DaemonClient(), runner: ASLWorkRunner = QueueWorkRunner(),
+    init(service: ASLService = DaemonClient(), runner: ASLWorkRunner = QueueWorkRunner.concurrent(),
          mint: @escaping () -> String = ASLResponse.newOperationID) {
         self.service = service
         self.runner = runner
@@ -120,6 +128,31 @@ final class ASLQuestionFlow: ObservableObject {
         reset()
     }
 
+    /// Try Again, after the panel could not open: reads the run afresh.
+    func retry() {
+        guard case .refused = phase, let target = answering else { return }
+        open(target)
+    }
+
+    /// Each live companion snapshot's waiting runs. A form whose run is no
+    /// longer among them stays open, says the question is no longer open,
+    /// and keeps its draft to copy.
+    func observe(waiting: [CompanionASLWaiting]) {
+        guard phase == .open, !state.target.runID.isEmpty else { return }
+        let listed = waiting.contains { $0.runID == state.target.runID }
+        if let effect = state.observe(listed: listed) { perform(effect) }
+    }
+
+    /// Copies the reply typed for the question shown, so a closed question
+    /// does not take it along. False when there is nothing to copy.
+    @discardableResult
+    func copyDraft(to pasteboard: NSPasteboard = .general) -> Bool {
+        let draft = state.draft
+        guard phase == .open, !draft.isBlank else { return false }
+        pasteboard.clearContents()
+        return pasteboard.setString(draft.reveal(), forType: .string)
+    }
+
     /// Load Again, after a question body could not be read.
     func reload() {
         guard phase == .open else { return }
@@ -153,7 +186,8 @@ final class ASLQuestionFlow: ObservableObject {
     }
 
     private func keepDrafts() {
-        guard phase == .open, !openRun.isEmpty else { return }
+        // A closed question's drafts were offered to copy; its run moved.
+        guard phase == .open, !openRun.isEmpty, !state.closed else { return }
         let drafts = state.keptDrafts
         keptDrafts[openRun] = drafts.isEmpty ? nil : drafts
     }
@@ -178,8 +212,7 @@ final class ASLQuestionFlow: ObservableObject {
         case let .failure(error):
             Self.logger.notice("asl_snapshot for run \(target.runID, privacy: .public): \(error.description, privacy: .public)")
             switch error {
-            case .notRunning, .unsupported: phase = .refused(ASLRefusal.text(error))
-            case .refused, .transport: phase = .refused("actions are unavailable: agent-session-loop is not reachable")
+            case .notRunning, .unsupported, .refused, .transport: phase = .refused(ASLRefusal.snapshotText(error))
             }
         case let .success(result):
             let rows = result.snapshot?.rows ?? []
@@ -238,8 +271,11 @@ final class ASLQuestionFlow: ObservableObject {
                     if let next = self.state.actionFinished(seq: seq, result) { self.perform(next) }
                 }
             }
+        case .questionClosed:
+            // The run moved: drafts kept from earlier panels no longer apply.
+            keptDrafts[openRun] = nil
         case let .close(notice):
-            // Answered, or the run moved: its kept drafts no longer apply.
+            // Answered: its kept drafts no longer apply.
             keptDrafts[openRun] = nil
             reset()
             onClose(notice)
@@ -304,11 +340,18 @@ struct ASLQuestionView: View {
 
     private var subtitle: String {
         var parts = [state.kind == .paused ? "Paused run" : "Waiting on its supervisor"]
-        if state.questionIDs.count > 1 {
-            parts.append("question \(state.questionIndex + 1) of \(state.questionIDs.count)")
-        }
-        if !state.askedAt.isEmpty { parts.append("asked \(state.askedAt)") }
+        let (index, total) = state.position
+        if total > 1 { parts.append("question \(index) of \(total)") }
+        if let asked = Self.asked(state.askedAt, now: Date()) { parts.append(asked) }
         return parts.joined(separator: " · ")
+    }
+
+    /// "asked 4m ago" from the question's RFC 3339 time, with or without
+    /// fractional seconds; the raw text when it does not parse.
+    static func asked(_ askedAt: String, now: Date) -> String? {
+        guard !askedAt.isEmpty else { return nil }
+        guard let date = RecentConversation.parseTime(askedAt) else { return "asked \(askedAt)" }
+        return "asked \(MenuBuilder.age(since: date, now: now)) ago"
     }
 
     @ViewBuilder private var form: some View {
@@ -344,7 +387,10 @@ struct ASLQuestionView: View {
             .focused($editorFocused)
             .frame(minHeight: 80, maxHeight: 160)
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4)))
-            .disabled(state.inFlight)
+            .disabled(state.inFlight || state.draftLocked)
+        if state.draftLocked {
+            Text(ASLResponseState.retryCaption).font(.caption).foregroundStyle(.secondary)
+        }
         if !state.notice.isEmpty {
             Text(state.notice).font(.callout).foregroundStyle(state.noticeKind.color)
         } else if state.inFlight {
@@ -358,13 +404,22 @@ struct ASLQuestionView: View {
         HStack {
             if flow.phase == .open, state.questionIDs.count > 1 {
                 Button("◀") { flow.move(by: -1) }
-                    .disabled(state.inFlight || state.questionIndex == 0)
+                    .disabled(state.inFlight || state.closed || state.questionIndex == 0)
                     .help("Previous question")
+                    .accessibilityLabel("Previous question")
                 Button("▶") { flow.move(by: 1) }
-                    .disabled(state.inFlight || state.questionIndex >= state.questionIDs.count - 1)
+                    .disabled(state.inFlight || state.closed || state.questionIndex >= state.questionIDs.count - 1)
                     .help("Next question")
+                    .accessibilityLabel("Next question")
+            }
+            if flow.phase == .open, state.closed, !state.draft.isBlank {
+                Button("Copy Reply") { flow.copyDraft() }
+                    .help("Copy what you typed, to send it another way")
             }
             Spacer()
+            if case .refused = flow.phase {
+                Button("Try Again") { flow.retry() }
+            }
             // An answer on its way keeps the panel open until it is known.
             Button("Close", action: onClose).keyboardShortcut(.cancelAction)
                 .disabled(state.inFlight)
@@ -432,8 +487,8 @@ extension PanelNoticeKind {
 final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     let flow: ASLQuestionFlow
     private var panel: ASLPanel?
-    /// The form closed itself; `notice` is set when the run moved, and the
-    /// menu should be refreshed either way.
+    /// The form closed itself, its answer accepted; `notice` says so, and
+    /// the menu should be refreshed.
     var onFinish: (_ notice: String?) -> Void = { _ in }
     /// The workspace window's frame while it is open, to open on its screen.
     var workspaceFrame: () -> CGRect? = { nil }
