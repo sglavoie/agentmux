@@ -161,6 +161,35 @@ final class WorkspaceTerminalOverlaysTests: XCTestCase {
         XCTAssertEqual(performed, ["end_search"], "no search, nothing to go to")
     }
 
+    func testSeededUtilitySearchRunsWithoutEditing() throws {
+        XCTAssertTrue(workspace.showView(dashboard))
+        let terminal = try XCTUnwrap(workspace.utilityTerminalView(for: dashboard))
+        performed = []
+        performedOn = []
+
+        // ⌘E names the selection; nothing is typed, yet it is searched for.
+        workspace.terminalSearch(terminal, .started(needle: "error"))
+        XCTAssertEqual(performed, ["search:error"])
+        XCTAssertTrue(performedOn.first === terminal)
+        XCTAssertEqual(workspace.findBar.field.stringValue, "error")
+        XCTAssertEqual(workspace.searches[dashboard]?.needle, "error")
+
+        // Asked again with nothing selected, the search stays as it was.
+        workspace.terminalSearch(terminal, .started(needle: ""))
+        XCTAssertEqual(performed, ["search:error"])
+
+        // Another selection replaces the active query, and a short needle
+        // still being typed never overtakes it.
+        workspace.findBar.needleChanged("ab")
+        workspace.terminalSearch(terminal, .total(2))
+        workspace.terminalSearch(terminal, .started(needle: "warn"))
+        waitOutTheFindDelay()
+        XCTAssertEqual(performed, ["search:error", "search:warn"])
+        XCTAssertTrue(performedOn.allSatisfy { $0 === terminal })
+        XCTAssertEqual(workspace.searches[dashboard]?.needle, "warn")
+        XCTAssertEqual(workspace.findBar.field.stringValue, "warn")
+    }
+
     /// Lets the find bar's short-needle delay run out.
     private func waitOutTheFindDelay() {
         let delivered = expectation(description: "the find delay ran out")

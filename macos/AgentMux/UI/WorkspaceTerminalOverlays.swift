@@ -127,6 +127,14 @@ final class WorkspaceFindBar: NSView, NSSearchFieldDelegate {
         needle.isEmpty || needle.count >= 3 ? nil : 0.3
     }
 
+    /// The search was given a needle from outside the field (a
+    /// selection): the field shows it, even mid-edit, and a needle still
+    /// waiting is dropped so it cannot overtake it.
+    func seed(_ needle: String) {
+        edits += 1
+        field.stringValue = needle
+    }
+
     @objc private func fieldChanged(_ sender: Any?) {
         needleChanged(field.stringValue)
     }

@@ -1618,7 +1618,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// A search began, ended, or was counted in a utility view's buffer.
-    /// A search asked for again takes the find bar's field.
+    /// A search asked for again takes the find bar's field. One begun from
+    /// a selection only names its needle (`search_selection`), so it is
+    /// searched for here, in place of whatever that view searched before.
     func terminalSearch(_ view: NSView, _ update: Ghostty.SearchUpdate) {
         guard let id = viewID(of: view) else { return }
         let hadKeyboard = findBar.hasKeyboard
@@ -1628,7 +1630,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             searchGeneration += 1
             searchGenerations[id] = searchGeneration
         }
+        var seed: String?
+        if case let .started(needle) = update, !needle.isEmpty {
+            _ = performTerminalAction(view, "search:\(needle)")
+            seed = needle
+        }
         guard shownUtility?.view === view else { return }
+        if let seed { findBar.seed(seed) }
         syncOverlays()
         switch update {
         case .started: findBar.focus()
