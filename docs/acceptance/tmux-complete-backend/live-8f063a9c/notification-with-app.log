@@ -1,0 +1,79 @@
+
+##### the same click with Agent Mux.app running and its workspace window closed: the app asks the daemon (focus_session) and the workspace opens on that session [02:06:40Z]
+
+--- machines ---
+driver, VNC viewer: Sébastien’s Mac Studio
+everything shown and clicked: Seb’s MacBook Pro
+
+--- no Kitty on the MacBook ---
+KITTY variables in this shell: 0
+kitty or kitten on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
+
+--- the app copy ---
+pid 22953, bundle io.github.sglavoie.agentmux
+{
+    "NSWindow Frame AgentMuxWorkspace" = "300 277 1000 640 0 0 1728 1117";
+    amxBinaryPath = "/tmp/amx75w/shim/amx";
+        PATH = "/tmp/amx75w/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+        "XDG_CONFIG_HOME" = "/tmp/amx75w/home/.config";
+        "XDG_DATA_HOME" = "/tmp/amx75w/home/.local/share";
+        "XDG_STATE_HOME" = "/tmp/amx75w/home/.local/state";
+    };
+    amxOpenWorkspaceAtLaunch = 0;
+    amxSnoozeDaemon = "17525:1791943446";
+    amxUseAppNotifications = 1;
+}
+PASS: the app subscribed to the world's daemon
+
+--- the app's notification claim, and what the daemon's doctor says of it ---
+notifications: ready (alerter 26.5 at /tmp/amx75w/bin/alerter)
+companion: Agent Mux.app 0.1.0
+PASS: the daemon lists the app as its connected companion
+PASS: the workspace window is closed: no terminal of the app is attached
+PASS: the stand-in's session is clear
+PASS: the stand-in asked for permission (icon=key)
+picture: app-notification.jpg (the MacBook's screen, 364x64 points at 1360,44)
+
+--- the daemon's notification journal: the notice went to the app ---
+02:07:03Z daemon.notification.decision scheduled debounce action=permission backend=None
+02:07:04Z daemon.notification.dispatch attempted backend_started action=permission backend=None
+02:07:04Z daemon.notification.dispatch sent send_success action=permission backend=app
+PASS: the daemon sent the notification through the app (send_success, backend app)
+PASS: the workspace attached a terminal of its own to the plain pane
+picture: app-workspace.jpg (the MacBook's screen, 1000x640 points at 300,200)
+
+--- private server clients after the click ---
+/dev/ttys004 pid=18079 session=amx-177047fd88ae6416 pane=%0 term=tmux-256color
+/dev/ttys005 pid=23294 session=amx-0931dd90e1641011 pane=%3 term=xterm-ghostty
+
+--- registry ---
+rs-9a50c60edaca98fed4cc935c1484d65c live claude tmux %0 owner=amx-switch-4900bed7c70c5dec
+rs-8c8755c4741e8492a21ced0ecdfe38fe live codex tmux %1 owner=-
+rs-de279a5d30c90cdfd39c278bd89bbd28 live copilot tmux %2 owner=-
+rs-4b78793214dd4644969693effc05ebbf live plain tmux %3 owner=amx-workspace-8f115255620205bd
+
+--- the app's log since the request ---
+20:07:10.723 [io.github.sglavoie.agentmux:workspace] workspace: opened
+20:07:10.756 [io.github.sglavoie.agentmux:workspace] workspace: rows current (4 session(s), selection none)
+20:07:10.762 [io.github.sglavoie.agentmux:workspace] workspace: view request for session rs-4b78793214dd4644969693effc05ebbf
+20:07:10.762 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-4b78793214dd4644969693effc05ebbf
+20:07:10.764 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+20:07:10.773 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-4b78793214dd4644969693effc05ebbf
+20:07:10.773 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-4b78793214dd4644969693effc05ebbf")
+20:07:10.782 [io.github.sglavoie.agentmux:app] workspace: now on session:rs-4b78793214dd4644969693effc05ebbf
+
+--- the daemon's notification journal since the request ---
+02:07:03Z daemon.notification.decision scheduled debounce action=permission backend=None
+02:07:04Z daemon.notification.dispatch attempted backend_started action=permission backend=None
+02:07:04Z daemon.notification.dispatch sent send_success action=permission backend=app
+02:07:10Z daemon.notification.focus suppressed focus_delegated action=permission backend=app
+PASS: the daemon recorded the click as delegated to the app (focus_delegated)
+PASS: the daemon showed the session through the workspace: the app did not fall back to showing it itself
+PASS: the workspace is on the plain session
+PASS: the plain terminal was not taken from the claude session
+PASS: nothing was launched: still four live sessions
+
+##### RESULT: 13 passed, 0 failed [02:07:18Z]

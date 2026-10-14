@@ -15,7 +15,7 @@ real() { echo "$L/run-$1"; }
 case "${1:-}" in
 up)
   rr <<'REMOTE' || exit 1
-nohup amx daemon start >> $R/logs/daemon.out 2>&1 </dev/null &
+perl -e 'alarm 25; exec @ARGV' osascript -e 'tell application "System Events" to do shell script "/tmp/amx75w/driver/daemon-start"' >/dev/null
 n=40; while [ $n -gt 0 ] && [ ! -S $DATA/daemon.sock ]; do sleep 0.25; n=$((n-1)); done
 [ -S $DATA/daemon.sock ] || { echo "daemon did not start"; tail -5 $R/logs/daemon.out; exit 1; }
 for p in claude codex copilot plain; do

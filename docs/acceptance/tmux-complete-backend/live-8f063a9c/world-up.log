@@ -1,0 +1,24 @@
+claude.cwd
+claude.env
+claude.sock
+codex.cwd
+codex.env
+codex.sock
+copilot.cwd
+copilot.env
+copilot.sock
+snapshot v2 kitty.ready=False attention.total=0
+  claude   claude   profile=claude   icon=-         attention=False runtime=tmux %0 rs-9a50c60edaca98fed4cc935c1484d65c
+  codex    codex    profile=codex    icon=-         attention=False runtime=tmux %1 rs-8c8755c4741e8492a21ced0ecdfe38fe
+  copilot  copilot  profile=copilot  icon=-         attention=False runtime=tmux %2 rs-de279a5d30c90cdfd39c278bd89bbd28
+  plain    claude   profile=plain    icon=-         attention=False runtime=tmux %3 rs-4b78793214dd4644969693effc05ebbf
+rs-9a50c60edaca98fed4cc935c1484d65c live claude tmux %0 owner=-
+rs-8c8755c4741e8492a21ced0ecdfe38fe live codex tmux %1 owner=-
+rs-de279a5d30c90cdfd39c278bd89bbd28 live copilot tmux %2 owner=-
+rs-4b78793214dd4644969693effc05ebbf live plain tmux %3 owner=-
+02:04:06Z standin SessionStart runtime=rs-4b78793214dd4644969693effc05ebbf exit=0
+02:04:07Z claude SessionStart --harness=claude runtime=rs-9a50c60edaca98fed4cc935c1484d65c exit=0
+02:04:07Z claude InstructionsLoaded --harness=claude runtime=rs-9a50c60edaca98fed4cc935c1484d65c exit=0
+claude on the Studio: harness pid 76860 
+codex on the Studio: harness pid 76859 
+copilot on the Studio: harness pid 76861 

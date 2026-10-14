@@ -1,0 +1,92 @@
+
+##### copilot (real, GitHub Copilot CLI 1.0.97.): a turn is submitted from the attached terminal; its native stop is held and then confirmed by probe:copilot_transcript [02:05:04Z]
+
+--- no Kitty ---
+KITTY variables in this shell: 0
+kitty or kitten on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
+PASS: the terminal is on the copilot session
+
+=== terminal: before the prompt [02:05:07Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                  │
+│  ╭─╮╭─╮                            │  Getting started                                                                                            │
+│  ╰─╯╰─╯  Copilot v1.0.97 uses AI.  │  Use the tabs above to explore your sessions and pull requests                                              │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository                                                │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto                                                       │
+│                                                                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● No copilot-instructions.md found. Run /init to generate.
+
+ ● Tip: /mcp
+   └ Manage MCP server configuration
+
+ /private/tmp/amx75/proj/copilot [⎇ main%]                                                                                        Session: 0 AIC used
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Manual Approval · / commands · ? help · tab next tab                                                Claude Sonnet 5.5
+ 🟣copilot
+
+--- daemon state before ---
+icon=- unseen=False muted=False
+PASS: the daemon shows the turn as active (the prompt hook arrived for this runtime session)
+
+--- daemon state while working ---
+icon=bolt unseen=False muted=False
+PASS: the daemon shows the session stopped
+
+=== terminal: after the turn [02:05:18Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                  │
+│  ╭─╮╭─╮                            │  Getting started                                                                                            │
+│  ╰─╯╰─╯  Copilot v1.0.97 uses AI.  │  Use the tabs above to explore your sessions and pull requests                                              │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository                                                │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto                                                       │
+│                                                                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● No copilot-instructions.md found. Run /init to generate.
+
+ ● Tip: /mcp
+   └ Manage MCP server configuration
+
+ ❯ Reply with exactly the word ready and nothing else. Use no tools.                                                                           20:05
+
+ ● ready
+
+ /private/tmp/amx75/proj/copilot [⎇ main%]                                                                                      Session: 7.5 AIC used
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Manual Approval · / commands · ? help · tab next tab                                                Claude Sonnet 5.5
+ ⚡🟣copilot
+
+--- daemon state at rest ---
+icon=stop unseen=True muted=False
+
+--- hooks the real copilot fired in this turn (relayed from the Studio; event and exit status only) ---
+02:05:08Z copilot userPromptSubmitted --harness=copilot runtime=rs-de279a5d30c90cdfd39c278bd89bbd28 exit=0
+02:05:09Z copilot sessionStart --harness=copilot runtime=rs-de279a5d30c90cdfd39c278bd89bbd28 exit=0
+02:05:10Z copilot agentStop --harness=copilot runtime=rs-de279a5d30c90cdfd39c278bd89bbd28 exit=0
+
+--- the session's stop-class events in the daemon's export ---
+runtime_session_id=rs-de279a5d30c90cdfd39c278bd89bbd28 backend=tmux events=4
+  1791943508 event=userPromptSubmitted source=None action=active icon=None stop_confirmed_by=None stop_hold_waited_ms=None
+  1791943516 event=agentStop source=None action=stop icon=None stop_confirmed_by=probe:copilot_transcript stop_hold_waited_ms=6001
+
+--- seconds from the prompt to the stop icon ---
+10
+PASS: the export is of a tmux runtime session
+PASS: the native stop was confirmed by probe:copilot_transcript, not released at the deadline
+PASS: the stop was held before it was applied (stop_hold_waited_ms > 0)
+PASS: the copilot pane kept running
+
+##### RESULT: 8 passed, 0 failed [02:05:18Z]

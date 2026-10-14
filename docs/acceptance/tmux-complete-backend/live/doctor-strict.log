@@ -1,5 +1,5 @@
 
-##### amx doctor --strict in the world, with the sessions running [02:06:06Z]
+##### amx doctor --strict in the world, with the sessions running [14:07:22Z]
 
 --- no Kitty ---
 KITTY variables in this shell: 0
@@ -10,7 +10,7 @@ PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applicatio
 
 --- amx doctor --strict ---
 Agent Mux doctor
-daemon: running (pid 17525, uptime 2m0s)
+daemon: running (pid 54814, uptime 1m34s)
 notifications: ready (alerter 26.5 at /tmp/amx75w/bin/alerter)
 asl: unavailable (mode auto via asl; asl bridge: "asl" not found beside /private/tmp/amx75w/bin or on the daemon's PATH: executable file not found in $PATH)
 screen patterns: embedded (claude, codex, contextlimit, copilot)
@@ -21,8 +21,8 @@ socket: /tmp/amx75w/home/.local/share/agent-mux/daemon.sock (current)
 daemon export: ok
 kitty: not in use (launches go to tmux, and no Kitty is listening here)
 backend: launches go to tmux; tmux 3.7c (path); server running with 4 agents in 4 sessions
-runtime sessions: 4 live (4 on tmux, 1 server), 1 with a terminal attached, 3 unattached; reconciled 200ms ago in 25ms (61 passes, 0 failed)
-screen captures: 29 read, 0 failed, last good one 28.2s ago (slowest 33ms); tmux clients: 112 run, at most 2 at once (limit 4), 0 timed out
+runtime sessions: 4 live (4 on tmux, 1 server), 1 with a terminal attached, 3 unattached; reconciled 0s ago in 7ms (48 passes, 0 failed)
+screen captures: 26 read, 0 failed, last good one 18s ago (slowest 46ms); tmux clients: 96 run, at most 2 at once (limit 4), 0 timed out
 versions: amx 0.8.0, daemon 0.8.0, go1.27.1, tmux 3.7c (needs 3.5 or newer), kitty not found, alerter 26.5
 native logs: /tmp/amx75w/home/.local/state/agent-mux/native (0 B across 4 launches; 0 active)
 native privacy: raw local logs; managed directories are 0700 and files are created with umask 077; bundles redact them
@@ -46,6 +46,7 @@ warnings:
 - [asl_daemon_resolution] the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amx75w/bin or on the daemon's PATH: executable file not found in $PATH; remediation: run `amx config asl-sync` to resolve and persist an absolute path
 notes:
 - [acknowledged_state] window 1099511627776: all 1 source facts are acknowledged; retained as history
+- [acknowledged_state] window 1099511627777: all 1 source facts are acknowledged; retained as history
 overall: ok (2 warnings)
 exit status: 0
 PASS: amx doctor --strict exits 0
@@ -55,6 +56,7 @@ schema_version 7
 warning None - defaults.asl.command is the bare name "asl" and it is not on this shell's PATH either; remediation: install agent-sessio
 warning None - the daemon has not resolved an executable: asl bridge: "asl" not found beside /private/tmp/amx75w/bin or on the daemon's
 info None - all 1 source facts are acknowledged; retained as history
+info None - all 1 source facts are acknowledged; retained as history
 PASS: doctor raises no Kitty finding
 
-##### RESULT: 3 passed, 0 failed [02:06:06Z]
+##### RESULT: 3 passed, 0 failed [14:07:22Z]

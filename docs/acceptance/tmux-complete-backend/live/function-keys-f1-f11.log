@@ -1,5 +1,5 @@
 
-##### F1 to F11 from the attached terminal, bound in the private tmux configuration [02:05:18Z]
+##### F1 to F11 from the attached terminal, bound in the private tmux configuration [14:06:44Z]
 
 --- no Kitty ---
 KITTY variables in this shell: 0
@@ -25,10 +25,10 @@ bind-key  -T root F12                       detach-client
 bind-key  -T root C-S-d                     display-popup -E -h "100%" -w "100%" "\"\${AMX_BIN:-amx}\" --popup"
 PASS: the terminal is on the claude session
 
-##### F1: the keybinding reference, in a popup over the terminal [02:05:20Z]
+##### F1: the keybinding reference, in a popup over the terminal [14:06:46Z]
 PASS: on the terminal: focus next session
 
-=== terminal: F1 [02:05:21Z] ===
+=== terminal: F1 [14:06:46Z] ===
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Keybinding Reference                                                                                                                                │
 │──────────────────────────────────────────                                                                                                          │
@@ -76,10 +76,10 @@ PASS: on the terminal: focus next session
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 PASS: no longer on the terminal: focus next session
 
-##### F2: the live session overview, in a popup [02:05:21Z]
+##### F2: the live session overview, in a popup [14:06:47Z]
 PASS: on the terminal: Live sessions
 
-=== terminal: F2 [02:05:22Z] ===
+=== terminal: F2 [14:06:48Z] ===
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Live sessions  4                                                                                                                                    │
 │                                                                                                                                                    │
@@ -128,10 +128,10 @@ PASS: on the terminal: Live sessions
 PASS: no longer on the terminal: Live sessions
 PASS: the popup attached no second terminal and moved nothing
 
-##### F5: the harness icon picker, in a popup [02:05:22Z]
+##### F5: the harness icon picker, in a popup [14:06:48Z]
 PASS: on the terminal: Set Harness Icon
 
-=== terminal: F5 [02:05:23Z] ===
+=== terminal: F5 [14:06:48Z] ===
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Set Harness Icon                                                                                                                                    │
 │──────────────────────────────                                                                                                                      │
@@ -179,10 +179,10 @@ PASS: on the terminal: Set Harness Icon
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 PASS: no longer on the terminal: Set Harness Icon
 
-##### F6: the color picker, in a popup [02:05:23Z]
+##### F6: the color picker, in a popup [14:06:49Z]
 PASS: on the terminal: Set Color
 
-=== terminal: F6 [02:05:23Z] ===
+=== terminal: F6 [14:06:49Z] ===
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │Set Color: claude                                                                                                                                   │
 │──────────────────────────────                                                                                                                      │
@@ -230,7 +230,7 @@ PASS: on the terminal: Set Color
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 PASS: no longer on the terminal: Set Color
 
-##### F11: mark the shown session active; F8: clear it [02:05:24Z]
+##### F11: mark the shown session active; F8: clear it [14:06:49Z]
 
 --- state before F11 ---
 icon=stop unseen=False muted=False
@@ -243,7 +243,7 @@ PASS: F8: the daemon cleared claude's state icon
 --- state after F8 ---
 icon=- unseen=False muted=False
 
-##### F10: toggle mute on the shown session [02:05:24Z]
+##### F10: toggle mute on the shown session [14:06:50Z]
 
 --- mute before ---
 cc_mute=
@@ -252,9 +252,9 @@ PASS: F10: the session is muted (cc_mute on the pane)
 --- mute after F10 ---
 cc_mute=1
 
-=== terminal: the status line while muted [02:05:26Z] ===
+=== terminal: the status line while muted [14:06:52Z] ===
 
- ▐▛███▛█   Claude Code v2.1.296
+ ▐▛███▛█   Claude Code v2.1.299
 ▝▜██████▀  Opus 5.5 · Claude Max
  ▝▝   ▝▝   /private/tmp/amx75/proj/claude
 
@@ -262,12 +262,12 @@ cc_mute=1
 
 ⏺ ready
 
-✻ Churned for 0s · done 8:04 PM
+✻ Churned for 1s · done 8:06 AM
 
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  46.6 max 5h 19/61 9:59pm 7d 23/39 oct18|12:59am
+  54.9 max 5h 4/5 12:50pm 7d 24/47 oct18|1am
   ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
  🔇🟠claude
 PASS: F10 again: the session is no longer muted
@@ -275,19 +275,19 @@ PASS: F10 again: the session is no longer muted
 --- mute after the second F10 ---
 cc_mute=
 
-##### F9 to the stand-in (a main-screen pane), then F3: the scrollback marker search; F3 again leaves it [02:05:27Z]
+##### F9 to the stand-in (a main-screen pane), then F3: the scrollback marker search; F3 again leaves it [14:06:53Z]
 PASS: the terminal is on the plain session
 PASS: F3: the pane entered history at an error marker
 
-=== terminal: F3 [02:05:31Z] ===
-stand-in claude pid 17565 in /tmp/amx75w/proj/plain                                                                                  [0/0] (1 results)
-runtime session: rs-4b78793214dd4644969693effc05ebbf  kitty window: none
+=== terminal: F3 [14:06:57Z] ===
+stand-in claude pid 54852 in /tmp/amx75w/proj/plain                                                                                  [0/0] (1 results)
+runtime session: rs-390fad5eb1e87e4cb553a5063f62a797  kitty window: none
 a line with the word error in it, for the scrollback marker key
 
  🟠plain
 PASS: F3 again: the pane left history
 
-##### F4: the next session needing attention. The three real sessions are at rest after their turns, which is attention too, so each is visited and cleared with F8 first; then the stand-in asks for permission [02:05:31Z]
+##### F4: the next session needing attention. The three real sessions are at rest after their turns, which is attention too, so each is visited and cleared with F8 first; then the stand-in asks for permission [14:06:57Z]
 PASS: F8 on codex: its stop is cleared
 PASS: F8 on copilot: its stop is cleared
 PASS: F8 on claude: its stop is cleared
@@ -301,9 +301,9 @@ copilot icon=- unseen=False muted=False
 plain icon=key unseen=False muted=False
 PASS: F4: the terminal went to the session needing attention (plain)
 
-=== terminal: F4 [02:05:39Z] ===
-stand-in claude pid 17565 in /tmp/amx75w/proj/plain
-runtime session: rs-4b78793214dd4644969693effc05ebbf  kitty window: none
+=== terminal: F4 [14:07:04Z] ===
+stand-in claude pid 54852 in /tmp/amx75w/proj/plain
+runtime session: rs-390fad5eb1e87e4cb553a5063f62a797  kitty window: none
 a line with the word error in it, for the scrollback marker key
 ask
 asked (1)
@@ -311,12 +311,12 @@ asked (1)
  🔑🟠plain
 
 --- private server clients ---
-/dev/ttys004 pid=18079 session=amx-0931dd90e1641011 pane=%3 term=tmux-256color
+/dev/ttys004 pid=55311 session=amx-6e7a7116c2b6f6d0 pane=%3 term=tmux-256color
 PASS: still exactly one terminal is attached
 PASS: F8 on plain: its permission state is cleared
 
-##### F7 and F9 are the navigation case's; here each is pressed once [02:05:39Z]
+##### F7 and F9 are the navigation case's; here each is pressed once [14:07:05Z]
 PASS: F9: the terminal moved to the next session (codex)
 PASS: F7: the terminal moved back to the previous session (claude)
 
-##### RESULT: 28 passed, 0 failed [02:05:41Z]
+##### RESULT: 28 passed, 0 failed [14:07:07Z]

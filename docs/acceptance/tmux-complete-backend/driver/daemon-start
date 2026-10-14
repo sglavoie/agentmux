@@ -1,0 +1,8 @@
+#!/bin/bash
+# Starts the world's daemon. `world up` runs this through System Events, so
+# the daemon is a process of the MacBook's GUI session, as a daemon started
+# from a terminal or by the app is: Alerter, which the daemon starts for each
+# notification when no app is connected, can show nothing from the background
+# session an SSH login is in.
+R=/tmp/amx75w; . $R/driver/remote-env
+nohup amx daemon start >> $R/logs/daemon.out 2>&1 </dev/null &

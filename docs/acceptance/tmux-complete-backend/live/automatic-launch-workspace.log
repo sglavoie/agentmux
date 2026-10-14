@@ -1,5 +1,5 @@
 
-##### Launch Project from the app's menu with the launch preference left on Automatic: the project starts on tmux and the workspace shows it [02:07:27Z]
+##### Launch Project from the app's menu with the launch preference left on Automatic: the project starts on tmux and the workspace shows it [14:08:58Z]
 
 --- machines ---
 driver, VNC viewer: Sébastien’s Mac Studio
@@ -19,52 +19,55 @@ PASS: amxLaunchBackend is not set: the preference is Automatic
 PASS: all four sessions are idle, so the menu lists them under one heading
 
 --- registry before ---
-rs-9a50c60edaca98fed4cc935c1484d65c live claude tmux %0 owner=amx-switch-5955f1191bed9613
-rs-8c8755c4741e8492a21ced0ecdfe38fe live codex tmux %1 owner=-
-rs-de279a5d30c90cdfd39c278bd89bbd28 live copilot tmux %2 owner=-
-rs-4b78793214dd4644969693effc05ebbf live plain tmux %3 owner=-
+rs-b1d9fa207c3fe977faf3abb67b55a285 live claude tmux %0 owner=amx-switch-6815b5feeb658f80
+rs-aac3ce3abecdd5184c6eeb3924bddbfb live codex tmux %1 owner=-
+rs-09e84eeb392df4391f83a8abe18a4a2a live copilot tmux %2 owner=-
+rs-390fad5eb1e87e4cb553a5063f62a797 live plain tmux %3 owner=-
 picture: auto-menu.jpg (the MacBook's screen, 560x480 points at 950,0)
 PASS: the registry holds a live tmux session for the project (second)
 PASS: the workspace attached its own terminal to the new session
 picture: auto-workspace.jpg (the MacBook's screen, 1000x640 points at 300,200)
 
 --- registry after ---
-rs-9a50c60edaca98fed4cc935c1484d65c live claude tmux %0 owner=amx-switch-5955f1191bed9613
-rs-8c8755c4741e8492a21ced0ecdfe38fe live codex tmux %1 owner=-
-rs-de279a5d30c90cdfd39c278bd89bbd28 live copilot tmux %2 owner=-
-rs-4b78793214dd4644969693effc05ebbf live plain tmux %3 owner=-
-rs-c7871a0215a6322dfc4a75da20fc58d5 live second tmux %4 owner=amx-workspace-ab215a09ee82379e
+rs-b1d9fa207c3fe977faf3abb67b55a285 live claude tmux %0 owner=amx-switch-6815b5feeb658f80
+rs-aac3ce3abecdd5184c6eeb3924bddbfb live codex tmux %1 owner=-
+rs-09e84eeb392df4391f83a8abe18a4a2a live copilot tmux %2 owner=-
+rs-390fad5eb1e87e4cb553a5063f62a797 live plain tmux %3 owner=-
+rs-78f1db098a20da8a0489b9e8f95c6868 live second tmux %4 owner=amx-workspace-7f1a4c1854aecca1
 
 --- private tmux server ---
-amx-0931dd90e1641011 %3 pid=17565 dead=0 /private/tmp/amx75w/proj/plain
-amx-177047fd88ae6416 %0 pid=17538 dead=0 /private/tmp/amx75w/proj/claude
-amx-597079f4b073326b %4 pid=23998 dead=0 /private/tmp/amx75w/proj/second
-amx-5bc1f803b7255946 %2 pid=17556 dead=0 /private/tmp/amx75w/proj/copilot
-amx-7e5dd565a096a6c2 %1 pid=17547 dead=0 /private/tmp/amx75w/proj/codex
+amx-3f5b4da0f2325f5b %0 pid=54823 dead=0 /private/tmp/amx75w/proj/claude
+amx-6e7a7116c2b6f6d0 %3 pid=54852 dead=0 /private/tmp/amx75w/proj/plain
+amx-98c924724fb2d635 %2 pid=54842 dead=0 /private/tmp/amx75w/proj/copilot
+amx-dd8702455ca0c784 %1 pid=54832 dead=0 /private/tmp/amx75w/proj/codex
+amx-f617a3ae1040d330 %4 pid=61371 dead=0 /private/tmp/amx75w/proj/second
 
 --- private server clients ---
-/dev/ttys004 pid=18079 session=amx-177047fd88ae6416 pane=%0 term=tmux-256color
-/dev/ttys006 pid=24020 session=amx-597079f4b073326b pane=%4 term=xterm-ghostty
+/dev/ttys004 pid=55311 session=amx-3f5b4da0f2325f5b pane=%0 term=tmux-256color
+/dev/ttys006 pid=61394 session=amx-f617a3ae1040d330 pane=%4 term=xterm-ghostty
 
 --- the app's log since the click ---
-20:07:45.282 [io.github.sglavoie.agentmux:app] launch plain/second on tmux as rs-c7871a0215a6322dfc4a75da20fc58d5
-20:07:45.283 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-c7871a0215a6322dfc4a75da20fc58d5
-20:07:45.440 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-c7871a0215a6322dfc4a75da20fc58d5 is listed; showing it
-20:07:45.440 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-c7871a0215a6322dfc4a75da20fc58d5
-20:07:45.445 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-c7871a0215a6322dfc4a75da20fc58d5
-20:07:45.446 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-c7871a0215a6322dfc4a75da20fc58d5")
-20:07:45.453 [io.github.sglavoie.agentmux:app] workspace: now on session:rs-c7871a0215a6322dfc4a75da20fc58d5
+08:09:15.658 [io.github.sglavoie.agentmux:app] launch plain/second on tmux as rs-78f1db098a20da8a0489b9e8f95c6868
+08:09:15.740 [io.github.sglavoie.agentmux:workspace] workspace: opened
+08:09:15.750 [io.github.sglavoie.agentmux:workspace] workspace: rows current (4 session(s), selection none)
+08:09:15.750 [io.github.sglavoie.agentmux:workspace] workspace: awaiting just-launched session rs-78f1db098a20da8a0489b9e8f95c6868
+08:09:15.839 [io.github.sglavoie.agentmux:workspace] workspace: awaited session rs-78f1db098a20da8a0489b9e8f95c6868 is listed; showing it
+08:09:15.839 [io.github.sglavoie.agentmux:workspace] workspace: focus embedded rs-78f1db098a20da8a0489b9e8f95c6868
+08:09:15.840 [io.github.sglavoie.agentmux:app] embedded terminals use Ghostty 1.3.1 (ReleaseFast)
+08:09:15.850 [io.github.sglavoie.agentmux:workspace] workspace: attached a terminal to rs-78f1db098a20da8a0489b9e8f95c6868
+08:09:15.850 [io.github.sglavoie.agentmux:workspace] workspace: showing terminal(runtimeSessionID: "rs-78f1db098a20da8a0489b9e8f95c6868")
+08:09:15.856 [io.github.sglavoie.agentmux:app] workspace: now on session:rs-78f1db098a20da8a0489b9e8f95c6868
 
 --- the daemon's v2 snapshot ---
 snapshot v2 kitty.ready=False attention.total=0
-  claude   claude   profile=claude   icon=-         attention=False runtime=tmux %0 rs-9a50c60edaca98fed4cc935c1484d65c
-  codex    codex    profile=codex    icon=-         attention=False runtime=tmux %1 rs-8c8755c4741e8492a21ced0ecdfe38fe
-  copilot  copilot  profile=copilot  icon=-         attention=False runtime=tmux %2 rs-de279a5d30c90cdfd39c278bd89bbd28
-  plain    claude   profile=plain    icon=-         attention=False runtime=tmux %3 rs-4b78793214dd4644969693effc05ebbf
-  second   claude   profile=plain    icon=-         attention=False runtime=tmux %4 rs-c7871a0215a6322dfc4a75da20fc58d5
+  claude   claude   profile=claude   icon=-         attention=False runtime=tmux %0 rs-b1d9fa207c3fe977faf3abb67b55a285
+  codex    codex    profile=codex    icon=-         attention=False runtime=tmux %1 rs-aac3ce3abecdd5184c6eeb3924bddbfb
+  copilot  copilot  profile=copilot  icon=-         attention=False runtime=tmux %2 rs-09e84eeb392df4391f83a8abe18a4a2a
+  plain    claude   profile=plain    icon=-         attention=False runtime=tmux %3 rs-390fad5eb1e87e4cb553a5063f62a797
+  second   claude   profile=plain    icon=-         attention=False runtime=tmux %4 rs-78f1db098a20da8a0489b9e8f95c6868
 PASS: the app logged the launch as one on tmux
 PASS: the new session's pane runs on the private server
 PASS: the stand-in saw a runtime session and no Kitty window
 PASS: no Kitty was started and none is installed
 
-##### RESULT: 10 passed, 0 failed [02:07:54Z]
+##### RESULT: 10 passed, 0 failed [14:09:21Z]

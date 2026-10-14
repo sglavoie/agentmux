@@ -1,0 +1,61 @@
+
+##### a notification of a tmux session is clicked with the app not running: the daemon switches the terminal used last to that session [14:07:22Z]
+
+--- machines ---
+driver, VNC viewer: Sébastien’s Mac Studio
+everything shown and clicked: Seb’s MacBook Pro
+
+--- no Kitty on the MacBook ---
+KITTY variables in this shell: 0
+kitty or kitten on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
+PASS: the app is not running
+PASS: no workspace is connected to the daemon
+PASS: the plain terminal is attached to the claude session
+
+--- private server clients before ---
+/dev/ttys004 pid=55311 session=amx-3f5b4da0f2325f5b pane=%0 term=tmux-256color
+PASS: the stand-in's session is clear and the terminal is on claude
+PASS: the stand-in asked for permission (icon=key) with nobody looking at it
+picture: noapp-notification.jpg (the MacBook's screen, 364x64 points at 1360,44)
+
+--- the daemon's notification journal: the notification was sent ---
+14:07:42Z daemon.notification.decision scheduled debounce action=permission backend=None
+14:07:43Z daemon.notification.dispatch attempted backend_started action=permission backend=None
+the first click expanded the stack of Terminal notifications; the newest card is clicked
+picture: noapp-expanded.jpg (the MacBook's screen, 364x64 points at 1360,74)
+PASS: the click moved the terminal to the session the notification was about (plain)
+
+--- private server clients after the click ---
+/dev/ttys004 pid=55311 session=amx-6e7a7116c2b6f6d0 pane=%3 term=tmux-256color
+
+--- registry ---
+rs-b1d9fa207c3fe977faf3abb67b55a285 live claude tmux %0 owner=-
+rs-aac3ce3abecdd5184c6eeb3924bddbfb live codex tmux %1 owner=-
+rs-09e84eeb392df4391f83a8abe18a4a2a live copilot tmux %2 owner=-
+rs-390fad5eb1e87e4cb553a5063f62a797 live plain tmux %3 owner=amx-switch-e2fe0a785bb0078f
+
+--- the daemon's notification journal since the request ---
+14:07:42Z daemon.notification.decision scheduled debounce action=permission backend=None
+14:07:43Z daemon.notification.dispatch attempted backend_started action=permission backend=None
+14:07:55Z daemon.notification.dispatch sent send_success action=permission backend=alerter
+14:07:55Z daemon.notification.focus focused focus_success action=permission backend=alerter
+
+--- the terminal after the click ---
+stand-in claude pid 54852 in /tmp/amx75w/proj/plain
+runtime session: rs-390fad5eb1e87e4cb553a5063f62a797  kitty window: none
+a line with the word error in it, for the scrollback marker key
+ask
+asked (1)
+ask
+asked (2)
+
+ 🔑🟠plain
+PASS: the daemon recorded the click as a focus that succeeded (focus_success)
+PASS: one terminal is attached, on the plain pane; no second terminal and no app
+PASS: the registry records the switched terminal as the owner of plain (amx-switch-)
+PASS: nothing was launched: as many live sessions as before the click
+
+##### RESULT: 11 passed, 0 failed [14:07:57Z]

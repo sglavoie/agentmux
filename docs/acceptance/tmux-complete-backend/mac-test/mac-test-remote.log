@@ -1,103 +1,105 @@
-# just mac-test, routed by macos/scripts/remote-ui.sh to Seb's MacBook Pro (AMX_MAC_TEST_HOST=sglavoie@sebs-macbook-pro.local, AMX_UI_TEST_REMOTE_ONLY=1), with /Applications/kitty.app moved aside at 2026-10-14T00:30:54Z.
-# The recipe's own output, then the suite and test-case verdict lines of that run's xcodebuild log on the MacBook
-# (macos/DerivedData/test-Debug.log there: 354333 bytes, sha256 feb34ae5d66c369b2b82920300042f5485b6bee89447d0aeb815653da49db4b2, 459 'Test Case ... passed' lines, 0 failed).
+# just mac-test at d1defb79, routed by macos/scripts/remote-ui.sh to Seb's MacBook Pro (AMX_MAC_TEST_HOST=sglavoie@sebs-macbook-pro.local, AMX_UI_TEST_REMOTE_ONLY=1), with /Applications/kitty.app moved aside there from 2026-10-14T06:23:27Z to 14:11:03Z.
+# The recipe's own output, then the xcodebuild log's size, sha256, case counts and suite verdict lines (macos/DerivedData/test-Debug.log on the MacBook).
 
-start 2026-10-14T00:32:21Z
+start 2026-10-14T13:56:22Z
 ./macos/scripts/test-app.sh Debug
 remote-ui: running 'macos/scripts/test-app.sh' 'Debug' on sglavoie@sebs-macbook-pro.local
 GhosttyKit up to date (ghostty=v1.3.1 commit=332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28 zig=0.15.2 target=universal patches=855da15192006691)
 ** TEST SUCCEEDED **
-	 Executed 459 tests, with 0 failures (0 unexpected) in 32.693 (32.873) seconds
+	 Executed 459 tests, with 0 failures (0 unexpected) in 31.224 (31.383) seconds
 on Seb’s MacBook Pro; full log: /Users/sglavoie/Library/Caches/agent-mux-remote-ui/68ad27fce24b/repo/macos/DerivedData/test-Debug.log
 exit=0
-end 2026-10-14T00:33:07Z
+end 2026-10-14T13:57:02Z
 
 # verdict lines
-Test Suite 'AMXBinaryResolverTests' passed at 2026-10-13 18:32:29.200.
-	 Executed 20 tests, with 0 failures (0 unexpected) in 0.069 (0.074) seconds
-Test Suite 'AMXCommandTests' passed at 2026-10-13 18:32:30.500.
-	 Executed 20 tests, with 0 failures (0 unexpected) in 1.281 (1.300) seconds
-Test Suite 'AMXVersionTests' passed at 2026-10-13 18:32:30.799.
-	 Executed 10 tests, with 0 failures (0 unexpected) in 0.292 (0.298) seconds
-Test Suite 'ASLQuestionFlowTests' passed at 2026-10-13 18:32:30.820.
-	 Executed 7 tests, with 0 failures (0 unexpected) in 0.018 (0.021) seconds
-Test Suite 'ASLResponseStateTests' passed at 2026-10-13 18:32:30.859.
-	 Executed 27 tests, with 0 failures (0 unexpected) in 0.029 (0.039) seconds
-Test Suite 'ASLWireTests' passed at 2026-10-13 18:32:30.869.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
-Test Suite 'ActionGateTests' passed at 2026-10-13 18:32:30.888.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 0.015 (0.018) seconds
-Test Suite 'AppPreferencesTests' passed at 2026-10-13 18:32:30.934.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.043 (0.047) seconds
-Test Suite 'AppSkeletonTests' passed at 2026-10-13 18:32:30.947.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.011 (0.013) seconds
-Test Suite 'AttentionCyclerTests' passed at 2026-10-13 18:32:30.956.
-	 Executed 8 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
-Test Suite 'BackendSetupTests' passed at 2026-10-13 18:32:30.966.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
-Test Suite 'CompanionFrameTests' passed at 2026-10-13 18:32:30.978.
-	 Executed 11 tests, with 0 failures (0 unexpected) in 0.009 (0.011) seconds
-Test Suite 'DaemonClientTests' passed at 2026-10-13 18:32:33.010.
-	 Executed 14 tests, with 0 failures (0 unexpected) in 2.027 (2.032) seconds
-Test Suite 'DashboardOpenerTests' passed at 2026-10-13 18:32:33.016.
-	 Executed 5 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
-Test Suite 'GhosttyConfigTests' passed at 2026-10-13 18:32:33.045.
-	 Executed 11 tests, with 0 failures (0 unexpected) in 0.025 (0.028) seconds
-Test Suite 'GhosttyInteractionTests' passed at 2026-10-13 18:32:35.662.
-	 Executed 10 tests, with 0 failures (0 unexpected) in 2.611 (2.617) seconds
-Test Suite 'GhosttyLinkTests' passed at 2026-10-13 18:32:47.133.
-	 Executed 4 tests, with 0 failures (0 unexpected) in 11.468 (11.470) seconds
-Test Suite 'GhosttySelectionTests' passed at 2026-10-13 18:32:47.721.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 0.587 (0.588) seconds
-Test Suite 'GhosttySurfaceConfigurationTests' passed at 2026-10-13 18:32:47.999.
-	 Executed 7 tests, with 0 failures (0 unexpected) in 0.274 (0.278) seconds
-Test Suite 'GhosttySurfaceLifecycleTests' passed at 2026-10-13 18:32:50.254.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 2.250 (2.255) seconds
-Test Suite 'GhosttySurfaceTests' passed at 2026-10-13 18:32:51.081.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.822 (0.826) seconds
-Test Suite 'HotKeyTests' passed at 2026-10-13 18:32:51.091.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
-Test Suite 'LaunchEnvironmentTests' passed at 2026-10-13 18:32:51.104.
-	 Executed 4 tests, with 0 failures (0 unexpected) in 0.012 (0.013) seconds
-Test Suite 'MenuBuilderTests' passed at 2026-10-13 18:32:51.117.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.010 (0.013) seconds
-Test Suite 'NotificationPresenterTests' passed at 2026-10-13 18:32:51.137.
-	 Executed 22 tests, with 0 failures (0 unexpected) in 0.015 (0.019) seconds
-Test Suite 'ProjectCatalogTests' passed at 2026-10-13 18:32:51.148.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
-Test Suite 'PromptAnswerTests' passed at 2026-10-13 18:32:51.158.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
-Test Suite 'RecentSessionsTests' passed at 2026-10-13 18:32:51.169.
-	 Executed 7 tests, with 0 failures (0 unexpected) in 0.009 (0.010) seconds
-Test Suite 'SessionStoreTests' passed at 2026-10-13 18:32:51.178.
-	 Executed 10 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
-Test Suite 'SnoozeTests' passed at 2026-10-13 18:32:51.187.
-	 Executed 10 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
-Test Suite 'SubscriptionClientTests' passed at 2026-10-13 18:32:54.447.
-	 Executed 11 tests, with 0 failures (0 unexpected) in 3.251 (3.260) seconds
-Test Suite 'WorkspaceInspectorTests' passed at 2026-10-13 18:32:55.681.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 1.230 (1.234) seconds
-Test Suite 'WorkspaceRecoveryTests' passed at 2026-10-13 18:32:56.851.
-	 Executed 15 tests, with 0 failures (0 unexpected) in 1.164 (1.169) seconds
-Test Suite 'WorkspaceRestorationTests' passed at 2026-10-13 18:32:56.861.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.007 (0.010) seconds
-Test Suite 'WorkspaceShortcutTests' passed at 2026-10-13 18:32:56.881.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 0.006 (0.019) seconds
-Test Suite 'WorkspaceSidebarTests' passed at 2026-10-13 18:32:56.903.
-	 Executed 18 tests, with 0 failures (0 unexpected) in 0.018 (0.022) seconds
-Test Suite 'WorkspaceStreamTests' passed at 2026-10-13 18:32:57.356.
-Test Suite 'WorkspaceSwitcherTests' passed at 2026-10-13 18:32:57.363.
-	 Executed 5 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
-Test Suite 'WorkspaceSwitcherWindowTests' passed at 2026-10-13 18:32:58.306.
-	 Executed 8 tests, with 0 failures (0 unexpected) in 0.940 (0.943) seconds
-Test Suite 'WorkspaceViewsModelTests' passed at 2026-10-13 18:32:58.316.
+328749 bytes
+0913c40e9b0db5dfa64016d93e1d21f36d40192180db4b785196981d284b8a79
+passed lines 459, failed lines 0
+Test Suite 'AMXBinaryResolverTests' passed at 2026-10-14 07:56:30.517.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 0.063 (0.068) seconds
+Test Suite 'AMXCommandTests' passed at 2026-10-14 07:56:31.793.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 1.266 (1.276) seconds
+Test Suite 'AMXVersionTests' passed at 2026-10-14 07:56:32.107.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.310 (0.314) seconds
+Test Suite 'ASLQuestionFlowTests' passed at 2026-10-14 07:56:32.126.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.013 (0.018) seconds
+Test Suite 'ASLResponseStateTests' passed at 2026-10-14 07:56:32.167.
+	 Executed 27 tests, with 0 failures (0 unexpected) in 0.030 (0.040) seconds
+Test Suite 'ASLWireTests' passed at 2026-10-14 07:56:32.177.
 	 Executed 9 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
-Test Suite 'WorkspaceViewsWindowTests' passed at 2026-10-13 18:32:59.781.
-	 Executed 16 tests, with 0 failures (0 unexpected) in 1.460 (1.465) seconds
-Test Suite 'WorkspaceWindowTests' passed at 2026-10-13 18:33:01.998.
-	 Executed 24 tests, with 0 failures (0 unexpected) in 2.209 (2.216) seconds
-Test Suite 'AgentMuxTests.xctest' passed at 2026-10-13 18:33:01.998.
-	 Executed 459 tests, with 0 failures (0 unexpected) in 32.693 (32.872) seconds
-Test Suite 'All tests' passed at 2026-10-13 18:33:01.998.
-	 Executed 459 tests, with 0 failures (0 unexpected) in 32.693 (32.873) seconds
+Test Suite 'ActionGateTests' passed at 2026-10-14 07:56:32.192.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.012 (0.015) seconds
+Test Suite 'AppPreferencesTests' passed at 2026-10-14 07:56:32.232.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.037 (0.040) seconds
+Test Suite 'AppSkeletonTests' passed at 2026-10-14 07:56:32.244.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.010 (0.012) seconds
+Test Suite 'AttentionCyclerTests' passed at 2026-10-14 07:56:32.252.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'BackendSetupTests' passed at 2026-10-14 07:56:32.262.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.007 (0.010) seconds
+Test Suite 'CompanionFrameTests' passed at 2026-10-14 07:56:32.273.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
+Test Suite 'DaemonClientTests' passed at 2026-10-14 07:56:34.301.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 2.023 (2.028) seconds
+Test Suite 'DashboardOpenerTests' passed at 2026-10-14 07:56:34.316.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.008 (0.014) seconds
+Test Suite 'GhosttyConfigTests' passed at 2026-10-14 07:56:34.356.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.034 (0.040) seconds
+Test Suite 'GhosttyInteractionTests' passed at 2026-10-14 07:56:36.686.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 2.326 (2.329) seconds
+Test Suite 'GhosttyLinkTests' passed at 2026-10-14 07:56:48.067.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 11.379 (11.381) seconds
+Test Suite 'GhosttySelectionTests' passed at 2026-10-14 07:56:48.625.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.556 (0.557) seconds
+Test Suite 'GhosttySurfaceConfigurationTests' passed at 2026-10-14 07:56:48.973.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.343 (0.348) seconds
+Test Suite 'GhosttySurfaceLifecycleTests' passed at 2026-10-14 07:56:51.190.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 2.211 (2.216) seconds
+Test Suite 'GhosttySurfaceTests' passed at 2026-10-14 07:56:51.903.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.709 (0.713) seconds
+Test Suite 'HotKeyTests' passed at 2026-10-14 07:56:51.918.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.014 (0.015) seconds
+Test Suite 'LaunchEnvironmentTests' passed at 2026-10-14 07:56:51.931.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.012 (0.013) seconds
+Test Suite 'MenuBuilderTests' passed at 2026-10-14 07:56:51.942.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+Test Suite 'NotificationPresenterTests' passed at 2026-10-14 07:56:51.961.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.014 (0.018) seconds
+Test Suite 'ProjectCatalogTests' passed at 2026-10-14 07:56:51.971.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+Test Suite 'PromptAnswerTests' passed at 2026-10-14 07:56:51.983.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+Test Suite 'RecentSessionsTests' passed at 2026-10-14 07:56:51.993.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.008 (0.010) seconds
+Test Suite 'SessionStoreTests' passed at 2026-10-14 07:56:52.002.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
+Test Suite 'SnoozeTests' passed at 2026-10-14 07:56:52.010.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'SubscriptionClientTests' passed at 2026-10-14 07:56:55.134.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 3.114 (3.124) seconds
+Test Suite 'WorkspaceInspectorTests' passed at 2026-10-14 07:56:56.263.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 1.125 (1.129) seconds
+Test Suite 'WorkspaceRecoveryTests' passed at 2026-10-14 07:56:57.306.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 1.039 (1.043) seconds
+Test Suite 'WorkspaceRestorationTests' passed at 2026-10-14 07:56:57.318.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.010 (0.012) seconds
+Test Suite 'WorkspaceShortcutTests' passed at 2026-10-14 07:56:57.334.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.015 (0.016) seconds
+Test Suite 'WorkspaceSidebarTests' passed at 2026-10-14 07:56:57.359.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.021 (0.025) seconds
+Test Suite 'WorkspaceStreamTests' passed at 2026-10-14 07:56:57.644.
+Test Suite 'WorkspaceSwitcherTests' passed at 2026-10-14 07:56:57.663.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.017 (0.018) seconds
+Test Suite 'WorkspaceSwitcherWindowTests' passed at 2026-10-14 07:56:58.386.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.720 (0.723) seconds
+Test Suite 'WorkspaceViewsModelTests' passed at 2026-10-14 07:56:58.404.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.017 (0.018) seconds
+Test Suite 'WorkspaceViewsWindowTests' passed at 2026-10-14 07:56:59.710.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 1.301 (1.305) seconds
+Test Suite 'WorkspaceWindowTests' passed at 2026-10-14 07:57:01.831.
+	 Executed 24 tests, with 0 failures (0 unexpected) in 2.114 (2.121) seconds
+Test Suite 'AgentMuxTests.xctest' passed at 2026-10-14 07:57:01.831.
+	 Executed 459 tests, with 0 failures (0 unexpected) in 31.224 (31.382) seconds
+Test Suite 'All tests' passed at 2026-10-14 07:57:01.831.
+	 Executed 459 tests, with 0 failures (0 unexpected) in 31.224 (31.383) seconds
 ** TEST SUCCEEDED **

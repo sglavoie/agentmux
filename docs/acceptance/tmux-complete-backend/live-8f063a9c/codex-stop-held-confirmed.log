@@ -1,0 +1,86 @@
+
+##### codex (real, codex-cli 0.162.1): a turn is submitted from the attached terminal; its native stop is held and then confirmed by probe:codex_screen [02:04:51Z]
+
+--- no Kitty ---
+KITTY variables in this shell: 0
+kitty or kitten on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
+PASS: the terminal is on the codex session
+
+=== terminal: before the prompt [02:04:53Z] ===
+
+  >_ OpenAI Codex (v0.162.1)
+     /private/tmp/amx75/proj/codex
+
+                                                                      ⣀⣤⣤⣤⣀⣀
+                                                                   ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣤⣤⣤⣤⣤⡀
+                                                                 ⢀⣾⣿⣿⠿⠋⠉⠉⢉⣭⣿⣿⣿⣿⣿⠿⣿⣿⣿⣿⣷⣄
+                                                                ⣀⣾⣿⣿⠃ ⣀⣴⣾⣿⣿⡿⠟⠋ ⣀⡀ ⠈⠙⢿⣿⣿⣧
+                                                             ⣀⣶⣿⣿⣿⣿⡇ ⢸⣿⣿⡿⠛⠉⢀⣠⣴⣿⣿⣿⣷⣦⣀⠈⢻⣿⣿⡇
+                                                            ⣰⣿⣿⡿⢿⣿⣿⡇ ⢸⣿⣿⢀⣤⣶⣿⣿⣿⠟⠛⠻⣿⣿⣿⣿⣮⣿⣿⡷
+                                                           ⢰⣿⣿⡟⠁⢸⣿⣿⡇ ⢸⣿⣿⣿⣿⠿⠿⣿⣿⣿⣦⣄⡀⠈⠛⠿⣿⣿⣿⣧⡀
+                                                           ⣾⣿⣿⠃ ⢸⣿⣿⡇ ⢸⣿⣿⠋⠁  ⠈⠙⢻⣿⣿⣿⣶⣤⡀ ⠹⢿⣿⣷⡄
+                                                           ⢸⣿⣿⣇ ⠸⣿⣿⣷⣦⣼⣿⣿      ⢸⣿⣿⠻⢿⣿⣿⡇ ⠘⣿⣿⣿
+                                                           ⠈⢿⣿⣿⣦⡀⠈⠛⠿⣿⣿⣿⣿⣄⡀  ⢀⣠⣼⣿⣿  ⣿⣿⡇  ⣿⣿⣿⠇
+                                                             ⢻⣿⣿⣿⣷⣦⣀⠈⠙⠻⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿  ⣿⣿⡇ ⣠⣿⣿⣿
+                                                             ⢸⣿⣿⡿⢿⣿⣿⣿⣦⣠⣴⣿⣿⣿⡿⠟⠋⢸⣿⣿  ⣿⣿⣷⣴⣿⣿⣿⠃
+                                                             ⠘⣿⣿⣷ ⠈⠛⢿⣿⣿⣿⠿⠋⠉ ⣠⣴⣿⣿⣿  ⣿⣿⣿⣿⣿⠟⠁
+                                                              ⠻⣿⣿⣿⣤⣀ ⠈⠉ ⢀⣤⣶⣿⣿⣿⠿⠟⠁ ⣰⣿⣿⡟⠋⠁
+                                                               ⠈⠿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⠟⠋⠁  ⣠⣼⣿⣿⡟
+                                                                  ⠙⠛⠛⠛⠻⠛⢿⣿⣿⣿⣿⣷⣾⣿⣿⣿⡿⠏
+                                                                         ⠈⠙⠛⠿⠿⠿⠿⠛⠉
+
+› Ask Codex to do anything
+
+  GPT-6-Astra high · /private/tmp/amx75/proj/codex · main · Ready · Ask for approval · Context 0% used · weekly 93% left · Fast off
+  ? for shortcuts                                                                                                           ⚠ 2 warnings · f2 to view
+ 🔵codex
+
+--- daemon state before ---
+icon=- unseen=False muted=False
+PASS: the daemon shows the turn as active (the prompt hook arrived for this runtime session)
+
+--- daemon state while working ---
+icon=bolt unseen=False muted=False
+PASS: the daemon shows the session stopped
+
+=== terminal: after the turn [02:05:04Z] ===
+
+  >_ OpenAI Codex (v0.162.1)
+     /private/tmp/amx75/proj/codex
+
+› Reply with exactly the word ready and nothing else. Use no tools.
+
+• ready
+
+  Worked for 2s • 8:04 PM
+
+› Ask Codex to do anything
+
+  GPT-6-Astra high · /private/tmp/amx75/proj/codex · main · Ready · Ask for approval · Context 3% used · weekly 93% left · Fast off
+  ? for shortcuts                                                                                                           ⚠ 2 warnings · f2 to view
+ 🛑🔵codex
+
+--- daemon state at rest ---
+icon=stop unseen=True muted=False
+
+--- hooks the real codex fired in this turn (relayed from the Studio; event and exit status only) ---
+02:04:55Z codex SessionStart --harness=codex runtime=rs-8c8755c4741e8492a21ced0ecdfe38fe exit=0
+02:04:55Z codex UserPromptSubmit --harness=codex runtime=rs-8c8755c4741e8492a21ced0ecdfe38fe exit=0
+02:04:57Z codex Stop --harness=codex runtime=rs-8c8755c4741e8492a21ced0ecdfe38fe exit=0
+
+--- the session's stop-class events in the daemon's export ---
+runtime_session_id=rs-8c8755c4741e8492a21ced0ecdfe38fe backend=tmux events=4
+  1791943495 event=UserPromptSubmit source=None action=active icon=None stop_confirmed_by=None stop_hold_waited_ms=None
+  1791943503 event=Stop source=None action=stop icon=None stop_confirmed_by=probe:codex_screen stop_hold_waited_ms=6000
+
+--- seconds from the prompt to the stop icon ---
+9
+PASS: the export is of a tmux runtime session
+PASS: the native stop was confirmed by probe:codex_screen, not released at the deadline
+PASS: the stop was held before it was applied (stop_hold_waited_ms > 0)
+PASS: the codex pane kept running
+
+##### RESULT: 8 passed, 0 failed [02:05:04Z]

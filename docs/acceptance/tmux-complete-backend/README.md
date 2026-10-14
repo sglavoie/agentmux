@@ -1,22 +1,23 @@
 # tmux as a complete backend: live acceptance
 
-The record is `../tmux-complete-backend.json`. Its status is `incomplete`:
-ten of the eleven cases and the hosted tests passed on a Mac with no Kitty
-installed, and the paired release gate passed, but on a Mac that has Kitty
-installed. Two items of the acceptance are unmet:
+The record is `../tmux-complete-backend.json`. Its status is `passed`, at
+revision `d1defb79`:
 
-- `notification-without-app` was not executed: the daemon's Alerter
-  notification is never presented on macOS 27 (below). What would meet it is a
-  change to the daemon's Alerter sender, then the case run again on a
-  Kitty-free Mac at the new revision.
-- The passed gate did not run on a machine with Kitty not installed. What
-  would meet it is the gate run on a Kitty-free Mac on which the pair is a
-  working installation.
+- `just mac-test` (459 tests) and all eleven cases passed on the MacBook Pro
+  with Kitty moved out of `/Applications` (`mac-test/`, `live/`);
+- `just paired-release-gate` passed on the Mac Studio with Kitty moved out of
+  place for the run (`gate/studio-d1defb79/`).
 
-This file says how the results were taken and what stands in the way of the
-rest.
+`d1defb79` is a fix made during this acceptance: the daemon started Alerter
+with `--sender fr.vjeantet.alerter`, and macOS 27 never presents a
+notification under an identifier no installed application has, so the click
+on a notification with no app connected could not be executed at `8f063a9c`
+(see "The notification click with no app" below). The first run, at
+`8f063a9c`, is kept in `live-8f063a9c/` and `mac-test-8f063a9c/`; its record
+of the earlier gate attempts is in `gate/` and `gate/studio/`.
 
-Everything ran on 2026-10-14 (UTC) against revision `8f063a9c`.
+The sections below were written for the first run and still describe how the
+results were taken; where the second run differs, it says so.
 
 ## Two machines
 
@@ -117,7 +118,7 @@ menu only.
   the dashboard's row order, which is by urgency. It now finds the row by what
   the inspector names. That third run is the record for this case.
 
-## Not executed: the notification click with no app
+## The notification click with no app
 
 With no app connected the daemon posts through Alerter, started with
 `--sender fr.vjeantet.alerter` (`internal/daemon/notification/backends.go`).
@@ -141,6 +142,17 @@ installed under it, and macOS 27 drops what it cannot attribute. On the Studio
 the installed daemon's journal shows every notification going through the app.
 
 No stand-in was put in place of a click.
+
+At `d1defb79` the daemon passes no `--sender`, Alerter posts as Terminal, and
+macOS presents it (the Terminal notification permission had been allowed
+through the viewer in the first run). The world's daemon is started inside the
+MacBook's GUI session (`driver/daemon-start`, run through System Events),
+because Alerter shows nothing from the background session an SSH login is in.
+While the viewer shares the display no banner appears, so the notification is
+clicked in Notification Center; when several Terminal notifications are
+waiting the first click only expands their stack, and the driver then clicks
+the newest card. The daemon journals `focus_success` and switches the terminal
+used last to the session (`live/notification-without-app.log`, 11 passed).
 
 ## The paired release gate
 
@@ -191,13 +203,45 @@ The Studio now runs the `amx` that gate installed (`985c3b6b`), its daemon
 was restarted by the gate, ASL was restowed from its checkout, and its
 LaunchAgents were reloaded.
 
+### At d1defb79, on the Studio with Kitty moved aside: passed
+
+The gate script moved `/Applications/kitty.app` and the Homebrew links
+`/opt/homebrew/bin/kitty` and `/opt/homebrew/bin/kitten` into an aside
+directory in that home before the gate and moved them back when it ended, with
+the same link targets and modes. Kitty was not running; the gate's environment
+had no `KITTY_*` variable, and its log records no `kitty` or `kitten` on
+`PATH` and no `kitty.app` in `/Applications`. Records in
+`gate/studio-d1defb79/`:
+
+1. Failed `asl-tests`: one ASL test (redirect continuation,
+   `termination-unreported`) that passed in every other run of the same ASL
+   revision.
+2. **Passed** (`amx-asl-1.01022924454bddd8.json`, Kitty out of place from
+   05:38:31Z to 06:07:35Z): schema 2, all 16 steps passed with exit 0,
+   Agent Mux `d1defb79`, ASL `f63ffef`, unsigned, no tag.
+
+## The second run at d1defb79, and what was run more than once
+
+On the MacBook: `mac-test` once; the eight terminal cases once on one world;
+then the desktop cases, where three driver faults were found and fixed before
+the record pass: the first click on Notification Center went to an unrelated
+system card that was on top (and opened the System Settings Login Items pane,
+which was left open), Terminal notifications stack so a first click only
+expands them, and a Notification Center left open by one case was closed
+rather than opened by the next. The record is one fresh world with all eleven
+cases, plus `notification-with-app` once more after the driver learned to close
+Notification Center first.
+
 ## What was changed on the MacBook
 
 With the operator's approval each time:
 
-- Kitty moved aside and back, and `VNCAlwaysStartOnConsole` set at 00:54:28Z
-  and deleted at 03:18:01Z (four `sudo` commands; no other).
-- Both checkouts fast-forwarded: Agent Mux to `8f063a9c`, ASL to `61e23fe`.
+- Kitty moved aside and back twice (00:30:54Z to 03:17:53Z, and 06:23:27Z to
+  14:11:03Z), and `VNCAlwaysStartOnConsole` set and deleted twice (00:54:28Z to
+  03:18:01Z, and 13:57:19Z to 14:11:04Z); no other `sudo` command.
+- A `caffeinate -dimsu` kept it awake during the second run and was stopped
+  afterwards.
+- Both checkouts fast-forwarded: Agent Mux to `d1defb79`, ASL to `61e23fe`.
 - Installed: Homebrew `tmux`, `golangci-lint`, `bash`, `alerter`; `ruff` and
   `mypy` as `uv` tools.
 - The by-hand install steps ran ASL's installer and `just install`: the

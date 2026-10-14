@@ -1,19 +1,15 @@
 {
   "record": "tmux-complete-backend",
-  "status": "incomplete",
-  "status_reason": "Ten of eleven cases and the hosted tests passed on the Kitty-free MacBook, and the paired release gate passed, but on the Mac Studio, where Kitty is installed. Two contract items are unmet: notification-without-app was not executed (the daemon's Alerter notification is never presented on macOS 27), and the passed gate did not run on a machine with Kitty not installed.",
-  "tested_revision": "8f063a9c2d3392b2929d39e0bd8fac1e5f7514fe",
-  "machine": {
-    "name": "Seb's MacBook Pro",
-    "host": "sglavoie@sebs-macbook-pro.local",
-    "os": "macOS 27.0.1",
-    "arch": "arm64",
-    "driver": "the Mac Studio, over SSH and a headless VNC viewer"
-  },
+  "status": "passed",
+  "tested_revision": "d1defb79a35dbdfd165adbbc2c337e254445b397",
+  "tested_revision_note": "d1defb79 is the fix that lets the daemon's Alerter notification be presented on macOS 27 (no --sender); every result below is of that revision. The earlier run at 8f063a9c, where notification-without-app could not be executed, is kept under live-8f063a9c/ and mac-test-8f063a9c/.",
   "kitty_installed": false,
   "kitty_running": false,
   "kitty_environment_unset": true,
-  "kitty_detail": "/Applications/kitty.app (0.48.2) was moved aside to a directory in the MacBook user's home with an operator-approved sudo mv at 2026-10-14T00:30:54Z and moved back at 2026-10-14T03:17:53Z (owner uid 501 and mode drwxr-xr-x as before). Between those times there was no kitty.app in /Applications, no kitty or kitten on PATH, no Kitty process, and no KITTY variable in any shell the runs used; ~/.config/kitty was left in place. Every result below was taken in that window.",
+  "kitty_detail": {
+    "macbook": "mac_test and all eleven cases ran on the MacBook Pro (sglavoie@sebs-macbook-pro.local, macOS 27.0.1). Its /Applications/kitty.app (0.48.2) was moved aside with the operator-approved sudo mv at 2026-10-14T06:23:27Z and moved back at 14:11:03Z (owner uid 501, mode drwxr-xr-x, as before); no kitty or kitten on PATH, no Kitty process, no KITTY variable in any shell the runs used; ~/.config/kitty left in place.",
+    "studio": "The paired gate ran on the Mac Studio (macOS 27.0.1). Its /Applications/kitty.app and the Homebrew links /opt/homebrew/bin/kitty and /opt/homebrew/bin/kitten were moved into an aside directory in that home by the gate script before the gate (05:38:31Z for the passed run) and moved back by the same script when it ended (06:07:35Z), with the same link targets and modes; Kitty was not running, and every KITTY_* variable was unset in the gate's environment. The gate log records no kitty or kitten on PATH and no kitty.app in /Applications."
+  },
   "mac_test": {
     "status": "passed",
     "exit_code": 0,
@@ -21,82 +17,27 @@
     "log": "docs/acceptance/tmux-complete-backend/mac-test/mac-test-remote.log",
     "executed": 459,
     "failures": 0,
-    "started": "2026-10-14T00:32:21Z",
-    "ended": "2026-10-14T00:33:07Z"
+    "ended": "2026-10-14T13:57:02Z"
   },
-  "paired_gate_record": "docs/acceptance/tmux-complete-backend/gate/studio/amx-asl-1.df1580f1ff696edb.json",
+  "paired_gate_record": "docs/acceptance/tmux-complete-backend/gate/studio-d1defb79/amx-asl-1.01022924454bddd8.json",
   "paired_gate": {
-    "status": "passed on the Studio (Kitty installed); never passed on the Kitty-free MacBook",
-    "no_step_ran_or_named_kitty": true,
-    "macbook_runs": [
+    "status": "passed",
+    "machine": "the Mac Studio, with Kitty moved aside for the run",
+    "agentmux_revision": "d1defb79a35dbdfd165adbbc2c337e254445b397",
+    "asl_revision": "f63ffefc08951c7c04ecdfb83d0e442d18c744b0",
+    "log": "docs/acceptance/tmux-complete-backend/gate/studio-d1defb79/gate-passed.log",
+    "runs_at_d1defb79": [
       {
-        "record": "docs/acceptance/tmux-complete-backend/gate/amx-asl-1.175b06686c0f4752.json",
-        "asl_revision": "dbf56767c86075f6abdcc6b7e32ebcc4bd941a62",
-        "failed_step": "asl-tests",
-        "cause": "ASL's committed tree: a capability-matrix row named a glob as a file (fixed in ASL by fae855c)"
+        "record": "docs/acceptance/tmux-complete-backend/gate/studio-d1defb79/run1-asl-tests-failed.json",
+        "log": "docs/acceptance/tmux-complete-backend/gate/studio-d1defb79/run1.log",
+        "result": "failed asl-tests: one ASL test (redirect continuation, termination-unreported) that passed in every other run of the same ASL revision"
       },
       {
-        "record": "docs/acceptance/tmux-complete-backend/gate/amx-asl-1.48e678dbfb4ea60d.json",
-        "asl_revision": "fae855c98e210de8e25e04ac2e8c81fcd4ac38a8",
-        "failed_step": "asl-lint",
-        "cause": "ruff and mypy were not installed on the MacBook; once installed, mypy reported 9 errors in ASL's committed tests (fixed in ASL by 61e23fe)"
-      },
-      {
-        "record": "docs/acceptance/tmux-complete-backend/gate/amx-asl-1.b2c864ae6197629d.json",
-        "log": "docs/acceptance/tmux-complete-backend/gate/gate-run-3.log",
-        "asl_revision": "61e23fe276c323b579aec285afbfb8744795d6db",
-        "failed_step": "asl-install",
-        "passed_steps": [
-          "os-version",
-          "harness-compat",
-          "build-amx",
-          "amx-check",
-          "asl-tests",
-          "asl-lint",
-          "contract-sync",
-          "paired-integration",
-          "crash-restart",
-          "amx-stress",
-          "asl-stress"
-        ],
-        "cause": "the MacBook had only /bin/bash 3.2 and ASL's installer needs mapfile"
+        "record": "docs/acceptance/tmux-complete-backend/gate/studio-d1defb79/amx-asl-1.01022924454bddd8.json",
+        "result": "passed: schema 2, all 16 steps exit 0, cockpit-smoke present, no kitty-version step, unsigned, no tag"
       }
     ],
-    "macbook_by_hand_after_run_3": {
-      "log": "docs/acceptance/tmux-complete-backend/gate/install-and-smoke-by-hand.log",
-      "passed": [
-        "asl-install-verify",
-        "overseer-integration"
-      ],
-      "failed": {
-        "asl-install": "one LaunchAgent of that Mac cannot load because its program is not installed there",
-        "amx-install-restart": "amx doctor --strict: 7 [hooks] health failures in that Mac's real profiles (hooks never synced there, harnesses not signed in, Copilot CLI absent)",
-        "cockpit-smoke": "the same doctor --strict failures"
-      }
-    },
-    "studio_runs": [
-      {
-        "record": "docs/acceptance/tmux-complete-backend/gate/studio/refused-dirty-asl.json",
-        "log": "docs/acceptance/tmux-complete-backend/gate/studio/refused-dirty-asl.log",
-        "result": "refused before any step: uncommitted changes in the ASL checkout (cleaned by the operator)"
-      },
-      {
-        "record": "docs/acceptance/tmux-complete-backend/gate/studio/run1-asl-install-failed.json",
-        "log": "docs/acceptance/tmux-complete-backend/gate/studio/run1.log",
-        "asl_revision": "f63ffefc08951c7c04ecdfb83d0e442d18c744b0",
-        "failed_step": "asl-install",
-        "cause": "ASL's installer reloads the LaunchAgents and two long-running ones failed to bootstrap again (launchctl 'Bootstrap failed: 5'); both loaded with a plain launchctl bootstrap straight afterwards"
-      },
-      {
-        "log": "docs/acceptance/tmux-complete-backend/gate/studio/run2-record-not-written.log",
-        "result": "all 16 steps passed, and the gate refused to write its record because run 1's record for the same pair ID was still in the evidence directory (it was copied aside, not moved)"
-      },
-      {
-        "record": "docs/acceptance/tmux-complete-backend/gate/studio/amx-asl-1.df1580f1ff696edb.json",
-        "log": "docs/acceptance/tmux-complete-backend/gate/studio/gate-passed.log",
-        "result": "passed: schema 2, all 16 steps passed with exit 0, cockpit-smoke present, no kitty-version step, unsigned, no tag"
-      }
-    ]
+    "earlier_attempts": "Before d1defb79: three runs on the MacBook (gate/), which never passed because that Mac is not a working installation of the pair, and four runs on the Studio at 985c3b6b with Kitty installed (gate/studio/). See README.md."
   },
   "cases": {
     "launch-two-profiles": {
@@ -118,23 +59,23 @@
     "claude-stop-held-confirmed": {
       "status": "passed",
       "evidence": "docs/acceptance/tmux-complete-backend/live/claude-stop-held-confirmed.log",
-      "harness": "Claude Code 2.1.296",
+      "harness": "Claude Code 2.1.299",
       "stop_confirmed_by": "probe:claude_screen",
-      "stop_hold_waited_ms": 8211
+      "stop_hold_waited_ms": 6946
     },
     "codex-stop-held-confirmed": {
       "status": "passed",
       "evidence": "docs/acceptance/tmux-complete-backend/live/codex-stop-held-confirmed.log",
       "harness": "codex-cli 0.162.1",
       "stop_confirmed_by": "probe:codex_screen",
-      "stop_hold_waited_ms": 6000
+      "stop_hold_waited_ms": 6003
     },
     "copilot-stop-held-confirmed": {
       "status": "passed",
       "evidence": "docs/acceptance/tmux-complete-backend/live/copilot-stop-held-confirmed.log",
       "harness": "GitHub Copilot CLI 1.0.97",
       "stop_confirmed_by": "probe:copilot_transcript",
-      "stop_hold_waited_ms": 6001
+      "stop_hold_waited_ms": 6000
     },
     "notification-with-app": {
       "status": "passed",
@@ -145,9 +86,13 @@
       ]
     },
     "notification-without-app": {
-      "status": "not-executed",
-      "evidence": "docs/acceptance/tmux-complete-backend/README.md",
-      "reason": "With no app connected the daemon posts through Alerter 26.5 with --sender fr.vjeantet.alerter. On macOS 27.0.1 that notification is never presented, as a banner or in Notification Center, so there was nothing to click. Tried: the binary copied into the world, the same binary under the home directory, the binary wrapped in a registered bundle of that identifier, a real brew install of vjeantet/tap/alerter, and a restart of usernoted and NotificationCenter. usernoted logs 'Unable to find notifier for identifier fr.vjeantet.alerter' and NotificationCenter 'Couldn't find application fr.vjeantet.alerter' each time. Run without --sender the same binary is presented as Terminal. No stand-in was used in place of a click."
+      "status": "passed",
+      "evidence": "docs/acceptance/tmux-complete-backend/live/notification-without-app.log",
+      "pictures": [
+        "docs/acceptance/tmux-complete-backend/live/noapp-notification.jpg",
+        "docs/acceptance/tmux-complete-backend/live/noapp-expanded.jpg"
+      ],
+      "how": "The daemon's Alerter notification, posted as Terminal, clicked in Notification Center through the VNC viewer; the daemon journals focus_success and switches the terminal used last to the session."
     },
     "doctor-strict": {
       "status": "passed",
@@ -162,27 +107,5 @@
       ]
     }
   },
-  "unmet": [
-    {
-      "item": "notification-without-app passed",
-      "single_change": "Make the daemon's Alerter notification presentable on macOS 27 (it passes --sender fr.vjeantet.alerter, an identifier no application has there; without it Alerter is presented as Terminal), then run the case again on a Kitty-free Mac at the new revision."
-    },
-    {
-      "item": "paired release gate passed on a machine with Kitty not installed",
-      "single_change": "Run just paired-release-gate on a Kitty-free Mac on which the pair is a working installation; the MacBook is Kitty-free but is not one (gate/install-and-smoke-by-hand.log), and the Studio is one but has Kitty installed."
-    }
-  ],
-  "paired_gate_record_machine": {
-    "name": "the Mac Studio (the driver machine)",
-    "os": "macOS 27.0.1",
-    "kitty_installed": true,
-    "kitty_running": false,
-    "kitty_environment_unset": true,
-    "agentmux_revision": "985c3b6b787935b9c69e34e42992b68e691bd8ba",
-    "agentmux_revision_note": "985c3b6b is tested_revision 8f063a9c plus two commits that add only files under docs/acceptance/tmux-complete-backend*; no *.go, *.swift, *.sh, *.toml, Justfile, go.mod or go.sum differs",
-    "asl_revision": "f63ffefc08951c7c04ecdfb83d0e442d18c744b0",
-    "log": "docs/acceptance/tmux-complete-backend/gate/studio/gate-passed.log",
-    "finished": "2026-10-14T05:18:04Z"
-  },
-  "kitty_scope": "kitty_installed, kitty_running and kitty_environment_unset describe the MacBook, where mac_test and every case ran. The passed gate ran on the Studio, where Kitty is installed (see paired_gate_record_machine)."
+  "changed_on_the_macbook": "Checkouts fast-forwarded (Agent Mux to d1defb79 at the end, ASL to 61e23fe); Homebrew tmux, golangci-lint, bash and alerter, and uv tools ruff and mypy, installed; amx 0.8.0 at 8f063a9c installed there by the by-hand install steps of the earlier cycle, with its daemon, ASL restowed and LaunchAgents reloaded; two regular files that blocked stow (generate-invoice-summary.sh, monthly-invoice.sh) moved to the aside directory in that home and stow's links left in their place; notification permission allowed for Terminal and Agent Mux; one stray click opened the System Settings Login Items pane, which was left open. The world, its app preferences and the scratch were removed; Kitty and VNCAlwaysStartOnConsole were restored."
 }

@@ -1,5 +1,5 @@
 
-##### copilot (real, GitHub Copilot CLI 1.0.97.): a turn is submitted from the attached terminal; its native stop is held and then confirmed by probe:copilot_transcript [02:05:04Z]
+##### copilot (real, GitHub Copilot CLI 1.0.97.): a turn is submitted from the attached terminal; its native stop is held and then confirmed by probe:copilot_transcript [14:06:31Z]
 
 --- no Kitty ---
 KITTY variables in this shell: 0
@@ -9,7 +9,7 @@ kitty processes: 0
 PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
 PASS: the terminal is on the copilot session
 
-=== terminal: before the prompt [02:05:07Z] ===
+=== terminal: before the prompt [14:06:33Z] ===
  [Current]  Sessions   Issues   Pull requests   Gists
 
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -23,8 +23,8 @@ PASS: the terminal is on the copilot session
 
  ● No copilot-instructions.md found. Run /init to generate.
 
- ● Tip: /mcp
-   └ Manage MCP server configuration
+ ● Tip: /memory
+   └ Show memory status, or enable/disable memory across sessions
 
  /private/tmp/amx75/proj/copilot [⎇ main%]                                                                                        Session: 0 AIC used
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ PASS: the daemon shows the turn as active (the prompt hook arrived for this runt
 icon=bolt unseen=False muted=False
 PASS: the daemon shows the session stopped
 
-=== terminal: after the turn [02:05:18Z] ===
+=== terminal: after the turn [14:06:43Z] ===
  [Current]  Sessions   Issues   Pull requests   Gists
 
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -55,10 +55,10 @@ PASS: the daemon shows the session stopped
 
  ● No copilot-instructions.md found. Run /init to generate.
 
- ● Tip: /mcp
-   └ Manage MCP server configuration
+ ● Tip: /memory
+   └ Show memory status, or enable/disable memory across sessions
 
- ❯ Reply with exactly the word ready and nothing else. Use no tools.                                                                           20:05
+ ❯ Reply with exactly the word ready and nothing else. Use no tools.                                                                           08:06
 
  ● ready
 
@@ -73,20 +73,20 @@ PASS: the daemon shows the session stopped
 icon=stop unseen=True muted=False
 
 --- hooks the real copilot fired in this turn (relayed from the Studio; event and exit status only) ---
-02:05:08Z copilot userPromptSubmitted --harness=copilot runtime=rs-de279a5d30c90cdfd39c278bd89bbd28 exit=0
-02:05:09Z copilot sessionStart --harness=copilot runtime=rs-de279a5d30c90cdfd39c278bd89bbd28 exit=0
-02:05:10Z copilot agentStop --harness=copilot runtime=rs-de279a5d30c90cdfd39c278bd89bbd28 exit=0
+14:06:34Z copilot userPromptSubmitted --harness=copilot runtime=rs-09e84eeb392df4391f83a8abe18a4a2a exit=0
+14:06:34Z copilot sessionStart --harness=copilot runtime=rs-09e84eeb392df4391f83a8abe18a4a2a exit=0
+14:06:36Z copilot agentStop --harness=copilot runtime=rs-09e84eeb392df4391f83a8abe18a4a2a exit=0
 
 --- the session's stop-class events in the daemon's export ---
-runtime_session_id=rs-de279a5d30c90cdfd39c278bd89bbd28 backend=tmux events=4
-  1791943508 event=userPromptSubmitted source=None action=active icon=None stop_confirmed_by=None stop_hold_waited_ms=None
-  1791943516 event=agentStop source=None action=stop icon=None stop_confirmed_by=probe:copilot_transcript stop_hold_waited_ms=6001
+runtime_session_id=rs-09e84eeb392df4391f83a8abe18a4a2a backend=tmux events=4
+  1791986794 event=userPromptSubmitted source=None action=active icon=None stop_confirmed_by=None stop_hold_waited_ms=None
+  1791986802 event=agentStop source=None action=stop icon=None stop_confirmed_by=probe:copilot_transcript stop_hold_waited_ms=6000
 
 --- seconds from the prompt to the stop icon ---
-10
+8
 PASS: the export is of a tmux runtime session
 PASS: the native stop was confirmed by probe:copilot_transcript, not released at the deadline
 PASS: the stop was held before it was applied (stop_hold_waited_ms > 0)
 PASS: the copilot pane kept running
 
-##### RESULT: 8 passed, 0 failed [02:05:18Z]
+##### RESULT: 8 passed, 0 failed [14:06:44Z]
