@@ -1,0 +1,71 @@
+# The world's config.toml (installed as ~/.config/agent-mux/config.toml of the
+# world). Launches go to tmux because the installation says so: the default
+# has not moved, and a Kitty-less installation sets it.
+[defaults]
+sort = "alpha"
+refresh_interval = 1
+launch_backend = "tmux"
+
+[defaults.notifications]
+alerter_path = "/tmp/amx75w/bin/alerter"
+permission = true
+stop = true
+stop_failure = true
+error = false
+
+[[profiles]]
+name = "claude"
+harness = "claude"
+home_dir = "/tmp/amx75w/home/.claude-w"
+color = "blue"
+
+[[profiles]]
+name = "codex"
+harness = "codex"
+home_dir = "/tmp/amx75w/home/.codex-w"
+# As in the profile `amx config init` writes: Codex runs the managed hooks
+# without a persisted trust record for each.
+args = ["--dangerously-bypass-hook-trust"]
+color = "purple"
+
+[[profiles]]
+name = "copilot"
+harness = "copilot"
+home_dir = "/tmp/amx75w/home/.copilot-w"
+color = "green"
+
+[[profiles]]
+name = "plain"
+harness = "claude"
+home_dir = "/tmp/amx75w/home/.claude-p"
+color = "yellow"
+
+[[projects]]
+title = "claude"
+directory = "/tmp/amx75w/proj/claude"
+profile = "claude"
+
+[[projects]]
+title = "codex"
+directory = "/tmp/amx75w/proj/codex"
+profile = "codex"
+
+[[projects]]
+title = "copilot"
+directory = "/tmp/amx75w/proj/copilot"
+profile = "copilot"
+
+[[projects]]
+title = "plain"
+directory = "/tmp/amx75w/proj/plain"
+profile = "plain"
+
+[[projects]]
+title = "second"
+directory = "/tmp/amx75w/proj/second"
+profile = "plain"
+
+[harness_emojis]
+claude = "🟠"
+codex = "🔵"
+copilot = "🟣"

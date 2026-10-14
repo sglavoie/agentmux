@@ -1,0 +1,15 @@
+#!/bin/sh
+# Runs on the MacBook, started over SSH by `hook` on the Studio for every hook
+# a real harness fires. Standard input is the harness's own payload. It runs
+# the world's amx in the environment and directory of the pane that harness's
+# terminal is carried to, so the hook is a managed hook of that pane's runtime
+# session. The log keeps the event name and the exit status, never a payload.
+# usage: hookrelay NAME EVENT [ARG...]
+R=/tmp/amx75w
+name=$1; shift
+. "$R/bridge/$name.env"
+cd "$(cat "$R/bridge/$name.cwd")" || exit 1
+"$R/bin/amx" hook-indicator "$@"
+rc=$?
+echo "$(date -u +%H:%M:%SZ) $name $* runtime=${AMX_RUNTIME_SESSION_ID:-none} exit=$rc" >> "$R/logs/hooks.log"
+exit $rc

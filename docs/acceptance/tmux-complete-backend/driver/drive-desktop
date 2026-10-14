@@ -1,0 +1,148 @@
+#!/bin/bash
+# Drives the MacBook's desktop for the three checks that need one: a click on
+# a notification with the app not running, the same with the app running, and
+# Launch Project with the app's launch preference left on Automatic. Runs on
+# the Studio; every notification, click, window, and picture is the MacBook's.
+#
+# Clicks and pictures go through session-15's headless VNC client; state is
+# read over SSH from the private tmux server, the registry, the daemon's
+# notification journal, and the app's unified log. No key is sent to an
+# agent's pane except `ask` to the stand-in, which is how it is told to send
+# a PermissionRequest hook.
+#
+# usage: drive-desktop OUTDIR CASE...
+#   cases: noapp app auto
+here=$(cd "$(dirname "$0")" && pwd)
+. "$here/env"
+OUT=$1; shift
+mkdir -p "$OUT"
+note() { printf '\n##### %s [%s]\n' "$*" "$(date -u +%H:%M:%SZ)" >> "$LOG"; echo "## $*"; }
+say() { printf '%s\n' "$*" >> "$LOG"; echo "$*"; }
+facts() { printf '\n--- %s ---\n' "$1" >> "$LOG"; shift; "$@" >> "$LOG" 2>&1; }
+check() { local what=$1; shift; if "$@" >/dev/null 2>&1; then say "PASS: $what"; passed=$((passed+1)); else say "FAIL: $what"; fail=$((fail+1)); fi; }
+ev() { eval "$1"; }
+until_ev() { local what=$1 n=$(( $2 * 2 )); while [ $n -gt 0 ]; do eval "$3" >/dev/null 2>&1 && { say "PASS: $what"; passed=$((passed+1)); return 0; }; sleep 0.5; n=$((n-1)); done; say "FAIL: timed out: $what"; fail=$((fail+1)); return 1; }
+begin() { LOG=$OUT/$1.log; : > "$LOG"; passed=0; fail=0; note "$2"; facts "machines" sh -c "echo \"driver, VNC viewer: \$(scutil --get ComputerName)\"; echo \"everything shown and clicked: \$(printf 'scutil --get ComputerName\n' | $SSH $H /bin/sh -s)\""; facts "no Kitty on the MacBook" rq nokitty; check "no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process" rq '[ "$(env | grep -c "^KITTY")" = 0 ] && ! command -v kitty && ! command -v kitten && [ ! -e /Applications/kitty.app ] && ! pgrep -x kitty'; }
+finish() { printf '\n##### RESULT: %d passed, %d failed [%s]\n' "$passed" "$fail" "$(date -u +%H:%M:%SZ)" >> "$LOG"; echo "$(basename "$LOG" .log): $passed passed, $fail failed"; }
+# --- input and pictures, on the MacBook (points; the framebuffer has two pixels per point) ---
+px() { echo $(( $1 * 2 )); }
+click() { vnc click "$(px $1)" "$(px $2)"; }
+move() { vnc move "$(px $1)" "$(px $2)"; }
+# shot NAME X Y W H: a rectangle of the MacBook's screen, as a JPEG beside the log.
+shot() { local n=$1; vnc shot "$L/shots/$n.png" "$(px $2)" "$(px $3)" "$(px $4)" "$(px $5)" && sips -s format jpeg -s formatOptions 70 "$L/shots/$n.png" --out "$OUT/$n.jpg" >/dev/null 2>&1 && say "picture: $n.jpg (the MacBook's screen, ${4}x${5} points at $2,$3)"; }
+SCREEN_W=1728; SCREEN_H=1117
+# While a viewer shares the display macOS presents no banner (usernoted:
+# "interruptionSuppression: silence; resolutionReason: display shared"); the
+# notification is delivered to Notification Center, and is clicked there. The
+# clock opens it and the newest notification is the first card. Pictures are
+# of that first card only: the cards under it are the MacBook user's own.
+NCX=$((SCREEN_W-368)); NCY=44; NCW=364; NCH=64
+nc_open() { click $((SCREEN_W-88)) 14; sleep 1.8; }
+nc_shot() { shot "$1" $NCX $NCY $NCW $NCH; }
+nc_click() { click $((SCREEN_W-190)) 80; }
+# The app's menu bar item, its Launch Project entry, and the project in the
+# submenu, with four sessions listed and all of them idle (one group heading).
+menu_launch() { click 1118 16; sleep 1.2; move 1157 265; sleep 0.3; click 1157 265; sleep 1.2; shot auto-menu 950 0 560 480; click 1446 457; }
+# The workspace window is placed by its saved frame before the app starts.
+WX=300; WY=200; WW=1000; WH=640
+FRAME="$WX $((SCREEN_H-WY-WH)) $WW $WH 0 0 $SCREEN_W $SCREEN_H"
+# The daemon's notification journal rows since a mark (see `journal` in remote-lib).
+jmark() { rq 'journal | wc -l | tr -d " " > $R/jmark'; }
+jsince() { rq 'journal | tail -n +$(( $(cat $R/jmark) + 1 ))'; }
+# ask: the stand-in in the plain session sends a PermissionRequest hook.
+ask() { rq 'priv send-keys -t "$(pane plain)" -l ask; priv send-keys -t "$(pane plain)" Enter'; }
+
+case_noapp() {
+  begin notification-without-app "a notification of a tmux session is clicked with the app not running: the daemon switches the terminal used last to that session"
+  check "the app is not running" rq '[ -z "$(apppid)" ]'
+  check "no workspace is connected to the daemon" rq 'amx doctor | grep -q "companion: no app connected"'
+  check "the plain terminal is attached to the claude session" rq 'goto claude'
+  facts "private server clients before" rq clients
+  rq 'goto plain; k F8; sleep 1.5; goto claude' >/dev/null 2>&1
+  until_ev "the stand-in's session is clear and the terminal is on claude" 10 "rq 'dstate plain' | grep -q 'icon=- ' && [ \"\$(rq where)\" = claude ]"
+  jmark; sleep 11
+  ask
+  until_ev "the stand-in asked for permission (icon=key) with nobody looking at it" 15 "rq 'dstate plain' | grep -q icon=key"
+  sleep 2.5; nc_open; nc_shot noapp-notification
+  facts "the daemon's notification journal: the notification was sent" jsince
+  nc_click
+  until_ev "the click moved the terminal to the session the notification was about (plain)" 15 "[ \"\$(rq where)\" = plain ]"
+  sleep 1
+  facts "private server clients after the click" rq clients
+  facts "registry" rq registry
+  facts "the daemon's notification journal since the request" jsince
+  facts "the terminal after the click" rq 'obs capture-pane -p -t $T | sed -e "s/[[:space:]]*\$//" | cat -s'
+  check "the daemon recorded the click as a focus that succeeded (focus_success)" ev "jsince | grep -q focus_success"
+  check "one terminal is attached, on the plain pane; no second terminal and no app" rq '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(where)" = plain ] && [ -z "$(apppid)" ]'
+  check "the registry records the switched terminal as the owner of plain (amx-switch-)" rq 'registry | grep " plain " | grep -q "owner=amx-switch-"'
+  check "nothing was launched: still four live sessions" rq '[ "$(registry | grep -c " live ")" = 4 ]'
+  finish
+}
+
+case_app() {
+  begin notification-with-app "the same click with Agent Mux.app running and its workspace window closed: the app asks the daemon (focus_session) and the workspace opens on that session"
+  rq 'goto plain; k F8; sleep 1.5; goto claude' >/dev/null 2>&1
+  rq "app_quit; app_defaults '$FRAME' false; app_start" || say "FAIL: the app did not start"
+  sleep 3
+  facts "the app copy" rq 'echo "pid $(apppid), bundle $BUNDLE"; defaults read $BUNDLE | grep -v amxEnvironment'
+  check "the app subscribed to the world's daemon" rq 'applog | grep -q "feed: live"'
+  facts "the app's notification claim, and what the daemon's doctor says of it" rq 'applog | grep "notifications:"; amx doctor | grep -E "^(companion|notifications)"'
+  check "the daemon lists the app as its connected companion" rq 'amx doctor | grep -q "^companion: Agent Mux.app"'
+  check "the workspace window is closed: no terminal of the app is attached" rq '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(where)" = claude ]'
+  until_ev "the stand-in's session is clear" 10 "rq 'dstate plain' | grep -q 'icon=- '"
+  jmark; rq mark; sleep 11
+  ask
+  until_ev "the stand-in asked for permission (icon=key)" 15 "rq 'dstate plain' | grep -q icon=key"
+  sleep 2.5; nc_open; nc_shot app-notification
+  facts "the daemon's notification journal: the notice went to the app" jsince
+  check "the daemon sent the notification through the app (send_success, backend app)" ev "jsince | grep 'send_success' | grep -q 'backend=app'"
+  nc_click
+  until_ev "the workspace attached a terminal of its own to the plain pane" 20 "rq 'registry' | grep ' plain ' | grep -q 'owner=amx-workspace-'"
+  sleep 2
+  shot app-workspace $WX $WY $WW $WH
+  facts "private server clients after the click" rq clients
+  facts "registry" rq registry
+  facts "the app's log since the request" rq since
+  facts "the daemon's notification journal since the request" jsince
+  check "the daemon recorded the click as delegated to the app (focus_delegated)" ev "jsince | grep -q focus_delegated"
+  check "the daemon showed the session through the workspace: the app did not fall back to showing it itself" ev "! rq since | grep -q 'showing it here'"
+  check "the workspace is on the plain session" ev "rq since | grep 'workspace: now on' | tail -1 | grep -q \"\$(rq 'rsof plain')\""
+  check "the plain terminal was not taken from the claude session" rq 'clients | grep -q "pane=$(pane claude) "'
+  check "nothing was launched: still four live sessions" rq '[ "$(registry | grep -c " live ")" = 4 ]'
+  finish
+}
+
+case_auto() {
+  begin automatic-launch-workspace "Launch Project from the app's menu with the launch preference left on Automatic: the project starts on tmux and the workspace shows it"
+  check "the app is running" rq '[ -n "$(apppid)" ]'
+  facts "the app's launch preference (unset means Automatic)" rq 'defaults read $BUNDLE amxLaunchBackend 2>&1 | tail -1'
+  check "amxLaunchBackend is not set: the preference is Automatic" rq '! defaults read $BUNDLE amxLaunchBackend'
+  rq 'for p in codex copilot plain claude; do goto $p; k F8; sleep 1.2; done' >/dev/null 2>&1
+  until_ev "all four sessions are idle, so the menu lists them under one heading" 10 "[ \"\$(rq 'for p in claude codex copilot plain; do dstate \$p; done' | grep -c 'icon=- ')\" = 4 ]"
+  facts "registry before" rq registry
+  rq mark
+  menu_launch second
+  until_ev "the registry holds a live tmux session for the project (second)" 20 "rq registry | grep -q ' live second tmux '"
+  until_ev "the workspace attached its own terminal to the new session" 20 "rq registry | grep ' live second ' | grep -q 'owner=amx-workspace-'"
+  sleep 2
+  shot auto-workspace $WX $WY $WW $WH
+  facts "registry after" rq registry
+  facts "private tmux server" rq panes
+  facts "private server clients" rq clients
+  facts "the app's log since the click" rq since
+  facts "the daemon's v2 snapshot" rq snapshot
+  check "the app logged the launch as one on tmux" ev "rq since | grep -q 'launch plain/second on tmux as rs-'"
+  check "the new session's pane runs on the private server" rq 'panes | grep " $(pane second) " | grep -q dead=0'
+  check "the stand-in saw a runtime session and no Kitty window" rq 'screen second | grep -q "runtime session: rs-.*kitty window: none"'
+  check "no Kitty was started and none is installed" rq '! pgrep -x kitty && [ ! -e /Applications/kitty.app ]'
+  finish
+}
+
+for c in "$@"; do
+  case $c in
+  noapp) case_noapp ;;
+  app) case_app ;;
+  auto) case_auto ;;
+  *) echo "unknown case $c"; exit 2 ;;
+  esac
+done

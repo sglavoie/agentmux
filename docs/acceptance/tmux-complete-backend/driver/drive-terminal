@@ -1,0 +1,218 @@
+#!/bin/bash
+# Runs on the MacBook, headless. The end-to-end workflow of a plain terminal
+# on the tmux backend, with no Kitty variable, no Kitty process, and no Kitty
+# installed: two (here three) profiles launched on tmux, a terminal attached,
+# F1 to F11, F7/F9, the dashboard popup, and a stop held and confirmed for
+# each real harness, then doctor.
+#
+# The "plain terminal" is one window of an observer tmux server (its own
+# socket and no configuration) running `amx attach`: it is a real tmux client
+# of AgentMux's private server, with a keyboard (send-keys) and a screen
+# (capture-pane). It is not the private server and hosts no agent.
+#
+# usage: drive-terminal OUTDIR CASE...
+#   cases: launch claude codex copilot keys nav popup doctor
+# Each case writes OUTDIR/<name>.log; every PASS or FAIL line is one observed
+# condition and each log ends with its counts.
+R=/tmp/amx75w; . $R/driver/remote-env; . $R/driver/remote-lib
+OUT=$1; shift; mkdir -p "$OUT"
+note() { printf '\n##### %s [%s]\n' "$*" "$(date -u +%H:%M:%SZ)" >> "$LOG"; echo "## $*"; }
+shot() { printf '\n=== terminal: %s [%s] ===\n' "$1" "$(date -u +%H:%M:%SZ)" >> "$LOG"; obs capture-pane -p -t $T | sed -e 's/[[:space:]]*$//' | cat -s >> "$LOG"; }
+pshot() { printf '\n=== pane of %s, read from the private server: %s [%s] ===\n' "$1" "$2" "$(date -u +%H:%M:%SZ)" >> "$LOG"; screen "$1" | cat -s >> "$LOG"; }
+onscreen() { obs capture-pane -p -t $T | grep -qF -- "$1"; }
+waitfor() { # text [seconds]
+  local n=$(( ${2:-15} * 4 ))
+  while [ $n -gt 0 ]; do onscreen "$1" && { printf 'PASS: on the terminal: %s\n' "$1" >> "$LOG"; passed=$((passed+1)); return 0; }; sleep 0.25; n=$((n-1)); done
+  printf 'FAIL: timed out waiting for on the terminal: %s\n' "$1" >> "$LOG"; echo "TIMEOUT: $1"; fail=$((fail+1)); shot "screen at timeout"; return 1
+}
+waitgone() { # text [seconds]
+  local n=$(( ${2:-15} * 4 ))
+  while [ $n -gt 0 ]; do onscreen "$1" || { printf 'PASS: no longer on the terminal: %s\n' "$1" >> "$LOG"; passed=$((passed+1)); return 0; }; sleep 0.25; n=$((n-1)); done
+  printf 'FAIL: still on the terminal: %s\n' "$1" >> "$LOG"; echo "STILL: $1"; fail=$((fail+1)); shot "screen at timeout"; return 1
+}
+check() { local what=$1; shift; if "$@" >/dev/null 2>&1; then printf 'PASS: %s\n' "$what" >> "$LOG"; passed=$((passed+1)); else printf 'FAIL: %s\n' "$what" >> "$LOG"; echo "FAIL: $what"; fail=$((fail+1)); fi; }
+ev() { eval "$1"; }
+facts() { printf '\n--- %s ---\n' "$1" >> "$LOG"; shift; "$@" >> "$LOG" 2>&1; }
+until_ev() { # WHAT SECONDS EXPRESSION: waits for a condition on state read from the world
+  local what=$1 n=$(( $2 * 2 ))
+  while [ $n -gt 0 ]; do eval "$3" >/dev/null 2>&1 && { printf 'PASS: %s\n' "$what" >> "$LOG"; passed=$((passed+1)); return 0; }; sleep 0.5; n=$((n-1)); done
+  printf 'FAIL: timed out: %s\n' "$what" >> "$LOG"; echo "TIMEOUT: $what"; fail=$((fail+1)); return 1
+}
+begin() { LOG=$OUT/$1.log; : > "$LOG"; passed=0; fail=0; note "$2"; facts "no Kitty" nokitty; check "no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process" ev '[ "$(env | grep -c "^KITTY")" = 0 ] && ! command -v kitty && ! command -v kitten && [ ! -e /Applications/kitty.app ] && ! pgrep -x kitty'; }
+finish() { printf '\n##### RESULT: %d passed, %d failed [%s]\n' "$passed" "$fail" "$(date -u +%H:%M:%SZ)" >> "$LOG"; echo "$(basename "$LOG" .log): $passed passed, $fail failed"; }
+case_launch() {
+  begin launch-two-profiles "three profiles launched on tmux by amx project launch, with launch_backend = tmux in the installation's config; a plain terminal attaches"
+  facts "the Mac" sh -c 'scutil --get ComputerName; sw_vers -productVersion; uname -m'
+  facts "amx" amx --version
+  facts "amx backend status" amx backend status
+  facts "the installation's launch backend" grep -n launch_backend $HOME/.config/agent-mux/config.toml
+  for p in claude codex copilot plain; do facts "amx project launch $p --profile $p --json (run by world up)" cat $R/logs/launch-$p.json; done
+  facts "runtime-session registry" registry
+  facts "private tmux server" panes
+  facts "the daemon's v2 companion snapshot" snapshot
+  check "the registry holds four live sessions, all on tmux" ev '[ "$(registry | grep -c " live .* tmux ")" = 4 ] && [ "$(registry | grep -c " live ")" = 4 ]'
+  check "every launch reported the tmux backend" ev '[ "$(grep -l "\"backend\": *\"tmux\"" $R/logs/launch-*.json | wc -l | tr -d " ")" = 4 ]'
+  check "claude, codex, and copilot run under three different profiles" ev 'snapshot | grep -q " claude .*profile=claude .*runtime=tmux" && snapshot | grep -q " codex .*profile=codex .*runtime=tmux" && snapshot | grep -q " copilot .*profile=copilot .*runtime=tmux"'
+  check "the daemon holds no Kitty topology" ev 'snapshot | grep -q "kitty.ready=False"'
+  check "four agent panes run on the private server" ev '[ "$(panes | grep -c "dead=0")" = 4 ]'
+  colors() { for p in claude codex copilot plain; do echo "$p $(pfmt $p "#{@amx_status_color}") [$(pfmt $p "#{@amx_status}")]"; done; }
+  until_ev "the daemon rendered a status for every session" 40 '[ "$(colors | grep -c " #[0-9a-f]\{6\} ")" = 4 ]'
+  facts "rendered status and color of each pane (@amx_status, @amx_status_color)" colors
+  check "each profile has its own color" ev '[ "$(colors | awk "{print \$2}" | sort -u | wc -l | tr -d " ")" = 4 ]'
+  check "no terminal is attached before the first attach" ev '[ -z "$(clients)" ]'
+  obs kill-server 2>/dev/null
+  check "a plain terminal attaches to the claude session (amx attach)" goto claude
+  sleep 1.5; shot "the terminal, attached to claude"
+  facts "private server clients" clients
+  facts "registry (the owner of claude is this terminal)" registry
+  check "one terminal is attached, to the claude pane" ev '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(where)" = claude ]'
+  check "the registry records the terminal as the session owner (amx-attach-)" ev 'registry | grep -q " claude .*owner=amx-attach-"'
+  check "the terminal shows the status line with the session title" ev 'obs capture-pane -p -t $T | tail -3 | grep -q "claude"'
+  finish
+}
+
+# The prompt each real harness is given: one short answer and no tool.
+PROMPT='Reply with exactly the word ready and nothing else. Use no tools.'
+case_stop() { # HARNESS EXPECTED_CONFIRMATION
+  local h=$1 want=$2
+  begin $h-stop-held-confirmed "$h (real, $(cat $R/versions/$h)): a turn is submitted from the attached terminal; its native stop is held and then confirmed by $want"
+  check "the terminal is on the $h session" goto $h
+  sleep 1; shot "before the prompt"
+  facts "daemon state before" dstate $h
+  local hooks0; hooks0=$(grep -c "^[0-9:Z]* $h " $R/logs/hooks.log 2>/dev/null); hooks0=${hooks0:-0}
+  typ "$PROMPT"; sleep 0.6; k Enter
+  local t0; t0=$(date +%s)
+  until_ev "the daemon shows the turn as active (the prompt hook arrived for this runtime session)" 30 "dstate $h | grep -q icon=bolt"
+  facts "daemon state while working" dstate $h
+  until_ev "the daemon shows the session stopped" 120 "dstate $h | grep -q icon=stop"
+  local t1; t1=$(date +%s)
+  sleep 1; shot "after the turn"
+  facts "daemon state at rest" dstate $h
+  facts "hooks the real $h fired in this turn (relayed from the Studio; event and exit status only)" sh -c "grep '^[0-9:Z]* $h ' $R/logs/hooks.log | tail -n +$((hooks0+1))"
+  facts "the session's stop-class events in the daemon's export" stops $h
+  facts "seconds from the prompt to the stop icon" echo "$((t1-t0))"
+  check "the export is of a tmux runtime session" ev "stops $h | grep -q 'backend=tmux'"
+  check "the native stop was confirmed by $want, not released at the deadline" ev "stops $h | grep 'stop_confirmed_by=' | grep -v 'stop_confirmed_by=None' | tail -1 | grep -q 'stop_confirmed_by=$want '"
+  check "the stop was held before it was applied (stop_hold_waited_ms > 0)" ev "[ \"\$(stops $h | grep 'stop_confirmed_by=$want ' | tail -1 | sed -n 's/.*stop_hold_waited_ms=\\([0-9]*\\).*/\\1/p')\" -gt 0 ]"
+  check "the $h pane kept running" ev "panes | grep \" \$(pane $h) \" | grep -q dead=0"
+  finish
+}
+
+case_keys() {
+  begin function-keys-f1-f11 "F1 to F11 from the attached terminal, bound in the private tmux configuration"
+  facts "the bindings the private server holds" sh -c "tmux -S $TMPDIR/agent-mux-$(id -u)/tmux.sock list-keys -T root | grep -E ' (F[0-9]+|C-S-d) '"
+  check "the terminal is on the claude session" goto claude
+  note "F1: the keybinding reference, in a popup over the terminal"
+  k F1; waitfor "focus next session"; shot "F1"; k q; sleep 0.5; onscreen "focus next session" && k Escape; waitgone "focus next session"
+  note "F2: the live session overview, in a popup"
+  k F2; waitfor "Live sessions"; sleep 1; shot "F2"; k q; waitgone "Live sessions"
+  check "the popup attached no second terminal and moved nothing" ev '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(where)" = claude ]'
+  note "F5: the harness icon picker, in a popup"
+  k F5; waitfor "Set Harness Icon"; shot "F5"; k Escape; waitgone "Set Harness Icon"
+  note "F6: the color picker, in a popup"
+  k F6; waitfor "Set Color"; shot "F6"; k Escape; waitgone "Set Color"
+  note "F11: mark the shown session active; F8: clear it"
+  facts "state before F11" dstate claude
+  k F11; until_ev "F11: the daemon shows claude active (bolt)" 10 'dstate claude | grep -q icon=bolt'
+  facts "state after F11" dstate claude
+  k F8; until_ev "F8: the daemon cleared claude's state icon" 10 'dstate claude | grep -q "icon=- "'
+  facts "state after F8" dstate claude
+  note "F10: toggle mute on the shown session"
+  mutevar() { priv show-options -pv -t "$(pane claude)" @amx_vars | python3 -c 'import base64,json,sys; s=sys.stdin.read().strip(); d=json.loads(base64.urlsafe_b64decode(s+"="*(-len(s)%4))); print("cc_mute=%s" % d.get("cc_mute",""))'; }
+  facts "mute before" mutevar
+  k F10; until_ev "F10: the session is muted (cc_mute on the pane)" 10 'mutevar | grep -qE "cc_mute=(1|true)"'
+  facts "mute after F10" mutevar; sleep 1.5; shot "the status line while muted"
+  k F10; until_ev "F10 again: the session is no longer muted" 10 '! mutevar | grep -qE "cc_mute=(1|true)"'
+  facts "mute after the second F10" mutevar
+  note "F9 to the stand-in (a main-screen pane), then F3: the scrollback marker search; F3 again leaves it"
+  goto plain; check "the terminal is on the plain session" ev '[ "$(where)" = plain ]'
+  k F3; until_ev "F3: the pane entered history at an error marker" 8 '[ "$(pfmt plain "#{pane_in_mode}")" = 1 ]'
+  sleep 0.5; shot "F3"
+  k F3; until_ev "F3 again: the pane left history" 8 '[ "$(pfmt plain "#{pane_in_mode}")" = 0 ]'
+  note "F4: the next session needing attention. The three real sessions are at rest after their turns, which is attention too, so each is visited and cleared with F8 first; then the stand-in asks for permission"
+  for p in codex copilot claude; do
+    goto $p; k F8; until_ev "F8 on $p: its stop is cleared" 10 "dstate $p | grep -q 'icon=- '"
+  done
+  check "the terminal is back on claude" ev '[ "$(where)" = claude ]'
+  priv send-keys -t "$(pane plain)" -l ask; priv send-keys -t "$(pane plain)" Enter
+  until_ev "the stand-in asked for permission and nobody is looking at it (icon=key)" 15 'dstate plain | grep -q icon=key'
+  allstates() { for p in claude codex copilot plain; do echo "$p $(dstate $p)"; done; }
+  facts "states before F4" allstates
+  k F4; until_ev "F4: the terminal went to the session needing attention (plain)" 10 '[ "$(where)" = plain ]'
+  sleep 1; shot "F4"
+  facts "private server clients" clients
+  check "still exactly one terminal is attached" ev '[ "$(clients | wc -l | tr -d " ")" = 1 ]'
+  k F8; until_ev "F8 on plain: its permission state is cleared" 10 'dstate plain | grep -q "icon=- "'
+  note "F7 and F9 are the navigation case's; here each is pressed once"
+  goto claude
+  k F9; until_ev "F9: the terminal moved to the next session (codex)" 10 '[ "$(where)" = codex ]'
+  k F7; until_ev "F7: the terminal moved back to the previous session (claude)" 10 '[ "$(where)" = claude ]'
+  finish
+}
+
+case_nav() {
+  begin navigation-f7-f9 "F7 and F9 walk the sessions in the one session order (alpha: claude, codex, copilot, plain)"
+  facts "the daemon's order (v2 snapshot)" snapshot
+  check "the terminal is on the claude session" goto claude
+  step_to() { k $1; until_ev "$1: the terminal is on $2" 10 "[ \"\$(where)\" = $2 ]"; facts "clients after $1" clients; }
+  step_to F9 codex; sleep 0.8; shot "after F9: codex"
+  step_to F9 copilot
+  step_to F9 plain; sleep 0.8; shot "after F9 F9: plain"
+  step_to F7 copilot
+  step_to F7 codex
+  step_to F7 claude; sleep 0.8; shot "after F7 F7 F7: claude"
+  check "one terminal throughout, and four agents still running" ev '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(panes | grep -c "dead=0")" = 4 ]'
+  facts "registry: the owner record followed the terminal" registry
+  check "the session the terminal is on is the one the registry says it owns" ev 'registry | grep " claude " | grep -qE "owner=amx-(attach|switch)-"'
+  check "no session the terminal left is still recorded as owned" ev '[ "$(registry | grep " live " | grep -c "owner=amx-")" = 1 ]'
+  finish
+}
+
+case_popup() {
+  begin dashboard-popup-return "ctrl+shift+d opens the dashboard as a popup over the terminal; q returns to the session; Enter on another row switches the terminal there and the popup ends"
+  check "the terminal is on the claude session" goto claude
+  k C-S-d; waitfor "Sessions" 15; sleep 1; shot "the dashboard, in a popup over the claude session"
+  check "the popup is that terminal's: still one client, still on claude" ev '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(where)" = claude ]'
+  k q; waitgone "Launch" 10; sleep 0.8; shot "after q: back on the claude session"
+  check "after q the terminal is on claude again, with one client" ev '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(where)" = claude ]'
+  k C-S-d; waitfor "Sessions" 15; sleep 1
+  # The dashboard lists by urgency, so the row is found by what the inspector
+  # says is selected, not by its position.
+  selected() { obs capture-pane -p -t $T | awk -F'│' '/Inspector/{getline; gsub(/^ +| +$/,"",$3); print $3; exit}'; }
+  facts "the row the popup opened on (the session the terminal is on)" selected
+  check "the popup opened on the row of the session it is over (claude)" ev '[ "$(selected)" = claude ]'
+  n=4; while [ $n -gt 0 ]; do k k; sleep 0.3; n=$((n-1)); done
+  n=4; while [ $n -gt 0 ] && [ "$(selected)" != copilot ]; do k j; sleep 0.4; n=$((n-1)); done
+  check "the copilot row is selected" ev '[ "$(selected)" = copilot ]'
+  sleep 0.4; shot "the popup with the copilot row selected"
+  k Enter
+  until_ev "Enter: the terminal was switched to the selected session (copilot)" 10 '[ "$(where)" = copilot ]'
+  sleep 1; shot "after Enter: the popup is gone and the terminal shows copilot"
+  check "the popup ended: no dashboard is left running" ev '! pgrep -f "$R/bin/amx --popup"'
+  check "one terminal is attached and nothing was relaunched" ev '[ "$(clients | wc -l | tr -d " ")" = 1 ] && [ "$(registry | grep -c " live ")" = 4 ]'
+  facts "registry" registry
+  finish
+}
+
+case_doctor() {
+  begin doctor-strict "amx doctor --strict in the world, with the sessions running"
+  facts "amx doctor --strict" sh -c 'amx doctor --strict; echo "exit status: $?"'
+  check "amx doctor --strict exits 0" amx doctor --strict
+  facts "findings (amx doctor --json)" sh -c "amx doctor --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(\"schema_version\", d.get(\"schema_version\")); [print(f.get(\"severity\"), f.get(\"id\"), \"-\", f.get(\"message\",\"\")[:120]) for f in d.get(\"findings\",[])] or print(\"no findings\")'"
+  check "doctor raises no Kitty finding" ev '! amx doctor --json | grep -qE "\"id\": *\"(kitty|kitty_snapshot_stale|renderer_drift)\""'
+  finish
+}
+
+for c in "$@"; do
+  case $c in
+  launch) case_launch ;;
+  claude) case_stop claude probe:claude_screen ;;
+  codex) case_stop codex probe:codex_screen ;;
+  copilot) case_stop copilot probe:copilot_transcript ;;
+  keys) case_keys ;;
+  nav) case_nav ;;
+  popup) case_popup ;;
+  doctor) case_doctor ;;
+  *) echo "unknown case $c"; exit 2 ;;
+  esac
+done

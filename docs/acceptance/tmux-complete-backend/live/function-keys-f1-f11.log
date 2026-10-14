@@ -1,0 +1,322 @@
+
+##### F1 to F11 from the attached terminal, bound in the private tmux configuration [02:05:18Z]
+
+--- no Kitty ---
+KITTY variables in this shell: 0
+kitty or kitten on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
+
+--- the bindings the private server holds ---
+bind-key  -T root User7                     if-shell -F "#{pane_in_mode}" { send-keys -X cancel } { if-shell -F "#{alternate_on}" { send-keys F3 } { copy-mode -e ; send-keys -X search-backward -- (error|failed|warning|deprecated) } }
+bind-key  -T root F1                        display-popup -E -h "100%" -w "100%" "\"\${AMX_BIN:-amx}\" keybindings"
+bind-key  -T root F2                        display-popup -E -h "100%" -w "100%" "\"\${AMX_BIN:-amx}\" overview --popup"
+bind-key  -T root F3                        if-shell -F "#{pane_in_mode}" { send-keys -X cancel } { if-shell -F "#{alternate_on}" { send-keys F3 } { copy-mode -e ; send-keys -X search-backward -- (error|failed|warning|deprecated) } }
+bind-key  -T root F4                        run-shell -b "\"\${AMX_BIN:-amx}\" focus-next --client \"#{client_name}\" >/dev/null 2>&1; true"
+bind-key  -T root F5                        display-popup -E -h "100%" -w "100%" "\"\${AMX_BIN:-amx}\" icon-picker"
+bind-key  -T root F6                        display-popup -E -h "100%" -w "100%" "\"\${AMX_BIN:-amx}\" color-picker"
+bind-key  -T root F7                        run-shell -b "\"\${AMX_BIN:-amx}\" focus-prev-managed --client \"#{client_name}\" >/dev/null 2>&1; true"
+bind-key  -T root F8                        run-shell -b "\"\${AMX_BIN:-amx}\" hook-indicator user_clear >/dev/null 2>&1; true"
+bind-key  -T root F9                        run-shell -b "\"\${AMX_BIN:-amx}\" focus-next-managed --client \"#{client_name}\" >/dev/null 2>&1; true"
+bind-key  -T root F10                       run-shell -b "\"\${AMX_BIN:-amx}\" mute-toggle >/dev/null 2>&1; true"
+bind-key  -T root F11                       run-shell -b "\"\${AMX_BIN:-amx}\" hook-indicator user_active >/dev/null 2>&1; true"
+bind-key  -T root F12                       detach-client
+bind-key  -T root C-S-d                     display-popup -E -h "100%" -w "100%" "\"\${AMX_BIN:-amx}\" --popup"
+PASS: the terminal is on the claude session
+
+##### F1: the keybinding reference, in a popup over the terminal [02:05:20Z]
+PASS: on the terminal: focus next session
+
+=== terminal: F1 [02:05:21Z] ===
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│Keybinding Reference                                                                                                                                │
+│──────────────────────────────────────────                                                                                                          │
+│                                                                                                                                                    │
+│  Overlays                                                                                                                                          │
+│    f1              show this keybinding reference                                                                                                  │
+│    f2              open the live session overview                                                                                                  │
+│    ctrl+shift+d    open the Agent Mux dashboard                                                                                                    │
+│                                                                                                                                                    │
+│  Sessions                                                                                                                                          │
+│    f5              set session harness icon (picker)                                                                                               │
+│    f6              set session color (picker)                                                                                                      │
+│    f8              clear markers and state icons from session                                                                                      │
+│    f11             mark session active (⚡ until the next real event)                                                                              │
+│    f10             toggle mute on the shown session (suppresses notifications)                                                                     │
+│    f4              focus next session needing attention                                                                                            │
+│                                                                                                                                                    │
+│  Scrollback                                                                                                                                        │
+│    f3              toggle error/failure/warning/deprecated markers                                                                                 │
+│                                                                                                                                                    │
+│  Navigation                                                                                                                                        │
+│    f7              focus previous session                                                                                                          │
+│    f9              focus next session                                                                                                              │
+│    f12             detach this terminal (the agent keeps running)                                                                                  │
+│                                                                                                                                                    │
+│──────────────────────────────────────────                                                                                                          │
+│j/k scroll · g/G top/bottom · q/esc close                                                                                                           │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+PASS: no longer on the terminal: focus next session
+
+##### F2: the live session overview, in a popup [02:05:21Z]
+PASS: on the terminal: Live sessions
+
+=== terminal: F2 [02:05:22Z] ===
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│Live sessions  4                                                                                                                                    │
+│                                                                                                                                                    │
+│┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓╭───────────────────────────────────────────────╮╔ Opened from here ═════════════════════════════╗│
+│┃ codex                            0:19 · • Done ┃│ copilot                         0:06 · • Done │║ claude                            0:32 · Done ║│
+│┃ codex · codex                                1 ┃│ copilot · copilot                           2 │║ claude · claude                             3 ║│
+│┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛╰───────────────────────────────────────────────╯╚═══════════════════════════════════════════════╝│
+│╭────────────────────────────────────────────────╮                                                                                                  │
+││ plain                                 — · Idle │                                                                                                  │
+││ claude · plain                               4 │                                                                                                  │
+│╰────────────────────────────────────────────────╯                                                                                                  │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│Enter focus · a actions · ? help · q exit · 1–0 jump · n/N needs you · c normal · ←↑↓→/hjkl move · Tab next · PgUp/PgDn page · Home/End ends        │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+PASS: no longer on the terminal: Live sessions
+PASS: the popup attached no second terminal and moved nothing
+
+##### F5: the harness icon picker, in a popup [02:05:22Z]
+PASS: on the terminal: Set Harness Icon
+
+=== terminal: F5 [02:05:23Z] ===
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│Set Harness Icon                                                                                                                                    │
+│──────────────────────────────                                                                                                                      │
+│  🟠  claude                                                                                                                                        │
+│  🟣  copilot                                                                                                                                       │
+│  🔵  codex                                                                                                                                         │
+│    None (clear icon)                                                                                                                               │
+│──────────────────────────────                                                                                                                      │
+│j/k navigate · enter apply · esc cancel                                                                                                             │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+PASS: no longer on the terminal: Set Harness Icon
+
+##### F6: the color picker, in a popup [02:05:23Z]
+PASS: on the terminal: Set Color
+
+=== terminal: F6 [02:05:23Z] ===
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│Set Color: claude                                                                                                                                   │
+│──────────────────────────────                                                                                                                      │
+│                                                                                                                                                    │
+│    🟩  green                                                                                                                                       │
+│    🟦  blue   ←                                                                                                                                    │
+│    🟥  red                                                                                                                                         │
+│    🟧  orange                                                                                                                                      │
+│    🟪  purple                                                                                                                                      │
+│    🟢  teal                                                                                                                                        │
+│    🟣  pink                                                                                                                                        │
+│    🟨  yellow                                                                                                                                      │
+│    ⬜  gray                                                                                                                                        │
+│    🔵  cyan                                                                                                                                        │
+│                                                                                                                                                    │
+│──────────────────────────────                                                                                                                      │
+│  ↩  reset to default (blue)                                                                                                                        │
+│──────────────────────────────                                                                                                                      │
+│j/k navigate · enter apply · esc cancel                                                                                                             │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+PASS: no longer on the terminal: Set Color
+
+##### F11: mark the shown session active; F8: clear it [02:05:24Z]
+
+--- state before F11 ---
+icon=stop unseen=False muted=False
+PASS: F11: the daemon shows claude active (bolt)
+
+--- state after F11 ---
+icon=bolt unseen=False muted=False
+PASS: F8: the daemon cleared claude's state icon
+
+--- state after F8 ---
+icon=- unseen=False muted=False
+
+##### F10: toggle mute on the shown session [02:05:24Z]
+
+--- mute before ---
+cc_mute=
+PASS: F10: the session is muted (cc_mute on the pane)
+
+--- mute after F10 ---
+cc_mute=1
+
+=== terminal: the status line while muted [02:05:26Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amx75/proj/claude
+
+❯ Reply with exactly the word ready and nothing else. Use no tools.
+
+⏺ ready
+
+✻ Churned for 0s · done 8:04 PM
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  46.6 max 5h 19/61 9:59pm 7d 23/39 oct18|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
+ 🔇🟠claude
+PASS: F10 again: the session is no longer muted
+
+--- mute after the second F10 ---
+cc_mute=
+
+##### F9 to the stand-in (a main-screen pane), then F3: the scrollback marker search; F3 again leaves it [02:05:27Z]
+PASS: the terminal is on the plain session
+PASS: F3: the pane entered history at an error marker
+
+=== terminal: F3 [02:05:31Z] ===
+stand-in claude pid 17565 in /tmp/amx75w/proj/plain                                                                                  [0/0] (1 results)
+runtime session: rs-4b78793214dd4644969693effc05ebbf  kitty window: none
+a line with the word error in it, for the scrollback marker key
+
+ 🟠plain
+PASS: F3 again: the pane left history
+
+##### F4: the next session needing attention. The three real sessions are at rest after their turns, which is attention too, so each is visited and cleared with F8 first; then the stand-in asks for permission [02:05:31Z]
+PASS: F8 on codex: its stop is cleared
+PASS: F8 on copilot: its stop is cleared
+PASS: F8 on claude: its stop is cleared
+PASS: the terminal is back on claude
+PASS: the stand-in asked for permission and nobody is looking at it (icon=key)
+
+--- states before F4 ---
+claude icon=- unseen=False muted=False
+codex icon=- unseen=False muted=False
+copilot icon=- unseen=False muted=False
+plain icon=key unseen=False muted=False
+PASS: F4: the terminal went to the session needing attention (plain)
+
+=== terminal: F4 [02:05:39Z] ===
+stand-in claude pid 17565 in /tmp/amx75w/proj/plain
+runtime session: rs-4b78793214dd4644969693effc05ebbf  kitty window: none
+a line with the word error in it, for the scrollback marker key
+ask
+asked (1)
+
+ 🔑🟠plain
+
+--- private server clients ---
+/dev/ttys004 pid=18079 session=amx-0931dd90e1641011 pane=%3 term=tmux-256color
+PASS: still exactly one terminal is attached
+PASS: F8 on plain: its permission state is cleared
+
+##### F7 and F9 are the navigation case's; here each is pressed once [02:05:39Z]
+PASS: F9: the terminal moved to the next session (codex)
+PASS: F7: the terminal moved back to the previous session (claude)
+
+##### RESULT: 28 passed, 0 failed [02:05:41Z]

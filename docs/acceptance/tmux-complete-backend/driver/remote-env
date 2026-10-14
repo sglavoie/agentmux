@@ -1,0 +1,19 @@
+# Sourced (bash) on the MacBook by everything that runs there: the isolated
+# world's own HOME, TMPDIR, config, daemon, registry, and private tmux server.
+# Nothing here reads or writes the MacBook user's own AgentMux state. No Kitty
+# variable is set, and the PATH holds no kitty or kitten.
+R=/tmp/amx75w
+REAL_HOME=${REAL_HOME:-$HOME}
+export REAL_HOME
+export HOME=$R/home TMPDIR=$R/tmp PATH=$R/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export XDG_STATE_HOME=$R/home/.local/state XDG_CONFIG_HOME=$R/home/.config XDG_DATA_HOME=$R/home/.local/share
+unset KITTY_LISTEN_ON KITTY_WINDOW_ID KITTY_PID KITTY_PUBLIC_KEY KITTY_INSTALLATION_DIR
+unset AMX_CONFIG AMX_TMUX AMX_TMUX_RUNTIME AMX_BIN AMX_RUNTIME_SESSION_ID AMX_WORKSPACE_HOSTED CLAUDECODE TMUX TMUX_PANE ZDOTDIR
+export TERM=xterm-256color LC_ALL=en_US.UTF-8
+BUNDLE=io.github.sglavoie.agentmux
+APP="$R/app/Agent Mux.app"
+DATA=$HOME/.local/share/agent-mux
+priv() { tmux -S $TMPDIR/agent-mux-$(id -u)/tmux.sock "$@"; }
+# The observer tmux: the plain terminal of this run. Its own socket and no
+# configuration; it hosts no agent and is not AgentMux's server.
+obs() { tmux -S $R/obs.sock -f /dev/null "$@"; }

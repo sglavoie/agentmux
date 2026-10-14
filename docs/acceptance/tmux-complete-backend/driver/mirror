@@ -1,0 +1,21 @@
+#!/bin/bash
+# Runs on the Studio while the world is up. The daemon confirms a Copilot stop
+# from the session's transcript (events.jsonl under the profile's home), and
+# the real Copilot writes that file here, where it is signed in. This carries
+# it to the world's Copilot home on the MacBook twice a second, as bridge.py
+# carries the terminal: only sessions started in this run's Copilot project
+# directory since the world came up, and only that one file.
+# usage: mirror HOST STAMP_FILE
+H=$1; stamp=$2; R=/tmp/amx75w; L=/tmp/amx75
+SSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ControlMaster=no -o ControlPath=$L/cm-%C"
+while :; do
+  for d in $(find "$HOME/.copilot/session-state" -maxdepth 1 -mindepth 1 -type d -newer "$stamp" 2>/dev/null); do
+    sid=$(basename "$d")
+    [ -f "$d/events.jsonl" ] || continue
+    grep -q "$L/proj/copilot" "$d/events.jsonl" 2>/dev/null || continue
+    dest=$R/home/.copilot-w/session-state/$sid
+    [ -e "$L/mirrored.$sid" ] || { $SSH "$H" "mkdir -p $dest" </dev/null && touch "$L/mirrored.$sid" && echo "$(date -u +%H:%M:%SZ) mirroring session $sid"; }
+    rsync -a -e "$SSH" "$d/events.jsonl" "$H:$dest/events.jsonl" </dev/null
+  done
+  sleep 0.5
+done

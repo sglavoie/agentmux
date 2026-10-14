@@ -1,0 +1,99 @@
+
+##### three profiles launched on tmux by amx project launch, with launch_backend = tmux in the installation's config; a plain terminal attaches [02:04:31Z]
+
+--- no Kitty ---
+KITTY variables in this shell: 0
+kitty or kitten on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
+
+--- the Mac ---
+Seb’s MacBook Pro
+27.0.1
+arm64
+
+--- amx ---
+amx version 0.8.0 (revision 8f063a9c2d33, built 2026-10-13T22:56:45Z, go1.27.1, sha256:d7d4629f8a61)
+
+--- amx backend status ---
+launch backend: tmux
+tmux: /opt/homebrew/bin/tmux (3.7c, from path)
+server: running at /tmp/amx75w/tmp/agent-mux-504/tmux.sock, 4 sessions, 4 running agents
+server tmux: /opt/homebrew/bin/tmux
+
+--- the installation's launch backend ---
+7:launch_backend = "tmux"
+
+--- amx project launch claude --profile claude --json (run by world up) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"claude","title":"claude","harness":"claude","directory":"/tmp/amx75w/proj/claude","groups":[]},"backend":"tmux","runtime_session_id":"rs-9a50c60edaca98fed4cc935c1484d65c"}}
+
+--- amx project launch codex --profile codex --json (run by world up) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"codex","title":"codex","harness":"codex","directory":"/tmp/amx75w/proj/codex","groups":[]},"backend":"tmux","runtime_session_id":"rs-8c8755c4741e8492a21ced0ecdfe38fe"}}
+
+--- amx project launch copilot --profile copilot --json (run by world up) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"copilot","title":"copilot","harness":"copilot","directory":"/tmp/amx75w/proj/copilot","groups":[]},"backend":"tmux","runtime_session_id":"rs-de279a5d30c90cdfd39c278bd89bbd28"}}
+
+--- amx project launch plain --profile plain --json (run by world up) ---
+{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched session","project":{"profile":"plain","title":"plain","harness":"claude","directory":"/tmp/amx75w/proj/plain","groups":[]},"backend":"tmux","runtime_session_id":"rs-4b78793214dd4644969693effc05ebbf"}}
+
+--- runtime-session registry ---
+rs-9a50c60edaca98fed4cc935c1484d65c live claude tmux %0 owner=-
+rs-8c8755c4741e8492a21ced0ecdfe38fe live codex tmux %1 owner=-
+rs-de279a5d30c90cdfd39c278bd89bbd28 live copilot tmux %2 owner=-
+rs-4b78793214dd4644969693effc05ebbf live plain tmux %3 owner=-
+
+--- private tmux server ---
+amx-0931dd90e1641011 %3 pid=17565 dead=0 /private/tmp/amx75w/proj/plain
+amx-177047fd88ae6416 %0 pid=17538 dead=0 /private/tmp/amx75w/proj/claude
+amx-5bc1f803b7255946 %2 pid=17556 dead=0 /private/tmp/amx75w/proj/copilot
+amx-7e5dd565a096a6c2 %1 pid=17547 dead=0 /private/tmp/amx75w/proj/codex
+
+--- the daemon's v2 companion snapshot ---
+snapshot v2 kitty.ready=False attention.total=0
+  claude   claude   profile=claude   icon=-         attention=False runtime=tmux %0 rs-9a50c60edaca98fed4cc935c1484d65c
+  codex    codex    profile=codex    icon=-         attention=False runtime=tmux %1 rs-8c8755c4741e8492a21ced0ecdfe38fe
+  copilot  copilot  profile=copilot  icon=-         attention=False runtime=tmux %2 rs-de279a5d30c90cdfd39c278bd89bbd28
+  plain    claude   profile=plain    icon=-         attention=False runtime=tmux %3 rs-4b78793214dd4644969693effc05ebbf
+PASS: the registry holds four live sessions, all on tmux
+PASS: every launch reported the tmux backend
+PASS: claude, codex, and copilot run under three different profiles
+PASS: the daemon holds no Kitty topology
+PASS: four agent panes run on the private server
+PASS: the daemon rendered a status for every session
+
+--- rendered status and color of each pane (@amx_status, @amx_status_color) ---
+claude #8ab7e9 [🟠claude]
+codex #bea7e9 [🔵codex]
+copilot #7ad395 [🟣copilot]
+plain #e4d063 [🟠plain]
+PASS: each profile has its own color
+PASS: no terminal is attached before the first attach
+PASS: a plain terminal attaches to the claude session (amx attach)
+
+=== terminal: the terminal, attached to claude [02:04:34Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amx75/proj/claude
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Try "fix typecheck errors"
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  46.6 max 5h 18/61 9:59pm 7d 22/39 oct18|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
+ 🟠claude
+
+--- private server clients ---
+/dev/ttys004 pid=18079 session=amx-177047fd88ae6416 pane=%0 term=tmux-256color
+
+--- registry (the owner of claude is this terminal) ---
+rs-9a50c60edaca98fed4cc935c1484d65c live claude tmux %0 owner=amx-attach-3c381cf63212d11b
+rs-8c8755c4741e8492a21ced0ecdfe38fe live codex tmux %1 owner=-
+rs-de279a5d30c90cdfd39c278bd89bbd28 live copilot tmux %2 owner=-
+rs-4b78793214dd4644969693effc05ebbf live plain tmux %3 owner=-
+PASS: one terminal is attached, to the claude pane
+PASS: the registry records the terminal as the session owner (amx-attach-)
+PASS: the terminal shows the status line with the session title
+
+##### RESULT: 13 passed, 0 failed [02:04:34Z]

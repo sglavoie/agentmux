@@ -1,0 +1,24 @@
+# Sourced (bash) on the Studio by the driver. The Studio only orchestrates:
+# it sends scripts over SSH, speaks VNC without a viewer, and runs the three
+# real harness processes headless, where they are signed in. Every terminal,
+# key, pointer move, notification, and pixel is the MacBook's
+# (AMX_MAC_TEST_HOST), which has no Kitty installed for the run.
+: "${AMX_MAC_TEST_HOST:?the Mac that everything runs and is shown on}"
+H=$AMX_MAC_TEST_HOST
+R=/tmp/amx75w            # the world, on the MacBook
+L=/tmp/amx75             # scratch on the Studio: harness directories, logs, pictures
+export AMX_VNC_PASSWORD_FILE=${AMX_VNC_PASSWORD_FILE:-$HOME/Downloads/pass}
+# One SSH connection is held and shared (ControlMaster), so the hook relay
+# and the transcript mirror authenticate nothing themselves.
+CM="-o ControlMaster=auto -o ControlPath=$L/cm-%C -o ControlPersist=3600"
+SSH="ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 $CM"
+# rr: runs a bash script (standard input) on the MacBook inside the world.
+rr() { { echo ". $R/driver/remote-env"; echo ". $R/driver/remote-lib"; cat; } | $SSH "$H" /bin/bash -s; }
+# rq 'COMMAND': the same for a one-line command.
+rq() { printf '%s\n' "$1" | rr; }
+S15=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../ghostty-desktop/session-15/driver" && pwd)
+# One held VNC connection for the whole desktop run (see session-15's vnc.py).
+export AMX_VNC_SOCKET=$L/vnc.sock
+vnc() { python3 "$S15/vnc.py" "$@"; }
+vnc_up() { [ -S $AMX_VNC_SOCKET ] && return 0; ( AMX_VNC_SOCKET= nohup python3 "$S15/vnc.py" daemon $L/vnc.sock > $L/logs/vnc.log 2>&1 </dev/null & ); n=60; while [ $n -gt 0 ] && [ ! -S $L/vnc.sock ]; do sleep 0.25; n=$((n-1)); done; [ -S $L/vnc.sock ]; }
+vnc_down() { [ -S $AMX_VNC_SOCKET ] && vnc quit; }

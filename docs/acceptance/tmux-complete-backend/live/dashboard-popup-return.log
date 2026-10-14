@@ -1,0 +1,172 @@
+
+##### ctrl+shift+d opens the dashboard as a popup over the terminal; q returns to the session; Enter on another row switches the terminal there and the popup ends [02:06:28Z]
+
+--- no Kitty ---
+KITTY variables in this shell: 0
+kitty or kitten on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+PASS: no Kitty variable, no kitty or kitten on PATH, no kitty.app in /Applications, no Kitty process
+PASS: the terminal is on the claude session
+PASS: on the terminal: Sessions
+
+=== terminal: the dashboard, in a popup over the claude session [02:06:29Z] ===
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│Agent Mux · Urgency · all projects                                                                                                   ● all checks ok│
+│> Sessions · focused                                                     │  Inspector                                                               │
+│    Needs you (1)                                                        │claude                                                                    │
+│• ▌ claude    Done     0:32                                              │• Done · 0:32                                                             │
+│                                                                         │Agent   claude · claude                                                   │
+│    Running (3)                                                          │Branch  master                                                            │
+│  ▌ plain     Active      —                                              │Dir     /tmp/amx75w/proj/claude                                           │
+│  ▌ copilot   Active      —                                              │Watch   —                                                                 │
+│  ▌ codex     Active      —                                              │──────────────────────────────────────────────────────────────────────────│
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │─────────────────────────────────────────────────────────────────────────…│
+│                                                                         │❯                                                                         │
+│                                                                         │─────────────────────────────────────────────────────────────────────────…│
+│                                                                         │  46.6 max 5h 19/61 9:59pm 7d 23/39 oct18|12:59am                         │
+│                                                                         │  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent                        │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+PASS: the popup is that terminal's: still one client, still on claude
+PASS: no longer on the terminal: Launch
+
+=== terminal: after q: back on the claude session [02:06:30Z] ===
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/amx75/proj/claude
+
+❯ Reply with exactly the word ready and nothing else. Use no tools.
+
+⏺ ready
+
+✻ Churned for 0s · done 8:04 PM
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  46.6 max 5h 19/61 9:59pm 7d 23/39 oct18|12:59am
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 1 agent
+ 🛑🟠claude
+PASS: after q the terminal is on claude again, with one client
+PASS: on the terminal: Sessions
+
+--- the row the popup opened on (the session the terminal is on) ---
+claude
+PASS: the popup opened on the row of the session it is over (claude)
+PASS: the copilot row is selected
+
+=== terminal: the popup with the copilot row selected [02:06:34Z] ===
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│Agent Mux · Urgency · all projects                                                                                                   ● all checks ok│
+│> Sessions · focused                                                     │  Inspector                                                               │
+│  Running (3)                                                            │copilot                                                                   │
+│▌ plain     Active      —                                                │Active · —                                                                │
+│▌ copilot   Active      —                                                │Agent   copilot · copilot                                                 │
+│▌ codex     Active      —                                                │Branch  master                                                            │
+│                                                                         │Dir     /tmp/amx75w/proj/copilot                                          │
+│  Idle (1)                                                               │Watch   —                                                                 │
+│▌ claude    Done     0:03                                                │──────────────────────────────────────────────────────────────────────────│
+│                                                                         │ ● Tip: /mcp                                                              │
+│                                                                         │   └ Manage MCP server configuration                                      │
+│                                                                         │                                                                          │
+│                                                                         │ ❯ Reply with exactly the word ready and nothing else. Use no tools.     …│
+│                                                                         │                                                                          │
+│                                                                         │ ● ready                                                                  │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │                                                                          │
+│                                                                         │ /private/tmp/amx75/proj/copilot [⎇ main%]                               …│
+│                                                                         │─────────────────────────────────────────────────────────────────────────…│
+│                                                                         │❯                                                                         │
+│                                                                         │─────────────────────────────────────────────────────────────────────────…│
+│                                                                         │ ← open sidebar · Interactive · Manual Approval · / commands · ? help · t…│
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · i inspector · q quit · ? more          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+PASS: Enter: the terminal was switched to the selected session (copilot)
+
+=== terminal: after Enter: the popup is gone and the terminal shows copilot [02:06:35Z] ===
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                  │
+│  ╭─╮╭─╮                            │  Getting started                                                                                            │
+│  ╰─╯╰─╯  Copilot v1.0.97 uses AI.  │  Use the tabs above to explore your sessions and pull requests                                              │
+│  █ ▘▝ █  Check for mistakes.       │  /init — Initialize Copilot instructions for this repository                                                │
+│   ▔▔▔▔                             │  /model — Switch models across providers, or use Auto                                                       │
+│                                                                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ● No copilot-instructions.md found. Run /init to generate.
+
+ ● Tip: /mcp
+   └ Manage MCP server configuration
+
+ ❯ Reply with exactly the word ready and nothing else. Use no tools.                                                                           20:05
+
+ ● ready
+
+ /private/tmp/amx75/proj/copilot [⎇ main%]                                                                                      Session: 7.5 AIC used
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Manual Approval · / commands · ? help · tab next tab                                                Claude Sonnet 5.5
+ 🟣copilot
+PASS: the popup ended: no dashboard is left running
+PASS: one terminal is attached and nothing was relaunched
+
+--- registry ---
+rs-9a50c60edaca98fed4cc935c1484d65c live claude tmux %0 owner=-
+rs-8c8755c4741e8492a21ced0ecdfe38fe live codex tmux %1 owner=-
+rs-de279a5d30c90cdfd39c278bd89bbd28 live copilot tmux %2 owner=amx-switch-8356e6b00d7eb8a6
+rs-4b78793214dd4644969693effc05ebbf live plain tmux %3 owner=-
+
+##### RESULT: 12 passed, 0 failed [02:06:36Z]

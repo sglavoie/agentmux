@@ -1,0 +1,115 @@
+# Helpers that run on the MacBook, inside the world (after remote-env).
+registry() { python3 - <<'PY'
+import json,os
+p=os.path.expanduser('~/.local/share/agent-mux/runtime-sessions.json')
+for s in json.load(open(p))['sessions']:
+    t=s.get('target') or {}
+    a=s.get('attachment') or {}
+    print(s['id'], s['state'], s.get('project',''), (t.get('instance') or {}).get('kind','-'), t.get('ref','-'),
+          'owner=%s' % (a.get('id') or '-'))
+PY
+}
+rsof() { registry | awk -v p="$1" '$2=="live" && $3==p {print $1}' | tail -1; }
+pane() { registry | awk -v p="$1" '$2=="live" && $3==p {print $5}' | tail -1; }
+screen() { priv capture-pane -p -t "$(pane "$1")" | sed -e 's/[[:space:]]*$//'; }
+pfmt() { priv display-message -p -t "$(pane "$1")" "$2"; }
+panes() { priv list-panes -a -F '#{session_name} #{pane_id} pid=#{pane_pid} dead=#{pane_dead} #{pane_current_path}'; }
+clients() { priv list-clients -F '#{client_name} pid=#{client_pid} session=#{session_name} pane=#{pane_id} term=#{client_termname}' 2>/dev/null | sort; }
+# where: the project whose pane the plain terminal's client is on.
+where() { local p; p=$(priv list-clients -F '#{pane_id}' 2>/dev/null | head -1); [ -n "$p" ] && registry | awk -v p="$p" '$2=="live" && $5==p {print $3}'; }
+# dq: the daemon's state query, whole.
+dq() { python3 - <<'PY'
+import json,socket,os,sys
+s=socket.socket(socket.AF_UNIX);s.settimeout(5);s.connect(os.path.expanduser('~/.local/share/agent-mux/daemon.sock'));s.sendall(b'{"type":"state_query"}\n')
+buf=b''
+while not buf.endswith(b'\n'):
+    c=s.recv(65536)
+    if not c: break
+    buf+=c
+sys.stdout.write(buf.decode())
+PY
+}
+# dstate PROJECT: the daemon's icon and unseen bit for the project's session.
+dstate() { local rid; rid=$(rsof "$1"); dq | python3 -c '
+import json,sys
+d=json.load(sys.stdin); rid=sys.argv[1]
+for slot,b in d.get("runtime_slots",{}).items():
+    if b["runtime_session_id"]==rid:
+        st=d["states"].get(slot,{})
+        print("icon=%s unseen=%s muted=%s" % (st.get("icon_state") or "-", bool(st.get("unseen")), bool(st.get("muted") or st.get("mute"))))
+' "$rid"; }
+# stops PROJECT: every Stop-class event the daemon holds for the session.
+stops() { amx daemon export-events --runtime-session "$(rsof "$1")" --pretty=false | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+for w in d["windows"]:
+    print("runtime_session_id=%s backend=%s events=%d" % (w.get("runtime_session_id"), w.get("backend"), len(w["events"])))
+    for e in w["events"]:
+        if e.get("stop_confirmed_by") or e.get("event") in ("Stop","agentStop","UserPromptSubmit","userPromptSubmitted","ScreenStopProbe","TranscriptStopProbe"):
+            print("  %s event=%s source=%s action=%s icon=%s stop_confirmed_by=%s stop_hold_waited_ms=%s" % (e.get("timestamp") or e.get("time") or e.get("at"), e.get("event"), e.get("source"), e.get("action"), e.get("icon_state") or e.get("icon"), e.get("stop_confirmed_by"), e.get("stop_hold_waited_ms")))
+'; }
+snapshot() { python3 - <<'PY'
+import json,os,socket
+s=socket.socket(socket.AF_UNIX); s.settimeout(5); s.connect(os.path.expanduser('~/.local/share/agent-mux/daemon.sock'))
+s.sendall((json.dumps({"type":"subscribe","subscribe":{"protocol":1,"client":"acceptance-probe","features":["runtime_sessions"]}})+"\n").encode())
+f=s.makefile(); ack=json.loads(f.readline()); frame=json.loads(f.readline())
+d=frame['data']
+print('snapshot v%s kitty.ready=%s attention.total=%s' % (d.get('v'), d['kitty'].get('ready'), d['attention'].get('total')))
+for x in d.get('sessions',[]):
+    rt=x.get('runtime') or {}
+    print('  %-8s %-8s profile=%-8s icon=%-9s attention=%-5s runtime=%s %s %s' % (x.get('project'), x.get('harness'), x.get('profile'), x.get('icon_state') or '-', x.get('attention',False), rt.get('backend','-'), rt.get('pane',''), rt.get('session_id','')))
+PY
+}
+# journal: the daemon's persisted notification and focus records, one a line.
+journal() { amx debug tail -n 0 --json 2>/dev/null | python3 -c '
+import json,sys
+for r in json.load(sys.stdin).get("records",[]):
+    st=r.get("stage","")
+    if "notification" in st or "focus" in st:
+        ev=r.get("evidence") or {}
+        print(r.get("observed_at","")[11:19]+"Z", st, r.get("outcome"), r.get("reason"), "action=%s backend=%s" % (ev.get("action"), ev.get("backend")))'; }
+nokitty() { echo "KITTY variables in this shell: $(env | grep -c '^KITTY')"; echo "kitty or kitten on PATH: $(command -v kitty kitten || echo none)"; echo "/Applications/kitty.app: $(ls -d /Applications/kitty.app 2>&1)"; echo "kitty processes: $(pgrep -x kitty | wc -l | tr -d ' ')"; }
+# --- the plain terminal ---------------------------------------------------------
+# One window of the observer tmux running `amx attach`: a real tmux client of
+# the private server, with a keyboard (send-keys) and a screen (capture-pane).
+T=term
+k() { obs send-keys -t $T "$@"; }
+typ() { obs send-keys -t $T -l "$1"; }
+# goto PROJECT: the terminal, attached to that project's session. A terminal
+# that is not attached yet runs `amx attach`; one that is goes there with F9
+# and F7, the navigation keys.
+term_up() { obs has-session -t $T 2>/dev/null && [ -n "$(priv list-clients 2>/dev/null)" ]; }
+goto() {
+  if ! term_up; then
+    obs kill-session -t $T 2>/dev/null
+    obs new-session -d -s $T -x 150 -y 45 "amx attach $(rsof "$1"); echo ATTACH_EXIT=\$?; exec sleep 36000"
+    obs set-option -s extended-keys always >/dev/null 2>&1
+  else
+    local n=4; while [ $n -gt 0 ] && [ "$(where)" != "$1" ]; do k F9; sleep 0.9; n=$((n-1)); done
+    n=4; while [ $n -gt 0 ] && [ "$(where)" != "$1" ]; do k F7; sleep 0.9; n=$((n-1)); done
+  fi
+  local n=40; while [ $n -gt 0 ] && [ "$(where)" != "$1" ]; do sleep 0.25; n=$((n-1)); done
+  [ "$(where)" = "$1" ]
+}
+
+# --- the app copy -------------------------------------------------------------
+apppid() { pgrep -f "$APP/Contents/MacOS/Agent Mux" | head -1; }
+applog() { /usr/bin/log show --start "$(cat $R/app.started)" --style compact --predicate "subsystem == \"io.github.sglavoie.agentmux\" AND processIdentifier == $(apppid)" 2>/dev/null | sed -E -e '1d' -e 's/^[0-9-]+ ([0-9:.]+) +[A-Za-z]+ +Agent Mux\[[0-9:a-f]+\] /\1 /'; }
+mark() { applog | wc -l | tr -d ' ' > $R/logmark; }
+since() { applog | tail -n +$(( $(cat $R/logmark) + 1 )); }
+# app_defaults FRAME OPEN_AT_LAUNCH: the copy's own preferences domain. No
+# launch backend is written: the preference is left at its default.
+app_defaults() {
+  defaults delete $BUNDLE >/dev/null 2>&1
+  defaults write $BUNDLE amxBinaryPath -string $R/shim/amx
+  defaults write $BUNDLE amxUseAppNotifications -bool true
+  defaults write $BUNDLE amxEnvironment -dict PATH "$PATH" XDG_STATE_HOME "$XDG_STATE_HOME" XDG_CONFIG_HOME "$XDG_CONFIG_HOME" XDG_DATA_HOME "$XDG_DATA_HOME"
+  defaults write $BUNDLE amxOpenWorkspaceAtLaunch -bool "$2"
+  defaults write $BUNDLE "NSWindow Frame AgentMuxWorkspace" -string "$1"
+}
+app_start() {
+  date '+%Y-%m-%d %H:%M:%S' > $R/app.started
+  open -n "$APP" --env HOME="$HOME" --env TMPDIR="$TMPDIR" --env PATH="$PATH"
+  n=80; while [ $n -gt 0 ]; do [ -n "$(apppid)" ] && applog | grep -q "feed: live" && return 0; sleep 0.25; n=$((n-1)); done; return 1
+}
+app_quit() { p=$(apppid); [ -n "$p" ] || return 0; kill "$p" 2>/dev/null; n=40; while [ $n -gt 0 ] && kill -0 "$p" 2>/dev/null; do sleep 0.25; n=$((n-1)); done; }

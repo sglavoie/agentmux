@@ -1,0 +1,8 @@
+#!/bin/sh
+# The amx the app copy runs (its amxBinaryPath), on the MacBook. libghostty
+# starts a terminal's command through login(1), which resets HOME to the
+# account's real one; this puts the isolated world back.
+R=/tmp/amx75w
+export HOME=$R/home TMPDIR=$R/tmp PATH=$R/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export XDG_STATE_HOME=$R/home/.local/state XDG_CONFIG_HOME=$R/home/.config XDG_DATA_HOME=$R/home/.local/share
+exec $R/bin/amx "$@"

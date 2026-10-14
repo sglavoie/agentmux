@@ -1,0 +1,41 @@
+#!/bin/sh
+# Installed on the MacBook as the world's `claude`, `codex`, and `copilot`:
+# what AgentMux launches in a tmux pane for a session of that harness.
+#
+# For the three real projects it is the pane end of session-15's bridge.py.
+# The REAL harness runs on the Studio, where it is signed in, and its terminal
+# is carried here over SSH. Its hooks are real too: on the Studio each one
+# runs `hook`, which hands the payload over SSH to `hookrelay` here, and that
+# runs the world's `amx hook-indicator` in this pane's own environment (saved
+# below), so the daemon receives exactly what the harness sent, for this
+# pane's runtime session.
+#
+# In the `plain` and `second` projects it is instead a stand-in with no model:
+# it sends real hooks itself and reads `ask`, `work`, `done`, and `quit`.
+R=/tmp/amx75w
+name=$(basename "$0")
+case "$1" in --version|-V|-v) cat "$R/versions/$name"; exit 0 ;; esac
+case "$(pwd -P)" in
+*/proj/plain|*/proj/second)
+  sid="standin-$$"
+  hook() { printf '{"session_id":"%s","hook_event_name":"%s","cwd":"%s"%s}' "$sid" "$1" "$(pwd)" "$2" | "$R/bin/amx" hook-indicator --harness "$name" "$1" >/dev/null 2>&1; echo "$(date -u +%H:%M:%SZ) standin $1 runtime=${AMX_RUNTIME_SESSION_ID:-none} exit=$?" >> "$R/logs/hooks.log"; }
+  echo "stand-in $name pid $$ in $(pwd)"
+  echo "runtime session: ${AMX_RUNTIME_SESSION_ID:-none}  kitty window: ${KITTY_WINDOW_ID:-none}"
+  echo "a line with the word error in it, for the scrollback marker key"
+  hook SessionStart ',"source":"startup"'
+  i=0
+  while IFS= read -r line; do
+    i=$((i+1))
+    case "$line" in
+      ask) hook PermissionRequest ',"tool_name":"Bash"'; echo "asked ($i)" ;;
+      work) hook UserPromptSubmit ',"prompt":"x"'; echo "working ($i)" ;;
+      done) hook Stop ''; echo "done ($i)" ;;
+      quit) exit 0 ;;
+      *) echo "echo[$i]: $line" ;;
+    esac
+  done
+  exit 0 ;;
+esac
+export -p > "$R/bridge/$name.env"
+pwd > "$R/bridge/$name.cwd"
+exec /usr/bin/python3 "$R/driver/bridge.py" pane "$R/bridge/$name.sock"

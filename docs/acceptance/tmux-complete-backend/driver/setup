@@ -1,0 +1,101 @@
+#!/bin/bash
+# Builds the isolated world on the MacBook. Runs on the Studio.
+# usage: setup world            the world: amx built from the MacBook's own checkout, config, agents, hooks
+#        setup app REPO_ROOT    the signed Release app of this checkout, copied into the world
+# Nothing is installed on the MacBook outside /tmp/amx75w and the checkout
+# copy macos/scripts/remote-ui.sh keeps. tmux is the MacBook's own (Homebrew).
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+. "$here/env"
+CHECKOUT='$REAL_HOME/1_dev_projects/sglavoie_agentmux'
+case "${1:-}" in
+world)
+  mkdir -p $L/logs $L/shots $L/proj/claude $L/proj/codex $L/proj/copilot
+  echo "$H" > $L/host
+  install -m 0755 "$here/hook" $L/hook
+  for p in claude codex copilot; do [ -d $L/proj/$p/.git ] || git -C $L/proj/$p init -q .; done
+  $SSH "$H" "[ ! -e $R/home ] || { echo '$R already holds a world; run: world down, then remove it'; exit 1; }; mkdir -p $R/driver $R/bin $R/shim $R/home/.config/agent-mux $R/tmp $R/logs $R/out $R/app $R/bridge $R/versions $R/proj/claude $R/proj/codex $R/proj/copilot $R/proj/plain $R/proj/second && chmod 700 $R/tmp" </dev/null
+  rsync -a --delete -e "$SSH" "$here/" "$H:$R/driver/" </dev/null
+  rsync -a -e "$SSH" "$S15/bridge.py" "$H:$R/driver/bridge.py" </dev/null
+  # Alerter: this Mac's binary, copied into the world; nothing is installed.
+  rsync -aL -e "$SSH" "$(command -v alerter)" "$H:$R/bin/alerter" </dev/null
+  # What each real harness says its version is, where it really runs.
+  /Users/sglavoie/.local/bin/claude --version | $SSH "$H" "cat > $R/versions/claude"
+  /opt/homebrew/bin/codex --version | $SSH "$H" "cat > $R/versions/codex"
+  /opt/homebrew/bin/copilot --version | head -1 | $SSH "$H" "cat > $R/versions/copilot"
+  rr <<REMOTE
+set -e
+(cd "$CHECKOUT" && echo "building amx from \$(pwd) at \$(git rev-parse HEAD), tree: [\$(git status --porcelain)]" && HOME=\$REAL_HOME TMPDIR=/tmp go build -o \$R/bin/amx .)
+for h in claude codex copilot; do install -m 0755 \$R/driver/agent \$R/bin/\$h; done
+install -m 0755 \$R/driver/amx-shim \$R/shim/amx
+chmod +x \$R/driver/hookrelay
+cp \$R/driver/world-config \$HOME/.config/agent-mux/config.toml
+# AgentMux starts a harness through a login shell, whose system profile puts
+# the system directories first: the world's bin goes back in front.
+printf "export PATH=\$R/bin:/opt/homebrew/bin:\\\$PATH\nPS1='view %%1~ %%# '\n" > \$HOME/.zshrc
+for d in claude codex copilot plain second; do git -C \$R/proj/\$d init -q . && git -C \$R/proj/\$d -c user.email=amx75@example.invalid -c user.name=amx75 commit -q --allow-empty -m init; done
+amx config hooks-sync
+echo "world ready on \$(scutil --get ComputerName) (\$(sw_vers -productVersion), \$(uname -m))"
+amx --version; tmux -V; \$R/bin/alerter --version </dev/null
+nokitty
+amx backend status
+REMOTE
+  # The real harnesses' hooks, on the Studio: the hooks this amx just wrote
+  # for each profile, with the command replaced by the relay.
+  relay() { python3 -c '
+import json,re,sys
+name=sys.argv[1]; d=json.load(sys.stdin)
+def walk(x):
+    if isinstance(x,dict): return {k:walk(v) for k,v in x.items()}
+    if isinstance(x,list): return [walk(v) for v in x]
+    if isinstance(x,str): return re.sub(r"\S*amx hook-indicator ", "/tmp/amx75/hook %s " % name, x)
+    return x
+out=walk(d)
+if name=="claude": out={"hooks": out.get("hooks",{})}
+json.dump(out,sys.stdout,indent=1)' "$1"; }
+  $SSH "$H" "cat $R/home/.claude-w/settings.json" </dev/null | relay claude > $L/claude-settings.json
+  mkdir -p $L/proj/copilot/.github/hooks
+  $SSH "$H" "cat $R/home/.copilot-w/hooks/agent-mux.json" </dev/null | relay copilot > $L/proj/copilot/.github/hooks/amx75-relay.json
+  # Each harness is started by a script of its own, with nothing written to
+  # its real home: Claude takes the relay hooks as --settings, Copilot from
+  # its project directory (trusted for this process by COPILOT_ALLOW_ALL=true),
+  # and Codex as -c overrides, with the project trusted the same way.
+  printf '#!/bin/sh\nexec /Users/sglavoie/.local/bin/claude --settings %s "$@"\n' $L/claude-settings.json > $L/run-claude
+  printf '#!/bin/sh\nCOPILOT_ALLOW_ALL=true exec /opt/homebrew/bin/copilot "$@"\n' > $L/run-copilot
+  $SSH "$H" "cat $R/home/.codex-w/hooks.json" </dev/null | relay codex | python3 -c '
+import json,re,shlex,sys
+def toml(v):
+    if isinstance(v,dict): return "{"+", ".join("%s=%s" % (k if re.fullmatch(r"[A-Za-z0-9_-]+",k) else json.dumps(k), toml(x)) for k,x in v.items())+"}"
+    if isinstance(v,list): return "["+", ".join(toml(x) for x in v)+"]"
+    if isinstance(v,bool): return "true" if v else "false"
+    if isinstance(v,(int,float)): return str(v)
+    return json.dumps(v)
+d=json.load(sys.stdin); proj=sys.argv[1]
+args=["/opt/homebrew/bin/codex","--dangerously-bypass-hook-trust","-c","projects={%s={trust_level=\"trusted\"}}" % json.dumps(proj)]
+for event,groups in d["hooks"].items(): args += ["-c","hooks.%s=%s" % (event, toml(groups))]
+print("#!/bin/sh\nexec "+" ".join(shlex.quote(a) for a in args)+" \"$@\"")' "$(cd $L/proj/codex && pwd -P)" > $L/run-codex
+  chmod +x $L/run-claude $L/run-codex $L/run-copilot
+  for f in $L/claude-settings.json $L/run-codex $L/proj/copilot/.github/hooks/amx75-relay.json; do echo "$f: $(grep -o '/tmp/amx75/hook' $f | wc -l | tr -d ' ') relayed hook commands"; done
+  ;;
+app)
+  # The app is the Release bundle of this checkout: built on the MacBook by
+  # `just mac-app Release` (AMX_MAC_TEST_HOST), brought back, and signed here
+  # by macos/scripts/sign.sh with this Mac's Apple Development identity. It
+  # keeps its real bundle identifier. A copy re-signed ad hoc under another
+  # identifier, as session 15 used, is refused by macOS 27's notification
+  # service ("Failed to find or validate client"), and this run needs the
+  # app's own notifications. The MacBook has no Agent Mux.app installed and no
+  # preferences for the identifier; `world down` removes the ones this sets.
+  repo=$2
+  src="$repo/macos/build/Agent Mux.app"
+  signed=$(codesign -dvv "$src" 2>&1 || true)
+  case "$signed" in *"Authority=Apple Development"*) ;; *) echo "$src is not signed with a development identity: run just mac-app Release, then macos/scripts/sign.sh on it"; exit 1 ;; esac
+  $SSH "$H" "[ ! -e '/Applications/Agent Mux.app' ] || { echo 'Agent Mux.app is installed on the MacBook; the run would use its identifier'; exit 1; }; rm -rf '$R/app/Agent Mux.app'" </dev/null
+  rsync -a --delete -e "$SSH" "$src" "$H:$R/app/" </dev/null
+  rr <<'REMOTE'
+codesign -dvv "$APP" 2>&1 | grep -E '^Identifier|Authority=Apple Dev|TeamIdentifier'
+echo "app: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist") as $BUNDLE in $R/app"
+REMOTE
+  ;;
+*) echo "usage: setup world | setup app REPO_ROOT"; exit 2 ;;
+esac
