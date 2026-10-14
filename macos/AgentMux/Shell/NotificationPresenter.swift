@@ -363,6 +363,12 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     /// The terminal notices shown, by thread, oldest first: the center
     /// removes by identifier only.
     private var terminalIdentifiers: [String: [String]] = [:]
+    /// Terminal notices handed to `add` and not yet answered.
+    private var terminalAdding: Set<String> = []
+    /// Terminal notices withdrawn or pushed out while still being added,
+    /// which are removed again once `add` finishes. Kept apart from
+    /// `retracted`: nothing about a terminal notice is reported.
+    private var terminalWithdrawn: Set<String> = []
     private var permissionInFlight = false
     /// Notices retracted before `add` finished, which must not be shown.
     private var retracted: Set<String> = []
@@ -493,19 +499,39 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         if evicted > 0 {
             // Forgetting a notice still shown would leave it behind when
             // its session or view is withdrawn.
-            center.remove(identifiers: Array(kept.prefix(evicted)))
+            removeTerminal(Array(kept.prefix(evicted)))
             kept.removeFirst(evicted)
         }
         terminalIdentifiers[notice.origin.thread] = kept
-        center.add(request) { _ in }
+        let id = request.identifier
+        terminalAdding.insert(id)
+        center.add(request) { [weak self] error in
+            self?.schedule { self?.finishTerminalAdd(id, error: error) }
+        }
         return .shown
+    }
+
+    private func finishTerminalAdd(_ id: String, error: Error?) {
+        terminalAdding.remove(id)
+        // Withdrawn while it was being added: the removal may have come
+        // before the center had it, so it is removed again now. Identifiers
+        // are never reused, so a newer notice of the same origin is untouched.
+        if terminalWithdrawn.remove(id) != nil, error == nil {
+            center.remove(identifiers: [id])
+        }
+    }
+
+    /// Removes terminal notices, remembering those still being added.
+    private func removeTerminal(_ ids: [String]) {
+        terminalWithdrawn.formUnion(ids.filter(terminalAdding.contains))
+        center.remove(identifiers: ids)
     }
 
     /// Removes the terminal notices of a session or view, which is being
     /// shown: they have nothing left to say.
     func withdrawTerminal(_ origin: TerminalNotice.Origin) {
         guard let ids = terminalIdentifiers.removeValue(forKey: origin.thread), !ids.isEmpty else { return }
-        center.remove(identifiers: ids)
+        removeTerminal(ids)
     }
 
     static func terminalRequest(_ notice: TerminalNotice) -> UNNotificationRequest {

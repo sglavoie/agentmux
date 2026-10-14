@@ -421,6 +421,43 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(Set(center.removed), Set(center.added.map(\.identifier)))
     }
 
+    /// A terminal notice withdrawn while it is still being added is removed
+    /// again once the add finishes, without a word to the daemon, and a
+    /// newer notice of the same origin is not taken with it.
+    func testTerminalNoticeWithdrawalSurvivesDelayedAdd() throws {
+        let presenter = presenter()
+        center.autoAdd = nil
+        let origin = TerminalNotice.Origin.session(runtimeSessionID: "rs-1")
+        let notice = TerminalNotice(title: "Build", body: "done", source: "api", origin: origin)
+
+        XCTAssertEqual(presenter.presentTerminal(notice, snoozed: false, muted: false, onScreen: false), .shown)
+        let old = try XCTUnwrap(center.added.last?.identifier)
+        presenter.withdrawTerminal(origin)
+        XCTAssertEqual(center.removed, [old])
+
+        XCTAssertEqual(presenter.presentTerminal(notice, snoozed: false, muted: false, onScreen: false), .shown)
+        let newer = try XCTUnwrap(center.added.last?.identifier)
+        XCTAssertNotEqual(newer, old)
+
+        center.finishAdd(old)
+        XCTAssertEqual(center.removed, [old, old], "removed again once the center has it")
+        center.finishAdd(newer)
+        XCTAssertEqual(center.removed, [old, old], "the newer notice of the same origin stays")
+        XCTAssertEqual(reports, [], "the daemon never hears of it")
+
+        presenter.withdrawTerminal(origin)
+        XCTAssertEqual(center.removed, [old, old, newer])
+        XCTAssertEqual(reports, [])
+
+        // A failed add of a withdrawn notice has nothing to remove.
+        presenter.presentTerminal(notice, snoozed: false, muted: false, onScreen: false)
+        let failed = try XCTUnwrap(center.added.last?.identifier)
+        presenter.withdrawTerminal(origin)
+        center.finishAdd(failed, error: NSError(domain: "test", code: 1))
+        XCTAssertEqual(center.removed, [old, old, newer, failed])
+        XCTAssertEqual(reports, [])
+    }
+
     /// The snooze a terminal notice obeys: the daemon's while the feed is
     /// live, else the mirrored one.
     func testTerminalNoticesFollowTheLiveSnoozeElseTheMirroredOne() {
