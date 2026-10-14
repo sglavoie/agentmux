@@ -180,6 +180,64 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertEqual(workspace.rendererFailed, [])
     }
 
+    func testAUtilityRendererFailureOffersRecovery() throws {
+        // The Dashboard: it stays listed, and comes back by itself.
+        let dashboardID = WorkspaceUtilityView.dashboard.id
+        XCTAssertTrue(workspace.showView(dashboardID))
+        let dashboard = try XCTUnwrap(workspace.utilityTerminalView(for: dashboardID))
+        workspace.terminalRendererHealthChanged(dashboard, healthy: false)
+        XCTAssertEqual(workspace.content, .viewRendererFailed(id: dashboardID))
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "The terminal stopped drawing")
+        XCTAssertEqual(workspace.placeholder.button.title, "Restart")
+        XCTAssertFalse(workspace.placeholder.button.isHidden)
+        XCTAssertTrue(dashboard.isHidden)
+        XCTAssertFalse(workspace.placeholder.isHidden)
+        XCTAssertEqual(workspace.rendererFailed, [], "a view is not a session")
+
+        workspace.terminalRendererHealthChanged(dashboard, healthy: true)
+        XCTAssertEqual(workspace.content, .view(id: dashboardID))
+        XCTAssertFalse(dashboard.isHidden)
+        XCTAssertEqual(app.madeViews, [dashboardID])
+
+        // Restarting ends the broken terminal and starts the program again.
+        workspace.terminalRendererHealthChanged(dashboard, healthy: false)
+        workspace.placeholder.press()
+        XCTAssertEqual(app.closedViews, [dashboardID])
+        XCTAssertEqual(app.madeViews, [dashboardID, dashboardID])
+        XCTAssertEqual(workspace.content, .view(id: dashboardID))
+        let restarted = try XCTUnwrap(workspace.utilityTerminalView(for: dashboardID))
+        XCTAssertFalse(restarted === dashboard)
+        XCTAssertFalse(restarted.isHidden)
+        XCTAssertTrue(workspace.placeholder.isHidden)
+        XCTAssertEqual(workspace.rendererFailedViews, [])
+
+        // The Overview, the other permanent view.
+        let overviewID = WorkspaceUtilityView.overview.id
+        XCTAssertTrue(workspace.showView(overviewID))
+        let overview = try XCTUnwrap(workspace.utilityTerminalView(for: overviewID))
+        workspace.terminalRendererHealthChanged(overview, healthy: false)
+        XCTAssertEqual(workspace.content, .viewRendererFailed(id: overviewID))
+        workspace.placeholder.press()
+        XCTAssertEqual(workspace.content, .view(id: overviewID))
+        XCTAssertFalse(try XCTUnwrap(workspace.utilityTerminalView(for: overviewID)) === overview)
+
+        // A shell, which is not permanent: it stays listed and restarts.
+        workspace.open(WorkspaceUtilityView(kind: .shell, target: "/tmp", title: "Shell"))
+        guard case let .view(shellID) = workspace.content else { return XCTFail("the shell is shown") }
+        let shell = try XCTUnwrap(workspace.utilityTerminalView(for: shellID))
+        workspace.terminalRendererHealthChanged(shell, healthy: false)
+        XCTAssertEqual(workspace.content, .viewRendererFailed(id: shellID))
+        XCTAssertNotNil(try? viewCell(shellID), "the failed view stays listed")
+        workspace.placeholder.press()
+        XCTAssertEqual(workspace.content, .view(id: shellID))
+        let newShell = try XCTUnwrap(workspace.utilityTerminalView(for: shellID))
+        XCTAssertFalse(newShell === shell)
+        XCTAssertFalse(newShell.isHidden)
+        XCTAssertEqual(workspace.rendererFailedViews, [])
+        XCTAssertEqual(workspace.rendererFailed, [])
+        XCTAssertEqual(app.made, [], "no session terminal was made for a view")
+    }
+
     func testATerminalsNotificationNamesWhereItCameFrom() throws {
         workspace.activate(try row("work"))
         let work = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))

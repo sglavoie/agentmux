@@ -290,8 +290,10 @@ runs without embedded terminals.
   follows its name in the window title; a session keeps its own name. The
   link under the pointer is shown at the pane's bottom corner. A session
   terminal whose renderer fails is set aside for a placeholder offering
-  **Reattach**, which makes a new terminal; it comes back by itself if the
-  renderer recovers. OSC 9 and 777 notifications become app notices (see
+  **Reattach**, which makes a new terminal; a utility view's (the Dashboard,
+  the Overview, a shell, editor, or pager) offers **Restart**, which ends its
+  program and starts it in a new terminal. Either comes back by itself if
+  the renderer recovers. OSC 9 and 777 notifications become app notices (see
   [Notifications](#notifications)).
 - **Links.** http, https, and mailto links open at once; a file (a `file:`
   URL or a bare path) is shown in the Finder, never opened; any other scheme

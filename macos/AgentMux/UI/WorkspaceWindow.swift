@@ -170,6 +170,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         /// The Dashboard or the Overview after its program exited.
         case viewEnded(id: String)
         case viewUnavailable(id: String, String)
+        /// A utility view's terminal reported that its renderer failed.
+        case viewRendererFailed(id: String)
     }
 
     /// Something the pane can be on: a session or a utility view.
@@ -220,6 +222,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var detached: Set<String> = []
     /// Sessions whose terminal's renderer said it failed.
     private(set) var rendererFailed: Set<String> = []
+    /// Utility views, by id, whose terminal's renderer said it failed.
+    private(set) var rendererFailedViews: Set<String> = []
 
     /// Sessions and views, by runtime session or view id, that rang the
     /// bell while another was shown; marked on their line until shown or
@@ -1102,6 +1106,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func discardViewTerminal(_ id: String) {
         guard let terminal = viewTerminals.removeValue(forKey: id) else { return }
         ringingViews.remove(id)
+        rendererFailedViews.remove(id)
         programTitles[id] = nil
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
             focusListOrPane()
@@ -1338,20 +1343,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         linkLabel.isHidden = url == nil
     }
 
-    /// A terminal's renderer failed or recovered. A session's terminal that
-    /// draws nothing is set aside for a placeholder offering to reattach.
+    /// A terminal's renderer failed or recovered. A terminal that draws
+    /// nothing is set aside for a placeholder: a session's offers to
+    /// reattach, a utility view's to restart its program.
     func terminalRendererHealthChanged(_ view: NSView, healthy: Bool) {
-        guard let id = sessionID(of: view) else {
-            if !healthy { Self.logger.error("workspace: a view's renderer failed") }
+        let changed: Bool
+        if let id = sessionID(of: view) {
+            Self.logger.notice("workspace: the renderer of \(id, privacy: .public) is \(healthy ? "healthy again" : "unhealthy", privacy: .public)")
+            changed = healthy ? rendererFailed.remove(id) != nil : rendererFailed.insert(id).inserted
+        } else if let id = viewID(of: view) {
+            Self.logger.notice("workspace: the renderer of view \(id, privacy: .public) is \(healthy ? "healthy again" : "unhealthy", privacy: .public)")
+            changed = healthy ? rendererFailedViews.remove(id) != nil : rendererFailedViews.insert(id).inserted
+        } else {
             return
         }
-        Self.logger.notice("workspace: the renderer of \(id, privacy: .public) is \(healthy ? "healthy again" : "unhealthy", privacy: .public)")
-        if healthy {
-            guard rendererFailed.remove(id) != nil else { return }
-        } else {
-            guard rendererFailed.insert(id).inserted else { return }
-        }
-        updateContent(focus: false)
+        if changed { updateContent(focus: false) }
     }
 
     /// A program asked for a desktop notification.
@@ -1399,7 +1405,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func wantedViewContent(_ view: WorkspaceUtilityView, retry: Bool) -> Content {
         let id = view.id
         if endedViews.contains(id) { return .viewEnded(id: id) }
-        if viewTerminals[id] != nil { return .view(id: id) }
+        if viewTerminals[id] != nil {
+            return rendererFailedViews.contains(id) ? .viewRendererFailed(id: id) : .view(id: id)
+        }
         if !retry, case let .viewUnavailable(refused, _) = content, refused == id { return content }
         guard let delegate else { return .viewUnavailable(id: id, "The app is shutting down.") }
         switch delegate.makeUtilityTerminal(view) {
@@ -1517,6 +1525,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             placeholder.show(title: "No terminal yet", message: message, button: "Try Again") { [weak self] in
                 self?.restartView(id)
             }
+        case let .viewRendererFailed(id):
+            let name = views.view(id)?.title ?? "This view"
+            placeholder.show(
+                title: "The terminal stopped drawing",
+                message: "\(name)'s renderer failed, so it can no longer be seen here. No session was affected; restarting ends its program and starts it in a new terminal.",
+                button: "Restart",
+                isDefault: true
+            ) { [weak self] in self?.restartViewAfterRendererFailure(id) }
         case .external:
             placeholder.show(
                 title: row.map { "\($0.project) runs in Kitty" } ?? "This session runs in Kitty",
@@ -1580,6 +1596,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         Self.logger.notice("workspace: reattaching \(id, privacy: .public) after a renderer failure")
         discardTerminal(id)
         reattach(id)
+    }
+
+    /// Ends a utility view whose renderer failed and starts it again in a
+    /// new terminal.
+    private func restartViewAfterRendererFailure(_ id: String) {
+        Self.logger.notice("workspace: restarting view \(id, privacy: .public) after a renderer failure")
+        discardViewTerminal(id)
+        restartView(id)
     }
 
     private func reattach(_ id: String) {
