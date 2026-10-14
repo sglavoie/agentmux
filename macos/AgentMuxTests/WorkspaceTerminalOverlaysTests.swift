@@ -76,6 +76,28 @@ final class WorkspaceTerminalOverlaysTests: XCTestCase {
         XCTAssertNil(B.delay(for: "abc"))
     }
 
+    func testTheFindBarFollowsLightAndDark() throws {
+        let bar = WorkspaceFindBar()
+        XCTAssertTrue(bar.wantsUpdateLayer)
+        func colors(_ name: NSAppearance.Name) throws -> (CGColor?, CGColor?, CGColor, CGColor) {
+            let appearance = try XCTUnwrap(NSAppearance(named: name))
+            bar.appearance = appearance
+            bar.updateLayer()
+            var expected: (CGColor, CGColor)!
+            appearance.performAsCurrentDrawingAppearance {
+                expected = (NSColor.windowBackgroundColor.cgColor, NSColor.separatorColor.cgColor)
+            }
+            return (bar.layer?.backgroundColor, bar.layer?.borderColor, expected.0, expected.1)
+        }
+        let light = try colors(.aqua)
+        XCTAssertEqual(light.0, light.2)
+        XCTAssertEqual(light.1, light.3)
+        let dark = try colors(.darkAqua)
+        XCTAssertEqual(dark.0, dark.2)
+        XCTAssertEqual(dark.1, dark.3)
+        XCTAssertNotEqual(light.0, dark.0, "the background changes with the appearance")
+    }
+
     func testTheScrollbarMapsRowsToTheKnobAndBack() {
         let bottom = Ghostty.Scrollbar(total: 124, offset: 100, len: 24)
         XCTAssertTrue(bottom.scrolls)

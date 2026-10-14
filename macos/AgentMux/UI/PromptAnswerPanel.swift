@@ -32,8 +32,9 @@ struct AMXPromptAnswerService: PromptAnswerService {
     }
 }
 
-/// Drives one panel's invocations. Main-thread confined; an answer for a
-/// panel that has since closed or been reopened is dropped by sequence.
+/// Drives one panel's invocations. Main-thread confined; a look for a panel
+/// that has since closed or been reopened is dropped by sequence, and a key's
+/// result is reported through `onLateResult` instead.
 @MainActor
 final class PromptAnswerFlow: ObservableObject {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "prompt")
@@ -46,19 +47,34 @@ final class PromptAnswerFlow: ObservableObject {
     /// on each, even for the session already shown.
     @Published private(set) var shown = 0
 
+    /// A key sent before the operator opened another session has answered;
+    /// the notice says how it went.
+    var onLateResult: (_ notice: String) -> Void = { _ in }
+
     private let service: PromptAnswerService
-    private let runner: ASLWorkRunner
+    /// Looks, including the settle pause after a key: concurrent, so a new
+    /// session's first look never waits behind another's slow key.
+    private let reads: ASLWorkRunner
+    private let presses: ASLWorkRunner
     private let pause: (TimeInterval) -> Void
     /// Counts every state this flow has opened, so sequences never repeat
     /// across reopenings.
     private var lastSeq = 0
 
-    init(service: PromptAnswerService, runner: ASLWorkRunner = QueueWorkRunner(),
+    init(service: PromptAnswerService,
+         reads: ASLWorkRunner = QueueWorkRunner(queue: DispatchQueue(
+             label: "io.github.sglavoie.agentmux.prompt.look", qos: .userInitiated, attributes: .concurrent)),
+         presses: ASLWorkRunner = QueueWorkRunner(queue: DispatchQueue(
+             label: "io.github.sglavoie.agentmux.prompt.press", qos: .userInitiated)),
          pause: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }) {
         self.service = service
-        self.runner = runner
+        self.reads = reads
+        self.presses = presses
         self.pause = pause
     }
+
+    /// A key is on its way, so closing the panel would hide its result.
+    var pressing: Bool { state?.pressing == true }
 
     /// Opens the panel on `target`, or looks again when it is already there.
     func open(_ target: PromptAnswerTarget) {
@@ -93,13 +109,13 @@ final class PromptAnswerFlow: ObservableObject {
     }
 
     private func perform(_ effect: PromptAnswerEffect) {
-        guard let target = state?.target else { return }
+        guard let target = state?.target, let title = state?.title else { return }
         let service = self.service
         let pause = self.pause
         switch effect {
         case let .look(seq, settle):
             lastSeq = max(lastSeq, seq)
-            runner.run({
+            reads.run({
                 if settle { pause(Self.settle) }
                 return service.look(runtimeSessionID: target.runtimeSessionID)
             }) { [weak self] result in
@@ -116,17 +132,37 @@ final class PromptAnswerFlow: ObservableObject {
             lastSeq = max(lastSeq, seq)
             // The arguments name a session and a key, never screen text.
             Self.logger.notice("press \(arguments.joined(separator: " "), privacy: .public)")
-            runner.run({ service.press(arguments: arguments) }) { [weak self] result in
+            presses.run({ service.press(arguments: arguments) }) { [weak self] result in
                 MainActor.assumeIsolated {
-                    guard let self, var current = self.state, current.target == target else { return }
+                    guard let self else { return }
                     if case let .failure(error) = result {
                         Self.logger.notice("press \(target.runtimeSessionID, privacy: .public): \(error.message, privacy: .public)")
+                    }
+                    guard var current = self.state, current.target == target, current.seq == seq else {
+                        // The panel moved to another session or was closed:
+                        // the key may have reached the agent all the same.
+                        return self.onLateResult(Self.lateNotice(key: arguments, title: title, result))
                     }
                     let next = current.pressed(seq: seq, result)
                     self.state = current
                     if let next { self.perform(next) }
                 }
             }
+        }
+    }
+
+    /// What the operator is told of a key that answered after the panel
+    /// stopped showing its session.
+    static func lateNotice(key arguments: [String], title: String, _ result: AMXCommandResult<PromptSent>) -> String {
+        let name = arguments.count > 3 ? arguments[3] : ""
+        let key = PromptKey.all.first { $0.name == name }?.accessibilityName ?? name
+        switch result {
+        case .success, .partial:
+            return "The key \(key) was sent to \(title)."
+        case let .failure(.command(error, _)) where error.code == "confirmation_required":
+            return "The key \(key) was not sent to \(title): its agent-session-loop run asks for a confirmation. Open its Answer… to press it again."
+        case let .failure(error):
+            return "The key \(key) was not sent to \(title): \(PromptAnswerState.text(error))"
         }
     }
 }
@@ -220,6 +256,7 @@ struct PromptAnswerView: View {
         ForEach(keys) { key in
             Button(key.label) { flow.press(key) }
                 .help(key.help)
+                .accessibilityLabel(key.accessibilityName)
                 .disabled(!state.canPress)
         }
     }
@@ -230,6 +267,8 @@ struct PromptAnswerView: View {
                 .disabled(flow.state?.canLookAgain != true)
             Spacer()
             Button("Close", action: onClose).keyboardShortcut(.cancelAction)
+                .disabled(flow.pressing)
+                .help(flow.pressing ? "Wait for the key to be sent" : "")
         }
     }
 }
@@ -244,10 +283,15 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
     var workspaceFrame: () -> CGRect? = { nil }
     private let frames: PanelFrameStore
 
+    /// A key sent for a session the panel no longer shows has answered;
+    /// `notice` says how it went.
+    var onLateResult: (_ notice: String) -> Void = { _ in }
+
     init(flow: PromptAnswerFlow, defaults: UserDefaults? = AppDelegate.isRunningTests ? nil : .standard) {
         self.flow = flow
         frames = PanelFrameStore(key: "AgentMuxPromptPanelFrame", defaults: defaults)
         super.init()
+        flow.onLateResult = { [weak self] notice in self?.onLateResult(notice) }
     }
 
     func show(_ target: PromptAnswerTarget) {
@@ -264,6 +308,15 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
     func windowDidMove(_ notification: Notification) {
         guard let panel, !panel.isPlacing, panel.isVisible else { return }
         frames.save(panel.frame)
+    }
+
+    /// A key on its way keeps the panel open, so its result is shown.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        Self.mayClose(flow)
+    }
+
+    static func mayClose(_ flow: PromptAnswerFlow) -> Bool {
+        !flow.pressing
     }
 
     /// The operator closed the panel: the screen it showed goes with it.
@@ -287,7 +340,7 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.contentView = NSHostingView(rootView: PromptAnswerView(
             flow: flow,
-            onClose: { [weak panel] in panel?.close() }
+            onClose: { [weak panel] in panel?.performClose(nil) }
         ))
         self.panel = panel
         return panel

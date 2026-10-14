@@ -356,7 +356,11 @@ final class WorkspaceWaitingRowView: NSBox {
         ])
         for label in [titleLabel, detailLabel] {
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            // The line is said as one; its labels are not said again. Its
+            // Answer… button stays an element of its own.
+            label.setAccessibilityElement(false)
         }
+        setAccessibilityElement(true)
         setAccessibilityRole(.button)
         update(row)
     }
@@ -367,7 +371,9 @@ final class WorkspaceWaitingRowView: NSBox {
         self.row = row
         titleLabel.stringValue = [row.glyph, row.title].filter { !$0.isEmpty }.joined(separator: " ")
         detailLabel.stringValue = row.detail
+        // The button's cell is the element VoiceOver reads.
         answerButton?.setAccessibilityLabel("Answer \(row.title)")
+        answerButton?.cell?.setAccessibilityLabel("Answer \(row.title)")
         toolTip = row.toolTip
         setAccessibilityLabel("\(row.title), \(row.detail)")
     }
@@ -410,6 +416,12 @@ final class WorkspaceWaitingRowView: NSBox {
     override func accessibilityPerformPress() -> Bool {
         press()
         return true
+    }
+
+    /// The labels' cells would be said again under the line; only its
+    /// Answer… button is an element of its own.
+    override func accessibilityChildren() -> [Any]? {
+        answerButton.map { NSAccessibility.unignoredChildren(from: [$0]) } ?? []
     }
 }
 

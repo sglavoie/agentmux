@@ -66,6 +66,17 @@ struct PromptKey: Equatable, Identifiable {
 
     var id: String { name }
 
+    /// What VoiceOver says for the button: the arrows and esc are named.
+    var accessibilityName: String {
+        switch name {
+        case "up": return "Up arrow"
+        case "down": return "Down arrow"
+        case "enter": return "Return"
+        case "escape": return "Escape"
+        default: return label
+        }
+    }
+
     /// The choices of a numbered prompt.
     static let digits: [PromptKey] = (1...9).map { PromptKey(name: String($0), label: String($0), help: "Choose option \($0)") }
 
@@ -211,6 +222,9 @@ struct PromptAnswerState: Equatable {
 
     /// The key the press in flight carries.
     private var pending: PromptKey?
+
+    /// A key is on its way: its result is still to be shown.
+    var pressing: Bool { pending != nil }
 
     mutating func looked(seq answered: Int, _ result: AMXCommandResult<PromptLook>) {
         guard answered == seq else { return }

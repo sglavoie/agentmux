@@ -1345,6 +1345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             problem: { [weak self] in self?.preferences.binaryMenuProblem ?? "amx has not been found yet." }
         )))
         controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
+        controller.onLateResult = { [weak self] notice in self?.finishAnswer(notice) }
         promptPanel = controller
         Self.logger.notice("prompt panel: session \(target.runtimeSessionID, privacy: .public)")
         controller.show(target)

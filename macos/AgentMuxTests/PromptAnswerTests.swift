@@ -47,9 +47,10 @@ final class PromptAnswerTests: XCTestCase {
     private let asking = PromptLook(project: "api", screen: "blocked", lines: ["Do you want to proceed?", "❯ 1. Yes", "  2. No"])
     private let two = PromptKey.digits[1]
 
-    private func flow(_ service: FakePromptService, runner: ASLWorkRunner = ImmediateRunner()) -> (PromptAnswerFlow, () -> [TimeInterval]) {
+    private func flow(_ service: FakePromptService, runner: ASLWorkRunner = ImmediateRunner(),
+                      presses: ASLWorkRunner? = nil) -> (PromptAnswerFlow, () -> [TimeInterval]) {
         var pauses: [TimeInterval] = []
-        let flow = PromptAnswerFlow(service: service, runner: runner, pause: { pauses.append($0) })
+        let flow = PromptAnswerFlow(service: service, reads: runner, presses: presses ?? runner, pause: { pauses.append($0) })
         return (flow, { pauses })
     }
 
@@ -306,5 +307,82 @@ final class PromptAnswerTests: XCTestCase {
         guard case let .failure(error) = service.look(runtimeSessionID: id) else { return XCTFail("looked with no amx") }
         XCTAssertEqual(error.message, "amx was not found")
         guard case .failure = service.press(arguments: ["send", id, "--key", "1"]) else { return XCTFail("pressed with no amx") }
+    }
+
+    // MARK: A key on its way
+
+    func testAKeyOnItsWayKeepsThePanelOpen() {
+        let service = FakePromptService()
+        service.looks = [.success(asking)]
+        let presses = HeldRunner()
+        let (flow, _) = flow(service, presses: presses)
+        let controller = PromptAnswerPanelController(flow: flow, defaults: nil)
+        flow.open(target)
+        XCTAssertTrue(PromptAnswerPanelController.mayClose(flow), "a look may be left behind")
+
+        flow.press(two)
+        XCTAssertTrue(flow.pressing)
+        XCTAssertFalse(PromptAnswerPanelController.mayClose(flow), "closing would hide whether the key was sent")
+        XCTAssertFalse(controller.windowShouldClose(NSWindow()))
+
+        presses.release()
+        XCTAssertFalse(flow.pressing)
+        XCTAssertTrue(PromptAnswerPanelController.mayClose(flow))
+        XCTAssertEqual(flow.state?.notice, "Sent.")
+    }
+
+    func testAKeyThatAnswersAfterAnotherSessionOpenedIsReported() {
+        let service = FakePromptService()
+        service.looks = [.success(asking)]
+        let presses = HeldRunner()
+        let (flow, _) = flow(service, presses: presses)
+        var late: [String] = []
+        flow.onLateResult = { late.append($0) }
+        flow.open(target)
+        flow.press(two)
+
+        // The other session's first look does not wait behind the key.
+        let other = PromptAnswerTarget(runtimeSessionID: "rs-ffffffffffffffffffffffffffffffff")
+        flow.open(other)
+        XCTAssertEqual(flow.state?.target, other)
+        XCTAssertEqual(flow.state?.phase, .open, "a look runs apart from the key on its way")
+        XCTAssertEqual(service.calls.last, ["send", other.runtimeSessionID, "--look"])
+
+        presses.release()
+        XCTAssertEqual(late, ["The key 2 was sent to api."])
+        XCTAssertEqual(flow.state?.target, other, "the panel stays on the session now shown")
+        XCTAssertEqual(flow.state?.notice, "")
+        XCTAssertEqual(service.calls.filter { $0.contains("--look") }.count, 2, "no look follows for a session not shown")
+    }
+
+    func testAKeyThatAnswersAfterThePanelClosedIsReported() {
+        let service = FakePromptService()
+        service.looks = [.success(asking)]
+        service.presses = [.failure(refusal("no_prompt_showing"))]
+        let presses = HeldRunner()
+        let (flow, _) = flow(service, presses: presses)
+        var late: [String] = []
+        flow.onLateResult = { late.append($0) }
+        flow.open(target)
+        flow.press(PromptKey.navigation[2])
+        flow.cancel()
+        flow.open(target)
+        presses.release()
+        XCTAssertEqual(late, ["The key Return was not sent to api: The session is not asking anything now, so the key was not pressed."])
+        XCTAssertEqual(flow.state?.notice, "", "the reopened panel is not the one the key was pressed in")
+    }
+
+    func testLateNoticesSayWhatBecameOfTheKey() {
+        let args = ["send", id, "--key", "escape"]
+        XCTAssertEqual(PromptAnswerFlow.lateNotice(key: args, title: "api", .success(PromptSent(delivery: "accepted"))),
+                       "The key Escape was sent to api.")
+        XCTAssertTrue(PromptAnswerFlow.lateNotice(key: args, title: "api", .failure(refusal("confirmation_required")))
+            .contains("asks for a confirmation"))
+    }
+
+    func testKeyButtonsAreNamedForVoiceOver() {
+        XCTAssertEqual(PromptKey.navigation.map(\.accessibilityName), ["Up arrow", "Down arrow", "Return"])
+        XCTAssertEqual(PromptKey.answers.map(\.accessibilityName), ["y", "n", "Escape"])
+        XCTAssertEqual(PromptKey.digits[0].accessibilityName, "1")
     }
 }

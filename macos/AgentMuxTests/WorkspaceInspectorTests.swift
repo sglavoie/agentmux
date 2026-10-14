@@ -222,6 +222,16 @@ final class WorkspaceInspectorTests: XCTestCase {
         let beside = lines[0].convert(NSPoint(x: 6, y: lines[0].bounds.midY), to: lines[0].superview)
         XCTAssertTrue(lines[0].hitTest(beside) === lines[0], "the rest of the line is still one target")
 
+        XCTAssertTrue(lines[0].isAccessibilityElement(), "the line is said as one")
+        XCTAssertEqual(lines[0].accessibilityRole(), .button)
+        XCTAssertFalse(lines[0].titleLabel.isAccessibilityElement())
+        XCTAssertFalse(lines[0].detailLabel.isAccessibilityElement())
+        let children = (lines[0].accessibilityChildren() ?? []).compactMap { $0 as? NSAccessibilityProtocol }
+        XCTAssertEqual(children.map { $0.accessibilityRole() }, [.button], "only Answer… is said under the line")
+        XCTAssertEqual(children.first?.accessibilityLabel(), "Answer api — personal")
+        XCTAssertEqual(lines[1].accessibilityChildren()?.count, 0, "a line with no button has nothing under it")
+        XCTAssertEqual(button.accessibilityLabel(), "Answer api — personal")
+
         button.performClick(nil)
         XCTAssertEqual(app.answers, [.prompt(runtimeSessionID: F.runtimeID(2))])
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)), "the pane stays where it is")

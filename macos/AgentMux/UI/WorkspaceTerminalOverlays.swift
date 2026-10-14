@@ -36,8 +36,6 @@ final class WorkspaceFindBar: NSView, NSSearchFieldDelegate {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = 6
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        layer?.borderColor = NSColor.separatorColor.cgColor
         layer?.borderWidth = 1
 
         field.placeholderString = "Find"
@@ -88,6 +86,17 @@ final class WorkspaceFindBar: NSView, NSSearchFieldDelegate {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported for this view")
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    /// Runs again when the appearance changes, so the bar follows light and
+    /// dark.
+    override func updateLayer() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+            layer?.borderColor = NSColor.separatorColor.cgColor
+        }
     }
 
     /// Shows a search: its needle, unless it is being typed, and its count.
