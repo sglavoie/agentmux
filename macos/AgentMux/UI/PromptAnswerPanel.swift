@@ -59,7 +59,7 @@ final class PromptAnswerFlow: ObservableObject {
 
     /// Opens the panel on `target`, or looks again when it is already there.
     func open(_ target: PromptAnswerTarget) {
-        if var current = state, current.target == target {
+        if var current = state, current.target == target, !current.isRefused {
             let effect = current.refresh()
             state = current
             if let effect { perform(effect) }
@@ -156,11 +156,19 @@ struct PromptAnswerView: View {
         .focusable()
         .focusEffectDisabled()
         .onKeyPress { press in
-            guard let character = press.characters.first, let key = PromptKey.typed(character),
+            guard let key = Self.key(press.characters, modifiers: press.modifiers),
                   flow.state?.canPress == true else { return .ignored }
             flow.press(key)
             return .handled
         }
+    }
+
+    /// The key typing `characters` presses. A key held with ⌘, ⌃, or ⌥ is a
+    /// shortcut for the menus, never a key for the agent.
+    static func key(_ characters: String, modifiers: EventModifiers) -> PromptKey? {
+        guard modifiers.isDisjoint(with: [.command, .control, .option]),
+              let character = characters.first else { return nil }
+        return PromptKey.typed(character)
     }
 
     @ViewBuilder private func form(_ state: PromptAnswerState) -> some View {
@@ -207,7 +215,7 @@ struct PromptAnswerView: View {
     private var footer: some View {
         HStack {
             Button("Look again") { flow.refresh() }
-                .disabled(flow.state?.phase != .open || flow.state?.inFlight == true)
+                .disabled(flow.state?.canLookAgain != true)
             Spacer()
             Button("Close", action: onClose).keyboardShortcut(.cancelAction)
         }

@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import AgentMux
 
@@ -155,7 +156,53 @@ final class PromptAnswerTests: XCTestCase {
         state.looked(seq: 1, .failure(refusal("runtime_session_exited")))
         XCTAssertEqual(state.phase, .refused("This session's agent is no longer running."))
         XCTAssertNil(state.press(two))
-        XCTAssertNil(state.refresh())
+        XCTAssertTrue(state.canLookAgain, "a failed first look can be tried again")
+
+        // Looking again waits as the first look did, and can open the panel.
+        XCTAssertEqual(state.refresh(), .look(seq: 2, settle: false))
+        XCTAssertEqual(state.phase, .loading)
+        XCTAssertFalse(state.canLookAgain)
+        XCTAssertNil(state.refresh(), "one look at a time")
+        state.looked(seq: 2, .success(asking))
+        XCTAssertEqual(state.phase, .open)
+        XCTAssertTrue(state.canPress)
+    }
+
+    func testALookAgainClearsWhatAnEarlierKeySaid() {
+        var (state, _) = PromptAnswerState.open(target)
+        state.looked(seq: 1, .success(asking))
+        _ = state.press(two)
+        XCTAssertEqual(state.pressed(seq: 2, .failure(refusal("no_prompt_showing"))), .look(seq: 3, settle: true))
+        state.looked(seq: 3, .success(asking))
+        XCTAssertEqual(state.notice, "The session is not asking anything now, so the key was not pressed.",
+                       "the look after a key keeps that key's notice")
+
+        _ = state.refresh()
+        state.looked(seq: 4, .success(asking))
+        XCTAssertEqual(state.notice, "", "a look the operator asked for shows the screen as it is now")
+    }
+
+    func testALookAgainAsksForAConfirmationAfresh() {
+        var (state, _) = PromptAnswerState.open(target)
+        state.looked(seq: 1, .success(asking))
+        _ = state.press(two)
+        XCTAssertNil(state.pressed(seq: 2, .failure(refusal("confirmation_required"))))
+        _ = state.refresh()
+        state.looked(seq: 3, .success(asking))
+        XCTAssertEqual(state.notice, "")
+        XCTAssertEqual(state.press(two), .press(seq: 4, arguments: ["send", id, "--key", "2"]),
+                       "the warning is gone, so the key is not confirmed")
+    }
+
+    func testModifiedKeysAreLeftToTheMenus() {
+        XCTAssertEqual(PromptAnswerView.key("2", modifiers: []), two)
+        XCTAssertEqual(PromptAnswerView.key("y", modifiers: .shift), PromptKey.answers[0])
+        XCTAssertEqual(PromptAnswerView.key("\r", modifiers: []), PromptKey.navigation[2])
+        for modifiers: EventModifiers in [.command, .control, .option, [.command, .shift]] {
+            XCTAssertNil(PromptAnswerView.key("2", modifiers: modifiers))
+            XCTAssertNil(PromptAnswerView.key("n", modifiers: modifiers))
+        }
+        XCTAssertNil(PromptAnswerView.key("", modifiers: []))
     }
 
     func testAnswersForAnEarlierRequestAreDropped() {
@@ -204,6 +251,18 @@ final class PromptAnswerTests: XCTestCase {
         flow.open(other)
         XCTAssertEqual(flow.state?.target, other)
         XCTAssertEqual(service.calls.last, ["send", other.runtimeSessionID, "--look"])
+    }
+
+    func testReopeningASessionWhoseFirstLookFailedStartsOver() {
+        let service = FakePromptService()
+        service.looks = [.failure(refusal("screen_unreadable")), .success(asking)]
+        let (flow, _) = flow(service)
+        flow.open(target)
+        XCTAssertEqual(flow.state?.isRefused, true)
+        flow.open(target)
+        XCTAssertEqual(service.calls.count, 2)
+        XCTAssertEqual(flow.state?.phase, .open)
+        XCTAssertEqual(flow.state?.canPress, true)
     }
 
     func testAnAnswerThatOutlivesThePanelIsDropped() {

@@ -463,4 +463,91 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertEqual(ASLAnswerTarget(planDir: "/tmp/plans/../plans/api").row(in: rows)?.rowID, "row-reply")
         XCTAssertNil(ASLAnswerTarget().row(in: rows))
     }
+
+    // MARK: Body loads and disabled buttons
+
+    func testAFailedBodyLoadSaysSoBlocksSubmitAndLoadsAgain() {
+        let row = ASLFixtures.replyRow()
+        guard case let .opened(opened, .fetch(seq, _, _)) = ASLResponseState.open(row: row, view: .live, status: ASLFixtures.liveStatus) else {
+            return XCTFail("the form did not open")
+        }
+        var state = opened
+        XCTAssertNil(state.questionLoaded(seq: seq, .failure(.transport("read timed out"))))
+        XCTAssertTrue(state.loadFailed)
+        XCTAssertEqual(state.notice, "could not load the question: agent-session-loop did not answer")
+        state.setDraft("an answer")
+        XCTAssertFalse(state.canSubmit(state.buttons[0]))
+        XCTAssertFalse(state.canSubmit(state.buttons[1]), "nothing is closed unseen")
+        XCTAssertEqual(state.disabledReason(state.buttons[1]), "Load the question again first")
+        XCTAssertNil(state.submit(state.buttons[1], mint: mint))
+        XCTAssertFalse(state.inFlight)
+
+        XCTAssertEqual(state.reload(), .fetch(seq: seq + 1, planDir: row.planDir, questionID: "q-api-1"))
+        XCTAssertFalse(state.loadFailed)
+        XCTAssertEqual(state.notice, "")
+        XCTAssertNil(state.reload(), "one fetch at a time")
+        XCTAssertNil(state.questionLoaded(seq: seq + 1, .success(ASLFixtures.body(row, "q-api-1", "First?"))))
+        XCTAssertEqual(state.body.reveal(), "First?")
+        XCTAssertTrue(state.canSubmit(state.buttons[0]))
+    }
+
+    func testAFailedReauthorizingLoadCanBeLoadedAgain() {
+        let row = ASLFixtures.replyRow()
+        var state = opened(row)
+        state.setDraft("one")
+        guard case let .act(seq, _) = state.submit(state.buttons[0], mint: mint),
+              case let .fetch(fetchSeq, _, _) = state.actionFinished(seq: seq, .success(ASLOperation(status: "accepted"))) else {
+            return XCTFail("did not advance")
+        }
+        XCTAssertNil(state.questionLoaded(seq: fetchSeq, .failure(.notRunning)))
+        XCTAssertEqual(state.notice, "could not load the question: the daemon is not running")
+        XCTAssertTrue(state.reauthorize)
+        guard case let .fetch(again, _, _) = state.reload() else { return XCTFail("Load Again did not fetch") }
+        XCTAssertEqual(state.disabledReason(state.buttons[1]), "Re-authorizing…")
+        XCTAssertNil(state.questionLoaded(seq: again, .success(ASLFixtures.body(row, "q-api-2", "Second?", token: "token-reply-2"))))
+        XCTAssertFalse(state.reauthorize)
+        XCTAssertEqual(state.target.actionToken, "token-reply-2")
+        XCTAssertTrue(state.canSubmit(state.buttons[1]), "the buttons come back once the token is re-minted")
+    }
+
+    func testReadTextNeverUsesActionWording() {
+        XCTAssertEqual(ASLRefusal.readText(.refused("internal-error: x")),
+                       "could not load the question: agent-session-loop reported an internal error")
+        XCTAssertEqual(ASLRefusal.readText(.refused("something-new: \"secret\"")), "could not load the question")
+        XCTAssertEqual(ASLRefusal.readText(.refused("question-body-too-large: x")),
+                       ASLRefusal.text(.refused("question-body-too-large: x")))
+        XCTAssertEqual(ASLRefusal.readText(.unsupported), ASLRefusal.text(.unsupported))
+        for error: ASLRequestError in [.notRunning, .transport("t"), .refused("mutation-failed: x"), .refused("x")] {
+            XCTAssertFalse(ASLRefusal.readText(error).contains("outcome"), "\(error)")
+            XCTAssertFalse(ASLRefusal.readText(error).contains("nothing was"), "\(error)")
+        }
+    }
+
+    func testDisabledButtonsSayWhy() {
+        XCTAssertEqual(ASLResponseState().disabledReason(ASLResponse.buttons(.live)[0]), "Loading…")
+        guard case .opened(var state, _) = ASLResponseState.open(row: ASLFixtures.replyRow(), view: .live, status: ASLFixtures.liveStatus) else {
+            return XCTFail("the form did not open")
+        }
+        XCTAssertEqual(state.disabledReason(state.buttons[0]), "Loading…")
+        state = opened()
+        XCTAssertEqual(state.disabledReason(state.buttons[0]), "Type a reply")
+        XCTAssertNil(state.disabledReason(state.buttons[1]))
+        state.setDraft("an answer")
+        XCTAssertNil(state.disabledReason(state.buttons[0]))
+        _ = state.submit(state.buttons[0], mint: mint)
+        XCTAssertEqual(state.disabledReason(state.buttons[0]), "Submitting…")
+    }
+
+    func testKeptDraftsAreRestoredOnlyForQuestionsStillOpen() {
+        var state = opened()
+        state.setDraft("kept")
+        _ = state.move(by: 1)
+        state.setDraft("   ")
+        XCTAssertEqual(state.keptDrafts.mapValues { $0.reveal() }, ["q-api-1": "kept"], "a blank draft is not kept")
+
+        var reopened = opened()
+        reopened.restore(drafts: ["q-api-1": SecretText("kept"), "q-gone": SecretText("answered elsewhere")])
+        XCTAssertEqual(reopened.draft.reveal(), "kept")
+        XCTAssertNil(reopened.drafts["q-gone"])
+    }
 }

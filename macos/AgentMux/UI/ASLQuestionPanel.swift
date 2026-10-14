@@ -64,11 +64,19 @@ final class ASLQuestionFlow: ObservableObject {
     /// The form closed itself: answered, or its run moved. The notice is set
     /// when the run moved.
     var onClose: (_ notice: String?) -> Void = { _ in }
+    /// A submission sent before the operator closed the form, or opened
+    /// another run, has answered; the notice says how it went.
+    var onLateResult: (_ notice: String) -> Void = { _ in }
 
     private let service: ASLService
     private let runner: ASLWorkRunner
     private let mint: () -> String
     private var openSeq = 0
+    /// The run of the form that is open, as its row names it.
+    private var openRun = ""
+    /// Unsent drafts by run, then question: closing the panel or opening
+    /// another run keeps them until the run's questions move. Memory only.
+    private var keptDrafts: [String: [String: SecretText]] = [:]
 
     init(service: ASLService = DaemonClient(), runner: ASLWorkRunner = QueueWorkRunner(),
          mint: @escaping () -> String = ASLResponse.newOperationID) {
@@ -81,6 +89,7 @@ final class ASLQuestionFlow: ObservableObject {
     /// keeps it, drafts and all.
     func open(_ target: ASLAnswerTarget) {
         if answering == target, phase == .loading || phase == .open { return }
+        keepDrafts()
         reset()
         answering = target
         phase = .loading
@@ -91,11 +100,22 @@ final class ASLQuestionFlow: ObservableObject {
         }
     }
 
-    /// Drops the form, its body, and every draft, without telling `onClose`:
-    /// the operator closed the panel.
+    /// Drops the form and its body without telling `onClose`: the operator
+    /// closed the panel. Unsent drafts are kept for the next time this run is
+    /// opened.
     func cancel() {
+        keepDrafts()
         reset()
     }
+
+    /// Load Again, after a question body could not be read.
+    func reload() {
+        guard phase == .open else { return }
+        if let effect = state.reload() { perform(effect) }
+    }
+
+    /// The drafts kept for `runID`, for tests.
+    func keptDrafts(run runID: String) -> [String: SecretText] { keptDrafts[runID] ?? [:] }
 
     func setDraft(_ text: String) {
         guard phase == .open else { return }
@@ -117,6 +137,27 @@ final class ASLQuestionFlow: ObservableObject {
         state = ASLResponseState()
         phase = .idle
         answering = nil
+        openRun = ""
+    }
+
+    private func keepDrafts() {
+        guard phase == .open, !openRun.isEmpty else { return }
+        let drafts = state.keptDrafts
+        keptDrafts[openRun] = drafts.isEmpty ? nil : drafts
+    }
+
+    /// What the menu says about a submission that answered after its form
+    /// was gone. It names the run, never the answer.
+    static func lateNotice(label: String, _ result: Result<ASLOperation, ASLRequestError>) -> String {
+        let run = label.isEmpty ? "the run" : label
+        switch result {
+        case let .success(operation):
+            return "the answer to \(run) was \(ASLResponse.operationState(operation.status))"
+        case let .failure(error) where ASLRefusal.isStale(error):
+            return "the answer to \(run) was not applied: the run changed since it was selected"
+        case let .failure(error):
+            return "the answer to \(run) did not complete: \(ASLRefusal.text(error))"
+        }
     }
 
     private func snapshotLoaded(seq: Int, target: ASLAnswerTarget, _ result: Result<ASLResult, ASLRequestError>) {
@@ -131,6 +172,7 @@ final class ASLQuestionFlow: ObservableObject {
         case let .success(result):
             let rows = result.snapshot?.rows ?? []
             guard let row = target.row(in: rows) else {
+                if !target.runID.isEmpty { keptDrafts[target.runID] = nil }
                 phase = .refused("this run is no longer waiting on an answer")
                 return
             }
@@ -138,8 +180,11 @@ final class ASLQuestionFlow: ObservableObject {
             switch ASLResponseState.open(row: row, view: view, status: result.status) {
             case let .refused(reason):
                 phase = .refused(reason)
-            case let .opened(opened, effect):
+            case var .opened(opened, effect):
+                opened.restore(drafts: keptDrafts[row.runID] ?? [:])
+                keptDrafts[row.runID] = nil
                 state = opened
+                openRun = row.runID
                 phase = .open
                 perform(effect)
             }
@@ -162,6 +207,8 @@ final class ASLQuestionFlow: ObservableObject {
         case let .act(seq, params):
             // The description is body-free: method, run, question, operation.
             Self.logger.notice("asl_action \(params.description, privacy: .public)")
+            let open = openSeq
+            let label = state.target.label
             runner.run({ service.act(params) }) { [weak self] result in
                 MainActor.assumeIsolated {
                     switch result {
@@ -170,14 +217,36 @@ final class ASLQuestionFlow: ObservableObject {
                     case let .failure(error):
                         Self.logger.notice("asl_action \(params.operationID, privacy: .public): \(error.description, privacy: .public)")
                     }
-                    guard let self, self.phase == .open else { return }
+                    guard let self else { return }
+                    guard open == self.openSeq else {
+                        self.lateResult(params, label: label, result)
+                        return
+                    }
+                    guard self.phase == .open else { return }
                     if let next = self.state.actionFinished(seq: seq, result) { self.perform(next) }
                 }
             }
         case let .close(notice):
+            // Answered, or the run moved: its kept drafts no longer apply.
+            keptDrafts[openRun] = nil
             reset()
             onClose(notice)
         }
+    }
+
+    /// A submission whose form was closed while it was on its way. Nothing
+    /// is resent; the operator is told, and a draft it answered is dropped.
+    private func lateResult(_ params: ASLRequestParams, label: String, _ result: Result<ASLOperation, ASLRequestError>) {
+        switch result {
+        case .success:
+            keptDrafts[params.runID]?[params.questionID] = nil
+            if keptDrafts[params.runID]?.isEmpty == true { keptDrafts[params.runID] = nil }
+        case let .failure(error) where ASLRefusal.isStale(error):
+            keptDrafts[params.runID] = nil
+        case .failure:
+            break
+        }
+        onLateResult(Self.lateNotice(label: label, result))
     }
 }
 
@@ -227,6 +296,13 @@ struct ASLQuestionView: View {
         Group {
             if state.fetching {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if state.loadFailed {
+                VStack(spacing: 8) {
+                    Text("The question could not be loaded.").foregroundStyle(.secondary)
+                    Button("Load Again") { flow.reload() }
+                        .disabled(state.inFlight)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     Text(state.body.reveal())
@@ -252,6 +328,8 @@ struct ASLQuestionView: View {
             Text(state.notice).font(.callout).foregroundStyle(.red)
         } else if state.inFlight {
             Text("Submitting…").font(.callout).foregroundStyle(.secondary)
+        } else if let reason = state.buttons.first.flatMap(state.disabledReason) {
+            Text(reason).font(.callout).foregroundStyle(.secondary)
         }
     }
 
@@ -266,7 +344,10 @@ struct ASLQuestionView: View {
                     .help("Next question")
             }
             Spacer()
+            // An answer on its way keeps the panel open until it is known.
             Button("Close", action: onClose).keyboardShortcut(.cancelAction)
+                .disabled(state.inFlight)
+                .help(state.inFlight ? "Wait for the answer to be sent" : "")
             if flow.phase == .open {
                 ForEach(Array(state.buttons.enumerated()), id: \.offset) { index, button in
                     submitButton(button, primary: index == 0)
@@ -278,6 +359,7 @@ struct ASLQuestionView: View {
     @ViewBuilder private func submitButton(_ button: ASLResponseButton, primary: Bool) -> some View {
         let base = Button(button.label) { flow.submit(button) }
             .disabled(!state.canSubmit(button))
+            .help(state.disabledReason(button) ?? "")
         if primary {
             // ⌘↩ sends the answer, whichever button has focus.
             base.keyboardShortcut(.return, modifiers: .command).buttonStyle(.borderedProminent)
@@ -307,6 +389,7 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
         self.flow = flow
         super.init()
         flow.onClose = { [weak self] notice in self?.finish(notice) }
+        flow.onLateResult = { [weak self] notice in self?.onFinish(notice) }
     }
 
     func show(_ target: ASLAnswerTarget) {
@@ -316,7 +399,17 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
         panel.orderFrontRegardless()
     }
 
-    /// The operator closed the panel: the body and drafts go with it.
+    /// An answer on its way keeps the panel open, so its result is shown.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        Self.mayClose(flow)
+    }
+
+    static func mayClose(_ flow: ASLQuestionFlow) -> Bool {
+        !(flow.phase == .open && flow.state.inFlight)
+    }
+
+    /// The operator closed the panel: the body goes with it, and unsent
+    /// drafts are kept for this run.
     func windowWillClose(_ notification: Notification) {
         flow.cancel()
     }

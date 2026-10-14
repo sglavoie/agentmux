@@ -134,6 +134,8 @@ struct PromptAnswerState: Equatable {
     private(set) var awaitingConfirmation: PromptKey?
     private(set) var notice = ""
     private(set) var seq = 0
+    /// The look that follows a key, which keeps the key's notice on show.
+    private var settleSeq = 0
 
     /// Opens on `target` and asks for the first look.
     static func open(_ target: PromptAnswerTarget, after seq: Int = 0) -> (PromptAnswerState, PromptAnswerEffect) {
@@ -160,9 +162,26 @@ struct PromptAnswerState: Equatable {
         }
     }
 
-    /// Asks for another look, when none and no key is on its way.
+    /// Whether Look again may be pressed now: the panel is showing a screen
+    /// or a first look that failed, and nothing is on its way.
+    var canLookAgain: Bool {
+        switch phase {
+        case .loading: return false
+        case .open, .refused: return !inFlight
+        }
+    }
+
+    /// The first look failed; looking again starts over.
+    var isRefused: Bool {
+        if case .refused = phase { return true }
+        return false
+    }
+
+    /// Asks for another look, when none and no key is on its way. After a
+    /// first look that failed, the panel waits on this one as on the first.
     mutating func refresh() -> PromptAnswerEffect? {
-        guard phase == .open, !inFlight else { return nil }
+        guard canLookAgain else { return nil }
+        if isRefused { phase = .loading }
         seq += 1
         inFlight = true
         return .look(seq: seq, settle: false)
@@ -195,6 +214,14 @@ struct PromptAnswerState: Equatable {
         case let .success(value), let .partial(value, _):
             look = value
             phase = .open
+            if answered != settleSeq {
+                // A look the operator asked for shows the screen as it is
+                // now: what an earlier key or look said no longer applies,
+                // nor does a confirmation asked for on the screen before.
+                notice = ""
+                confirmed = false
+                awaitingConfirmation = nil
+            }
         case let .failure(error):
             // A look that fails after the panel opened keeps the last screen
             // on show, with the reason; a first look that fails has none.
@@ -226,6 +253,7 @@ struct PromptAnswerState: Equatable {
             notice = Self.text(error)
         }
         seq += 1
+        settleSeq = seq
         return .look(seq: seq, settle: true)
     }
 

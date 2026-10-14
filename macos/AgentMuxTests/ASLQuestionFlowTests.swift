@@ -185,4 +185,94 @@ final class ASLQuestionFlowTests: XCTestCase {
         XCTAssertEqual(flow.state.draft.reveal(), "half written")
         XCTAssertEqual(service.calls.filter { $0 == "asl_snapshot" }.count, 1)
     }
+
+    func testClosingThePanelKeepsTheRunsDrafts() {
+        let row = ASLFixtures.replyRow()
+        serve([row, ASLFixtures.pausedRow()])
+        service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "First?"))
+        service.bodies["q-web-1"] = .success(ASLFixtures.body(ASLFixtures.pausedRow(), "q-web-1", "Paused?"))
+        let flow = flow()
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        flow.setDraft("half written")
+        flow.cancel()
+        XCTAssertEqual(flow.state, ASLResponseState(), "the form and its body go")
+        XCTAssertEqual(flow.keptDrafts(run: "run-reply").mapValues { $0.reveal() }, ["q-api-1": "half written"])
+
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        XCTAssertEqual(flow.state.draft.reveal(), "half written", "closing and reopening keeps the draft")
+
+        // Opening another run keeps this one's draft too.
+        flow.open(ASLAnswerTarget(runID: "run-paused"))
+        XCTAssertEqual(flow.state.draft.reveal(), "")
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        XCTAssertEqual(flow.state.draft.reveal(), "half written")
+    }
+
+    func testKeptDraftsGoWhenTheRunsQuestionsMove() {
+        let row = ASLFixtures.replyRow()
+        serve([row])
+        service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "First?"))
+        let flow = flow()
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        flow.setDraft("half written")
+        flow.cancel()
+
+        serve([])
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        XCTAssertEqual(flow.phase, .refused("this run is no longer waiting on an answer"))
+        XCTAssertTrue(flow.keptDrafts(run: "run-reply").isEmpty)
+
+        serve([row])
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        flow.setDraft("another")
+        service.actResults = [.failure(.refused("stale-action-token: expired"))]
+        flow.submit(flow.state.buttons[0])
+        XCTAssertEqual(closes, [ASLRefusal.targetChanged])
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        XCTAssertEqual(flow.state.draft.reveal(), "", "a run that moved does not bring its draft back")
+    }
+
+    func testAnAnswerSentBeforeThePanelClosedIsReported() {
+        let row = ASLFixtures.replyRow()
+        serve([row])
+        service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "First?"))
+        let runner = HeldRunner()
+        let flow = flow(runner: runner)
+        var late: [String] = []
+        flow.onLateResult = { late.append($0) }
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        runner.release() // snapshot
+        runner.release() // body
+        flow.setDraft("sent anyway")
+        flow.submit(flow.state.buttons[0])
+        XCTAssertFalse(ASLQuestionPanelController.mayClose(flow), "the panel stays while the answer is on its way")
+        flow.cancel()
+        XCTAssertTrue(ASLQuestionPanelController.mayClose(flow))
+        runner.release() // the action's reply
+        XCTAssertEqual(late, ["the answer to api migration was accepted"])
+        XCTAssertTrue(closes.isEmpty, "a late result never closes a panel opened since")
+        XCTAssertTrue(flow.keptDrafts(run: "run-reply").isEmpty, "the answered draft is not kept")
+    }
+
+    func testLateNotices() {
+        XCTAssertEqual(ASLQuestionFlow.lateNotice(label: "", .failure(.refused("no-open-question: x"))),
+                       "the answer to the run was not applied: the run changed since it was selected")
+        XCTAssertEqual(ASLQuestionFlow.lateNotice(label: "api", .failure(.transport("t"))),
+                       "the answer to api did not complete: the action did not complete; its outcome is unknown and it was not retried")
+    }
+
+    func testABodyThatFailedToLoadLoadsAgain() {
+        let row = ASLFixtures.replyRow()
+        serve([row])
+        service.bodies["q-api-1"] = .failure(.transport("timed out"))
+        let flow = flow()
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        XCTAssertEqual(flow.phase, .open)
+        XCTAssertTrue(flow.state.loadFailed)
+        service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "First?"))
+        flow.reload()
+        XCTAssertEqual(flow.state.body.reveal(), "First?")
+        XCTAssertEqual(service.calls.filter { $0 == "asl_question q-api-1" }.count, 2)
+    }
 }
+

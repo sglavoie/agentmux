@@ -267,6 +267,27 @@ enum ASLRefusal {
         }
     }
 
+    /// Why a question body could not be read. A read applies nothing, so it
+    /// never borrows an action's "outcome is unknown" wording.
+    static func readText(_ error: ASLRequestError) -> String {
+        let prefix = "could not load the question"
+        switch error {
+        case .notRunning: return "\(prefix): the daemon is not running"
+        case .unsupported: return text(error)
+        case .transport: return "\(prefix): agent-session-loop did not answer"
+        case .refused: break
+        }
+        switch code(error) {
+        case "question-body-too-large", "missing-question-body", "invalid-plan", "contract-set-mismatch",
+             "unknown-method", "unsupported-protocol":
+            return text(error)
+        case "malformed-json", "frame-too-large", "internal-error":
+            return "\(prefix): agent-session-loop reported an internal error"
+        default:
+            return prefix
+        }
+    }
+
     /// `asl.MethodLabel`.
     static func methodLabel(_ method: String) -> String {
         switch method {
@@ -314,6 +335,9 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     var drafts: [String: SecretText] = [:]
     var fetching = false
     var fetchSeq = 0
+    /// The last fetch failed, so there is no body to answer; Load Again
+    /// fetches it again.
+    var loadFailed = false
     var buttons: [ASLResponseButton] = []
     var pending = ASLPendingSubmission()
     /// The previous closure spent the captured token; the next fetch re-mints
@@ -387,11 +411,23 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         drafts[target.questionID] = text
     }
 
+    /// The drafts worth keeping when the panel closes before they are sent.
+    var keptDrafts: [String: SecretText] { drafts.filter { !$0.value.isBlank } }
+
+    /// Puts back drafts kept from an earlier panel on this run, for the
+    /// questions it still has open; the others were answered or moved.
+    mutating func restore(drafts kept: [String: SecretText]) {
+        for (questionID, text) in kept where questionIDs.contains(questionID) && drafts[questionID] == nil {
+            drafts[questionID] = text
+        }
+    }
+
     // MARK: Fetching
 
     mutating func startFetch() -> ASLPanelEffect {
         fetchSeq += 1
         fetching = true
+        loadFailed = false
         body = SecretText()
         bodyBytes = 0
         notice = ""
@@ -406,7 +442,8 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         switch result {
         case let .failure(error):
             if ASLRefusal.isStale(error) { return invalidate() }
-            notice = ASLRefusal.text(error)
+            loadFailed = true
+            notice = ASLRefusal.readText(error)
             return nil
         case let .success(value):
             loaded = value
@@ -423,6 +460,14 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         bodyBytes = loaded.bodyBytes
         if !loaded.contextKind.isEmpty { contextKind = loaded.contextKind }
         return nil
+    }
+
+    /// Load Again: fetches the body whose fetch failed. A re-authorizing
+    /// fetch that failed re-mints the token this way too, so its buttons do
+    /// not stay disabled.
+    mutating func reload() -> ASLPanelEffect? {
+        guard active, loadFailed, !fetching, !inFlight else { return nil }
+        return startFetch()
     }
 
     // MARK: Navigating
@@ -444,7 +489,19 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
 
     /// Whether `button` may be pressed now.
     func canSubmit(_ button: ASLResponseButton) -> Bool {
-        active && !inFlight && !fetching && !reauthorize && (!button.needsText || !draft.isBlank)
+        disabledReason(button) == nil
+    }
+
+    /// Why `button` may not be pressed now, in a few words for its tooltip
+    /// and the caption under the reply; nil when it may.
+    func disabledReason(_ button: ASLResponseButton) -> String? {
+        if !active { return "Loading…" }
+        if inFlight { return "Submitting…" }
+        if fetching { return reauthorize ? "Re-authorizing…" : "Loading…" }
+        if loadFailed { return "Load the question again first" }
+        if reauthorize { return "Re-authorizing…" }
+        if button.needsText, draft.isBlank { return "Type a reply" }
+        return nil
     }
 
     /// `submitASLResponse`: refuses a double submit, a submit while the
@@ -452,6 +509,10 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     /// reuses the operation ID and returns the action to send.
     mutating func submit(_ button: ASLResponseButton, mint: () -> String = ASLResponse.newOperationID) -> ASLPanelEffect? {
         guard active, !inFlight else { return nil }
+        if loadFailed {
+            notice = "the question could not be loaded: load it again before answering"
+            return nil
+        }
         if reauthorize {
             notice = "the previous answer was accepted: this question is still being re-authorized"
             return nil

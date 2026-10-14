@@ -839,9 +839,20 @@ the panel and the TUI's Runs view agree:
   bridge's message. A refusal meaning the run moved (a stale token, a closed
   question, a stale snapshot) closes the panel, shows a notice in the menu,
   and rebuilds the menu.
+- A question body that cannot be read says "could not load the question",
+  never an action's wording, and nothing can be sent until **Load Again**
+  has read it. That includes the re-authorizing fetch after a closure.
+- A disabled button says why in its tooltip, and the caption under the reply
+  says why Reply is: "Type a reply", "Loading…", "Re-authorizing…".
+- While a submission is on its way, Close (and Escape, and the title bar's
+  close button) wait for it. One whose panel went anyway, because another run
+  was opened, still reports how it went as a notice in the menu.
 
-The question body and every draft are held only while the panel is open, and
-closing it drops them. `SecretText` and the state's `description`, `dump`
+The question body is held only while the panel is open. Drafts not yet sent
+are kept, in memory only, per run: closing the panel or opening another run
+keeps them, and reopening that run puts them back for the questions it still
+has open. They go when the run's questions move: answered, a moved run, or a
+run no longer waiting. `SecretText` and the state's `description`, `dump`
 mirror, and request descriptions are all redacted, so the logs (category
 `asl`) name only methods, run, question, and operation IDs, and refusal codes.
 
@@ -875,6 +886,12 @@ The rules are in `Model/PromptAnswer.swift`:
   key is asked about afresh.
 - A refusal is shown as a sentence chosen by its code, not `amx send`'s own
   message, which names command-line flags.
+- A key held with ⌘, ⌃, or ⌥ is left to the menus and never reaches the
+  session.
+- A first look that fails can be tried again with **Look again**, and
+  reopening the panel on that session starts over. A look you ask for clears
+  the notice an earlier key or look left (the look 0.6 seconds after a key
+  keeps that key's), and a confirmation asked before it is asked afresh.
 
 The daemon offers `respond` only on a `permission` notice whose target is a
 tmux runtime session, and the app shows Answer… only when that was offered
