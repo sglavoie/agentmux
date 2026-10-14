@@ -393,6 +393,13 @@ ASL answer panel work the same either way.
   daemon line under them; the selection and every terminal stay as they are,
   since tmux holds the sessions and `amx attach` does not need the daemon.
   The first snapshot after the reconnect then decides what is still there.
+  The daemon line is `WorkspaceSidebar.feedNotice` (`Connecting to the
+  daemon…`, `Daemon not running`, `Daemon too old — run amx daemon restart`,
+  `Reconnecting… (reason)`). With no rows to hold, the pane says the same
+  instead of "No live sessions" (`feedExplanation`) and offers **Start
+  Daemon** when it is not running (`workspaceStartDaemon`, the menu's
+  `amx daemon start`); the inspector's Waiting tab says it instead of
+  "Nothing is waiting on you".
   A wake from sleep reconnects the feed at once; the terminals are local
   processes and are not touched.
 - **Coming back.** `WorkspaceRestoration` (`Model/WorkspaceRecovery.swift`)
@@ -437,7 +444,13 @@ ASL answer panel work the same either way.
   it where the click put it. A terminal under the list claims a click only
   when the window's own hit test lands on it, so a click on a row is the
   list's. A snapshot that changes the places re-filters
-  an open list.
+  an open list. A query that keeps nothing says **No matches**; the selected
+  row is drawn as a focused list's (`WorkspaceSwitcherRowView`), since it is
+  what Return goes to; and the list shrinks to stay 16 points above the
+  pane's bottom. A terminal, pager, or picker is listed with the name of the
+  session it is about (`WorkspaceUtilityView.detail(session:)`), the one it
+  was last listed under once that session is gone, and is found by it; the
+  sidebar line and its tooltip say the same.
 - **Inspector.** ⌘⇧B shows `WorkspaceInspectorView` on the pane's other
   side, built as data by `Model/WorkspaceInspector.swift`. A Waiting row
   carries a `WorkspaceWaitingAnswer` when it can be answered without going
@@ -458,7 +471,15 @@ ASL answer panel work the same either way.
   the line changes with the next snapshot and not before. A named row is
   taller by one line (`WorkspaceRowCellView.nameLabel`, bold, dark blue on
   the session's color and a lighter blue on a dark list). A Kitty session is
-  not named here: its item is listed and disabled.
+  not named here: its item is listed and disabled. A session is called by
+  its name, else "project — profile" (`WorkspaceRow.displayName`), in the
+  window title, the inspector, and the end, name, and failure sheets.
+- **Right-click menu.** A session's line offers **Name Session…** and **Pin
+  to Top**/**Unpin**, and an embedded one also **New Terminal Below**, **Copy
+  Runtime Session ID**, and **End Session…** (the same sheet as its ×). An
+  opened view, or the Dashboard or Overview while its program runs, offers
+  **Close**. A line with nothing to offer, a heading among them, shows no
+  menu (`WorkspaceSidebarView.hasMenu`).
 - **Function keys.** F1 to F11 are the menu's too, with no modifier
   (`WorkspaceMenu.functionKeys`, listed under **Session › Function Keys**):
   the keys Kitty binds for its tabs (`internal/kittykeys`), acting on the

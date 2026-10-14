@@ -253,9 +253,27 @@ final class WorkspaceSidebarTests: XCTestCase {
 
     func testFeedNotice() {
         XCTAssertNil(WorkspaceSidebar.feedNotice(.live))
-        XCTAssertEqual(WorkspaceSidebar.feedNotice(.notRunning), "Daemon: not running")
-        XCTAssertEqual(WorkspaceSidebar.feedNotice(.reconnecting("no heartbeat")), "Daemon: reconnecting · no heartbeat")
-        XCTAssertEqual(WorkspaceSidebar.feedNotice(.connecting), "Daemon: connecting…")
+        XCTAssertEqual(WorkspaceSidebar.feedNotice(.notRunning), "Daemon not running")
+        XCTAssertEqual(WorkspaceSidebar.feedNotice(.reconnecting("no heartbeat")), "Reconnecting… (no heartbeat)")
+        XCTAssertEqual(WorkspaceSidebar.feedNotice(.connecting), "Connecting to the daemon…")
+        XCTAssertEqual(WorkspaceSidebar.feedNotice(.daemonTooOld), "Daemon too old — run amx daemon restart")
+        for feed in [FeedState.connecting, .notRunning, .daemonTooOld, .reconnecting("x")] {
+            let notice = WorkspaceSidebar.feedNotice(feed)
+            XCTAssertFalse(notice?.contains("`") ?? true, "no Markdown in a label")
+            XCTAssertEqual(notice?.first?.isUppercase, true, "sentence case")
+        }
+        XCTAssertNil(WorkspaceSidebar.feedExplanation(.live))
+        XCTAssertEqual(WorkspaceSidebar.feedExplanation(.notRunning)?.startsDaemon, true)
+        XCTAssertEqual(WorkspaceSidebar.feedExplanation(.daemonTooOld)?.startsDaemon, false)
+        XCTAssertEqual(WorkspaceSidebar.feedExplanation(.reconnecting("x"))?.title, "Reconnecting…")
+    }
+
+    func testDisplayNamePrefersTheGivenName() {
+        var row = WorkspaceRow(key: .embedded("rs-1"), target: .embedded(runtimeSessionID: "rs-1"), project: "api", label: "work",
+                               detail: "", glyph: "", attention: false, working: false, muted: false, toolTip: "")
+        XCTAssertEqual(row.displayName, "api — work")
+        row.name = "release notes"
+        XCTAssertEqual(row.displayName, "release notes")
     }
 
     // MARK: State

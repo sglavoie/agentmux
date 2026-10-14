@@ -33,19 +33,26 @@ enum WorkspaceSwitcher {
 
     /// The sessions in sidebar order, then the views. An overlay view — the
     /// key reference, a picker — is passed through, not gone to.
-    static func entries(rows: [WorkspaceRow], views: [WorkspaceUtilityView]) -> [Entry] {
+    /// A view about a session says which, by the name in `names` (keyed by
+    /// runtime session) or of its listed row.
+    static func entries(rows: [WorkspaceRow], views: [WorkspaceUtilityView], names: [String: String] = [:]) -> [Entry] {
+        var names = names
+        for row in rows {
+            if let id = row.embeddedRuntimeSessionID { names[id] = row.displayName }
+        }
         let sessions = rows.map { row -> Entry in
             let place = "\(row.project) — \(row.label)"
             return Entry(
                 place: .session(row.key),
                 glyph: row.glyph,
-                title: row.name.isEmpty ? place : row.name,
+                title: row.displayName,
                 detail: row.name.isEmpty ? row.detail : [place, row.detail].filter { !$0.isEmpty }.joined(separator: " · "),
                 also: [row.project, row.label, row.harness]
             )
         }
         let others = views.filter { !$0.isOverlay }.map { view in
-            Entry(place: .view(view.id), glyph: view.glyph, title: view.title, detail: view.detail)
+            Entry(place: .view(view.id), glyph: view.glyph, title: view.title,
+                  detail: view.detail(session: view.aboutRuntimeSessionID.flatMap { names[$0] }))
         }
         return sessions + others
     }

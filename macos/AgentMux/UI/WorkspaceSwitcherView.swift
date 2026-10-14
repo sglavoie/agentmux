@@ -12,8 +12,12 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     /// The most places shown without scrolling.
     static let visibleRows = 8
 
+    static let noMatches = "No matches"
+
     let field = NSTextField()
     let table = NSTableView()
+    /// Said in place of the list when nothing matches what is typed.
+    let noMatchLabel = NSTextField(labelWithString: WorkspaceSwitcherView.noMatches)
     /// The places that match what is typed, in the order they are listed.
     private(set) var shown: [WorkspaceSwitcher.Entry] = []
     private var entries: [WorkspaceSwitcher.Entry] = []
@@ -66,8 +70,13 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
+        // The list gives up height before the box leaves the pane.
+        scroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let stack = NSStackView(views: [field, scroll])
+        noMatchLabel.textColor = .secondaryLabelColor
+        noMatchLabel.isHidden = true
+
+        let stack = NSStackView(views: [field, noMatchLabel, scroll])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
@@ -77,6 +86,9 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         content.addSubview(stack)
         contentView = content
         let height = scroll.heightAnchor.constraint(equalToConstant: 0)
+        // Below the pane's hold on the box, so a short window shrinks the
+        // list rather than pushing the box out of the pane.
+        height.priority = .defaultHigh
         listHeight = height
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: content.topAnchor),
@@ -124,8 +136,10 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         select(min(max(table.selectedRow + offset, 0), shown.count - 1))
     }
 
+    /// Goes to the selected place. With nothing matching there is none, and
+    /// the list already says so.
     func choose() {
-        guard let selected else { return NSSound.beep() }
+        guard let selected else { return }
         onChoose?(selected)
     }
 
@@ -135,6 +149,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         shown = WorkspaceSwitcher.matches(field.stringValue, in: entries)
         table.reloadData()
         listHeight?.constant = CGFloat(min(shown.count, Self.visibleRows)) * (Self.rowHeight + table.intercellSpacing.height)
+        noMatchLabel.isHidden = !shown.isEmpty
         select(shown.firstIndex { $0.place == place } ?? 0)
     }
 
@@ -177,11 +192,25 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
 
     func numberOfRows(in tableView: NSTableView) -> Int { shown.count }
 
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        WorkspaceSwitcherRowView()
+    }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let cell = tableView.makeView(withIdentifier: WorkspaceSwitcherCellView.identifier, owner: nil) as? WorkspaceSwitcherCellView
             ?? WorkspaceSwitcherCellView()
         cell.show(shown[row])
         return cell
+    }
+}
+
+/// A line of the Go to… list. The list never has the keyboard — the field
+/// does — so its selection is drawn as a focused list's would be: it is what
+/// Return goes to.
+final class WorkspaceSwitcherRowView: NSTableRowView {
+    override var isEmphasized: Bool {
+        get { true }
+        set {}
     }
 }
 

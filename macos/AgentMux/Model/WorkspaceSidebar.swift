@@ -63,6 +63,12 @@ struct WorkspaceRow: Equatable {
     /// it: what Past Sessions is opened on if the agent stops.
     var conversation: ConversationIdentity?
 
+    /// What the session is called in titles, alerts, and the inspector:
+    /// its name when it was given one, else its project and profile.
+    var displayName: String {
+        name.isEmpty ? "\(project) — \(label)" : name
+    }
+
     var embeddedRuntimeSessionID: String? {
         if case let .embedded(id) = target { return id }
         return nil
@@ -298,10 +304,28 @@ enum WorkspaceSidebar {
     static func feedNotice(_ feed: FeedState) -> String? {
         switch feed {
         case .live: return nil
-        case .connecting: return "Daemon: connecting…"
-        case .notRunning: return DaemonStatusLine.title(for: .notRunning)
-        case .daemonTooOld: return "daemon too old — run `amx daemon restart`"
-        case let .reconnecting(reason): return "Daemon: reconnecting · \(reason)"
+        case .connecting: return "Connecting to the daemon…"
+        case .notRunning: return "Daemon not running"
+        case .daemonTooOld: return "Daemon too old — run amx daemon restart"
+        case let .reconnecting(reason): return "Reconnecting… (\(reason))"
+        }
+    }
+
+    /// What the pane says when it has nothing to show and the feed is not
+    /// delivering snapshots, and whether it can offer to start the daemon;
+    /// nil while the feed is live.
+    static func feedExplanation(_ feed: FeedState) -> (title: String, message: String, startsDaemon: Bool)? {
+        guard let notice = feedNotice(feed) else { return nil }
+        switch feed {
+        case .live: return nil
+        case .connecting:
+            return (notice, "Sessions are listed once the daemon answers.", false)
+        case .notRunning:
+            return (notice, "Nothing is listed until the daemon runs. Starting it starts no agent.", true)
+        case .daemonTooOld:
+            return (notice, "This daemon cannot list sessions for the workspace. Restart it from a terminal.", false)
+        case .reconnecting:
+            return ("Reconnecting…", "The sessions listed are the last ones the daemon reported. They keep running meanwhile.", false)
         }
     }
 }

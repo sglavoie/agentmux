@@ -418,6 +418,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
+    func workspaceStartDaemon() {
+        startDaemon()
+    }
+
     /// Names a session with `amx name-session`; an empty name removes the
     /// one it has. The sidebar shows the change once the daemon has read it.
     func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void) {
@@ -1340,7 +1344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if !project.directory.isEmpty {
             panel.directoryURL = URL(fileURLWithPath: project.directory, isDirectory: true)
         }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         launch(project, directory: url.path)
     }

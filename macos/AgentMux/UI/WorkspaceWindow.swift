@@ -57,6 +57,9 @@ protocol WorkspaceDelegate: AnyObject {
     /// The answer is nil once it is written, or why it could not be, and
     /// arrives on the main actor, possibly before this returns.
     func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void)
+    /// Runs `amx daemon start`, because the operator asked for it from the
+    /// pane. It starts no agent.
+    func workspaceStartDaemon()
 }
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -229,6 +232,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// The utility views listed above the projects.
     private(set) var views = WorkspaceViews()
+    /// The last name each embedded session was listed under, by runtime
+    /// session, kept while a view is about it: a terminal whose session is
+    /// no longer listed still says whose it was.
+    private var sessionNames: [String: String] = [:]
     /// The utility view the pane shows, by `WorkspaceUtilityView.id`. It and
     /// `state.selection` are never both set.
     private(set) var viewSelection: String?
@@ -295,7 +302,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             Self.logger.notice("workspace: opened")
             delegate?.workspaceVisibilityChanged(true)
         }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         refresh()
     }
@@ -335,7 +342,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         let wasCurrent = state.current
         let previous = state.selection
-        let previousName = state.selectedRow.map { "\($0.project) — \($0.label)" }
+        let previousName = state.selectedRow?.displayName
         let lost = state.apply(live)
         if state.current != wasCurrent {
             Self.logger.notice("workspace: rows \(self.state.current ? "current" : "held from the last snapshot", privacy: .public) (\(self.state.rows.count) session(s), selection \(Self.describe(self.state.selection), privacy: .public))")
@@ -424,7 +431,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             return
         }
         let listed = state.row(key) != nil
-        let name = state.row(key).map { "\($0.project) — \($0.label)" } ?? "The session this window was on"
+        let name = state.row(key)?.displayName ?? "The session this window was on"
         restoring = nil
         if !listed {
             Self.logger.notice("workspace: \(id, privacy: .public) is not listed after the restart; asking what became of it")
@@ -601,7 +608,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private func switcherEntries() -> [WorkspaceSwitcher.Entry] {
-        WorkspaceSwitcher.entries(rows: state.rows, views: views.all)
+        WorkspaceSwitcher.entries(rows: state.rows, views: views.all, names: sessionNames)
     }
 
     /// Puts the list away. With `restoring`, the keyboard goes back to what
@@ -744,7 +751,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func askToClose(_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "End \(row.project) — \(row.label)?"
+        alert.messageText = "End \(row.displayName)?"
         if row.attention || row.working {
             alert.informativeText = (row.attention ? "Its agent is waiting on you." : "Its agent is working.")
                 + " Ending it loses the work in progress. The conversation stays on disk and can be resumed from the Dashboard."
@@ -768,7 +775,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private func endSession(_ row: WorkspaceRow, _ id: String) {
-        let name = "\(row.project) — \(row.label)"
+        let name = row.displayName
         Self.logger.notice("workspace: closing session \(id, privacy: .public)")
         closing[id] = (place == .session(row.key), false)
         // Its terminal goes first: the attachment ending with the agent is
@@ -853,7 +860,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             Self.logger.notice("workspace: naming session \(id, privacy: .public)")
             self.delegate?.nameSession(runtimeSessionID: id, name: name) { [weak self] problem in
                 guard let self, let problem else { return }
-                let title = "\(row.project) — \(row.label)"
+                let title = row.displayName
                 if let report = self.reportNameProblem {
                     report(title, problem)
                 } else if !AppDelegate.isRunningTests {
@@ -872,7 +879,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         field.placeholderString = "No name"
         field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
         let alert = NSAlert()
-        alert.messageText = "Name \(row.project) — \(row.label)"
+        alert.messageText = "Name \(row.displayName)"
         alert.informativeText = "The name is shown above the session in the sidebar. Leave it empty to remove it."
         alert.accessoryView = field
         alert.addButton(withTitle: "Name")
@@ -884,14 +891,40 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// The menu a right-click on the session list shows: what can be done to
-    /// the line under the pointer. Only a session's line has anything.
+    /// the line under the pointer. A line with nothing to offer shows no menu
+    /// (`WorkspaceSidebarView.hasMenu`).
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         for item in contextMenuItems(forRow: sidebar.clickedRow) { menu.addItem(item) }
     }
 
+    static let newTerminalTitle = "New Terminal Below"
+    static let copyRuntimeSessionIDTitle = "Copy Runtime Session ID"
+
+    /// Takes a copied runtime session ID; the general pasteboard unless a
+    /// test says otherwise.
+    var copyToPasteboard: (String) -> Void = { value in
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
     func contextMenuItems(forRow index: Int) -> [NSMenuItem] {
-        guard index >= 0, index < items.count, case let .row(row) = items[index] else { return [] }
+        guard index >= 0, index < items.count else { return [] }
+        switch items[index] {
+        case let .row(row): return sessionMenuItems(row)
+        case let .view(view):
+            // The Dashboard and the Overview have nothing to close until their
+            // program runs.
+            guard !view.isPermanent || viewTerminals[view.id] != nil else { return [] }
+            let close = NSMenuItem(title: Self.closeTitle, action: #selector(closeClickedView(_:)), keyEquivalent: "")
+            close.representedObject = view.id
+            close.target = self
+            return [close]
+        case .section, .group: return []
+        }
+    }
+
+    private func sessionMenuItems(_ row: WorkspaceRow) -> [NSMenuItem] {
         let name = NSMenuItem(title: Self.nameSessionTitle, action: #selector(nameClickedSession(_:)), keyEquivalent: "")
         name.representedObject = row.key
         if row.embeddedRuntimeSessionID != nil {
@@ -905,7 +938,39 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                              action: #selector(pinClickedSession(_:)), keyEquivalent: "")
         pin.representedObject = row.key
         pin.target = self
-        return [name, pin]
+        guard let id = row.embeddedRuntimeSessionID else { return [name, pin] }
+        // What the × and the Session menu do, for the line under the pointer.
+        let terminal = NSMenuItem(title: Self.newTerminalTitle, action: #selector(openTerminalBesideClickedSession(_:)), keyEquivalent: "")
+        terminal.representedObject = id
+        terminal.target = self
+        let copy = NSMenuItem(title: Self.copyRuntimeSessionIDTitle, action: #selector(copyClickedRuntimeSessionID(_:)), keyEquivalent: "")
+        copy.representedObject = id
+        copy.target = self
+        let end = NSMenuItem(title: Self.endSessionTitle, action: #selector(endClickedSession(_:)), keyEquivalent: "")
+        end.representedObject = row.key
+        end.target = self
+        end.isEnabled = closing[id] == nil
+        return [name, pin, .separator(), terminal, copy, .separator(), end]
+    }
+
+    @objc private func closeClickedView(_ sender: Any?) {
+        guard let id = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        closeView(id)
+    }
+
+    @objc private func openTerminalBesideClickedSession(_ sender: Any?) {
+        guard let id = (sender as? NSMenuItem)?.representedObject as? String, state.row(.embedded(id)) != nil else { return }
+        open(views.openTerminal(beside: id))
+    }
+
+    @objc private func copyClickedRuntimeSessionID(_ sender: Any?) {
+        guard let id = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        copyToPasteboard(id)
+    }
+
+    @objc private func endClickedSession(_ sender: Any?) {
+        guard let key = (sender as? NSMenuItem)?.representedObject as? AttentionCycler.Key else { return }
+        closeSession(key)
     }
 
     @objc private func pinClickedSession(_ sender: Any?) {
@@ -1228,7 +1293,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         placeholder.isHidden = shown != nil
         if shown == nil { fillPlaceholder(wanted) }
         window.title = views.view(viewSelection)?.title
-            ?? state.selectedRow.map { "\($0.project) — \($0.label)" } ?? "Agent Mux"
+            ?? state.selectedRow?.displayName ?? "Agent Mux"
 
         if let shown, focus {
             window.makeFirstResponder(shown)
@@ -1243,11 +1308,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     static let resumeTitle = "Resume from Past Sessions"
+    static let startDaemonTitle = "Start Daemon"
 
     private func fillPlaceholder(_ content: Content) {
         let row = state.selectedRow
         switch content {
         case .empty, .terminal, .view:
+            // Rows held from the last snapshot can still be chosen; with none
+            // listed, what is wrong is the feed, not the sessions.
+            if state.rows.isEmpty, let feed = delegate?.store.feed, let down = WorkspaceSidebar.feedExplanation(feed) {
+                placeholder.show(title: down.title, message: down.message,
+                                 button: down.startsDaemon ? Self.startDaemonTitle : nil) { [weak self] in
+                    self?.delegate?.workspaceStartDaemon()
+                }
+                break
+            }
             placeholder.show(
                 title: state.rows.isEmpty ? "No live sessions" : "No session selected",
                 message: state.rows.isEmpty
@@ -1341,6 +1416,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         // A session's terminals follow its row. One whose session is no
         // longer listed keeps running, among the workspace's own views.
         let listed = state.embeddedRuntimeSessionIDs
+        for row in state.rows {
+            if let id = row.embeddedRuntimeSessionID { sessionNames[id] = row.displayName }
+        }
+        let about = Set(views.all.compactMap(\.aboutRuntimeSessionID))
+        sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
         let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
         let wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
             + state.groups.flatMap { group in
@@ -1407,7 +1487,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .view(view):
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
-            cell.show(view)
+            cell.show(view, session: view.aboutRuntimeSessionID.flatMap { sessionNames[$0] })
             cell.onClose = { [weak self] in self?.closeView(view.id) }
             return cell
         case let .group(group):
@@ -1641,7 +1721,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private static func makeSidebarToggle() -> NSButton {
-        makeTitlebarToggle(symbol: "line.3.horizontal", title: "Toggle Sidebar", shortcut: "⌘B")
+        makeTitlebarToggle(symbol: "sidebar.left", title: "Toggle Sidebar", shortcut: "⌘B")
     }
 
     private static func makeInspectorToggle() -> NSButton {
@@ -1729,7 +1809,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 sessions, asl: store.snapshot?.asl.waiting ?? [], snapshotSocket: socket, now: now(), glyphs: glyphs, order: order
             ),
             inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs) },
-            current: state.current
+            current: state.current,
+            feedNotice: WorkspaceSidebar.feedNotice(store.feed)
         ))
     }
 
@@ -1765,6 +1846,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.target = self
         sidebar.action = #selector(rowClicked(_:))
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
+        sidebar.hasMenu = { [weak self] row in !(self?.contextMenuItems(forRow: row).isEmpty ?? true) }
         sidebar.registerForDraggedTypes([Self.dragType])
         sidebar.setDraggingSourceOperationMask(.move, forLocal: true)
         sidebar.setDraggingSourceOperationMask([], forLocal: false)
@@ -1809,6 +1891,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             switcher.topAnchor.constraint(equalTo: pane.topAnchor, constant: 48),
             switcher.centerXAnchor.constraint(equalTo: pane.centerXAnchor),
             switcher.widthAnchor.constraint(lessThanOrEqualTo: pane.widthAnchor, constant: -32),
+            switcher.bottomAnchor.constraint(lessThanOrEqualTo: pane.bottomAnchor, constant: -16),
             switcherWidth,
         ])
         switcher.onChoose = { [weak self] entry in self?.go(to: entry) }
@@ -1894,6 +1977,15 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
 @MainActor
 final class WorkspaceSidebarView: NSTableView {
     var onReturn: (() -> Void)?
+    /// Whether the line at an index has anything for its right-click menu;
+    /// one that has nothing shows no menu rather than an empty one.
+    var hasMenu: ((Int) -> Bool)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let index = row(at: convert(event.locationInWindow, from: nil))
+        guard hasMenu?(index) ?? true else { return nil }
+        return super.menu(for: event)
+    }
 
     override func keyDown(with event: NSEvent) {
         let returnKeys: Set<UInt16> = [36, 76]
@@ -2132,6 +2224,10 @@ final class WorkspaceRowCellView: NSTableCellView {
     }
     /// The side of the ×'s target, larger than its glyph.
     static let closeTarget: CGFloat = 18
+    /// Keep the text clear of the × and the key label, each only while it
+    /// is there: a hidden one leaves the title the whole line.
+    private var clearOfClose: NSLayoutConstraint!
+    private var clearOfKey: NSLayoutConstraint!
 
     init() {
         super.init(frame: .zero)
@@ -2173,8 +2269,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         NSLayoutConstraint.activate([
             glyphLabel.widthAnchor.constraint(equalToConstant: 20),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6),
             keyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
             keyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -2183,12 +2278,24 @@ final class WorkspaceRowCellView: NSTableCellView {
             closeButton.widthAnchor.constraint(equalToConstant: Self.closeTarget),
             closeButton.heightAnchor.constraint(equalToConstant: Self.closeTarget),
         ])
+        clearOfClose = stack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2)
+        clearOfKey = stack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4)
         closeButton.alphaValue = 0
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
     }
 
     @objc private func closePressed(_ sender: Any?) { onClose?() }
+
+    /// Whether the title may run under the × or the key label: only where
+    /// that one is not there.
+    var titleClearsClose: Bool { clearOfClose.isActive }
+    var titleClearsKey: Bool { clearOfKey.isActive }
+
+    private func syncTrailingRoom() {
+        clearOfClose.isActive = !closeButton.isHidden
+        clearOfKey.isActive = !keyLabel.stringValue.isEmpty
+    }
 
     /// Whether the × can be seen now: the line can be closed and the
     /// pointer is over it.
@@ -2229,19 +2336,20 @@ final class WorkspaceRowCellView: NSTableCellView {
 
     /// A utility view's line: what it is and what it is about. It shows no
     /// session state, because it has none.
-    func show(_ view: WorkspaceUtilityView) {
+    func show(_ view: WorkspaceUtilityView, session: String? = nil) {
         nameLabel.stringValue = ""
         nameLabel.isHidden = true
         glyphLabel.stringValue = view.glyph
         titleLabel.stringValue = view.title
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        detailLabel.stringValue = view.detail
-        toolTip = view.target.isEmpty ? view.detail : view.target
+        detailLabel.stringValue = view.detail(session: session)
+        toolTip = view.toolTip(session: session)
         setAccessibilityLabel("\(view.title), \(view.kind.rawValue) view")
         keyLabel.stringValue = ""
         closeButton.isHidden = view.isPermanent
         closeButton.toolTip = "Close \(view.title)"
         closeButton.setAccessibilityLabel("Close \(view.title)")
+        syncTrailingRoom()
     }
 
     /// Only an embedded session can be closed from here; `closing` is set
@@ -2266,7 +2374,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         setAccessibilityLabel(spoken.joined(separator: ", "))
         if closing { detailLabel.stringValue = "closing…" }
         closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
-        closeButton.toolTip = "End \(row.project) — \(row.label)"
-        closeButton.setAccessibilityLabel("End \(row.project), \(row.label)")
+        closeButton.toolTip = "End \(row.displayName)"
+        closeButton.setAccessibilityLabel("End \(row.displayName)")
+        syncTrailingRoom()
     }
 }

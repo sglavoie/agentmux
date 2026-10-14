@@ -178,6 +178,13 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
         completion(nameProblem)
     }
 
+    /// How many times the pane asked for the daemon to be started.
+    private(set) var daemonStarts = 0
+
+    func workspaceStartDaemon() {
+        daemonStarts += 1
+    }
+
     /// The sessions amx was asked to close, in order.
     private(set) var ended: [String] = []
     /// Set to refuse every close with this message.

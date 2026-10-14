@@ -221,7 +221,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         model.refresh()
         // An accessory app is not active by default; bring it forward so the
         // window takes key focus.
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
 

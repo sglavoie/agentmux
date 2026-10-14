@@ -17,6 +17,9 @@ final class WorkspaceInspectorView: NSView {
         var inspection: WorkspaceInspection?
         /// False while the rows are held from the last live snapshot.
         var current = true
+        /// What is wrong with the feed, said instead of "nothing waiting":
+        /// a daemon that is down cannot say that nothing is.
+        var feedNotice: String?
     }
 
     static let nothingWaiting = "Nothing is waiting on you."
@@ -107,7 +110,7 @@ final class WorkspaceInspectorView: NSView {
         lines = []
         switch model.tab {
         case .waiting:
-            if model.waiting.isEmpty { add(Self.note(Self.nothingWaiting)) }
+            if model.waiting.isEmpty { add(Self.note(model.feedNotice ?? Self.nothingWaiting)) }
             for row in model.waiting {
                 let line = WorkspaceWaitingRowView(row)
                 line.onPress = { [weak self] in self?.onWaiting?(row.key) }
@@ -229,6 +232,22 @@ final class WorkspaceWaitingRowView: NSBox {
     private(set) var answerButton: NSButton?
     let titleLabel = NSTextField(labelWithString: "")
     let detailLabel = NSTextField(labelWithString: "")
+    /// Whether the pointer is over the line, and whether it is held down on
+    /// it: each draws the line darker, as a button's would be.
+    var isHovered = false {
+        didSet { syncFill() }
+    }
+    var isPressed = false {
+        didSet { syncFill() }
+    }
+
+    static let restingFill = NSColor.quaternaryLabelColor
+    static let hoveredFill = NSColor.labelColor.withAlphaComponent(0.16)
+    static let pressedFill = NSColor.labelColor.withAlphaComponent(0.24)
+
+    private func syncFill() {
+        fillColor = isPressed ? Self.pressedFill : isHovered ? Self.hoveredFill : Self.restingFill
+    }
 
     init(_ row: WorkspaceWaitingRow) {
         self.row = row
@@ -237,8 +256,10 @@ final class WorkspaceWaitingRowView: NSBox {
         titlePosition = .noTitle
         borderWidth = 0
         cornerRadius = 6
-        fillColor = .quaternaryLabelColor
+        fillColor = Self.restingFill
         contentViewMargins = .zero
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                                       owner: self, userInfo: nil))
 
         titleLabel.stringValue = [row.glyph, row.title].filter { !$0.isEmpty }.joined(separator: " ")
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
@@ -306,9 +327,17 @@ final class WorkspaceWaitingRowView: NSBox {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    override func mouseDown(with event: NSEvent) {}
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
+    override func mouseDown(with event: NSEvent) { isPressed = true }
+
+    override func mouseDragged(with event: NSEvent) {
+        isPressed = bounds.contains(convert(event.locationInWindow, from: nil))
+    }
 
     override func mouseUp(with event: NSEvent) {
+        isPressed = false
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         press()
     }

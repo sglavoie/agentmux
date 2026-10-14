@@ -409,7 +409,7 @@ extension Ghostty {
                 ghostty_surface_text(surface, ptr, UInt(len - 1))
             }
             // A drop from Finder leaves Finder in front; keep typing here.
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             window?.makeKeyAndOrderFront(nil)
             window?.makeFirstResponder(self)
             return true

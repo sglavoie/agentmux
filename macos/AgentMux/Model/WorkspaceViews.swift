@@ -153,6 +153,21 @@ struct WorkspaceUtilityView: Equatable {
         }
     }
 
+    /// The line under the title, naming the session the view is about when
+    /// its name is known: every pager is "Scrollback" and every terminal
+    /// "Shell" until it says whose.
+    func detail(session name: String?) -> String {
+        guard aboutRuntimeSessionID != nil, let name, !name.isEmpty else { return detail }
+        return "\(detail) · \(name)"
+    }
+
+    /// What the pointer shows over the view's line: the session it is about
+    /// by name, else what it is about.
+    func toolTip(session name: String?) -> String {
+        if aboutRuntimeSessionID != nil, let name, !name.isEmpty { return detail(session: name) }
+        return target.isEmpty ? detail : target
+    }
+
     static let dashboard = WorkspaceUtilityView(kind: .dashboard, target: "", title: "Dashboard")
     static let overview = WorkspaceUtilityView(kind: .overview, target: "", title: "Overview")
     static let keybindings = WorkspaceUtilityView(kind: .keybindings, target: "", title: "Keybindings")

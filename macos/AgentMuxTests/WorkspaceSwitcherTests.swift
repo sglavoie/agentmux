@@ -62,6 +62,24 @@ final class WorkspaceSwitcherTests: XCTestCase {
         XCTAssertEqual(WorkspaceSwitcher.matches("api", in: [entry]), [entry])
         XCTAssertEqual(WorkspaceSwitcher.matches("release", in: [entry]), [entry])
     }
+
+    func testAViewAboutASessionSaysWhichAndIsFoundByIt() throws {
+        var named = F.tmux(1, project: "api", profile: "work")
+        named.name = "release notes"
+        var views = WorkspaceViews()
+        views.openTerminal(beside: F.runtimeID(1))
+        views.openTerminal(beside: F.runtimeID(2))
+        views.open(WorkspaceUtilityView(kind: .pager, target: F.runtimeID(3), title: "Scrollback"))
+        let rows = WorkspaceSidebar.groups([named, F.tmux(2, project: "web", profile: "personal")],
+                                           snapshotSocket: "", glyphs: .fallback).flatMap(\.rows)
+        // The pager's session is no longer listed: the name it was last listed under.
+        let listed = WorkspaceSwitcher.entries(rows: rows, views: views.all, names: [F.runtimeID(3): "old one"])
+        let others = Array(listed.suffix(3))
+        XCTAssertEqual(others.map(\.detail), ["Shell · release notes", "Shell · web — personal", "Scrollback · old one"])
+        XCTAssertEqual(WorkspaceSwitcher.matches("terminal release", in: listed).map(\.detail), ["Shell · release notes"])
+        XCTAssertEqual(WorkspaceSwitcher.matches("scrollback", in: entries([], views: views.all)).map(\.detail), ["Scrollback"],
+                       "with no name known, the view says what it is")
+    }
 }
 
 /// The Go to… list in the workspace window: it takes the keyboard while it is
@@ -143,10 +161,15 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
         workspace.switcher.move(-5)
         XCTAssertEqual(workspace.switcher.selected?.title, "api — personal")
 
+        XCTAssertTrue(workspace.switcher.noMatchLabel.isHidden)
         workspace.switcher.enter("nothing here")
         XCTAssertNil(workspace.switcher.selected)
+        XCTAssertFalse(workspace.switcher.noMatchLabel.isHidden, "the list says nothing matches")
+        XCTAssertEqual(workspace.switcher.noMatchLabel.stringValue, WorkspaceSwitcherView.noMatches)
         workspace.switcher.choose()
         XCTAssertTrue(workspace.isSwitching, "Return on nothing goes nowhere")
+        workspace.switcher.enter("api")
+        XCTAssertTrue(workspace.switcher.noMatchLabel.isHidden)
     }
 
     func testAKittySessionComesForwardInKitty() {
@@ -184,6 +207,25 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
         workspace.focusSidebar()
         XCTAssertFalse(workspace.isSwitching)
         XCTAssertTrue(workspace.window.firstResponder === workspace.sidebar)
+    }
+
+    func testTheListStaysInsideTheSmallestPane() throws {
+        let many = (1...12).map { F.tmux($0, project: "p\($0)", profile: "work") }
+        app.store.apply(snapshot: F.snapshot(many))
+        workspace.window.setContentSize(WorkspaceWindowController.minimumSize)
+        workspace.toggleSwitcher()
+        workspace.window.contentView?.layoutSubtreeIfNeeded()
+        let pane = try XCTUnwrap(workspace.switcher.superview)
+        let box = workspace.switcher.frame
+        XCTAssertGreaterThanOrEqual(box.minY, pane.bounds.minY + 16 - 0.5, "the list shrinks rather than leave the pane")
+        XCTAssertLessThanOrEqual(box.maxY, pane.bounds.maxY)
+        XCTAssertEqual(workspace.switcher.shown.count, 14)
+    }
+
+    func testTheSelectedRowIsDrawnAsTheOneReturnGoesTo() throws {
+        workspace.toggleSwitcher()
+        let view = try XCTUnwrap(workspace.switcher.tableView(workspace.switcher.table, rowViewForRow: 0))
+        XCTAssertTrue(view.isEmphasized, "though the field has the keyboard")
     }
 
     func testClosingTheWindowPutsTheListAway() {

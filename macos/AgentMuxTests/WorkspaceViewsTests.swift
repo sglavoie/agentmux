@@ -664,6 +664,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
     }
 
     func testTheEmptyPaneOffersTheDashboard() throws {
+        app.store.apply(snapshot: F.snapshot([]))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
         XCTAssertEqual(workspace.placeholder.button.title, "Open Dashboard")
         workspace.placeholder.press()

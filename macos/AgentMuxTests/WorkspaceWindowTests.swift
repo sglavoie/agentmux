@@ -44,7 +44,7 @@ final class WorkspaceWindowTests: XCTestCase {
     func testSidebarListsProjectsThenTheirSessions() throws {
         // The workspace's own views are always listed, above the projects.
         XCTAssertEqual(workspace.items, [.section("Workspace"), .view(.dashboard), .view(.overview)])
-        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Connecting to the daemon…")
 
         app.store.apply(snapshot: F.snapshot(sessions))
         XCTAssertEqual(workspace.sidebar.numberOfRows, 8)
@@ -199,7 +199,8 @@ final class WorkspaceWindowTests: XCTestCase {
         // wherever the pane is.
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top"])
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top", "", "New Terminal Below",
+                                            "Copy Runtime Session ID", "", "End Session…"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(asked.map(\.0), [personal])
         XCTAssertTrue(app.named.isEmpty, "nothing is written before the answer")
@@ -278,7 +279,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.refresh()
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[api]", "api/personal"])
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Unpin"])
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Unpin"], "a Kitty session is ended, and has its terminals, in Kitty")
         workspace.setPinned(kitty.key, false)
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[api]", "api/personal", "[web]", "web/work"])
         XCTAssertTrue(workspace.togglePinOfShownSession())
@@ -491,7 +492,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertFalse(workspace.state.current)
         XCTAssertEqual(workspace.items, items, "the sessions stay listed")
         XCTAssertEqual(workspace.sidebar.alphaValue, 0.5, "and are marked as not current")
-        XCTAssertEqual(workspace.feedLabel.stringValue, "Daemon: not running")
+        XCTAssertEqual(workspace.feedLabel.stringValue, "Daemon not running")
         XCTAssertFalse(workspace.feedLabel.isHidden)
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
         XCTAssertEqual(workspace.sidebar.selectedRow, try index(of: .embedded(F.runtimeID(1))))
@@ -528,7 +529,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.activate(try row("api", "work"))
         app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
         XCTAssertFalse(workspace.state.current)
-        XCTAssertEqual(workspace.feedLabel.stringValue, "Daemon: reconnecting · no heartbeat")
+        XCTAssertEqual(workspace.feedLabel.stringValue, "Reconnecting… (no heartbeat)")
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
         app.store.apply(.subscribed(SubscriptionAck()))
         XCTAssertTrue(workspace.state.current, "the kept snapshot is the daemon's last word until the next one")

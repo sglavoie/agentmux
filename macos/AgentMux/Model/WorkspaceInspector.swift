@@ -149,7 +149,7 @@ enum WorkspaceInspector {
             if row.embeddedRuntimeSessionID == nil { detail.append(WorkspaceSidebar.kittyBadge) }
             return WorkspaceWaitingRow(
                 key: row.key,
-                title: title(of: row),
+                title: row.displayName,
                 detail: detail.joined(separator: " · "),
                 glyph: row.glyph,
                 toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)",
@@ -214,16 +214,12 @@ enum WorkspaceInspector {
         }
         return WorkspaceInspection(
             key: row.key,
-            title: title(of: row),
+            title: row.displayName,
             glyph: row.glyph,
             sections: sections,
             embedded: row.embeddedRuntimeSessionID != nil,
             muted: session.muted
         )
-    }
-
-    private static func title(of row: WorkspaceRow) -> String {
-        row.name.isEmpty ? "\(row.project) — \(row.label)" : row.name
     }
 
     private static func age(_ seconds: Int64, now: Date) -> String {
