@@ -1123,6 +1123,30 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNotNil(workspace.views.view(shell.id), "a cancelled quit closes nothing")
     }
 
+    func testQuittingWithTheWindowClosedStillAsksAboutViewsWhoseProgramIsRunning() throws {
+        var asked: [([String], @MainActor (Bool) -> Void)] = []
+        workspace.confirmQuitWithViews = { titles, answer in asked.append((titles, answer)) }
+        let shell = WorkspaceUtilityView(kind: .shell, target: "/work/api", title: "Shell")
+        workspace.open(shell)
+        app.runningViews = [shell.id]
+        workspace.window.close()
+        XCTAssertFalse(workspace.isOpen)
+        XCTAssertNotNil(workspace.utilityTerminalView(for: shell.id), "a closed window keeps the shell running")
+        XCTAssertEqual(app.closedViews, [])
+
+        var answers: [Bool] = []
+        XCTAssertTrue(workspace.confirmQuit { answers.append($0) })
+        XCTAssertEqual(asked.map(\.0), [["Shell"]])
+        XCTAssertFalse(workspace.isOpen, "asking does not open the window, so the next launch keeps it closed")
+        asked[0].1(false)
+        XCTAssertEqual(answers, [false])
+        XCTAssertEqual(app.closedViews, [], "a cancelled quit ends nothing")
+
+        // Once its program has exited, there is nothing to ask about.
+        app.runningViews = []
+        XCTAssertFalse(workspace.confirmQuit { _ in XCTFail("nothing to ask") })
+    }
+
     func testATerminalThatCannotBeMadeSaysWhyAndIsRetriedOnlyWhenAsked() throws {
         app.problem = "amx is still being resolved."
         app.store.apply(snapshot: F.snapshot(sessions))

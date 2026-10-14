@@ -610,6 +610,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         reportPlace()
     }
 
+    /// Whether the pane is somewhere: on a session or a view, coming back to
+    /// one, or saying what became of one. Opening the window on nothing in
+    /// particular must leave such a place alone.
+    var hasPlace: Bool {
+        state.selection != nil || viewSelection != nil || restoring != nil || gone != nil
+    }
+
+    /// Lands the pane on the Dashboard when it has no place, as opening the
+    /// window on nothing in particular does.
+    func showDashboardUnlessPlaced() {
+        guard !hasPlace else { return }
+        showView(WorkspaceUtilityView.dashboard.id)
+    }
+
     /// The operator went somewhere: whatever the pane was waiting to say or
     /// to come back to is over.
     private func leaveRecovery() {
@@ -855,9 +869,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// Asks once, naming every view that needs it, before the app quits.
     /// Reports whether it asked; when it did, `answer` gets the operator's
-    /// reply, on the main actor.
+    /// reply, on the main actor. A closed window keeps its views' programs,
+    /// so it asks too.
     func confirmQuit(_ answer: @escaping @MainActor (Bool) -> Void) -> Bool {
-        let titles = isOpen ? viewsNeedingConfirmation : []
+        let titles = viewsNeedingConfirmation
         guard !titles.isEmpty else { return false }
         Self.logger.notice("workspace: quitting with \(titles.count) view programs running; asking")
         (confirmQuitWithViews ?? askToQuit)(titles, answer)
@@ -1457,6 +1472,18 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         alert.informativeText = "Quitting ends those processes. Sessions live on and are shown again at the next launch."
         alert.addButton(withTitle: "Quit").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
+        guard isOpen else {
+            // No window to hang a sheet on, and opening one to ask would be
+            // saved as open for the next launch: an alert of its own instead,
+            // once the app has been told the answer is coming.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    NSApp.activate()
+                    answer(alert.runModal() == .alertFirstButtonReturn)
+                }
+            }
+            return
+        }
         alert.beginSheetModal(for: window) { response in
             MainActor.assumeIsolated { answer(response == .alertFirstButtonReturn) }
         }

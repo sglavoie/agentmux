@@ -293,6 +293,36 @@ final class WorkspaceRecoveryTests: XCTestCase {
         XCTAssertNil(workspace.gone)
     }
 
+    func testOpeningTheWindowOnNothingInParticularKeepsARestoreOrALostAgent() throws {
+        // Dock reopen, Window ▸ Workspace, ⌘⇧L, and Open Workspace all land
+        // on the Dashboard only when the pane has no place.
+        app.holdsAnswers = true
+        workspace.restore(.session(runtimeSessionID: F.runtimeID(2)))
+        XCTAssertTrue(workspace.hasPlace)
+        workspace.showDashboardUnlessPlaced()
+        XCTAssertEqual(workspace.content, .restoring(runtimeSessionID: F.runtimeID(2)))
+        XCTAssertNil(workspace.viewSelection)
+        app.store.apply(snapshot: F.snapshot(sessions))
+        app.answer()
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)), "the restore went on")
+
+        app.holdsAnswers = false
+        app.statuses[F.runtimeID(9)] = .lost("runtime session was lost (backend generation changed)")
+        workspace.restore(.session(runtimeSessionID: F.runtimeID(9)))
+        XCTAssertNotNil(workspace.gone)
+        workspace.showDashboardUnlessPlaced()
+        XCTAssertEqual(workspace.content, .gone(runtimeSessionID: F.runtimeID(9), .lost("runtime session was lost (backend generation changed)")))
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Agent lost")
+        XCTAssertNil(workspace.viewSelection)
+
+        // A closed window forgets both, so it opens again on the Dashboard.
+        workspace.window.close()
+        XCTAssertFalse(workspace.hasPlace)
+        workspace.openForTesting()
+        workspace.showDashboardUnlessPlaced()
+        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.dashboard.id)
+    }
+
     func testAStoppedAgentWithAConversationOffersItInPastSessions() throws {
         let conversation = ConversationIdentity(harness: "claude", sessionID: "c-1")
         app.store.apply(snapshot: F.snapshot([F.tmux(1, project: "api", conversation: "c-1"), sessions[1]]))

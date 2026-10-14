@@ -176,8 +176,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         controller.show()
         if let place = restoration.place {
             controller.restore(place, conversation: restoration.conversation)
-        } else if controller.state.selection == nil, controller.viewSelection == nil {
-            controller.showView(WorkspaceUtilityView.dashboard.id)
+        } else {
+            controller.showDashboardUnlessPlaced()
         }
     }
 
@@ -272,9 +272,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             controller.focus(runtimeSessionID: runtimeSessionID)
         } else {
             controller.show()
-            if controller.state.selection == nil, controller.viewSelection == nil {
-                controller.showView(WorkspaceUtilityView.dashboard.id)
-            }
+            // A restore under way, or an agent said to be gone, is a place.
+            controller.showDashboardUnlessPlaced()
         }
     }
 
@@ -306,9 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         controller.show()
         guard !controller.showView(id) else { return }
         Self.logger.notice("terminal notice from view \(id, privacy: .public): the view is gone")
-        if controller.state.selection == nil, controller.viewSelection == nil {
-            controller.showView(WorkspaceUtilityView.dashboard.id)
-        }
+        controller.showDashboardUnlessPlaced()
     }
 
     /// Shows one of the workspace's utility views, opening the window for it.
