@@ -251,6 +251,38 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
     }
 
+    func testForgettingSessionsThatEndedPrunesTheDraggedOrders() {
+        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web"),
+                        F.tmux(3, project: "docs")]
+        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        var order = WorkspaceOrder()
+        order.set([.embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))], for: "api")
+        order.set([kitty], for: "web")
+        order.set([.embedded(F.runtimeID(3))], for: "docs")
+        order.set([.embedded(F.runtimeID(9))], for: "gone")
+        order.setPinned(.embedded(F.runtimeID(3)), true)
+        func rows(_ sessions: [CompanionSession]) -> [WorkspaceRow] {
+            var state = WorkspaceState()
+            state.apply(WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order))
+            return state.rows
+        }
+
+        var pruned = order
+        pruned.forget(notAmong: rows(sessions))
+        XCTAssertEqual(pruned.projects.keys.sorted(), ["api", "docs", "web"], "a project nobody lists is forgotten")
+        XCTAssertEqual(pruned.projects["docs"], [WorkspaceOrder.token(.embedded(F.runtimeID(3)))], "a pinned row keeps its project")
+        XCTAssertEqual(pruned.pinned, order.pinned)
+
+        pruned.forget(notAmong: rows([sessions[1], sessions[2]]))
+        XCTAssertEqual(pruned.projects, ["api": [WorkspaceOrder.token(.embedded(F.runtimeID(2)))], "web": [WorkspaceOrder.token(kitty)]],
+                       "an ended session leaves its project's order, and a project with none left is forgotten")
+        XCTAssertEqual(pruned.pinned, [])
+
+        var unchanged = pruned
+        unchanged.forget(notAmong: rows(sessions))
+        XCTAssertEqual(unchanged, pruned, "what is listed is kept")
+    }
+
     func testFeedNotice() {
         XCTAssertNil(WorkspaceSidebar.feedNotice(.live))
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.notRunning), "Daemon not running")

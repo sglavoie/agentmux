@@ -53,6 +53,26 @@ final class WorkspaceRestorationTests: XCTestCase {
         XCTAssertNil(WorkspaceRestoration.load(from: defaults).place, "a damaged preference restores nothing")
     }
 
+    func testTheSidebarAndInspectorWidthsAreKeptInDefaults() throws {
+        let suite = "amx.tests.restoration.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        XCTAssertNil(WorkspaceRestoration.load(from: defaults).sidebarWidth, "nothing saved: the window's default")
+        XCTAssertNil(WorkspaceRestoration.load(from: defaults).inspectorWidth)
+        WorkspaceRestoration.saveWidths(sidebar: 300, inspector: nil, to: defaults)
+        var loaded = WorkspaceRestoration.load(from: defaults)
+        XCTAssertEqual(loaded.sidebarWidth, 300)
+        XCTAssertNil(loaded.inspectorWidth)
+        WorkspaceRestoration.saveWidths(sidebar: nil, inspector: 280, to: defaults)
+        loaded = WorkspaceRestoration.load(from: defaults)
+        XCTAssertEqual(loaded.sidebarWidth, 300, "a hidden sidebar keeps the width it had")
+        XCTAssertEqual(loaded.inspectorWidth, 280)
+
+        defaults.set("wide", forKey: WorkspaceRestoration.sidebarWidthKey)
+        XCTAssertNil(WorkspaceRestoration.load(from: defaults).sidebarWidth, "a damaged preference restores nothing")
+    }
+
     func testTheConversationShownIsKeptInDefaults() throws {
         let suite = "amx.tests.restoration.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

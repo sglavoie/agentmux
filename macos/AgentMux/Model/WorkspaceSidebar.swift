@@ -149,6 +149,21 @@ struct WorkspaceOrder: Equatable {
         pinned.removeAll { !tokens.contains($0) }
     }
 
+    /// Forgets what is kept of sessions that are not among `listed`, and of
+    /// projects none of them is in: their pins, and their places in the
+    /// orders projects were dragged into. A project left with no session
+    /// listed is forgotten too. Only a live snapshot may say what is listed.
+    mutating func forget(notAmong listed: [WorkspaceRow]) {
+        forgetPins(notAmong: listed.map(\.key))
+        let tokens = Set(listed.map { Self.token($0.key) })
+        let names = Set(listed.map(\.project))
+        projects = projects.reduce(into: [:]) { kept, entry in
+            guard names.contains(entry.key) else { return }
+            let remaining = entry.value.filter(tokens.contains)
+            if !remaining.isEmpty { kept[entry.key] = remaining }
+        }
+    }
+
     /// The pinned rows in the order they were pinned or dragged into.
     func arrangedPins(_ rows: [WorkspaceRow]) -> [WorkspaceRow] {
         let rank = Dictionary(pinned.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })

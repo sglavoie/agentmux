@@ -232,7 +232,9 @@ Whatever has the keyboard decides where a key goes.
   **Window › Session List** (⌘⇧L) puts the keyboard there.
 - The button in the title bar, or **View › Toggle Sidebar** (⌘B), hides the
   sidebar so the terminal has the whole window, and brings it back; ⌘⇧L
-  shows it too. The choice is kept across launches.
+  shows it too. The choice is kept across launches, and so is the width
+  the sidebar and the inspector were dragged to: hiding one and showing it
+  again keeps its width.
 - The button at the other end of the title bar, or **View › Toggle
   Inspector** (⌘⇧B), shows a second sidebar on the right, hidden until it is
   asked for. Its **Waiting** tab lists every session waiting on you, in the
@@ -285,6 +287,9 @@ Whatever has the keyboard decides where a key goes.
   one back under its project. The digits, the next-attention shortcut, and
   the inspector follow the list, so the first pinned session is ⌘1. Pins are
   kept across launches, and any session can be pinned, a Kitty one too.
+  The order sessions were dragged into within a project is kept too; a
+  session that ended, or a project with none left, is dropped from it once
+  the daemon lists the sessions again.
 - Every shortcut of the menu bar holds ⌘, so none is taken from a program,
   with two exceptions: Shift+Page Up and Shift+Page Down, and the function
   keys below. The global shortcuts work whatever has the keyboard.

@@ -287,6 +287,78 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.orders.last?.pinned, [])
     }
 
+    /// The orders dragged into forget a session that ended and a project
+    /// that is gone, once a live snapshot says so, and only then.
+    func testALiveSnapshotPrunesTheDraggedOrders() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let (work, personal) = (try row("api", "work"), try row("api", "personal"))
+        let top = try index(of: personal.key)
+        XCTAssertTrue(workspace.moveItem(at: top, to: top + 2))
+        workspace.setPinned(try row("web", "work").key, true)
+        let dragged = app.orders.count
+        XCTAssertEqual(app.orders.last?.projects["api"], [work, personal].map { WorkspaceOrder.token($0.key) })
+
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(app.orders.count, dragged, "nothing gone, nothing written")
+
+        // Held rows say nothing of what ended.
+        app.store.apply(.disconnected(.notRunning, retryIn: 0.5))
+        XCTAssertFalse(workspace.state.current)
+        XCTAssertEqual(app.orders.count, dragged)
+
+        app.store.apply(snapshot: F.snapshot([sessions[0]]))
+        XCTAssertEqual(app.orders.count, dragged + 1)
+        XCTAssertEqual(app.orders.last?.projects, ["api": [WorkspaceOrder.token(work.key)]])
+        XCTAssertEqual(app.orders.last?.pinned, [], "the Kitty session ended, and its pin with it")
+        XCTAssertEqual(workspace.order, app.orders.last)
+    }
+
+    /// The sidebar and the inspector open at the widths they were left at,
+    /// and the delegate hears of a new width only while one is shown.
+    func testTheSidebarAndInspectorOpenAtTheirSavedWidths() throws {
+        XCTAssertEqual(WorkspaceWindowController.width(nil, default: 240, in: 180...420), 240)
+        XCTAssertEqual(WorkspaceWindowController.width(300, default: 240, in: 180...420), 300)
+        XCTAssertEqual(WorkspaceWindowController.width(9000, default: 240, in: 180...420), 420)
+        XCTAssertEqual(WorkspaceWindowController.width(12, default: 240, in: 180...420), 180)
+        XCTAssertEqual(WorkspaceWindowController.width(.nan, default: 240, in: 180...420), 240)
+
+        func widths(_ controller: WorkspaceWindowController) throws -> (CGFloat, CGFloat) {
+            let split = try XCTUnwrap(controller.window.contentViewController as? NSSplitViewController)
+            return (split.splitViewItems[0].viewController.view.frame.width, split.splitViewItems[2].viewController.view.frame.width)
+        }
+        XCTAssertEqual(try widths(workspace).0, WorkspaceWindowController.defaultSidebarWidth, "nothing saved: the default")
+
+        // Both fit beside the pane, which keeps room for the Go to… list.
+        let other = FakeWorkspaceApp()
+        let restored = WorkspaceWindowController(delegate: other, glyphs: .fallback)
+        defer { restored.window.close() }
+        restored.sidebarWidth = 260
+        restored.inspectorWidth = 280
+        restored.openForTesting()
+        XCTAssertEqual(try widths(restored).0, 260)
+        XCTAssertTrue(restored.isInspectorCollapsed, "hidden until asked for")
+        XCTAssertTrue(other.layoutChanges.isEmpty, "opening at the saved widths reports nothing")
+        restored.setInspectorCollapsed(false)
+        restored.window.layoutIfNeeded()
+        XCTAssertEqual(try widths(restored).1, 280, "shown, the inspector has its saved width")
+        XCTAssertEqual(try widths(restored).0, 260)
+
+        let split = try XCTUnwrap(restored.window.contentViewController as? NSSplitViewController)
+        split.splitView.setPosition(220, ofDividerAt: 0)
+        restored.window.layoutIfNeeded()
+        XCTAssertEqual(other.layoutChanges.last?.sidebar, 220)
+        XCTAssertNil(other.layoutChanges.last?.inspector, "the inspector kept its width")
+
+        // Hidden and shown again, the sidebar keeps the width it had.
+        let reported = other.layoutChanges.count
+        restored.setSidebarCollapsed(true)
+        restored.window.layoutIfNeeded()
+        restored.setSidebarCollapsed(false)
+        restored.window.layoutIfNeeded()
+        XCTAssertEqual(try widths(restored).0, 220)
+        XCTAssertFalse(other.layoutChanges.dropFirst(reported).contains { $0.sidebar != nil && $0.sidebar != 220 })
+    }
+
     func testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, personal) = (try row("api", "work"), try row("api", "personal"))

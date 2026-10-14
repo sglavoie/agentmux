@@ -142,6 +142,11 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     /// another tab, in order.
     private(set) var inspectorChanges: [(collapsed: Bool, tab: WorkspaceInspectorTab)] = []
     func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab) { inspectorChanges.append((collapsed, tab)) }
+    /// Every width the sidebar (first) or the inspector was given, in order.
+    private(set) var layoutChanges: [(sidebar: CGFloat?, inspector: CGFloat?)] = []
+    func workspaceLayoutChanged(sidebarWidth: CGFloat?, inspectorWidth: CGFloat?) {
+        layoutChanges.append((sidebarWidth, inspectorWidth))
+    }
 
     /// What the inspector's buttons asked for, in order.
     private(set) var inspectorActions: [WorkspaceInspectorAction] = []

@@ -40,6 +40,9 @@ protocol WorkspaceDelegate: AnyObject {
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
     /// The inspector was hidden or shown, or turned to another tab.
     func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab)
+    /// The sidebar or the inspector was given another width. Each is nil
+    /// while it is hidden: hiding one keeps the width it had.
+    func workspaceLayoutChanged(sidebarWidth: CGFloat?, inspectorWidth: CGFloat?)
     /// Does what one of the inspector's buttons asks for the session the
     /// pane is on.
     func workspaceInspectorAction(_ action: WorkspaceInspectorAction)
@@ -211,6 +214,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var reportedInspectorCollapsed = true
     private var inspectorItem: NSSplitViewItem?
     private var inspectorObservation: NSKeyValueObservation?
+    /// The widths the sidebar and the inspector open at, which the app sets
+    /// before the window is made; nil gives each its default.
+    var sidebarWidth: CGFloat?
+    var inspectorWidth: CGFloat?
+    /// The widths the delegate was last told of.
+    private var reportedSidebarWidth: CGFloat?
+    private var reportedInspectorWidth: CGFloat?
+    private var splitObservation: NSObjectProtocol?
     let feedLabel = NSTextField(labelWithString: "")
     let placeholder = WorkspacePlaceholderView()
     /// The Go to… list, above whatever the pane shows while it is up.
@@ -395,7 +406,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             }
         }
         if state.current {
-            // Only a live snapshot says a session is gone.
+            // Only a live snapshot says a session is gone, and what was kept
+            // of it in the orders dragged into with it.
+            let kept = order
+            order.forget(notAmong: state.rows)
+            if order != kept { delegate?.workspaceOrderChanged(order) }
             let listed = state.embeddedRuntimeSessionIDs
             for id in terminals.keys where !listed.contains(id) {
                 Self.logger.notice("workspace: \(id, privacy: .public) is no longer listed; detaching its terminal")
@@ -2070,6 +2085,39 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         return accessory
     }
 
+    // MARK: Widths
+
+    static let sidebarWidths: ClosedRange<CGFloat> = 180...420
+    static let inspectorWidths: ClosedRange<CGFloat> = 220...420
+    static let defaultSidebarWidth: CGFloat = 240
+    static let defaultInspectorWidth: CGFloat = 260
+
+    /// The width to open at: the saved one, kept within what the item
+    /// allows, else the default.
+    static func width(_ saved: CGFloat?, default fallback: CGFloat, in range: ClosedRange<CGFloat>) -> CGFloat {
+        guard let saved, saved.isFinite, saved > 0 else { return fallback }
+        return min(max(saved, range.lowerBound), range.upperBound)
+    }
+
+    /// The split view was laid out again: by a drag of a divider, a hidden
+    /// item shown, or the window resized. The width of what is shown is
+    /// reported when it changed; a hidden one reports nothing.
+    private func splitResized() {
+        let sidebarShown = sidebarItem.flatMap { $0.isCollapsed ? nil : $0.viewController.view.frame.width }
+        let inspectorShown = inspectorItem.flatMap { $0.isCollapsed ? nil : $0.viewController.view.frame.width }
+        // Mid-animation an item is narrower than it may be, so a width is
+        // kept only within its limits.
+        let sidebar = sidebarShown.flatMap { Self.sidebarWidths.contains($0) ? $0 : nil }
+        let inspector = inspectorShown.flatMap { Self.inspectorWidths.contains($0) ? $0 : nil }
+        let sidebarChanged = sidebar != nil && sidebar != reportedSidebarWidth
+        let inspectorChanged = inspector != nil && inspector != reportedInspectorWidth
+        guard sidebarChanged || inspectorChanged else { return }
+        if sidebarChanged { reportedSidebarWidth = sidebar }
+        if inspectorChanged { reportedInspectorWidth = inspector }
+        delegate?.workspaceLayoutChanged(sidebarWidth: sidebarChanged ? sidebar : nil,
+                                         inspectorWidth: inspectorChanged ? inspector : nil)
+    }
+
     // MARK: Inspector
 
     /// Whether the inspector is hidden, as it is until it is asked for.
@@ -2273,11 +2321,26 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         window.delegate = self
         window.center()
         if !AppDelegate.isRunningTests { window.setFrameAutosaveName("AgentMuxWorkspace") }
-        split.splitView.setPosition(240, ofDividerAt: 0)
+        let splitView = split.splitView
+        splitView.layoutSubtreeIfNeeded()
+        // The inspector gets its width while shown, so that showing it
+        // again brings that width back. It goes first: moving its divider
+        // takes from the sidebar too.
+        let inspectorShown = Self.width(inspectorWidth, default: Self.defaultInspectorWidth, in: Self.inspectorWidths)
+        splitView.setPosition(splitView.bounds.width - inspectorShown - splitView.dividerThickness, ofDividerAt: 1)
+        splitView.layoutSubtreeIfNeeded()
+        splitView.setPosition(Self.width(sidebarWidth, default: Self.defaultSidebarWidth, in: Self.sidebarWidths), ofDividerAt: 0)
         // Hidden until it is asked for. An item is collapsed for good only
         // once its split view is laid out in a window.
-        split.splitView.layoutSubtreeIfNeeded()
+        splitView.layoutSubtreeIfNeeded()
         inspectorItem.isCollapsed = true
+        reportedSidebarWidth = sidebarWidth
+        reportedInspectorWidth = inspectorWidth
+        splitObservation = NotificationCenter.default.addObserver(
+            forName: NSSplitView.didResizeSubviewsNotification, object: splitView, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.splitResized() }
+        }
         inspectorObservation = inspectorItem.observe(\.isCollapsed) { [weak self] _, _ in
             MainActor.assumeIsolated { self?.inspectorCollapseChanged() }
         }

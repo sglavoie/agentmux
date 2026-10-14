@@ -62,6 +62,8 @@ struct WorkspaceRestoration: Equatable {
     static let sidebarCollapsedKey = "amxWorkspaceSidebarCollapsed"
     static let inspectorShownKey = "amxWorkspaceInspectorShown"
     static let inspectorTabKey = "amxWorkspaceInspectorTab"
+    static let sidebarWidthKey = "amxWorkspaceSidebarWidth"
+    static let inspectorWidthKey = "amxWorkspaceInspectorWidth"
 
     /// Whether the window was open when the app last ran.
     var windowOpen = false
@@ -75,6 +77,10 @@ struct WorkspaceRestoration: Equatable {
     /// Whether the inspector was shown; it is hidden until asked for.
     var inspectorShown = false
     var inspectorTab = WorkspaceInspectorTab.waiting
+    /// The widths the sidebar and the inspector were last dragged to while
+    /// shown; nil when nothing is saved, and the window's defaults apply.
+    var sidebarWidth: Double?
+    var inspectorWidth: Double?
 
     static func load(from defaults: UserDefaults = .standard) -> WorkspaceRestoration {
         WorkspaceRestoration(
@@ -83,13 +89,28 @@ struct WorkspaceRestoration: Equatable {
             conversation: defaults.string(forKey: conversationKey).flatMap(ConversationIdentity.init(encoded:)),
             sidebarCollapsed: defaults.bool(forKey: sidebarCollapsedKey),
             inspectorShown: defaults.bool(forKey: inspectorShownKey),
-            inspectorTab: defaults.string(forKey: inspectorTabKey).flatMap(WorkspaceInspectorTab.init(rawValue:)) ?? .waiting
+            inspectorTab: defaults.string(forKey: inspectorTabKey).flatMap(WorkspaceInspectorTab.init(rawValue:)) ?? .waiting,
+            sidebarWidth: width(sidebarWidthKey, in: defaults),
+            inspectorWidth: width(inspectorWidthKey, in: defaults)
         )
     }
 
     static func saveInspector(shown: Bool, tab: WorkspaceInspectorTab, to defaults: UserDefaults = .standard) {
         defaults.set(shown, forKey: inspectorShownKey)
         defaults.set(tab.rawValue, forKey: inspectorTabKey)
+    }
+
+    /// Saves the width of whichever is shown; nil leaves the saved one as it
+    /// is, so hiding and showing again keeps it.
+    static func saveWidths(sidebar: Double?, inspector: Double?, to defaults: UserDefaults = .standard) {
+        if let sidebar { defaults.set(sidebar, forKey: sidebarWidthKey) }
+        if let inspector { defaults.set(inspector, forKey: inspectorWidthKey) }
+    }
+
+    private static func width(_ key: String, in defaults: UserDefaults) -> Double? {
+        guard defaults.object(forKey: key) != nil else { return nil }
+        let width = defaults.double(forKey: key)
+        return width.isFinite && width > 0 ? width : nil
     }
 
     static func saveSidebarCollapsed(_ collapsed: Bool, to defaults: UserDefaults = .standard) {

@@ -271,6 +271,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         workspace = controller
         if !Self.isRunningTests {
             let restoration = WorkspaceRestoration.load()
+            // Before anything makes the window, which opens at these widths.
+            controller.sidebarWidth = restoration.sidebarWidth.map { CGFloat($0) }
+            controller.inspectorWidth = restoration.inspectorWidth.map { CGFloat($0) }
             controller.setSidebarCollapsed(restoration.sidebarCollapsed)
             controller.setInspectorTab(restoration.inspectorTab)
             controller.setInspectorCollapsed(!restoration.inspectorShown)
@@ -372,6 +375,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab) {
         guard !Self.isRunningTests, !isTerminating else { return }
         WorkspaceRestoration.saveInspector(shown: !collapsed, tab: tab)
+    }
+
+    func workspaceLayoutChanged(sidebarWidth: CGFloat?, inspectorWidth: CGFloat?) {
+        guard !Self.isRunningTests, !isTerminating else { return }
+        WorkspaceRestoration.saveWidths(sidebar: sidebarWidth.map(Double.init), inspector: inspectorWidth.map(Double.init))
     }
 
     /// The inspector's buttons do what ⌘R and the session function keys do.
