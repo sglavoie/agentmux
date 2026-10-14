@@ -91,8 +91,9 @@ enum WorkspaceMenu {
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
         view.addItem(.separator())
         // ⌘W closes what the pane is on, as it closes a tab elsewhere; the
-        // window itself is ⌘⇧W.
-        view.addItem(item("Close", #selector(AppDelegate.closeWorkspaceView(_:)), "w", target: target))
+        // window itself is ⌘⇧W. Its title follows what that is
+        // (`AppDelegate.validateMenuItem`): Close View, or End Session….
+        view.addItem(item(WorkspaceWindowController.closeTitle, #selector(AppDelegate.closeWorkspaceView(_:)), "w", target: target))
 
         let session = submenu("Session", in: main)
         session.addItem(item("Go to…", #selector(AppDelegate.showSwitcher(_:)), "p", target: target))

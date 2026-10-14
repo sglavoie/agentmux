@@ -20,12 +20,13 @@ extension Ghostty.SurfaceView {
 
     private func localEventLeftMouseDown(_ event: NSEvent) -> NSEvent? {
         guard let window, event.window != nil, window == event.window else { return event }
-        // `hitTest` takes a point in the superview's coordinates. Several
-        // surfaces share a window here, each with its own monitor, so only the
-        // one under the pointer may claim the click.
-        guard let superview else { return event }
-        let location = superview.convert(event.locationInWindow, from: nil)
-        guard hitTest(location) === self else { return event }
+        // Several surfaces share a window here, each with its own monitor, and
+        // views such as the Go to… list lie above them: only the surface the
+        // window itself finds under the pointer may claim the click. `hitTest`
+        // takes a point in the superview's coordinates.
+        guard let root = window.contentView else { return event }
+        let location = root.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
+        guard root.hitTest(location) === self else { return event }
 
         suppressNextLeftMouseUp = false
         guard window.firstResponder !== self else { return event }

@@ -587,16 +587,20 @@ final class WorkspaceWindowTests: XCTestCase {
         try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: try index(of: key), makeIfNecessary: true) as? WorkspaceRowCellView)
     }
 
-    func testTheCloseButtonEndsAnIdleSessionAtOnce() throws {
+    func testTheCloseButtonAsksEvenForAnIdleSession() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")
         workspace.activate(work)
         app.holdsCloses = true
-        workspace.confirmClose = { _, _ in XCTFail("an idle session is closed without asking") }
+        var asked: [(WorkspaceRow, @MainActor (Bool) -> Void)] = []
+        workspace.confirmClose = { row, answer in asked.append((row, answer)) }
 
         XCTAssertFalse(try cell(work.key).closeButton.isHidden)
         XCTAssertTrue(try cell(try row("web", "work").key).closeButton.isHidden, "a Kitty window is not the workspace's to close")
         try cell(work.key).closeButton.performClick(nil)
+        XCTAssertEqual(asked.map(\.0), [work], "an idle agent is ended only once the operator agrees")
+        XCTAssertEqual(app.ended, [], "nothing ends before the answer")
+        asked[0].1(true)
         XCTAssertEqual(app.ended, [F.runtimeID(1)])
         XCTAssertEqual(app.closed, [F.runtimeID(1)], "its terminal is let go at once")
         XCTAssertEqual(workspace.content, .closing(runtimeSessionID: F.runtimeID(1)))
@@ -606,6 +610,7 @@ final class WorkspaceWindowTests: XCTestCase {
         // A second click, and snapshots that still list it, change nothing.
         workspace.closeSession(work.key)
         app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(asked.count, 1, "a session being closed is not asked about again")
         XCTAssertEqual(app.ended, [F.runtimeID(1)])
         XCTAssertEqual(app.made, [F.runtimeID(1)], "a session being closed is not attached again")
 
@@ -653,10 +658,13 @@ final class WorkspaceWindowTests: XCTestCase {
         asked[0].1(true)
         XCTAssertEqual(app.ended, [F.runtimeID(2)])
 
-        // An idle one ends at once; a Kitty window is not the workspace's.
-        workspace.activate(try row("api", "work"))
+        // An idle one asks too; a Kitty window is not the workspace's.
+        let idle = try row("api", "work")
+        workspace.activate(idle)
         XCTAssertTrue(workspace.closeShown())
-        XCTAssertEqual(asked.count, 1)
+        XCTAssertEqual(asked.map(\.0), [busy, idle])
+        XCTAssertEqual(app.ended, [F.runtimeID(2)])
+        asked[1].1(true)
         XCTAssertEqual(app.ended, [F.runtimeID(2), F.runtimeID(1)])
         workspace.select(try row("web", "work").key, focus: false)
         XCTAssertFalse(workspace.closeShown())
@@ -670,12 +678,136 @@ final class WorkspaceWindowTests: XCTestCase {
         app.closeProblem = "tmux backend unavailable"
         var reported: [String] = []
         workspace.reportCloseProblem = { name, message in reported.append("\(name): \(message)") }
+        workspace.confirmClose = { _, answer in answer(true) }
 
         try cell(work.key).closeButton.performClick(nil)
         XCTAssertEqual(reported, ["api — work: tmux backend unavailable"])
         XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)], "its terminal is attached again")
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
         XCTAssertFalse(try cell(work.key).closeButton.isHidden)
+    }
+
+    func testTheCloseButtonIsDrawnOnlyUnderThePointerWithARoomyTarget() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let line = try cell(try row("api", "work").key)
+        XCTAssertFalse(line.closeButton.isHidden, "the line can be closed")
+        XCTAssertFalse(line.showsCloseButton, "but the × is not drawn until the pointer is over it")
+        XCTAssertEqual(line.closeButton.alphaValue, 0)
+        line.isHovered = true
+        XCTAssertTrue(line.showsCloseButton)
+        XCTAssertEqual(line.closeButton.alphaValue, 1)
+        line.isHovered = false
+        XCTAssertFalse(line.showsCloseButton)
+        XCTAssertFalse(try cell(try row("web", "work").key).showsCloseButton, "a Kitty window has none to draw")
+
+        line.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThanOrEqual(line.closeButton.frame.width, 18)
+        XCTAssertGreaterThanOrEqual(line.closeButton.frame.height, 18)
+    }
+
+    func testTheCloseItemSaysWhatItCloses() throws {
+        XCTAssertEqual(workspace.closeShownTitle, "Close")
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+        XCTAssertEqual(workspace.closeShownTitle, "End Session…")
+        workspace.select(try row("web", "work").key)
+        XCTAssertEqual(workspace.closeShownTitle, "Close", "a Kitty window is not the workspace's to end")
+        workspace.showView(WorkspaceUtilityView.dashboard.id)
+        XCTAssertEqual(workspace.closeShownTitle, "Close View")
+    }
+
+    func testReturnOrAClickOnADetachedSessionReattachesIt() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        workspace.activate(work)
+        workspace.terminalEnded(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))))
+        XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
+        XCTAssertEqual(workspace.placeholder.button.keyEquivalent, "\r", "Reattach is the default button")
+
+        // Return in the session list, on the detached session's line.
+        workspace.focusSidebar()
+        workspace.sidebar.keyDown(with: TestKey(keyCode: 36, characters: "\r", unmodified: "\r").event())
+        XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)])
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
+        XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
+
+        // Go to… goes where a click would, and reattaches the same way.
+        workspace.terminalEnded(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))))
+        workspace.toggleSwitcher()
+        workspace.switcher.enter("api work")
+        workspace.switcher.choose()
+        XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1), F.runtimeID(1)])
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
+
+        // Any other button is not the default one.
+        workspace.select(try row("web", "work").key)
+        XCTAssertEqual(workspace.placeholder.button.keyEquivalent, "")
+    }
+
+    func testAHiddenSidebarNeverTakesTheKeyboard() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+        workspace.setSidebarCollapsed(true)
+        workspace.window.layoutIfNeeded()
+        func inTheSidebar() -> Bool {
+            (workspace.window.firstResponder as? NSView)?.isDescendant(of: workspace.sidebar) == true
+        }
+
+        // The shown terminal ends while the list is hidden.
+        workspace.terminalEnded(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))))
+        XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
+        XCTAssertFalse(inTheSidebar(), "the arrows must not switch sessions in a list that cannot be seen")
+
+        // The list is hidden while it has the keyboard and the pane shows
+        // no terminal.
+        workspace.setSidebarCollapsed(false)
+        workspace.focusSidebar()
+        XCTAssertTrue(inTheSidebar())
+        workspace.setSidebarCollapsed(true)
+        XCTAssertFalse(inTheSidebar())
+
+        // A view that ends while the list is hidden.
+        workspace.showView(WorkspaceUtilityView.dashboard.id)
+        workspace.terminalEnded(try XCTUnwrap(workspace.utilityTerminalView(for: WorkspaceUtilityView.dashboard.id)))
+        XCTAssertEqual(workspace.content, .viewEnded(id: WorkspaceUtilityView.dashboard.id))
+        XCTAssertFalse(inTheSidebar())
+
+        // Shown again, the list takes it as before.
+        workspace.focusSidebar()
+        XCTAssertTrue(inTheSidebar())
+    }
+
+    func testAViewWhoseProgramIsStillRunningClosesOnlyWhenTheOperatorAgrees() throws {
+        let shell = WorkspaceUtilityView(kind: .shell, target: "/work/api", title: "Shell")
+        workspace.open(shell)
+        let view = try XCTUnwrap(workspace.utilityTerminalView(for: shell.id))
+        var asked: [(String, @MainActor (Bool) -> Void)] = []
+        workspace.confirmViewClose = { title, answer in asked.append((title, answer)) }
+
+        workspace.terminalAskedToClose(view, needsConfirm: true)
+        XCTAssertEqual(asked.map(\.0), ["Shell"])
+        XCTAssertEqual(app.closedViews, [], "nothing ends before the answer")
+        asked[0].1(false)
+        XCTAssertEqual(app.closedViews, [])
+        XCTAssertEqual(workspace.content, .view(id: shell.id))
+
+        workspace.terminalAskedToClose(view, needsConfirm: true)
+        asked[1].1(true)
+        XCTAssertEqual(app.closedViews, [shell.id])
+        XCTAssertNil(workspace.views.view(shell.id))
+
+        // Nothing running: it closes at once.
+        workspace.open(shell)
+        workspace.terminalAskedToClose(try XCTUnwrap(workspace.utilityTerminalView(for: shell.id)), needsConfirm: false)
+        XCTAssertEqual(asked.count, 2)
+        XCTAssertEqual(app.closedViews, [shell.id, shell.id])
+
+        // An attachment's close only detaches, so it is never asked about.
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+        workspace.terminalAskedToClose(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))), needsConfirm: true)
+        XCTAssertEqual(asked.count, 2)
+        XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
     }
 
     func testATerminalThatCannotBeMadeSaysWhyAndIsRetriedOnlyWhenAsked() throws {

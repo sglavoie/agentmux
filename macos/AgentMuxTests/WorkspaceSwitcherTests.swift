@@ -194,3 +194,91 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
         XCTAssertFalse(workspace.isSwitching, "a closed workspace has no list")
     }
 }
+
+/// The Go to… list above a real Ghostty terminal: the terminal watches every
+/// click in the window, and must leave one on the list to the list.
+@MainActor
+final class WorkspaceSwitcherClickTests: XCTestCase {
+    private typealias F = WorkspaceFixture
+    private var ghostty: Ghostty.App!
+    private var app: FakeWorkspaceApp!
+    private var workspace: WorkspaceWindowController!
+
+    override func setUp() async throws {
+        ghostty = Ghostty.App { Ghostty.Config(userConfig: nil, overrides: Ghostty.ConfigOverrides()) }
+        XCTAssertEqual(ghostty.readiness, .ready)
+        app = FakeWorkspaceApp()
+        workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+        app.factory = { [unowned self] _ in
+            let view = self.ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+                program: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "exec cat"]))
+            view?.delegate = self.workspace
+            return view
+        }
+        app.store.onChange = { [weak self] in self?.workspace.refresh() }
+        workspace.openForTesting()
+        app.store.apply(snapshot: F.snapshot([
+            F.tmux(1, project: "api", profile: "work"),
+            F.tmux(2, project: "api", profile: "personal"),
+        ]))
+    }
+
+    override func tearDown() async throws {
+        workspace.window.close()
+        workspace = nil
+        app = nil
+        ghostty.shutdown()
+        ghostty = nil
+    }
+
+    private func mouse(_ type: NSEvent.EventType, _ p: NSPoint) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                           windowNumber: workspace.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    }
+
+    func testAClickOnARowGoesToItsEntryOverAShownTerminal() throws {
+        let window = workspace.window
+        workspace.activate(try XCTUnwrap(workspace.state.row(.embedded(F.runtimeID(1)))))
+        let surface = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)) as? Ghostty.SurfaceView)
+        XCTAssertTrue(window.firstResponder === surface)
+
+        workspace.toggleSwitcher()
+        workspace.switcher.enter("personal")
+        window.layoutIfNeeded()
+        let editing = window.firstResponder
+        let table = workspace.switcher.table
+        XCTAssertEqual(table.numberOfRows, 1)
+        let cell = table.rect(ofRow: 0)
+        let point = table.convert(NSPoint(x: cell.midX, y: cell.midY), to: nil)
+        XCTAssertTrue(surface.frame.contains(surface.superview!.convert(point, from: nil)), "the row lies over the terminal")
+
+        // The terminal's monitor sees the press first, and lets it through
+        // without taking the keyboard from the list.
+        let down = mouse(.leftMouseDown, point)
+        XCTAssertTrue(down.window === window)
+        XCTAssertTrue(surface.localEventHandler(down) === down, "the click is the list's")
+        XCTAssertTrue(window.firstResponder === editing, "the list keeps the keyboard")
+        XCTAssertTrue(workspace.isSwitching)
+
+        // The window hands the click to the list, which goes to the row.
+        let root = try XCTUnwrap(window.contentView)
+        let hit = try XCTUnwrap(root.hitTest(root.superview!.convert(point, from: nil)))
+        XCTAssertTrue(hit.isDescendant(of: table), "the window finds the list's row under the pointer")
+        workspace.switcher.click(row: table.row(at: table.convert(point, from: nil)))
+        XCTAssertFalse(workspace.isSwitching)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertTrue(window.firstResponder === workspace.terminalView(for: F.runtimeID(2)))
+    }
+
+    func testAClickOnTheTerminalOutsideTheListStillFocusesIt() throws {
+        let window = workspace.window
+        workspace.activate(try XCTUnwrap(workspace.state.row(.embedded(F.runtimeID(1)))))
+        let surface = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)) as? Ghostty.SurfaceView)
+        workspace.focusSidebar()
+        window.layoutIfNeeded()
+
+        let corner = surface.convert(NSPoint(x: surface.bounds.maxX - 10, y: surface.bounds.minY + 10), to: nil)
+        _ = surface.localEventHandler(mouse(.leftMouseDown, corner))
+        XCTAssertTrue(window.firstResponder === surface)
+    }
+}

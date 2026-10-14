@@ -349,9 +349,15 @@ ASL answer panel work the same either way.
   running `amx attach <runtime-session-id>`, made the first time the session
   is selected and kept, hidden, while another is shown. A terminal is let go
   when its `amx attach` ends (the session was attached somewhere else, or
-  detached with **F12**; the pane then offers **Reattach** instead of taking
-  the session back by itself), when a live snapshot no longer lists its
-  session, or when the window closes. None of those ends the agent.
+  detached with **F12**; the pane then offers **Reattach**, its default
+  button, instead of taking the session back by itself; a click on the
+  session's line, Return on it, or choosing it in the Go to… list reattaches
+  too), when a live snapshot no longer lists its session, or when the window
+  closes. None of those ends the agent.
+- **Keyboard with the sidebar hidden.** A hidden sidebar never takes the
+  keyboard: when a terminal it would have gone to ends, the pane's terminal,
+  the placeholder's button, or the window takes it instead, so the arrow keys
+  never switch sessions in a list that cannot be seen.
 - **Session colors.** An embedded session's line is drawn on its color
   (`WorkspaceRowView`): the profile's color, or the one F6 picked, in the
   palette's `bright_bg`, with black text; a palette test holds every
@@ -369,12 +375,17 @@ ASL answer panel work the same either way.
   configured emoji it starts with as the session's `harness_icon`, so a pick
   shows as soon as a color does. A Kitty session's icon stays on its tab in
   Kitty.
-- **Closing from the sidebar.** A row that can be closed has a × in its top
-  right corner. On an opened view (a shell, an editor, a pager, a session's
-  terminal) it does what **View › Close** does on a view, wherever the pane is. On an
+- **Closing from the sidebar.** A row that can be closed shows a × in its
+  top right corner while the pointer is over it, with an 18×18 target. On an
+  opened view (a shell, an editor, a pager, a session's terminal) it does
+  what **View › Close View** does on a view, wherever the pane is. On an
   embedded session it ends the agent: the workspace runs
-  `amx close <runtime-session-id> --yes`, after a sheet when the agent is
-  working or waiting, and at once when it is idle. The row says `closing…`
+  `amx close <runtime-session-id> --yes`, always after a sheet, an idle agent
+  included (its conversation stays on disk and can be resumed). ⌘W's item is
+  titled for what it would close (`AppDelegate.validateMenuItem`): **Close
+  View** on a view, **End Session…** on an embedded session. A view whose
+  program Ghostty says is still running (`needsConfirm` on its close request)
+  closes only after a sheet says so. The row says `closing…`
   until a live snapshot drops it, and a pane that was on it goes to the
   Dashboard. A Kitty session, the Dashboard, and the Overview have no ×.
 - **Losing the daemon.** `WorkspaceState` replaces its rows only from a live
@@ -413,7 +424,7 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does, after the same sheet; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
   ⌘, and ⌘Q.
 - **Go to.** ⌘P shows `WorkspaceSwitcherView` above the pane: a field over
   the places `Model/WorkspaceSwitcher.swift` lists, which are the sidebar's
@@ -423,7 +434,9 @@ ASL answer panel work the same either way.
   `showView(_:focus:)` for a view, what a click on the sidebar line calls, so
   nothing is launched from it. The field has the keyboard while the list is
   up; Escape and ⌘P give it back to what had it, and a click elsewhere leaves
-  it where the click put it. A snapshot that changes the places re-filters
+  it where the click put it. A terminal under the list claims a click only
+  when the window's own hit test lands on it, so a click on a row is the
+  list's. A snapshot that changes the places re-filters
   an open list.
 - **Inspector.** ⌘⇧B shows `WorkspaceInspectorView` on the pane's other
   side, built as data by `Model/WorkspaceInspector.swift`. A Waiting row

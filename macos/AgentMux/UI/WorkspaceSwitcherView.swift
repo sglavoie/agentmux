@@ -144,9 +144,12 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         table.scrollRowToVisible(index)
     }
 
-    @objc private func rowClicked(_ sender: Any?) {
-        guard shown.indices.contains(table.clickedRow) else { return }
-        onChoose?(shown[table.clickedRow])
+    @objc private func rowClicked(_ sender: Any?) { click(row: table.clickedRow) }
+
+    /// Goes to the place on the table's row `index`, as a click on it does.
+    func click(row index: Int) {
+        guard shown.indices.contains(index) else { return }
+        onChoose?(shown[index])
     }
 
     // MARK: Field

@@ -74,8 +74,8 @@ protocol WorkspaceDelegate: AnyObject {
 /// when its `amx attach` ends, when a live snapshot no longer lists its
 /// session, or when the window closes. None of those ends the agent.
 ///
-/// Only the × on an embedded session's row ends an agent, and it asks first
-/// when that agent is working or waiting on the operator. The × on an opened
+/// Only the × on an embedded session's row, or ⌘W on it, ends an agent, and
+/// both always ask first. The × on an opened
 /// view closes that view and ends its program. A Kitty session and the
 /// Dashboard and Overview have none.
 ///
@@ -213,9 +213,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// snapshot no longer lists them: whether the pane was on each when it
     /// was closed, and whether amx has answered.
     private var closing: [String: (wasShown: Bool, answered: Bool)] = [:]
-    /// Stands in for the sheet that asks before a session that is working or
-    /// waiting is closed, for tests. Answers on the main actor.
+    /// Stands in for the sheet that asks before a session is closed, for
+    /// tests. Answers on the main actor.
     var confirmClose: ((_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
+    /// Stands in for the sheet that asks before a utility view whose program
+    /// is still running is closed, for tests. Answers on the main actor.
+    var confirmViewClose: ((_ title: String, _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
     /// Stands in for the sheet that says why a session could not be closed.
     var reportCloseProblem: ((_ name: String, _ message: String) -> Void)?
     /// Stands in for the sheet that asks for a session's name, for tests.
@@ -551,11 +554,17 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// Focuses a row the way a click does: an embedded session takes the
-    /// keyboard here, a Kitty session comes forward in Kitty.
-    func activate(_ row: WorkspaceRow) {
+    /// keyboard here, a Kitty session comes forward in Kitty. With
+    /// `reattaching`, which only the operator's own click or Return on the
+    /// row asks for, a session whose terminal was detached is attached
+    /// again, taking it from whichever terminal has it.
+    func activate(_ row: WorkspaceRow, reattaching: Bool = false) {
         switch row.target {
         case let .embedded(id):
             Self.logger.notice("workspace: focus embedded \(id, privacy: .public)")
+            if reattaching, detached.remove(id) != nil {
+                Self.logger.notice("workspace: reattaching \(id, privacy: .public)")
+            }
             select(row.key, focus: true)
         case let .kitty(_, windowID):
             Self.logger.notice("workspace: focus Kitty window \(windowID) externally")
@@ -612,7 +621,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         closeSwitcher(restoring: true)
         switch entry.place {
         case let .session(key):
-            if let row = state.row(key) { activate(row) }
+            if let row = state.row(key) { activate(row, reattaching: true) }
         case let .view(id):
             showView(id, focus: true)
         }
@@ -682,9 +691,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// ⌘W: closes what the pane is on, as the × on its row would. A view is
-    /// closed; an embedded session's agent is ended, after the same sheet
-    /// when it is working or waiting. Reports whether there was anything to
-    /// close: a Kitty session is not the workspace's.
+    /// closed; an embedded session's agent is ended, after the same sheet.
+    /// Reports whether there was anything to close: a Kitty session is not
+    /// the workspace's.
     @discardableResult
     func closeShown() -> Bool {
         if closeSelectedView() { return true }
@@ -709,15 +718,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
-    /// Ends an embedded session's agent, asking first when it is working or
-    /// waiting on the operator. The row stays until a live snapshot drops it;
-    /// if the pane was on the session it goes to the Dashboard.
+    /// What ⌘W does where the pane is now, as its menu item says it.
+    var closeShownTitle: String {
+        if viewSelection != nil { return Self.closeViewTitle }
+        if state.selectedRow?.embeddedRuntimeSessionID != nil { return Self.endSessionTitle }
+        return Self.closeTitle
+    }
+
+    static let closeTitle = "Close"
+    static let closeViewTitle = "Close View"
+    static let endSessionTitle = "End Session…"
+
+    /// Ends an embedded session's agent, always asking first: an idle agent's
+    /// conversation is kept, but the agent is not. The row stays until a live
+    /// snapshot drops it; if the pane was on the session it goes to the
+    /// Dashboard.
     func closeSession(_ key: AttentionCycler.Key) {
         guard let row = state.row(key), let id = row.embeddedRuntimeSessionID, closing[id] == nil else { return }
-        guard row.attention || row.working else {
-            endSession(row, id)
-            return
-        }
         (confirmClose ?? askToClose)(row) { [weak self] confirmed in
             guard let self, confirmed, self.closing[id] == nil, let row = self.state.row(key) else { return }
             self.endSession(row, id)
@@ -728,8 +745,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "End \(row.project) — \(row.label)?"
-        alert.informativeText = (row.attention ? "Its agent is waiting on you." : "Its agent is working.")
-            + " Ending it loses the work in progress. The conversation stays on disk and can be resumed from the Dashboard."
+        if row.attention || row.working {
+            alert.informativeText = (row.attention ? "Its agent is waiting on you." : "Its agent is working.")
+                + " Ending it loses the work in progress. The conversation stays on disk and can be resumed from the Dashboard."
+        } else {
+            alert.informativeText = "Its agent is idle and stops when the session ends."
+                + " The conversation stays on disk and can be resumed from the Dashboard."
+        }
         alert.addButton(withTitle: "End Session").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { response in
@@ -986,7 +1008,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func discardViewTerminal(_ id: String) {
         guard let terminal = viewTerminals.removeValue(forKey: id) else { return }
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
-            window.makeFirstResponder(sidebar)
+            focusListOrPane()
         }
         terminal.view.removeFromSuperview()
         terminal.close()
@@ -1077,6 +1099,36 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         updateContent(focus: false)
     }
 
+    /// A terminal asked to be closed. A utility view whose program Ghostty
+    /// says is still running (`needsConfirm`) is closed only once the
+    /// operator agrees; an attachment's close only detaches, so it is never
+    /// asked about.
+    func terminalAskedToClose(_ view: NSView, needsConfirm: Bool) {
+        guard needsConfirm, let id = viewTerminals.first(where: { $0.value.view === view })?.key,
+              let title = views.view(id)?.title else {
+            terminalEnded(view)
+            return
+        }
+        Self.logger.notice("workspace: view \(id, privacy: .public) asked to close with its program running; asking")
+        (confirmViewClose ?? askToCloseView)(title) { [weak self] confirmed in
+            // Still the same terminal: it may have ended meanwhile.
+            guard let self, confirmed, self.viewTerminals[id]?.view === view else { return }
+            self.utilityEnded(id)
+        }
+    }
+
+    private func askToCloseView(_ title: String, _ answer: @escaping @MainActor (Bool) -> Void) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "A process is still running in \(title). Close it?"
+        alert.informativeText = "Closing the view ends that process. No session is affected."
+        alert.addButton(withTitle: "Close").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated { answer(response == .alertFirstButtonReturn) }
+        }
+    }
+
     /// A utility view's program exited. A shell, editor, or pager is done
     /// and goes away; the Dashboard and the Overview stay listed, and say
     /// they stopped until they are started again.
@@ -1095,7 +1147,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func discardTerminal(_ id: String) {
         guard let terminal = terminals.removeValue(forKey: id) else { return }
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
-            window.makeFirstResponder(sidebar)
+            focusListOrPane()
         }
         terminal.view.removeFromSuperview()
         terminal.close()
@@ -1184,7 +1236,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                     || (window.firstResponder as? NSView)?.isHiddenOrHasHiddenAncestor == true {
             // Nothing has the keyboard, or a terminal that is no longer
             // shown had it: the sidebar takes it, so the arrow keys work.
-            window.makeFirstResponder(sidebar)
+            focusListOrPane()
         }
         reloadInspector()
         reportPlace()
@@ -1253,7 +1305,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             placeholder.show(
                 title: "Detached",
                 message: "This view let go of the session: it was attached somewhere else, or detached with F12. The agent is still running.",
-                button: "Reattach"
+                button: "Reattach",
+                isDefault: true
             ) { [weak self] in self?.reattach(id) }
         case let .unavailable(id, message):
             placeholder.show(title: "No terminal yet", message: message, button: "Try Again") { [weak self] in
@@ -1565,12 +1618,26 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         if collapsed, window.firstResponder === window
             || (window.firstResponder as? NSView)?.isDescendant(of: sidebar) == true {
             // A list that cannot be seen does not keep the keyboard.
-            var shown: NSView?
-            if case let .terminal(id) = content { shown = terminals[id]?.view }
-            if case let .view(id) = content { shown = viewTerminals[id]?.view }
-            if let shown { window.makeFirstResponder(shown) }
+            focusListOrPane()
         }
         delegate?.workspaceSidebarCollapsedChanged(collapsed)
+    }
+
+    /// Gives the keyboard to the session list, so the arrow keys work; while
+    /// the list is hidden, to what the pane shows instead: its terminal, the
+    /// placeholder's button, or else the window. A list that cannot be seen
+    /// must not switch sessions under keys typed into it.
+    private func focusListOrPane() {
+        guard isSidebarCollapsed else {
+            window.makeFirstResponder(sidebar)
+            return
+        }
+        var shown: NSView?
+        if case let .terminal(id) = content { shown = terminals[id]?.view }
+        if case let .view(id) = content { shown = viewTerminals[id]?.view }
+        if let shown, !shown.isHidden, window.makeFirstResponder(shown) { return }
+        if !placeholder.isHidden, !placeholder.button.isHidden, window.makeFirstResponder(placeholder.button) { return }
+        window.makeFirstResponder(nil)
     }
 
     private static func makeSidebarToggle() -> NSButton {
@@ -1674,7 +1741,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func focusItem(at index: Int) {
         guard index >= 0, index < items.count else { return }
         switch items[index] {
-        case let .row(row): activate(row)
+        case let .row(row): activate(row, reattaching: true)
         case let .view(view): showView(view.id, focus: true)
         case .section, .group: break
         }
@@ -1818,7 +1885,7 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
     }
 
     nonisolated func surfaceDidRequestClose(_ surface: Ghostty.SurfaceView, needsConfirm: Bool) {
-        MainActor.assumeIsolated { terminalEnded(surface) }
+        MainActor.assumeIsolated { terminalAskedToClose(surface, needsConfirm: needsConfirm) }
     }
 }
 
@@ -1935,13 +2002,23 @@ final class WorkspaceSelectionBorderView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
+/// The placeholder's button. As the default button it takes Return, but
+/// never from a field being typed in, such as the Go to… list's above it.
+@MainActor
+final class WorkspacePlaceholderButton: NSButton {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if window?.firstResponder is NSText { return false }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 /// What the pane shows when it has no terminal to show: a title, a line of
 /// explanation, and at most one thing to do about it.
 @MainActor
 final class WorkspacePlaceholderView: NSView {
     let titleLabel = NSTextField(labelWithString: "")
     let messageLabel = NSTextField(wrappingLabelWithString: "")
-    let button = NSButton(title: "", target: nil, action: nil)
+    let button = WorkspacePlaceholderButton(title: "", target: nil, action: nil)
     private var onPress: (() -> Void)?
 
     init() {
@@ -1969,11 +2046,13 @@ final class WorkspacePlaceholderView: NSView {
         fatalError("init(coder:) is not supported for this view")
     }
 
-    func show(title: String, message: String, button label: String? = nil, onPress: (() -> Void)? = nil) {
+    /// With `isDefault`, Return presses the button, as it does a sheet's.
+    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = false, onPress: (() -> Void)? = nil) {
         titleLabel.stringValue = title
         messageLabel.stringValue = message
         button.title = label ?? ""
         button.isHidden = label == nil
+        button.keyEquivalent = isDefault && label != nil ? "\r" : ""
         self.onPress = onPress
     }
 
@@ -2031,7 +2110,8 @@ final class WorkspaceGroupCellView: NSTableCellView {
 }
 
 /// A session's line: its state glyph, its profile, and a line of detail,
-/// with a × in the top right corner when the line can be closed. A session
+/// with a × in the top right corner while the pointer is over a line that can
+/// be closed. A session
 /// that was given a name has it on a line of its own above the profile, and
 /// one of the first ten has the key that goes to it in the bottom right.
 @MainActor
@@ -2046,6 +2126,12 @@ final class WorkspaceRowCellView: NSTableCellView {
     let keyLabel = NSTextField(labelWithString: "")
     /// What the × does for the line shown now.
     var onClose: (() -> Void)?
+    /// Whether the pointer is over the line; the × is drawn only then.
+    var isHovered = false {
+        didSet { closeButton.alphaValue = isHovered ? 1 : 0 }
+    }
+    /// The side of the ×'s target, larger than its glyph.
+    static let closeTarget: CGFloat = 18
 
     init() {
         super.init(frame: .zero)
@@ -2092,14 +2178,29 @@ final class WorkspaceRowCellView: NSTableCellView {
             keyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
             keyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 3),
-            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            closeButton.widthAnchor.constraint(equalToConstant: 14),
-            closeButton.heightAnchor.constraint(equalToConstant: 14),
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 1),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            closeButton.widthAnchor.constraint(equalToConstant: Self.closeTarget),
+            closeButton.heightAnchor.constraint(equalToConstant: Self.closeTarget),
         ])
+        closeButton.alphaValue = 0
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                                       owner: self, userInfo: nil))
     }
 
     @objc private func closePressed(_ sender: Any?) { onClose?() }
+
+    /// Whether the × can be seen now: the line can be closed and the
+    /// pointer is over it.
+    var showsCloseButton: Bool { !closeButton.isHidden && isHovered }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        isHovered = false
+    }
 
     /// A session's name on its color: a dark blue, which reads on every
     /// color the daemon publishes, as black does.

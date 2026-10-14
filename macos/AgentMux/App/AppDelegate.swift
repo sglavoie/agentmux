@@ -478,6 +478,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
         if workspace?.closeShown() != true { NSSound.beep() }
     }
+    /// What ⌘W's item says it does: "Close View" on a utility view, "End
+    /// Session…" on an embedded session, and plain "Close" anywhere else.
+    var closeWorkspaceViewTitle: String {
+        guard let workspace, workspace.isOpen, let key = NSApp.keyWindow, key === workspace.window else {
+            return WorkspaceWindowController.closeTitle
+        }
+        return workspace.closeShownTitle
+    }
     /// ⌘R: names the session the workspace's pane is on.
     @objc func nameSession(_ sender: Any?) {
         guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
@@ -1594,6 +1602,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         publishPreferences()
         controller.show()
         refreshConfigFontSize()
+    }
+}
+
+extension AppDelegate: NSMenuItemValidation {
+    /// Every item the app targets stays enabled, as it is without this; only
+    /// ⌘W's title follows what it would close.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(closeWorkspaceView(_:)) {
+            item.title = closeWorkspaceViewTitle
+        }
+        return true
     }
 }
 
