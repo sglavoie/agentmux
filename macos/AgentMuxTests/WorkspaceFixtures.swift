@@ -84,6 +84,10 @@ final class FocusableView: NSView {
 final class FakeWorkspaceApp: WorkspaceDelegate {
     let store = SessionStore()
     private(set) var made: [String] = []
+    /// The font size each terminal was asked for, in the order made.
+    private(set) var madeFontSizes: [Float?] = []
+    /// What each terminal reports as its font size, by runtime session.
+    var reportedFontSizes: [String: Float] = [:]
     private(set) var closed: [String] = []
     private(set) var external: [WorkspaceRow] = []
     private(set) var visibility: [Bool] = []
@@ -92,16 +96,22 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     /// Makes the view for a terminal; a `FocusableView` when nil.
     var factory: ((String) -> NSView?)?
 
-    func makeTerminal(runtimeSessionID: String) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
+    func makeTerminal(runtimeSessionID: String, fontSize: Float?) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
         if let problem { return .failure(WorkspaceTerminalProblem(message: problem)) }
         guard let view = factory.map({ $0(runtimeSessionID) }) ?? FocusableView() else {
             return .failure(WorkspaceTerminalProblem(message: "no view"))
         }
         made.append(runtimeSessionID)
-        return .success(WorkspaceTerminal(view: view) { [weak self] in
-            self?.closed.append(runtimeSessionID)
-            (view as? Ghostty.SurfaceView)?.close()
-        })
+        madeFontSizes.append(fontSize)
+        return .success(WorkspaceTerminal(
+            view: view,
+            close: { [weak self] in
+                self?.closed.append(runtimeSessionID)
+                (view as? Ghostty.SurfaceView)?.close()
+            },
+            fontSize: { [weak self] in
+                self?.reportedFontSizes[runtimeSessionID] ?? (view as? Ghostty.SurfaceView)?.fontSize
+            }))
     }
 
     /// The utility views a terminal was made for, by id, and those let go.

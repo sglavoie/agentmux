@@ -9,6 +9,8 @@ struct WorkspaceTerminal {
     /// Whether closing it now would end a program that should be asked
     /// about first (`ghostty_surface_needs_confirm_quit`).
     var needsConfirm: () -> Bool = { false }
+    /// The font size it shows now, zoom included; nil when unknown.
+    var fontSize: () -> Float? = { nil }
 }
 
 /// Why a terminal could not be shown.
@@ -21,8 +23,9 @@ struct WorkspaceTerminalProblem: Error, Equatable {
 protocol WorkspaceDelegate: AnyObject {
     /// The live sessions and the feed that delivers them.
     var store: SessionStore { get }
-    /// A terminal attached to a runtime session.
-    func makeTerminal(runtimeSessionID: String) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem>
+    /// A terminal attached to a runtime session, at `fontSize` points when
+    /// one is given, else the app configuration's.
+    func makeTerminal(runtimeSessionID: String, fontSize: Float?) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem>
     /// A terminal running a utility view: never an attachment, never a
     /// session.
     func makeUtilityTerminal(_ view: WorkspaceUtilityView) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem>
@@ -330,6 +333,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// session, kept while a view is about it: a terminal whose session is
     /// no longer listed still says whose it was.
     private var sessionNames: [String: String] = [:]
+    /// The font size each session's last terminal had when it was let go,
+    /// by runtime session, so a zoom survives the window closing. Kept for
+    /// the app's lifetime.
+    private(set) var fontSizes: [String: Float] = [:]
     /// The utility view the pane shows, by `WorkspaceUtilityView.id`. It and
     /// `state.selection` are never both set.
     private(set) var viewSelection: String?
@@ -1761,6 +1768,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     private func discardTerminal(_ id: String) {
         guard let terminal = terminals.removeValue(forKey: id) else { return }
+        // The session's next terminal comes back at the zoom this one had.
+        if let size = terminal.fontSize() { fontSizes[id] = size }
         ringingSessions.remove(id)
         rendererFailed.remove(id)
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
@@ -1817,7 +1826,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         // snapshot; something has to have changed first.
         if !retry, case let .unavailable(refused, _) = content, refused == id { return content }
         guard let delegate else { return .unavailable(runtimeSessionID: id, "The app is shutting down.") }
-        switch delegate.makeTerminal(runtimeSessionID: id) {
+        switch delegate.makeTerminal(runtimeSessionID: id, fontSize: fontSizes[id]) {
         case let .success(terminal):
             Self.logger.notice("workspace: attached a terminal to \(id, privacy: .public)")
             terminals[id] = terminal

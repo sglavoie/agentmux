@@ -271,7 +271,11 @@ runs without embedded terminals.
   Reset removes that override and restores the config's `font-size`.
   **⌘+** (or **⌘=**) and **⌘−** adjust only the focused terminal;
   **⌘⇧-** restores the saved default. New terminals start at that default;
-  shortcut changes are not persisted.
+  shortcut changes are not persisted, but a session's terminal made again
+  while the app runs (after the window closed, say) comes back at the zoom
+  its last one had (`WorkspaceWindowController.fontSizes`, read through
+  `SurfaceView.fontSize`, which is why the overrides force
+  `window-inherit-font-size = true`).
 - **Callbacks.** Runtime actions are sorted by `Ghostty.disposition(of:)`. The
   app answers quit (passed to `GhosttyAppDelegate`, which ignores it), open
   URL, and open and reload config. A surface-targeted title, working
@@ -387,7 +391,13 @@ ASL answer panel work the same either way.
   button, instead of taking the session back by itself; a click on the
   session's line, Return on it, or choosing it in the Go to… list reattaches
   too), when a live snapshot no longer lists its session, or when the window
-  closes. None of those ends the agent.
+  closes. None of those ends the agent. A hidden terminal hears of a new
+  size, and of a new backing scale, only once it is shown, so tmux is never
+  sized for a grid nobody sees.
+- **Accessibility.** A terminal is a text area to VoiceOver
+  (`SurfaceView+Accessibility.swift`, ported from upstream): its value is
+  the screen's text, reread at most every half second, with the selection
+  and ranges in UTF-16 units.
 - **Keyboard with the sidebar hidden.** A hidden sidebar never takes the
   keyboard: when a terminal it would have gone to ends, the pane's terminal,
   the placeholder's button, or the window takes it instead, so the arrow keys

@@ -204,6 +204,42 @@ final class GhosttySurfaceTests: XCTestCase {
         XCTAssertEqual(shown.width_px, UInt32(view.convertToBacking(view.bounds.size).width))
     }
 
+    /// A scale change reaching a hidden terminal is deferred with its size:
+    /// the surface hears of both once the view is shown, never of a size
+    /// left over from before it was hidden.
+    func testAHiddenSurfaceDefersAScaleChangeWithItsSize() throws {
+        view.isHidden = true
+        XCTAssertFalse(view.sizePending)
+        view.viewDidChangeBackingProperties()
+        XCTAssertTrue(view.sizePending, "the new scale waits for the view to be shown")
+        window.setContentSize(NSSize(width: 400, height: 250))
+        view.isHidden = false
+        XCTAssertFalse(view.sizePending)
+        let shown = try surfaceSize()
+        XCTAssertEqual(shown.width_px, UInt32(view.convertToBacking(view.bounds.size).width))
+        XCTAssertEqual(shown.height_px, UInt32(view.convertToBacking(view.bounds.size).height))
+    }
+
+    /// The zoom a terminal shows is read back from it, so the next terminal
+    /// for the same session can be made at it.
+    func testTheFontSizeFollowsTheZoomAndSeedsANewSurface() throws {
+        window.contentView = nil
+        view = nil
+        ghostty.shutdown()
+        ghostty = Ghostty.App { Ghostty.Config(userConfig: nil, overrides: Ghostty.ConfigOverrides(fontSize: 14)) }
+        view = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        window.contentView = view
+        XCTAssertEqual(view.fontSize, 14)
+        view.performBindingAction("increase_font_size:3")
+        XCTAssertEqual(view.fontSize, 17)
+
+        var configuration = Self.cat
+        configuration.fontSize = 17
+        let again = try XCTUnwrap(ghostty.makeSurface(configuration))
+        defer { again.close() }
+        XCTAssertEqual(again.fontSize, 17)
+    }
+
     /// QuickLook asks for a range that is not the selection's: it is put at
     /// the selection, above the cursor, rather than where the input method
     /// draws.
@@ -222,6 +258,41 @@ final class GhosttySurfaceTests: XCTestCase {
         let cursor = view.firstRect(forCharacterRange: NSRange(location: 0, length: 0), actualRange: nil)
         let quickLook = view.firstRect(forCharacterRange: NSRange(location: selection.location + 1, length: 2), actualRange: nil)
         XCTAssertGreaterThan(quickLook.minY, cursor.minY, "the selection starts on the first row, above the cursor")
+    }
+
+    /// VoiceOver reads a terminal as a text area holding the screen's text,
+    /// with the selection.
+    func testATerminalIsATextAreaAssistiveTechnologiesCanRead() throws {
+        window.contentView = nil
+        view = nil
+        view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf 'first\\nsécond\\nthird\\n'; exec cat"])))
+        window.contentView = view
+        XCTAssertTrue(view.isAccessibilityElement())
+        XCTAssertEqual(view.accessibilityRole(), .textArea)
+        XCTAssertEqual(view.accessibilityHelp(), "Terminal content area")
+        XCTAssertNil(view.accessibilitySelectedText(), "nothing is selected yet")
+
+        var screen = ""
+        ghosttyWait("the text to be drawn") {
+            view.accessibilityContents = nil
+            screen = view.accessibilityValue() as? String ?? ""
+            return screen.contains("third")
+        }
+        let text = screen as NSString
+        XCTAssertEqual(view.accessibilityNumberOfCharacters(), text.length)
+        XCTAssertEqual(view.accessibilityVisibleCharacterRange(), NSRange(location: 0, length: text.length))
+        let second = text.range(of: "sécond")
+        XCTAssertEqual(view.accessibilityString(for: second), "sécond")
+        XCTAssertEqual(view.accessibilityAttributedString(for: second)?.string, "sécond")
+        XCTAssertEqual(view.accessibilityLine(for: second.location), 1)
+        XCTAssertEqual(view.accessibilityLine(for: text.range(of: "third").location), 2)
+
+        view.performBindingAction("select_all")
+        ghosttyWait("the selection") { view.accessibilitySelectedText() != nil }
+        XCTAssertTrue(try XCTUnwrap(view.accessibilitySelectedText()).contains("third"))
+        XCTAssertEqual(view.accessibilitySelectedTextRange(), view.selectedRange())
     }
 
     func testFramebufferTracksTheViewInBackingPixels() throws {

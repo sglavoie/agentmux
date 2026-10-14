@@ -27,6 +27,10 @@ extension Ghostty {
             // Ghostty binds to it (`menuMayClaim`): Ghostty's reset_font_size
             // would run behind a menu that says otherwise. Actual Size is ⌘_.
             lines += Self.menuOwnedKeys.map { "keybind = \($0)=unbind" }
+            // The workspace reads a surface's zoom back through what a new
+            // window would inherit (`SurfaceView.fontSize`), to give it to
+            // the terminal it makes for the same session later.
+            lines.append("window-inherit-font-size = true")
             if let fontSize {
                 lines.append("font-size = \(Self.number(fontSize))")
             }

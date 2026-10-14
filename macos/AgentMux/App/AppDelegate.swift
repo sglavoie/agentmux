@@ -239,13 +239,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// What a terminal attached to a runtime session runs: the resolved amx,
     /// with the environment every other amx invocation gets. Nil until amx is
     /// resolved.
-    func attachmentConfiguration(runtimeSessionID: String) -> Ghostty.SurfaceConfiguration? {
+    func attachmentConfiguration(runtimeSessionID: String, fontSize: Float? = nil) -> Ghostty.SurfaceConfiguration? {
         guard let command else { return nil }
-        return .attachment(
+        var configuration = Ghostty.SurfaceConfiguration.attachment(
             amx: command.binary,
             runtimeSessionID: runtimeSessionID,
             environment: command.launchEnvironment.commandEnvironment
         )
+        configuration.fontSize = fontSize
+        return configuration
     }
 
     /// What a utility view's terminal runs: `amx workspace-view …`, which
@@ -350,8 +352,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return .success(WorkspaceTerminal(view: surface, close: { surface.close() }, needsConfirm: { surface.needsConfirmQuit }))
     }
 
-    func makeTerminal(runtimeSessionID: String) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
-        guard let configuration = attachmentConfiguration(runtimeSessionID: runtimeSessionID) else {
+    func makeTerminal(runtimeSessionID: String, fontSize: Float?) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
+        guard let configuration = attachmentConfiguration(runtimeSessionID: runtimeSessionID, fontSize: fontSize) else {
             return .failure(WorkspaceTerminalProblem(message: preferences.binaryMenuProblem ?? "amx is still being resolved."))
         }
         guard let runtime = terminalRuntime() else {
@@ -361,7 +363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return .failure(WorkspaceTerminalProblem(message: "The terminal could not be created."))
         }
         surface.delegate = workspace
-        return .success(WorkspaceTerminal(view: surface) { surface.close() })
+        return .success(WorkspaceTerminal(view: surface, close: { surface.close() }, fontSize: { surface.fontSize }))
     }
 
     func focusExternally(_ row: WorkspaceRow) {

@@ -1158,6 +1158,24 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(app.made.count, 3, "only the selected session is attached again")
     }
+
+    /// A session's zoom is the terminal's, and the terminal is let go with
+    /// the window: the next one for the session is made at the same size.
+    func testASessionsZoomSurvivesItsTerminalBeingMadeAgain() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+        workspace.activate(try row("api", "personal"))
+        XCTAssertEqual(app.madeFontSizes, [nil, nil], "a first terminal takes the app's size")
+
+        app.reportedFontSizes = [F.runtimeID(1): 18, F.runtimeID(2): 9.5]
+        workspace.window.close()
+        XCTAssertEqual(workspace.fontSizes, [F.runtimeID(1): 18, F.runtimeID(2): 9.5])
+
+        workspace.openForTesting()
+        XCTAssertEqual(app.madeFontSizes.last, 9.5, "the shown session comes back at its zoom")
+        workspace.activate(try row("api", "work"))
+        XCTAssertEqual(app.madeFontSizes.last, 18, "each session keeps its own")
+    }
 }
 
 /// The whole path a snapshot travels — socket, subscription, store, sidebar —

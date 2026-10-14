@@ -148,6 +148,10 @@ extension Ghostty {
 
         private var appliedColorScheme: ghostty_color_scheme_e?
 
+        /// The screen's text as last read for accessibility, and when; see
+        /// SurfaceView+Accessibility.swift.
+        var accessibilityContents: (text: String, read: ContinuousClock.Instant)?
+
         // MARK: Input state (see SurfaceView+Input.swift)
 
         /// The input method's uncommitted composition, mirrored to the
@@ -284,6 +288,14 @@ extension Ghostty {
             return ghostty_surface_process_exited(surface)
         }
 
+        /// The font size in points the terminal shows now, zoom included;
+        /// nil without a surface.
+        var fontSize: Float? {
+            guard let surface else { return nil }
+            let size = ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_WINDOW).font_size
+            return size > 0 ? size : nil
+        }
+
         /// Whether closing the surface would end a program Ghostty thinks
         /// should be asked about first.
         var needsConfirmQuit: Bool {
@@ -326,11 +338,23 @@ extension Ghostty {
             sizeDidChange(newSize)
         }
 
-        /// Gives the surface a size deferred while it was hidden.
+        /// Gives the surface a size, and any scale, deferred while it was
+        /// hidden.
         private func applyPendingSize() {
             guard sizePending, !isHiddenOrHasHiddenAncestor else { return }
             sizePending = false
+            setContentScale()
             sizeDidChange(frame.size)
+        }
+
+        /// Tells the surface the scale its frame has in the backing store.
+        private func setContentScale() {
+            guard let surface else { return }
+            let backing = convertToBacking(frame)
+            if frame.width > 0, frame.height > 0 {
+                ghostty_surface_set_content_scale(
+                    surface, backing.width / frame.width, backing.height / frame.height)
+            }
         }
 
         override func viewDidEndLiveResize() {
@@ -351,12 +375,14 @@ extension Ghostty {
                 CATransaction.commit()
             }
 
-            guard let surface else { return }
-            let backing = convertToBacking(frame)
-            if frame.width > 0, frame.height > 0 {
-                ghostty_surface_set_content_scale(
-                    surface, backing.width / frame.width, backing.height / frame.height)
+            // A hidden terminal's last size may be stale: the new scale goes
+            // to the surface with its current size once it is shown, so
+            // tmux never hears of a grid nobody sees.
+            if isHiddenOrHasHiddenAncestor {
+                sizePending = true
+                return
             }
+            setContentScale()
             // A new scale is a new framebuffer size for the same point size.
             setSurfaceSize(Self.pixelSize(convertToBacking(contentSize)))
         }
