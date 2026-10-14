@@ -1,9 +1,20 @@
 # tmux as a complete backend: live acceptance
 
 The record is `../tmux-complete-backend.json`. Its status is `incomplete`:
-ten of the eleven cases and the hosted tests passed; one case could not be
-executed and the paired release gate has no passed record. This file says how
-the results were taken and what stands in the way of the rest.
+ten of the eleven cases and the hosted tests passed on a Mac with no Kitty
+installed, and the paired release gate passed, but on a Mac that has Kitty
+installed. Two items of the acceptance are unmet:
+
+- `notification-without-app` was not executed: the daemon's Alerter
+  notification is never presented on macOS 27 (below). What would meet it is a
+  change to the daemon's Alerter sender, then the case run again on a
+  Kitty-free Mac at the new revision.
+- The passed gate did not run on a machine with Kitty not installed. What
+  would meet it is the gate run on a Kitty-free Mac on which the pair is a
+  working installation.
+
+This file says how the results were taken and what stands in the way of the
+rest.
 
 Everything ran on 2026-10-14 (UTC) against revision `8f063a9c`.
 
@@ -133,9 +144,10 @@ No stand-in was put in place of a click.
 
 ## The paired release gate
 
+### On the MacBook (Kitty-free): never passed
+
 `just paired-release-gate` ran three times on the MacBook, unsigned and
-without a tag, and has no passed record. No step ran or named Kitty. The three
-records are in `gate/`:
+without a tag. No step ran or named Kitty. The three records are in `gate/`:
 
 1. ASL `dbf5676`: `asl-tests` failed in ASL's own committed tree.
 2. ASL `fae855c`: `asl-lint` failed; `ruff` and `mypy` were missing on that
@@ -150,8 +162,34 @@ After the third run the install and smoke steps were run by hand
 one of its LaunchAgents cannot load because its program is not installed
 there, and `amx doctor --strict` reports seven `[hooks]` health failures in
 its real profiles (hooks never synced, harnesses not signed in, no Copilot
-CLI). A passed gate needs a Kitty-free machine on which the pair is a working
-installation.
+CLI).
+
+### On the Studio (Kitty installed): passed
+
+At the operator's instruction the gate then ran on the Studio, the driver
+machine, where the pair is a working installation and Kitty is installed (not
+running, and no `KITTY_*` variable in the gate's environment). It ran detached
+from the session that started it, since its install step restarts the daemon
+that session runs under. Its records are in `gate/studio/`:
+
+1. Refused before any step: the ASL checkout had uncommitted changes. The
+   operator cleaned it.
+2. ASL `f63ffef`: every verification step passed, and `asl-install` failed:
+   ASL's installer reloads the LaunchAgents, and two long-running ones failed
+   to bootstrap again (`Bootstrap failed: 5`). A plain `launchctl bootstrap`
+   loaded both straight afterwards.
+3. All 16 steps passed, and the gate refused to write the record because the
+   second run's record for the same pair ID was still in the evidence
+   directory.
+4. **Passed** (`gate/studio/amx-asl-1.df1580f1ff696edb.json`, finished
+   05:18:04Z): schema 2, all 16 steps passed with exit 0, `cockpit-smoke`
+   present and no `kitty-version` step, unsigned, no tag. It names Agent Mux
+   `985c3b6b`, which is `8f063a9c` plus the two commits that add these
+   acceptance files and nothing else, and ASL `f63ffef`.
+
+The Studio now runs the `amx` that gate installed (`985c3b6b`), its daemon
+was restarted by the gate, ASL was restowed from its checkout, and its
+LaunchAgents were reloaded.
 
 ## What was changed on the MacBook
 

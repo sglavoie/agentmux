@@ -1,0 +1,37 @@
+start 2026-10-14T03:33:05Z on Sébastien’s Mac Studio
+KITTY variables: 0
+kitty on PATH: /opt/homebrew/bin/kitty /opt/homebrew/bin/kitten 
+/Applications/kitty.app: /Applications/kitty.app
+kitty processes: 0
+agentmux 985c3b6b787935b9c69e34e42992b68e691bd8ba
+warning: no signing_key given; the evidence record will be unsigned
+warning: an unsigned record is a rehearsal, not a release
+refusing: uncommitted changes in asl
+evidence /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.db3ffe98ec20ca30.json
+evidence is unsigned (no signing key given)
+pair amx-asl-1.db3ffe98ec20ca30 (failed)
+  agentmux  985c3b6b7879 clean
+  asl       61e23fe276c3 dirty (66 paths)
+  not-run  os-version           -
+  not-run  harness-compat       -
+  not-run  build-amx            -
+  not-run  amx-check            -
+  not-run  asl-tests            -
+  not-run  asl-lint             -
+  not-run  contract-sync        -
+  not-run  paired-integration   -
+  not-run  crash-restart        -
+  not-run  amx-stress           -
+  not-run  asl-stress           -
+  not-run  asl-install          -
+  not-run  asl-install-verify   -
+  not-run  amx-install-restart  -
+  not-run  overseer-integration -
+  not-run  cockpit-smoke        -
+  evidence /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.db3ffe98ec20ca30.json
+  signature none (unsigned record)
+paired release gate failed: uncommitted changes in asl
+exit status 2
+error: recipe `paired-release-gate` failed with exit code 1
+exit=1
+end 2026-10-14T03:33:06Z

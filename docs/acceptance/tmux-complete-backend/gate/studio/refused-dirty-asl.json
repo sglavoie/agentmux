@@ -1,0 +1,308 @@
+{
+  "schema_version": 2,
+  "pair_id": "amx-asl-1.db3ffe98ec20ca30",
+  "generated_at": "2026-10-14T03:33:06Z",
+  "result": "failed",
+  "repositories": [
+    {
+      "repo": "agentmux",
+      "root": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux",
+      "revision": "985c3b6b787935b9c69e34e42992b68e691bd8ba",
+      "describe": "985c3b6b",
+      "clean": true
+    },
+    {
+      "repo": "asl",
+      "root": "/Users/sglavoie/scripts",
+      "revision": "61e23fe276c323b579aec285afbfb8744795d6db",
+      "describe": "61e23fe-dirty",
+      "clean": false,
+      "dirty": [
+        "M agent_session_loop/review_continuation.py",
+        "M asl_workbench/capabilities.py",
+        "M asl_workbench/observation.py",
+        "M asl_workbench/store_workbench.py",
+        "M asl_workbench/transport.py",
+        "M pyproject.toml",
+        "M tests/run_suite.py",
+        "M tests/test_asl_acceptance.py",
+        "D tests/test_asl_assurance_lifecycle.py",
+        "D tests/test_asl_assurance_projection.py",
+        "M tests/test_asl_live_verification.py",
+        "D tests/test_asl_prompts.py",
+        "M tests/test_asl_run_payloads.py",
+        "M tests/test_asl_run_termination.py",
+        "M tests/test_asl_typing_ratchet.py",
+        "D tests/test_workbench_fullstack.py",
+        "D tests/test_workbench_remote_actions.py",
+        "D tests/test_workbench_store.py",
+        "M tests/test_workbench_uplink.py",
+        "M tests/test_workbench_wire.py",
+        "?? agent_session_loop/review_continuation_evaluation.py",
+        "?? agent_session_loop/review_continuation_events.py",
+        "?? agent_session_loop/review_continuation_groups.py",
+        "?? agent_session_loop/review_continuation_guidance.py",
+        "?? agent_session_loop/review_continuation_models.py",
+        "?? agent_session_loop/review_continuation_state.py",
+        "?? asl_workbench/transport_checks.py",
+        "?? asl_workbench/transport_compat.py",
+        "?? asl_workbench/transport_envelopes.py",
+        "?? asl_workbench/transport_payloads.py",
+        "?? asl_workbench/transport_shapes.py",
+        "?? asl_workbench/transport_vocabulary.py",
+        "?? tests/support_asl_assurance_lifecycle.py",
+        "?? tests/support_asl_assurance_projection.py",
+        "?? tests/support_asl_prompts.py",
+        "?? tests/support_workbench_fullstack.py",
+        "?? tests/support_workbench_fullstack_case.py",
+        "?? tests/support_workbench_remote_actions.py",
+        "?? tests/support_workbench_store.py",
+        "?? tests/test_asl_assurance_lifecycle_catchup.py",
+        "?? tests/test_asl_assurance_lifecycle_coordinator.py",
+        "?? tests/test_asl_assurance_lifecycle_terminal_audit.py",
+        "?? tests/test_asl_assurance_lifecycle_terminal_outcomes.py",
+        "?? tests/test_asl_assurance_projection_catalog.py",
+        "?? tests/test_asl_assurance_projection_identity.py",
+        "?? tests/test_asl_assurance_projection_lifecycle.py",
+        "?? tests/test_asl_assurance_projection_publication.py",
+        "?? tests/test_asl_assurance_projection_replay.py",
+        "?? tests/test_asl_prompts_corrections.py",
+        "?? tests/test_asl_prompts_harness_skill.py",
+        "?? tests/test_asl_prompts_pending_guidance.py",
+        "?? tests/test_asl_prompts_reply_resolution.py",
+        "?? tests/test_asl_prompts_task_packet.py",
+        "?? tests/test_workbench_fullstack_corpus_link.py",
+        "?? tests/test_workbench_fullstack_mutations.py",
+        "?? tests/test_workbench_fullstack_resources.py",
+        "?? tests/test_workbench_fullstack_robustness.py",
+        "?? tests/test_workbench_remote_actions_lane.py",
+        "?? tests/test_workbench_remote_actions_performer.py",
+        "?? tests/test_workbench_remote_actions_restart.py",
+        "?? tests/test_workbench_remote_actions_submission_queue.py",
+        "?? tests/test_workbench_store_catalog_retention.py",
+        "?? tests/test_workbench_store_incident_delivery.py",
+        "?? tests/test_workbench_store_incidents.py",
+        "?? tests/test_workbench_store_ingestion.py",
+        "?? tests/test_workbench_store_migration_schema.py"
+      ]
+    }
+  ],
+  "artifacts": [],
+  "contract": {
+    "set_id": "asl-amx-1.85ec3041b9f03f47",
+    "manifest_sha256": "60c967d4fff0353e47f7ee747f923b07728dfa2dc3ac6f31078826afbd549e82"
+  },
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "os_version": "",
+    "go": "go1.27.1",
+    "harnesses": []
+  },
+  "steps": [
+    {
+      "name": "os-version",
+      "repo": "agentmux",
+      "phase": "environment",
+      "command": [
+        "sw_vers",
+        "-productVersion"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "harness-compat",
+      "repo": "asl",
+      "phase": "environment",
+      "command": [
+        "/Users/sglavoie/scripts/bin/.local/bin/agent-session-loop",
+        "harness-compat",
+        "--json"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "build-amx",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "just",
+        "build"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "amx-check",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "check"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "asl-tests",
+      "repo": "asl",
+      "phase": "verify",
+      "command": [
+        "env",
+        "ASL_CLI_TRACE=0",
+        "just",
+        "test-all"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "asl-lint",
+      "repo": "asl",
+      "phase": "verify",
+      "command": [
+        "env",
+        "ASL_CLI_TRACE=0",
+        "just",
+        "lint"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "contract-sync",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "asl-contract-sync",
+        "asl_root=/Users/sglavoie/scripts"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "paired-integration",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "asl-integration"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "crash-restart",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "crash-restart"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "amx-stress",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "reliability-stress"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "asl-stress",
+      "repo": "asl",
+      "phase": "verify",
+      "command": [
+        "just",
+        "reliability-stress"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "asl-install",
+      "repo": "asl",
+      "phase": "install",
+      "command": [
+        "just",
+        "all"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "asl-install-verify",
+      "repo": "asl",
+      "phase": "install",
+      "command": [
+        "just",
+        "verify-asl-install"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "amx-install-restart",
+      "repo": "agentmux",
+      "phase": "install",
+      "command": [
+        "just",
+        "install-restart-smoke"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "overseer-integration",
+      "repo": "agentmux",
+      "phase": "smoke",
+      "command": [
+        "just",
+        "overseer-integration",
+        "asl_root=/Users/sglavoie/scripts"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "cockpit-smoke",
+      "repo": "agentmux",
+      "phase": "smoke",
+      "command": [
+        "just",
+        "cockpit-smoke"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    }
+  ],
+  "signature": {
+    "signed": false,
+    "namespace": "agentmux-asl-release"
+  },
+  "path": "/Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.db3ffe98ec20ca30.json"
+}

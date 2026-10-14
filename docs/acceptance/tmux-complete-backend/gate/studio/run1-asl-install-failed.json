@@ -1,0 +1,279 @@
+{
+  "schema_version": 2,
+  "pair_id": "amx-asl-1.df1580f1ff696edb",
+  "generated_at": "2026-10-14T03:46:40Z",
+  "result": "failed",
+  "repositories": [
+    {
+      "repo": "agentmux",
+      "root": "/Users/sglavoie/1_dev_projects/sglavoie_agentmux",
+      "revision": "985c3b6b787935b9c69e34e42992b68e691bd8ba",
+      "describe": "985c3b6b",
+      "clean": true
+    },
+    {
+      "repo": "asl",
+      "root": "/Users/sglavoie/scripts",
+      "revision": "f63ffefc08951c7c04ecdfb83d0e442d18c744b0",
+      "describe": "f63ffef",
+      "clean": true
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "amx",
+      "repo": "agentmux",
+      "path": "amx",
+      "kind": "file",
+      "sha256": "88742fb66b05b0e6d50a077413a02e5673ffdf7c8874a940fafc6a140fba01ac"
+    },
+    {
+      "name": "agent-session-loop",
+      "repo": "asl",
+      "path": "bin/.local/bin/agent-session-loop",
+      "kind": "file",
+      "sha256": "4d5184046ac13ca6363e3d3def927732652fa303ec1e21dcc3f3136f386cebfa"
+    },
+    {
+      "name": "agent_session_loop",
+      "repo": "asl",
+      "path": "agent_session_loop",
+      "kind": "tree",
+      "sha256": "f2eec09f3ae16c8891eddfb158e9dfb454680a88fccb73ef63ee8468662f061b"
+    }
+  ],
+  "contract": {
+    "set_id": "asl-amx-1.85ec3041b9f03f47",
+    "manifest_sha256": "60c967d4fff0353e47f7ee747f923b07728dfa2dc3ac6f31078826afbd549e82"
+  },
+  "environment": {
+    "os": "darwin",
+    "arch": "arm64",
+    "os_version": "27.0.1",
+    "go": "go1.27.1",
+    "harnesses": [
+      {
+        "harness": "claude",
+        "version": "2.1.299",
+        "status": "unknown"
+      },
+      {
+        "harness": "codex",
+        "version": "0.162.1",
+        "status": "unknown"
+      },
+      {
+        "harness": "copilot",
+        "version": "1.0.97",
+        "status": "unknown"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "name": "os-version",
+      "repo": "agentmux",
+      "phase": "environment",
+      "command": [
+        "sw_vers",
+        "-productVersion"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 11
+    },
+    {
+      "name": "harness-compat",
+      "repo": "asl",
+      "phase": "environment",
+      "command": [
+        "/Users/sglavoie/scripts/bin/.local/bin/agent-session-loop",
+        "harness-compat",
+        "--json"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 593
+    },
+    {
+      "name": "build-amx",
+      "repo": "agentmux",
+      "phase": "build",
+      "command": [
+        "just",
+        "build"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 679
+    },
+    {
+      "name": "amx-check",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "check"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 182194
+    },
+    {
+      "name": "asl-tests",
+      "repo": "asl",
+      "phase": "verify",
+      "command": [
+        "env",
+        "ASL_CLI_TRACE=0",
+        "just",
+        "test-all"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 365359
+    },
+    {
+      "name": "asl-lint",
+      "repo": "asl",
+      "phase": "verify",
+      "command": [
+        "env",
+        "ASL_CLI_TRACE=0",
+        "just",
+        "lint"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 5813
+    },
+    {
+      "name": "contract-sync",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "asl-contract-sync",
+        "asl_root=/Users/sglavoie/scripts"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 163
+    },
+    {
+      "name": "paired-integration",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "asl-integration"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 19462
+    },
+    {
+      "name": "crash-restart",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "crash-restart"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 7022
+    },
+    {
+      "name": "amx-stress",
+      "repo": "agentmux",
+      "phase": "verify",
+      "command": [
+        "just",
+        "reliability-stress"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 184594
+    },
+    {
+      "name": "asl-stress",
+      "repo": "asl",
+      "phase": "verify",
+      "command": [
+        "just",
+        "reliability-stress"
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 1134114
+    },
+    {
+      "name": "asl-install",
+      "repo": "asl",
+      "phase": "install",
+      "command": [
+        "just",
+        "all"
+      ],
+      "status": "failed",
+      "exit_code": 1,
+      "duration_ms": 3210,
+      "output_tail": "...(truncated)...\nreverts previous action)\nLINK: .copilot/skills/references =\u003e ../../scripts/copilot/.copilot/skills/references (reverts previous action)\nLINK: .copilot/skills/session-expand =\u003e ../../scripts/copilot/.copilot/skills/session-expand (reverts previous action)\nLINK: .copilot/skills/session-resplit =\u003e ../../scripts/copilot/.copilot/skills/session-resplit (reverts previous action)\nLINK: .copilot/skills/session-run =\u003e ../../scripts/copilot/.copilot/skills/session-run (reverts previous action)\nLINK: .copilot/skills/session-split =\u003e ../../scripts/copilot/.copilot/skills/session-split (reverts previous action)\nLINK: .gitignore =\u003e scripts/git/.gitignore (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.backup-legacy-repo.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.backup-legacy-repo.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.brainnotes-vault-guard.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.brainnotes-vault-guard.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.brew-maintain.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.brew-maintain.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.check-legacy-health.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.check-legacy-health.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.ddc-brightnessd.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.ddc-brightnessd.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.forgejo-sync.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.forgejo-sync.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.log-rotate.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.log-rotate.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.photos-backup-check.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.photos-backup-check.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.pi-backup-fetch.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.pi-backup-fetch.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.seneca-remind.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.seneca-remind.plist (reverts previous action)\nLINK: Library/LaunchAgents/com.sglavoie.sync-legacy.plist =\u003e ../../scripts/launchagents/Library/LaunchAgents/com.sglavoie.sync-legacy.plist (reverts previous action)\njust load-agents\nReloading com.sglavoie.backup-legacy-repo...\nReloading com.sglavoie.brainnotes-vault-guard...\nBootstrap failed: 5: Input/output error\nTry re-running the command as root for richer errors.\nReloading com.sglavoie.brew-maintain...\nReloading com.sglavoie.check-legacy-health...\nReloading com.sglavoie.ddc-brightnessd...\nBootstrap failed: 5: Input/output error\nTry re-running the command as root for richer errors.\nReloading com.sglavoie.forgejo-sync...\nReloading com.sglavoie.log-rotate...\nReloading com.sglavoie.photos-backup-check...\nReloading com.sglavoie.pi-backup-fetch...\nReloading com.sglavoie.seneca-remind...\nReloading com.sglavoie.sync-legacy...\n./bin/.local/bin/launchagents-setup --check\nok   /Users/sglavoie/Library/LaunchAgents is a real directory\nok   com.sglavoie.backup-legacy-repo\nFAIL com.sglavoie.brainnotes-vault-guard is not loaded\nok   com.sglavoie.brew-maintain\nok   com.sglavoie.check-legacy-health\nFAIL com.sglavoie.ddc-brightnessd is not loaded\nok   com.sglavoie.forgejo-sync\nok   com.sglavoie.log-rotate\nok   com.sglavoie.photos-backup-check\nok   com.sglavoie.pi-backup-fetch\nok   com.sglavoie.seneca-remind\nok   com.sglavoie.sync-legacy\n\nAlso needed once per Mac: System Settings \u003e General \u003e Login Items \u0026\nExtensions \u003e Allow in the Background must be on for these agents.\n\n2 problem(s). Run: launchagents-setup\nerror: recipe `all` failed on line 29 with exit code 1"
+    },
+    {
+      "name": "asl-install-verify",
+      "repo": "asl",
+      "phase": "install",
+      "command": [
+        "just",
+        "verify-asl-install"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "amx-install-restart",
+      "repo": "agentmux",
+      "phase": "install",
+      "command": [
+        "just",
+        "install-restart-smoke"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "overseer-integration",
+      "repo": "agentmux",
+      "phase": "smoke",
+      "command": [
+        "just",
+        "overseer-integration",
+        "asl_root=/Users/sglavoie/scripts"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    },
+    {
+      "name": "cockpit-smoke",
+      "repo": "agentmux",
+      "phase": "smoke",
+      "command": [
+        "just",
+        "cockpit-smoke"
+      ],
+      "status": "not-run",
+      "exit_code": 0,
+      "duration_ms": 0
+    }
+  ],
+  "signature": {
+    "signed": false,
+    "namespace": "agentmux-asl-release"
+  },
+  "path": "/Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.df1580f1ff696edb.json"
+}

@@ -1,7 +1,7 @@
 {
   "record": "tmux-complete-backend",
   "status": "incomplete",
-  "status_reason": "Ten of eleven cases and the hosted tests passed. notification-without-app could not be executed on macOS 27 (the daemon's Alerter notification is never presented there), and the paired release gate has no passed record (three runs failed on things outside Agent Mux; the MacBook is not a healthy installation of the pair).",
+  "status_reason": "Ten of eleven cases and the hosted tests passed on the Kitty-free MacBook, and the paired release gate passed, but on the Mac Studio, where Kitty is installed. Two contract items are unmet: notification-without-app was not executed (the daemon's Alerter notification is never presented on macOS 27), and the passed gate did not run on a machine with Kitty not installed.",
   "tested_revision": "8f063a9c2d3392b2929d39e0bd8fac1e5f7514fe",
   "machine": {
     "name": "Seb's MacBook Pro",
@@ -24,10 +24,11 @@
     "started": "2026-10-14T00:32:21Z",
     "ended": "2026-10-14T00:33:07Z"
   },
-  "paired_gate_record": null,
+  "paired_gate_record": "docs/acceptance/tmux-complete-backend/gate/studio/amx-asl-1.df1580f1ff696edb.json",
   "paired_gate": {
-    "status": "failed",
-    "runs": [
+    "status": "passed on the Studio (Kitty installed); never passed on the Kitty-free MacBook",
+    "no_step_ran_or_named_kitty": true,
+    "macbook_runs": [
       {
         "record": "docs/acceptance/tmux-complete-backend/gate/amx-asl-1.175b06686c0f4752.json",
         "asl_revision": "dbf56767c86075f6abdcc6b7e32ebcc4bd941a62",
@@ -61,7 +62,7 @@
         "cause": "the MacBook had only /bin/bash 3.2 and ASL's installer needs mapfile"
       }
     ],
-    "by_hand_after_run_3": {
+    "macbook_by_hand_after_run_3": {
       "log": "docs/acceptance/tmux-complete-backend/gate/install-and-smoke-by-hand.log",
       "passed": [
         "asl-install-verify",
@@ -73,7 +74,29 @@
         "cockpit-smoke": "the same doctor --strict failures"
       }
     },
-    "no_step_ran_or_named_kitty": true
+    "studio_runs": [
+      {
+        "record": "docs/acceptance/tmux-complete-backend/gate/studio/refused-dirty-asl.json",
+        "log": "docs/acceptance/tmux-complete-backend/gate/studio/refused-dirty-asl.log",
+        "result": "refused before any step: uncommitted changes in the ASL checkout (cleaned by the operator)"
+      },
+      {
+        "record": "docs/acceptance/tmux-complete-backend/gate/studio/run1-asl-install-failed.json",
+        "log": "docs/acceptance/tmux-complete-backend/gate/studio/run1.log",
+        "asl_revision": "f63ffefc08951c7c04ecdfb83d0e442d18c744b0",
+        "failed_step": "asl-install",
+        "cause": "ASL's installer reloads the LaunchAgents and two long-running ones failed to bootstrap again (launchctl 'Bootstrap failed: 5'); both loaded with a plain launchctl bootstrap straight afterwards"
+      },
+      {
+        "log": "docs/acceptance/tmux-complete-backend/gate/studio/run2-record-not-written.log",
+        "result": "all 16 steps passed, and the gate refused to write its record because run 1's record for the same pair ID was still in the evidence directory (it was copied aside, not moved)"
+      },
+      {
+        "record": "docs/acceptance/tmux-complete-backend/gate/studio/amx-asl-1.df1580f1ff696edb.json",
+        "log": "docs/acceptance/tmux-complete-backend/gate/studio/gate-passed.log",
+        "result": "passed: schema 2, all 16 steps passed with exit 0, cockpit-smoke present, no kitty-version step, unsigned, no tag"
+      }
+    ]
   },
   "cases": {
     "launch-two-profiles": {
@@ -138,5 +161,28 @@
         "docs/acceptance/tmux-complete-backend/live/auto-workspace.jpg"
       ]
     }
-  }
+  },
+  "unmet": [
+    {
+      "item": "notification-without-app passed",
+      "single_change": "Make the daemon's Alerter notification presentable on macOS 27 (it passes --sender fr.vjeantet.alerter, an identifier no application has there; without it Alerter is presented as Terminal), then run the case again on a Kitty-free Mac at the new revision."
+    },
+    {
+      "item": "paired release gate passed on a machine with Kitty not installed",
+      "single_change": "Run just paired-release-gate on a Kitty-free Mac on which the pair is a working installation; the MacBook is Kitty-free but is not one (gate/install-and-smoke-by-hand.log), and the Studio is one but has Kitty installed."
+    }
+  ],
+  "paired_gate_record_machine": {
+    "name": "the Mac Studio (the driver machine)",
+    "os": "macOS 27.0.1",
+    "kitty_installed": true,
+    "kitty_running": false,
+    "kitty_environment_unset": true,
+    "agentmux_revision": "985c3b6b787935b9c69e34e42992b68e691bd8ba",
+    "agentmux_revision_note": "985c3b6b is tested_revision 8f063a9c plus two commits that add only files under docs/acceptance/tmux-complete-backend*; no *.go, *.swift, *.sh, *.toml, Justfile, go.mod or go.sum differs",
+    "asl_revision": "f63ffefc08951c7c04ecdfb83d0e442d18c744b0",
+    "log": "docs/acceptance/tmux-complete-backend/gate/studio/gate-passed.log",
+    "finished": "2026-10-14T05:18:04Z"
+  },
+  "kitty_scope": "kitty_installed, kitty_running and kitty_environment_unset describe the MacBook, where mac_test and every case ran. The passed gate ran on the Studio, where Kitty is installed (see paired_gate_record_machine)."
 }
