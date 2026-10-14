@@ -811,6 +811,67 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
     }
 
+    func testClosingAViewWhoseProgramIsRunningAsksFirst() throws {
+        let shell = WorkspaceUtilityView(kind: .shell, target: "/work/api", title: "Shell")
+        workspace.open(shell)
+        var asked: [(String, @MainActor (Bool) -> Void)] = []
+        workspace.confirmViewClose = { title, answer in asked.append((title, answer)) }
+
+        // Nothing running: ⌘W closes at once.
+        XCTAssertTrue(workspace.closeShown())
+        XCTAssertEqual(asked.count, 0)
+        XCTAssertEqual(app.closedViews, [shell.id])
+
+        // Running: ⌘W, the row's ×, and the menu's Close all ask by name.
+        workspace.open(shell)
+        app.runningViews = [shell.id]
+        XCTAssertTrue(workspace.closeShown())
+        XCTAssertEqual(asked.map(\.0), ["Shell"])
+        XCTAssertEqual(app.closedViews, [shell.id], "nothing ends before the answer")
+        asked[0].1(false)
+        XCTAssertEqual(app.closedViews, [shell.id])
+        XCTAssertEqual(workspace.content, .view(id: shell.id))
+        workspace.closeView(shell.id)
+        asked[1].1(true)
+        XCTAssertEqual(app.closedViews, [shell.id, shell.id])
+        XCTAssertNil(workspace.views.view(shell.id))
+
+        // The Dashboard and Past Sessions never ask, whatever Ghostty says.
+        let history = WorkspaceUtilityView.history(ConversationIdentity(harness: "claude", sessionID: "0b6f-1c2e"))
+        workspace.open(history)
+        app.runningViews = [WorkspaceUtilityView.dashboard.id, history.id]
+        workspace.closeView(history.id)
+        XCTAssertNil(workspace.views.view(history.id))
+        workspace.showView(WorkspaceUtilityView.dashboard.id)
+        let dashboard = try XCTUnwrap(workspace.utilityTerminalView(for: WorkspaceUtilityView.dashboard.id))
+        workspace.terminalAskedToClose(dashboard, needsConfirm: true)
+        workspace.closeView(WorkspaceUtilityView.dashboard.id)
+        XCTAssertEqual(asked.count, 2)
+    }
+
+    func testQuittingAsksOnceNamingEveryViewWhoseProgramIsRunning() throws {
+        var asked: [([String], @MainActor (Bool) -> Void)] = []
+        workspace.confirmQuitWithViews = { titles, answer in asked.append((titles, answer)) }
+        XCTAssertFalse(workspace.confirmQuit { _ in XCTFail("nothing to ask") })
+
+        let shell = WorkspaceUtilityView(kind: .shell, target: "/work/api", title: "Shell")
+        let editor = WorkspaceUtilityView(kind: .editor, target: "/work/api/main.go", title: "main.go")
+        let pager = WorkspaceUtilityView(kind: .pager, target: F.runtimeID(2), title: "api")
+        for view in [shell, editor, pager] { workspace.open(view) }
+        workspace.showView(WorkspaceUtilityView.dashboard.id)
+        app.runningViews = [shell.id, pager.id, WorkspaceUtilityView.dashboard.id]
+        // A session's terminal only detaches, so it is never named.
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+
+        var answers: [Bool] = []
+        XCTAssertTrue(workspace.confirmQuit { answers.append($0) })
+        XCTAssertEqual(asked.map(\.0), [["Shell", "api"]])
+        asked[0].1(false)
+        XCTAssertEqual(answers, [false])
+        XCTAssertNotNil(workspace.views.view(shell.id), "a cancelled quit closes nothing")
+    }
+
     func testATerminalThatCannotBeMadeSaysWhyAndIsRetriedOnlyWhenAsked() throws {
         app.problem = "amx is still being resolved."
         app.store.apply(snapshot: F.snapshot(sessions))

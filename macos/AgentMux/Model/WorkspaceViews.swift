@@ -107,6 +107,18 @@ struct WorkspaceUtilityView: Equatable {
     /// only while their program runs.
     var isPermanent: Bool { kind == .dashboard || kind == .overview }
 
+    /// Whether closing the view asks first while its program needs it: a
+    /// shell, an editor, or a pager may hold work that closing would lose.
+    /// The Dashboard and the Overview start again when shown, Past Sessions
+    /// and the overlays hold nothing to lose, and an attachment is not a
+    /// utility view at all: closing one only detaches.
+    var asksBeforeClosing: Bool {
+        switch kind {
+        case .shell, .editor, .pager, .terminal: return true
+        case .dashboard, .overview, .history, .keybindings, .iconPicker, .colorPicker: return false
+        }
+    }
+
     /// What `amx` runs in the view's terminal. amx decides the program: the
     /// workspace passes only the kind and the target.
     var arguments: [String] {
@@ -253,6 +265,14 @@ struct WorkspaceViews: Equatable {
     func view(_ id: String?) -> WorkspaceUtilityView? {
         guard let id else { return nil }
         return all.first { $0.id == id }
+    }
+
+    /// What the one sheet shown before quitting asks, naming every view
+    /// whose program is still running.
+    static func quitQuestion(_ titles: [String]) -> String {
+        if titles.count == 1 { return "A process is still running in \(titles[0]). Quit anyway?" }
+        let list = titles.dropLast().joined(separator: ", ") + " and " + titles[titles.count - 1]
+        return "Processes are still running in \(list). Quit anyway?"
     }
 
     /// Lists `view`. One view per kind and target: opening the same shell or

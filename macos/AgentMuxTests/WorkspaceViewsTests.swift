@@ -62,6 +62,30 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertNil(WorkspaceRestoration.Place(encoded: "view:\(history.id)"), "and it is not brought back at launch")
     }
 
+    /// Only a view whose program may hold the operator's work asks before it
+    /// is closed: a shell, an editor, a pager, and a terminal beside a
+    /// session. Every kind is named, so a new one has to decide.
+    func testOnlyShellsEditorsAndPagersAskBeforeClosing() {
+        let expected: [WorkspaceUtilityView.Kind: Bool] = [
+            .dashboard: false, .overview: false, .shell: true, .editor: true, .pager: true,
+            .terminal: true, .history: false, .keybindings: false, .iconPicker: false, .colorPicker: false,
+        ]
+        for (kind, asks) in expected {
+            let view = WorkspaceUtilityView(kind: kind, target: "x", title: "X")
+            XCTAssertEqual(view.asksBeforeClosing, asks, kind.rawValue)
+        }
+        XCTAssertFalse(WorkspaceUtilityView.dashboard.asksBeforeClosing)
+        XCTAssertFalse(WorkspaceUtilityView.overview.asksBeforeClosing)
+    }
+
+    func testTheQuitQuestionNamesEveryView() {
+        XCTAssertEqual(WorkspaceViews.quitQuestion(["Shell"]), "A process is still running in Shell. Quit anyway?")
+        XCTAssertEqual(WorkspaceViews.quitQuestion(["Shell", "main.go"]),
+                       "Processes are still running in Shell and main.go. Quit anyway?")
+        XCTAssertEqual(WorkspaceViews.quitQuestion(["Shell", "main.go", "api"]),
+                       "Processes are still running in Shell, main.go and api. Quit anyway?")
+    }
+
     func testTheKeybindingReferenceAndThePickersAreTheOperatorsToOpen() {
         XCTAssertEqual(WorkspaceUtilityView.keybindings.arguments, ["workspace-view", "keybindings"])
         let icon = WorkspaceUtilityView.picker(.iconPicker, runtimeSessionID: F.runtimeID(2))

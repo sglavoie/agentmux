@@ -17,9 +17,11 @@ extension Ghostty {
 
         /// The override file's lines, in the order Ghostty reads them.
         var lines: [String] {
-            // Closing a view only detaches from its session, so the host
-            // decides and Ghostty never asks.
-            var lines = ["confirm-close-surface = false"]
+            // Ghostty only reports whether a surface's program would be lost
+            // (`ghostty_surface_needs_confirm_quit`); the host decides whether
+            // to ask, and never does for an attachment, whose close only
+            // detaches from its session.
+            var lines = ["confirm-close-surface = true"]
             if let fontSize {
                 lines.append("font-size = \(Self.number(fontSize))")
             }

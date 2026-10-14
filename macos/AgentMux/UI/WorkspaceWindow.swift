@@ -6,6 +6,9 @@ import os
 struct WorkspaceTerminal {
     let view: NSView
     let close: () -> Void
+    /// Whether closing it now would end a program that should be asked
+    /// about first (`ghostty_surface_needs_confirm_quit`).
+    var needsConfirm: () -> Bool = { false }
 }
 
 /// Why a terminal could not be shown.
@@ -255,6 +258,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Stands in for the sheet that asks before a utility view whose program
     /// is still running is closed, for tests. Answers on the main actor.
     var confirmViewClose: ((_ title: String, _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
+    /// Stands in for the sheet that asks once, naming every view whose
+    /// program is still running, before the app quits, for tests. Answers on
+    /// the main actor.
+    var confirmQuitWithViews: ((_ titles: [String], _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
     /// Stands in for the sheet that says why a session could not be closed.
     var reportCloseProblem: ((_ name: String, _ message: String) -> Void)?
     /// Stands in for the sheet that asks for a session's name, for tests.
@@ -743,8 +750,48 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// Closes a utility view, ending its program, whether or not the pane
-    /// shows it.
+    /// shows it. A shell, editor, or pager whose program still needs it is
+    /// closed only once the operator agrees.
     func closeView(_ id: String) {
+        guard let view = views.view(id) else { return }
+        guard needsConfirmBeforeClosing(id) else {
+            closeViewNow(id)
+            return
+        }
+        let terminal = viewTerminals[id]?.view
+        Self.logger.notice("workspace: closing view \(id, privacy: .public) with its program running; asking")
+        (confirmViewClose ?? askToCloseView)(view.title) { [weak self] confirmed in
+            // Still the same terminal: it may have ended meanwhile.
+            guard let self, confirmed, self.viewTerminals[id]?.view === terminal else { return }
+            self.closeViewNow(id)
+        }
+    }
+
+    /// Whether closing the view would end a program that should be asked
+    /// about first.
+    private func needsConfirmBeforeClosing(_ id: String) -> Bool {
+        guard let view = views.view(id), view.asksBeforeClosing, let terminal = viewTerminals[id] else { return false }
+        return terminal.needsConfirm()
+    }
+
+    /// The titles of the views whose programs should be asked about before
+    /// the app quits, in sidebar order.
+    var viewsNeedingConfirmation: [String] {
+        views.all.filter { needsConfirmBeforeClosing($0.id) }.map(\.title)
+    }
+
+    /// Asks once, naming every view that needs it, before the app quits.
+    /// Reports whether it asked; when it did, `answer` gets the operator's
+    /// reply, on the main actor.
+    func confirmQuit(_ answer: @escaping @MainActor (Bool) -> Void) -> Bool {
+        let titles = isOpen ? viewsNeedingConfirmation : []
+        guard !titles.isEmpty else { return false }
+        Self.logger.notice("workspace: quitting with \(titles.count) view programs running; asking")
+        (confirmQuitWithViews ?? askToQuit)(titles, answer)
+        return true
+    }
+
+    private func closeViewNow(_ id: String) {
         guard let view = views.view(id) else { return }
         Self.logger.notice("workspace: closing view \(id, privacy: .public)")
         discardViewTerminal(id)
@@ -1206,12 +1253,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// asked about.
     func terminalAskedToClose(_ view: NSView, needsConfirm: Bool) {
         guard needsConfirm, let id = viewTerminals.first(where: { $0.value.view === view })?.key,
-              let title = views.view(id)?.title else {
+              let utility = views.view(id), utility.asksBeforeClosing else {
             terminalEnded(view)
             return
         }
         Self.logger.notice("workspace: view \(id, privacy: .public) asked to close with its program running; asking")
-        (confirmViewClose ?? askToCloseView)(title) { [weak self] confirmed in
+        (confirmViewClose ?? askToCloseView)(utility.title) { [weak self] confirmed in
             // Still the same terminal: it may have ended meanwhile.
             guard let self, confirmed, self.viewTerminals[id]?.view === view else { return }
             self.utilityEnded(id)
@@ -1224,6 +1271,18 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         alert.messageText = "A process is still running in \(title). Close it?"
         alert.informativeText = "Closing the view ends that process. No session is affected."
         alert.addButton(withTitle: "Close").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated { answer(response == .alertFirstButtonReturn) }
+        }
+    }
+
+    private func askToQuit(_ titles: [String], _ answer: @escaping @MainActor (Bool) -> Void) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = WorkspaceViews.quitQuestion(titles)
+        alert.informativeText = "Quitting ends those processes. Sessions live on and are shown again at the next launch."
+        alert.addButton(withTitle: "Quit").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { response in
             MainActor.assumeIsolated { answer(response == .alertFirstButtonReturn) }

@@ -176,8 +176,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // A window that closes because the app is quitting was open: the
-        // next launch reopens it.
+        // One sheet names every shell, editor, or pager whose program would
+        // be lost; a session's terminal only detaches, so it never asks.
+        let asked = workspace?.confirmQuit { [weak self] confirmed in
+            // A window that closes because the app is quitting was open:
+            // the next launch reopens it.
+            if confirmed { self?.isTerminating = true }
+            sender.reply(toApplicationShouldTerminate: confirmed)
+        } ?? false
+        if asked { return .terminateLater }
         isTerminating = true
         return .terminateNow
     }
@@ -310,7 +317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return .failure(WorkspaceTerminalProblem(message: "The terminal could not be created."))
         }
         surface.delegate = workspace
-        return .success(WorkspaceTerminal(view: surface) { surface.close() })
+        return .success(WorkspaceTerminal(view: surface, close: { surface.close() }, needsConfirm: { surface.needsConfirmQuit }))
     }
 
     func makeTerminal(runtimeSessionID: String) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {

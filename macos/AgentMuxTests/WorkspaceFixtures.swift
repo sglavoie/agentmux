@@ -109,12 +109,18 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     private(set) var closedViews: [String] = []
     /// Set to refuse every utility terminal with this message.
     var viewProblem: String?
+    /// The utility views whose terminals say their program should be asked
+    /// about before closing, by id.
+    var runningViews: Set<String> = []
 
     func makeUtilityTerminal(_ view: WorkspaceUtilityView) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem> {
         if let viewProblem { return .failure(WorkspaceTerminalProblem(message: viewProblem)) }
         let terminal = FocusableView()
         madeViews.append(view.id)
-        return .success(WorkspaceTerminal(view: terminal) { [weak self] in self?.closedViews.append(view.id) })
+        return .success(WorkspaceTerminal(
+            view: terminal,
+            close: { [weak self] in self?.closedViews.append(view.id) },
+            needsConfirm: { [weak self] in self?.runningViews.contains(view.id) ?? false }))
     }
 
     func focusExternally(_ row: WorkspaceRow) { external.append(row) }

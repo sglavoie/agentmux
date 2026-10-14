@@ -259,6 +259,13 @@ extension Ghostty {
             return ghostty_surface_process_exited(surface)
         }
 
+        /// Whether closing the surface would end a program Ghostty thinks
+        /// should be asked about first.
+        var needsConfirmQuit: Bool {
+            guard let surface else { return false }
+            return ghostty_surface_needs_confirm_quit(surface)
+        }
+
         // MARK: Size and scale
 
         /// Tells the surface its framebuffer size for a view size in points.

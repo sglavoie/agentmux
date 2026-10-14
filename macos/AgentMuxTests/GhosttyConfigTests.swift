@@ -34,12 +34,12 @@ final class GhosttyConfigTests: XCTestCase {
 
     /// The app configuration names no program: what runs is each surface's own.
     func testOverridesForceOnlyWhatTheHostOwns() {
-        XCTAssertEqual(Ghostty.ConfigOverrides().lines, ["confirm-close-surface = false"])
+        XCTAssertEqual(Ghostty.ConfigOverrides().lines, ["confirm-close-surface = true"])
 
         var sized = Ghostty.ConfigOverrides()
         sized.fontSize = 15
         sized.settings = ["cursor-style = bar", "split\ncommand = /bin/sh"]
-        XCTAssertEqual(sized.lines, ["confirm-close-surface = false", "font-size = 15", "cursor-style = bar"])
+        XCTAssertEqual(sized.lines, ["confirm-close-surface = true", "font-size = 15", "cursor-style = bar"])
         sized.fontSize = 12.5
         XCTAssertTrue(sized.lines.contains("font-size = 12.5"))
         XCTAssertFalse(sized.lines.contains { $0.hasPrefix("command") })
@@ -49,7 +49,7 @@ final class GhosttyConfigTests: XCTestCase {
         let config = Ghostty.Config(userConfig: dir.appendingPathComponent("missing.conf"))
         XCTAssertTrue(config.loaded)
         XCTAssertEqual(config.diagnostics, [])
-        XCTAssertEqual(config.string("confirm-close-surface"), "false")
+        XCTAssertEqual(config.string("confirm-close-surface"), "true")
     }
 
     func testUserFileLoadsAfterDefaultsAndBeforeOverrides() throws {
@@ -63,7 +63,7 @@ final class GhosttyConfigTests: XCTestCase {
         // The user file beats the defaults...
         XCTAssertEqual(config.get("font-size", as: Float.self, initial: 0), 17)
         // ...and the forced overrides beat the user file.
-        XCTAssertEqual(config.string("confirm-close-surface"), "false")
+        XCTAssertEqual(config.string("confirm-close-surface"), "true")
 
         var sized = Ghostty.ConfigOverrides()
         sized.fontSize = 12.5
