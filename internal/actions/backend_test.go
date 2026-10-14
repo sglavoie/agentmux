@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -67,6 +68,31 @@ func TestLaunchActionOnTmuxReportsRuntimeSession(t *testing.T) {
 	}
 	if running := tmuxSessions(t, f, cfg); len(running) != 1 || string(running[0].RuntimeSessionID) != id {
 		t.Fatalf("running = %+v, want the launched runtime session", running)
+	}
+}
+
+// TestContinueOnTmuxReportsRuntimeSession: the desktop app's Recent menu
+// resumes a conversation on tmux and opens the workspace on the runtime
+// session `session continue --json` reports.
+func TestContinueOnTmuxReportsRuntimeSession(t *testing.T) {
+	f := tmuxtest.New(t)
+	cfg := continuityConfig(harness.Claude)
+	meta := continuityMeta(t, harness.Claude, "source-1", "work")
+	meta.CWD = t.TempDir()
+	deps := tmuxDeps(f, cfg)
+	deps.Readers = map[string]transcript.Reader{harness.Claude: &continuityReader{harness: harness.Claude}}
+	deps.Daemon = func(protocol.Request) (protocol.Response, error) { return protocol.Response{OK: true}, nil }
+
+	result, err := DefaultRegistry().Execute(context.Background(), deps, Continue, Request{Conversation: &meta})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := result.Data["runtime_session_id"].(string)
+	if result.Data["continuation"] != "resumed" || result.Data["backend"] != "tmux" || id == "" {
+		t.Fatalf("data = %+v, want a tmux resume with its runtime session", result.Data)
+	}
+	if running := tmuxSessions(t, f, cfg); len(running) != 1 || string(running[0].RuntimeSessionID) != id {
+		t.Fatalf("running = %+v, want the resumed runtime session", running)
 	}
 }
 

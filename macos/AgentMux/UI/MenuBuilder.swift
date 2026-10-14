@@ -56,6 +56,10 @@ enum MenuEntry: Equatable {
     /// An action this amx or daemon cannot run, greyed out with the reason as
     /// its tooltip.
     case unavailable(String, reason: String)
+    /// A project whose directory is missing: greyed out with the reason as
+    /// its tooltip, while its ⌥ "in Folder…" alternate still launches it
+    /// somewhere else.
+    case unavailableProject(ProjectEntry, reason: String)
     /// One of the controller's live submenus; greyed out when `reason` is set.
     case submenuRef(MenuSubmenu, String, reason: String?)
     /// "Answer…" for an ASL run waiting on its supervisor; indented under the
@@ -89,6 +93,8 @@ enum MenuBuilder {
     /// What the action items and their submenus are built from.
     struct ActionsInput: Equatable {
         var gate = ActionGate()
+        /// Where Open Dashboard shows it; only Kitty needs `open-dashboard`.
+        var dashboardPlace: DashboardPlacePreference = .workspace
         var feedLive = false
         var projects = FetchState<[ProjectEntry]>()
         /// Project directories the last survey found missing on disk.
@@ -263,13 +269,10 @@ enum MenuBuilder {
             kittySocket: session.kittySocket,
             toolTip: tip.joined(separator: " · "),
             muted: session.muted,
-            muteUnavailable: embedded == nil ? input.gate.unavailableReason(.muteToggle) : muteNeedsKitty,
+            muteUnavailable: input.gate.unavailableReason(.muteToggle),
             runtimeSessionID: embedded ?? ""
         )
     }
-
-    /// `amx mute-toggle` names a Kitty window.
-    static let muteNeedsKitty = "Mute from the menu works for Kitty sessions only"
 
     static func name(of session: CompanionSession) -> String {
         if !session.project.isEmpty { return session.project }
@@ -302,7 +305,7 @@ enum MenuBuilder {
     /// then the Launch Project, Recent, and Notifications submenus.
     static func actionEntries(_ input: ActionsInput) -> [MenuEntry] {
         var entries: [MenuEntry] = [.separator, .action(.openWorkspace, "Open Workspace")]
-        if let reason = input.gate.unavailableReason(.openDashboard) {
+        if input.dashboardPlace == .kitty, let reason = input.gate.unavailableReason(.openDashboard) {
             entries.append(.unavailable("Open Dashboard", reason: reason))
         } else {
             entries.append(.action(.openDashboard, "Open Dashboard"))
@@ -346,7 +349,7 @@ enum MenuBuilder {
             entries.append(.header(profile.isEmpty ? "(no profile)" : profile))
             entries += members.map { project in
                 missing.contains(project.directory)
-                    ? .unavailable(project.title, reason: "Directory not found: \(project.directory)")
+                    ? .unavailableProject(project, reason: "Directory not found: \(project.directory)")
                     : .action(.launchProject(project), project.title)
             }
         }
@@ -497,6 +500,17 @@ enum MenuBuilder {
             item.isEnabled = false
             return item
         }
+        // A project's ⌥ alternate, which asks for a folder first; enabled
+        // even when the project's own directory is missing.
+        func inFolderItem(after item: NSMenuItem, _ project: ProjectEntry) -> NSMenuItem {
+            item.keyEquivalentModifierMask = []
+            let alternate = NSMenuItem(title: "\(item.title) in Folder…", action: actionSelector, keyEquivalent: "")
+            alternate.target = target
+            alternate.keyEquivalentModifierMask = .option
+            alternate.isAlternate = true
+            alternate.representedObject = ActionBox(.launchProjectInFolder(project))
+            return alternate
+        }
         return entries.flatMap { entry -> [NSMenuItem] in
             switch entry {
             case let .info(text):
@@ -517,17 +531,15 @@ enum MenuBuilder {
                 item.target = target
                 item.representedObject = ActionBox(action)
                 guard case let .launchProject(project) = action else { return [item] }
-                item.keyEquivalentModifierMask = []
-                let alternate = NSMenuItem(title: "\(title) in Folder…", action: actionSelector, keyEquivalent: "")
-                alternate.target = target
-                alternate.keyEquivalentModifierMask = .option
-                alternate.isAlternate = true
-                alternate.representedObject = ActionBox(.launchProjectInFolder(project))
-                return [item, alternate]
+                return [item, inFolderItem(after: item, project)]
             case let .unavailable(title, reason):
                 let item = infoItem(title)
                 item.toolTip = reason
                 return [item]
+            case let .unavailableProject(project, reason):
+                let item = infoItem(project.title)
+                item.toolTip = reason
+                return [item, inFolderItem(after: item, project)]
             case let .answer(answerTarget, title, indented):
                 let item = NSMenuItem(title: title, action: actionSelector, keyEquivalent: "")
                 item.target = target

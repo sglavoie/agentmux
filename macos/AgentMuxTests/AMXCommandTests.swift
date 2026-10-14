@@ -131,7 +131,7 @@ final class AMXCommandTests: XCTestCase {
         )
         command.runner = { executable, arguments, environment, timeout in
             recorder.calls.append((executable, arguments, environment, timeout))
-            return output
+            return output.map(ProcessRun.finished) ?? .timedOut
         }
         return command
     }
@@ -151,9 +151,55 @@ final class AMXCommandTests: XCTestCase {
         XCTAssertEqual(recorder.calls[0].3, AMXCommand.defaultTimeout)
     }
 
-    func testTimeoutOrLaunchFailure() {
+    func testTimeoutIsNotALaunchFailure() {
         let amx = command(Recorder(), output: nil)
-        XCTAssertEqual(amx.json(Mute.self, ["x"], timeout: 2), .failure(.launchFailedOrTimedOut(binary: "/bin/amx", timeout: 2)))
+        XCTAssertEqual(amx.json(Mute.self, ["x"], timeout: 2), .failure(.timedOut(binary: "/bin/amx", timeout: 2, mutates: false)))
+        XCTAssertEqual(AMXCommandError.timedOut(binary: "/bin/amx", timeout: 2, mutates: false).message, "amx did not answer within 2s")
+    }
+
+    func testAMutatingCommandThatTimesOutHasAnUnknownOutcome() {
+        let amx = command(Recorder(), output: nil)
+        let result = amx.json(Mute.self, ["project", "launch"], timeout: AMXCommand.launchTimeout, mutates: true)
+        guard case let .failure(error) = result else { return XCTFail("\(result)") }
+        XCTAssertEqual(error, .timedOut(binary: "/bin/amx", timeout: 120, mutates: true))
+        XCTAssertEqual(error.message, "amx did not answer within 120s; the outcome is unknown — check the session list")
+    }
+
+    func testLaunchFailureIsReportedAsSuch() {
+        var amx = command(Recorder(), output: nil)
+        amx.runner = { _, _, _, _ in .launchFailed(reason: "no such file") }
+        let result = amx.json(Mute.self, ["x"], mutates: true)
+        XCTAssertEqual(result, .failure(.launchFailed(binary: "/bin/amx", reason: "no such file")))
+        XCTAssertEqual(AMXCommandError.launchFailed(binary: "/bin/amx", reason: "no such file").message,
+                       "/bin/amx could not be started: no such file")
+    }
+
+    func testMutatingCommandsHaveLongTimeouts() {
+        XCTAssertGreaterThanOrEqual(AMXCommand.launchTimeout, 120)
+        XCTAssertGreaterThanOrEqual(AMXCommand.actionTimeout, 30)
+        XCTAssertGreaterThan(AMXCommand.actionTimeout, AMXCommand.defaultTimeout)
+    }
+
+    func testDataThatDoesNotDecodeReadsAsAVersionMismatch() {
+        let result = decode(#"{"schema_version":1,"data":{"window_id":"seven"}}"#)
+        guard case let .failure(error) = result else { return XCTFail("\(result)") }
+        XCTAssertEqual(error.message, AMXEnvelope.undecodableData)
+        XCTAssertFalse(error.message.contains("DecodingError"))
+        XCTAssertFalse(error.message.contains("typeMismatch"))
+    }
+
+    func testMapKeepsPartialAndFailure() {
+        let partial: AMXCommandResult<Int> = .partial(2, status: 3)
+        XCTAssertEqual(partial.map { $0 * 2 }, .partial(4, status: 3))
+        let failed: AMXCommandResult<Int> = .failure(.unsupportedSchema(2))
+        XCTAssertEqual(failed.map { $0 * 2 }, .failure(.unsupportedSchema(2)))
+    }
+
+    func testRealProcessReportsAMissingExecutable() {
+        guard case .launchFailed = ProcessOutput.execute("/nonexistent/amx", arguments: [], timeout: 2) else {
+            return XCTFail("a missing executable never starts")
+        }
+        XCTAssertEqual(ProcessOutput.execute("/bin/sleep", arguments: ["5"], timeout: 0.2), .timedOut)
     }
 
     func testRealProcessTimesOut() throws {
@@ -266,9 +312,9 @@ final class AMXCommandTests: XCTestCase {
             switch arguments {
             case ["--help"]: text = "Available Commands:\n  notifications  N\n"
             case ["notifications", "--help"]: text = "Available Commands:\n  snooze  S\n"
-            default: return ProcessOutput(status: 1, stdout: Data(), stderr: Data())
+            default: return .finished(ProcessOutput(status: 1, stdout: Data(), stderr: Data()))
             }
-            return ProcessOutput(status: 0, stdout: Data(text.utf8), stderr: Data())
+            return .finished(ProcessOutput(status: 0, stdout: Data(text.utf8), stderr: Data()))
         }
         XCTAssertEqual(AMXCapabilities.probe(amx), AMXCapabilities(notificationsSnooze: true))
         XCTAssertEqual(recorder.calls.map(\.1), [["--help"], ["notifications", "--help"]])

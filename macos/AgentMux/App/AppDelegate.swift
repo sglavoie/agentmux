@@ -58,10 +58,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// reaches the daemon before the click that follows it.
     private let dispositionQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.dispositions", qos: .userInitiated)
 
-    /// Health requests and amx runs block, so they run here, one at a time.
+    /// Resolving amx reads the login shell and probes the binary, which can
+    /// take seconds, so it runs here, one at a time.
     private let work = DispatchQueue(label: "io.github.sglavoie.agentmux.work", qos: .utility)
-    /// Focus requests run here, so a click never waits behind a health check.
+    /// Health requests run here, so a slow resolve never holds up the daemon
+    /// line.
+    private let healthQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.health", qos: .utility)
+    /// Focus, mute, and snooze requests run here, so a click never waits
+    /// behind a health check or a launch.
     private let focusQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.focus", qos: .userInitiated)
+    /// Launches, continues, and closes run here, one at a time: each can take
+    /// up to a minute or two, and none of them should hold up a click.
+    private let launchQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.launch", qos: .userInitiated)
     /// The project and Recent lists load here, so a slow transcript refresh
     /// never holds up a health check or a click.
     private let listQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.lists", qos: .utility, attributes: .concurrent)
@@ -407,8 +415,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             completion(preferences.binaryProblem ?? "amx has not been found yet.")
             return
         }
-        focusQueue.async {
-            let problem = SessionClose.problem(command.json(SessionClose.self, ["close", runtimeSessionID, "--yes"]))
+        launchQueue.async {
+            let problem = SessionClose.problem(command.json(
+                SessionClose.self, ["close", runtimeSessionID, "--yes"], timeout: AMXCommand.actionTimeout, mutates: true
+            ))
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     Self.logger.notice("close \(runtimeSessionID, privacy: .public): \(problem ?? "closed", privacy: .public)")
@@ -575,18 +585,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case let .kitty(socket, windowID):
             toggleMute(MenuSessionRow(title: row.project, windowID: windowID, kittySocket: socket, toolTip: "", muted: row.muted))
         case let .embedded(id):
-            guard let command else { return refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
-            focusQueue.async { [weak self] in
-                let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(runtimeSessionID: id))
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        switch result {
-                        case let .success(value), let .partial(value, _):
-                            Self.logger.notice("mute-toggle \(id, privacy: .public): muted=\(value.muted)")
-                        case let .failure(error):
-                            Self.logger.error("mute-toggle \(id, privacy: .public): \(error.message, privacy: .public)")
-                            self?.store.show(notice: "Could not toggle mute: \(error.message)")
-                        }
+            guard command != nil else { return refuse(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+            toggleMute(runtimeSessionID: id)
+        }
+    }
+
+    /// `amx mute-toggle --runtime-session`: a session the workspace embeds
+    /// has no window to name.
+    private func toggleMute(runtimeSessionID id: String) {
+        guard let command else { return }
+        focusQueue.async { [weak self] in
+            let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(runtimeSessionID: id))
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    switch result {
+                    case let .success(value), let .partial(value, _):
+                        Self.logger.notice("mute-toggle \(id, privacy: .public): muted=\(value.muted)")
+                    case let .failure(error):
+                        Self.logger.error("mute-toggle \(id, privacy: .public): \(error.message, privacy: .public)")
+                        self?.store.show(notice: "Could not toggle mute: \(error.message)")
                     }
                 }
             }
@@ -654,7 +671,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     func refreshDaemonStatus() {
         guard store.feed != .live, !healthInFlight else { return }
         healthInFlight = true
-        work.async { [weak self] in
+        healthQueue.async { [weak self] in
             let status = DaemonClient().health()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -1212,6 +1229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let prefs = preferencesModel.preferences
         return MenuBuilder.ActionsInput(
             gate: gate,
+            dashboardPlace: prefs.dashboardPlace,
             feedLive: live,
             projects: projects.state,
             missingProjectDirectories: projects.missingDirectories,
@@ -1318,9 +1336,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
         let candidates = newTabCandidates()
         let arguments = ProjectCatalog.launchArguments(for: project, directory: directory)
-        focusQueue.async { [weak self] in
+        launchQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
-                command.json(ProjectLaunchResult.self, arguments, kittyListenOn: socket)
+                command.json(ProjectLaunchResult.self, arguments, kittyListenOn: socket,
+                             timeout: AMXCommand.launchTimeout, mutates: true)
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -1355,48 +1374,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private func launchInWorkspace(_ project: ProjectEntry, directory: String?, command: AMXCommand) {
         let arguments = ProjectCatalog.workspaceLaunchArguments(for: project, directory: directory)
         let label = "launch \(project.profile)/\(project.title)"
-        focusQueue.async { [weak self] in
-            let result = command.json(ProjectLaunchResult.self, arguments)
+        launchQueue.async { [weak self] in
+            let result = command.json(ProjectLaunchResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self else { return }
-                    switch result {
-                    case let .failure(error):
-                        Self.logger.error("\(label, privacy: .public) on tmux: \(error.message, privacy: .public)")
-                        self.report("Could not \(label): \(error.message)")
-                    case let .success(value), let .partial(value, _):
-                        Self.logger.notice("\(label, privacy: .public) on tmux as \(value.runtimeSessionID, privacy: .public)")
-                        let controller = self.workspaceController()
-                        controller.show()
-                        controller.open(WorkspaceViewRequest(
-                            kind: WorkspaceViewRequest.sessionKind, runtimeSessionID: value.runtimeSessionID, awaited: true
-                        ))
-                    }
+                    self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label)
                 }
             }
         }
     }
 
+    /// Shows the workspace on the runtime session a tmux launch or continue
+    /// reports: its own view as soon as the daemon lists it, and the window
+    /// meanwhile.
+    private func finishOpeningInWorkspace(_ result: AMXCommandResult<String>, label: String) {
+        switch result {
+        case let .failure(error):
+            Self.logger.error("\(label, privacy: .public) on tmux: \(error.message, privacy: .public)")
+            report("Could not \(label): \(error.message)")
+        case let .success(runtimeSessionID), let .partial(runtimeSessionID, _):
+            Self.logger.notice("\(label, privacy: .public) on tmux as \(runtimeSessionID, privacy: .public)")
+            let controller = workspaceController()
+            controller.show()
+            guard !runtimeSessionID.isEmpty else { return }
+            controller.open(WorkspaceViewRequest(
+                kind: WorkspaceViewRequest.sessionKind, runtimeSessionID: runtimeSessionID, awaited: true
+            ))
+        }
+    }
+
     /// Recent: a conversation a live session runs is focused where it runs,
-    /// in whichever Kitty that is; any other goes to `amx session continue`,
-    /// which resumes it in the Kitty used last. amx sees only the Kitty it is
-    /// pointed at, so asking it to continue a conversation live in another
-    /// instance would resume a second copy instead of focusing the first.
+    /// in the workspace or whichever Kitty that is; any other goes to
+    /// `amx session continue`, which resumes it on tmux for the workspace,
+    /// or, when Preferences names Kitty, in the Kitty used last. amx sees only
+    /// the Kitty it is pointed at, so asking it to continue a conversation
+    /// live in another instance would resume a second copy instead of
+    /// focusing the first.
     private func continueConversation(_ conversation: RecentConversation) {
         if let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
             focus(.focusing(live, title: conversation.selector))
             return
         }
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
+        let label = "continue \(conversation.selector)"
+        if preferencesModel.preferences.launchBackend.launchesInWorkspace {
+            let arguments = RecentSessions.workspaceContinueArguments(for: conversation)
+            launchQueue.async { [weak self] in
+                let result = command.json(SessionContinueResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label)
+                    }
+                }
+            }
+            return
+        }
         let candidates = newTabCandidates()
         let arguments = RecentSessions.continueArguments(for: conversation)
-        focusQueue.async { [weak self] in
+        launchQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
-                command.json(SessionContinueResult.self, arguments, kittyListenOn: socket)
+                command.json(SessionContinueResult.self, arguments, kittyListenOn: socket,
+                             timeout: AMXCommand.launchTimeout, mutates: true)
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.finishOpening(outcome, label: "continue \(conversation.selector)") { $0.windowID }
+                    self?.finishOpening(outcome, label: label) { $0.windowID }
                 }
             }
         }
@@ -1437,13 +1479,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
-    /// ⌥ on a session row: `amx mute-toggle` against that row's own Kitty.
+    /// ⌥ on a session row: `amx mute-toggle` on the row's runtime session
+    /// when the workspace embeds it, else against that row's own Kitty.
     /// Window IDs mean something only inside the instance that issued them,
     /// so no other socket is tried.
     func toggleMute(_ row: MenuSessionRow) {
-        guard row.runtimeSessionID.isEmpty else { return report(MenuBuilder.muteNeedsKitty) }
         guard let command else { return report(preferences.binaryProblem ?? "amx is still being resolved; try again in a moment.") }
         if let reason = gate.unavailableReason(.muteToggle) { return report(reason) }
+        guard row.runtimeSessionID.isEmpty else { return toggleMute(runtimeSessionID: row.runtimeSessionID) }
         let socket = row.kittySocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : row.kittySocket
         guard !socket.isEmpty else { return report(KittyEndpoint.listenOnMissing) }
         // Shown at once, so a menu reopened before the daemon publishes the

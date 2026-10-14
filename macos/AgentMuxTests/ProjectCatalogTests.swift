@@ -11,7 +11,7 @@ final class ProjectCatalogTests: XCTestCase {
         amx.inheritedEnvironment = ["KITTY_WINDOW_ID": "3", "LANG": "C"]
         amx.runner = { _, args, env, _ in
             calls.append((args, env))
-            return reply(args)
+            return reply(args).map(ProcessRun.finished) ?? .timedOut
         }
         return (amx, { calls })
     }

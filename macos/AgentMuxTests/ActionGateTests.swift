@@ -38,6 +38,7 @@ final class ActionGateTests: XCTestCase {
         var input = MenuBuilder.ActionsInput()
         input.gate = ActionGate(capabilities: capabilities, binaryPath: "amx")
         input.feedLive = true
+        input.dashboardPlace = .kitty
         let entries = MenuBuilder.actionEntries(input)
         XCTAssertEqual(entries, [
             .separator,
@@ -47,6 +48,16 @@ final class ActionGateTests: XCTestCase {
             .submenuRef(.recent, "Recent", reason: nil),
             .submenuRef(.notifications, "Notifications", reason: nil),
         ])
+    }
+
+    func testOpenDashboardInTheWorkspaceNeedsNoOpenDashboardCommand() {
+        let old = AMXCapabilities(root: AMXHelp(subcommands: ["session"], flags: []), notifications: nil, muteToggle: nil)
+        var input = MenuBuilder.ActionsInput()
+        input.gate = ActionGate(capabilities: old, binaryPath: "amx")
+        input.dashboardPlace = .workspace
+        XCTAssertEqual(MenuBuilder.actionEntries(input)[2], .action(.openDashboard, "Open Dashboard"))
+        input.dashboardPlace = .kitty
+        XCTAssertEqual(MenuBuilder.actionEntries(input)[2], .unavailable("Open Dashboard", reason: "amx has no `open-dashboard`; run `just install`"))
     }
 
     func testActionEntriesOnACurrentAmx() {
@@ -96,14 +107,32 @@ final class ActionGateTests: XCTestCase {
         XCTAssertEqual(MenuBuilder.projectEntries(state, missing: ["/src/gone"]), [
             .header("work"),
             .action(.launchProject(api), "API"),
-            .unavailable("Gone", reason: "Directory not found: /src/gone"),
+            .unavailableProject(gone, reason: "Directory not found: /src/gone"),
         ])
 
         var input = MenuBuilder.ActionsInput()
         input.projects = state
         input.missingProjectDirectories = ["/src/gone"]
-        XCTAssertEqual(MenuBuilder.entries(for: .projects, input).last, .unavailable("Gone", reason: "Directory not found: /src/gone"),
+        XCTAssertEqual(MenuBuilder.entries(for: .projects, input).last, .unavailableProject(gone, reason: "Directory not found: /src/gone"),
                        "the submenu reads the survey from its input")
+    }
+
+    func testAMissingDirectoryKeepsTheInFolderAlternate() {
+        let gone = ProjectEntry(profile: "work", title: "Gone", directory: "/src/gone")
+        let items = MenuBuilder.items(
+            for: [.unavailableProject(gone, reason: "Directory not found: /src/gone")],
+            target: NSObject(), sessionAction: #selector(NSObject.description), actionSelector: #selector(NSObject.hash)
+        )
+        XCTAssertEqual(items.count, 2)
+        XCTAssertFalse(items[0].isEnabled)
+        XCTAssertEqual(items[0].toolTip, "Directory not found: /src/gone")
+        XCTAssertEqual(items[0].keyEquivalentModifierMask, [])
+        XCTAssertTrue(items[1].isAlternate)
+        XCTAssertTrue(items[1].isEnabled, "another folder can still be chosen")
+        XCTAssertEqual(items[1].keyEquivalentModifierMask, .option)
+        XCTAssertEqual(items[1].title, "Gone in Folder…")
+        XCTAssertEqual(items[1].action, #selector(NSObject.hash))
+        XCTAssertEqual((items[1].representedObject as? MenuBuilder.ActionBox)?.action, .launchProjectInFolder(gone))
     }
 
     // MARK: Mute
@@ -175,7 +204,7 @@ final class ActionGateTests: XCTestCase {
         amx.inheritedEnvironment = ["KITTY_LISTEN_ON": "unix:/tmp/kitty-1"]
         amx.runner = { _, args, env, _ in
             calls.append((args, env))
-            return ProcessOutput(status: 1, stdout: Data(#"{"schema_version":1,"data":{"window_id":4,"muted":true,"changed":true}}"#.utf8), stderr: Data())
+            return .finished(ProcessOutput(status: 1, stdout: Data(#"{"schema_version":1,"data":{"window_id":4,"muted":true,"changed":true}}"#.utf8), stderr: Data()))
         }
         let result = amx.json(MuteToggleResult.self, MuteToggleResult.arguments(windowID: 4), kittyListenOn: "unix:/tmp/kitty-2")
         XCTAssertEqual(result, .partial(MuteToggleResult(windowID: 4, muted: true, changed: true), status: 1),

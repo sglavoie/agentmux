@@ -28,7 +28,7 @@ struct AMXPromptAnswerService: PromptAnswerService {
 
     func press(arguments: [String]) -> AMXCommandResult<PromptSent> {
         guard let command = command() else { return .failure(.undecodable(status: 1, detail: problem())) }
-        return command.json(PromptSent.self, arguments)
+        return command.json(PromptSent.self, arguments, timeout: AMXCommand.actionTimeout, mutates: true)
     }
 }
 

@@ -370,8 +370,13 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(rows.map(\.runtimeSessionID), [F.runtimeID(1), F.runtimeID(2), ""])
         XCTAssertEqual(rows[0].title, "❓ api · claude · 1m")
         XCTAssertEqual(rows[0].toolTip, "tmux %1 · profile work")
-        XCTAssertEqual(rows[0].muteUnavailable, MenuBuilder.muteNeedsKitty)
+        XCTAssertEqual(rows[0].muteUnavailable, ActionGate().unavailableReason(.muteToggle), "an embedded row follows the gate too")
         XCTAssertEqual(rows[2].muteUnavailable, ActionGate().unavailableReason(.muteToggle), "a Kitty row follows the gate")
+        let full = ActionGate(capabilities: AMXCapabilities(project: true, openDashboard: true, notificationsSnooze: true, muteToggleJSON: true))
+        let muteable = MenuBuilder.row(snapshot.sessions[0], showReason: false, input: MenuBuilder.Input(
+            feed: .live, daemonStatus: .ready(nil), sessions: snapshot.sessions, snapshot: snapshot,
+            notice: nil, now: now, glyphs: .fallback, gate: full))
+        XCTAssertNil(muteable.muteUnavailable, "an embedded session mutes by runtime session")
 
         // Both tmux sessions have window ID 0; each still gets its own run.
         let answers = entries.compactMap { entry -> String? in

@@ -36,6 +36,8 @@ final class RecentSessionsTests: XCTestCase {
         XCTAssertEqual(RecentSessions.listArguments(days: 7), ["session", "list", "--since", "7d"])
         XCTAssertEqual(RecentSessions.listArguments(days: 0), ["session", "list", "--since", "1d"])
         XCTAssertEqual(RecentSessions.continueArguments(for: RecentConversation(id: "x", harness: "codex")), ["session", "continue", "codex:x"])
+        XCTAssertEqual(RecentSessions.workspaceContinueArguments(for: RecentConversation(id: "x", harness: "codex")),
+                       ["session", "continue", "codex:x", "--backend", "tmux"])
     }
 
     func testFetchRunsWithTheRecentTimeout() {
@@ -43,9 +45,9 @@ final class RecentSessionsTests: XCTestCase {
         var amx = AMXCommand(binary: URL(fileURLWithPath: "/opt/amx"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
         amx.runner = { _, _, _, timeout in
             timeouts.append(timeout)
-            return nil
+            return .timedOut
         }
-        guard case let .failure(.launchFailedOrTimedOut(_, timeout)) = RecentSessions.fetch(amx, days: 3) else {
+        guard case let .failure(.timedOut(_, timeout, mutates)) = RecentSessions.fetch(amx, days: 3), !mutates else {
             return XCTFail("a run that never finishes is a timeout")
         }
         XCTAssertEqual(timeout, 15)
@@ -73,6 +75,11 @@ final class RecentSessionsTests: XCTestCase {
         let resumed = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"action":"session.continue","changed":true,"data":{"continuation":"resumed","harness":"codex","session_id":"x"}}}"#.utf8), status: 0)
         XCTAssertEqual(resumed.value?.continuation, "resumed")
         XCTAssertEqual(resumed.value?.windowID, 0)
+        XCTAssertEqual(resumed.value?.runtimeSessionID, "", "a Kitty resume names no runtime session")
+        let onTmux = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"action":"session.continue","changed":true,"data":{"continuation":"resumed","backend":"tmux","runtime_session_id":"rs-1"}}}"#.utf8), status: 0)
+        XCTAssertEqual(onTmux.value?.runtimeSessionID, "rs-1")
+        let odd = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"changed":true,"data":{"continuation":"resumed","runtime_session_id":7}}}"#.utf8), status: 0)
+        XCTAssertEqual(odd.value?.runtimeSessionID, "", "an unexpected type falls back rather than failing the continue")
         let missing = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"error":{"code":"not_found","message":"indexed conversation codex:x was not found"}}"#.utf8), status: 1)
         guard case let .failure(.command(error, _)) = missing else { return XCTFail("\(missing)") }
         XCTAssertEqual(error.code, "not_found")

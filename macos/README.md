@@ -644,8 +644,9 @@ the operator chooses it.
 ## Focus
 
 A row for a session on tmux opens the [workspace](#workspace) on its terminal;
-it has no Kitty window, and **Mute** on it is greyed out because
-`amx mute-toggle` names one. Everything below is for a Kitty session.
+it has no Kitty window, and its ⌥ **Mute** runs
+`amx mute-toggle --runtime-session ID --json`, as F10 does in the workspace.
+Everything below is for a Kitty session.
 
 A click on a session row sends `focus_window` to the daemon. The request names
 a Kitty socket, which the daemon accepts only if it learned that socket itself
@@ -680,9 +681,9 @@ After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
 | Item | Does |
 | --- | --- |
 | Open Dashboard | What the ⌃⌥⌘A shortcut does. |
-| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch, cached, and refreshed when the menu opens on one older than 60s. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip. Choosing one runs `amx project launch --title T --profile P --json`. |
-| Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --json`. |
-| ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket. |
+| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch, cached, and refreshed when the menu opens on one older than 60s. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip, and its ⌥ `… in Folder…` alternate still launches it in a folder you choose. Choosing one runs `amx project launch --title T --profile P --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
+| Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
+| ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --runtime-session ID --json` for a session on tmux, or `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket for a Kitty one. |
 | Notifications ▸ | Snooze for 1 hour, until tomorrow 08:00, or until resumed, and Resume Now, all through the daemon's `notification_snooze` request. Quiet hours are shown read-only with the config path they come from, because the app never rewrites `config.toml`. |
 
 New tabs open in the Kitty that was frontmost last (the app watches
@@ -690,15 +691,28 @@ application activation), then the Preferences override, the snapshot's Kitty,
 and each `/tmp/kitty-<pid>`. After a launch or a continue, the app asks the
 daemon to focus the window amx reported, when it reported one, and brings that
 Kitty forward. A Recent conversation that a live session already runs is
-focused through `focus_window`, in whichever Kitty runs it, instead of asking
-amx: `session continue` only sees the Kitty it is pointed at, so for a session
+focused where it runs, in the workspace or through `focus_window` in
+whichever Kitty runs it, instead of asking amx: `session continue` only sees the Kitty it is pointed at, so for a session
 in another instance it would resume a second copy. Mute never tries another
 socket, because window IDs mean something only inside the Kitty that issued
 them.
 
 Items are greyed out when the resolved amx lacks `project` (Launch Project),
-`open-dashboard` (Open Dashboard), or `mute-toggle --json` (the ⌥ Mute
-alternates). Notifications is greyed out while the feed is not live, and when
+`open-dashboard` (Open Dashboard, only when `amxDashboardPlace` is `kitty`;
+the workspace's own Dashboard needs no amx command), or `mute-toggle --json`
+(the ⌥ Mute alternates).
+
+**Timeouts.** amx runs from the menu are bounded (`CLI/AMXCommand.swift`):
+queries and toggles get 10s, `project launch` and `session continue` 120s
+(`launchTimeout`), and `close --yes` and `amx send` 30s (`actionTimeout`).
+An amx that could not be started is reported as such; one that changes
+something and does not answer in time is reported as "amx did not answer
+within Ns; the outcome is unknown — check the session list", because the
+launch or close may still have happened. Launches, continues, and closes run
+on a queue of their own, so a slow one never holds up a click on a session,
+and health checks run apart from resolving amx. An answer whose data this app
+cannot decode reads "amx answered in a format this app does not understand;
+update the app or amx", and the decoding error goes to the log. Notifications is greyed out while the feed is not live, and when
 the daemon answers that it has no `notification_snooze`.
 
 **Snooze across daemon restarts.** The daemon keeps the snooze in memory only.

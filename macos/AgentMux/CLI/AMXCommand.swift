@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// The common error payload every `amx --json` failure carries
 /// (`internal/cli.JSONError`).
@@ -46,8 +47,11 @@ struct AMXJSONError: Decodable, Equatable {
 
 /// Why an `amx` invocation produced no usable answer.
 enum AMXCommandError: Error, Equatable {
-    /// The process could not be started, or did not finish within its timeout.
-    case launchFailedOrTimedOut(binary: String, timeout: TimeInterval)
+    /// The process could not be started.
+    case launchFailed(binary: String, reason: String)
+    /// The process did not finish within its timeout and was stopped. For a
+    /// command that `mutates`, what it was doing may or may not have happened.
+    case timedOut(binary: String, timeout: TimeInterval, mutates: Bool)
     /// amx answered with the structured error envelope.
     case command(AMXJSONError, status: Int32)
     /// The envelope names a schema version this app does not read.
@@ -58,8 +62,11 @@ enum AMXCommandError: Error, Equatable {
 
     var message: String {
         switch self {
-        case let .launchFailedOrTimedOut(binary, timeout):
-            return "\(binary) did not start or did not finish within \(Int(timeout))s"
+        case let .launchFailed(binary, reason):
+            return reason.isEmpty ? "\(binary) could not be started" : "\(binary) could not be started: \(reason)"
+        case let .timedOut(_, timeout, mutates):
+            let answer = "amx did not answer within \(Int(timeout))s"
+            return mutates ? "\(answer); the outcome is unknown — check the session list" : answer
         case let .command(error, _):
             return error.message.isEmpty ? error.code : error.message
         case let .unsupportedSchema(version):
@@ -86,12 +93,29 @@ enum AMXCommandResult<T> {
     }
 }
 
+extension AMXCommandResult {
+    /// The same answer with its value transformed.
+    func map<U>(_ transform: (T) -> U) -> AMXCommandResult<U> {
+        switch self {
+        case let .success(value): return .success(transform(value))
+        case let .partial(value, status): return .partial(transform(value), status: status)
+        case let .failure(error): return .failure(error)
+        }
+    }
+}
+
 extension AMXCommandResult: Equatable where T: Equatable {}
 
 /// The schema-v1 command envelope: `{"schema_version":1,"data":…}` on
 /// success, `{"schema_version":1,"error":{…}}` on failure.
 enum AMXEnvelope {
     static let schemaVersion = 1
+
+    /// What the operator reads when amx's data does not decode; the decoding
+    /// error itself goes to the log.
+    static let undecodableData = "amx answered in a format this app does not understand; update the app or amx"
+
+    private static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "amx")
 
     private struct Header: Decodable {
         let schemaVersion: Int?
@@ -132,7 +156,8 @@ enum AMXEnvelope {
             let envelope = try decoder.decode(DataEnvelope<T>.self, from: document)
             return status == 0 ? .success(envelope.data) : .partial(envelope.data, status: status)
         } catch {
-            return .failure(.undecodable(status: status, detail: "amx data did not decode: \(error)"))
+            logger.error("amx data did not decode as \(String(describing: T.self), privacy: .public): \(String(describing: error), privacy: .public)")
+            return .failure(.undecodable(status: status, detail: undecodableData))
         }
     }
 
@@ -161,14 +186,20 @@ enum AMXEnvelope {
 /// would otherwise aim every command at that one window), and
 /// `KITTY_LISTEN_ON` is set only from the caller's argument.
 struct AMXCommand {
-    typealias Runner = (_ executable: String, _ arguments: [String], _ environment: [String: String], _ timeout: TimeInterval) -> ProcessOutput?
+    typealias Runner = (_ executable: String, _ arguments: [String], _ environment: [String: String], _ timeout: TimeInterval) -> ProcessRun
 
+    /// Queries and quick toggles.
     static let defaultTimeout: TimeInterval = 10
+    /// `project launch` and `session continue`: starting an agent can wait on
+    /// a slow shell profile, a worktree, or a transcript check.
+    static let launchTimeout: TimeInterval = 120
+    /// `close --yes` and `amx send`, which wait on the agent's pane.
+    static let actionTimeout: TimeInterval = 30
 
     var binary: URL
     var launchEnvironment: LaunchEnvironment
     var inheritedEnvironment: [String: String] = ProcessInfo.processInfo.environment
-    var runner: Runner = { ProcessOutput.run($0, arguments: $1, environment: $2, timeout: $3) }
+    var runner: Runner = { ProcessOutput.execute($0, arguments: $1, environment: $2, timeout: $3) }
 
     /// The child's whole environment.
     static func childEnvironment(
@@ -188,12 +219,22 @@ struct AMXCommand {
         Self.childEnvironment(inherited: inheritedEnvironment, launch: launchEnvironment, kittyListenOn: kittyListenOn)
     }
 
-    /// One run, undecoded.
-    func run(_ arguments: [String], kittyListenOn: String? = nil, timeout: TimeInterval = defaultTimeout) -> Result<ProcessOutput, AMXCommandError> {
-        guard let output = runner(binary.path, arguments, environment(kittyListenOn: kittyListenOn), timeout) else {
-            return .failure(.launchFailedOrTimedOut(binary: binary.path, timeout: timeout))
+    /// One run, undecoded. `mutates` says the command changes something, so
+    /// a timeout leaves its outcome unknown.
+    func run(
+        _ arguments: [String],
+        kittyListenOn: String? = nil,
+        timeout: TimeInterval = defaultTimeout,
+        mutates: Bool = false
+    ) -> Result<ProcessOutput, AMXCommandError> {
+        switch runner(binary.path, arguments, environment(kittyListenOn: kittyListenOn), timeout) {
+        case let .finished(output):
+            return .success(output)
+        case let .launchFailed(reason):
+            return .failure(.launchFailed(binary: binary.path, reason: reason))
+        case .timedOut:
+            return .failure(.timedOut(binary: binary.path, timeout: timeout, mutates: mutates))
         }
-        return .success(output)
     }
 
     /// One `--json` run decoded through the schema-v1 envelope. `--json` is
@@ -202,10 +243,11 @@ struct AMXCommand {
         _ type: T.Type,
         _ arguments: [String],
         kittyListenOn: String? = nil,
-        timeout: TimeInterval = defaultTimeout
+        timeout: TimeInterval = defaultTimeout,
+        mutates: Bool = false
     ) -> AMXCommandResult<T> {
         let full = arguments.contains("--json") ? arguments : arguments + ["--json"]
-        switch run(full, kittyListenOn: kittyListenOn, timeout: timeout) {
+        switch run(full, kittyListenOn: kittyListenOn, timeout: timeout, mutates: mutates) {
         case let .failure(error):
             return .failure(error)
         case let .success(output):

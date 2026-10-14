@@ -76,24 +76,31 @@ struct SessionContinueResult: Decodable, Equatable {
     var continuation = ""
     var tabID = 0
     var windowID = 0
+    /// The runtime session a resume on the tmux backend registered; empty
+    /// for a Kitty resume or a focus.
+    var runtimeSessionID = ""
 
-    init(changed: Bool = true, message: String = "", continuation: String = "", tabID: Int = 0, windowID: Int = 0) {
+    init(changed: Bool = true, message: String = "", continuation: String = "", tabID: Int = 0, windowID: Int = 0,
+         runtimeSessionID: String = "") {
         self.changed = changed
         self.message = message
         self.continuation = continuation
         self.tabID = tabID
         self.windowID = windowID
+        self.runtimeSessionID = runtimeSessionID
     }
 
     private struct Details: Decodable {
         var continuation: String?
         var tabID: Int?
         var windowID: Int?
+        var runtimeSessionID: String?
 
         enum CodingKeys: String, CodingKey {
             case continuation
             case tabID = "tab_id"
             case windowID = "window_id"
+            case runtimeSessionID = "runtime_session_id"
         }
 
         init(from decoder: Decoder) throws {
@@ -101,6 +108,7 @@ struct SessionContinueResult: Decodable, Equatable {
             continuation = c.lenient(.continuation)
             tabID = c.lenient(.tabID)
             windowID = c.lenient(.windowID)
+            runtimeSessionID = c.lenient(.runtimeSessionID)
         }
     }
 
@@ -114,6 +122,7 @@ struct SessionContinueResult: Decodable, Equatable {
         continuation = details?.continuation ?? ""
         tabID = details?.tabID ?? 0
         windowID = details?.windowID ?? 0
+        runtimeSessionID = details?.runtimeSessionID ?? ""
     }
 }
 
@@ -136,6 +145,11 @@ struct RecentSessions: Equatable {
 
     static func continueArguments(for conversation: RecentConversation) -> [String] {
         ["session", "continue", conversation.selector]
+    }
+
+    /// The same continue on the private tmux server, for the workspace.
+    static func workspaceContinueArguments(for conversation: RecentConversation) -> [String] {
+        continueArguments(for: conversation) + ["--backend", "tmux"]
     }
 
     /// The `limit` most recently active conversations, newest first.
