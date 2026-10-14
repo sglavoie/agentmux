@@ -470,7 +470,9 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     /// 777): the daemon never heard of it, so nothing about it is reported.
     static let terminalPrefix = "amx-terminal:"
 
-    /// The most terminal notices of one thread remembered for withdrawal.
+    /// The most terminal notices of one thread kept in Notification Center.
+    /// An older one is removed when a newer one pushes it out, so whatever
+    /// is still delivered is still remembered for withdrawal.
     static let terminalNoticesKept = 32
 
     /// Shows a program's desktop notification, titled by the session or view
@@ -487,7 +489,14 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         let request = Self.terminalRequest(notice)
         var kept = terminalIdentifiers[notice.origin.thread, default: []]
         kept.append(request.identifier)
-        terminalIdentifiers[notice.origin.thread] = Array(kept.suffix(Self.terminalNoticesKept))
+        let evicted = kept.count - Self.terminalNoticesKept
+        if evicted > 0 {
+            // Forgetting a notice still shown would leave it behind when
+            // its session or view is withdrawn.
+            center.remove(identifiers: Array(kept.prefix(evicted)))
+            kept.removeFirst(evicted)
+        }
+        terminalIdentifiers[notice.origin.thread] = kept
         center.add(request) { _ in }
         return .shown
     }

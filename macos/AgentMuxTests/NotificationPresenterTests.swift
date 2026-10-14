@@ -379,15 +379,46 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(center.removed.count, 3, "a view is not the session of the same name")
     }
 
+    /// Only the latest terminal notices of a thread are kept: an older one
+    /// is removed as a newer one pushes it out, and withdrawal removes the
+    /// rest.
     func testOnlyTheLatestTerminalNoticesOfAThreadAreKept() {
         let presenter = presenter()
         let origin = TerminalNotice.Origin.view(id: "shell-1")
-        let count = NotificationPresenter.terminalNoticesKept + 3
-        for _ in 0..<count {
+        let kept = NotificationPresenter.terminalNoticesKept
+        for _ in 0..<(kept + 3) {
             presenter.presentTerminal(TerminalNotice(title: "t", body: "b", source: "s", origin: origin), snoozed: false, muted: false, onScreen: false)
         }
+        let ids = center.added.map(\.identifier)
+        XCTAssertEqual(center.removed, Array(ids.prefix(3)), "pushed out as newer ones arrive")
         presenter.withdrawTerminal(origin)
-        XCTAssertEqual(center.removed, Array(center.added.map(\.identifier).suffix(NotificationPresenter.terminalNoticesKept)))
+        XCTAssertEqual(center.removed, ids, "every notice is removed, each once")
+    }
+
+    /// However many notices one session or view raised, showing it leaves
+    /// none of them behind, and another's are untouched.
+    func testTerminalNoticeOverflowLeavesNothingAfterWithdrawal() {
+        let presenter = presenter()
+        let api = TerminalNotice.Origin.session(runtimeSessionID: "rs-1")
+        let shell = TerminalNotice.Origin.view(id: "shell-1")
+        let present = { (origin: TerminalNotice.Origin) in
+            presenter.presentTerminal(TerminalNotice(title: "t", body: "b", source: "s", origin: origin), snoozed: false, muted: false, onScreen: false)
+        }
+        present(shell)
+        for _ in 0..<(NotificationPresenter.terminalNoticesKept * 2 + 5) { present(api) }
+        present(shell)
+        let thread = { (origin: TerminalNotice.Origin) in
+            Set(self.center.added.filter { $0.content.threadIdentifier == origin.thread }.map(\.identifier))
+        }
+
+        presenter.withdrawTerminal(api)
+        let remaining = Set(center.added.map(\.identifier)).subtracting(center.removed)
+        XCTAssertTrue(remaining.isDisjoint(with: thread(api)), "no notice of the session shown remains")
+        XCTAssertEqual(remaining, thread(shell))
+        XCTAssertTrue(Set(center.removed).isDisjoint(with: thread(shell)), "another's notices are untouched")
+
+        presenter.withdrawTerminal(shell)
+        XCTAssertEqual(Set(center.removed), Set(center.added.map(\.identifier)))
     }
 
     /// The snooze a terminal notice obeys: the daemon's while the feed is
