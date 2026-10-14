@@ -2603,7 +2603,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         titleLabel.stringValue = bell ? "\(view.title) \(Self.bellGlyph)" : view.title
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         let program = program.flatMap { $0.isEmpty ? nil : $0 }
-        detailLabel.stringValue = program ?? view.detail(session: session)
+        detailLabel.stringValue = view.detail(session: session, program: program)
         toolTip = view.toolTip(session: session)
         var spoken = ["\(view.title), \(view.kind.rawValue) view"]
         if let program { spoken.append(program) }

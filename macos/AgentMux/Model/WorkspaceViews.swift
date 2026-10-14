@@ -161,6 +161,15 @@ struct WorkspaceUtilityView: Equatable {
         return "\(detail) · \(name)"
     }
 
+    /// The line under the title once the view's program set a title: that
+    /// title, still followed by the session's name when the view is about
+    /// one, so terminals with the same program stay told apart.
+    func detail(session name: String?, program: String?) -> String {
+        guard let program, !program.isEmpty else { return detail(session: name) }
+        guard aboutRuntimeSessionID != nil, let name, !name.isEmpty else { return program }
+        return "\(program) · \(name)"
+    }
+
     /// What the pointer shows over the view's line: the session it is about
     /// by name, else what it is about.
     func toolTip(session name: String?) -> String {

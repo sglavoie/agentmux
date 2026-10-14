@@ -136,6 +136,45 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertEqual(try viewCell(id).detailLabel.stringValue, WorkspaceUtilityView.dashboard.detail)
     }
 
+    func testProgramTitlePreservesSessionName() throws {
+        var named = sessions
+        named[0].name = "release notes"
+        app.store.apply(snapshot: F.snapshot(named))
+
+        // A named session.
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.openTerminalBesideSession()
+        let first = "terminal:\(F.runtimeID(1))#1"
+        let firstTerminal = try XCTUnwrap(workspace.utilityTerminalView(for: first))
+        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "Shell · release notes")
+        workspace.terminalTitleChanged(firstTerminal, title: "zsh")
+        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "zsh · release notes")
+        XCTAssertEqual(try viewCell(first).toolTip, "Shell · release notes")
+
+        // A session with no name of its own is named by project and profile.
+        workspace.select(.embedded(F.runtimeID(2)), focus: true)
+        workspace.openTerminalBesideSession()
+        let second = "terminal:\(F.runtimeID(2))#1"
+        let secondTerminal = try XCTUnwrap(workspace.utilityTerminalView(for: second))
+        workspace.terminalTitleChanged(secondTerminal, title: "zsh")
+        XCTAssertEqual(try viewCell(second).detailLabel.stringValue, "zsh · api — personal")
+        XCTAssertEqual(try viewCell(second).toolTip, "Shell · api — personal")
+
+        // Its session ends: the terminal keeps both the program's title and
+        // the name it was last listed under.
+        app.store.apply(snapshot: F.snapshot([named[1]]))
+        XCTAssertNotNil(workspace.views.view(first))
+        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "zsh · release notes")
+        XCTAssertEqual(try viewCell(first).toolTip, "Shell · release notes")
+        workspace.toggleSwitcher()
+        workspace.switcher.enter("release")
+        XCTAssertEqual(workspace.switcher.shown.map(\.detail), ["Shell · release notes"])
+
+        // The title cleared, the line is the view's own again.
+        workspace.terminalTitleChanged(firstTerminal, title: "")
+        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "Shell · release notes")
+    }
+
     func testAHoveredLinkIsShownOnlyForTheTerminalShown() throws {
         workspace.activate(try row("work"))
         let work = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
