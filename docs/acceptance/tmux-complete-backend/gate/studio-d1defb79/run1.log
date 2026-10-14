@@ -1,0 +1,54 @@
+moved aside 2026-10-14T05:27:42Z
+start 2026-10-14T05:27:42Z on Sébastien’s Mac Studio
+KITTY variables: 0
+kitty on PATH: none
+/Applications/kitty.app: ls: /Applications/kitty.app: No such file or directory
+kitty processes: 0
+agentmux d1defb79a35dbdfd165adbbc2c337e254445b397
+warning: no signing_key given; the evidence record will be unsigned
+warning: an unsigned record is a rehearsal, not a release
+run  os-version [agentmux] sw_vers -productVersion
+ok   os-version (9ms)
+run  harness-compat [asl] /Users/sglavoie/scripts/bin/.local/bin/agent-session-loop harness-compat --json
+ok   harness-compat (592ms)
+run  build-amx [agentmux] just build
+ok   build-amx (611ms)
+run  amx-check [agentmux] just check
+ok   amx-check (3m4.582s)
+run  asl-tests [asl] env ASL_CLI_TRACE=0 just test-all
+FAIL asl-tests (exit 1)
+evidence /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.01022924454bddd8.json
+evidence is unsigned (no signing key given)
+pair amx-asl-1.01022924454bddd8 (failed)
+  agentmux  d1defb79a35d clean
+  asl       f63ffefc0895 clean
+  artifact amx                  2a84c16cdfdf8904e0b49d30b7075168d760e233ef74f980cbca04c4099f0bb0
+  artifact agent-session-loop   4d5184046ac13ca6363e3d3def927732652fa303ec1e21dcc3f3136f386cebfa
+  artifact agent_session_loop   f2eec09f3ae16c8891eddfb158e9dfb454680a88fccb73ef63ee8468662f061b
+  passed   os-version           0.0s
+  passed   harness-compat       0.6s
+  passed   build-amx            0.6s
+  passed   amx-check            184.6s
+  failed   asl-tests            362.1s
+  not-run  asl-lint             -
+  not-run  contract-sync        -
+  not-run  paired-integration   -
+  not-run  crash-restart        -
+  not-run  amx-stress           -
+  not-run  asl-stress           -
+  not-run  asl-install          -
+  not-run  asl-install-verify   -
+  not-run  amx-install-restart  -
+  not-run  overseer-integration -
+  not-run  cockpit-smoke        -
+  evidence /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.01022924454bddd8.json
+  signature none (unsigned record)
+paired release gate failed: see /Users/sglavoie/.local/share/agent-mux/release-evidence/amx-asl-1.01022924454bddd8.json
+exit status 2
+error: recipe `paired-release-gate` failed with exit code 1
+exit=1
+end 2026-10-14T05:36:51Z
+restored 2026-10-14T05:36:51Z
+drwxr-xr-x@ 3 sglavoie  admin  - 96 Sep 23 23:00 /Applications/kitty.app
+lrwxr-xr-x@ 1 sglavoie  admin  69 Sep 25 10:28 /opt/homebrew/bin/kitten -> /opt/homebrew/Caskroom/kitty/0.49.1/.homebrew-command-wrappers/kitten
+lrwxr-xr-x@ 1 sglavoie  admin  68 Sep 25 10:28 /opt/homebrew/bin/kitty -> /opt/homebrew/Caskroom/kitty/0.49.1/.homebrew-command-wrappers/kitty
