@@ -283,6 +283,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The link under the pointer in the terminal shown, at the pane's
     /// bottom corner. Clicks go through it to the terminal beneath.
     let linkLabel = WorkspaceLinkLabel(labelWithString: "")
+    /// The search open in each utility view, by view id, shown in the find
+    /// bar while the pane is on that view.
+    private(set) var searches: [String: Ghostty.Search] = [:]
+    /// Where each utility view's viewport sits in its buffer, by view id.
+    private(set) var scrollbars: [String: Ghostty.Scrollbar] = [:]
+    /// The progress each utility view's program last reported (OSC 9;4), by
+    /// view id, shown on its line. It is never attention.
+    private(set) var progresses: [String: Ghostty.Progress] = [:]
+    let findBar = WorkspaceFindBar()
+    let scrollbarView = WorkspaceScrollbarView()
+    /// Runs a Ghostty binding action in a terminal, replaced in tests.
+    var performTerminalAction: (NSView, String) -> Bool = { view, action in
+        (view as? Ghostty.SurfaceView)?.performBindingAction(action) ?? false
+    }
 
     /// Sessions amx was asked to close, until it has answered and a live
     /// snapshot no longer lists them: whether the pane was on each when it
@@ -1284,6 +1298,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         ringingViews.remove(id)
         rendererFailedViews.remove(id)
         programTitles[id] = nil
+        searches[id] = nil
+        scrollbars[id] = nil
+        progresses[id] = nil
         if isOpen, let responder = window.firstResponder as? NSView, responder.isDescendant(of: terminal.view) {
             focusListOrPane()
         }
@@ -1575,6 +1592,83 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         linkLabel.isHidden = url == nil
     }
 
+    /// The utility view the pane shows, and its terminal.
+    private var shownUtility: (id: String, view: NSView)? {
+        guard case let .view(id) = content, let view = viewTerminals[id]?.view else { return nil }
+        return (id, view)
+    }
+
+    /// Shows the find bar and the scrollbar of the utility view the pane is
+    /// on, and neither for anything else.
+    private func syncOverlays() {
+        let shown = shownUtility
+        let search = shown.flatMap { searches[$0.id] }
+        if let search { findBar.show(search) }
+        findBar.isHidden = search == nil
+        scrollbarView.terminal = shown?.view
+        scrollbarView.scrollbar = shown.flatMap { scrollbars[$0.id] }
+    }
+
+    /// A search began, ended, or was counted in a utility view's buffer.
+    /// A search asked for again takes the find bar's field.
+    func terminalSearch(_ view: NSView, _ update: Ghostty.SearchUpdate) {
+        guard let id = viewID(of: view) else { return }
+        let hadKeyboard = findBar.hasKeyboard
+        searches[id] = Ghostty.Search.applying(update, to: searches[id])
+        guard shownUtility?.view === view else { return }
+        syncOverlays()
+        switch update {
+        case .started: findBar.focus()
+        case .ended where hadKeyboard: window.makeFirstResponder(view)
+        default: break
+        }
+    }
+
+    /// The find bar's needle changed, or a match was asked for.
+    func findBarNeedleChanged(_ needle: String) {
+        guard let shown = shownUtility, searches[shown.id] != nil else { return }
+        searches[shown.id]?.needle = needle
+        _ = performTerminalAction(shown.view, "search:\(needle)")
+    }
+
+    func findBarNavigate(next: Bool) {
+        guard let shown = shownUtility, searches[shown.id] != nil else { return }
+        _ = performTerminalAction(shown.view, next ? "navigate_search:next" : "navigate_search:previous")
+    }
+
+    /// Closes the find bar and ends the search; the terminal takes the
+    /// keyboard back if the bar had it.
+    func closeFindBar() {
+        guard let shown = shownUtility else { return }
+        _ = performTerminalAction(shown.view, "end_search")
+        terminalSearch(shown.view, .ended)
+        if window.firstResponder === window || (window.firstResponder as? NSView)?.isHiddenOrHasHiddenAncestor == true {
+            window.makeFirstResponder(shown.view)
+        }
+    }
+
+    /// Where a utility view's viewport sits in its buffer changed.
+    func terminalScrollbar(_ view: NSView, _ scrollbar: Ghostty.Scrollbar?) {
+        guard let id = viewID(of: view) else { return }
+        scrollbars[id] = scrollbar
+        if shownUtility?.view === view { scrollbarView.scrollbar = scrollbar }
+    }
+
+    /// The scrollbar's knob was moved.
+    func scrollbarMoved(toRow row: UInt64) {
+        guard let shown = shownUtility else { return }
+        _ = performTerminalAction(shown.view, "scroll_to_row:\(row)")
+    }
+
+    /// A utility view's program reported progress, or its report went. Shown
+    /// on the view's line, never as attention: a session's terminal reports
+    /// none here.
+    func terminalProgress(_ view: NSView, _ progress: Ghostty.Progress?) {
+        guard let id = viewID(of: view), progresses[id] != progress else { return }
+        progresses[id] = progress
+        reloadLines()
+    }
+
     /// A terminal's renderer failed or recovered. A terminal that draws
     /// nothing is set aside for a placeholder: a session's offers to
     /// reattach, a utility view's to restart its program.
@@ -1738,6 +1832,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         window.title = windowTitle
         clearBells()
         showLink((shown as? Ghostty.SurfaceView)?.hoveredLink)
+        syncOverlays()
 
         if let shown, focus {
             window.makeFirstResponder(shown)
@@ -1976,7 +2071,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
             cell.show(view, session: view.aboutRuntimeSessionID.flatMap { sessionNames[$0] },
-                      program: programTitles[view.id], bell: ringingViews.contains(view.id))
+                      program: programTitles[view.id], bell: ringingViews.contains(view.id),
+                      progress: progresses[view.id])
             cell.onClose = { [weak self] in self?.closeView(view.id) }
             return cell
         case let .group(group):
@@ -2426,6 +2522,28 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         linkLabel.refusesFirstResponder = true
         linkLabel.translatesAutoresizingMaskIntoConstraints = false
         pane.addSubview(linkLabel)
+        // The scrollbar and the find bar: above every terminal, below the
+        // Go to… list, shown only over a utility view.
+        scrollbarView.translatesAutoresizingMaskIntoConstraints = false
+        scrollbarView.onScroll = { [weak self] row in self?.scrollbarMoved(toRow: row) }
+        pane.addSubview(scrollbarView)
+        NSLayoutConstraint.activate([
+            scrollbarView.topAnchor.constraint(equalTo: pane.topAnchor),
+            scrollbarView.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
+            scrollbarView.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
+            scrollbarView.widthAnchor.constraint(equalToConstant: WorkspaceScrollbarView.width),
+        ])
+        findBar.isHidden = true
+        findBar.onNeedle = { [weak self] needle in self?.findBarNeedleChanged(needle) }
+        findBar.onNext = { [weak self] in self?.findBarNavigate(next: true) }
+        findBar.onPrevious = { [weak self] in self?.findBarNavigate(next: false) }
+        findBar.onClose = { [weak self] in self?.closeFindBar() }
+        pane.addSubview(findBar)
+        NSLayoutConstraint.activate([
+            findBar.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
+            findBar.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8 - WorkspaceScrollbarView.width),
+            findBar.leadingAnchor.constraint(greaterThanOrEqualTo: pane.leadingAnchor, constant: 8),
+        ])
         NSLayoutConstraint.activate([
             linkLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 6),
             linkLabel.bottomAnchor.constraint(equalTo: pane.bottomAnchor, constant: -6),
@@ -2552,6 +2670,18 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
 
     nonisolated func surface(_ surface: Ghostty.SurfaceView, didRequestNotificationTitled title: String, body: String) {
         MainActor.assumeIsolated { terminalNotification(surface, title: title, body: body) }
+    }
+
+    nonisolated func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate) {
+        MainActor.assumeIsolated { terminalSearch(surface, update) }
+    }
+
+    nonisolated func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { terminalScrollbar(surface, surface.scrollbar) }
+    }
+
+    nonisolated func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { terminalProgress(surface, surface.progress) }
     }
 }
 
@@ -2940,17 +3070,22 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// session state, because it has none.
     /// `program` is the title its program set, shown under the view's own;
     /// `bell` marks a bell rung while another was shown.
-    func show(_ view: WorkspaceUtilityView, session: String? = nil, program: String? = nil, bell: Bool = false) {
+    /// `progress` is what its program last reported of its progress.
+    func show(_ view: WorkspaceUtilityView, session: String? = nil, program: String? = nil, bell: Bool = false,
+              progress: Ghostty.Progress? = nil) {
         nameLabel.stringValue = ""
         nameLabel.isHidden = true
         glyphLabel.stringValue = view.glyph
         titleLabel.stringValue = bell ? "\(view.title) \(Self.bellGlyph)" : view.title
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         let program = program.flatMap { $0.isEmpty ? nil : $0 }
-        detailLabel.stringValue = view.detail(session: session, program: program)
+        let detail = view.detail(session: session, program: program)
+        let progressText = progress.map(Self.progressText)
+        detailLabel.stringValue = progressText.map { "\($0) · \(detail)" } ?? detail
         toolTip = view.toolTip(session: session)
         var spoken = ["\(view.title), \(view.kind.rawValue) view"]
         if let program { spoken.append(program) }
+        if let progressText { spoken.append(progressText) }
         if bell { spoken.append("bell") }
         setAccessibilityLabel(spoken.joined(separator: ", "))
         keyLabel.stringValue = ""
@@ -2984,6 +3119,17 @@ final class WorkspaceRowCellView: NSTableCellView {
     }
 
     nonisolated static let closingDetail = "closing…"
+
+    /// What a utility view's line says of its program's progress (OSC 9;4).
+    nonisolated static func progressText(_ progress: Ghostty.Progress) -> String {
+        let percent = progress.percent.map { "\($0)%" }
+        switch progress.state {
+        case .normal: return percent ?? "in progress"
+        case .indeterminate: return "in progress"
+        case .paused: return percent.map { "paused at \($0)" } ?? "paused"
+        case .error: return percent.map { "failed at \($0)" } ?? "failed"
+        }
+    }
 
     /// What VoiceOver says of a session's line: what the line shows, in
     /// words. A session asked to close is said to be closing instead of its

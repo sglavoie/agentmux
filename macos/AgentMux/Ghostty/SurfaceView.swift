@@ -28,6 +28,17 @@ protocol GhosttySurfaceDelegate: AnyObject {
     /// The renderer reported itself unhealthy, or healthy again
     /// (`rendererHealthy`). An unhealthy one draws nothing new.
     func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView)
+    /// A search through the terminal's own buffer began, was asked for
+    /// again, ended, or was counted. Only a terminal holding its own
+    /// history (`Scrollback.terminal`) reports one.
+    func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate)
+    /// The viewport moved in the terminal's own buffer, or the buffer grew
+    /// (`scrollbar`). Never reported when the config says `scrollbar = never`
+    /// or the terminal's history is the server's.
+    func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView)
+    /// The program reported progress, or its report was removed or expired
+    /// (`progress`).
+    func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView)
 }
 
 extension GhosttySurfaceDelegate {
@@ -40,6 +51,9 @@ extension GhosttySurfaceDelegate {
     func surfaceDidRingBell(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) {}
+    func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate) {}
+    func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView) {}
+    func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView) {}
 }
 
 extension Ghostty {
@@ -91,6 +105,16 @@ extension Ghostty {
 
         /// Whether the renderer last said it is drawing.
         private(set) var rendererHealthy = true
+
+        /// Where the viewport sits in the terminal's own buffer, once Ghostty
+        /// has said; see SurfaceView+Search.swift.
+        private(set) var scrollbar: Scrollbar?
+
+        /// The program's last progress report (OSC 9;4), until it removes
+        /// it or `Progress.expiry` passes without another.
+        private(set) var progress: Progress?
+        /// Counts reports, so an expiry overtaken by a later one is dropped.
+        private var progressCount = 0
 
         /// Whether the program asked for Secure Keyboard Entry. It is in
         /// force only while the surface is focused (`holdsSecureInput`).
@@ -667,6 +691,43 @@ extension Ghostty {
                 now { $0.setKeyTable(table) }
                 return true
 
+            // A session's terminal is a viewer of the tmux server, whose
+            // history and search are the server's (SurfaceView+History.swift).
+            case GHOSTTY_ACTION_START_SEARCH:
+                guard scrollback == .terminal else { return false }
+                let needle = action.action.start_search.needle.map { String(cString: $0) } ?? ""
+                later { $0.searchDidChange(.started(needle: needle)) }
+                return true
+
+            case GHOSTTY_ACTION_END_SEARCH:
+                guard scrollback == .terminal else { return false }
+                later { $0.searchDidChange(.ended) }
+                return true
+
+            case GHOSTTY_ACTION_SEARCH_TOTAL:
+                guard scrollback == .terminal else { return false }
+                let total = action.action.search_total.total
+                later { $0.searchDidChange(.total(total < 0 ? nil : Int(total))) }
+                return true
+
+            case GHOSTTY_ACTION_SEARCH_SELECTED:
+                guard scrollback == .terminal else { return false }
+                let selected = action.action.search_selected.selected
+                later { $0.searchDidChange(.selected(selected < 0 ? nil : Int(selected))) }
+                return true
+
+            case GHOSTTY_ACTION_SCROLLBAR:
+                guard scrollback == .terminal else { return false }
+                let bar = action.action.scrollbar
+                let scrollbar = Scrollbar(total: bar.total, offset: bar.offset, len: bar.len)
+                later { $0.setScrollbar(scrollbar) }
+                return true
+
+            case GHOSTTY_ACTION_PROGRESS_REPORT:
+                let progress = Progress(action.action.progress_report)
+                later { $0.setProgress(progress) }
+                return true
+
             case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
                 // Returning true tells Ghostty the host shows the exit, so it
                 // writes nothing of its own into the terminal.
@@ -707,6 +768,39 @@ extension Ghostty {
 
         /// What a bell does, as the app's config says.
         var bellFeatures: BellFeatures { owner?.config.bellFeatures ?? [] }
+
+        /// Whether the config lets a scrollbar show (`scrollbar`, not `never`).
+        var scrollbarAllowed: Bool { owner?.config.scrollbarAllowed ?? true }
+
+        /// Whether the config lets progress reports show (`progress-style`).
+        var progressAllowed: Bool { owner?.config.progressAllowed ?? true }
+
+        func searchDidChange(_ update: SearchUpdate) {
+            delegate?.surface(self, didUpdateSearch: update)
+        }
+
+        func setScrollbar(_ scrollbar: Scrollbar) {
+            guard scrollbarAllowed, scrollbar != self.scrollbar else { return }
+            self.scrollbar = scrollbar
+            delegate?.surfaceDidChangeScrollbar(self)
+        }
+
+        /// Takes a progress report, or its removal, and drops it once
+        /// `Progress.expiry` passes without another.
+        func setProgress(_ progress: Progress?) {
+            let progress = progressAllowed ? progress : nil
+            progressCount += 1
+            if progress != nil {
+                let count = progressCount
+                DispatchQueue.main.asyncAfter(deadline: .now() + Progress.expiry) { [weak self] in
+                    guard let self, self.surface != nil, self.progressCount == count else { return }
+                    self.setProgress(nil)
+                }
+            }
+            guard progress != self.progress else { return }
+            self.progress = progress
+            delegate?.surfaceDidChangeProgress(self)
+        }
 
         func setHoveredLink(_ url: String?) {
             guard url != hoveredLink else { return }

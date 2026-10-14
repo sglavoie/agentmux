@@ -13,6 +13,9 @@ private final class SurfaceEvents: GhosttySurfaceDelegate {
     var bells = 0
     var links: [String?] = []
     var health: [Bool] = []
+    var searches: [Ghostty.SearchUpdate] = []
+    var scrollbars: [Ghostty.Scrollbar?] = []
+    var progress: [Ghostty.Progress?] = []
     /// Run on a close request, to prove a delegate may free the surface there.
     var onCloseRequest: ((Ghostty.SurfaceView) -> Void)?
 
@@ -31,6 +34,9 @@ private final class SurfaceEvents: GhosttySurfaceDelegate {
     func surfaceDidRingBell(_ surface: Ghostty.SurfaceView) { bells += 1 }
     func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) { links.append(surface.hoveredLink) }
     func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) { health.append(surface.rendererHealthy) }
+    func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate) { searches.append(update) }
+    func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView) { scrollbars.append(surface.scrollbar) }
+    func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView) { progress.append(surface.progress) }
 }
 
 /// Several real surfaces on one `Ghostty.App`: each runs its own program with
@@ -334,6 +340,72 @@ final class GhosttySurfaceLifecycleTests: XCTestCase {
         // The terminal keeps running unseen.
         XCTAssertFalse(view.processExited)
         view.close()
+    }
+
+    /// A search, the scrollbar, and progress reach the delegate of a
+    /// terminal holding its own history; a session's viewer of the tmux
+    /// server refuses the first two, whose history is the server's.
+    func testSearchScrollbarAndProgressAreReportedForATerminalsOwnBuffer() throws {
+        let cat = Ghostty.SurfaceConfiguration(program: URL(fileURLWithPath: "/bin/cat"))
+        let utility = try XCTUnwrap(ghostty.makeSurface(cat))
+        let viewer = try XCTUnwrap(ghostty.makeSurface(cat))
+        viewer.scrollback = .server
+        let events = SurfaceEvents()
+        let viewerEvents = SurfaceEvents()
+        utility.delegate = events
+        viewer.delegate = viewerEvents
+        let app = try XCTUnwrap(ghostty.app)
+
+        var action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_START_SEARCH
+        try "needle".withCString { needle in
+            action.action.start_search = ghostty_action_start_search_s(needle: needle)
+            XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(utility), action: action))
+            XCTAssertFalse(Ghostty.App.action(app, target: try surfaceTarget(viewer), action: action),
+                           "a session's search is the server's")
+        }
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_SEARCH_TOTAL
+        action.action.search_total = ghostty_action_search_total_s(total: 12)
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(utility), action: action))
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_SEARCH_SELECTED
+        action.action.search_selected = ghostty_action_search_selected_s(selected: -1)
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(utility), action: action))
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_END_SEARCH
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(utility), action: action))
+        ghosttyWait("the search") { events.searches.count == 4 }
+        XCTAssertEqual(events.searches, [.started(needle: "needle"), .total(12), .selected(nil), .ended])
+
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_SCROLLBAR
+        action.action.scrollbar = ghostty_action_scrollbar_s(total: 100, offset: 40, len: 24)
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(utility), action: action))
+        XCTAssertFalse(Ghostty.App.action(app, target: try surfaceTarget(viewer), action: action))
+        let scrollbar = Ghostty.Scrollbar(total: 100, offset: 40, len: 24)
+        // The renderer reports the terminal's own as well.
+        ghosttyWait("the scrollbar") { events.scrollbars.contains(scrollbar) }
+        let other = Ghostty.Scrollbar(total: 7, offset: 1, len: 2)
+        let reported = events.scrollbars.count
+        utility.setScrollbar(other)
+        utility.setScrollbar(other)
+        XCTAssertEqual(events.scrollbars.count, reported + 1, "reported once per change")
+
+        action = ghostty_action_s()
+        action.tag = GHOSTTY_ACTION_PROGRESS_REPORT
+        action.action.progress_report = ghostty_action_progress_report_s(state: GHOSTTY_PROGRESS_STATE_SET, progress: 45)
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(utility), action: action))
+        ghosttyWait("the progress") { utility.progress != nil }
+        action.action.progress_report = ghostty_action_progress_report_s(state: GHOSTTY_PROGRESS_STATE_REMOVE, progress: -1)
+        XCTAssertTrue(Ghostty.App.action(app, target: try surfaceTarget(utility), action: action))
+        ghosttyWait("the progress removed") { utility.progress == nil }
+        XCTAssertEqual(events.progress, [Ghostty.Progress(state: .normal, percent: 45), nil])
+
+        XCTAssertTrue(viewerEvents.searches.isEmpty)
+        XCTAssertTrue(viewerEvents.scrollbars.isEmpty)
+        utility.close()
+        viewer.close()
     }
 
     // MARK: Callbacks

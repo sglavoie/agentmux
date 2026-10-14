@@ -56,7 +56,7 @@ extension Ghostty {
 
             var runtime = ghostty_runtime_config_s(
                 userdata: Unmanaged.passUnretained(self).toOpaque(),
-                supports_selection_clipboard: false,
+                supports_selection_clipboard: true,
                 wakeup_cb: { userdata in App.wakeup(userdata) },
                 action_cb: { app, target, action in App.action(app!, target: target, action: action) },
                 read_clipboard_cb: { userdata, loc, state in App.readClipboard(userdata, location: loc, state: state) },
@@ -399,10 +399,18 @@ extension Ghostty {
 
         // MARK: Clipboard
 
+        /// Where a selection goes, as upstream Ghostty.app keeps it: a private
+        /// pasteboard of the app's own. With one, copy-on-select fills it
+        /// rather than the general pasteboard, and a middle click pastes from
+        /// it, in every terminal; ⌘C still copies to the general one.
+        static let selectionPasteboard = NSPasteboard(name: .init("io.github.sglavoie.agentmux.selection"))
+
         static func pasteboard(for location: ghostty_clipboard_e) -> NSPasteboard? {
-            // Selection clipboard support is declared off, so only the
-            // standard one is ever requested.
-            location == GHOSTTY_CLIPBOARD_STANDARD ? .general : nil
+            switch location {
+            case GHOSTTY_CLIPBOARD_STANDARD: return .general
+            case GHOSTTY_CLIPBOARD_SELECTION: return selectionPasteboard
+            default: return nil
+            }
         }
 
         static func readClipboard(

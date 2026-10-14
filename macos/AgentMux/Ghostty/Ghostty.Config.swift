@@ -100,6 +100,14 @@ extension Ghostty {
             self.get("bell-features", as: CUnsignedInt.self, initial: 0).map(BellFeatures.init(rawValue:)) ?? []
         }
 
+        /// Whether a terminal holding its own history shows a scrollbar:
+        /// `scrollbar = system` (the default) does, `never` does not.
+        var scrollbarAllowed: Bool { string("scrollbar") != "never" }
+
+        /// Whether programs' progress reports (OSC 9;4) are shown
+        /// (`progress-style`, on by default).
+        var progressAllowed: Bool { bool("progress-style") ?? true }
+
         /// The configured default background, before any program changes it.
         var backgroundColor: NSColor? {
             self.get("background", as: ghostty_config_color_s.self, initial: ghostty_config_color_s()).map(Ghostty.color)

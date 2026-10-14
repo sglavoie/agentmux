@@ -278,10 +278,17 @@ final class GhosttyInteractionTests: XCTestCase {
             XCTAssertTrue(view.perform(request), "\(request) scrolls Ghostty's buffer")
         }
         for action in [#selector(Ghostty.SurfaceView.find(_:)), #selector(Ghostty.SurfaceView.findNext(_:)),
-                       #selector(Ghostty.SurfaceView.findPrevious(_:)), #selector(Ghostty.SurfaceView.toggleMarkers(_:))] {
-            XCTAssertFalse(view.validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: "")))
+                       #selector(Ghostty.SurfaceView.findPrevious(_:))] {
+            XCTAssertTrue(view.validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: "")))
         }
-        XCTAssertFalse(view.perform(.find))
+        XCTAssertFalse(view.validateMenuItem(NSMenuItem(title: "", action: #selector(Ghostty.SurfaceView.toggleMarkers(_:)),
+                                                        keyEquivalent: "")))
+        XCTAssertTrue(view.perform(.find), "Ghostty's search opens the find bar")
+        XCTAssertFalse(view.perform(.findNext), "nothing to go to before a needle is searched for")
+        XCTAssertTrue(view.search(for: "needle"))
+        XCTAssertTrue(view.perform(.findNext))
+        XCTAssertTrue(view.performBindingAction("end_search"))
+        XCTAssertFalse(view.perform(.markers))
         // A marker typed afterwards is the first thing the program hears.
         press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
         expect("a", "only the marker")
@@ -335,7 +342,11 @@ final class GhosttyInteractionTests: XCTestCase {
         XCTAssertNil(Ghostty.HistoryRequest.markers.bindingAction(for: .terminal),
                      "the markers are searched for in the server's history; a utility view has none")
         XCTAssertEqual(Ghostty.HistoryRequest.pageUp.bindingAction(for: .terminal), "scroll_page_up")
-        XCTAssertNil(Ghostty.HistoryRequest.findNext.bindingAction(for: .terminal))
+        // A utility view's search is Ghostty's, through the workspace's find
+        // bar; next and previous navigate it, never search for a word.
+        XCTAssertEqual(Ghostty.HistoryRequest.find.bindingAction(for: .terminal), "start_search")
+        XCTAssertEqual(Ghostty.HistoryRequest.findNext.bindingAction(for: .terminal), "navigate_search:next")
+        XCTAssertEqual(Ghostty.HistoryRequest.findPrevious.bindingAction(for: .terminal), "navigate_search:previous")
     }
 
     // MARK: Wheel

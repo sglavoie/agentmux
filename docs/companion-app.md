@@ -348,12 +348,23 @@ on screen: use the agent's own search for the rest (in Claude Code, Control+O
 and then `/`; in Codex, F3). F3 is handed to such an agent as its own key
 rather than marking anything.
 
-In a utility view the paging items scroll that terminal's own buffer, Find is
-not offered, and F3 is the program's.
+In a utility view the paging items scroll that terminal's own buffer, a
+scrollbar at its right edge shows where in it the view is (drag it to move;
+`scrollbar = never` in the Ghostty config hides it), and F3 is the program's.
+**Find** (⌘F) opens a find bar at the top of the view that searches the
+buffer as you type: Return and ⌘G go to the next match, Shift-Return and ⇧⌘G
+to the previous one, and Escape closes it.
+
+A utility view whose program reports progress (OSC 9;4, as some build tools
+do) shows it on its sidebar line, as a percentage or as paused or failed,
+until the program clears it or 15 seconds pass without another report. It is
+never shown as needing attention.
 
 **Selecting and copying.** Hold Shift and drag to select text in any
 terminal, then **Edit › Copy** (⌘C). In a session whose program does not use
-the mouse, a plain drag selects and copies on release. An agent that uses the
+the mouse, a plain drag selects on release. A selection goes to Agent Mux's
+own selection clipboard rather than the system one, as in Ghostty: a middle
+click pastes it, and ⌘C copies it to the system clipboard. An agent that uses the
 mouse receives plain clicks and drags itself. **Edit › Paste** (⌘V) pastes as one block: a pasted line break is not
 a Return. A right click never opens a tmux menu.
 

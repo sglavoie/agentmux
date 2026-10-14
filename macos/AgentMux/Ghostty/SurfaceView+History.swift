@@ -35,9 +35,13 @@ extension Ghostty {
                 case .pageDown: return "scroll_page_down"
                 case .top: return "scroll_to_top"
                 case .bottom: return "scroll_to_bottom"
-                // Ghostty's search needs a field of the host's own, which
-                // the utility views do not have.
-                case .find, .findNext, .findPrevious, .markers: return nil
+                // The search opens the host's find bar (`start_search`),
+                // which then sends the needle itself.
+                case .find: return "start_search"
+                case .findNext: return "navigate_search:next"
+                case .findPrevious: return "navigate_search:previous"
+                // The markers are the server's.
+                case .markers: return nil
                 }
             }
         }
@@ -46,7 +50,8 @@ extension Ghostty {
 
 // The View and Edit menus' history items. A session's terminal passes them
 // to the tmux server, which pages its own history or the full-screen
-// program's; a utility view scrolls Ghostty's buffer.
+// program's; a utility view scrolls and searches Ghostty's buffer, the search
+// shown in the workspace's find bar.
 extension Ghostty.SurfaceView {
     @discardableResult
     func perform(_ request: Ghostty.HistoryRequest) -> Bool {

@@ -160,6 +160,9 @@ final class GhosttyConfigTests: XCTestCase {
             // to the terminal they happen in.
             GHOSTTY_ACTION_RING_BELL, GHOSTTY_ACTION_MOUSE_OVER_LINK, GHOSTTY_ACTION_SECURE_INPUT,
             GHOSTTY_ACTION_KEY_SEQUENCE, GHOSTTY_ACTION_KEY_TABLE,
+            // A search, the scrollbar, and progress are the terminal's own.
+            GHOSTTY_ACTION_START_SEARCH, GHOSTTY_ACTION_END_SEARCH, GHOSTTY_ACTION_SEARCH_TOTAL,
+            GHOSTTY_ACTION_SEARCH_SELECTED, GHOSTTY_ACTION_SCROLLBAR, GHOSTTY_ACTION_PROGRESS_REPORT,
         ] {
             XCTAssertEqual(Ghostty.disposition(of: tag), .surface, "action \(tag.rawValue)")
         }
