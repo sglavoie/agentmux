@@ -69,7 +69,7 @@ final class WorkspacePolishTests: XCTestCase {
 
         app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Reconnecting…")
-        XCTAssertEqual(waitingNote, "Reconnecting… (no heartbeat)")
+        XCTAssertEqual(waitingNote, "Reconnecting… (the daemon is not answering)")
 
         app.store.apply(snapshot: F.snapshot([]))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")

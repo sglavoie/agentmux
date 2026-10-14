@@ -529,7 +529,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.activate(try row("api", "work"))
         app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
         XCTAssertFalse(workspace.state.current)
-        XCTAssertEqual(workspace.feedLabel.stringValue, "Reconnecting… (no heartbeat)")
+        XCTAssertEqual(workspace.feedLabel.stringValue, "Reconnecting… (the daemon is not answering)")
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
         app.store.apply(.subscribed(SubscriptionAck()))
         XCTAssertTrue(workspace.state.current, "the kept snapshot is the daemon's last word until the next one")
