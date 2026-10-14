@@ -53,6 +53,40 @@ final class StatusItemControllerTests: XCTestCase {
         XCTAssertEqual(controller.statusItem.button?.appearsDisabled, true)
     }
 
+    func testTheAccessibilityLabelCountsAndNamesTheSnooze() {
+        XCTAssertEqual(StatusItemController.accessibilityLabel(
+            feedLive: true, attention: CompanionAttention(total: 2, stop: 2, working: 1), snoozed: true
+        ), "Agent Mux, 2 waiting, 1 working, notifications snoozed")
+        XCTAssertEqual(StatusItemController.accessibilityLabel(feedLive: true, attention: CompanionAttention(), snoozed: false),
+                       "Agent Mux, nothing waiting")
+        XCTAssertEqual(StatusItemController.accessibilityLabel(feedLive: false, attention: CompanionAttention(total: 3), snoozed: true),
+                       "Agent Mux, daemon not connected")
+
+        var live = snapshot()
+        live.attention = CompanionAttention(total: 1, question: 1)
+        store.apply(snapshot: live)
+        XCTAssertEqual(controller.statusItem.button?.accessibilityLabel(), "Agent Mux, 1 waiting")
+    }
+
+    func testTheIconMarksASnooze() {
+        store.apply(snapshot: snapshot())
+        XCTAssertFalse(controller.showsSnoozed)
+        let plainWidth = controller.statusItem.button?.image?.size.width ?? 0
+
+        var snoozed = snapshot()
+        snoozed.notification.indefinite = true
+        store.apply(snapshot: snoozed)
+        XCTAssertTrue(controller.showsSnoozed)
+        XCTAssertGreaterThan(controller.statusItem.button?.image?.size.width ?? 0, plainWidth, "the bell-slash sits beside the icon")
+        XCTAssertEqual(controller.statusItem.button?.image?.isTemplate, true)
+        XCTAssertTrue(controller.statusItem.button?.toolTip?.contains("Snoozed until resumed") == true)
+        XCTAssertTrue(controller.statusItem.button?.accessibilityLabel()?.hasSuffix("notifications snoozed") == true)
+
+        store.apply(snapshot: snapshot())
+        XCTAssertFalse(controller.showsSnoozed)
+        XCTAssertEqual(controller.statusItem.button?.image?.size.width, plainWidth)
+    }
+
     func testAnOpenMenuFollowsTheStoreAndSeesItsNotice() {
         store.apply(snapshot: snapshot())
         controller.menuNeedsUpdate(controller.menu)

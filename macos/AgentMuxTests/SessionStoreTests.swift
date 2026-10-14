@@ -306,6 +306,48 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.sessions.map(\.muted), [false], "a failed toggle withdraws it")
     }
 
+    func testExpectedMuteOfAnEmbeddedSessionIsKeyedByItsRuntimeSession() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let store = SessionStore(now: { clock })
+        var snapshot = sessions([("unix:/tmp/kitty-101", 7)])
+        var tmux = CompanionSession(windowID: 0)
+        tmux.runtime = CompanionRuntime(sessionID: "rs-1", backend: "tmux")
+        snapshot.sessions.append(tmux)
+        store.apply(snapshot: snapshot)
+
+        store.expectMute(.embedded("rs-1"), muted: true)
+        XCTAssertEqual(store.sessions.map(\.muted), [false, true], "only the embedded session shows the mute")
+        clock += 1
+        store.apply(snapshot: snapshot)
+        XCTAssertEqual(store.sessions.map(\.muted), [false, true], "a stale snapshot does not undo it, so a banner's Mute sees it muted")
+
+        snapshot.sessions[1].muted = true
+        store.apply(snapshot: snapshot)
+        XCTAssertTrue(store.expectedMutes.isEmpty, "an agreeing snapshot settles it")
+
+        store.expectMute(.embedded("rs-1"), muted: false)
+        store.dropExpectedMute(.embedded("rs-1"))
+        XCTAssertEqual(store.sessions.map(\.muted), [false, true], "a failed toggle withdraws it")
+    }
+
+    func testNotificationsSnoozedFollowsTheLiveSnapshot() {
+        let clock = Date(timeIntervalSince1970: 1_000)
+        let store = SessionStore(now: { clock })
+        XCTAssertFalse(store.notificationsSnoozed)
+        var snapshot = sessions([])
+        snapshot.notification.snoozedUntil = 2_000
+        store.apply(snapshot: snapshot)
+        XCTAssertTrue(store.notificationsSnoozed)
+        snapshot.notification.snoozedUntil = 500
+        store.apply(snapshot: snapshot)
+        XCTAssertFalse(store.notificationsSnoozed, "a snooze that ran out is no snooze")
+        snapshot.notification.indefinite = true
+        store.apply(snapshot: snapshot)
+        XCTAssertTrue(store.notificationsSnoozed)
+        store.apply(.disconnected(.notRunning, retryIn: 1))
+        XCTAssertFalse(store.notificationsSnoozed)
+    }
+
     func testExpectedMuteIsScopedToKittySocket() {
         let store = SessionStore()
         var snapshot = sessions([("", 7), ("unix:/tmp/kitty-202", 7)])

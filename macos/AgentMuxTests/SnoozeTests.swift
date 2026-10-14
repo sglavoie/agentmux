@@ -179,6 +179,48 @@ final class SnoozeTests: XCTestCase {
 
     // MARK: Menu
 
+    func testATimedSnoozeNeverShortensALongerOne() {
+        XCTAssertFalse(SnoozeState().wouldShorten(to: .oneHour, now: now), "nothing to shorten")
+        XCTAssertTrue(SnoozeState(indefinite: true).wouldShorten(to: .oneHour, now: now))
+        XCTAssertTrue(SnoozeState(indefinite: true).wouldShorten(to: .untilMorning, now: now))
+        let inTwoHours = Int64(now.timeIntervalSince1970) + 7200
+        XCTAssertTrue(SnoozeState(snoozedUntil: inTwoHours).wouldShorten(to: .oneHour, now: now))
+        let inHalfAnHour = Int64(now.timeIntervalSince1970) + 1800
+        XCTAssertFalse(SnoozeState(snoozedUntil: inHalfAnHour).wouldShorten(to: .oneHour, now: now), "lengthening is fine")
+        XCTAssertFalse(SnoozeState(snoozedUntil: Int64(now.timeIntervalSince1970) - 10).wouldShorten(to: .oneHour, now: now),
+                       "an expired snooze is no snooze")
+        XCTAssertFalse(SnoozeState(snoozedUntil: inTwoHours).wouldShorten(to: .untilResumed, now: now))
+        XCTAssertFalse(SnoozeState(snoozedUntil: inTwoHours).wouldShorten(to: .resume, now: now))
+    }
+
+    func testTheMenuGreysOutASnoozeThatWouldShortenTheCurrentOne() {
+        var input = MenuBuilder.ActionsInput()
+        input.now = now
+        var notification = CompanionNotification()
+        notification.indefinite = true
+        input.notification = notification
+        let entries = MenuBuilder.notificationEntries(input)
+        XCTAssertTrue(entries.contains(.unavailable("Snooze for 1 Hour", reason: MenuBuilder.snoozeLonger)))
+        XCTAssertTrue(entries.contains(.unavailable(SnoozeChoice.untilMorning.title(now: now), reason: MenuBuilder.snoozeLonger)))
+        XCTAssertTrue(entries.contains(.action(.snooze(.resume), "Resume Now")))
+
+        notification.indefinite = false
+        notification.snoozedUntil = Int64(now.timeIntervalSince1970) + 7200
+        input.notification = notification
+        XCTAssertTrue(MenuBuilder.notificationEntries(input).contains(.unavailable("Snooze for 1 Hour", reason: MenuBuilder.snoozeLonger)))
+        notification.snoozedUntil = Int64(now.timeIntervalSince1970) + 600
+        input.notification = notification
+        XCTAssertTrue(MenuBuilder.notificationEntries(input).contains(.action(.snooze(.oneHour), "Snooze for 1 Hour")))
+    }
+
+    func testADaemonTooOldToSnoozeOffersRestartDaemon() {
+        var input = MenuBuilder.ActionsInput()
+        input.notification = CompanionNotification()
+        input.snoozeSupported = false
+        XCTAssertEqual(MenuBuilder.notificationEntries(input),
+                       [.info(MenuBuilder.snoozeUnsupported), .action(.restartDaemon, "Restart Daemon")])
+    }
+
     func testNotificationEntries() {
         var input = MenuBuilder.ActionsInput()
         input.now = now

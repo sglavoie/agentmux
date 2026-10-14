@@ -107,6 +107,9 @@ enum MenuBuilder {
         /// The global shortcut Next Waiting Session shows as its key.
         var nextAttentionHotKey: HotKeyCombo?
         var feedLive = false
+        /// The sessions waiting on the operator, which Next Waiting Session
+        /// visits; it is greyed out when there are none.
+        var waiting = 0
         var projects = FetchState<[ProjectEntry]>()
         /// Project directories the last survey found missing on disk.
         var missingProjectDirectories: Set<String> = []
@@ -142,6 +145,9 @@ enum MenuBuilder {
         }
         if let notice = input.notice, !notice.isEmpty {
             entries.append(.info(notice))
+            if notice.contains(restartHint), input.feed != .daemonTooOld {
+                entries.append(.action(.restartDaemon, "Restart Daemon"))
+            }
         }
         guard input.feed == .live, input.snapshot != nil else { return entries }
 
@@ -322,22 +328,28 @@ enum MenuBuilder {
         } else {
             entries.append(.action(.openDashboard, "Open Dashboard"))
         }
-        entries.append(.action(.nextAttention, HotKeyPreference.nextAttention.label))
+        if !input.feedLive {
+            entries.append(.unavailable(HotKeyPreference.nextAttention.label, reason: "The daemon is not connected"))
+        } else if input.waiting == 0 {
+            entries.append(.unavailable(HotKeyPreference.nextAttention.label, reason: "No session is waiting"))
+        } else {
+            entries.append(.action(.nextAttention, HotKeyPreference.nextAttention.label))
+        }
         entries.append(.submenuRef(.projects, "Launch Project", reason: input.gate.unavailableReason(.project)))
         entries.append(.submenuRef(.recent, "Recent", reason: input.gate.unavailableReason(.sessions)))
-        let notifications: String?
-        if !input.feedLive {
-            notifications = "The daemon is not connected"
-        } else if !input.snoozeSupported {
-            notifications = snoozeUnsupported
-        } else {
-            notifications = nil
-        }
+        // A daemon too old to snooze leaves the submenu open, to say so and
+        // offer the Restart Daemon its reason names.
+        let notifications = input.feedLive ? nil : "The daemon is not connected"
         entries.append(.submenuRef(.notifications, "Notifications", reason: notifications))
         return entries
     }
 
-    static let snoozeUnsupported = "Daemon too old to snooze — choose Restart Daemon"
+    static let snoozeUnsupported = "Daemon too old to snooze — \(restartHint)"
+    /// Why a timed snooze is greyed out while a longer one is in force.
+    static let snoozeLonger = "Already snoozed for longer"
+    /// The end of every notice that sends the operator to Restart Daemon;
+    /// wherever one is shown, the menu offers the item it names.
+    static let restartHint = "choose Restart Daemon"
 
     static func entries(for submenu: MenuSubmenu, _ input: ActionsInput) -> [MenuEntry] {
         switch submenu {
@@ -428,6 +440,9 @@ enum MenuBuilder {
         guard let notification = input.notification else {
             return [.info("The daemon is not connected")]
         }
+        guard input.snoozeSupported else {
+            return [.info(snoozeUnsupported), .action(.restartDaemon, "Restart Daemon")]
+        }
         let snooze = SnoozeState(notification)
         let snoozed = snooze.isSnoozed(now: input.now)
         var entries: [MenuEntry] = [.info(snooze.description(now: input.now))]
@@ -437,6 +452,8 @@ enum MenuBuilder {
                 entries.append(.unavailable(title, reason: SnoozeChoice.notSnoozed))
             } else if choice == .untilResumed, snooze.indefinite {
                 entries.append(.unavailable(title, reason: "Already snoozed until resumed"))
+            } else if snooze.wouldShorten(to: choice, now: input.now) {
+                entries.append(.unavailable(title, reason: Self.snoozeLonger))
             } else {
                 entries.append(.action(.snooze(choice), title))
             }

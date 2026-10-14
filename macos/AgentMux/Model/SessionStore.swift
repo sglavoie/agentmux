@@ -208,14 +208,24 @@ final class SessionStore {
     /// snapshot's own, as it does on a row.
     func expectMute(socket: String, windowID: Int, muted: Bool) {
         let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
-        expectedMutes[AttentionCycler.Key(socket: socket, windowID: windowID)] = (muted, now().addingTimeInterval(Self.expectedMuteHold))
+        expectMute(AttentionCycler.Key(socket: socket, windowID: windowID), muted: muted)
+    }
+
+    /// Shows the session `key` names as `muted` right away; the key of an
+    /// embedded session is its runtime session (`AttentionCycler.Key.embedded`).
+    func expectMute(_ key: AttentionCycler.Key, muted: Bool) {
+        expectedMutes[key] = (muted, now().addingTimeInterval(Self.expectedMuteHold))
         onChange?()
     }
 
     /// Withdraws an expected mute, for a toggle that failed.
     func dropExpectedMute(socket: String, windowID: Int) {
         let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
-        guard expectedMutes.removeValue(forKey: AttentionCycler.Key(socket: socket, windowID: windowID)) != nil else { return }
+        dropExpectedMute(AttentionCycler.Key(socket: socket, windowID: windowID))
+    }
+
+    func dropExpectedMute(_ key: AttentionCycler.Key) {
+        guard expectedMutes.removeValue(forKey: key) != nil else { return }
         onChange?()
     }
 
@@ -268,6 +278,13 @@ final class SessionStore {
             session.muted = expected.muted
             return session
         }
+    }
+
+    /// Whether the daemon is holding notifications back right now; false
+    /// while the feed is not live, since nothing is known then.
+    var notificationsSnoozed: Bool {
+        guard feed == .live, let snapshot else { return false }
+        return SnoozeState(snapshot.notification).isSnoozed(now: now())
     }
 
     func title(style: StatusTitleStyle = .glyphs, showWorking: Bool = true, glyphs: Glyphs = .bundled) -> String {

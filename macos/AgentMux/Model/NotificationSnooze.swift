@@ -58,6 +58,15 @@ struct SnoozeState: Decodable, Equatable {
 
     func isSnoozed(now: Date) -> Bool { mirrored(now: now) != nil }
 
+    /// Whether choosing a timed snooze would end this one sooner: the daemon
+    /// replaces the snooze it holds, so a 1-hour snooze over one held until
+    /// resumed, or until tomorrow, would cut it short.
+    func wouldShorten(to choice: SnoozeChoice, now: Date, calendar: Calendar = .current) -> Bool {
+        let request = choice.request(now: now, calendar: calendar)
+        guard request.mode == SnoozeRequest.until, let until = request.until, let current = mirrored(now: now) else { return false }
+        return current > Date(timeIntervalSince1970: TimeInterval(until))
+    }
+
     /// `Snoozed until 14:05`, `Snoozed until resumed`, `Not snoozed`.
     func description(now: Date, time: (Date) -> String = SnoozeState.shortTime) -> String {
         if indefinite { return "Snoozed until resumed" }

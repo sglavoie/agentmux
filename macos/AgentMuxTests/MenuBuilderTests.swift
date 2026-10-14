@@ -145,6 +145,22 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(entries[2], .info(KittyEndpoint.listenOnMissing))
     }
 
+    func testANoticeNamingRestartDaemonOffersIt() {
+        var value = input([])
+        value.notice = "Daemon too old to focus sessions — \(MenuBuilder.restartHint)"
+        XCTAssertEqual(Array(MenuBuilder.entries(value)[1...2]),
+                       [.info(value.notice!), .action(.restartDaemon, "Restart Daemon")])
+        value.notice = MenuBuilder.snoozeUnsupported
+        XCTAssertTrue(MenuBuilder.entries(value).contains(.action(.restartDaemon, "Restart Daemon")))
+        value.notice = "That session has closed."
+        XCTAssertFalse(MenuBuilder.entries(value).contains(.action(.restartDaemon, "Restart Daemon")))
+
+        var old = input([], feed: .daemonTooOld)
+        old.notice = MenuBuilder.snoozeUnsupported
+        XCTAssertEqual(MenuBuilder.entries(old).filter { $0 == .action(.restartDaemon, "Restart Daemon") }.count, 1,
+                       "offered once when the feed already offers it")
+    }
+
     func testMenuItemsCarryTheirRows() {
         let rows = (1...11).map { MenuSessionRow(title: "r\($0)", windowID: $0, kittySocket: "", toolTip: "") }
         let entries: [MenuEntry] = [.info("x"), .header("H"), .session(rows[0]), .submenu("Idle (11)", rows),

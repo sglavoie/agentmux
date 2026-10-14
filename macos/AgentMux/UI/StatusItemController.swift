@@ -85,6 +85,44 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return image
     }
 
+    /// Whether the icon shows the snooze mark now.
+    private(set) var showsSnoozed = false
+
+    nonisolated static let snoozedPhrase = "notifications snoozed"
+
+    /// The icon with a bell-slash beside it, while notifications are snoozed,
+    /// so a snooze is visible without opening the menu.
+    nonisolated static func snoozedIcon() -> NSImage {
+        let base = icon()
+        guard let bell = NSImage(systemSymbolName: "bell.slash", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .semibold)) else { return base }
+        let size = NSSize(width: base.size.width + 2 + bell.size.width, height: base.size.height)
+        let image = NSImage(size: size, flipped: false) { _ in
+            base.draw(in: NSRect(origin: .zero, size: base.size))
+            let y = (size.height - bell.size.height) / 2
+            bell.draw(in: NSRect(x: base.size.width + 2, y: y, width: bell.size.width, height: bell.size.height))
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Agent Mux, \(snoozedPhrase)"
+        return image
+    }
+
+    /// What VoiceOver reads for the status item: the name, then the counts
+    /// the title shows in glyphs (or not at all), then the snooze.
+    /// `Agent Mux, 2 waiting, 1 working, notifications snoozed`.
+    nonisolated static func accessibilityLabel(feedLive: Bool, attention: CompanionAttention, snoozed: Bool) -> String {
+        var parts = ["Agent Mux"]
+        if feedLive {
+            parts.append(attention.total == 0 ? "nothing waiting" : "\(attention.total) waiting")
+            if attention.working > 0 { parts.append("\(attention.working) working") }
+            if snoozed { parts.append(snoozedPhrase) }
+        } else {
+            parts.append("daemon not connected")
+        }
+        return parts.joined(separator: ", ")
+    }
+
     /// The daemon line's text, for the tooltip and tests.
     var daemonLine: String {
         guard let store = delegate?.store else { return DaemonStatusLine.title(for: nil) }
@@ -100,7 +138,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let title = store.title(style: titleStyle, showWorking: showWorking)
         button.title = title
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
-        button.toolTip = "Agent Mux — \(daemonLine)"
+        let snoozed = store.notificationsSnoozed
+        if snoozed != showsSnoozed {
+            showsSnoozed = snoozed
+            button.image = snoozed ? Self.snoozedIcon() : Self.icon()
+        }
+        var toolTip = "Agent Mux — \(daemonLine)"
+        if snoozed, let notification = store.snapshot?.notification {
+            toolTip += "\nNotifications: \(SnoozeState(notification).description(now: Date()))"
+        }
+        button.toolTip = toolTip
+        button.setAccessibilityLabel(Self.accessibilityLabel(
+            feedLive: store.feed == .live,
+            attention: store.snapshot?.attention ?? CompanionAttention(),
+            snoozed: snoozed
+        ))
         button.appearsDisabled = Self.appearsDisabled(store.feed)
         if isMenuOpen { rebuildMenuIfChanged() }
     }

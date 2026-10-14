@@ -678,24 +678,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     /// `amx mute-toggle --runtime-session`: a session the workspace embeds
-    /// has no window to name.
-    private func toggleMute(runtimeSessionID id: String) {
+    /// has no window to name. Like the Kitty path, it shows the change at
+    /// once, so a second click (or a banner's Mute) before the daemon
+    /// publishes it does not toggle the session back.
+    private func toggleMute(runtimeSessionID id: String, banner: Bool = false) {
         guard let command else { return }
+        let key = AttentionCycler.Key.embedded(id)
+        if let listed = store.sessions.first(where: { $0.embeddedRuntimeSessionID == id }) {
+            store.expectMute(key, muted: !listed.muted)
+        }
         focusQueue.async { [weak self] in
             let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(runtimeSessionID: id))
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    guard let self else { return }
                     switch result {
                     case let .success(value), let .partial(value, _):
                         Self.logger.notice("mute-toggle \(id, privacy: .public): muted=\(value.muted)")
+                        self.settleExpectedMute(value, key: key)
                     case let .failure(error):
                         Self.logger.error("mute-toggle \(id, privacy: .public): \(error.message, privacy: .public)")
-                        self?.store.show(notice: "Could not toggle mute: \(error.message)")
+                        self.store.dropExpectedMute(key)
+                        self.actionFailed(Self.muteFailedTitle, error.message, banner: banner)
                     }
                 }
             }
         }
     }
+
+    static let muteFailedTitle = "Could not toggle mute"
 
     @objc func focusSessionList(_ sender: Any?) {
         showWorkspace()
@@ -899,7 +910,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .unknownSocket:
             store.show(notice: "The daemon does not know this session's Kitty socket.")
         case .unsupported:
-            store.show(notice: "Daemon too old to focus sessions — choose Restart Daemon")
+            store.show(notice: "Daemon too old to focus sessions — \(MenuBuilder.restartHint)")
         case .notRunning:
             store.apply(health: .notRunning)
         case let .failed(message):
@@ -1295,17 +1306,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .actionMute:
             // A session the workspace embeds has no window to match by.
             let embedded = Self.session(runtimeSessionID: response.embeddedRuntimeSessionID, in: store.sessions)
-            guard let session = embedded ?? origin.session else { return report("Could not mute: the session is no longer listed.") }
-            // mute-toggle toggles; a banner's Mute never unmutes.
+            guard let session = embedded ?? origin.session else {
+                return reportFailure(title: "Could not mute", "The session is no longer listed.")
+            }
+            // mute-toggle toggles; a banner's Mute never unmutes. `muted`
+            // includes a mute the app has asked for and not yet seen.
             guard !session.muted else { return }
-            toggleMute(.focusing(session))
+            toggleMute(.focusing(session), banner: true)
         case .actionSnooze:
-            snooze(.oneHour)
+            // A banner's snooze only ever lengthens the one in force.
+            let current = store.feed == .live ? store.snapshot.map { SnoozeState($0.notification) } : nil
+            if let current, current.wouldShorten(to: .oneHour, now: Date()) {
+                Self.logger.notice("snooze: banner kept the longer \(current.description(now: Date()), privacy: .public)")
+                return
+            }
+            snooze(.oneHour, banner: true)
         case .actionAnswer:
-            guard !response.runID.isEmpty else { return report("Could not answer: the notification names no run.") }
+            guard !response.runID.isEmpty else { return reportFailure(title: "Could not answer", "The notification names no run.") }
             answer(ASLAnswerTarget(runID: response.runID, windowID: response.windowID))
         case .actionRespond:
-            guard !response.embeddedRuntimeSessionID.isEmpty else { return report("Could not answer: the notification names no session.") }
+            guard !response.embeddedRuntimeSessionID.isEmpty else { return reportFailure(title: "Could not answer", "The notification names no session.") }
             answerPrompt(PromptAnswerTarget(runtimeSessionID: response.embeddedRuntimeSessionID))
         case .delivered, .dismissed, .failed:
             break
@@ -1523,6 +1543,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             dashboardHotKey: prefs.hotKeyDashboard,
             nextAttentionHotKey: prefs.hotKeyNextAttention,
             feedLive: live,
+            waiting: live ? AttentionCycler.ordered(store.sessions).count : 0,
             projects: projects.state,
             missingProjectDirectories: projects.missingDirectories,
             recent: recent.state,
@@ -1790,12 +1811,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// when the workspace embeds it, else against that row's own Kitty.
     /// Window IDs mean something only inside the instance that issued them,
     /// so no other socket is tried.
-    func toggleMute(_ row: MenuSessionRow) {
-        guard let command else { return report(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.") }
-        if let reason = gate.unavailableReason(.muteToggle) { return report(reason) }
-        guard row.runtimeSessionID.isEmpty else { return toggleMute(runtimeSessionID: row.runtimeSessionID) }
+    func toggleMute(_ row: MenuSessionRow) { toggleMute(row, banner: false) }
+
+    /// `banner`: a notification's Mute, whose failures are reported where
+    /// the operator sees them now rather than only on the menu line.
+    private func toggleMute(_ row: MenuSessionRow, banner: Bool) {
+        guard let command else {
+            return actionFailed(Self.muteFailedTitle, preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.", banner: banner)
+        }
+        if let reason = gate.unavailableReason(.muteToggle) { return actionFailed(Self.muteFailedTitle, reason, banner: banner) }
+        guard row.runtimeSessionID.isEmpty else { return toggleMute(runtimeSessionID: row.runtimeSessionID, banner: banner) }
         let socket = row.kittySocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : row.kittySocket
-        guard !socket.isEmpty else { return report(KittyEndpoint.listenOnMissing) }
+        guard !socket.isEmpty else { return actionFailed(Self.muteFailedTitle, KittyEndpoint.listenOnMissing, banner: banner) }
         // Shown at once, so a menu reopened before the daemon publishes the
         // change does not offer the toggle the click already made.
         store.expectMute(socket: socket, windowID: row.windowID, muted: !row.muted)
@@ -1814,7 +1841,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                     case let .failure(error):
                         Self.logger.error("mute-toggle window \(row.windowID): \(error.message, privacy: .public)")
                         self.store.dropExpectedMute(socket: socket, windowID: row.windowID)
-                        self.store.show(notice: "Could not toggle mute: \(error.message)")
+                        self.actionFailed(Self.muteFailedTitle, error.message, banner: banner)
                     }
                 }
             }
@@ -1824,10 +1851,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Replaces the guess `toggleMute` showed with what `amx` reports it did;
     /// a toggle that changed nothing (the window was gone) shows nothing.
     private func settleExpectedMute(_ value: MuteToggleResult, socket: String, windowID: Int) {
+        let socket = socket.isEmpty ? store.snapshot?.kitty.socket ?? "" : socket
+        settleExpectedMute(value, key: AttentionCycler.Key(socket: socket, windowID: windowID))
+    }
+
+    private func settleExpectedMute(_ value: MuteToggleResult, key: AttentionCycler.Key) {
         if value.changed {
-            store.expectMute(socket: socket, windowID: windowID, muted: value.muted)
+            store.expectMute(key, muted: value.muted)
         } else {
-            store.dropExpectedMute(socket: socket, windowID: windowID)
+            store.dropExpectedMute(key)
         }
     }
 
@@ -1836,32 +1868,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Notifications ▸, and Preferences' Resume Now: sets or clears the
     /// daemon's snooze and mirrors what the daemon answers into
     /// `amxSnoozeUntil`.
-    private func snooze(_ choice: SnoozeChoice) {
+    /// `banner`: a notification's Snooze, whose failures are reported where
+    /// the operator sees them now.
+    private func snooze(_ choice: SnoozeChoice, banner: Bool = false) {
         guard let daemon = store.snapshot?.daemon, store.feed == .live else {
-            return report("The daemon is not connected.")
+            return actionFailed(Self.snoozeFailedTitle, "The daemon is not connected.", banner: banner)
         }
         let request = choice.request(now: Date())
         focusQueue.async { [weak self] in
             let outcome = DaemonClient().notificationSnooze(request)
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.finishSnooze(outcome, daemon: SnoozeMirror.identity(of: daemon)) }
+                MainActor.assumeIsolated { self?.finishSnooze(outcome, daemon: SnoozeMirror.identity(of: daemon), banner: banner) }
             }
         }
     }
 
-    private func finishSnooze(_ outcome: SnoozeOutcome, daemon: String) {
+    static let snoozeFailedTitle = "Could not change the snooze"
+
+    private func finishSnooze(_ outcome: SnoozeOutcome, daemon: String, banner: Bool = false) {
         switch outcome {
         case let .state(state):
             Self.logger.notice("snooze: \(state.description(now: Date()), privacy: .public)")
             recordSnooze(state.mirrored(now: Date()), daemon: daemon)
         case .unsupported:
             snoozeSupported = false
-            report(MenuBuilder.snoozeUnsupported)
+            actionFailed(Self.snoozeFailedTitle, MenuBuilder.snoozeUnsupported, banner: banner)
         case .notRunning:
             store.apply(health: .notRunning)
+            if banner { actionFailed(Self.snoozeFailedTitle, "The daemon is not running.", banner: true) }
         case let .failed(message):
             Self.logger.error("snooze: \(message, privacy: .public)")
-            report("Could not change the snooze: \(message)")
+            actionFailed(Self.snoozeFailedTitle, message, banner: banner)
         }
     }
 
@@ -1976,6 +2013,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// menu line says why, and the operator hears of it at once, by a
     /// notification when app notifications are on and allowed, else by a
     /// beep and the icon blinking.
+    /// A mute, snooze, or answer that failed: one a notification's button
+    /// asked for is reported as `reportFailure` does, since no menu is open
+    /// to show it; one from the menu or a shortcut on the menu line.
+    private func actionFailed(_ title: String, _ message: String, banner: Bool) {
+        if banner {
+            reportFailure(title: title, message)
+        } else {
+            report(Self.failureLine(title: title, message: message))
+        }
+    }
+
     private func reportFailure(title: String, _ message: String) {
         let line = Self.failureLine(title: title, message: message)
         report(line)
