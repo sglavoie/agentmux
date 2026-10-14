@@ -240,20 +240,30 @@ struct PromptAnswerView: View {
 final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
     let flow: PromptAnswerFlow
     private var panel: ASLPanel?
+    /// The workspace window's frame while it is open, to open on its screen.
+    var workspaceFrame: () -> CGRect? = { nil }
+    private let frames: PanelFrameStore
 
-    init(flow: PromptAnswerFlow) {
+    init(flow: PromptAnswerFlow, defaults: UserDefaults? = AppDelegate.isRunningTests ? nil : .standard) {
         self.flow = flow
+        frames = PanelFrameStore(key: "AgentMuxPromptPanelFrame", defaults: defaults)
         super.init()
     }
 
     func show(_ target: PromptAnswerTarget) {
         flow.open(target)
         let panel = self.panel ?? makePanel()
-        if !panel.isVisible { panel.center() }
+        if !panel.isVisible { panel.place(saved: frames.load(), workspace: workspaceFrame()) }
         panel.orderFrontRegardless()
         // Typing a key needs the app active as well as the panel key.
         NSApp.activate()
         panel.makeKey()
+    }
+
+    /// The operator dragged the panel: it opens there next time.
+    func windowDidMove(_ notification: Notification) {
+        guard let panel, !panel.isPlacing, panel.isVisible else { return }
+        frames.save(panel.frame)
     }
 
     /// The operator closed the panel: the screen it showed goes with it.

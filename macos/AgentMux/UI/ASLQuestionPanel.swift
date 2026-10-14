@@ -393,6 +393,24 @@ struct ASLQuestionView: View {
 /// A panel that can take keyboard focus without the app being active first.
 final class ASLPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// The panel is being moved by the app rather than dragged.
+    private(set) var isPlacing = false
+
+    /// Opens on the workspace window's screen while it is open, else the
+    /// pointer's, unless the operator dragged the panel somewhere that is
+    /// still on a connected screen.
+    func place(saved: CGRect?, workspace: CGRect?) {
+        let placement = PanelPlacement(screens: NSScreen.screens.map {
+            PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
+        })
+        guard let target = placement.frame(
+            size: frame.size, saved: saved, workspace: workspace, pointer: NSEvent.mouseLocation
+        ) else { return center() }
+        isPlacing = true
+        setFrame(target, display: false)
+        isPlacing = false
+    }
 }
 
 extension PanelNoticeKind {
@@ -417,10 +435,14 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     /// The form closed itself; `notice` is set when the run moved, and the
     /// menu should be refreshed either way.
     var onFinish: (_ notice: String?) -> Void = { _ in }
+    /// The workspace window's frame while it is open, to open on its screen.
+    var workspaceFrame: () -> CGRect? = { nil }
+    private let frames: PanelFrameStore
 
-    init(flow: ASLQuestionFlow? = nil) {
+    init(flow: ASLQuestionFlow? = nil, defaults: UserDefaults? = AppDelegate.isRunningTests ? nil : .standard) {
         let flow = flow ?? ASLQuestionFlow()
         self.flow = flow
+        frames = PanelFrameStore(key: "AgentMuxASLPanelFrame", defaults: defaults)
         super.init()
         flow.onClose = { [weak self] notice in self?.finish(notice) }
         flow.onLateResult = { [weak self] notice in self?.onFinish(notice) }
@@ -429,10 +451,16 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     func show(_ target: ASLAnswerTarget) {
         flow.open(target)
         let panel = self.panel ?? makePanel()
-        if !panel.isVisible { panel.center() }
+        if !panel.isVisible { panel.place(saved: frames.load(), workspace: workspaceFrame()) }
         panel.orderFrontRegardless()
         NSApp.activate()
         panel.makeKey()
+    }
+
+    /// The operator dragged the panel: it opens there next time.
+    func windowDidMove(_ notification: Notification) {
+        guard let panel, !panel.isPlacing, panel.isVisible else { return }
+        frames.save(panel.frame)
     }
 
     /// An answer on its way keeps the panel open, so its result is shown.

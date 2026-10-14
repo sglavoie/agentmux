@@ -861,10 +861,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let controller = aslPanel ?? ASLQuestionPanelController()
         if aslPanel == nil {
             controller.onFinish = { [weak self] notice in self?.finishAnswer(notice) }
+            controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
             aslPanel = controller
         }
         Self.logger.notice("answer panel: run \(target.runID, privacy: .public)")
         controller.show(target)
+    }
+
+    /// The workspace window's frame while it is on screen; nil otherwise,
+    /// without building a window that was never opened.
+    private var openWorkspaceFrame: CGRect? {
+        guard let workspace, workspace.isOpen, workspace.window.isVisible else { return nil }
+        return workspace.window.frame
     }
 
     /// The panel closed itself: answered, or its run moved. The menu is
@@ -1117,6 +1125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             command: { [weak self] in self?.command },
             problem: { [weak self] in self?.preferences.binaryProblem ?? "amx has not been found yet." }
         )))
+        controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
         promptPanel = controller
         Self.logger.notice("prompt panel: session \(target.runtimeSessionID, privacy: .public)")
         controller.show(target)
