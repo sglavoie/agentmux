@@ -20,6 +20,25 @@ final class WorkspaceInspectorView: NSView {
         /// What is wrong with the feed, said instead of "nothing waiting":
         /// a daemon that is down cannot say that nothing is.
         var feedNotice: String?
+
+        /// The lines under the tabs, top to bottom. The session tab with no
+        /// session says what is wrong with the feed when something is: the
+        /// pane may still be on a session nobody can list.
+        var lines: [WorkspaceInspectorLine] {
+            switch tab {
+            case .waiting:
+                if waiting.isEmpty { return [.note(feedNotice ?? WorkspaceInspectorView.nothingWaiting)] }
+                return waiting.map(WorkspaceInspectorLine.waiting)
+            case .session:
+                guard let inspection else { return [.note(feedNotice ?? WorkspaceInspectorView.noSession)] }
+                let title = [inspection.glyph, inspection.title].filter { !$0.isEmpty }.joined(separator: " ")
+                return [.title(title, toolTip: inspection.title)]
+                    + inspection.sections.flatMap { section in
+                        [.heading(section.title)] + section.fields.map(WorkspaceInspectorLine.field)
+                    }
+                    + [.heading("Actions"), .actions(muted: inspection.muted, embedded: inspection.embedded)]
+            }
+        }
     }
 
     static let nothingWaiting = "Nothing is waiting on you."
@@ -91,14 +110,18 @@ final class WorkspaceInspectorView: NSView {
         fatalError("init(coder:) is not supported for this view")
     }
 
-    /// Shows `model`; nothing is rebuilt when it is what is shown already.
+    /// Shows `model`. Lines that are the same lines as before are updated
+    /// where they are, so a line under the pointer keeps its tint and a
+    /// copied identifier keeps saying so while ages tick; the lines are
+    /// built again only when they are different lines.
     func show(_ model: Model) {
         guard model != self.model else { return }
+        let old = self.model.lines
         self.model = model
-        rebuild()
+        rebuild(keeping: old)
     }
 
-    private func rebuild() {
+    private func rebuild(keeping old: [WorkspaceInspectorLine]? = nil) {
         for (index, tab) in WorkspaceInspectorTab.allCases.enumerated() {
             let count = tab == .waiting && !model.waiting.isEmpty ? " \(model.waiting.count)" : ""
             tabs.setLabel(tab.title + count, forSegment: index)
@@ -106,34 +129,62 @@ final class WorkspaceInspectorView: NSView {
         }
         alphaValue = model.current ? 1 : 0.5
 
+        let wanted = model.lines
+        if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {
+            for (view, line) in zip(lines, wanted) { update(view, to: line) }
+            return
+        }
         lines.forEach { $0.removeFromSuperview() }
         lines = []
-        switch model.tab {
-        case .waiting:
-            if model.waiting.isEmpty { add(Self.note(model.feedNotice ?? Self.nothingWaiting)) }
-            for row in model.waiting {
-                let line = WorkspaceWaitingRowView(row)
-                line.onPress = { [weak self] in self?.onWaiting?(row.key) }
-                line.onAnswer = { [weak self] answer in self?.onAnswer?(answer) }
-                add(line)
-            }
-        case .session:
-            guard let inspection = model.inspection else { return add(Self.note(Self.noSession)) }
-            let title = NSTextField(labelWithString: [inspection.glyph, inspection.title].filter { !$0.isEmpty }.joined(separator: " "))
+        wanted.forEach { add(view(for: $0)) }
+    }
+
+    private func view(for line: WorkspaceInspectorLine) -> NSView {
+        switch line {
+        case let .note(text):
+            return Self.note(text)
+        case let .title(text, toolTip):
+            let title = NSTextField(labelWithString: text)
             title.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
             title.lineBreakMode = .byTruncatingTail
-            title.toolTip = inspection.title
-            add(title)
-            for section in inspection.sections {
-                add(Self.heading(section.title))
-                for field in section.fields {
-                    let line = WorkspaceInspectorFieldView(field)
-                    line.onCopy = { [weak self] value in self?.onCopy(value) }
-                    add(line)
-                }
+            title.toolTip = toolTip
+            return title
+        case let .heading(text):
+            return Self.heading(text)
+        case let .field(field):
+            let view = WorkspaceInspectorFieldView(field)
+            view.onCopy = { [weak self] value in self?.onCopy(value) }
+            return view
+        case let .waiting(row):
+            let view = WorkspaceWaitingRowView(row)
+            view.onPress = { [weak self, weak view] in
+                if let key = view?.row.key { self?.onWaiting?(key) }
             }
-            add(Self.heading("Actions"))
-            add(actions(for: inspection))
+            view.onAnswer = { [weak self] answer in self?.onAnswer?(answer) }
+            return view
+        case let .actions(muted, embedded):
+            return actions(muted: muted, embedded: embedded)
+        }
+    }
+
+    /// Shows `line` on the view that showed the same line before.
+    private func update(_ view: NSView, to line: WorkspaceInspectorLine) {
+        switch line {
+        case let .note(text):
+            (view as? NSTextField)?.stringValue = text
+        case let .title(text, toolTip):
+            (view as? NSTextField)?.stringValue = text
+            view.toolTip = toolTip
+        case .heading:
+            break
+        case let .field(field):
+            (view as? WorkspaceInspectorFieldView)?.update(field)
+        case let .waiting(row):
+            (view as? WorkspaceWaitingRowView)?.update(row)
+        case let .actions(muted, embedded):
+            for (button, action) in zip(actionButtons, WorkspaceInspectorAction.allCases) {
+                Self.configure(button, action, muted: muted, embedded: embedded)
+            }
         }
     }
 
@@ -171,16 +222,15 @@ final class WorkspaceInspectorView: NSView {
 
     /// The buttons, two to a line. One a Kitty session has in Kitty is
     /// disabled and says so.
-    private func actions(for inspection: WorkspaceInspection) -> NSView {
+    private func actions(muted: Bool, embedded: Bool) -> NSView {
         let buttons = WorkspaceInspectorAction.allCases.enumerated().map { index, action in
-            let button = NSButton(title: action.title(muted: inspection.muted), target: self, action: #selector(actionPressed(_:)))
+            let button = NSButton(title: "", target: self, action: #selector(actionPressed(_:)))
             button.tag = index
             button.bezelStyle = .rounded
             button.controlSize = .small
             button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             button.refusesFirstResponder = true
-            button.isEnabled = inspection.embedded || !action.needsEmbedded
-            button.toolTip = button.isEnabled ? action.shortcut : Self.kittyOnly
+            Self.configure(button, action, muted: muted, embedded: embedded)
             return button
         }
         let rows = stride(from: 0, to: buttons.count, by: 2).map { Array(buttons[$0..<min($0 + 2, buttons.count)]) }
@@ -190,6 +240,12 @@ final class WorkspaceInspectorView: NSView {
         for column in 0..<grid.numberOfColumns { grid.column(at: column).xPlacement = .fill }
         if buttons.count > 1 { buttons[0].widthAnchor.constraint(equalTo: buttons[1].widthAnchor).isActive = true }
         return grid
+    }
+
+    private static func configure(_ button: NSButton, _ action: WorkspaceInspectorAction, muted: Bool, embedded: Bool) {
+        button.title = action.title(muted: muted)
+        button.isEnabled = embedded || !action.needsEmbedded
+        button.toolTip = button.isEnabled ? action.shortcut : kittyOnly
     }
 
     /// The buttons of the session tab, in `WorkspaceInspectorAction` order;
@@ -225,7 +281,7 @@ final class WorkspaceInspectorStack: NSStackView {
 final class WorkspaceWaitingRowView: NSBox {
     static let answerTitle = "Answer…"
 
-    let row: WorkspaceWaitingRow
+    private(set) var row: WorkspaceWaitingRow
     var onPress: (() -> Void)?
     var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
     /// Nil on a row with nothing to answer from here.
@@ -261,10 +317,8 @@ final class WorkspaceWaitingRowView: NSBox {
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
 
-        titleLabel.stringValue = [row.glyph, row.title].filter { !$0.isEmpty }.joined(separator: " ")
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         titleLabel.lineBreakMode = .byTruncatingTail
-        detailLabel.stringValue = row.detail
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
@@ -287,7 +341,6 @@ final class WorkspaceWaitingRowView: NSBox {
             button.refusesFirstResponder = true
             button.setContentHuggingPriority(.required, for: .horizontal)
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
-            button.setAccessibilityLabel("Answer \(row.title)")
             stack.addArrangedSubview(button)
             answerButton = button
         }
@@ -304,8 +357,18 @@ final class WorkspaceWaitingRowView: NSBox {
         for label in [titleLabel, detailLabel] {
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
-        toolTip = row.toolTip
         setAccessibilityRole(.button)
+        update(row)
+    }
+
+    /// Shows `row` on this line: the same session, said anew. Whether it has
+    /// an Answer… button is the line's own and does not change.
+    func update(_ row: WorkspaceWaitingRow) {
+        self.row = row
+        titleLabel.stringValue = [row.glyph, row.title].filter { !$0.isEmpty }.joined(separator: " ")
+        detailLabel.stringValue = row.detail
+        answerButton?.setAccessibilityLabel("Answer \(row.title)")
+        toolTip = row.toolTip
         setAccessibilityLabel("\(row.title), \(row.detail)")
     }
 
@@ -357,18 +420,20 @@ final class WorkspaceInspectorFieldView: NSView {
     static let labelWidth: CGFloat = 84
     static let copied = "Copied"
 
-    let field: WorkspaceInspection.Field
+    private(set) var field: WorkspaceInspection.Field
     var onCopy: ((String) -> Void)?
     let nameLabel = NSTextField(labelWithString: "")
     let valueLabel = NSTextField(labelWithString: "")
+    /// Counts copies, so only the last one's moment ends the "Copied".
+    private var copies = 0
+    /// Whether the value says "Copied" for now.
+    var showsCopied: Bool { copies > 0 }
 
     init(_ field: WorkspaceInspection.Field) {
         self.field = field
         super.init(frame: .zero)
-        nameLabel.stringValue = field.label
         nameLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         nameLabel.textColor = .secondaryLabelColor
-        valueLabel.stringValue = field.value
         valueLabel.font = field.copies
             ? .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
             : .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -387,6 +452,15 @@ final class WorkspaceInspectorFieldView: NSView {
             valueLabel.topAnchor.constraint(equalTo: topAnchor),
             valueLabel.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+        update(field)
+    }
+
+    /// Shows `field` on this line: the same field with its value now. A
+    /// value that says "Copied" goes on saying so for its moment.
+    func update(_ field: WorkspaceInspection.Field) {
+        self.field = field
+        nameLabel.stringValue = field.label
+        if !showsCopied { valueLabel.stringValue = field.value }
         toolTip = field.copies ? "\(field.value) — click to copy" : field.value
         setAccessibilityLabel("\(field.label): \(field.value)")
     }
@@ -414,8 +488,13 @@ final class WorkspaceInspectorFieldView: NSView {
         guard field.copies else { return }
         onCopy?(field.value)
         valueLabel.stringValue = Self.copied
+        copies += 1
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            MainActor.assumeIsolated { self?.valueLabel.stringValue = self?.field.value ?? "" }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.copies -= 1
+                if !self.showsCopied { self.valueLabel.stringValue = self.field.value }
+            }
         }
     }
 }

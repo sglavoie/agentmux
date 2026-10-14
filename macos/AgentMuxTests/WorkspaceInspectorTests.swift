@@ -290,4 +290,87 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual(copied, [F.runtimeID(1)])
         XCTAssertEqual(runtime.valueLabel.stringValue, WorkspaceInspectorFieldView.copied)
     }
+
+    // MARK: Updating in place
+
+    func testLinesAreTheSameLinesWhenOnlyWhatTheySayChanged() {
+        typealias Line = WorkspaceInspectorLine
+        let reason = WorkspaceInspection.Field(label: "Reason", value: "permission")
+        let row = WorkspaceWaitingRow(key: .embedded(F.runtimeID(1)), title: "api", detail: "stopped · 1m", glyph: "", toolTip: "")
+        let later = WorkspaceWaitingRow(key: row.key, title: row.title, detail: "stopped · 2m", glyph: "", toolTip: "")
+        XCTAssertTrue(Line.sameLines(
+            [.title("a", toolTip: "a"), .heading("Status"), .field(reason), .waiting(row), .actions(muted: false, embedded: true)],
+            [.title("b", toolTip: "b"), .heading("Status"), .field(WorkspaceInspection.Field(label: "Reason", value: "idle")),
+             .waiting(later), .actions(muted: true, embedded: false)]
+        ))
+        XCTAssertFalse(Line.sameLines([.heading("Status")], [.heading("Git")]))
+        XCTAssertFalse(Line.sameLines([.field(reason)], [.field(WorkspaceInspection.Field(label: "Since", value: "1m"))]))
+        XCTAssertFalse(Line.sameLines([.waiting(row)], [.waiting(WorkspaceWaitingRow(
+            key: .embedded(F.runtimeID(2)), title: "api", detail: "", glyph: "", toolTip: ""))]))
+        var answerable = row
+        answerable.answer = .prompt(runtimeSessionID: F.runtimeID(1))
+        XCTAssertFalse(Line.sameLines([.waiting(row)], [.waiting(answerable)]), "an Answer… button comes or goes")
+        XCTAssertFalse(Line.sameLines([.note("a")], [.note("a"), .note("b")]))
+    }
+
+    func testTheSessionTabSaysWhatIsWrongWithTheFeedWhenItHasNoSession() {
+        var model = WorkspaceInspectorView.Model(tab: .session)
+        XCTAssertEqual(model.lines, [.note(WorkspaceInspectorView.noSession)])
+        model.feedNotice = "Daemon not running"
+        XCTAssertEqual(model.lines, [.note("Daemon not running")])
+        model.tab = .waiting
+        XCTAssertEqual(model.lines, [.note("Daemon not running")])
+    }
+
+    func testTheSessionTabSaysTheFeedIsDownWhileThePaneIsOnASession() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.setInspectorTab(.session)
+        workspace.select(.embedded(F.runtimeID(1)))
+        XCTAssertNotNil(workspace.inspector.model.inspection)
+        app.store.apply(.disconnected(.notRunning, retryIn: 0.5))
+        XCTAssertNil(workspace.inspector.model.inspection)
+        XCTAssertEqual((workspace.inspector.lines.first as? NSTextField)?.stringValue, "Daemon not running")
+    }
+
+    func testACopiedIdentifierStaysCopiedWhileTheSessionChanges() throws {
+        var changed = sessions
+        changed[1].reason = "permission"
+        app.store.apply(snapshot: F.snapshot(changed))
+        workspace.setInspectorTab(.session)
+        workspace.select(.embedded(F.runtimeID(2)))
+        workspace.inspector.onCopy = { _ in }
+        let before = workspace.inspector.lines
+        let fields = before.compactMap { $0 as? WorkspaceInspectorFieldView }
+        let runtime = try XCTUnwrap(fields.first { $0.field.label == "Runtime" })
+        runtime.copyValue()
+
+        changed[1].reason = "done"
+        app.store.apply(snapshot: F.snapshot(changed))
+        let after = workspace.inspector.lines
+        XCTAssertEqual(after.count, before.count)
+        XCTAssertTrue(zip(before, after).allSatisfy { $0 === $1 }, "the same lines, updated where they are")
+        XCTAssertEqual(runtime.valueLabel.stringValue, WorkspaceInspectorFieldView.copied)
+        let reason = try XCTUnwrap(fields.first { $0.field.label == "Reason" })
+        XCTAssertEqual(reason.valueLabel.stringValue, "done")
+
+        // A line that comes or goes builds the lines again.
+        changed[1].branch = "main"
+        app.store.apply(snapshot: F.snapshot(changed))
+        XCTAssertFalse(workspace.inspector.lines.first === before.first)
+    }
+
+    func testAHoveredWaitingLineKeepsItsTintWhileItsAgeChanges() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.setInspectorCollapsed(false)
+        let line = try XCTUnwrap(workspace.inspector.lines.first as? WorkspaceWaitingRowView)
+        line.isHovered = true
+        var changed = sessions
+        changed[1].reason = "permission"
+        app.store.apply(snapshot: F.snapshot(changed))
+        XCTAssertTrue(workspace.inspector.lines.first === line)
+        XCTAssertEqual(line.detailLabel.stringValue, "permission · 5m")
+        XCTAssertEqual(line.fillColor, WorkspaceWaitingRowView.hoveredFill)
+        line.press()
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+    }
 }

@@ -596,6 +596,69 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.closed, [])
     }
 
+    func testTheFeedNoticeWrapsAndSaysItAllInItsTooltip() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertNil(workspace.feedLabel.toolTip)
+        XCTAssertEqual(workspace.feedLabel.maximumNumberOfLines, 2)
+        XCTAssertFalse(workspace.feedLabel.usesSingleLineMode)
+        app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
+        XCTAssertEqual(workspace.feedLabel.toolTip, "Reconnecting… (the daemon is not answering)")
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertNil(workspace.feedLabel.toolTip)
+    }
+
+    func testOnlyTheSidebarLinesThatChangedAreDrawnAgain() throws {
+        typealias Item = WorkspaceWindowController.Item
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let items = workspace.items
+        XCTAssertEqual(WorkspaceWindowController.changedLines(from: items, to: items), IndexSet())
+
+        var changed = sessions
+        changed[1].iconState = "bolt"
+        app.store.apply(snapshot: F.snapshot(changed))
+        let moved = try index(of: .embedded(F.runtimeID(2)))
+        XCTAssertEqual(WorkspaceWindowController.changedLines(from: items, to: workspace.items).map(Array.init),
+                       items.indices.filter { items[$0] != workspace.items[$0] })
+        XCTAssertTrue(WorkspaceWindowController.changedLines(from: items, to: workspace.items)?.contains(moved) ?? false)
+
+        // Another order, another line, or a name, which makes a line taller: all of it again.
+        XCTAssertNil(WorkspaceWindowController.changedLines(from: items, to: items.reversed()))
+        XCTAssertNil(WorkspaceWindowController.changedLines(from: items, to: Array(items.dropLast())))
+        var named = changed
+        named[1].name = "migrations"
+        app.store.apply(snapshot: F.snapshot(named))
+        XCTAssertNil(WorkspaceWindowController.changedLines(from: items, to: workspace.items))
+        XCTAssertNotNil(WorkspaceWindowController.changedLines(from: [Item.section("A")], to: [Item.section("A")]))
+    }
+
+    func testTheLineUnderThePointerKeepsItsCloseButtonWhileAnotherChanges() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try cell(.embedded(F.runtimeID(1)))
+        work.isHovered = true
+        var changed = sessions
+        changed[1].iconState = "bolt"
+        app.store.apply(snapshot: F.snapshot(changed))
+        let line = try index(of: .embedded(F.runtimeID(1)))
+        XCTAssertTrue(workspace.sidebar.view(atColumn: 0, row: line, makeIfNecessary: false) === work, "the line was not drawn again")
+        XCTAssertTrue(work.showsCloseButton)
+    }
+
+    func testALineDrawnAgainIsHoveredWhereThePointerIs() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.window.layoutIfNeeded()
+        let first = try index(of: .embedded(F.runtimeID(2)))
+        let second = try index(of: .embedded(F.runtimeID(1)))
+        let over = try cell(.embedded(F.runtimeID(2)))
+        let other = try cell(.embedded(F.runtimeID(1)))
+        other.isHovered = true
+        let point = over.convert(NSPoint(x: over.bounds.midX, y: over.bounds.midY), to: nil)
+        workspace.syncHover(at: point, lines: IndexSet([first, second]))
+        XCTAssertTrue(over.isHovered)
+        XCTAssertFalse(other.isHovered)
+        workspace.syncHover(at: NSPoint(x: -100, y: -100), lines: IndexSet([first, second]))
+        XCTAssertFalse(over.isHovered, "a pointer outside the list hovers nothing")
+    }
+
     func testAHalfOpenFeedKeepsItsSnapshotAndTheWorkspace() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.activate(try row("api", "work"))

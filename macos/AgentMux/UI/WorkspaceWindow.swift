@@ -141,6 +141,27 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case view(WorkspaceUtilityView)
         case group(WorkspaceGroup)
         case row(WorkspaceRow)
+
+        /// Whether `other` is the same line showing something else: the
+        /// same heading, view, project, or session, as tall as before. A
+        /// session given or relieved of a name takes another height.
+        func isSameLine(as other: Item) -> Bool {
+            switch (self, other) {
+            case let (.section(a), .section(b)): return a == b
+            case let (.view(a), .view(b)): return a.id == b.id
+            case let (.group(a), .group(b)): return a.project == b.project && a.pinned == b.pinned
+            case let (.row(a), .row(b)): return a.key == b.key && a.name.isEmpty == b.name.isEmpty
+            default: return false
+            }
+        }
+    }
+
+    /// The lines of `new` that show something other than they did in
+    /// `old`, when the two are the same lines in the same order; nil when
+    /// they are not and the whole list is to be loaded again.
+    static func changedLines(from old: [Item], to new: [Item]) -> IndexSet? {
+        guard old.count == new.count, zip(old, new).allSatisfy({ $0.isSameLine(as: $1) }) else { return nil }
+        return IndexSet(old.indices.filter { old[$0] != new[$0] })
     }
 
     /// The heading the utility views are listed under.
@@ -423,6 +444,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let notice = WorkspaceSidebar.feedNotice(store.feed)
         feedLabel.stringValue = notice ?? ""
         feedLabel.isHidden = notice == nil
+        feedLabel.toolTip = notice
         if let awaited {
             if let row = state.row(.embedded(awaited.runtimeSessionID)) {
                 Self.logger.notice("workspace: awaited session \(awaited.runtimeSessionID, privacy: .public) is listed; showing it")
@@ -1417,9 +1439,38 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Redraws the sidebar's lines in place, keeping its selection.
     private func reloadLines() {
         guard sidebar.numberOfRows > 0 else { return }
+        reload(IndexSet(integersIn: 0..<sidebar.numberOfRows))
+    }
+
+    /// Redraws the given lines in place, keeping the selection, and gives
+    /// each its session's color again: the row views stay.
+    private func reload(_ indexes: IndexSet) {
         applying = true
-        sidebar.reloadData(forRowIndexes: IndexSet(integersIn: 0..<sidebar.numberOfRows), columnIndexes: IndexSet(integer: 0))
+        sidebar.reloadData(forRowIndexes: indexes, columnIndexes: IndexSet(integer: 0))
         applying = false
+        for index in indexes {
+            guard let rowView = sidebar.rowView(atRow: index, makeIfNecessary: false) as? WorkspaceRowView else { continue }
+            rowView.tabColor = Self.tabColor(of: items[index])
+        }
+        syncHover(indexes)
+    }
+
+    /// A line drawn again is a fresh cell that knows nothing of the
+    /// pointer: its × follows where the pointer is now. The other lines'
+    /// own tracking areas already know.
+    private func syncHover(_ indexes: IndexSet) {
+        guard NSApp.isActive, let window = sidebar.window, window.isVisible else { return }
+        syncHover(at: window.mouseLocationOutsideOfEventStream, lines: indexes)
+    }
+
+    /// Hovers whichever of `lines` is under `point`, in window
+    /// coordinates, and none of the others.
+    func syncHover(at point: NSPoint, lines: IndexSet) {
+        let inList = sidebar.visibleRect.contains(sidebar.convert(point, from: nil))
+        for index in lines where index < sidebar.numberOfRows {
+            guard let cell = sidebar.view(atColumn: 0, row: index, makeIfNecessary: false) as? WorkspaceRowCellView else { continue }
+            cell.isHovered = inList && cell.bounds.contains(cell.convert(point, from: nil))
+        }
     }
 
     /// A utility view's program set its title. A session's terminal shows
@@ -1757,11 +1808,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             }
         let dimmed: CGFloat = state.current ? 1 : 0.5
         if force || wanted != items || sidebar.alphaValue != dimmed {
+            // A snapshot mostly moves ages and glyphs: only those lines are
+            // drawn again, and the pointer's × stays where it is.
+            let changed = force ? nil : Self.changedLines(from: items, to: wanted)
             items = wanted
             sidebar.alphaValue = dimmed
-            applying = true
-            sidebar.reloadData()
-            applying = false
+            if let changed {
+                if !changed.isEmpty { reload(changed) }
+            } else {
+                applying = true
+                sidebar.reloadData()
+                applying = false
+                syncHover(IndexSet(integersIn: 0..<sidebar.numberOfRows))
+            }
         }
         syncSidebarSelection()
         reloadInspector()
@@ -1837,10 +1896,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// the Dashboard and the Overview among them, on the list's own.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let view = WorkspaceRowView()
-        if case let .row(row) = items[row], let color = row.tabColor {
-            view.tabColor = NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
-        }
+        view.tabColor = Self.tabColor(of: items[row])
         return view
+    }
+
+    private static func tabColor(of item: Item) -> NSColor? {
+        guard case let .row(row) = item, let color = row.tabColor else { return nil }
+        return NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
     }
 
     func tableView(_ tableView: NSTableView, didAdd rowView: NSTableRowView, forRow row: Int) {
@@ -2224,7 +2286,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
         feedLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         feedLabel.textColor = .secondaryLabelColor
-        feedLabel.lineBreakMode = .byTruncatingTail
+        // Two lines, then an ellipsis; the whole notice is its tooltip.
+        feedLabel.usesSingleLineMode = false
+        feedLabel.cell?.wraps = true
+        feedLabel.maximumNumberOfLines = 2
+        feedLabel.lineBreakMode = .byWordWrapping
+        feedLabel.cell?.truncatesLastVisibleLine = true
         feedLabel.isHidden = true
         feedLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -2238,7 +2305,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         NSLayoutConstraint.activate([
             scroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
             feedLabel.leadingAnchor.constraint(equalTo: stack.leadingAnchor, constant: 10),
-            feedLabel.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor, constant: -10),
+            // As wide as the sidebar, so a long notice wraps there.
+            feedLabel.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: -10),
         ])
 
         placeholder.frame = pane.bounds

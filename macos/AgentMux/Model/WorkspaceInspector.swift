@@ -226,3 +226,34 @@ enum WorkspaceInspector {
         MenuBuilder.age(since: Date(timeIntervalSince1970: TimeInterval(seconds)), now: now)
     }
 }
+
+/// One line of the right sidebar, with what it shows.
+enum WorkspaceInspectorLine: Equatable {
+    case note(String)
+    /// The shown session's glyph and title, and the title in full.
+    case title(String, toolTip: String)
+    case heading(String)
+    case field(WorkspaceInspection.Field)
+    case waiting(WorkspaceWaitingRow)
+    case actions(muted: Bool, embedded: Bool)
+
+    /// Whether `other` is the same line showing something else: a note or
+    /// a title, a heading over the same section, a field of the same name,
+    /// the same waiting session with or without a way to answer it alike,
+    /// or the buttons. Lines that all match are updated where they are, so
+    /// the pointer's tint and a "Copied" stay put while ages tick.
+    func isSameLine(as other: WorkspaceInspectorLine) -> Bool {
+        switch (self, other) {
+        case (.note, .note), (.title, .title), (.actions, .actions): return true
+        case let (.heading(a), .heading(b)): return a == b
+        case let (.field(a), .field(b)): return a.label == b.label && a.copies == b.copies
+        case let (.waiting(a), .waiting(b)): return a.key == b.key && (a.answer == nil) == (b.answer == nil)
+        default: return false
+        }
+    }
+
+    /// Whether two lists of lines are the same lines, in the same order.
+    static func sameLines(_ a: [WorkspaceInspectorLine], _ b: [WorkspaceInspectorLine]) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy { $0.isSameLine(as: $1) }
+    }
+}
