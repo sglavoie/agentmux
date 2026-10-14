@@ -38,7 +38,7 @@ struct ActionGate: Equatable {
         case .muteToggle: missing = capabilities.muteToggleJSON ? nil : "mute-toggle --json"
         case .sessions: missing = nil
         }
-        return missing.map { "\(binaryPath) has no `\($0)`; run `just install`" }
+        return missing.map { "\(binaryPath) has no \($0) command; run just install" }
     }
 }
 

@@ -51,7 +51,10 @@ struct PreferencesSnapshot: Equatable {
 
 /// Everything Preferences edits. Each change is saved to `UserDefaults` as it
 /// is made, and `onChange` hands the app the old and new values so it can
-/// apply the live ones at once.
+/// apply the live ones at once. The amx binary path is the exception: it is
+/// typed into `binaryPathDraft` and reaches `preferences` only when the field
+/// is submitted or loses focus, so a half-typed path never replaces the amx
+/// the app runs.
 @MainActor
 final class PreferencesModel: ObservableObject {
     let defaults: UserDefaults
@@ -59,10 +62,17 @@ final class PreferencesModel: ObservableObject {
     @Published var preferences: AppPreferences {
         didSet {
             guard preferences != oldValue else { return }
+            if preferences.binaryPath != oldValue.binaryPath {
+                binaryPathDraft = preferences.binaryPath
+            }
             preferences.save(to: defaults)
             onChange?(oldValue, preferences)
         }
     }
+
+    /// The amx binary field as typed; `commitBinaryPath` makes it the
+    /// preference.
+    @Published var binaryPathDraft: String
 
     /// Read-only facts about the running app.
     @Published var snapshot = PreferencesSnapshot()
@@ -87,7 +97,15 @@ final class PreferencesModel: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        preferences = AppPreferences.load(from: defaults)
+        let stored = AppPreferences.load(from: defaults)
+        preferences = stored
+        binaryPathDraft = stored.binaryPath
+    }
+
+    /// The binary field was submitted or left: what it holds is now the
+    /// override, and the app resolves amx again if that changed it.
+    func commitBinaryPath() {
+        preferences.binaryPath = binaryPathDraft
     }
 
     /// Re-reads what may have changed elsewhere: the login item in System
@@ -123,8 +141,8 @@ final class PreferencesModel: ObservableObject {
         }
     }
 
-    /// Why the binary override will not work, checked the way the resolver
-    /// checks it.
+    /// Why the binary override in use will not work, checked the way the
+    /// resolver checks it.
     var binaryOverrideProblem: String? {
         let trimmed = preferences.binaryPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -192,6 +210,16 @@ final class PreferencesModel: ObservableObject {
             : SnoozeState(snoozedUntil: Int64(until.timeIntervalSince1970))
     }
 
+    /// Why Show the working count is greyed out; nil when it is not.
+    static func workingCountNote(_ style: StatusTitleStyle) -> String? {
+        style == .glyphs ? nil : "Only the “\(StatusTitleStyle.glyphs.label)” status shows a working count."
+    }
+
+    /// `Recent: last day`, `Recent: last 7 days`.
+    static func recentDaysLabel(_ days: Int) -> String {
+        days == 1 ? "Recent: last day" : "Recent: last \(days) days"
+    }
+
     static func time(_ date: Date) -> String {
         DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .short)
     }
@@ -230,7 +258,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         // The grouped form's ideal height is all of its content.
         let contentHeight = NSHostingView(rootView: view.fixedSize(horizontal: false, vertical: true)).fittingSize.height
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "Agent Mux Preferences"
+        window.title = "Agent Mux Settings"
         window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -247,8 +275,10 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         return window
     }
 
-    /// A closed window records nothing.
+    /// A closed window records nothing, and ends any editing of the binary
+    /// path.
     func windowWillClose(_ notification: Notification) {
+        model.commitBinaryPath()
         dashboardRecorder.stop()
         attentionRecorder.stop()
     }
@@ -258,6 +288,7 @@ struct PreferencesView: View {
     @ObservedObject var model: PreferencesModel
     @ObservedObject var dashboardRecorder: HotKeyRecorder
     @ObservedObject var attentionRecorder: HotKeyRecorder
+    @FocusState private var binaryFieldFocused: Bool
 
     var body: some View {
         Form {
@@ -286,7 +317,11 @@ struct PreferencesView: View {
                 }
                 Toggle("Show the working count", isOn: $model.preferences.showWorkingCount)
                     .disabled(model.preferences.statusStyle != .glyphs)
-                Stepper("Recent: last \(model.preferences.recentDays) days",
+                    .help(PreferencesModel.workingCountNote(model.preferences.statusStyle) ?? "")
+                if let reason = PreferencesModel.workingCountNote(model.preferences.statusStyle) {
+                    note(reason)
+                }
+                Stepper(PreferencesModel.recentDaysLabel(model.preferences.recentDays),
                         value: $model.preferences.recentDays, in: AppPreferences.recentDaysRange)
                 Stepper("Recent: at most \(model.preferences.recentLimit) conversations",
                         value: $model.preferences.recentLimit, in: AppPreferences.recentLimitRange)
@@ -305,7 +340,7 @@ struct PreferencesView: View {
                 LabeledContent("Snooze") {
                     HStack {
                         Text(model.snoozeDescription).foregroundStyle(.secondary)
-                        Button(SnoozeChoice.resume.title) { model.resumeSnooze() }
+                        Button(SnoozeChoice.resume.title(now: Date())) { model.resumeSnooze() }
                             .disabled(!model.isSnoozed)
                             .help(model.isSnoozed ? "" : SnoozeChoice.notSnoozed)
                     }
@@ -350,9 +385,14 @@ struct PreferencesView: View {
             Section("amx") {
                 LabeledContent("amx binary") {
                     HStack {
-                        TextField("", text: $model.preferences.binaryPath, prompt: Text("Automatic"))
+                        TextField("", text: $model.binaryPathDraft, prompt: Text("Automatic"))
                             .labelsHidden()
                             .frame(minWidth: 220)
+                            .focused($binaryFieldFocused)
+                            .onSubmit { model.commitBinaryPath() }
+                            .onChange(of: binaryFieldFocused) { _, focused in
+                                if !focused { model.commitBinaryPath() }
+                            }
                         Button("Choose…", action: chooseBinary)
                     }
                 }
@@ -449,8 +489,8 @@ extension StatusTitleStyle {
     }
 }
 
-/// A button that records the next shortcut typed. Esc cancels; the shortcut
-/// must use Control, Option, or Command, unless it is a function key.
+/// A button that records the next shortcut typed. Esc cancels; a key
+/// `HotKeyCombo.refusal` refuses shows why in the button instead.
 struct HotKeyRecorderView: View {
     @Binding var combo: HotKeyCombo?
     @ObservedObject var model: PreferencesModel
@@ -512,10 +552,12 @@ final class HotKeyRecorder: ObservableObject {
             if Int(event.keyCode) == HotKeyRecorder.escapeKeyCode, chord.isEmpty {
                 self.stop()
             } else if let combo = HotKeyCombo(event: event) {
-                self.stop()
+                // Recorded before stopping, so the shortcuts the app
+                // registers again when recording ends are the new ones.
                 onRecord(combo)
+                self.stop()
             } else {
-                self.hint = "Add ⌃, ⌥, or ⌘…"
+                self.hint = HotKeyCombo.refusal(event: event)
             }
             return nil
         }

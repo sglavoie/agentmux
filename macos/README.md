@@ -702,7 +702,7 @@ After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
 | Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch, cached, and refreshed when the menu opens on one older than 60s. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip, and its ⌥ `… in Folder…` alternate still launches it in a folder you choose. Choosing one runs `amx project launch --title T --profile P --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
 | Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
 | ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --runtime-session ID --json` for a session on tmux, or `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket for a Kitty one. |
-| Notifications ▸ | Snooze for 1 hour, until tomorrow 08:00, or until resumed, and Resume Now, all through the daemon's `notification_snooze` request. Quiet hours are shown read-only with the config path they come from, because the app never rewrites `config.toml`. |
+| Notifications ▸ | Snooze for 1 hour, until the next 08:00 (today's before 08:00, titled in the locale's time format and "Tomorrow" only when it is), or until resumed, and Resume Now, all through the daemon's `notification_snooze` request. Quiet hours are shown read-only with the config path they come from, because the app never rewrites `config.toml`. |
 
 New tabs open in the Kitty that was frontmost last (the app watches
 application activation), then the Preferences override, the snapshot's Kitty,
@@ -926,16 +926,28 @@ last focused no longer waits, or is gone, the cycle carries on from where
 that session stood instead of starting over. With nothing waiting, it beeps.
 
 A shortcut that cannot act beeps and leaves the reason as the menu's notice.
-Preferences records shortcuts, and a change is registered at once. It warns
+Preferences records shortcuts, and a change is registered at once. The
+recorder refuses, saying why in its button, a key with no ⌃, ⌥, or ⌘ (other
+than F12 to F20), ⌘ alone or with ⇧ (every app's own menu keys), and a bare F1
+to F11 (the workspace's keys); `HotKeyCombo.refusal` is the rule. It warns
 when a shortcut is already used by the other one (the dashboard's wins), is
-held by another app (Carbon's `eventHotKeyExistsErr`), or is one macOS owns in
-System Settings › Keyboard › Keyboard Shortcuts, which Carbon cannot see. While
-a recorder listens, both shortcuts are unregistered so they can be recorded.
+held by another app (Carbon's `eventHotKeyExistsErr`), is one macOS owns in
+System Settings › Keyboard › Keyboard Shortcuts, which Carbon cannot see, or is
+also a key of the app's own main menu. While a recorder listens, both
+shortcuts are unregistered so they can be recorded; the recorded one is saved
+before the recorder stops, so registering again happens once, with the new
+shortcut. Shortcuts are shown with the key the current keyboard layout puts
+there (`UCKeyTranslate`; ⌃⌥⌘Q on AZERTY for the stored `ctrl+opt+cmd+a`), and
+the status menu's Open Dashboard shows the dashboard shortcut as its key.
 
 ## Preferences
 
-Preferences (`UI/PreferencesWindow.swift`, SwiftUI in an NSWindow) saves each
-change as it is made, in the `io.github.sglavoie.agentmux` defaults domain.
+Preferences (`UI/PreferencesWindow.swift`, SwiftUI in an NSWindow titled
+Agent Mux Settings, opened by Settings… in the status menu and the app menu)
+saves each change as it is made, in the `io.github.sglavoie.agentmux` defaults
+domain. The amx binary path is saved when its field is submitted or left (or
+the window closes), not per keystroke, so a half-typed path never replaces the
+amx the app runs.
 An absent, mistyped, or out-of-range value reads as its default.
 
 | Key | Default | Meaning |
@@ -974,7 +986,10 @@ login item removed in System Settings is not added back.
 
 ## Single instance and tests
 
-A second copy of the app exits at launch if one is already running. The tests
+A second copy of the app exits at launch if one is already running, but first
+asks the running one to come forward (a distributed notification,
+`SingleInstance.reopenRequest`, answered as a reopen is: the workspace
+opens) and activates it, so a double launch is never silently nothing. The tests
 run hosted inside the app. When the app sees XCTest in its environment, it
 skips the single-instance check and the status item, and it never spawns
 `amx`. This means `just mac-test` works while the installed app is running.

@@ -9,7 +9,8 @@ final class HotKeyTests: XCTestCase {
         XCTAssertEqual(HotKeyPreference.dashboard.default.string, "ctrl+opt+cmd+a")
         XCTAssertEqual(HotKeyCombo(string: "Command+Alt+Control+N"), HotKeyPreference.nextAttention.default)
         XCTAssertNil(HotKeyCombo(string: "shift+a"), "Shift alone would swallow typing")
-        XCTAssertNotNil(HotKeyCombo(string: "f5"))
+        XCTAssertNotNil(HotKeyCombo(string: "f12"))
+        XCTAssertNil(HotKeyCombo(string: "f5"), "F1–F11 are the workspace's")
         XCTAssertNil(HotKeyCombo(string: "ctrl+ctrl+a"))
     }
 
@@ -60,6 +61,98 @@ final class HotKeyTests: XCTestCase {
             HotKeyConflicts.problem(for: .failed(combo, OSStatus(eventHotKeyInvalidErr)), systemCombos: []),
             "⌃⌥⌘A cannot be used as a global shortcut."
         )
+    }
+
+    @MainActor
+    func testHijackingCombosAreRefusedWithAReason() {
+        let cmd = UInt32(cmdKey), shift = UInt32(shiftKey), ctrl = UInt32(controlKey), opt = UInt32(optionKey)
+        let t = UInt32(kVK_ANSI_T)
+        XCTAssertNil(HotKeyCombo(keyCode: t, modifiers: cmd), "⌘T is every app's new tab")
+        XCTAssertNil(HotKeyCombo(keyCode: t, modifiers: cmd | shift))
+        XCTAssertEqual(HotKeyCombo.refusal(keyCode: t, modifiers: cmd), "⌘ alone is for apps' own menus; add ⌃ or ⌥…")
+        XCTAssertNil(HotKeyCombo(string: "cmd+t"), "a stored ⌘-only combo reads as refused")
+        XCTAssertNotNil(HotKeyCombo(keyCode: t, modifiers: cmd | opt))
+        XCTAssertNotNil(HotKeyCombo(keyCode: t, modifiers: ctrl))
+
+        for number in 1...11 {
+            let code = UInt32([kVK_F1, kVK_F2, kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F9, kVK_F10, kVK_F11][number - 1])
+            XCTAssertNil(HotKeyCombo(keyCode: code, modifiers: 0), "F\(number) is the workspace's")
+            XCTAssertNil(HotKeyCombo(keyCode: code, modifiers: shift))
+            XCTAssertEqual(HotKeyCombo.refusal(keyCode: code, modifiers: 0), "F1–F11 are the workspace's; add ⌃, ⌥, or ⌘…")
+            XCTAssertNotNil(HotKeyCombo(keyCode: code, modifiers: ctrl | opt))
+        }
+        XCTAssertEqual(HotKeyCombo.workspaceFunctionKeys, WorkspaceMenu.functionKeys.count)
+        XCTAssertNotNil(HotKeyCombo(keyCode: UInt32(kVK_F12), modifiers: 0))
+        XCTAssertNotNil(HotKeyCombo(string: "f13"))
+        XCTAssertEqual(HotKeyCombo.refusal(keyCode: UInt32(kVK_ANSI_A), modifiers: shift), "Add ⌃, ⌥, or ⌘…")
+        XCTAssertEqual(HotKeyCombo.refusal(keyCode: UInt32(kVK_CapsLock), modifiers: ctrl), "That key cannot be a shortcut")
+    }
+
+    func testDisplayFollowsTheKeyboardLayout() {
+        let combo = HotKeyPreference.dashboard.default
+        // AZERTY types Q on the key US calls A.
+        let azerty: (UInt32) -> String? = { $0 == UInt32(kVK_ANSI_A) ? "Q" : nil }
+        XCTAssertEqual(combo.displayString(keyLabel: azerty), "⌃⌥⌘Q")
+        XCTAssertEqual(combo.displayString(keyLabel: { _ in nil }), "⌃⌥⌘A", "the US table is the fallback")
+        XCTAssertEqual(HotKeyCombo(string: "ctrl+opt+f5")?.displayString, "⌃⌥F5", "named keys keep their names")
+        XCTAssertNil(HotKeyCombo.layoutLabel(UInt32(kVK_F5)))
+        XCTAssertNil(HotKeyCombo.layoutLabel(UInt32(kVK_Return)))
+        // Whatever this Mac's layout is, it names its letter keys.
+        XCTAssertNotNil(HotKeyCombo.layoutLabel(UInt32(kVK_ANSI_A)))
+        XCTAssertEqual(combo.displayString, combo.displayString(keyLabel: HotKeyCombo.layoutLabel))
+    }
+
+    func testMenuKeyEquivalent() throws {
+        let f13 = try XCTUnwrap(HotKeyCombo(string: "ctrl+f13")?.menuKeyEquivalent)
+        XCTAssertEqual(f13.key, String(Character(UnicodeScalar(NSF13FunctionKey)!)))
+        XCTAssertEqual(f13.modifiers, [.control])
+        let dashboard = try XCTUnwrap(HotKeyPreference.dashboard.default.menuKeyEquivalent)
+        XCTAssertEqual(dashboard.key, HotKeyCombo.layoutLabel(UInt32(kVK_ANSI_A))?.lowercased())
+        XCTAssertEqual(dashboard.modifiers, [.control, .option, .command])
+        XCTAssertNil(HotKeyCombo(string: "ctrl+opt+return")?.menuKeyEquivalent)
+    }
+
+    @MainActor
+    func testCollisionWithTheAppsOwnMenuKeys() throws {
+        let combo = try XCTUnwrap(HotKeyCombo(string: "opt+cmd+i"))
+        let key = try XCTUnwrap(combo.menuKeyEquivalent?.key)
+        let menu = NSMenu()
+        let top = NSMenuItem(title: "View", action: nil, keyEquivalent: "")
+        top.submenu = NSMenu()
+        let inspector = NSMenuItem(title: "Inspector", action: nil, keyEquivalent: key)
+        inspector.keyEquivalentModifierMask = [.option, .command]
+        top.submenu?.addItem(inspector)
+        menu.addItem(top)
+        let keys = HotKeyConflicts.menuKeys(menu)
+        XCTAssertEqual(keys.map(\.title), ["Inspector"])
+        XCTAssertEqual(
+            HotKeyConflicts.menuCollision(combo, menuKeys: keys),
+            "\(combo.displayString) is also the menu key for “Inspector”, which stops working while this shortcut is set."
+        )
+        XCTAssertNil(HotKeyConflicts.menuCollision(HotKeyCombo(string: "ctrl+opt+cmd+i"), menuKeys: keys))
+        XCTAssertNil(HotKeyConflicts.menuCollision(nil, menuKeys: keys))
+        // An uppercase key equivalent is the Shift combo.
+        let shifted = [HotKeyConflicts.MenuKey(title: "Up", key: key.uppercased(), modifiers: [.option, .command])]
+        XCTAssertNotNil(HotKeyConflicts.menuCollision(HotKeyCombo(string: "opt+shift+cmd+i"), menuKeys: shifted))
+        XCTAssertNil(HotKeyConflicts.menuCollision(combo, menuKeys: shifted))
+    }
+
+    @MainActor
+    func testOpenDashboardShowsTheGlobalShortcut() throws {
+        let open = NSMenuItem(title: "Open Dashboard", action: nil, keyEquivalent: "")
+        open.representedObject = MenuBuilder.ActionBox(.openDashboard)
+        let other = NSMenuItem(title: "Open Workspace", action: nil, keyEquivalent: "")
+        other.representedObject = MenuBuilder.ActionBox(.openWorkspace)
+        var input = MenuBuilder.ActionsInput()
+        StatusItemController.showHotKeys(on: [open, other], input)
+        XCTAssertEqual(open.keyEquivalent, "", "no shortcut, no key")
+
+        input.dashboardHotKey = HotKeyPreference.dashboard.default
+        StatusItemController.showHotKeys(on: [open, other], input)
+        let expected = try XCTUnwrap(HotKeyPreference.dashboard.default.menuKeyEquivalent)
+        XCTAssertEqual(open.keyEquivalent, expected.key)
+        XCTAssertEqual(open.keyEquivalentModifierMask, [.control, .option, .command])
+        XCTAssertEqual(other.keyEquivalent, "")
     }
 
     func testSystemCombosAreReadable() {

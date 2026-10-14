@@ -189,6 +189,47 @@ final class AppPreferencesTests: XCTestCase {
     }
 
     @MainActor
+    func testBinaryPathIsCommittedOnlyWhenEditingEnds() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        var changes: [(AppPreferences, AppPreferences)] = []
+        model.onChange = { changes.append(($0, $1)) }
+
+        for prefix in ["/", "/us", "/usr/loc"] {
+            model.binaryPathDraft = prefix
+        }
+        XCTAssertTrue(changes.isEmpty, "typing changes nothing the app runs")
+        XCTAssertEqual(model.preferences.binaryPath, "")
+        XCTAssertNil(defaults.object(forKey: AMXBinaryResolver.overrideDefaultsKey))
+        XCTAssertNil(model.binaryOverrideProblem, "a partial path is not judged until it is committed")
+
+        model.binaryPathDraft = "/no/such/amx"
+        model.commitBinaryPath()
+        XCTAssertEqual(changes.count, 1)
+        XCTAssertEqual(changes.first?.1.binaryPath, "/no/such/amx")
+        XCTAssertEqual(defaults.string(forKey: AMXBinaryResolver.overrideDefaultsKey), "/no/such/amx")
+        XCTAssertEqual(model.binaryOverrideProblem, "Not an executable file.")
+        model.commitBinaryPath()
+        XCTAssertEqual(changes.count, 1, "committing again changes nothing")
+
+        // A path chosen in the panel, or written elsewhere, shows in the field.
+        model.preferences.binaryPath = "/bin/ls"
+        XCTAssertEqual(model.binaryPathDraft, "/bin/ls")
+        defaults.set("/bin/cat", forKey: AMXBinaryResolver.overrideDefaultsKey)
+        model.refresh()
+        XCTAssertEqual(model.binaryPathDraft, "/bin/cat")
+    }
+
+    @MainActor
+    func testWordingOfTheMenuBarSection() {
+        XCTAssertEqual(PreferencesModel.recentDaysLabel(1), "Recent: last day")
+        XCTAssertEqual(PreferencesModel.recentDaysLabel(7), "Recent: last 7 days")
+        XCTAssertNil(PreferencesModel.workingCountNote(.glyphs))
+        XCTAssertEqual(PreferencesModel.workingCountNote(.compact), "Only the “Glyphs and counts” status shows a working count.")
+        XCTAssertNotNil(PreferencesModel.workingCountNote(.iconOnly))
+    }
+
+    @MainActor
     func testModelDescribesTheSnooze() {
         let model = PreferencesModel(defaults: freshDefaults())
         XCTAssertEqual(model.snoozeDescription, "Not snoozed")

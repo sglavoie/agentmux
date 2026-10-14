@@ -237,7 +237,7 @@ enum ASLRefusal {
         case .notRunning:
             return "the daemon is not running: nothing was sent"
         case .unsupported:
-            return "daemon too old to answer questions — run `amx daemon restart`"
+            return "Daemon too old to answer questions — run amx daemon restart"
         case .refused, .transport:
             break
         }

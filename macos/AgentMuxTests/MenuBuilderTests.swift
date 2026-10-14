@@ -96,11 +96,11 @@ final class MenuBuilderTests: XCTestCase {
 
     func testFeedStates() {
         XCTAssertEqual(MenuBuilder.entries(input([], feed: .notRunning)),
-                       [.info("Daemon: not running"), .action(.startDaemon, "Start daemon")])
+                       [.info("Daemon: not running"), .action(.startDaemon, "Start Daemon")])
         var old = input([], feed: .daemonTooOld)
         old.daemonStatus = .ready(DaemonBuild(version: "0.7.0", revision: "abc"))
         XCTAssertEqual(MenuBuilder.entries(old),
-                       [.info("Daemon: ready · 0.7.0 (abc)"), .info("daemon too old — run `amx daemon restart`")])
+                       [.info("Daemon: ready · 0.7.0 (abc)"), .info("Daemon too old — run amx daemon restart")])
         XCTAssertEqual(MenuBuilder.entries(input([session(1, "")], feed: .reconnecting("no heartbeat"))),
                        [.info("Daemon: reconnecting · no heartbeat")], "no sessions shown from a feed that is not live")
         XCTAssertEqual(MenuBuilder.entries(input([], feed: .connecting)), [.info("Daemon: connecting…")])
@@ -118,7 +118,7 @@ final class MenuBuilderTests: XCTestCase {
     func testMenuItemsCarryTheirRows() {
         let rows = (1...11).map { MenuSessionRow(title: "r\($0)", windowID: $0, kittySocket: "", toolTip: "") }
         let entries: [MenuEntry] = [.info("x"), .header("H"), .session(rows[0]), .submenu("Idle (11)", rows),
-                                    .action(.startDaemon, "Start daemon"), .separator]
+                                    .action(.startDaemon, "Start Daemon"), .separator]
         let target = NSObject()
         let items = MenuBuilder.items(for: entries, target: target, sessionAction: #selector(NSObject.description), actionSelector: #selector(NSObject.hash))
         XCTAssertEqual(items.count, 6)

@@ -75,19 +75,24 @@ struct SnoozeState: Decodable, Equatable {
 /// What the Notifications submenu offers.
 enum SnoozeChoice: CaseIterable, Equatable {
     case oneHour
-    case untilTomorrowMorning
+    case untilMorning
     case untilResumed
     case resume
 
-    /// Tomorrow's snooze ends at this hour, local time.
+    /// The morning snooze ends at this hour, local time.
     static let morningHour = 8
     /// Why Resume Now is greyed out, in the menu and in Preferences.
     static let notSnoozed = "Notifications are not snoozed"
 
-    var title: String {
+    /// The menu title as of `now`: the morning snooze names its end in the
+    /// operator's time format, and says Tomorrow only when it is tomorrow.
+    func title(now: Date, calendar: Calendar = .current, time: (Date) -> String = SnoozeChoice.localTime) -> String {
         switch self {
         case .oneHour: return "Snooze for 1 Hour"
-        case .untilTomorrowMorning: return "Snooze Until Tomorrow 08:00"
+        case .untilMorning:
+            let end = Self.nextMorning(after: now, calendar: calendar)
+            let tomorrow = !calendar.isDate(end, inSameDayAs: now)
+            return "Snooze Until \(tomorrow ? "Tomorrow " : "")\(time(end))"
         case .untilResumed: return "Snooze Until Resumed"
         case .resume: return "Resume Now"
         }
@@ -97,8 +102,8 @@ enum SnoozeChoice: CaseIterable, Equatable {
         switch self {
         case .oneHour:
             return .ending(at: now.addingTimeInterval(3600))
-        case .untilTomorrowMorning:
-            return .ending(at: Self.tomorrowMorning(after: now, calendar: calendar))
+        case .untilMorning:
+            return .ending(at: Self.nextMorning(after: now, calendar: calendar))
         case .untilResumed:
             return .untilResumed
         case .resume:
@@ -106,12 +111,20 @@ enum SnoozeChoice: CaseIterable, Equatable {
         }
     }
 
-    /// 08:00 on the calendar day after `now`'s.
-    static func tomorrowMorning(after now: Date, calendar: Calendar = .current) -> Date {
+    /// The next 08:00 after `now`: today's when it is still to come,
+    /// otherwise tomorrow's.
+    static func nextMorning(after now: Date, calendar: Calendar = .current) -> Date {
         let today = calendar.startOfDay(for: now)
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86400)
-        return calendar.date(bySettingHour: morningHour, minute: 0, second: 0, of: tomorrow)
-            ?? tomorrow.addingTimeInterval(TimeInterval(morningHour * 3600))
+        let morning = calendar.date(bySettingHour: morningHour, minute: 0, second: 0, of: today)
+            ?? today.addingTimeInterval(TimeInterval(morningHour * 3600))
+        if morning > now { return morning }
+        return calendar.date(byAdding: .day, value: 1, to: morning) ?? morning.addingTimeInterval(86400)
+    }
+
+    /// A time of day alone, as the operator's locale writes it (`08:00`,
+    /// `8:00 AM`).
+    static func localTime(_ date: Date) -> String {
+        DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .short)
     }
 }
 

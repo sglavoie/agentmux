@@ -17,11 +17,25 @@ final class SnoozeTests: XCTestCase {
         XCTAssertEqual(SnoozeChoice.untilResumed.request(now: now), SnoozeRequest(mode: "indefinite"))
         XCTAssertEqual(SnoozeChoice.resume.request(now: now), SnoozeRequest(mode: "clear"))
 
-        // 1_800_000_000 is 2027-01-15 08:00:00 UTC; tomorrow 08:00 is a day on.
-        let morning = SnoozeChoice.untilTomorrowMorning.request(now: now, calendar: utc)
+        // 1_800_000_000 is 2027-01-15 08:00:00 UTC: 08:00 has come, so the
+        // next one is tomorrow's.
+        let morning = SnoozeChoice.untilMorning.request(now: now, calendar: utc)
         XCTAssertEqual(morning, SnoozeRequest(mode: "until", until: 1_800_000_000 + 86400))
         let lateNight = now.addingTimeInterval(15 * 3600 + 59 * 60) // 23:59
-        XCTAssertEqual(SnoozeChoice.tomorrowMorning(after: lateNight, calendar: utc), Date(timeIntervalSince1970: 1_800_000_000 + 86400))
+        XCTAssertEqual(SnoozeChoice.nextMorning(after: lateNight, calendar: utc), Date(timeIntervalSince1970: 1_800_000_000 + 86400))
+    }
+
+    func testMorningSnoozeEndsAtTheNextEightOClock() {
+        let earlyMorning = now.addingTimeInterval(-(6 * 3600 + 30 * 60)) // 01:30
+        XCTAssertEqual(SnoozeChoice.nextMorning(after: earlyMorning, calendar: utc), now, "before 08:00 it is today's")
+        XCTAssertEqual(SnoozeChoice.nextMorning(after: now.addingTimeInterval(-1), calendar: utc), now)
+        XCTAssertEqual(SnoozeChoice.untilMorning.request(now: earlyMorning, calendar: utc),
+                       SnoozeRequest(mode: "until", until: 1_800_000_000))
+
+        let time: (Date) -> String = { _ in "8:00 AM" }
+        XCTAssertEqual(SnoozeChoice.untilMorning.title(now: earlyMorning, calendar: utc, time: time), "Snooze Until 8:00 AM")
+        XCTAssertEqual(SnoozeChoice.untilMorning.title(now: now, calendar: utc, time: time), "Snooze Until Tomorrow 8:00 AM")
+        XCTAssertEqual(SnoozeChoice.oneHour.title(now: now), "Snooze for 1 Hour")
     }
 
     func testRequestsEncodeAsTheDaemonReadsThem() throws {
@@ -154,7 +168,7 @@ final class SnoozeTests: XCTestCase {
         XCTAssertEqual(MenuBuilder.notificationEntries(input), [
             .info("Not snoozed"),
             .action(.snooze(.oneHour), "Snooze for 1 Hour"),
-            .action(.snooze(.untilTomorrowMorning), "Snooze Until Tomorrow 08:00"),
+            .action(.snooze(.untilMorning), SnoozeChoice.untilMorning.title(now: now)),
             .action(.snooze(.untilResumed), "Snooze Until Resumed"),
             .unavailable("Resume Now", reason: "Notifications are not snoozed"),
             .separator,

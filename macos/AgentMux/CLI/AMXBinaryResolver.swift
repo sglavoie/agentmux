@@ -58,7 +58,7 @@ struct AMXBinaryResolver {
                 lines.append("Agent Mux.app could not find the amx binary. Looked in:")
                 lines.append(contentsOf: tried.map { "  \($0)" })
                 lines.append("")
-                lines.append("Install it with `just install`, or point Agent Mux.app at one:")
+                lines.append("Install it with just install, or point Agent Mux.app at one:")
                 lines.append("  defaults write \(AMXBinaryResolver.defaultsDomain) \(AMXBinaryResolver.overrideDefaultsKey) /path/to/amx")
             }
             return lines.joined(separator: "\n")

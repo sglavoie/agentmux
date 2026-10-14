@@ -18,9 +18,9 @@ final class ActionGateTests: XCTestCase {
     func testAnOlderAmxGreysOutWhatItLacks() {
         // amx 0.8.0: no project, no open-dashboard, mute-toggle without --json.
         let gate = ActionGate(capabilities: AMXCapabilities(notificationsSnooze: false), binaryPath: "/bin/amx")
-        XCTAssertEqual(gate.unavailableReason(.project), "/bin/amx has no `project`; run `just install`")
-        XCTAssertEqual(gate.unavailableReason(.openDashboard), "/bin/amx has no `open-dashboard`; run `just install`")
-        XCTAssertEqual(gate.unavailableReason(.muteToggle), "/bin/amx has no `mute-toggle --json`; run `just install`")
+        XCTAssertEqual(gate.unavailableReason(.project), "/bin/amx has no project command; run just install")
+        XCTAssertEqual(gate.unavailableReason(.openDashboard), "/bin/amx has no open-dashboard command; run just install")
+        XCTAssertEqual(gate.unavailableReason(.muteToggle), "/bin/amx has no mute-toggle --json command; run just install")
         XCTAssertNil(gate.unavailableReason(.sessions))
     }
 
@@ -43,8 +43,8 @@ final class ActionGateTests: XCTestCase {
         XCTAssertEqual(entries, [
             .separator,
             .action(.openWorkspace, "Open Workspace"),
-            .unavailable("Open Dashboard", reason: "amx has no `open-dashboard`; run `just install`"),
-            .submenuRef(.projects, "Launch Project", reason: "amx has no `project`; run `just install`"),
+            .unavailable("Open Dashboard", reason: "amx has no open-dashboard command; run just install"),
+            .submenuRef(.projects, "Launch Project", reason: "amx has no project command; run just install"),
             .submenuRef(.recent, "Recent", reason: nil),
             .submenuRef(.notifications, "Notifications", reason: nil),
         ])
@@ -57,7 +57,7 @@ final class ActionGateTests: XCTestCase {
         input.dashboardPlace = .workspace
         XCTAssertEqual(MenuBuilder.actionEntries(input)[2], .action(.openDashboard, "Open Dashboard"))
         input.dashboardPlace = .kitty
-        XCTAssertEqual(MenuBuilder.actionEntries(input)[2], .unavailable("Open Dashboard", reason: "amx has no `open-dashboard`; run `just install`"))
+        XCTAssertEqual(MenuBuilder.actionEntries(input)[2], .unavailable("Open Dashboard", reason: "amx has no open-dashboard command; run just install"))
     }
 
     func testActionEntriesOnACurrentAmx() {

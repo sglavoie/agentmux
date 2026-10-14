@@ -44,6 +44,16 @@ final class AppSkeletonTests: XCTestCase {
         XCTAssertEqual(icon.tiffRepresentation, asset.tiffRepresentation, "the SF Symbol fallback was used")
     }
 
+    @MainActor
+    func testSecondCopyAsksTheRunningOneToComeForward() {
+        let identifier = "io.github.sglavoie.agentmux.tests-\(UUID().uuidString)"
+        let reopened = expectation(description: "reopen asked")
+        let observer = SingleInstance.observeReopenRequests(bundleIdentifier: identifier) { reopened.fulfill() }
+        defer { DistributedNotificationCenter.default().removeObserver(observer) }
+        SingleInstance.handOff(to: [], bundleIdentifier: identifier)
+        wait(for: [reopened], timeout: 10)
+    }
+
     func testSingleInstanceIgnoresItself() {
         let others = SingleInstance.otherInstances(bundleIdentifier: "x", currentPID: 42) { _ in [42, 7, 0] }
         XCTAssertEqual(others, [7])

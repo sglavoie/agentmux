@@ -51,7 +51,7 @@ enum WorkspaceMenu {
         let main = NSMenu()
 
         let app = submenu("Agent Mux", in: main)
-        app.addItem(item("Preferences…", #selector(AppDelegate.showPreferences(_:)), ",", target: target))
+        app.addItem(item("Settings…", #selector(AppDelegate.showPreferences(_:)), ",", target: target))
         app.addItem(.separator())
         app.addItem(item("Hide Agent Mux", #selector(NSApplication.hide(_:)), "h"))
         app.addItem(.separator())

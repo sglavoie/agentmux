@@ -13,20 +13,42 @@ struct HotKeyCombo: Equatable, Hashable {
 
     static let modifierMask = UInt32(controlKey | optionKey | shiftKey | cmdKey)
 
-    /// Refuses a combo that would swallow ordinary typing: it needs Control,
-    /// Option, or Command, unless the key is a function key.
+    /// Refuses what `refusal` refuses.
     init?(keyCode: UInt32, modifiers: UInt32) {
-        guard Self.keys[keyCode] != nil else { return nil }
-        let modifiers = modifiers & Self.modifierMask
-        let chord = modifiers & UInt32(controlKey | optionKey | cmdKey)
-        guard chord != 0 || Self.isFunctionKey(keyCode) else { return nil }
+        guard Self.refusal(keyCode: keyCode, modifiers: modifiers) == nil else { return nil }
         self.keyCode = keyCode
-        self.modifiers = modifiers
+        self.modifiers = modifiers & Self.modifierMask
     }
+
+    /// Why a key cannot be a global shortcut, in the recorder's words; nil
+    /// when it can. A global shortcut is taken from every app, so it may not
+    /// swallow ordinary typing (it needs Control, Option, or Command, unless
+    /// the key is a function key), may not be Command alone (with or without
+    /// Shift, that is every app's own menu keys), and may not be a bare F1 to
+    /// F11, which the workspace binds.
+    static func refusal(keyCode: UInt32, modifiers: UInt32) -> String? {
+        guard keys[keyCode] != nil else { return "That key cannot be a shortcut" }
+        let chord = modifiers & UInt32(controlKey | optionKey | cmdKey)
+        if chord == 0 {
+            guard let number = functionKeyNumber(keyCode) else { return "Add ⌃, ⌥, or ⌘…" }
+            if number <= workspaceFunctionKeys { return "F1–F11 are the workspace's; add ⌃, ⌥, or ⌘…" }
+            return nil
+        }
+        if chord == UInt32(cmdKey) { return "⌘ alone is for apps' own menus; add ⌃ or ⌥…" }
+        return nil
+    }
+
+    /// F1 to this one are the workspace's keys (`WorkspaceMenu.functionKeys`).
+    static let workspaceFunctionKeys = 11
 
     /// A key pressed in the recorder.
     init?(event: NSEvent) {
         self.init(keyCode: UInt32(event.keyCode), modifiers: Self.carbonModifiers(event.modifierFlags))
+    }
+
+    /// Why the recorder refuses `event`; nil when it is a shortcut.
+    static func refusal(event: NSEvent) -> String? {
+        refusal(keyCode: UInt32(event.keyCode), modifiers: carbonModifiers(event.modifierFlags))
     }
 
     /// Parses the stored spelling; modifier aliases (`control`, `option`,
@@ -50,10 +72,33 @@ struct HotKeyCombo: Equatable, Hashable {
         return (names + [Self.keys[keyCode]?.name ?? ""]).joined(separator: "+")
     }
 
-    /// The menu-style label, e.g. `⌃⌥⌘T`.
-    var displayString: String {
+    /// The menu-style label, e.g. `⌃⌥⌘T`, with the key the current keyboard
+    /// layout puts on that key code (`⌃⌥⌘Q` on AZERTY for the US A key).
+    var displayString: String { displayString(keyLabel: Self.layoutLabel) }
+
+    /// The label with `keyLabel` naming character keys; a nil from it falls
+    /// back to the US name.
+    func displayString(keyLabel: (UInt32) -> String?) -> String {
         Self.modifierOrder.filter { modifiers & $0.bit != 0 }.map(\.symbol).joined()
-            + (Self.keys[keyCode]?.symbol ?? "?")
+            + (keyLabel(keyCode) ?? Self.keys[keyCode]?.symbol ?? "?")
+    }
+
+    /// What an `NSMenuItem` takes to show this combo as its key equivalent:
+    /// the key as the current layout types it (or the function key's
+    /// character) and the modifiers. Nil for keys a menu cannot spell this way.
+    var menuKeyEquivalent: (key: String, modifiers: NSEvent.ModifierFlags)? {
+        var flags: NSEvent.ModifierFlags = []
+        if modifiers & UInt32(controlKey) != 0 { flags.insert(.control) }
+        if modifiers & UInt32(optionKey) != 0 { flags.insert(.option) }
+        if modifiers & UInt32(shiftKey) != 0 { flags.insert(.shift) }
+        if modifiers & UInt32(cmdKey) != 0 { flags.insert(.command) }
+        if let number = Self.functionKeyNumber(keyCode),
+           let scalar = UnicodeScalar(NSF1FunctionKey + number - 1) {
+            return (String(Character(scalar)), flags)
+        }
+        guard let label = Self.layoutLabel(keyCode) ?? (Self.characterKeyCodes.contains(keyCode) ? Self.keys[keyCode]?.symbol : nil)
+        else { return nil }
+        return (label.lowercased(), flags)
     }
 
     static func carbonModifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
@@ -66,8 +111,41 @@ struct HotKeyCombo: Equatable, Hashable {
     }
 
     static func isFunctionKey(_ keyCode: UInt32) -> Bool {
-        guard let name = keys[keyCode]?.name, name.hasPrefix("f") else { return false }
-        return Int(name.dropFirst()) != nil
+        functionKeyNumber(keyCode) != nil
+    }
+
+    /// 5 for F5; nil for any other key.
+    static func functionKeyNumber(_ keyCode: UInt32) -> Int? {
+        guard let name = keys[keyCode]?.name, name.hasPrefix("f") else { return nil }
+        return Int(name.dropFirst())
+    }
+
+    /// The character the current keyboard layout types on a character key,
+    /// uppercased as a menu shows it (`UCKeyTranslate`); nil for named keys
+    /// (Return, arrows, function keys) and when the layout cannot say.
+    static func layoutLabel(_ keyCode: UInt32) -> String? {
+        guard characterKeyCodes.contains(keyCode),
+              let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return nil }
+        let data = Unmanaged<CFData>.fromOpaque(raw).takeUnretainedValue() as Data
+        var deadKeyState: UInt32 = 0
+        var characters = [UniChar](repeating: 0, count: 4)
+        var length = 0
+        let status = data.withUnsafeBytes { buffer -> OSStatus in
+            guard let layout = buffer.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else {
+                return OSStatus(paramErr)
+            }
+            return UCKeyTranslate(
+                layout, UInt16(keyCode), UInt16(kUCKeyActionDisplay), 0, UInt32(LMGetKbdType()),
+                OptionBits(kUCKeyTranslateNoDeadKeysMask), &deadKeyState, characters.count, &length, &characters
+            )
+        }
+        guard status == noErr, length > 0 else { return nil }
+        let label = String(utf16CodeUnits: characters, count: length).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty, label.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else {
+            return nil
+        }
+        return label.uppercased()
     }
 
     // MARK: Tables
@@ -86,28 +164,35 @@ struct HotKeyCombo: Equatable, Hashable {
         "cmd": UInt32(cmdKey), "command": UInt32(cmdKey),
     ]
 
+    /// The keys that type a character, which the layout names.
+    static let characterKeyCodes: Set<UInt32> = Set(characterKeys.keys.map { UInt32($0) })
+
+    private static let characterKeys: [Int: (String, String)] = [
+        kVK_ANSI_A: ("a", "A"), kVK_ANSI_B: ("b", "B"), kVK_ANSI_C: ("c", "C"),
+        kVK_ANSI_D: ("d", "D"), kVK_ANSI_E: ("e", "E"), kVK_ANSI_F: ("f", "F"),
+        kVK_ANSI_G: ("g", "G"), kVK_ANSI_H: ("h", "H"), kVK_ANSI_I: ("i", "I"),
+        kVK_ANSI_J: ("j", "J"), kVK_ANSI_K: ("k", "K"), kVK_ANSI_L: ("l", "L"),
+        kVK_ANSI_M: ("m", "M"), kVK_ANSI_N: ("n", "N"), kVK_ANSI_O: ("o", "O"),
+        kVK_ANSI_P: ("p", "P"), kVK_ANSI_Q: ("q", "Q"), kVK_ANSI_R: ("r", "R"),
+        kVK_ANSI_S: ("s", "S"), kVK_ANSI_T: ("t", "T"), kVK_ANSI_U: ("u", "U"),
+        kVK_ANSI_V: ("v", "V"), kVK_ANSI_W: ("w", "W"), kVK_ANSI_X: ("x", "X"),
+        kVK_ANSI_Y: ("y", "Y"), kVK_ANSI_Z: ("z", "Z"),
+        kVK_ANSI_0: ("0", "0"), kVK_ANSI_1: ("1", "1"), kVK_ANSI_2: ("2", "2"),
+        kVK_ANSI_3: ("3", "3"), kVK_ANSI_4: ("4", "4"), kVK_ANSI_5: ("5", "5"),
+        kVK_ANSI_6: ("6", "6"), kVK_ANSI_7: ("7", "7"), kVK_ANSI_8: ("8", "8"),
+        kVK_ANSI_9: ("9", "9"),
+        kVK_ANSI_Minus: ("minus", "-"), kVK_ANSI_Equal: ("equal", "="),
+        kVK_ANSI_LeftBracket: ("leftbracket", "["), kVK_ANSI_RightBracket: ("rightbracket", "]"),
+        kVK_ANSI_Quote: ("quote", "'"), kVK_ANSI_Semicolon: ("semicolon", ";"),
+        kVK_ANSI_Backslash: ("backslash", "\\"), kVK_ANSI_Comma: ("comma", ","),
+        kVK_ANSI_Slash: ("slash", "/"), kVK_ANSI_Period: ("period", "."),
+        kVK_ANSI_Grave: ("grave", "`"),
+    ]
+
     /// Keys by their US-layout virtual key code, as the hardware reports them.
     static let keys: [UInt32: (name: String, symbol: String)] = {
-        var table: [Int: (String, String)] = [
-            kVK_ANSI_A: ("a", "A"), kVK_ANSI_B: ("b", "B"), kVK_ANSI_C: ("c", "C"),
-            kVK_ANSI_D: ("d", "D"), kVK_ANSI_E: ("e", "E"), kVK_ANSI_F: ("f", "F"),
-            kVK_ANSI_G: ("g", "G"), kVK_ANSI_H: ("h", "H"), kVK_ANSI_I: ("i", "I"),
-            kVK_ANSI_J: ("j", "J"), kVK_ANSI_K: ("k", "K"), kVK_ANSI_L: ("l", "L"),
-            kVK_ANSI_M: ("m", "M"), kVK_ANSI_N: ("n", "N"), kVK_ANSI_O: ("o", "O"),
-            kVK_ANSI_P: ("p", "P"), kVK_ANSI_Q: ("q", "Q"), kVK_ANSI_R: ("r", "R"),
-            kVK_ANSI_S: ("s", "S"), kVK_ANSI_T: ("t", "T"), kVK_ANSI_U: ("u", "U"),
-            kVK_ANSI_V: ("v", "V"), kVK_ANSI_W: ("w", "W"), kVK_ANSI_X: ("x", "X"),
-            kVK_ANSI_Y: ("y", "Y"), kVK_ANSI_Z: ("z", "Z"),
-            kVK_ANSI_0: ("0", "0"), kVK_ANSI_1: ("1", "1"), kVK_ANSI_2: ("2", "2"),
-            kVK_ANSI_3: ("3", "3"), kVK_ANSI_4: ("4", "4"), kVK_ANSI_5: ("5", "5"),
-            kVK_ANSI_6: ("6", "6"), kVK_ANSI_7: ("7", "7"), kVK_ANSI_8: ("8", "8"),
-            kVK_ANSI_9: ("9", "9"),
-            kVK_ANSI_Minus: ("minus", "-"), kVK_ANSI_Equal: ("equal", "="),
-            kVK_ANSI_LeftBracket: ("leftbracket", "["), kVK_ANSI_RightBracket: ("rightbracket", "]"),
-            kVK_ANSI_Quote: ("quote", "'"), kVK_ANSI_Semicolon: ("semicolon", ";"),
-            kVK_ANSI_Backslash: ("backslash", "\\"), kVK_ANSI_Comma: ("comma", ","),
-            kVK_ANSI_Slash: ("slash", "/"), kVK_ANSI_Period: ("period", "."),
-            kVK_ANSI_Grave: ("grave", "`"),
+        var table: [Int: (String, String)] = characterKeys
+        table.merge([
             kVK_Return: ("return", "↩"), kVK_Tab: ("tab", "⇥"), kVK_Space: ("space", "Space"),
             kVK_Delete: ("delete", "⌫"), kVK_ForwardDelete: ("forwarddelete", "⌦"),
             kVK_Escape: ("escape", "⎋"),
@@ -115,7 +200,7 @@ struct HotKeyCombo: Equatable, Hashable {
             kVK_UpArrow: ("up", "↑"), kVK_DownArrow: ("down", "↓"),
             kVK_Home: ("home", "↖"), kVK_End: ("end", "↘"),
             kVK_PageUp: ("pageup", "⇞"), kVK_PageDown: ("pagedown", "⇟"),
-        ]
+        ]) { first, _ in first }
         let functionKeys = [
             kVK_F1, kVK_F2, kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F9, kVK_F10,
             kVK_F11, kVK_F12, kVK_F13, kVK_F14, kVK_F15, kVK_F16, kVK_F17, kVK_F18, kVK_F19, kVK_F20,
@@ -291,6 +376,40 @@ enum HotKeyConflicts {
         guard let combo else { return nil }
         guard let owner = earlier.first(where: { $0.combo == combo }) else { return nil }
         return "\(combo.displayString) is already used for “\(owner.label)”. Choose another shortcut."
+    }
+
+    /// One key equivalent of the app's own menus.
+    struct MenuKey: Equatable {
+        let title: String
+        let key: String
+        let modifiers: NSEvent.ModifierFlags
+    }
+
+    /// Every key equivalent in `menu` and its submenus.
+    static func menuKeys(_ menu: NSMenu?) -> [MenuKey] {
+        guard let menu else { return [] }
+        return menu.items.flatMap { item -> [MenuKey] in
+            var keys = menuKeys(item.submenu)
+            if !item.keyEquivalent.isEmpty {
+                keys.insert(MenuKey(title: item.title, key: item.keyEquivalent, modifiers: item.keyEquivalentModifierMask), at: 0)
+            }
+            return keys
+        }
+    }
+
+    /// The warning for a shortcut that is also one of the app's own menu
+    /// keys: the global shortcut wins, so the menu item's key stops working.
+    static func menuCollision(_ combo: HotKeyCombo?, menuKeys: [MenuKey]) -> String? {
+        guard let combo, let wanted = combo.menuKeyEquivalent else { return nil }
+        let relevant: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
+        let owner = menuKeys.first { item in
+            var modifiers = item.modifiers.intersection(relevant)
+            // An uppercase key equivalent implies Shift.
+            if item.key != item.key.lowercased() { modifiers.insert(.shift) }
+            return item.key.lowercased() == wanted.key && modifiers == wanted.modifiers.intersection(relevant)
+        }
+        guard let owner else { return nil }
+        return "\(combo.displayString) is also the menu key for “\(owner.title)”, which stops working while this shortcut is set."
     }
 
     /// The warning for a registration result; macOS's own shortcuts are

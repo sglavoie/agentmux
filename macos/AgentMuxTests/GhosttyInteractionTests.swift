@@ -408,7 +408,7 @@ final class WorkspaceShortcutTests: XCTestCase {
 
     func testEveryMenuShortcutIsClaimedForItsKey() {
         let expected: [(TestKey, String)] = [
-            (.command(",", keyCode: 43), "Preferences…"),
+            (.command(",", keyCode: 43), "Settings…"),
             (.command("q", keyCode: 12), "Quit Agent Mux"),
             (.command("c", keyCode: 8), "Copy"),
             (.command("v", keyCode: 9), "Paste"),

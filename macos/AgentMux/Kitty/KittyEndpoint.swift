@@ -83,5 +83,5 @@ enum KittyEndpoint {
     }
 
     /// The menu's explanation when there is nothing to try.
-    static let listenOnMissing = "Kitty has no remote-control socket: add `allow_remote_control yes` and `listen_on unix:/tmp/kitty` to kitty.conf, then restart Kitty."
+    static let listenOnMissing = "Kitty has no remote-control socket: add “allow_remote_control yes” and “listen_on unix:/tmp/kitty” to kitty.conf, then restart Kitty."
 }

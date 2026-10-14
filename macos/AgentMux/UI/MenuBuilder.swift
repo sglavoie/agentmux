@@ -95,6 +95,8 @@ enum MenuBuilder {
         var gate = ActionGate()
         /// Where Open Dashboard shows it; only Kitty needs `open-dashboard`.
         var dashboardPlace: DashboardPlacePreference = .workspace
+        /// The global shortcut Open Dashboard shows as its key; nil for none.
+        var dashboardHotKey: HotKeyCombo?
         var feedLive = false
         var projects = FetchState<[ProjectEntry]>()
         /// Project directories the last survey found missing on disk.
@@ -121,10 +123,10 @@ enum MenuBuilder {
             entries.append(.info("Daemon: connecting…"))
         case .notRunning:
             entries.append(.info(DaemonStatusLine.title(for: .notRunning)))
-            entries.append(.action(.startDaemon, "Start daemon"))
+            entries.append(.action(.startDaemon, "Start Daemon"))
         case .daemonTooOld:
             entries.append(.info(DaemonStatusLine.title(for: input.daemonStatus)))
-            entries.append(.info("daemon too old — run `amx daemon restart`"))
+            entries.append(.info("Daemon too old — run amx daemon restart"))
         case let .reconnecting(reason):
             entries.append(.info("Daemon: reconnecting · \(reason)"))
         }
@@ -324,7 +326,7 @@ enum MenuBuilder {
         return entries
     }
 
-    static let snoozeUnsupported = "daemon too old to snooze — run `amx daemon restart`"
+    static let snoozeUnsupported = "Daemon too old to snooze — run amx daemon restart"
 
     static func entries(for submenu: MenuSubmenu, _ input: ActionsInput) -> [MenuEntry] {
         switch submenu {
@@ -419,12 +421,13 @@ enum MenuBuilder {
         let snoozed = snooze.isSnoozed(now: input.now)
         var entries: [MenuEntry] = [.info(snooze.description(now: input.now))]
         for choice in SnoozeChoice.allCases {
+            let title = choice.title(now: input.now)
             if choice == .resume, !snoozed {
-                entries.append(.unavailable(choice.title, reason: SnoozeChoice.notSnoozed))
+                entries.append(.unavailable(title, reason: SnoozeChoice.notSnoozed))
             } else if choice == .untilResumed, snooze.indefinite {
-                entries.append(.unavailable(choice.title, reason: "Already snoozed until resumed"))
+                entries.append(.unavailable(title, reason: "Already snoozed until resumed"))
             } else {
-                entries.append(.action(.snooze(choice), choice.title))
+                entries.append(.action(.snooze(choice), title))
             }
         }
         entries.append(.separator)

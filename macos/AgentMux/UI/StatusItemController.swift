@@ -43,7 +43,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// The entries the main menu was last built from.
     private var builtEntries: [MenuEntry]?
 
-    private let preferencesItem = NSMenuItem(title: "Preferences…", action: #selector(preferences(_:)), keyEquivalent: ",")
+    private let preferencesItem = NSMenuItem(title: "Settings…", action: #selector(preferences(_:)), keyEquivalent: ",")
     private let quitItem = NSMenuItem(title: "Quit Agent Mux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
     init(delegate: StatusItemDelegate, statusBar: NSStatusBar = .system) {
@@ -169,6 +169,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 muteAction: #selector(muteClicked(_:)),
                 submenus: submenus
             )
+            Self.showHotKeys(on: items, actions)
             items.forEach(menu.addItem)
             refreshSubmenus(actions)
         }
@@ -177,6 +178,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(quitItem)
         if isMenuOpen { delegate?.store.noticeWasSeen() }
+    }
+
+    /// Shows the global shortcut as the key equivalent of the item it does
+    /// the same as, where a menu can spell it.
+    static func showHotKeys(on items: [NSMenuItem], _ actions: MenuBuilder.ActionsInput) {
+        guard let key = actions.dashboardHotKey?.menuKeyEquivalent else { return }
+        for item in items where (item.representedObject as? MenuBuilder.ActionBox)?.action == .openDashboard {
+            item.keyEquivalent = key.key
+            item.keyEquivalentModifierMask = key.modifiers
+        }
     }
 
     /// Refills the action submenus; safe while one is open.

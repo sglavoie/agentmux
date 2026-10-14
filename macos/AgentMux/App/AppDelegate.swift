@@ -29,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// applied on top of it each time amx is resolved again.
     private var detectedEnvironment: LaunchEnvironment?
     private var pendingResolve: DispatchWorkItem?
+    /// True while a Preferences recorder listens for a shortcut.
+    private var isRecordingHotKey = false
     private var healthTimer: Timer?
     private var subscription: SubscriptionClient?
     private var wakeObserver: NSObjectProtocol?
@@ -109,9 +111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if let identifier = Bundle.main.bundleIdentifier {
             let others = SingleInstance.otherInstances(bundleIdentifier: identifier)
             if !others.isEmpty {
-                Self.logger.notice("another Agent Mux.app is running (pid \(others.map(String.init).joined(separator: ","), privacy: .public)); exiting")
+                Self.logger.notice("another Agent Mux.app is running (pid \(others.map(String.init).joined(separator: ","), privacy: .public)); asking it to come forward and exiting")
+                SingleInstance.handOff(to: others, bundleIdentifier: identifier)
                 NSApp.terminate(nil)
                 return
+            }
+            SingleInstance.observeReopenRequests(bundleIdentifier: identifier) { [weak self] in
+                self?.showWorkspace()
             }
         }
 
@@ -809,7 +815,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .unknownSocket:
             store.show(notice: "The daemon does not know this session's Kitty socket.")
         case .unsupported:
-            store.show(notice: "daemon too old to focus sessions — run `amx daemon restart`")
+            store.show(notice: "Daemon too old to focus sessions — run amx daemon restart")
         case .notRunning:
             store.apply(health: .notRunning)
         case let .failed(message):
@@ -968,8 +974,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
-    /// Resolves again once typing in Preferences pauses, so a binary path or
-    /// environment value typed one key at a time does not run amx per key.
+    /// Resolves again once typing in Preferences pauses, so an environment
+    /// value typed one key at a time does not run amx per key. The binary
+    /// path arrives whole, when its field is submitted or left.
     private func scheduleResolve() {
         pendingResolve?.cancel()
         let item = DispatchWorkItem { [weak self] in
@@ -994,6 +1001,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         model.onResumeSnooze = { [weak self] in self?.snooze(.resume) }
         model.onRecordingChange = { [weak self] recording in
             guard let self else { return }
+            self.isRecordingHotKey = recording
             if recording {
                 self.dashboardHotKey?.unregister()
                 self.attentionHotKey?.unregister()
@@ -1007,7 +1015,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if old.defaultFontSize != new.defaultFontSize {
             applyDefaultFontSize()
         }
-        if old.hotKeyDashboard != new.hotKeyDashboard || old.hotKeyNextAttention != new.hotKeyNextAttention {
+        // While a recorder listens the shortcuts stay unregistered; it
+        // registers them once, with what it recorded, when it stops.
+        if !isRecordingHotKey,
+           old.hotKeyDashboard != new.hotKeyDashboard || old.hotKeyNextAttention != new.hotKeyNextAttention {
             registerHotKeys()
         }
         applyMenuBarPreferences(new)
@@ -1178,6 +1189,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         } else {
             problems[HotKeyPreference.nextAttention.defaultsKey] = HotKeyConflicts.problem(for: attentionHotKey.register(preferences.hotKeyNextAttention))
         }
+        let menuKeys = HotKeyConflicts.menuKeys(NSApp.mainMenu ?? WorkspaceMenu.make(target: self))
+        for (preference, combo) in [(HotKeyPreference.dashboard, preferences.hotKeyDashboard),
+                                    (HotKeyPreference.nextAttention, preferences.hotKeyNextAttention)]
+        where problems[preference.defaultsKey] == nil {
+            problems[preference.defaultsKey] = HotKeyConflicts.menuCollision(combo, menuKeys: menuKeys)
+        }
         for problem in problems.values {
             Self.logger.notice("hotkey: \(problem, privacy: .public)")
         }
@@ -1198,7 +1215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return
         }
         if let capabilities = preferences.capabilities, !capabilities.openDashboard {
-            refuse("\(command.binary.path) has no open-dashboard command; run `just install`.")
+            refuse("\(command.binary.path) has no open-dashboard command; run just install.")
             return
         }
         let candidates = DashboardOpener.candidates(
@@ -1288,6 +1305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return MenuBuilder.ActionsInput(
             gate: gate,
             dashboardPlace: prefs.dashboardPlace,
+            dashboardHotKey: prefs.hotKeyDashboard,
             feedLive: live,
             projects: projects.state,
             missingProjectDirectories: projects.missingDirectories,
