@@ -263,7 +263,7 @@ struct PromptAnswerView: View {
 
     private var footer: some View {
         HStack {
-            Button("Look again") { flow.refresh() }
+            Button("Look Again") { flow.refresh() }
                 .disabled(flow.state?.canLookAgain != true)
             Spacer()
             Button("Close", action: onClose).keyboardShortcut(.cancelAction)
@@ -331,7 +331,7 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: true
         )
-        panel.title = "Agent Mux — Answer a prompt"
+        panel.title = "Agent Mux — Answer a Prompt"
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false

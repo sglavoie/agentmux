@@ -257,6 +257,8 @@ final class AppPreferencesTests: XCTestCase {
     func testWordingOfTheMenuBarSection() {
         XCTAssertEqual(PreferencesModel.recentDaysLabel(1), "Recent: last day")
         XCTAssertEqual(PreferencesModel.recentDaysLabel(7), "Recent: last 7 days")
+        XCTAssertEqual(PreferencesModel.recentLimitLabel(1), "Recent: at most 1 conversation")
+        XCTAssertEqual(PreferencesModel.recentLimitLabel(10), "Recent: at most 10 conversations")
         XCTAssertNil(PreferencesModel.workingCountNote(.glyphs))
         XCTAssertEqual(PreferencesModel.workingCountNote(.compact), "Only the “Glyphs and counts” status shows a working count.")
         XCTAssertNotNil(PreferencesModel.workingCountNote(.iconOnly))

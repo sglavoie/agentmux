@@ -178,7 +178,7 @@ struct PromptAnswerState: Equatable {
         }
     }
 
-    /// Whether Look again may be pressed now: the panel is showing a screen
+    /// Whether Look Again may be pressed now: the panel is showing a screen
     /// or a first look that failed, and nothing is on its way.
     var canLookAgain: Bool {
         switch phase {

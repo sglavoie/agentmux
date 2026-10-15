@@ -93,7 +93,7 @@ enum NotificationDisposition: String, Equatable {
 /// action the daemon did not offer it. Every category asks for
 /// `customDismissAction`, which is what makes a dismissal reach the app.
 enum NotificationCategories {
-    /// A session notice: Mute session, Snooze All for 1 Hour.
+    /// A session notice: Mute Session, Snooze All for 1 Hour.
     static let session = "amx.session"
     /// A notice with no session to mute (a profile-wide one): Snooze All for
     /// 1 Hour.
@@ -127,7 +127,7 @@ enum NotificationCategories {
         let foreground: Bool
     }
 
-    static let mute = Action(identifier: muteAction, title: "Mute session", foreground: false)
+    static let mute = Action(identifier: muteAction, title: "Mute Session", foreground: false)
     static let snooze = Action(identifier: snoozeAction, title: "Snooze All for 1 Hour", foreground: false)
     static let answer = Action(identifier: answerAction, title: "Answer…", foreground: true)
     static let respond = Action(identifier: respondAction, title: "Answer…", foreground: true)

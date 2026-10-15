@@ -160,7 +160,7 @@ final class PreferencesModel: ObservableObject {
             return nil
         } catch {
             refreshLoginItem()
-            let message = "Launch at Login could not be changed: \(error.localizedDescription)"
+            let message = "Launch at login could not be changed: \(error.localizedDescription)"
             launchAtLoginNote = message
             return message
         }
@@ -255,6 +255,11 @@ final class PreferencesModel: ObservableObject {
     /// `Recent: last day`, `Recent: last 7 days`.
     static func recentDaysLabel(_ days: Int) -> String {
         days == 1 ? "Recent: last day" : "Recent: last \(days) days"
+    }
+
+    /// `Recent: at most 1 conversation`, `Recent: at most 10 conversations`.
+    static func recentLimitLabel(_ limit: Int) -> String {
+        limit == 1 ? "Recent: at most 1 conversation" : "Recent: at most \(limit) conversations"
     }
 
     static func time(_ date: Date) -> String {
@@ -371,12 +376,12 @@ struct PreferencesView: View {
                 }
                 Stepper(PreferencesModel.recentDaysLabel(model.preferences.recentDays),
                         value: $model.preferences.recentDays, in: AppPreferences.recentDaysRange)
-                Stepper("Recent: at most \(model.preferences.recentLimit) conversations",
+                Stepper(PreferencesModel.recentLimitLabel(model.preferences.recentLimit),
                         value: $model.preferences.recentLimit, in: AppPreferences.recentLimitRange)
             }
 
             Section("General") {
-                Toggle("Launch at Login", isOn: Binding(
+                Toggle("Launch at login", isOn: Binding(
                     get: { model.launchAtLogin },
                     set: { model.setLaunchAtLogin($0) }
                 ))

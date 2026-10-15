@@ -99,7 +99,7 @@ final class NotificationPresenterTests: XCTestCase {
         let byID = Dictionary(uniqueKeysWithValues: center.categories.map { ($0.identifier, $0) })
         XCTAssertEqual(Set(byID.keys), ["amx.session", "amx.session.snooze", "amx.asl", "amx.asl.snooze", "amx.prompt", "amx.plain"])
         let session = try XCTUnwrap(byID["amx.session"])
-        XCTAssertEqual(session.actions.map(\.title), ["Mute session", "Snooze All for 1 Hour"])
+        XCTAssertEqual(session.actions.map(\.title), ["Mute Session", "Snooze All for 1 Hour"])
         XCTAssertEqual(session.actions.map(\.identifier), ["amx.mute", "amx.snooze"])
         XCTAssertTrue(session.options.contains(.customDismissAction), "dismissals must reach the app")
         let asl = try XCTUnwrap(byID["amx.asl"])
