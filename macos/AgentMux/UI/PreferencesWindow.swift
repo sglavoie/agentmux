@@ -287,8 +287,13 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         super.init()
     }
 
+    /// Told when the window opens and closes: while it is open the app keeps
+    /// a Dock icon and a place in ⌘Tab, so the window can be found again.
+    var onVisibilityChanged: (Bool) -> Void = { _ in }
+
     func show() {
         model.refresh()
+        onVisibilityChanged(true)
         // An accessory app is not active by default; bring it forward so the
         // window takes key focus.
         NSApp.activate()
@@ -326,6 +331,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         model.commitEnvironment()
         dashboardRecorder.stop()
         attentionRecorder.stop()
+        onVisibilityChanged(false)
     }
 
     /// Recording ends when Settings loses key, so the shortcuts are back

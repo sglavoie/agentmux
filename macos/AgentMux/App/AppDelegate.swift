@@ -461,9 +461,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// and a menu bar, so its window takes the keyboard like any other; with
     /// it closed the app is the menu bar accessory again.
     func workspaceVisibilityChanged(_ visible: Bool) {
-        NSApp.setActivationPolicy(visible ? .regular : .accessory)
+        workspaceVisible = visible
+        syncActivationPolicy()
         guard !Self.isRunningTests, !isTerminating else { return }
         WorkspaceRestoration.saveWindowOpen(visible)
+    }
+
+    private var workspaceVisible = false
+    private var settingsVisible = false
+
+    /// Regular while the workspace or Settings is open, so either can be
+    /// found again from the Dock and ⌘Tab once it falls behind another
+    /// app's window; the menu bar accessory otherwise. The answer panels
+    /// float above every window and need neither.
+    private func syncActivationPolicy() {
+        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible, settings: settingsVisible))
+    }
+
+    nonisolated static func activationPolicy(workspace: Bool, settings: Bool) -> NSApplication.ActivationPolicy {
+        workspace || settings ? .regular : .accessory
     }
 
     func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?) {
@@ -2344,6 +2360,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     @objc func showPreferences(_ sender: Any?) {
         let controller = preferencesController ?? PreferencesWindowController(model: preferencesModel)
+        if preferencesController == nil {
+            controller.onVisibilityChanged = { [weak self] visible in
+                self?.settingsVisible = visible
+                self?.syncActivationPolicy()
+            }
+        }
         preferencesController = controller
         publishPreferences()
         controller.show()

@@ -13,6 +13,13 @@ final class AppSkeletonTests: XCTestCase {
         XCTAssertEqual(NSApp.activationPolicy(), .accessory)
     }
 
+    func testTheAppHasADockIconWhileTheWorkspaceOrSettingsIsOpen() {
+        XCTAssertEqual(AppDelegate.activationPolicy(workspace: false, settings: false), .accessory)
+        XCTAssertEqual(AppDelegate.activationPolicy(workspace: true, settings: false), .regular)
+        XCTAssertEqual(AppDelegate.activationPolicy(workspace: false, settings: true), .regular,
+                       "Settings behind another app's window is found again from the Dock and ⌘Tab")
+    }
+
     /// Held keys repeat and AutoFill stays out of the terminals: both are
     /// registered at launch, below anything the user set.
     func testLaunchTurnsOffPressAndHoldAndAutoFillHeuristics() {
