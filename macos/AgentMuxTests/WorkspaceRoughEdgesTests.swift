@@ -147,7 +147,10 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         XCTAssertEqual(app.daemonRestarts, 1)
 
         app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
-        XCTAssertTrue(workspace.feedButton.isHidden, "nothing to do but wait")
+        XCTAssertEqual(workspace.feedButton.title, "Restart Daemon", "a daemon that stopped answering is not waited on for good")
+        XCTAssertFalse(workspace.feedButton.isHidden)
+        app.store.apply(.disconnected(.bye("restart"), retryIn: 0.5))
+        XCTAssertTrue(workspace.feedButton.isHidden, "a restart under way: nothing to do but wait")
         app.store.apply(snapshot: F.snapshot(sessions))
         XCTAssertTrue(workspace.feedButton.isHidden)
     }

@@ -152,10 +152,14 @@ enum MenuBuilder {
             entries.append(daemonAction(.restartDaemon, "Restart Daemon", busy: input.daemonBusy))
         case let .reconnecting(reason):
             entries.append(.info("Daemon: reconnecting · \(reason)"))
+            if WorkspaceSidebar.daemonAction(input.feed) == .restart {
+                entries.append(daemonAction(.restartDaemon, "Restart Daemon", busy: input.daemonBusy))
+            }
         }
         if let notice = input.notice, !notice.isEmpty {
             entries.append(.info(notice))
-            if notice.contains(restartHint), input.feed != .daemonTooOld {
+            if notice.contains(restartHint), input.feed != .daemonTooOld,
+               WorkspaceSidebar.daemonAction(input.feed) != .restart {
                 entries.append(daemonAction(.restartDaemon, "Restart Daemon", busy: input.daemonBusy))
             }
         }
@@ -347,7 +351,7 @@ enum MenuBuilder {
             entries.append(.action(.openDashboard, "Open Dashboard"))
         }
         if !input.feedLive {
-            entries.append(.unavailableAction(.nextAttention, HotKeyPreference.nextAttention.label, reason: "The daemon is not connected"))
+            entries.append(.unavailableAction(.nextAttention, HotKeyPreference.nextAttention.label, reason: DaemonPhrase.notConnected))
         } else if input.waiting == 0 {
             entries.append(.unavailableAction(.nextAttention, HotKeyPreference.nextAttention.label, reason: "No session is waiting"))
         } else {
@@ -357,7 +361,7 @@ enum MenuBuilder {
         entries.append(.submenuRef(.recent, "Recent", reason: input.gate.unavailableReason(.sessions)))
         // A daemon too old to snooze leaves the submenu open, to say so and
         // offer the Restart Daemon its reason names.
-        let notifications = input.feedLive ? nil : "The daemon is not connected"
+        let notifications = input.feedLive ? nil : DaemonPhrase.notConnected
         entries.append(.submenuRef(.notifications, "Notifications", reason: notifications))
         return entries
     }
@@ -476,7 +480,7 @@ enum MenuBuilder {
     /// The snooze line and choices, then the read-only quiet hours.
     static func notificationEntries(_ input: ActionsInput) -> [MenuEntry] {
         guard let notification = input.notification else {
-            return [.info("The daemon is not connected")]
+            return [.info(DaemonPhrase.notConnected)]
         }
         guard input.snoozeSupported else {
             return [.info(snoozeUnsupported), daemonAction(.restartDaemon, "Restart Daemon", busy: input.daemonBusy)]

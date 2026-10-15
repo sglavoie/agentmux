@@ -41,6 +41,8 @@ protocol WorkspaceDelegate: AnyObject {
     func workspaceConversationChanged(_ conversation: ConversationIdentity?)
     /// The sidebar was hidden or shown.
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
+    /// The open window entered or left full screen.
+    func workspaceFullScreenChanged(_ fullScreen: Bool)
     /// The inspector was hidden or shown, or turned to another tab.
     func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab)
     /// The sidebar or the inspector was given another width. Each is nil
@@ -356,7 +358,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var drawnDecorations: [String?] = []
     /// The font size each session's last terminal had when it was let go,
     /// by runtime session, so a zoom survives the window closing. Kept for
-    /// the app's lifetime.
+    /// the app's lifetime, until a new default zoom replaces every one.
     private(set) var fontSizes: [String: Float] = [:]
     /// The utility view the pane shows, by `WorkspaceUtilityView.id`. It and
     /// `state.selection` are never both set.
@@ -497,6 +499,25 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         content = .empty
         reportedShowing = nil
         delegate?.workspaceVisibilityChanged(false)
+    }
+
+    /// Kept for the next launch. A window closed while in full screen, or
+    /// one the app is quitting with, keeps what it had: neither is the
+    /// operator leaving full screen.
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        guard isOpen else { return }
+        delegate?.workspaceFullScreenChanged(true)
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        guard isOpen else { return }
+        delegate?.workspaceFullScreenChanged(false)
+    }
+
+    /// At launch, for a window that was in full screen when the app last ran.
+    func enterFullScreen() {
+        guard isOpen, !window.styleMask.contains(.fullScreen) else { return }
+        window.toggleFullScreen(nil)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -804,7 +825,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private func switcherEntries() -> [WorkspaceSwitcher.Entry] {
-        WorkspaceSwitcher.entries(rows: state.rows, views: views.all, names: sessionNames)
+        let previous: WorkspaceSwitcher.Entry.Place?
+        switch recent.before {
+        case let .session(key)?: previous = .session(key)
+        case let .view(id)?: previous = .view(id)
+        case nil: previous = nil
+        }
+        return WorkspaceSwitcher.entries(rows: state.rows, views: views.all, names: sessionNames, previous: previous)
     }
 
     /// Puts the list away. With `restoring`, the keyboard goes back to what
@@ -872,6 +899,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// Lists and shows a utility view. A pager is read afresh every time it
     /// is asked for; any other view that is already open is shown as it is.
+    /// New Shell (⌘T): always one more shell, never the one already open.
+    func openNewShell(in directory: String) {
+        open(views.nextShell(in: directory))
+    }
+
     func open(_ wanted: WorkspaceUtilityView) {
         let here = place
         let view = views.open(wanted)
@@ -1175,7 +1207,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     func contextMenuItems(forRow index: Int) -> [NSMenuItem] {
-        guard index >= 0, index < items.count else { return [] }
+        if index < 0 { return listMenuItems() }
+        guard index < items.count else { return [] }
         switch items[index] {
         case let .row(row): return sessionMenuItems(row)
         case let .view(view):
@@ -1188,6 +1221,22 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             return [close]
         case let .group(group): return groupMenuItems(group)
         case .section: return []
+        }
+    }
+
+    /// The list's empty space: where to go, and what to open, as the main
+    /// menu offers them. Each goes to the app, as the main menu's do.
+    private func listMenuItems() -> [NSMenuItem] {
+        let entries: [(String, Selector)] = [
+            ("Go to…", #selector(AppDelegate.showSwitcher(_:))),
+            ("New Shell", #selector(AppDelegate.newShellFromMenu(_:))),
+            ("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:))),
+            ("Overview", #selector(AppDelegate.openOverviewFromMenu(_:))),
+        ]
+        return entries.map { title, action in
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = delegate
+            return item
         }
     }
 
@@ -1798,10 +1847,44 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         return state.selectedRow?.displayName ?? "Agent Mux"
     }
 
+    /// Under the title, a session's line from the sidebar (harness, branch,
+    /// age, why it waits), so the window says it with the sidebar hidden.
+    /// A view's title already says what its program does.
+    private var windowSubtitle: String {
+        guard viewSelection == nil else { return "" }
+        return state.selectedRow?.detail ?? ""
+    }
+
     /// The pointer moved onto a link, or off one, in a terminal.
     func terminalHoveredLink(_ view: NSView, url: String?) {
         guard view === shownTerminalView else { return }
         showLink(url)
+    }
+
+    static let copiedNotice = "Copied to the clipboard"
+    private var copiedNoticeEnd: DispatchWorkItem?
+
+    /// The shown terminal put text on the clipboard. Where a selection made
+    /// with the mouse is tmux's and is copied when the button is let go,
+    /// nothing on screen says so; the link line does, for a moment.
+    func terminalCopied(_ view: NSView) {
+        guard view === shownTerminalView else { return }
+        showLink(Self.copiedNotice)
+        NSAccessibility.post(element: window, notification: .announcementRequested,
+                             userInfo: [.announcement: Self.copiedNotice, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+        copiedNoticeEnd?.cancel()
+        let end = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.endCopiedNotice() }
+        }
+        copiedNoticeEnd = end
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: end)
+    }
+
+    func endCopiedNotice() {
+        copiedNoticeEnd?.cancel()
+        copiedNoticeEnd = nil
+        guard linkLabel.stringValue == Self.copiedNotice else { return }
+        showLink((shownTerminalView as? Ghostty.SurfaceView)?.hoveredLink)
     }
 
     private func showLink(_ url: String?) {
@@ -1971,6 +2054,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
+    /// A new default zoom resets every open terminal; the sessions whose
+    /// terminal was let go come back at it too, not at the zoom they had.
+    func forgetFontSizes() {
+        fontSizes.removeAll()
+    }
+
     private func discardTerminal(_ id: String) {
         guard let terminal = terminals.removeValue(forKey: id) else { return }
         // The session's next terminal comes back at the zoom this one had.
@@ -2065,6 +2154,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         placeholder.isHidden = shown != nil
         if shown == nil { fillPlaceholder(wanted) }
         window.title = windowTitle
+        window.subtitle = windowSubtitle
         clearBells()
         showLink((shown as? Ghostty.SurfaceView)?.hoveredLink)
         syncOverlays()
@@ -2341,6 +2431,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let selectable = proposed.filteredIndexSet { $0 < items.count && self.tableView(tableView, shouldSelectRow: $0) }
         if selectable.isEmpty, !applying { return tableView.selectedRowIndexes }
         return selectable
+    }
+
+    /// What typing in the list matches: a line's name. The label a cell
+    /// exposes starts with glyphs and, for a session, is not its name.
+    func tableView(_ tableView: NSTableView, typeSelectStringFor tableColumn: NSTableColumn?, row: Int) -> String? {
+        guard row < items.count else { return nil }
+        return Self.typeSelectString(items[row])
+    }
+
+    static func typeSelectString(_ item: Item) -> String? {
+        switch item {
+        case let .row(row): return row.displayName
+        case let .view(view): return view.title
+        case .section, .group: return nil
+        }
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
@@ -2993,6 +3098,10 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
 
     nonisolated func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) {
         MainActor.assumeIsolated { terminalHoveredLink(surface, url: surface.hoveredLink) }
+    }
+
+    nonisolated func surfaceDidWriteClipboard(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { terminalCopied(surface) }
     }
 
     nonisolated func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) {

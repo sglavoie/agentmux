@@ -76,8 +76,9 @@ struct WorkspaceUtilityView: Equatable {
     let target: String
     /// The sidebar label.
     let title: String
-    /// Tells apart the terminals opened beside one session, from 1; 0 for
-    /// every other kind.
+    /// Tells apart the terminals opened beside one session, from 1, and the
+    /// shells New Shell opened in one directory after the first, from 2; 0
+    /// for every other view.
     var ordinal = 0
 
     /// What tells one view from another: its kind and what it is about.
@@ -282,6 +283,16 @@ struct WorkspaceViews: Equatable {
         if let listed = self.view(view.id) { return listed }
         opened.append(view)
         return view
+    }
+
+    /// What New Shell opens in `directory`: the shell there when none is
+    /// listed yet, else one more after the ones it has. A surface's request
+    /// for a shell still goes back to the one listed (`open`).
+    func nextShell(in directory: String) -> WorkspaceUtilityView {
+        let listed = opened.filter { $0.kind == .shell && $0.target == directory }
+        guard !listed.isEmpty else { return WorkspaceUtilityView(kind: .shell, target: directory, title: "Shell") }
+        let ordinal = listed.map { max($0.ordinal, 1) }.max()! + 1
+        return WorkspaceUtilityView(kind: .shell, target: directory, title: "Shell \(ordinal)", ordinal: ordinal)
     }
 
     /// The terminals opened beside a session, in the order they were.

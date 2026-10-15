@@ -19,7 +19,7 @@ enum WorkspaceSwitcher {
         let glyph: String
         let title: String
         let detail: String
-        /// Everything a query is matched against, lowercased.
+        /// Everything a query is matched against, folded (`fold`).
         let text: String
 
         init(place: Place, glyph: String, title: String, detail: String, also: [String] = []) {
@@ -27,15 +27,23 @@ enum WorkspaceSwitcher {
             self.glyph = glyph
             self.title = title
             self.detail = detail
-            text = ([title, detail] + also).joined(separator: " ").lowercased()
+            text = WorkspaceSwitcher.fold(([title, detail] + also).joined(separator: " "))
         }
     }
 
-    /// The sessions in sidebar order, then the views. An overlay view — the
-    /// key reference, a picker — is passed through, not gone to.
+    /// Case and accents do not matter: "e" finds "é", "release" "Release".
+    static func fold(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+    }
+
+    /// The sessions in sidebar order, then the views, except that the place
+    /// the pane was on before this one comes first: ⌘P then ↩ goes back, as
+    /// ⌘L does. An overlay view — the key reference, a picker — is passed
+    /// through, not gone to.
     /// A view about a session says which, by the name in `names` (keyed by
     /// runtime session) or of its listed row.
-    static func entries(rows: [WorkspaceRow], views: [WorkspaceUtilityView], names: [String: String] = [:]) -> [Entry] {
+    static func entries(rows: [WorkspaceRow], views: [WorkspaceUtilityView], names: [String: String] = [:],
+                        previous: Entry.Place? = nil) -> [Entry] {
         var names = names
         for row in rows {
             if let id = row.embeddedRuntimeSessionID { names[id] = row.displayName }
@@ -54,18 +62,22 @@ enum WorkspaceSwitcher {
             Entry(place: .view(view.id), glyph: view.glyph, title: view.title,
                   detail: view.detail(session: view.aboutRuntimeSessionID.flatMap { names[$0] }))
         }
-        return sessions + others
+        var all = sessions + others
+        if let previous, let index = all.firstIndex(where: { $0.place == previous }) {
+            all.insert(all.remove(at: index), at: 0)
+        }
+        return all
     }
 
     /// The entries that hold every word of the query, in the order given,
     /// with those whose title starts with the query first. An empty query
     /// keeps them all.
     static func matches(_ query: String, in entries: [Entry]) -> [Entry] {
-        let wanted = query.lowercased().trimmingCharacters(in: .whitespaces)
+        let wanted = fold(query).trimmingCharacters(in: .whitespaces)
         let words = wanted.split(separator: " ")
         guard !words.isEmpty else { return entries }
         let kept = entries.filter { entry in words.allSatisfy { entry.text.contains($0) } }
-        let leading = kept.filter { $0.title.lowercased().hasPrefix(wanted) }
+        let leading = kept.filter { fold($0.title).hasPrefix(wanted) }
         return leading + kept.filter { !leading.contains($0) }
     }
 }

@@ -105,7 +105,8 @@ struct PromptKey: Equatable, Identifiable {
         case "\r", "\n": return all.first { $0.name == "enter" }
         case "\u{F700}": return all.first { $0.name == "up" }
         case "\u{F701}": return all.first { $0.name == "down" }
-        default: return (digits + answers.prefix(2)).first { $0.name == String(character) }
+        // Shift or Caps Lock types Y and N; the prompt's answer is the key.
+        default: return (digits + answers.prefix(2)).first { $0.name == String(character).lowercased() }
         }
     }
 }

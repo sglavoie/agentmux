@@ -335,8 +335,13 @@ enum LoginItem {
 
     /// A note for Preferences, when the state needs one.
     static var note: String? {
-        status == .requiresApproval
-            ? "Allow Agent Mux in System Settings › General › Login Items to finish turning this on."
-            : nil
+        status == .requiresApproval ? approvalNote : nil
+    }
+
+    static let approvalNote = "Allow Agent Mux in System Settings › General › Login Items to finish turning this on."
+
+    /// Opens System Settings on Login Items, where the approval is given.
+    static func openSettings() {
+        SMAppService.openSystemSettingsLoginItems()
     }
 }

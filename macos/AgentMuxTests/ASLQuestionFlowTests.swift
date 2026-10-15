@@ -424,3 +424,44 @@ final class ASLQuestionFlowTests: XCTestCase {
     }
 }
 
+/// A reply reaches the agent as typed: no smart quotes, dashes, or
+/// replacements on the editor's text view, however deep it is nested.
+@MainActor
+final class PlainTextEditingTests: XCTestCase {
+    func testEveryTextViewTypesPlainText() {
+        let root = NSView()
+        let scroll = NSScrollView()
+        let text = NSTextView()
+        text.isAutomaticQuoteSubstitutionEnabled = true
+        text.isAutomaticDashSubstitutionEnabled = true
+        text.isAutomaticTextReplacementEnabled = true
+        scroll.documentView = text
+        root.addSubview(scroll)
+
+        PlainTextEditing.apply(in: root)
+        XCTAssertFalse(text.isAutomaticQuoteSubstitutionEnabled)
+        XCTAssertFalse(text.isAutomaticDashSubstitutionEnabled)
+        XCTAssertFalse(text.isAutomaticTextReplacementEnabled)
+        XCTAssertFalse(text.isAutomaticSpellingCorrectionEnabled)
+    }
+}
+
+/// A panel gives the keyboard back to the app the operator came from, and
+/// to nothing when they came from Agent Mux itself.
+final class KeyboardReturnTests: XCTestCase {
+    func testOnlyAnotherAppIsReturnedTo() throws {
+        let own = ProcessInfo.processInfo.processIdentifier
+        XCTAssertNil(KeyboardReturn.returnTarget(frontmost: NSRunningApplication.current, own: own))
+        XCTAssertNil(KeyboardReturn.returnTarget(frontmost: nil, own: own))
+        let other = try XCTUnwrap(NSWorkspace.shared.runningApplications.first { $0.processIdentifier != own })
+        XCTAssertEqual(KeyboardReturn.returnTarget(frontmost: other, own: own), other)
+    }
+}
+
+final class PanelAnnouncementTests: XCTestCase {
+    func testAConfirmationOrAFailureInterrupts() {
+        XCTAssertEqual(PanelAnnouncement.priority(.confirm), .high)
+        XCTAssertEqual(PanelAnnouncement.priority(.error), .high)
+        XCTAssertEqual(PanelAnnouncement.priority(.info), .medium)
+    }
+}

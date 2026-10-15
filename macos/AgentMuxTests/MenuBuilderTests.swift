@@ -156,6 +156,9 @@ final class MenuBuilderTests: XCTestCase {
                         .action(.restartDaemon, "Restart Daemon")])
         XCTAssertEqual(MenuBuilder.entries(input([session(1, "")], feed: .reconnecting("no heartbeat"))),
                        [.info("Daemon: reconnecting · no heartbeat")], "no sessions shown from a feed that is not live")
+        XCTAssertEqual(MenuBuilder.entries(input([], feed: .reconnecting(DaemonPhrase.notAnswering))),
+                       [.info("Daemon: reconnecting · \(DaemonPhrase.notAnswering)"), .action(.restartDaemon, "Restart Daemon")],
+                       "a daemon stuck not answering can be restarted from the menu")
         XCTAssertEqual(MenuBuilder.entries(input([], feed: .connecting)), [.info("Daemon: connecting…")])
     }
 

@@ -235,6 +235,9 @@ protocol NotificationCenterClient: AnyObject {
     func setCategories(_ categories: Set<UNNotificationCategory>)
     func add(_ request: UNNotificationRequest, completion: @escaping (Error?) -> Void)
     func remove(identifiers: [String])
+    /// Removes every banner the app has shown, from this launch or an
+    /// earlier one.
+    func removeAll()
 }
 
 /// The real center.
@@ -264,6 +267,11 @@ final class SystemNotificationCenter: NotificationCenterClient {
     func remove(identifiers: [String]) {
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    func removeAll() {
+        center.removeAllDeliveredNotifications()
+        center.removeAllPendingNotificationRequests()
     }
 }
 
@@ -317,6 +325,10 @@ enum TerminalOutcome: Equatable {
 ///   through `onAction`.
 /// - `notification_retract` removes the banner, including one still waiting
 ///   on the permission prompt, which is then never shown.
+/// - When the connection the daemon sent a notice on ends, the daemon ends
+///   that delivery and will never retract it, so the banner is removed then
+///   (`connectionEnded`); one from an earlier launch, at launch
+///   (`removeEarlierLaunches`).
 ///
 /// Main-thread confined: every entry point is called on the main thread,
 /// and completions are hopped back to it through `schedule`.
@@ -374,6 +386,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     private var retracted: Set<String> = []
     /// Notices handed to `add` and not yet answered.
     private var adding: Set<String> = []
+    /// Daemon notices shown on the current connection and not retracted.
+    private(set) var shown: Set<String> = []
 
     init(center: NotificationCenterClient, enabled: Bool,
          schedule: @escaping (@escaping () -> Void) -> Void = { work in DispatchQueue.main.async(execute: work) }) {
@@ -468,6 +482,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
             center.remove(identifiers: [id])
             return
         }
+        shown.insert(id)
         report(id, .delivered, nil)
     }
 
@@ -582,7 +597,27 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         if awaitingPermission.contains(where: { $0.notificationID == id }) || adding.contains(id) {
             retracted.insert(id)
         }
+        shown.remove(id)
         center.remove(identifiers: [id])
+    }
+
+    /// The feed's connection ended. The daemon ended every delivery it made
+    /// on it and can never retract one now, so each banner it left would
+    /// stay in Notification Center after its session moved on: they go,
+    /// along with any still being added or waiting on the permission prompt.
+    /// The app's own terminal and app notices are not the daemon's and stay.
+    func connectionEnded() {
+        let pending = adding.union(awaitingPermission.map(\.notificationID))
+        retracted.formUnion(pending)
+        let ids = Array(shown)
+        shown = []
+        if !ids.isEmpty { center.remove(identifiers: ids) }
+    }
+
+    /// At launch: banners an earlier launch showed can no longer be
+    /// retracted by the daemon or withdrawn by the app, so none is kept.
+    func removeEarlierLaunches() {
+        center.removeAll()
     }
 
     /// The request a notice is shown with.

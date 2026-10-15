@@ -203,6 +203,9 @@ struct PromptAnswerView: View {
         .onChange(of: flow.state?.phase) { _, phase in
             if phase == .open { focused = true }
         }
+        .onChange(of: flow.state?.notice ?? "") { _, notice in
+            PanelAnnouncement.post(notice, kind: flow.state?.noticeKind ?? .info)
+        }
         // A key held down repeats; only its first press is an answer, or a
         // held key would answer the next prompt the look shows.
         .onKeyPress(phases: .down) { press in
@@ -284,6 +287,7 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
     /// The workspace window's frame while it is open, to open on its screen.
     var workspaceFrame: () -> CGRect? = { nil }
     private let frames: PanelFrameStore
+    private var keyboardReturn = KeyboardReturn()
 
     /// A key sent for a session the panel no longer shows has answered;
     /// `notice` says how it went.
@@ -299,7 +303,10 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
     func show(_ target: PromptAnswerTarget) {
         flow.open(target)
         let panel = self.panel ?? makePanel()
-        if !panel.isVisible { panel.place(saved: frames.load(), workspace: workspaceFrame()) }
+        if !panel.isVisible {
+            keyboardReturn.note()
+            panel.place(saved: frames.load(), workspace: workspaceFrame())
+        }
         panel.orderFrontRegardless()
         // Typing a key needs the app active as well as the panel key.
         NSApp.activate()
@@ -308,6 +315,12 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
 
     /// The operator dragged the panel: it opens there next time.
     func windowDidMove(_ notification: Notification) {
+        guard let panel, !panel.isPlacing, panel.isVisible else { return }
+        frames.save(panel.frame)
+    }
+
+    /// The operator resized the panel: it opens at that size next time.
+    func windowDidEndLiveResize(_ notification: Notification) {
         guard let panel, !panel.isPlacing, panel.isVisible else { return }
         frames.save(panel.frame)
     }
@@ -324,6 +337,7 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
     /// The operator closed the panel: the screen it showed goes with it.
     func windowWillClose(_ notification: Notification) {
         flow.cancel()
+        keyboardReturn.giveBack()
     }
 
     private func makePanel() -> ASLPanel {

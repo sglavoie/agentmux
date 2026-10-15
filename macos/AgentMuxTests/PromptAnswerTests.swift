@@ -220,7 +220,10 @@ final class PromptAnswerTests: XCTestCase {
 
     func testModifiedKeysAreLeftToTheMenus() {
         XCTAssertEqual(PromptAnswerView.key("2", modifiers: []), two)
-        XCTAssertEqual(PromptAnswerView.key("y", modifiers: .shift), PromptKey.answers[0])
+        // AppKit delivers the capital with Shift or Caps Lock held.
+        XCTAssertEqual(PromptAnswerView.key("Y", modifiers: .shift), PromptKey.answers[0])
+        XCTAssertEqual(PromptAnswerView.key("N", modifiers: .capsLock), PromptKey.answers[1])
+        XCTAssertEqual(PromptAnswerView.key("y", modifiers: []), PromptKey.answers[0])
         XCTAssertEqual(PromptAnswerView.key("\r", modifiers: []), PromptKey.navigation[2])
         // Arrow keys carry the function and numeric-pad flags; they are not shortcuts.
         // SwiftUI deprecates `.function` but still sets it, so it is spelled by value.

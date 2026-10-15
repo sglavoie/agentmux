@@ -232,7 +232,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNil(items[0].action, "listed, and greyed out")
         XCTAssertNotNil(items[4].action, "a Kitty session can be pinned")
         XCTAssertTrue(workspace.contextMenuItems(forRow: 0).isEmpty)
-        XCTAssertTrue(workspace.contextMenuItems(forRow: -1).isEmpty)
+        XCTAssertEqual(workspace.contextMenuItems(forRow: -1).first?.title, "Go to…", "the list's empty space has its own menu")
         workspace.select(kitty.key)
         XCTAssertFalse(workspace.nameShownSession())
         XCTAssertEqual(asked.count, 5)
@@ -1341,6 +1341,48 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.madeFontSizes.last, 9.5, "the shown session comes back at its zoom")
         workspace.activate(try row("api", "work"))
         XCTAssertEqual(app.madeFontSizes.last, 18, "each session keeps its own")
+    }
+
+    /// Typing in the list matches a line's name, not the glyphs its label
+    /// starts with; headings are never matched.
+    func testTypingInTheListMatchesNames() {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let strings = workspace.items.indices.map { workspace.tableView(NSTableView(), typeSelectStringFor: nil, row: $0) }
+        for (item, string) in zip(workspace.items, strings) {
+            switch item {
+            case let .row(row): XCTAssertEqual(string, row.displayName)
+            case let .view(view): XCTAssertEqual(string, view.title)
+            case .section, .group: XCTAssertNil(string)
+            }
+        }
+        XCTAssertTrue(strings.contains("Dashboard"))
+        XCTAssertTrue(workspace.items.contains { if case .row = $0 { return true } else { return false } })
+    }
+
+    /// Full screen is kept for the next launch while the window is open; a
+    /// window closed in full screen keeps it.
+    func testFullScreenIsReportedOnlyWhileOpen() {
+        let note = Notification(name: NSWindow.didEnterFullScreenNotification, object: workspace.window)
+        workspace.windowDidEnterFullScreen(note)
+        workspace.windowDidExitFullScreen(note)
+        XCTAssertEqual(app.fullScreenChanges, [true, false])
+        workspace.window.close()
+        workspace.windowDidExitFullScreen(note)
+        XCTAssertEqual(app.fullScreenChanges, [true, false], "closing is not leaving full screen")
+    }
+
+    /// A new default zoom reaches the sessions whose terminal was let go:
+    /// they come back at the default, not at the zoom they were closed with.
+    func testANewDefaultZoomForgetsTheZoomOfClosedTerminals() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+        app.reportedFontSizes = [F.runtimeID(1): 18]
+        workspace.window.close()
+        XCTAssertEqual(workspace.fontSizes, [F.runtimeID(1): 18])
+
+        workspace.forgetFontSizes()
+        workspace.openForTesting()
+        XCTAssertEqual(app.madeFontSizes.last, .some(nil), "the session takes the app's size again")
     }
 }
 

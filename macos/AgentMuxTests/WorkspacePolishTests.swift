@@ -75,8 +75,13 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Reconnecting…")
         XCTAssertFalse(workspace.placeholder.messageLabel.stringValue.contains("listed are"),
                        "nothing is listed, so it does not speak of the sessions listed")
-        XCTAssertTrue(workspace.placeholder.button.isHidden, "nothing to do but wait")
+        XCTAssertFalse(workspace.placeholder.button.isHidden, "a daemon that stopped answering is not waited on for good")
+        XCTAssertEqual(workspace.placeholder.button.title, WorkspaceWindowController.restartDaemonTitle)
         XCTAssertEqual(waitingNote, "Reconnecting… (the daemon is not answering)")
+
+        app.store.apply(.disconnected(.bye("restart"), retryIn: 0.5))
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Reconnecting…")
+        XCTAssertTrue(workspace.placeholder.button.isHidden, "a restart under way: nothing to do but wait")
 
         app.store.apply(snapshot: F.snapshot([]))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
@@ -94,6 +99,9 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertEqual(workspace.window.title, "release notes")
         workspace.select(.embedded(F.runtimeID(2)))
         XCTAssertEqual(workspace.window.title, "api — personal", "one with no name is its project and profile")
+        XCTAssertEqual(workspace.window.subtitle, try XCTUnwrap(workspace.state.selectedRow).detail,
+                       "the sidebar's line for the session, there with the sidebar hidden")
+        XCTAssertFalse(workspace.window.subtitle.isEmpty)
 
         var asked: [String] = []
         workspace.confirmClose = { row, answer in
@@ -184,6 +192,15 @@ final class WorkspacePolishTests: XCTestCase {
         let mute = try XCTUnwrap(kittyItems.first { $0.title == "Mute" })
         try perform(mute)
         XCTAssertEqual(app.muteToggles, [personal, kitty])
+    }
+
+    /// A right-click on the list's empty space offers where to go and what
+    /// to open, sent to the app as the main menu's items are.
+    func testTheListsEmptySpaceOffersGoToAndNewViews() {
+        let items = workspace.contextMenuItems(forRow: -1)
+        XCTAssertEqual(items.map(\.title), ["Go to…", "New Shell", "Dashboard", "Overview"])
+        XCTAssertTrue(items.allSatisfy { $0.target === app })
+        XCTAssertEqual(workspace.sidebar.hasMenu?(-1), true)
     }
 
     func testAViewOffersCloseAndAHeadingNoMenu() throws {

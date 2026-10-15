@@ -60,6 +60,7 @@ struct WorkspaceRestoration: Equatable {
     static let placeKey = "amxWorkspacePlace"
     static let conversationKey = "amxWorkspaceConversation"
     static let sidebarCollapsedKey = "amxWorkspaceSidebarCollapsed"
+    static let fullScreenKey = "amxWorkspaceFullScreen"
     static let inspectorShownKey = "amxWorkspaceInspectorShown"
     static let inspectorTabKey = "amxWorkspaceInspectorTab"
     static let sidebarWidthKey = "amxWorkspaceSidebarWidth"
@@ -74,6 +75,8 @@ struct WorkspaceRestoration: Equatable {
     var conversation: ConversationIdentity?
     /// Whether the sidebar was hidden.
     var sidebarCollapsed = false
+    /// Whether the window was in full screen.
+    var fullScreen = false
     /// Whether the inspector was shown; it is hidden until asked for.
     var inspectorShown = false
     var inspectorTab = WorkspaceInspectorTab.waiting
@@ -88,6 +91,7 @@ struct WorkspaceRestoration: Equatable {
             place: defaults.string(forKey: placeKey).flatMap(Place.init(encoded:)),
             conversation: defaults.string(forKey: conversationKey).flatMap(ConversationIdentity.init(encoded:)),
             sidebarCollapsed: defaults.bool(forKey: sidebarCollapsedKey),
+            fullScreen: defaults.bool(forKey: fullScreenKey),
             inspectorShown: defaults.bool(forKey: inspectorShownKey),
             inspectorTab: defaults.string(forKey: inspectorTabKey).flatMap(WorkspaceInspectorTab.init(rawValue:)) ?? .waiting,
             sidebarWidth: width(sidebarWidthKey, in: defaults),
@@ -115,6 +119,10 @@ struct WorkspaceRestoration: Equatable {
 
     static func saveSidebarCollapsed(_ collapsed: Bool, to defaults: UserDefaults = .standard) {
         defaults.set(collapsed, forKey: sidebarCollapsedKey)
+    }
+
+    static func saveFullScreen(_ fullScreen: Bool, to defaults: UserDefaults = .standard) {
+        defaults.set(fullScreen, forKey: fullScreenKey)
     }
 
     static func saveWindowOpen(_ open: Bool, to defaults: UserDefaults = .standard) {

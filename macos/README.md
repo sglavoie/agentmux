@@ -455,8 +455,10 @@ ASL answer panel work the same either way.
   daemon…`, `Daemon not running`, `Daemon too old — choose Restart Daemon`,
   `Reconnecting… (reason)`). Under it, whatever is listed, the sidebar offers
   **Start Daemon** when it is not running (`workspaceStartDaemon`, the menu's
-  `amx daemon start`) and **Restart Daemon** when it is too old
-  (`workspaceRestartDaemon`); a second start or restart is refused while one
+  `amx daemon start`) and **Restart Daemon** when it is too old, or when it is
+  reconnecting for a reason waiting will not cure: it stopped answering, or
+  sends sessions the app cannot read (`WorkspaceSidebar.stuckReasons`; the
+  menu bar offers the same) (`workspaceRestartDaemon`); a second start or restart is refused while one
   runs. With no rows to hold, the pane says the same instead of "No live
   sessions" (`feedExplanation`) and offers the same action. The inspector
   shows the daemon line above the lines it holds, and its Answer… and action
@@ -492,13 +494,14 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (new shell), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does, after the same sheet; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does, after the same sheet; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
   ⌘, and ⌘Q.
 - **Go to.** ⌘P shows `WorkspaceSwitcherView` above the pane: a field over
   the places `Model/WorkspaceSwitcher.swift` lists, which are the sidebar's
-  sessions in its order and then the views, overlays left out. A query keeps
-  the entries that hold every word of it, those whose title starts with it
-  first. Return or a click calls `activate(_:)` for a session and
+  sessions in its order and then the views, overlays left out, except that
+  the place the pane was on before comes first, so ⌘P then Return goes back
+  as ⌘L does. A query keeps the entries that hold every word of it, case and
+  accents aside, those whose title starts with it first. Return or a click calls `activate(_:)` for a session and
   `showView(_:focus:)` for a view, what a click on the sidebar line calls, so
   nothing is launched from it. The field has the keyboard while the list is
   up; Escape and ⌘P give it back to what had it, and a click elsewhere leaves
@@ -701,7 +704,7 @@ The menu's first line says where the feed stands:
 | `ready · 0.8.0 (52189e529adf-dirty)` | The feed is live and the daemon is ready. Shows its version and revision. |
 | `degraded · <reason>` | The daemon answered but is not ready. |
 | `not running` | There is no socket, or nothing accepts on it. A **Start daemon** item follows. |
-| `reconnecting · <reason>` | The stream ended; the client is dialing again. |
+| `reconnecting · <reason>` | The stream ended; the client is dialing again. When the daemon stopped answering, or sends sessions the app cannot read, a **Restart Daemon** item follows. |
 | `unresponsive · <reason>` | Something accepted the connection but did not answer in time. |
 
 Reasons are operator phrases, never socket errors: "the daemon is not
@@ -882,6 +885,11 @@ forward. A dismissal reports `dismissed` (every category sets
 
 A `notification_retract` frame removes the banner. A retracted notification
 that is still waiting on the permission prompt, or on `add`, is never shown.
+When the feed's connection ends the daemon ends every delivery it made on it
+and can never retract one, so the app removes the banners it showed on that
+connection then (`NotificationPresenter.connectionEnded`); the app's own
+terminal notices stay. Banners left by an earlier launch are removed at
+launch.
 The `amx debug tail` dispositions name the `app` backend.
 
 **Terminal notices.** A program's own desktop notification (OSC 9 or 777) in

@@ -175,6 +175,23 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "Shell · release notes")
     }
 
+    /// tmux copies a mouse selection when the button is let go: the link
+    /// line says so for a moment, for the terminal shown only.
+    func testACopyIsConfirmedForTheTerminalShown() throws {
+        workspace.activate(try row("work"))
+        let work = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        workspace.activate(try row("personal"))
+        let personal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(2)))
+
+        workspace.terminalCopied(work)
+        XCTAssertTrue(workspace.linkLabel.isHidden, "a hidden terminal's copy is not announced")
+        workspace.terminalCopied(personal)
+        XCTAssertFalse(workspace.linkLabel.isHidden)
+        XCTAssertEqual(workspace.linkLabel.stringValue, WorkspaceWindowController.copiedNotice)
+        workspace.endCopiedNotice()
+        XCTAssertTrue(workspace.linkLabel.isHidden)
+    }
+
     func testAHoveredLinkIsShownOnlyForTheTerminalShown() throws {
         workspace.activate(try row("work"))
         let work = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))

@@ -53,6 +53,24 @@ final class WorkspaceSwitcherTests: XCTestCase {
         XCTAssertEqual(WorkspaceSwitcher.matches("over", in: entries([], views: views)).map(\.title), ["Overview", "shell"])
     }
 
+    /// ⌘P then ↩ goes back to where the pane was before, as ⌘L does.
+    func testThePreviousPlaceComesFirst() {
+        let rows = WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", glyphs: .fallback).flatMap(\.rows)
+        let views = WorkspaceViews().all
+        let back = WorkspaceSwitcher.entries(rows: rows, views: views, previous: .view(WorkspaceUtilityView.overview.id))
+        XCTAssertEqual(back.map(\.title), ["Overview", "api — personal", "api — work", "web — work", "Dashboard"])
+        let gone = WorkspaceSwitcher.entries(rows: rows, views: views, previous: .view("shell:/nowhere"))
+        XCTAssertEqual(gone, entries(sessions), "a place no longer listed changes nothing")
+    }
+
+    func testCaseAndAccentsDoNotMatter() {
+        var named = sessions
+        named[0].name = "Révision"
+        let listed = entries(named)
+        XCTAssertEqual(WorkspaceSwitcher.matches("revision", in: listed).map(\.title), ["Révision"])
+        XCTAssertEqual(WorkspaceSwitcher.matches("RÉV", in: listed).map(\.title), ["Révision"])
+    }
+
     func testANamedSessionGoesByItsNameAndIsStillFoundByItsProject() throws {
         var named = F.tmux(1, project: "api", profile: "work")
         named.name = "release notes"

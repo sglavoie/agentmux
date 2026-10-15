@@ -60,6 +60,9 @@ enum DaemonPhrase {
     static let tooManyConnections = "too many app connections — quit other copies"
     static let shuttingDown = "the daemon is shutting down"
     static let refused = "the daemon refused the connection"
+    /// What an action that needs the live feed says without it, in the menu
+    /// and in a refusal alike.
+    static let notConnected = "The daemon is not connected"
 
     /// A daemon refusal code (`subscriber_limit`, `shutting_down`, …) as a
     /// phrase; an unknown one is a plain refusal.

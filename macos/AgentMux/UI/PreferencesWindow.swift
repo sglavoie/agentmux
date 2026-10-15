@@ -380,6 +380,14 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         onVisibilityChanged(false)
     }
 
+    /// Coming back from System Settings: what was allowed or denied there
+    /// (the login item, notifications) is read again, so a note about it
+    /// does not outlive the reason for it.
+    func windowDidBecomeKey(_ notification: Notification) {
+        model.refreshLoginItem()
+        model.onRefreshAuthorization?()
+    }
+
     /// Recording ends when Settings loses key, so the shortcuts are back
     /// while the operator works in another window.
     func windowDidResignKey(_ notification: Notification) {
@@ -440,7 +448,15 @@ struct PreferencesView: View {
                     set: { model.setLaunchAtLogin($0) }
                 ))
                 if let loginNote = model.launchAtLoginNote {
-                    note(loginNote, warning: true)
+                    if loginNote == LoginItem.approvalNote {
+                        HStack {
+                            note(loginNote, warning: true)
+                            Spacer()
+                            Button("Open Login Items") { LoginItem.openSettings() }
+                        }
+                    } else {
+                        note(loginNote, warning: true)
+                    }
                 }
                 Toggle("Use app notifications", isOn: $model.preferences.useAppNotifications)
                 note("Delivers the daemon's notifications through Agent Mux; off leaves them to Alerter.")

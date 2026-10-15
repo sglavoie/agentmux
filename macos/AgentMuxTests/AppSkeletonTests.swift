@@ -20,6 +20,20 @@ final class AppSkeletonTests: XCTestCase {
                        "Settings behind another app's window is found again from the Dock and ⌘Tab")
     }
 
+    func testWindowsAreNeverTabbedTogether() {
+        XCTAssertFalse(NSWindow.allowsAutomaticWindowTabbing, "Settings never opens as a tab of the workspace")
+    }
+
+    /// Clicking the Dock icon that Settings put there brings Settings back,
+    /// not the workspace; with nothing open, or the workspace open, it is
+    /// the workspace.
+    func testReopeningWithOnlySettingsOpenShowsSettings() {
+        XCTAssertEqual(AppDelegate.reopenTarget(workspace: false, settings: true), .settings)
+        XCTAssertEqual(AppDelegate.reopenTarget(workspace: false, settings: false), .workspace)
+        XCTAssertEqual(AppDelegate.reopenTarget(workspace: true, settings: true), .workspace)
+        XCTAssertEqual(AppDelegate.reopenTarget(workspace: true, settings: false), .workspace)
+    }
+
     /// Held keys repeat and AutoFill stays out of the terminals: both are
     /// registered at launch, below anything the user set.
     func testLaunchTurnsOffPressAndHoldAndAutoFillHeuristics() {

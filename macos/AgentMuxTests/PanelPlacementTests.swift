@@ -63,6 +63,16 @@ final class PanelPlacementTests: XCTestCase {
         XCTAssertEqual(placement.frame(size: size, saved: dragged, workspace: workspace, pointer: .zero), dragged)
     }
 
+    /// A panel resized on a large display and reopened after the display
+    /// grew smaller keeps its place but fits the usable area again.
+    func testASavedFrameLargerThanItsScreenIsMadeToFit() {
+        let resized = CGRect(x: 200, y: 100, width: 1400, height: 900)
+        XCTAssertEqual(
+            placement.frame(size: size, saved: resized, workspace: nil, pointer: .zero),
+            CGRect(x: 40, y: 70, width: 1400, height: 805)
+        )
+    }
+
     func testADraggedFrameOnADisconnectedScreenIsDropped() {
         let dragged = CGRect(x: 3000, y: 600, width: 600, height: 500)
         let laptopOnly = PanelPlacement(screens: [left])

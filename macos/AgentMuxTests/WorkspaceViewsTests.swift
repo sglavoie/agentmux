@@ -128,6 +128,23 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertEqual(views.all.map(\.id), ["dashboard", "overview", "editor:/work/api"], "the Dashboard cannot be unlisted")
     }
 
+    /// New Shell opens one more shell each time; a surface asking for the
+    /// shell in a directory still gets the one listed there.
+    func testNewShellOpensAnotherShellEachTime() {
+        var views = WorkspaceViews()
+        let first = views.open(views.nextShell(in: "/home"))
+        let second = views.open(views.nextShell(in: "/home"))
+        let third = views.open(views.nextShell(in: "/home"))
+        XCTAssertEqual([first, second, third].map(\.id), ["shell:/home", "shell:/home#2", "shell:/home#3"])
+        XCTAssertEqual([first, second, third].map(\.title), ["Shell", "Shell 2", "Shell 3"])
+        XCTAssertEqual(views.nextShell(in: "/work").id, "shell:/work", "another directory starts again")
+
+        let requested = views.open(WorkspaceUtilityView(kind: .shell, target: "/home", title: "Shell"))
+        XCTAssertEqual(requested, first, "a request for the shell there reuses the first")
+        views.close(first.id)
+        XCTAssertEqual(views.nextShell(in: "/home").id, "shell:/home#4", "a number is not reused while a later one is open")
+    }
+
     func testATerminalMovesOnlyAmongTheOnesBesideItsSession() {
         var views = WorkspaceViews()
         let (a, b) = (F.runtimeID(1), F.runtimeID(2))

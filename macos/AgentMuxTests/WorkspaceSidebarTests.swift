@@ -337,6 +337,10 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertNil(WorkspaceSidebar.feedExplanation(.connecting)?.action)
         XCTAssertEqual(WorkspaceSidebar.feedExplanation(.reconnecting("x"))?.title, "Reconnecting…")
         XCTAssertNil(WorkspaceSidebar.feedExplanation(.reconnecting("x"))?.action)
+        XCTAssertEqual(WorkspaceSidebar.daemonAction(.reconnecting(DaemonPhrase.notAnswering)), .restart,
+                       "a daemon that stopped answering is not waited on for good")
+        XCTAssertEqual(WorkspaceSidebar.daemonAction(.reconnecting(DaemonPhrase.unreadableSnapshot)), .restart)
+        XCTAssertNil(WorkspaceSidebar.daemonAction(.reconnecting(DaemonPhrase.restarting)), "a restart under way is waited on")
         XCTAssertNil(WorkspaceSidebar.daemonAction(.live))
         XCTAssertEqual(WorkspaceSidebar.DaemonAction.start.title, "Start Daemon")
         XCTAssertEqual(WorkspaceSidebar.DaemonAction.restart.title, "Restart Daemon")

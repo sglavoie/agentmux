@@ -39,6 +39,10 @@ protocol GhosttySurfaceDelegate: AnyObject {
     /// The program reported progress, or its report was removed or expired
     /// (`progress`).
     func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView)
+    /// The terminal put text on the clipboard: a Copy, or, in a session
+    /// view, tmux copying a selection made with the mouse (OSC 52), which
+    /// otherwise happens with nothing to show for it.
+    func surfaceDidWriteClipboard(_ surface: Ghostty.SurfaceView)
 }
 
 extension GhosttySurfaceDelegate {
@@ -54,6 +58,7 @@ extension GhosttySurfaceDelegate {
     func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate) {}
     func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView) {}
+    func surfaceDidWriteClipboard(_ surface: Ghostty.SurfaceView) {}
 }
 
 extension Ghostty {

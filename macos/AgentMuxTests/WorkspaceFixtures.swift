@@ -147,6 +147,8 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     /// Every time the sidebar was hidden (true) or shown, in order.
     private(set) var sidebarCollapses: [Bool] = []
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool) { sidebarCollapses.append(collapsed) }
+    private(set) var fullScreenChanges: [Bool] = []
+    func workspaceFullScreenChanged(_ fullScreen: Bool) { fullScreenChanges.append(fullScreen) }
 
     /// Every time the inspector was hidden (true) or shown, or turned to
     /// another tab, in order.

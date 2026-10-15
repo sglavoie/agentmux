@@ -51,6 +51,11 @@ final class FakeNotificationCenter: NotificationCenterClient {
     func remove(identifiers: [String]) {
         removed.append(contentsOf: identifiers)
     }
+
+    var removedAll = 0
+    func removeAll() {
+        removedAll += 1
+    }
 }
 
 final class NotificationPresenterTests: XCTestCase {
@@ -592,6 +597,38 @@ final class NotificationPresenterTests: XCTestCase {
         center.finishAdd("n-1")
         XCTAssertEqual(center.removed, ["n-1", "n-1"])
         XCTAssertTrue(reports.isEmpty, "a withdrawn notice is not reported delivered")
+    }
+
+    /// The daemon ends every delivery when the connection ends and never
+    /// retracts one after: the banners go with it, and one still being
+    /// added is removed once it is.
+    func testAnEndedConnectionRemovesTheDaemonsBanners() {
+        let presenter = presenter()
+        presenter.present(stop)
+        XCTAssertEqual(presenter.shown, ["n-1"])
+        let terminal = TerminalNotice(title: "t", body: "b", source: "api", origin: .session(runtimeSessionID: "rs-1"))
+        XCTAssertEqual(presenter.presentTerminal(terminal, snoozed: false, muted: false, onScreen: false), .shown)
+        center.removed = []
+
+        center.autoAdd = nil
+        presenter.present(AppNotice(notificationID: "n-2", windowID: 8, navigable: true, title: "Web", subtitle: "Stopped",
+                                    action: "stop", actions: []))
+        presenter.connectionEnded()
+        XCTAssertEqual(center.removed, ["n-1"], "only the daemon's shown notice; the terminal notice stays")
+        XCTAssertTrue(presenter.shown.isEmpty)
+
+        center.finishAdd("n-2")
+        XCTAssertEqual(center.removed, ["n-1", "n-2"], "one still being added goes once it is")
+        presenter.connectionEnded()
+        XCTAssertEqual(center.removed, ["n-1", "n-2"], "nothing twice")
+    }
+
+    func testRetractedNoticesAreNotRemovedAgainWhenTheConnectionEnds() {
+        let presenter = presenter()
+        presenter.present(stop)
+        presenter.retract(NotificationRetractFrame(notificationID: "n-1", reason: "superseded"))
+        presenter.connectionEnded()
+        XCTAssertEqual(center.removed, ["n-1"])
     }
 
     // MARK: Wire

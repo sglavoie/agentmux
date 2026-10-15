@@ -43,6 +43,9 @@ final class WorkspaceRestorationTests: XCTestCase {
 
         WorkspaceRestoration.saveSidebarCollapsed(true, to: defaults)
         XCTAssertTrue(WorkspaceRestoration.load(from: defaults).sidebarCollapsed)
+        WorkspaceRestoration.saveFullScreen(true, to: defaults)
+        XCTAssertTrue(WorkspaceRestoration.load(from: defaults).fullScreen)
+        WorkspaceRestoration.saveFullScreen(false, to: defaults)
 
         WorkspaceRestoration.savePlace(nil, to: defaults)
         WorkspaceRestoration.saveWindowOpen(false, to: defaults)

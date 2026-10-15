@@ -359,6 +359,9 @@ struct ASLQuestionView: View {
         .onChange(of: flow.editorFocus, initial: true) { _, focus in
             if focus != nil { editorFocused = true }
         }
+        .onChange(of: flow.state.notice) { _, notice in
+            PanelAnnouncement.post(notice, kind: flow.state.noticeKind)
+        }
     }
 
     private var state: ASLResponseState { flow.state }
@@ -504,6 +507,67 @@ extension PanelNoticeKind {
     }
 }
 
+/// The app the operator was in before an answer panel took the keyboard.
+/// The panels activate Agent Mux to be typed in; when one goes, the keyboard
+/// goes back there instead of staying with an app that has no window in
+/// front. Coming from the app itself, AppKit already gives it back to the
+/// window that had it.
+struct KeyboardReturn {
+    private var app: NSRunningApplication?
+
+    /// Called before a panel that is not yet shown activates the app.
+    mutating func note(frontmost: NSRunningApplication? = NSWorkspace.shared.frontmostApplication) {
+        app = Self.returnTarget(frontmost: frontmost, own: ProcessInfo.processInfo.processIdentifier)
+    }
+
+    /// Called once the panel is gone. Only while the app is still active:
+    /// an operator who went elsewhere meanwhile keeps the app they chose.
+    mutating func giveBack() {
+        let app = self.app
+        self.app = nil
+        guard let app, !app.isTerminated, NSApp.isActive, !AppDelegate.isRunningTests else { return }
+        app.activate()
+    }
+
+    nonisolated static func returnTarget(frontmost: NSRunningApplication?, own: pid_t) -> NSRunningApplication? {
+        guard let frontmost, frontmost.processIdentifier != own else { return nil }
+        return frontmost
+    }
+}
+
+/// What an answer panel's notice says, said aloud as it appears: VoiceOver
+/// does not read a line of text that changes under it. "Press the key again
+/// to confirm" and a failure interrupt; what happened waits its turn.
+enum PanelAnnouncement {
+    static func priority(_ kind: PanelNoticeKind) -> NSAccessibilityPriorityLevel {
+        kind == .info ? .medium : .high
+    }
+
+    static func post(_ notice: String, kind: PanelNoticeKind) {
+        guard !notice.isEmpty, let element = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        NSAccessibility.post(element: element, notification: .announcementRequested,
+                             userInfo: [.announcement: notice, .priority: priority(kind).rawValue])
+    }
+}
+
+/// A reply is read by an agent, often as a command or a path: typing
+/// `"amx doctor --strict"` must reach it as typed, not as
+/// `“amx doctor —strict”`. SwiftUI's `TextEditor` takes the system's smart
+/// quotes, dashes, and replacements, so each is turned off on the text view
+/// behind it.
+enum PlainTextEditing {
+    static func apply(in view: NSView) {
+        if let text = view as? NSTextView {
+            text.isAutomaticQuoteSubstitutionEnabled = false
+            text.isAutomaticDashSubstitutionEnabled = false
+            text.isAutomaticTextReplacementEnabled = false
+            text.isAutomaticSpellingCorrectionEnabled = false
+            text.isAutomaticTextCompletionEnabled = false
+        }
+        view.subviews.forEach(apply(in:))
+    }
+}
+
 /// Owns the one answer panel. It floats above other windows. Every opening
 /// is the operator's (Answer…, a banner, the menu), so it takes the keyboard:
 /// the reply editor is focused, and Esc closes the panel rather than reaching
@@ -518,6 +582,7 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     /// The workspace window's frame while it is open, to open on its screen.
     var workspaceFrame: () -> CGRect? = { nil }
     private let frames: PanelFrameStore
+    private var keyboardReturn = KeyboardReturn()
 
     init(flow: ASLQuestionFlow? = nil, defaults: UserDefaults? = AppDelegate.isRunningTests ? nil : .standard) {
         let flow = flow ?? ASLQuestionFlow()
@@ -531,7 +596,10 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     func show(_ target: ASLAnswerTarget) {
         flow.open(target)
         let panel = self.panel ?? makePanel()
-        if !panel.isVisible { panel.place(saved: frames.load(), workspace: workspaceFrame()) }
+        if !panel.isVisible {
+            keyboardReturn.note()
+            panel.place(saved: frames.load(), workspace: workspaceFrame())
+        }
         panel.orderFrontRegardless()
         NSApp.activate()
         panel.makeKey()
@@ -539,6 +607,12 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
 
     /// The operator dragged the panel: it opens there next time.
     func windowDidMove(_ notification: Notification) {
+        guard let panel, !panel.isPlacing, panel.isVisible else { return }
+        frames.save(panel.frame)
+    }
+
+    /// The operator resized the panel: it opens at that size next time.
+    func windowDidEndLiveResize(_ notification: Notification) {
         guard let panel, !panel.isPlacing, panel.isVisible else { return }
         frames.save(panel.frame)
     }
@@ -556,11 +630,13 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     /// drafts are kept for this run.
     func windowWillClose(_ notification: Notification) {
         flow.cancel()
+        keyboardReturn.giveBack()
     }
 
     private func finish(_ notice: String?) {
         // orderOut does not send windowWillClose; the flow has already reset.
         panel?.orderOut(nil)
+        keyboardReturn.giveBack()
         onFinish(notice)
     }
 
@@ -585,6 +661,7 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
                 // Typing needs the app active and the panel key.
                 NSApp.activate()
                 panel?.makeKey()
+                if let content = panel?.contentView { PlainTextEditing.apply(in: content) }
             }
         ))
         self.panel = panel

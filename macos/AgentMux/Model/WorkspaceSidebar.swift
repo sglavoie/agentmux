@@ -371,14 +371,20 @@ enum WorkspaceSidebar {
     }
 
     /// The daemon action offered with the feed's notice; nil when there is
-    /// nothing to do but wait for the daemon to answer.
+    /// nothing to do but wait for the daemon to answer. A daemon that takes
+    /// the connection but stops answering, or keeps sending what the app
+    /// cannot read, would be waited on for good: that is restarted.
     static func daemonAction(_ feed: FeedState) -> DaemonAction? {
         switch feed {
         case .notRunning: return .start
         case .daemonTooOld: return .restart
+        case let .reconnecting(reason) where stuckReasons.contains(reason): return .restart
         case .live, .connecting, .reconnecting: return nil
         }
     }
+
+    /// The reconnecting reasons waiting will not cure.
+    static let stuckReasons: Set<String> = [DaemonPhrase.notAnswering, DaemonPhrase.unreadableSnapshot]
 
     /// What the pane says when it has nothing to show and the feed is not
     /// delivering snapshots, and what it can offer to do about the daemon;
@@ -397,6 +403,9 @@ enum WorkspaceSidebar {
         case .reconnecting:
             // Said only with nothing listed: the daemon has no sessions to
             // hold, so the list fills when it answers.
+            if action == .restart {
+                return ("Reconnecting…", "Waiting may not help: the daemon stopped answering, or sends what this app cannot read. Restarting it ends no agent.", action)
+            }
             return ("Reconnecting…", "The daemon is reconnecting. Sessions are listed once it answers; any that are running keep running meanwhile.", action)
         }
     }

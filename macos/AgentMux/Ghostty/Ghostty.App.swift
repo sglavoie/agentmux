@@ -508,10 +508,14 @@ extension Ghostty {
             }
             guard !items.isEmpty else { return }
 
+            weak let writer = Ghostty.surfaceHost(from: userdata) as? SurfaceView
             let write = {
                 pasteboard.declareTypes(items.map(\.type), owner: nil)
                 for item in items {
                     pasteboard.setString(item.data, forType: item.type)
+                }
+                if location == GHOSTTY_CLIPBOARD_STANDARD {
+                    Ghostty.onMain { writer.map { $0.delegate?.surfaceDidWriteClipboard($0) } }
                 }
             }
             guard confirm else {

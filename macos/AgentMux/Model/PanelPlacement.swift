@@ -33,11 +33,12 @@ struct PanelPlacement {
     }
 
     /// The frame to show a panel of `size` in. A frame the operator dragged
-    /// the panel to is kept while its middle still lies on a connected
-    /// screen; otherwise the panel is centred on the chosen screen, and no
-    /// larger than it.
+    /// or resized the panel to is kept while its middle still lies on a
+    /// connected screen, made to fit that screen if it has grown smaller;
+    /// otherwise the panel is centred on the chosen screen, and no larger
+    /// than it.
     func frame(size: CGSize, saved: CGRect?, workspace: CGRect?, pointer: CGPoint) -> CGRect? {
-        if let saved, isOnScreen(saved) { return saved }
+        if let saved, let screen = screen(holding: saved) { return Self.fit(saved, in: screen.visibleFrame) }
         guard let screen = screen(workspace: workspace, pointer: pointer) else { return nil }
         let visible = screen.visibleFrame
         let width = min(size.width, visible.width)
@@ -53,9 +54,23 @@ struct PanelPlacement {
     /// Whether a frame can be seen and dragged again: its middle is on some
     /// screen's usable area.
     func isOnScreen(_ frame: CGRect) -> Bool {
-        guard frame.width > 0, frame.height > 0 else { return false }
+        screen(holding: frame) != nil
+    }
+
+    private func screen(holding frame: CGRect) -> Screen? {
+        guard frame.width > 0, frame.height > 0 else { return nil }
         let middle = CGPoint(x: frame.midX, y: frame.midY)
-        return screens.contains { $0.visibleFrame.contains(middle) }
+        return screens.first { $0.visibleFrame.contains(middle) }
+    }
+
+    /// `frame` no larger than `visible`, moved as little as it takes to lie
+    /// inside it.
+    private static func fit(_ frame: CGRect, in visible: CGRect) -> CGRect {
+        let width = min(frame.width, visible.width)
+        let height = min(frame.height, visible.height)
+        let x = min(max(frame.minX, visible.minX), visible.maxX - width)
+        let y = min(max(frame.minY, visible.minY), visible.maxY - height)
+        return CGRect(x: x, y: y, width: width, height: height)
     }
 
     private static func area(_ rect: CGRect) -> CGFloat {

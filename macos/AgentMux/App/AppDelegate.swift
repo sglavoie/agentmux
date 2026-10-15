@@ -127,6 +127,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         // for a build run straight from DerivedData.
         NSApp.setActivationPolicy(.accessory)
         UserDefaults.standard.register(defaults: Self.launchDefaults)
+        // One workspace window and Settings: neither is a tab of the other,
+        // whatever "Prefer tabs" says, and View has no tab bar items.
+        NSWindow.allowsAutomaticWindowTabbing = false
         // The delegate must be in place before launch finishes, so a banner
         // clicked while the app was not running still reaches it.
         if !Self.isRunningTests { setUpNotifications() }
@@ -197,6 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         Self.logger.notice("workspace: reopening at launch (was open: \(restoration.windowOpen), place: \(restoration.place?.encoded ?? "none", privacy: .public))")
         let controller = workspaceController()
         controller.show()
+        if restoration.fullScreen { controller.enterFullScreen() }
         if let place = restoration.place {
             controller.restore(place, conversation: restoration.conversation)
         } else {
@@ -204,12 +208,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
-    /// The app was opened again while running (from Finder, Spotlight, or
-    /// `open`): that asks for its window.
+    /// The app was opened again while running (from the Dock, Finder,
+    /// Spotlight, or `open`): that asks for its window. With only Settings
+    /// open, as any app with a window open does, it brings that forward: the
+    /// Dock icon is there for Settings.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         guard !Self.isRunningTests else { return false }
-        showWorkspace()
+        switch Self.reopenTarget(workspace: workspaceVisible, settings: settingsVisible) {
+        case .workspace: showWorkspace()
+        case .settings: showPreferences(nil)
+        }
         return false
+    }
+
+    enum ReopenTarget: Equatable { case workspace, settings }
+
+    nonisolated static func reopenTarget(workspace: Bool, settings: Bool) -> ReopenTarget {
+        settings && !workspace ? .settings : .workspace
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -498,6 +513,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         WorkspaceRestoration.saveSidebarCollapsed(collapsed)
     }
 
+    func workspaceFullScreenChanged(_ fullScreen: Bool) {
+        guard !Self.isRunningTests, !isTerminating else { return }
+        WorkspaceRestoration.saveFullScreen(fullScreen)
+    }
+
     func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab) {
         guard !Self.isRunningTests, !isTerminating else { return }
         WorkspaceRestoration.saveInspector(shown: !collapsed, tab: tab)
@@ -669,7 +689,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func openOverviewFromMenu(_ sender: Any?) { showWorkspaceView(.overview) }
     @objc func newShellFromMenu(_ sender: Any?) {
         let home = command?.launchEnvironment.home ?? NSHomeDirectory()
-        showWorkspaceView(WorkspaceUtilityView(kind: .shell, target: home, title: "Shell"))
+        let controller = workspaceController()
+        controller.show()
+        controller.openNewShell(in: home)
     }
     /// ⌘↩: a shell beside the session the workspace is on.
     @objc func newSessionTerminal(_ sender: Any?) {
@@ -858,6 +880,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             lastDisconnect = nil
         case let .disconnected(reason, retryIn):
             subscriptionWaiting = true
+            notifications?.connectionEnded()
             // The raw reason, once per change; the store shows an operator
             // phrase.
             if reason != lastDisconnect {
@@ -1103,6 +1126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// standard error goes to a file the log quotes when the start fails.
     private func startDaemon() {
         guard let command else {
+            lookAgainForAmx()
             store.show(notice: preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
             return
         }
@@ -1425,6 +1449,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         refreshProjects()
     }
 
+    /// Looks for amx again when none was found and the bounded retries are
+    /// spent: an amx installed since is picked up the next time the operator
+    /// opens the menu or asks for the daemon, without a relaunch.
+    private func lookAgainForAmx() {
+        guard command == nil, !resolveRunning, pendingRetry == nil else { return }
+        Self.logger.notice("no amx yet; looking again")
+        resolveBinary()
+    }
+
     /// Runs `action` after the next of `retryDelays`; false, scheduling
     /// nothing, once they are spent.
     @discardableResult
@@ -1560,6 +1593,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// zoomed terminals, including the workspace's hidden session views.
     private func applyDefaultFontSize() {
         terminals?.reloadConfig(resetFontSize: true)
+        workspace?.forgetFontSizes()
         refreshConfigFontSize()
     }
 
@@ -1579,6 +1613,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             enabled: preferencesModel.preferences.useAppNotifications
         )
         UNUserNotificationCenter.current().delegate = presenter
+        if !Self.isRunningTests { presenter.removeEarlierLaunches() }
         subscribeRequest.claim = presenter.claim
         presenter.onClaimChange = { [weak self, unowned presenter] claim in
             guard let self else { return }
@@ -1810,7 +1845,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// the workspace's own sessions.
     func focusNextAttention() {
         guard store.feed == .live, let snapshot = store.snapshot else {
-            refuse("The session feed is not live.")
+            refuse(DaemonPhrase.notConnected + ".")
             return
         }
         guard let session = cycler.advance(in: store.sessions, snapshotSocket: snapshot.kitty.socket, order: attentionOrder) else {
@@ -1889,6 +1924,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     func menuWillOpen() {
+        lookAgainForAmx()
         notifications?.refreshAuthorization()
         refreshProjects()
         surveyProjectDirectories()
@@ -2212,7 +2248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// the operator sees them now.
     private func snooze(_ choice: SnoozeChoice, banner: Bool = false) {
         guard let daemon = store.snapshot?.daemon, store.feed == .live else {
-            return actionFailed(Self.snoozeFailedTitle, "The daemon is not connected.", banner: banner)
+            return actionFailed(Self.snoozeFailedTitle, DaemonPhrase.notConnected + ".", banner: banner)
         }
         let request = choice.request(now: Date())
         focusQueue.async { [weak self] in
