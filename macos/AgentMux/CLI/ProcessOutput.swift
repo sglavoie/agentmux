@@ -35,46 +35,142 @@ struct ProcessOutput: Equatable {
 
     /// Runs `executable` with `arguments` and `environment` (nil inherits this
     /// process's), reading both pipes off the calling thread so a chatty child
-    /// cannot fill one. A child that outlasts `timeout` is terminated.
+    /// cannot fill one. A child that outlasts `timeout` is terminated, along
+    /// with everything it started.
     ///
     /// The run ends when the child exits, not when its pipes close: a
     /// grandchild it left in the background (a login shell's agent or
     /// daemon) may hold them open for good. After the exit the readers get
     /// `pipeGrace` to drain what was written, and whatever they have is the
     /// output.
+    ///
+    /// The child starts in a process group of its own, so a timeout reaches
+    /// what it started too: a login shell's profile still running, or the
+    /// tmux client amx is waiting on. Signalling the child alone would leave
+    /// them running with nobody to wait for them. A child that exits in time
+    /// leaves its background helpers be.
     static func execute(
         _ executable: String,
         arguments: [String],
         environment: [String: String]? = nil,
         timeout: TimeInterval
     ) -> ProcessRun {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        if let environment {
-            process.environment = environment
+        var stdoutPipe: [Int32] = [-1, -1]
+        var stderrPipe: [Int32] = [-1, -1]
+        guard pipe(&stdoutPipe) == 0 else { return .launchFailed(reason: String(cString: strerror(errno))) }
+        guard pipe(&stderrPipe) == 0 else {
+            stdoutPipe.forEach { close($0) }
+            return .launchFailed(reason: String(cString: strerror(errno)))
         }
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-        process.standardInput = FileHandle.nullDevice
-        let exited = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in exited.signal() }
-        do {
-            try process.run()
-        } catch {
-            return .launchFailed(reason: error.localizedDescription)
+        // Another child started meanwhile must not hold a write end open.
+        for fd in stdoutPipe + stderrPipe { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
+
+        let spawned = spawn(
+            executable, arguments: arguments,
+            environment: environment ?? ProcessInfo.processInfo.environment,
+            stdout: stdoutPipe[1], stderr: stderrPipe[1]
+        )
+        close(stdoutPipe[1])
+        close(stderrPipe[1])
+        let pid: pid_t
+        switch spawned {
+        case let .success(child):
+            pid = child
+        case let .failure(failure):
+            close(stdoutPipe[0])
+            close(stderrPipe[0])
+            return .launchFailed(reason: failure.message)
         }
-        let readers = [PipeReader(stdout.fileHandleForReading), PipeReader(stderr.fileHandleForReading)]
+
+        let readers = [
+            PipeReader(FileHandle(fileDescriptor: stdoutPipe[0], closeOnDealloc: true)),
+            PipeReader(FileHandle(fileDescriptor: stderrPipe[0], closeOnDealloc: true)),
+        ]
         defer { readers.forEach { $0.finish() } }
+        let exited = waitForExit(pid)
         if exited.wait(timeout: .now() + timeout) == .timedOut {
-            stop(process, exited: exited)
+            stop(group: pid, exited: exited)
             return .timedOut
         }
+        let status = reap(pid)
         let grace = DispatchTime.now() + pipeGrace
         for reader in readers { reader.waitForEOF(until: grace) }
-        return .finished(ProcessOutput(status: process.terminationStatus, stdout: readers[0].data, stderr: readers[1].data))
+        return .finished(ProcessOutput(status: status, stdout: readers[0].data, stderr: readers[1].data))
+    }
+
+    private struct SpawnFailure: Error {
+        let message: String
+    }
+
+    /// Starts the child as the leader of a new process group, with standard
+    /// input on /dev/null, its output on the given pipe ends, no other
+    /// descriptor of this process, and default signal handling, as `Process`
+    /// would. The group is set by the spawn itself, so there is no moment in
+    /// which the child runs, or starts anything, outside it.
+    private static func spawn(
+        _ executable: String,
+        arguments: [String],
+        environment: [String: String],
+        stdout: Int32,
+        stderr: Int32
+    ) -> Result<pid_t, SpawnFailure> {
+        var attributes: posix_spawnattr_t?
+        guard posix_spawnattr_init(&attributes) == 0 else { return .failure(SpawnFailure(message: "could not prepare the process")) }
+        defer { posix_spawnattr_destroy(&attributes) }
+        let flags = POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK
+        posix_spawnattr_setflags(&attributes, Int16(flags))
+        // Group 0: a new group whose ID is the child's own pid.
+        posix_spawnattr_setpgroup(&attributes, 0)
+        var everySignal = sigset_t()
+        sigfillset(&everySignal)
+        posix_spawnattr_setsigdefault(&attributes, &everySignal)
+        var noSignals = sigset_t()
+        sigemptyset(&noSignals)
+        posix_spawnattr_setsigmask(&attributes, &noSignals)
+
+        var actions: posix_spawn_file_actions_t?
+        guard posix_spawn_file_actions_init(&actions) == 0 else { return .failure(SpawnFailure(message: "could not prepare the process")) }
+        defer { posix_spawn_file_actions_destroy(&actions) }
+        posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0)
+        posix_spawn_file_actions_adddup2(&actions, stdout, 1)
+        posix_spawn_file_actions_adddup2(&actions, stderr, 2)
+
+        let argv = [executable] + arguments
+        let envp = environment.map { "\($0.key)=\($0.value)" }
+        var cArgv: [UnsafeMutablePointer<CChar>?] = argv.map { strdup($0) } + [nil]
+        var cEnvp: [UnsafeMutablePointer<CChar>?] = envp.map { strdup($0) } + [nil]
+        defer {
+            cArgv.forEach { free($0) }
+            cEnvp.forEach { free($0) }
+        }
+        var pid: pid_t = 0
+        let result = posix_spawn(&pid, executable, &actions, &attributes, &cArgv, &cEnvp)
+        guard result == 0 else { return .failure(SpawnFailure(message: String(cString: strerror(result)))) }
+        return .success(pid)
+    }
+
+    /// Signalled once `pid` has exited. The child is left unreaped, so its pid
+    /// (and with it its group's ID) cannot go to another process while a
+    /// timeout may still signal the group.
+    private static func waitForExit(_ pid: pid_t) -> DispatchSemaphore {
+        let exited = DispatchSemaphore(value: 0)
+        let thread = Thread {
+            var info = siginfo_t()
+            while waitid(P_PID, id_t(pid), &info, WEXITED | WNOWAIT) != 0, errno == EINTR {}
+            exited.signal()
+        }
+        thread.qualityOfService = Thread.current.qualityOfService
+        thread.start()
+        return exited
+    }
+
+    /// Collects an exited child's status as `Process` reports it: the exit
+    /// code, or the signal that ended it.
+    private static func reap(_ pid: pid_t) -> Int32 {
+        var status: Int32 = 0
+        while waitpid(pid, &status, 0) < 0, errno == EINTR {}
+        let signal = status & 0x7f
+        return signal == 0 ? (status >> 8) & 0xff : signal
     }
 
     /// How long the pipes may stay open after the child exits before the
@@ -84,13 +180,24 @@ struct ProcessOutput: Equatable {
     /// How long a terminated child gets to exit before it is killed.
     static let terminationGrace: TimeInterval = 0.5
 
-    /// Ends a child that outlasted its deadline: SIGTERM, then SIGKILL if it
-    /// is still running after the grace period. Bounded either way.
-    private static func stop(_ process: Process, exited: DispatchSemaphore) {
-        process.terminate()
-        if exited.wait(timeout: .now() + terminationGrace) == .timedOut, process.isRunning {
-            kill(process.processIdentifier, SIGKILL)
-            _ = exited.wait(timeout: .now() + terminationGrace)
+    /// Ends a child that outlasted its deadline, and its group with it:
+    /// SIGTERM, then SIGKILL if the child is still running after the grace
+    /// period, then SIGKILL for anything in the group that outlived it.
+    /// Bounded either way; a child that will not die is reaped whenever it
+    /// does.
+    private static func stop(group pid: pid_t, exited: DispatchSemaphore) {
+        kill(-pid, SIGTERM)
+        var ended = exited.wait(timeout: .now() + terminationGrace) == .success
+        if !ended {
+            kill(-pid, SIGKILL)
+            ended = exited.wait(timeout: .now() + terminationGrace) == .success
+        }
+        // The leader is not reaped yet, so the group's ID is still its own.
+        kill(-pid, SIGKILL)
+        if ended {
+            _ = reap(pid)
+        } else {
+            AMXCommand.reapWhenExited(pid)
         }
     }
 
