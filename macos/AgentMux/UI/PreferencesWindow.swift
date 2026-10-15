@@ -305,7 +305,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         // The grouped form's ideal height is all of its content.
         let contentHeight = NSHostingView(rootView: view.fixedSize(horizontal: false, vertical: true)).fittingSize.height
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "Agent Mux Settings"
+        window.title = "Settings"
         window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -450,7 +450,7 @@ struct PreferencesView: View {
                 }
             }
 
-            Section("amx") {
+            Section("Command Line Tool") {
                 LabeledContent("amx binary") {
                     HStack {
                         TextField("", text: $model.binaryPathDraft, prompt: Text("Automatic"))

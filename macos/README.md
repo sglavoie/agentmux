@@ -1027,7 +1027,7 @@ shortcut by its menu item (`HotKeyPreference.label`).
 ## Preferences
 
 Preferences (`UI/PreferencesWindow.swift`, SwiftUI in an NSWindow titled
-Agent Mux Settings, opened by Settings… in the status menu and the app menu)
+Settings, opened by Settings… in the status menu and the app menu)
 saves each change as it is made, in the `io.github.sglavoie.agentmux` defaults
 domain. The amx binary path is saved when its field is submitted or left (or
 the window closes), not per keystroke, so a half-typed path never replaces the
