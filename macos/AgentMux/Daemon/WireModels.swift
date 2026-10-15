@@ -32,12 +32,12 @@ struct DaemonBuild: Decodable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        version = try c.decodeIfPresent(String.self, forKey: .version) ?? "dev"
-        revision = try c.decodeIfPresent(String.self, forKey: .revision)
-        dirty = try c.decodeIfPresent(Bool.self, forKey: .dirty) ?? false
-        buildTime = try c.decodeIfPresent(String.self, forKey: .buildTime)
-        goVersion = try c.decodeIfPresent(String.self, forKey: .goVersion)
-        binaryHash = try c.decodeIfPresent(String.self, forKey: .binaryHash)
+        version = c.lenient(.version, "dev")
+        revision = c.lenient(.revision)
+        dirty = c.lenient(.dirty, false)
+        buildTime = c.lenient(.buildTime)
+        goVersion = c.lenient(.goVersion)
+        binaryHash = c.lenient(.binaryHash)
     }
 
     /// `0.8.0 (52189e529adf-dirty)`.
@@ -387,11 +387,13 @@ struct HealthResponse: Decodable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        ok = try c.decodeIfPresent(Bool.self, forKey: .ok) ?? false
-        error = try c.decodeIfPresent(String.self, forKey: .error)
-        ready = try c.decodeIfPresent(Bool.self, forKey: .ready) ?? false
-        degradedReason = try c.decodeIfPresent(String.self, forKey: .degradedReason)
-        pid = try c.decodeIfPresent(Int.self, forKey: .pid)
-        build = try c.decodeIfPresent(DaemonBuild.self, forKey: .build)
+        // Lenient like every other reply: one field of an unexpected type
+        // must not turn a daemon that answered into one that did not.
+        ok = c.lenient(.ok, false)
+        error = c.lenient(.error)
+        ready = c.lenient(.ready, false)
+        degradedReason = c.lenient(.degradedReason)
+        pid = c.lenient(.pid)
+        build = c.lenient(.build)
     }
 }

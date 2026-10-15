@@ -108,6 +108,33 @@ final class BackendSetupTests: XCTestCase {
         XCTAssertTrue(setup.notes[0].text.hasPrefix("This amx could not report the backend setup"))
     }
 
+    /// One field of an unexpected type costs that field, not the report.
+    func testAFieldOfTheWrongTypeKeepsTheRest() throws {
+        let status = try XCTUnwrap(decode(#"""
+        {"schema_version":1,"data":{"launch_backend":7,"tmux":{"available":"yes","path":"/t/tmux","version":3.5,"source":"bundled"},
+        "server":{"running":true,"agents":"two"},"problems":[{"code":"x","severity":"info","message":1}]}}
+        """#.replacingOccurrences(of: "\n", with: "")).value)
+        XCTAssertEqual(status.launchBackend, "")
+        XCTAssertFalse(status.tmux.available)
+        XCTAssertEqual(status.tmux.path, "/t/tmux")
+        XCTAssertEqual(status.tmux.version, "")
+        XCTAssertEqual(status.tmux.source, "bundled")
+        XCTAssertTrue(status.server.running)
+        XCTAssertEqual(status.server.agents, 0)
+        XCTAssertEqual(status.problems, [BackendStatus.Problem(code: "x", severity: "info", message: "")])
+    }
+
+    func testAHealthReplyWithAFieldOfTheWrongTypeStillAnswers() throws {
+        let health = try JSONDecoder().decode(HealthResponse.self, from: Data(#"""
+        {"ok":true,"ready":"yes","pid":"12","degraded_reason":5,"build":{"version":"0.9.0","dirty":"no","revision":"abc"}}
+        """#.utf8))
+        XCTAssertTrue(health.ok)
+        XCTAssertFalse(health.ready)
+        XCTAssertNil(health.pid)
+        XCTAssertNil(health.degradedReason)
+        XCTAssertEqual(health.build, DaemonBuild(version: "0.9.0", revision: "abc"))
+    }
+
     func testAnEmptyReportDecodesToItsDefaults() throws {
         let status = try XCTUnwrap(decode(#"{"schema_version":1,"data":{}}"#).value)
         XCTAssertEqual(status, BackendStatus())

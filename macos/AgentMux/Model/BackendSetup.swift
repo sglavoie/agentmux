@@ -49,12 +49,12 @@ struct BackendStatus: Decodable, Equatable {
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            available = try c.decodeIfPresent(Bool.self, forKey: .available) ?? false
-            path = try c.decodeIfPresent(String.self, forKey: .path) ?? ""
-            version = try c.decodeIfPresent(String.self, forKey: .version) ?? ""
-            source = try c.decodeIfPresent(String.self, forKey: .source) ?? ""
-            verified = try c.decodeIfPresent(Bool.self, forKey: .verified) ?? false
-            minVersion = try c.decodeIfPresent(String.self, forKey: .minVersion) ?? ""
+            available = c.lenient(.available, false)
+            path = c.lenient(.path, "")
+            version = c.lenient(.version, "")
+            source = c.lenient(.source, "")
+            verified = c.lenient(.verified, false)
+            minVersion = c.lenient(.minVersion, "")
         }
     }
 
@@ -70,10 +70,10 @@ struct BackendStatus: Decodable, Equatable {
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            running = try c.decodeIfPresent(Bool.self, forKey: .running) ?? false
-            binary = try c.decodeIfPresent(String.self, forKey: .binary) ?? ""
-            sessions = try c.decodeIfPresent(Int.self, forKey: .sessions) ?? 0
-            agents = try c.decodeIfPresent(Int.self, forKey: .agents) ?? 0
+            running = c.lenient(.running, false)
+            binary = c.lenient(.binary, "")
+            sessions = c.lenient(.sessions, 0)
+            agents = c.lenient(.agents, 0)
         }
     }
 
@@ -95,10 +95,10 @@ struct BackendStatus: Decodable, Equatable {
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            code = try c.decodeIfPresent(String.self, forKey: .code) ?? ""
-            severity = try c.decodeIfPresent(String.self, forKey: .severity) ?? ""
-            message = try c.decodeIfPresent(String.self, forKey: .message) ?? ""
-            hint = try c.decodeIfPresent(String.self, forKey: .hint) ?? ""
+            code = c.lenient(.code, "")
+            severity = c.lenient(.severity, "")
+            message = c.lenient(.message, "")
+            hint = c.lenient(.hint, "")
         }
 
         /// Something to act on, as opposed to something to know.
@@ -122,10 +122,10 @@ struct BackendStatus: Decodable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        launchBackend = try c.decodeIfPresent(String.self, forKey: .launchBackend) ?? ""
-        tmux = try c.decodeIfPresent(Tmux.self, forKey: .tmux) ?? Tmux()
-        server = try c.decodeIfPresent(Server.self, forKey: .server) ?? Server()
-        problems = try c.decodeIfPresent([Problem].self, forKey: .problems) ?? []
+        launchBackend = c.lenient(.launchBackend, "")
+        tmux = c.lenient(.tmux, Tmux())
+        server = c.lenient(.server, Server())
+        problems = c.lenient(.problems, [])
     }
 
     static let arguments = ["backend", "status"]
