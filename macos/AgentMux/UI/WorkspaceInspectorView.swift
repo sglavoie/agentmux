@@ -23,16 +23,18 @@ final class WorkspaceInspectorView: NSView {
 
         /// The lines under the tabs, top to bottom. The session tab with no
         /// session says what is wrong with the feed when something is: the
-        /// pane may still be on a session nobody can list.
+        /// pane may still be on a session nobody can list. Held lines say it
+        /// above them, so what they show is not taken for what is so now.
         var lines: [WorkspaceInspectorLine] {
+            let held: [WorkspaceInspectorLine] = !current ? feedNotice.map { [.note($0)] } ?? [] : []
             switch tab {
             case .waiting:
                 if waiting.isEmpty { return [.note(feedNotice ?? WorkspaceInspectorView.nothingWaiting)] }
-                return waiting.map(WorkspaceInspectorLine.waiting)
+                return held + waiting.map(WorkspaceInspectorLine.waiting)
             case .session:
                 guard let inspection else { return [.note(feedNotice ?? WorkspaceInspectorView.noSession)] }
                 let title = [inspection.glyph, inspection.title].filter { !$0.isEmpty }.joined(separator: " ")
-                return [.title(title, toolTip: inspection.title)]
+                return held + [.title(title, toolTip: inspection.title)]
                     + inspection.sections.flatMap { section in
                         [.heading(section.title)] + section.fields.map(WorkspaceInspectorLine.field)
                     }
@@ -44,6 +46,7 @@ final class WorkspaceInspectorView: NSView {
     static let nothingWaiting = "Nothing is waiting on you."
     static let noSession = "No session is shown."
     static let kittyOnly = "A Kitty session has this in Kitty."
+    static let waitForDaemon = "Available once the daemon answers again."
 
     var onTab: ((WorkspaceInspectorTab) -> Void)?
     var onWaiting: ((AttentionCycler.Key) -> Void)?
@@ -132,11 +135,27 @@ final class WorkspaceInspectorView: NSView {
         let wanted = model.lines
         if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {
             for (view, line) in zip(lines, wanted) { update(view, to: line) }
-            return
+        } else {
+            lines.forEach { $0.removeFromSuperview() }
+            lines = []
+            wanted.forEach { add(view(for: $0)) }
         }
-        lines.forEach { $0.removeFromSuperview() }
-        lines = []
-        wanted.forEach { add(view(for: $0)) }
+        holdWhileNotCurrent()
+    }
+
+    /// Held lines can still be clicked to go to their session, which is
+    /// listed, but nothing is answered or changed from them: what they show
+    /// may no longer be so, and the daemon is not there to say.
+    private func holdWhileNotCurrent() {
+        for case let row as WorkspaceWaitingRowView in lines {
+            row.answerButton?.isEnabled = model.current
+            row.answerButton?.toolTip = model.current ? nil : Self.waitForDaemon
+        }
+        guard !model.current else { return }
+        for button in actionButtons {
+            button.isEnabled = false
+            button.toolTip = Self.waitForDaemon
+        }
     }
 
     private func view(for line: WorkspaceInspectorLine) -> NSView {
