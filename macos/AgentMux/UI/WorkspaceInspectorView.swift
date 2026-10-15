@@ -43,6 +43,13 @@ final class WorkspaceInspectorView: NSView {
         }
     }
 
+    /// Whether a line is drawn dimmed: every held line but a note.
+    static func dims(_ line: WorkspaceInspectorLine, current: Bool) -> Bool {
+        guard !current else { return false }
+        if case .note = line { return false }
+        return true
+    }
+
     static let nothingWaiting = "Nothing is waiting on you."
     static let noSession = "No session is shown."
     static let kittyOnly = "A Kitty session has this in Kitty."
@@ -130,8 +137,6 @@ final class WorkspaceInspectorView: NSView {
             tabs.setLabel(tab.title + count, forSegment: index)
             if tab == model.tab { tabs.selectedSegment = index }
         }
-        alphaValue = model.current ? 1 : 0.5
-
         let wanted = model.lines
         if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {
             for (view, line) in zip(lines, wanted) { update(view, to: line) }
@@ -139,6 +144,12 @@ final class WorkspaceInspectorView: NSView {
             lines.forEach { $0.removeFromSuperview() }
             lines = []
             wanted.forEach { add(view(for: $0)) }
+        }
+        // Held lines are dimmed, as the sidebar's are; the note saying why,
+        // and the tabs, are not, or the warning would be the hardest thing
+        // to read.
+        for (view, line) in zip(lines, wanted) {
+            view.alphaValue = Self.dims(line, current: model.current) ? 0.5 : 1
         }
         holdWhileNotCurrent()
     }

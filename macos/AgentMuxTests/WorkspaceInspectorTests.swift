@@ -363,6 +363,18 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual((workspace.inspector.lines.first as? NSTextField)?.stringValue, "Daemon not running")
     }
 
+    func testHeldLinesAreDimmedButNotTheNoteSayingWhy() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.setInspectorTab(.waiting)
+        app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
+        let model = workspace.inspector.model
+        XCTAssertFalse(model.current)
+        XCTAssertFalse(model.waiting.isEmpty, "the waiting rows are held")
+        guard case .note = try XCTUnwrap(model.lines.first) else { return XCTFail("no note above the held lines") }
+        XCTAssertEqual(workspace.inspector.alphaValue, 1, "the tabs are not dimmed")
+        XCTAssertEqual(workspace.inspector.lines.map(\.alphaValue), [1] + Array(repeating: 0.5, count: model.lines.count - 1))
+    }
+
     func testACopiedIdentifierStaysCopiedWhileTheSessionChanges() throws {
         var changed = sessions
         changed[1].reason = "permission"
