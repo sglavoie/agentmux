@@ -403,6 +403,10 @@ final class ASLQuestionFlowTests: XCTestCase {
                        "The answer to the run was not applied: the run changed since it was selected")
         XCTAssertEqual(ASLQuestionFlow.lateNotice(label: "api", .failure(.transport("t"))),
                        "The answer to api did not complete. The action did not complete; its outcome is unknown and it was not retried")
+        XCTAssertEqual(ASLQuestionFlow.lateNotice(label: "api", .success(ASLOperation(operationID: "o", status: "rejected"))),
+                       "The answer to api was not taken. The run refused the answer")
+        XCTAssertEqual(ASLQuestionFlow.lateNotice(label: "api", .success(ASLOperation(operationID: "o", status: "consumed"))),
+                       "The answer to api was consumed")
     }
 
     func testABodyThatFailedToLoadLoadsAgain() {

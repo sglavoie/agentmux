@@ -323,6 +323,28 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertNotEqual(pause?.operationID, other?.operationID, "another resolution is another call")
     }
 
+    func testAReceiptThatDidNotTakeTheAnswerKeepsTheQuestionAndItsDraft() {
+        for (status, sentence, sameID) in [("rejected", "The run refused the answer", false),
+                                           ("superseded", "Another answer reached the run first", false),
+                                           ("expired", "The answer expired before the run took it", false),
+                                           ("", "The run did not say it took the answer", true)] {
+            var state = opened()
+            state.setDraft("an answer")
+            guard case let .act(seq, first) = state.submit(state.buttons[0], mint: mint) else { return XCTFail("no submission") }
+            XCTAssertNil(state.actionFinished(seq: seq, .success(ASLOperation(operationID: first.operationID, status: status))), status)
+            XCTAssertTrue(state.active, status)
+            XCTAssertEqual(state.status, "failed", status)
+            XCTAssertEqual(state.notice, sentence, status)
+            XCTAssertEqual(state.noticeKind, .error, status)
+            XCTAssertEqual(state.draft.reveal(), "an answer", status)
+            let again = params(state.submit(state.buttons[0], mint: mint))
+            XCTAssertEqual(again?.operationID == first.operationID, sameID, status)
+        }
+        XCTAssertTrue(ASLResponse.answered("accepted"))
+        XCTAssertTrue(ASLResponse.answered("consumed"))
+        XCTAssertFalse(ASLResponse.answered("submitting"))
+    }
+
     func testStaleRefusalsCloseTheQuestionAndKeepTheDraft() {
         var state = opened()
         state.setDraft("x")

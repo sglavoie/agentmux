@@ -188,6 +188,22 @@ enum ASLResponse {
         return "\(label) is unavailable for this run"
     }
 
+    /// Whether a receipt says the run took the answer. Any other receipt
+    /// leaves the question open and its draft kept.
+    static func answered(_ status: String) -> Bool {
+        status == ASLOperationStatus.accepted || status == ASLOperationStatus.consumed
+    }
+
+    /// The fixed sentence for a receipt that did not take the answer.
+    static func notTakenText(_ status: String) -> String {
+        switch status {
+        case ASLOperationStatus.expired: return "The answer expired before the run took it"
+        case ASLOperationStatus.rejected: return "The run refused the answer"
+        case ASLOperationStatus.superseded: return "Another answer reached the run first"
+        default: return "The run did not say it took the answer"
+        }
+    }
+
     /// `asl.OperationState`: a receipt status in the body-free vocabulary.
     static func operationState(_ status: String) -> String {
         switch status {
@@ -641,9 +657,20 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
             status = "failed"
             note(ASLRefusal.text(error), .error)
             return nil
-        case let .success(operation):
+        case let .success(operation) where ASLResponse.answered(operation.status):
             status = ASLResponse.operationState(operation.status)
             return advance()
+        case let .success(operation):
+            // Not taken: the question stays, with its draft. A receipt that
+            // is final for this operation takes a new one next time; one the
+            // app cannot read is replayed under the same.
+            status = "failed"
+            if operation.status == ASLOperationStatus.rejected || operation.status == ASLOperationStatus.expired
+                || operation.status == ASLOperationStatus.superseded {
+                pending = ASLPendingSubmission()
+            }
+            note(ASLResponse.notTakenText(operation.status), .error)
+            return nil
         }
     }
 

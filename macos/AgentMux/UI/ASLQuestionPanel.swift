@@ -220,8 +220,10 @@ final class ASLQuestionFlow: ObservableObject {
     static func lateNotice(label: String, _ result: Result<ASLOperation, ASLRequestError>) -> String {
         let run = label.isEmpty ? "the run" : label
         switch result {
-        case let .success(operation):
+        case let .success(operation) where ASLResponse.answered(operation.status):
             return "The answer to \(run) was \(ASLResponse.operationState(operation.status))"
+        case let .success(operation):
+            return "The answer to \(run) was not taken. \(ASLResponse.notTakenText(operation.status))"
         case let .failure(error) where ASLRefusal.isStale(error):
             return "The answer to \(run) was not applied: the run changed since it was selected"
         case let .failure(error):
@@ -309,12 +311,12 @@ final class ASLQuestionFlow: ObservableObject {
     /// is resent; the operator is told, and a draft it answered is dropped.
     private func lateResult(_ params: ASLRequestParams, label: String, _ result: Result<ASLOperation, ASLRequestError>) {
         switch result {
-        case .success:
+        case let .success(operation) where ASLResponse.answered(operation.status):
             keptDrafts[params.runID]?[params.questionID] = nil
             if keptDrafts[params.runID]?.isEmpty == true { keptDrafts[params.runID] = nil }
         case let .failure(error) where ASLRefusal.isStale(error):
             keptDrafts[params.runID] = nil
-        case .failure:
+        case .success, .failure:
             break
         }
         onLateResult(Self.lateNotice(label: label, result))
