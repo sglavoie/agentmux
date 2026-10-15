@@ -147,6 +147,7 @@ final class SessionStore {
         case .heartbeatLost: return DaemonPhrase.notAnswering
         case let .lost(phrase): return phrase.isEmpty ? DaemonPhrase.notAnswering : phrase
         case .reconnectRequested: return "reconnecting"
+        case .unreadableSnapshot: return DaemonPhrase.unreadableSnapshot
         }
     }
 

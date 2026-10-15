@@ -55,6 +55,7 @@ enum DaemonPhrase {
     static let closedConnection = "the daemon closed the connection"
     static let unreachable = "could not reach the daemon"
     static let unreadable = "the daemon sent a reply this app cannot read"
+    static let unreadableSnapshot = "the daemon sent sessions this app cannot read; update the app or amx"
     static let restarting = "the daemon is restarting"
     static let tooManyConnections = "too many app connections — quit other copies"
     static let shuttingDown = "the daemon is shutting down"

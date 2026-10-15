@@ -174,6 +174,26 @@ final class SubscriptionClientTests: XCTestCase {
                        .disconnected(.unsupported, retryIn: fast.maximum))
     }
 
+    /// A snapshot this app cannot read is not skipped like any other bad
+    /// line: the last good one would go on being shown as live. The stream
+    /// ends, says why, and is dialed again at the slowest cadence.
+    func testAnUnreadableSnapshotEndsTheStreamAndSaysSo() throws {
+        server = try FakeStreamServer(directory: directory, scripts: [{ conn in
+            _ = conn.readLine()
+            conn.write(WireFixture.ack)
+            conn.write(WireFixture.snapshot(seq: 1))
+            conn.write(#"{"v":1,"seq":2,"type":"snapshot","data":["not","a","snapshot"]}"#)
+            Thread.sleep(forTimeInterval: 2)
+            conn.close()
+        }])
+        let recorder = startClient(server!.path)
+        XCTAssertTrue(recorder.wait { !$0.disconnects.isEmpty })
+        XCTAssertEqual(recorder.events.snapshotSeqs, [1])
+        XCTAssertEqual(recorder.events.first { if case .disconnected = $0 { return true } else { return false } },
+                       .disconnected(.unreadableSnapshot, retryIn: fast.maximum))
+        XCTAssertEqual(client?.badLines, 1)
+    }
+
     func testNoSocketIsNotRunningAndBacksOff() {
         let recorder = startClient(directory.appendingPathComponent("absent.sock").path)
         XCTAssertTrue(recorder.wait { $0.disconnects.count >= 3 })

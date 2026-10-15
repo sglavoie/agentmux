@@ -32,11 +32,14 @@ struct ReconnectBackoff: Equatable {
 /// Holds a companion subscription open for as long as it is started: it
 /// connects, sends `subscribe`, reads the ack and then frames, and reconnects
 /// whenever the stream ends — on a `bye`, on EOF, or when no frame (not even a
-/// heartbeat) arrives within two heartbeat intervals, which is how a socket
-/// left half-open by sleep is noticed.
+/// heartbeat) arrives within two heartbeat intervals, which is how a daemon
+/// that stopped answering is noticed.
 ///
-/// Decoding is tolerant: a line that is not a frame is counted and skipped,
-/// and an unknown frame type is reported as `.unknown` and otherwise ignored.
+/// Decoding is tolerant: a line that is not a frame is counted, logged (the
+/// first few), and skipped, and an unknown frame type is reported as
+/// `.unknown` and otherwise ignored. A snapshot that does not decode is the
+/// exception: it ends the stream as `.unreadableSnapshot`, since skipping it
+/// would leave older sessions on show as if they were current.
 ///
 /// The client runs on a thread of its own and reports through `onEvent`, on
 /// that thread; the caller hops to wherever it keeps state.
@@ -67,8 +70,11 @@ final class SubscriptionClient {
         /// The connection failed or closed; the text is an operator phrase
         /// (`DaemonPhrase`), the raw error having gone to the log.
         case lost(String)
-        /// Something asked for a fresh connection (a wake from sleep).
+        /// Something asked for a fresh connection (a daemon just started).
         case reconnectRequested
+        /// A snapshot frame this app cannot read: a daemon newer or older
+        /// than the app in a way the lenient decoding does not absorb.
+        case unreadableSnapshot
     }
 
     /// How long the ack may take once the request is written.
@@ -156,8 +162,9 @@ final class SubscriptionClient {
     }
 
     /// Drops the current connection, if any, and dials again at once, with
-    /// the backoff back at its start. Sent on wake from sleep, when the old
-    /// socket may be half-open, and after the app starts the daemon.
+    /// the backoff back at its start. Sent while the app starts the daemon,
+    /// after it restarts it, and when the notification claim changes, which
+    /// the daemon learns only from a subscribe.
     func reconnectNow() {
         lock.lock()
         reconnectRequested = true
@@ -185,9 +192,10 @@ final class SubscriptionClient {
             if isStopped { return }
             let delay: TimeInterval
             switch reason {
-            case .unsupported:
-                // An old daemon stays old until it is restarted; look again
-                // at the slowest cadence.
+            case .unsupported, .unreadableSnapshot:
+                // An old daemon stays old until it is restarted, and a
+                // snapshot this app cannot read stays so until one of the two
+                // is updated; look again at the slowest cadence.
                 delay = backoff.maximum
             case .reconnectRequested:
                 delay = 0
@@ -258,7 +266,11 @@ final class SubscriptionClient {
 
         let heartbeat = ack.heartbeatMS > 0 ? TimeInterval(ack.heartbeatMS) / 1000 : Self.defaultHeartbeat
         let watchdog = heartbeat * 2
-        var lastFrame = Date()
+        // Measured on the clock that stops while the Mac sleeps: both ends of
+        // this local socket sleep together, so the sleep itself is not a
+        // silence, and a stream that is still good after a wake is kept.
+        // One that is not ends at its EOF, or a watchdog after the wake.
+        var lastFrame = ProcessInfo.processInfo.systemUptime
         while true {
             if isStopped { return .lost("stopped") }
             if takeReconnectRequest() { return .reconnectRequested }
@@ -266,20 +278,35 @@ final class SubscriptionClient {
             do {
                 line = try socket.readLine(deadline: Date().addingTimeInterval(Self.pollSlice))
             } catch LineSocketError.timedOut {
-                if Date().timeIntervalSince(lastFrame) >= watchdog { return .heartbeatLost }
+                if ProcessInfo.processInfo.systemUptime - lastFrame >= watchdog { return .heartbeatLost }
                 continue
             } catch {
                 return Self.lost(error)
             }
-            guard let frame = Self.decodeFrame(line) else {
-                lock.lock(); badLinesCount += 1; lock.unlock()
+            let frame: StreamFrame
+            switch Self.decodeLine(line) {
+            case let .success(decoded):
+                frame = decoded
+            case let .failure(problem):
+                lock.lock(); badLinesCount += 1; let count = badLinesCount; lock.unlock()
+                if count <= Self.loggedBadLines {
+                    Self.logger.error("subscription: skipped a \(line.count)-byte line that is not a readable frame (type \(problem.type ?? "unknown", privacy: .public)): \(problem.detail, privacy: .public)")
+                }
+                // Sessions shown from the last snapshot would be presented
+                // as live while every newer one is unreadable: the feed says
+                // so instead, and dials again at the slowest cadence.
+                if problem.type == "snapshot" { return .unreadableSnapshot }
                 continue
             }
-            lastFrame = Date()
+            lastFrame = ProcessInfo.processInfo.systemUptime
             emit(.frame(frame))
             if case let .bye(_, reason) = frame { return .bye(reason) }
         }
     }
+
+    /// How many unreadable lines are logged, so a daemon that sends nothing
+    /// else does not fill the log.
+    static let loggedBadLines = 5
 
     private enum AckOutcome {
         case success(SubscriptionAck)
@@ -326,30 +353,79 @@ final class SubscriptionClient {
 
     /// One stream line as a frame; nil when it is not one.
     static func decodeFrame(_ line: Data) -> StreamFrame? {
+        try? decodeLine(line).get()
+    }
+
+    /// Why a stream line is not a frame, in words fit for the log: the frame
+    /// type when the header could be read, and what failed, never the
+    /// payload, which can carry session titles and paths.
+    struct FrameProblem: Error, Equatable {
+        /// nil when the line has no readable header.
+        let type: String?
+        let detail: String
+    }
+
+    /// One stream line as a frame, or why it is not one.
+    static func decodeLine(_ line: Data) -> Result<StreamFrame, FrameProblem> {
         let decoder = JSONDecoder()
-        guard let header = try? decoder.decode(StreamFrameHeader.self, from: line) else { return nil }
+        let header: StreamFrameHeader
+        do {
+            header = try decoder.decode(StreamFrameHeader.self, from: line)
+        } catch {
+            return .failure(FrameProblem(type: nil, detail: describe(error)))
+        }
+        func payload<T: Decodable>(_ type: T.Type) -> Result<T, FrameProblem> {
+            do {
+                return .success(try decoder.decode(StreamFramePayload<T>.self, from: line).data)
+            } catch {
+                return .failure(FrameProblem(type: header.type, detail: describe(error)))
+            }
+        }
         switch header.type {
         case "snapshot":
-            guard let payload = try? decoder.decode(StreamFramePayload<CompanionSnapshot>.self, from: line) else { return nil }
-            return .snapshot(seq: header.seq, payload.data)
+            return payload(CompanionSnapshot.self).map { .snapshot(seq: header.seq, $0) }
         case "heartbeat":
-            return .heartbeat(seq: header.seq)
+            return .success(.heartbeat(seq: header.seq))
         case "bye":
             let reason = (try? decoder.decode(StreamFramePayload<ByeFrame>.self, from: line))?.data.reason ?? ""
-            return .bye(seq: header.seq, reason: reason)
+            return .success(.bye(seq: header.seq, reason: reason))
         case "notification":
+            // Only an object can be written back out: `data(withJSONObject:)`
+            // raises an exception Swift cannot catch for null, a string, or a
+            // number, which would take the app down.
             guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-                  let data = object["data"],
-                  let raw = try? JSONSerialization.data(withJSONObject: data) else { return nil }
-            return .notification(seq: header.seq, raw)
+                  let data = object["data"] as? [String: Any],
+                  JSONSerialization.isValidJSONObject(data),
+                  let raw = try? JSONSerialization.data(withJSONObject: data) else {
+                return .failure(FrameProblem(type: header.type, detail: "its data is not an object"))
+            }
+            return .success(.notification(seq: header.seq, raw))
         case "notification_retract":
-            guard let payload = try? decoder.decode(StreamFramePayload<NotificationRetractFrame>.self, from: line) else { return nil }
-            return .notificationRetract(seq: header.seq, payload.data)
+            return payload(NotificationRetractFrame.self).map { .notificationRetract(seq: header.seq, $0) }
         case "workspace_view":
-            guard let payload = try? decoder.decode(StreamFramePayload<WorkspaceViewRequest>.self, from: line) else { return nil }
-            return .workspaceView(seq: header.seq, payload.data)
+            return payload(WorkspaceViewRequest.self).map { .workspaceView(seq: header.seq, $0) }
         default:
-            return .unknown(seq: header.seq, type: header.type)
+            return .success(.unknown(seq: header.seq, type: header.type))
+        }
+    }
+
+    /// A decoding error as its kind and the path to the field, with no value
+    /// from the line.
+    private static func describe(_ error: Error) -> String {
+        func path(_ keys: [CodingKey]) -> String {
+            keys.isEmpty ? "the top level" : keys.map { $0.intValue.map(String.init) ?? $0.stringValue }.joined(separator: ".")
+        }
+        switch error {
+        case let DecodingError.typeMismatch(type, context):
+            return "\(path(context.codingPath)) is not \(type)"
+        case let DecodingError.valueNotFound(type, context):
+            return "\(path(context.codingPath)) has no \(type)"
+        case let DecodingError.keyNotFound(key, context):
+            return "\(path(context.codingPath + [key])) is missing"
+        case let DecodingError.dataCorrupted(context):
+            return context.codingPath.isEmpty ? "not JSON" : "\(path(context.codingPath)) is malformed"
+        default:
+            return "undecodable"
         }
     }
 }

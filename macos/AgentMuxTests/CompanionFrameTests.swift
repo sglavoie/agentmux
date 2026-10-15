@@ -6,6 +6,35 @@ final class CompanionFrameTests: XCTestCase {
         SubscriptionClient.decodeFrame(Data(line.utf8))
     }
 
+    /// `JSONSerialization.data(withJSONObject:)` raises an exception Swift
+    /// cannot catch for anything but an object or array; such a frame is a
+    /// bad line, not a crash.
+    func testANotificationWhoseDataIsNotAnObjectIsSkipped() {
+        for data in ["null", #""text""#, "42", "[1,2]", "true"] {
+            XCTAssertNil(frame(#"{"v":1,"seq":1,"type":"notification","data":"# + data + "}"), data)
+        }
+        XCTAssertNil(frame(#"{"v":1,"seq":1,"type":"notification"}"#))
+        guard case .notification(seq: 2, _)? = frame(#"{"v":1,"seq":2,"type":"notification","data":{"id":"n1"}}"#) else {
+            return XCTFail("an object is a notification")
+        }
+    }
+
+    /// What the log gets about a bad line: its type and where it failed,
+    /// never a value from it.
+    func testAnUnreadableLineSaysWhatFailedWithoutItsContent() {
+        let notJSON = SubscriptionClient.decodeLine(Data("secret-title".utf8))
+        XCTAssertEqual(notJSON, .failure(SubscriptionClient.FrameProblem(type: nil, detail: "not JSON")))
+        guard case let .failure(problem) = SubscriptionClient.decodeLine(
+            Data(#"{"v":1,"seq":3,"type":"snapshot","data":"secret-title"}"#.utf8)
+        ) else { return XCTFail("a snapshot that is not an object does not decode") }
+        XCTAssertEqual(problem.type, "snapshot")
+        XCTAssertFalse(problem.detail.contains("secret"), problem.detail)
+        guard case let .failure(view) = SubscriptionClient.decodeLine(
+            Data(#"{"v":1,"seq":4,"type":"notification","data":null}"#.utf8)
+        ) else { return XCTFail("null notification data is not a frame") }
+        XCTAssertEqual(view.type, "notification")
+    }
+
     func testSnapshotFrameDecodes() throws {
         let decoded = try XCTUnwrap(frame(WireFixture.snapshot(seq: 4)))
         guard case let .snapshot(seq, snapshot) = decoded else { return XCTFail("\(decoded)") }
