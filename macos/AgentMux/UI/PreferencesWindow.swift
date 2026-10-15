@@ -160,7 +160,7 @@ final class PreferencesModel: ObservableObject {
             return nil
         } catch {
             refreshLoginItem()
-            let message = "Launch at login could not be changed: \(error.localizedDescription)"
+            let message = "Open at Login could not be changed: \(error.localizedDescription)"
             launchAtLoginNote = message
             return message
         }
@@ -387,7 +387,7 @@ struct PreferencesView: View {
             }
 
             Section("General") {
-                Toggle("Launch at login", isOn: Binding(
+                Toggle("Open at Login", isOn: Binding(
                     get: { model.launchAtLogin },
                     set: { model.setLaunchAtLogin($0) }
                 ))
