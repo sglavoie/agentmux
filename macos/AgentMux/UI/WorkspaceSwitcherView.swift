@@ -41,7 +41,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         isHidden = true
         translatesAutoresizingMaskIntoConstraints = false
 
-        field.placeholderString = "Go to a session or view"
+        field.placeholderString = "Go to a session or view, or > for actions"
         field.font = .systemFont(ofSize: 15)
         field.isBordered = false
         field.drawsBackground = false
@@ -141,7 +141,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
 
     /// What VoiceOver says of a place: its title, then the line under it.
     nonisolated static func spoken(_ entry: WorkspaceSwitcher.Entry) -> String {
-        entry.detail.isEmpty ? entry.title : "\(entry.title), \(entry.detail)"
+        [entry.title, entry.detail, entry.unavailableReason ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
     /// What was last said, for tests.
@@ -176,6 +176,10 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     /// the list already says so.
     func choose() {
         guard let selected else { return }
+        guard selected.unavailableReason == nil else {
+            announce(selected.unavailableReason!, priority: .high)
+            return
+        }
         onChoose?(selected)
     }
 
@@ -200,6 +204,10 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     /// Goes to the place on the table's row `index`, as a click on it does.
     func click(row index: Int) {
         guard shown.indices.contains(index) else { return }
+        guard shown[index].unavailableReason == nil else {
+            announce(shown[index].unavailableReason!, priority: .high)
+            return
+        }
         onChoose?(shown[index])
     }
 
@@ -297,9 +305,10 @@ final class WorkspaceSwitcherCellView: NSTableCellView {
     func show(_ entry: WorkspaceSwitcher.Entry) {
         glyphLabel.stringValue = entry.glyph
         titleLabel.stringValue = entry.title
-        detailLabel.stringValue = entry.detail
-        detailLabel.isHidden = entry.detail.isEmpty
-        toolTip = entry.detail
+        detailLabel.stringValue = entry.unavailableReason ?? entry.detail
+        detailLabel.isHidden = detailLabel.stringValue.isEmpty
+        titleLabel.textColor = entry.unavailableReason == nil ? .labelColor : .secondaryLabelColor
+        toolTip = entry.unavailableReason ?? entry.detail
         // The line is said as one, as the session list's are.
         setAccessibilityLabel(WorkspaceSwitcherView.spoken(entry))
     }

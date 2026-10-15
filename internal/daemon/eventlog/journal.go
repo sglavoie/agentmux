@@ -63,6 +63,9 @@ func DecisionEnvelope(event protocol.SessionEvent) diagnostics.TraceEnvelope {
 		"saturation":             eventSaturationReason(event),
 	}
 	appendReplayJournalEvidence(envelope.Evidence, event)
+	if event.Origin != nil && event.Origin.RuntimeSessionID != "" {
+		envelope.Evidence["runtime_session_id"] = event.Origin.RuntimeSessionID
+	}
 	appendRoutingJournalEvidence(envelope.Evidence, event.RouteEvidence)
 	if event.Attempt > 0 {
 		envelope.Evidence["attempt"] = fmt.Sprint(event.Attempt)

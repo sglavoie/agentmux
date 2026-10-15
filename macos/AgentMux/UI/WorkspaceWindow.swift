@@ -85,6 +85,17 @@ protocol WorkspaceDelegate: AnyObject {
     /// The pane shows the terminal of a session or view: it moved there, or
     /// the window became key on it. Its terminal notices are now read.
     func workspaceShowing(_ origin: TerminalNotice.Origin)
+    var workspaceCommands: [WorkspaceSwitcher.Entry] { get }
+    func workspacePerform(_ command: WorkspaceCommand)
+    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void)
+}
+
+extension WorkspaceDelegate {
+    var workspaceCommands: [WorkspaceSwitcher.Entry] { [] }
+    func workspacePerform(_ command: WorkspaceCommand) {}
+    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void) {
+        completion(SecretText("Context is unavailable."))
+    }
 }
 
 extension WorkspaceDelegate where Self: AppDelegate {
@@ -197,6 +208,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     enum Content: Equatable {
         /// Nothing is selected.
         case empty
+        case review
         case terminal(runtimeSessionID: String)
         /// The selected session is a Kitty window.
         case external(AttentionCycler.Key)
@@ -226,6 +238,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// Something the pane can be on: a session or a utility view.
     private enum Place: Equatable {
+        case review
         case session(AttentionCycler.Key)
         case view(String)
     }
@@ -249,7 +262,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// What the delegate was last told, so it hears of each change once.
     private var reportedCollapsed = false
     private var reportedShowing: TerminalNotice.Origin?
+    private var reportedOtherShowing: TerminalNotice.Origin?
     private var sidebarItem: NSSplitViewItem?
+    private var contentItem: NSSplitViewItem?
     private var sidebarObservation: NSKeyValueObservation?
     let inspector = WorkspaceInspectorView()
     /// Hides the inspector and brings it back, from the title bar.
@@ -278,6 +293,27 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// What had the keyboard when the Go to… list took it.
     private weak var switcherReturn: NSResponder?
     private let pane = NSView()
+    private let otherPane = NSView()
+    private let otherPlaceholder = WorkspacePlaceholderView()
+    private lazy var paneLayout = WorkspacePaneLayout(active: pane, other: otherPane)
+    private var otherPlace: Place?
+    private(set) var otherContent: Content = .empty
+    private(set) var activeOnRight = false
+    private var reviewSelected = false
+    private var reviewView: NSView?
+    private var reviewCanClose: () -> Bool = { true }
+    private var reviewClosed: () -> Void = {}
+    private var paneClickMonitor: Any?
+    var isSplit: Bool { otherPlace != nil }
+    var hasReview: Bool { reviewView != nil }
+    var splitUnavailableReason: String? {
+        if !isOpen || place == nil { return "Select a session or view first" }
+        if reviewSelected { return "Focus a session or shell first" }
+        if !reviewCanClose() { return "Wait for the checkout operation to finish" }
+        return nil
+    }
+    var canHideOtherPane: Bool { isSplit && (otherPlace != .review || reviewCanClose()) }
+
     private(set) lazy var window: NSWindow = makeWindow()
 
     private var terminals: [String: WorkspaceTerminal] = [:]
@@ -482,9 +518,29 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         refresh()
     }
 
+    func windowShouldClose(_ sender: NSWindow) -> Bool { reviewCanClose() }
+
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
         isOpen = false
+        if let paneClickMonitor { NSEvent.removeMonitor(paneClickMonitor) }
+        paneClickMonitor = nil
+        if reviewSelected {
+            switch otherPlace {
+            case let .session(key)?: state.select(key); viewSelection = nil
+            case let .view(id)?: state.select(nil); viewSelection = id
+            default: break
+            }
+        }
+        otherPlace = nil
+        otherContent = .empty
+        activeOnRight = false
+        reviewView?.removeFromSuperview()
+        reviewView = nil
+        reviewSelected = false
+        reviewClosed()
+        reviewClosed = {}
+        paneLayout.arrange(split: false, activeOnRight: false)
         ageTimer?.invalidate()
         ageTimer = nil
         Self.logger.notice("workspace: closed, detaching \(self.terminals.count) terminal(s)")
@@ -494,10 +550,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         // or a running shell is not an attachment that can simply be remade.
         for terminal in viewTerminals.values { terminal.view.isHidden = true }
         closeSwitcher(restoring: false)
+        inspector.discardContext()
         awaited = nil
         leaveRecovery()
         content = .empty
         reportedShowing = nil
+        reportedOtherShowing = nil
         delegate?.workspaceVisibilityChanged(false)
     }
 
@@ -521,9 +579,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        guard isOpen, let origin = showing else { return }
-        reportedShowing = origin
-        delegate?.workspaceShowing(origin)
+        guard isOpen else { return }
+        reportedShowing = showing
+        if let showing { delegate?.workspaceShowing(showing) }
+        if let otherShowing { delegate?.workspaceShowing(otherShowing) }
     }
 
     // MARK: State
@@ -704,7 +763,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// one, or saying what became of one. Opening the window on nothing in
     /// particular must leave such a place alone.
     var hasPlace: Bool {
-        state.selection != nil || viewSelection != nil || restoring != nil || gone != nil
+        reviewSelected || state.selection != nil || viewSelection != nil || restoring != nil || gone != nil
     }
 
     /// Lands the pane on the Dashboard when it has no place, as opening the
@@ -730,6 +789,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let now: WorkspaceRestoration.Place?
         if let restoring {
             now = restoring
+        } else if reviewSelected {
+            now = reportedPlace
         } else if let viewSelection {
             now = views.view(viewSelection)?.isPermanent == true ? .view(id: viewSelection) : reportedPlace
         } else if let key = state.selection {
@@ -768,7 +829,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// `focus`, keyboard focus moves into its terminal when it has one.
     @discardableResult
     func select(_ key: AttentionCycler.Key?, focus: Bool = false) -> Bool {
+        if let key, otherPlace == .session(key) { return focusOtherPane() }
         guard state.select(key) else { return false }
+        reviewSelected = false
         viewSelection = nil
         awaited = nil
         leaveRecovery()
@@ -815,11 +878,15 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// ⌘P: lists every session and view to go to by name, or puts the list
     /// away when it is up. It goes only where a click on the sidebar would.
-    func toggleSwitcher() {
+    func toggleSwitcher(actions: Bool = false) {
         guard isOpen else { return }
-        if isSwitching { return closeSwitcher(restoring: true) }
+        if isSwitching {
+            if actions { switcher.enter("> "); return }
+            return closeSwitcher(restoring: true)
+        }
         switcherReturn = window.firstResponder
         switcher.show(switcherEntries())
+        if actions { switcher.enter("> ") }
         switcher.isHidden = false
         window.makeFirstResponder(switcher.field)
     }
@@ -829,9 +896,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         switch recent.before {
         case let .session(key)?: previous = .session(key)
         case let .view(id)?: previous = .view(id)
-        case nil: previous = nil
+        case .review?, nil: previous = nil
         }
         return WorkspaceSwitcher.entries(rows: state.rows, views: views.all, names: sessionNames, previous: previous)
+            + (delegate?.workspaceCommands ?? [])
+    }
+
+    func refreshCommands() {
+        if isSwitching { switcher.update(switcherEntries()) }
     }
 
     /// Puts the list away. With `restoring`, the keyboard goes back to what
@@ -854,6 +926,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             if let row = state.row(key) { activate(row, reattaching: true) }
         case let .view(id):
             showView(id, focus: true)
+        case let .command(command):
+            delegate?.workspacePerform(command)
         }
     }
 
@@ -864,6 +938,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     @discardableResult
     func showView(_ id: String, focus: Bool = true) -> Bool {
         guard views.view(id) != nil else { return false }
+        if otherPlace == .view(id) { return focusOtherPane() }
+        reviewSelected = false
         state.select(nil)
         viewSelection = id
         awaited = nil
@@ -931,6 +1007,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// the workspace's.
     @discardableResult
     func closeShown() -> Bool {
+        if reviewSelected {
+            guard reviewCanClose() else { return true }
+            if isSplit { _ = focusOtherPane(); collapseOtherPane() }
+            else { reviewSelected = false; releaseReview(); showView(WorkspaceUtilityView.dashboard.id) }
+            return true
+        }
         if closeSelectedView() { return true }
         guard let row = state.selectedRow, row.embeddedRuntimeSessionID != nil else { return false }
         closeSession(row.key)
@@ -987,7 +1069,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         endedViews.remove(id)
         if !view.isPermanent {
             retire(view)
-        } else if viewSelection == id {
+        } else if viewSelection == id || otherPlace == .view(id) {
             // The pane stays on it and says it closed, with Reopen, as when
             // its program quits on its own.
             endedViews.insert(id)
@@ -997,7 +1079,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// What ⌘W does where the pane is now, as its menu item says it.
     var closeShownTitle: String {
-        if viewSelection != nil { return Self.closeViewTitle }
+        if reviewSelected || viewSelection != nil { return Self.closeViewTitle }
         if state.selectedRow?.embeddedRuntimeSessionID != nil { return Self.endSessionTitle }
         return Self.closeTitle
     }
@@ -1342,7 +1424,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case .color: openPicker(.colorPicker, for: row)
         case .icon: openPicker(.iconPicker, for: row)
         case .mute: delegate?.workspaceToggleMute(row)
-        case .name, .clearState, .markActive: return
+        case .name, .clearState, .markActive, .reviewChanges: return
         }
     }
 
@@ -1460,6 +1542,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             go(to: row, raising: false)
         case let .view(id)?:
             guard showView(id, focus: true) else { return false }
+        case .review?:
+            guard reviewView != nil else { return false }
+            if otherPlace == .review { return focusOtherPane() }
+            reviewSelected = true
+            state.select(nil)
+            viewSelection = nil
+            updateContent(focus: true)
         case nil:
             return false
         }
@@ -1468,6 +1557,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// Where the pane is now.
     private var place: Place? {
+        if reviewSelected { return .review }
         if let viewSelection { return .view(viewSelection) }
         return state.selection.map(Place.session)
     }
@@ -1477,6 +1567,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         views.close(view.id)
         let back = returnPlaces.removeValue(forKey: view.id)
         reloadSidebar()
+        if otherPlace == .view(view.id) {
+            otherPlace = nil
+            otherContent = .empty
+            updateContent(focus: false)
+        }
         guard viewSelection == view.id else { return }
         viewSelection = nil
         switch back {
@@ -1757,7 +1852,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let session = sessionID(of: view)
         let utility = session == nil ? viewID(of: view) : nil
         guard session != nil || utility != nil else { return }
-        let shown = isOpen && view === shownTerminalView
+        let shown = isOpen && (view === shownTerminalView || view === visibleView(otherContent))
         let response = BellResponse.of(shown: shown, appActive: isAppActive(), systemBell: systemBell)
         if response.beep { beep() }
         if response.requestAttention { requestAttention() }
@@ -1781,10 +1876,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             ringingSessions.removeAll()
             ringingViews.removeAll()
         } else {
-            switch content {
-            case let .terminal(id): changed = ringingSessions.remove(id) != nil
-            case let .view(id): changed = ringingViews.remove(id) != nil
-            default: break
+            for visible in [content, otherContent] {
+                switch visible {
+                case let .terminal(id): changed = (ringingSessions.remove(id) != nil) || changed
+                case let .view(id): changed = (ringingViews.remove(id) != nil) || changed
+                default: break
+                }
             }
         }
         if changed { reloadLines() }
@@ -1840,6 +1937,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The window's title: the view or session the pane is on, and for a
     /// view the title its program set.
     private var windowTitle: String {
+        if reviewSelected { return "Checkout Changes — Agent Mux" }
         if let view = views.view(viewSelection) {
             guard let program = programTitles[view.id], program != view.title else { return view.title }
             return "\(view.title) — \(program)"
@@ -2012,7 +2110,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         } else {
             return
         }
-        delegate?.workspaceTerminalNotification(notice, onScreen: Self.onScreen(notice.origin, showing: showing, key: window.isKeyWindow))
+        delegate?.workspaceTerminalNotification(notice, onScreen: window.isKeyWindow && (notice.origin == showing || notice.origin == otherShowing))
     }
 
     /// The terminal the pane shows, as a terminal notice names it.
@@ -2034,9 +2132,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Tells the app which terminal the pane shows, when that changed.
     private func reportShowing() {
         let now = showing
-        guard now != reportedShowing else { return }
+        let other = otherShowing
+        if now != reportedShowing, let now { delegate?.workspaceShowing(now) }
+        if other != reportedOtherShowing, let other { delegate?.workspaceShowing(other) }
         reportedShowing = now
-        if let now { delegate?.workspaceShowing(now) }
+        reportedOtherShowing = other
     }
 
     /// A utility view's program exited. A shell, editor, or pager is done
@@ -2080,13 +2180,215 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     // MARK: Pane
 
-    private func wantedViewContent(_ view: WorkspaceUtilityView, retry: Bool) -> Content {
+    /// Preserve the current place on the left and select a different live
+    /// session on the right. The original terminal remains attached exactly once.
+    @discardableResult
+    func split(with key: AttentionCycler.Key) -> Bool {
+        guard isOpen, state.row(key)?.embeddedRuntimeSessionID != nil,
+              place != .session(key), prepareSplit() else { return false }
+        return select(key, focus: true)
+    }
+
+    @discardableResult
+    func splitWithShell() -> Bool {
+        guard canOpenTerminalBesideSession, prepareSplit() else { return false }
+        return openTerminalBesideSession()
+    }
+
+    @discardableResult
+    func splitWithReview(_ view: NSView, canClose: @escaping () -> Bool, onClose: @escaping () -> Void) -> Bool {
+        guard prepareSplit() else { return false }
+        releaseReview()
+        reviewView = view
+        reviewCanClose = canClose
+        reviewClosed = onClose
+        reviewSelected = true
+        state.select(nil)
+        viewSelection = nil
+        leaveRecovery()
+        syncSidebarSelection()
+        updateContent(focus: true)
+        return true
+    }
+
+    @discardableResult
+    func focusReview() -> Bool {
+        guard isOpen, reviewView != nil else { return false }
+        if otherPlace == .review { return focusOtherPane() }
+        reviewSelected = true
+        state.select(nil)
+        viewSelection = nil
+        leaveRecovery()
+        syncSidebarSelection()
+        updateContent(focus: true)
+        return true
+    }
+
+    private func prepareSplit() -> Bool {
+        guard isOpen, let place, place != .review, reviewCanClose() else { return false }
+        if otherPlace == .review { releaseReview() }
+        otherPlace = place
+        otherContent = content
+        activeOnRight = true
+        return true
+    }
+
+    /// Clicking an inactive terminal promotes its container and selection
+    /// together. The physical terminal stays under the pointer.
+    @discardableResult
+    func focusOtherPane() -> Bool {
+        guard isOpen, let next = otherPlace else { return false }
+        let previous = place
+        let previousContent = content
+        content = otherContent
+        otherPlace = previous
+        otherContent = previousContent
+        activeOnRight.toggle()
+        reviewSelected = false
+        viewSelection = nil
+        state.select(nil)
+        leaveRecovery()
+        switch next {
+        case let .session(key):
+            if !state.select(key), !key.runtimeSessionID.isEmpty {
+                sessionGone(key.runtimeSessionID, name: key.runtimeSessionID)
+            }
+        case let .view(id): viewSelection = id
+        case .review: reviewSelected = true
+        }
+        syncSidebarSelection()
+        updateContent(focus: true)
+        return true
+    }
+
+    func swapPanes() {
+        guard isSplit else { return }
+        activeOnRight.toggle()
+        paneLayout.arrange(split: true, activeOnRight: activeOnRight)
+    }
+
+    /// Hiding a pane never ends its agent or shell. Utility views stay in the
+    /// sidebar, and a hidden session keeps its existing workspace attachment.
+    func collapseOtherPane() {
+        guard isSplit else { return }
+        if otherPlace == .review {
+            guard reviewCanClose() else { return }
+            releaseReview()
+        }
+        otherPlace = nil
+        otherContent = .empty
+        activeOnRight = false
+        updateContent(focus: true)
+    }
+
+    private func releaseReview() {
+        reviewView?.removeFromSuperview()
+        reviewView = nil
+        reviewClosed()
+        reviewClosed = {}
+        reviewCanClose = { true }
+    }
+
+    private func fitPanes() {
+        let middle: CGFloat = isSplit ? 2 * WorkspacePaneLayout.minimumPaneWidth + 1 : 320
+        if contentItem?.minimumThickness != middle { contentItem?.minimumThickness = middle }
+        let width: CGFloat
+        if isSplit {
+            let left = sidebarItem.flatMap { $0.isCollapsed ? nil : max(180, $0.viewController.view.frame.width) } ?? 0
+            let right = inspectorItem.flatMap { $0.isCollapsed ? nil : max(220, $0.viewController.view.frame.width) } ?? 0
+            width = middle + left + right + 2
+        } else { width = Self.minimumSize.width }
+        let minimum = NSSize(width: width, height: Self.minimumSize.height)
+        if window.minSize != minimum { window.minSize = minimum }
+        if isSplit, window.frame.width < width {
+            var frame = window.frame
+            frame.size.width = width
+            window.setFrame(frame, display: true)
+        }
+    }
+
+    private func wantedOtherContent() -> Content {
+        switch otherPlace {
+        case let .session(key)?:
+            guard let row = state.row(key) else { return .gone(runtimeSessionID: key.runtimeSessionID, nil) }
+            return wantedSessionContent(row, previous: otherContent, retry: false)
+        case let .view(id)?:
+            guard let view = views.view(id) else { return .empty }
+            return wantedViewContent(view, previous: otherContent, retry: false)
+        case .review?: return .review
+        case nil: return .empty
+        }
+    }
+
+    private func visibleView(_ content: Content) -> NSView? {
+        switch content {
+        case let .terminal(id): return terminals[id]?.view
+        case let .view(id): return viewTerminals[id]?.view
+        case .review: return reviewView
+        default: return nil
+        }
+    }
+
+    private func placeView(_ view: NSView?, in container: NSView, below placeholder: NSView) {
+        guard let view else { return }
+        if view.superview !== container {
+            view.removeFromSuperview()
+            container.addSubview(view, positioned: .below, relativeTo: placeholder)
+        }
+        view.frame = container.bounds
+        view.autoresizingMask = [.width, .height]
+        view.isHidden = false
+    }
+
+    private func title(for place: Place?) -> String {
+        switch place {
+        case let .session(key)?: return state.row(key)?.displayName ?? "Session ended"
+        case let .view(id)?: return views.view(id)?.title ?? "View closed"
+        case .review?: return "Checkout Changes"
+        case nil: return "Workspace"
+        }
+    }
+
+    private var otherExplanation: String {
+        switch otherContent {
+        case let .unavailable(_, reason), let .viewUnavailable(_, reason): return reason
+        case .detached: return "Detached. Focus this pane to reconnect explicitly."
+        case .rendererFailed, .viewRendererFailed: return "The terminal stopped drawing. Focus this pane for recovery options."
+        case .gone: return "This session is no longer running."
+        case .closing: return "Ending the session…"
+        case .viewEnded: return "This program closed. Focus this pane to reopen it."
+        default: return "Focus this pane to see its available actions."
+        }
+    }
+
+    private var otherShowing: TerminalNotice.Origin? {
+        guard isOpen, isSplit else { return nil }
+        switch otherContent {
+        case let .terminal(id): return .session(runtimeSessionID: id)
+        case let .view(id): return .view(id: id)
+        default: return nil
+        }
+    }
+
+    private func installPaneClickMonitor() {
+        guard paneClickMonitor == nil else { return }
+        paneClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, self.isOpen, self.isSplit, event.window === self.window else { return }
+                let point = self.otherPane.convert(event.locationInWindow, from: nil)
+                if self.otherPane.bounds.contains(point) { _ = self.focusOtherPane() }
+            }
+            return event
+        }
+    }
+
+    private func wantedViewContent(_ view: WorkspaceUtilityView, previous: Content, retry: Bool) -> Content {
         let id = view.id
         if endedViews.contains(id) { return .viewEnded(id: id) }
         if viewTerminals[id] != nil {
             return rendererFailedViews.contains(id) ? .viewRendererFailed(id: id) : .view(id: id)
         }
-        if !retry, case let .viewUnavailable(refused, _) = content, refused == id { return content }
+        if !retry, case let .viewUnavailable(refused, _) = previous, refused == id { return previous }
         guard let delegate else { return .viewUnavailable(id: id, "The app is shutting down.") }
         switch delegate.makeUtilityTerminal(view) {
         case let .success(terminal):
@@ -2104,12 +2406,17 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private func wantedContent(retry: Bool) -> Content {
-        if let view = views.view(viewSelection) { return wantedViewContent(view, retry: retry) }
+        if reviewSelected { return .review }
+        if let view = views.view(viewSelection) { return wantedViewContent(view, previous: content, retry: retry) }
         guard let row = state.selectedRow else {
             if let gone { return .gone(runtimeSessionID: gone.runtimeSessionID, gone.status) }
             if case let .session(id)? = restoring { return .restoring(runtimeSessionID: id) }
             return .empty
         }
+        return wantedSessionContent(row, previous: content, retry: retry)
+    }
+
+    private func wantedSessionContent(_ row: WorkspaceRow, previous: Content, retry: Bool) -> Content {
         guard let id = row.embeddedRuntimeSessionID else { return .external(row.key) }
         if closing[id] != nil { return .closing(runtimeSessionID: id) }
         if detached.contains(id) { return .detached(runtimeSessionID: id) }
@@ -2118,7 +2425,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         // A terminal that could not be made is not asked for again on every
         // snapshot; something has to have changed first.
-        if !retry, case let .unavailable(refused, _) = content, refused == id { return content }
+        if !retry, case let .unavailable(refused, _) = previous, refused == id { return previous }
         guard let delegate else { return .unavailable(runtimeSessionID: id, "The app is shutting down.") }
         switch delegate.makeTerminal(runtimeSessionID: id, fontSize: fontSizes[id]) {
         case let .success(terminal):
@@ -2145,14 +2452,26 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             content = wanted
             Self.logger.notice("workspace: showing \(String(describing: wanted), privacy: .public)")
         }
-        var shown: NSView?
-        if case let .terminal(id) = wanted { shown = terminals[id]?.view }
-        if case let .view(id) = wanted { shown = viewTerminals[id]?.view }
-        for terminal in terminals.values where terminal.view !== shown { terminal.view.isHidden = true }
-        for terminal in viewTerminals.values where terminal.view !== shown { terminal.view.isHidden = true }
-        shown?.isHidden = false
+        otherContent = wantedOtherContent()
+        let shown = visibleView(wanted)
+        let otherShown = visibleView(otherContent)
+        for terminal in terminals.values { terminal.view.isHidden = terminal.view !== shown && terminal.view !== otherShown }
+        for terminal in viewTerminals.values { terminal.view.isHidden = terminal.view !== shown && terminal.view !== otherShown }
+        reviewView?.isHidden = reviewView !== shown && reviewView !== otherShown
+        placeView(shown, in: pane, below: placeholder)
+        placeView(otherShown, in: otherPane, below: otherPlaceholder)
         placeholder.isHidden = shown != nil
+        otherPlaceholder.isHidden = otherShown != nil
         if shown == nil { fillPlaceholder(wanted) }
+        if otherShown == nil {
+            otherPlaceholder.show(title: title(for: otherPlace), message: otherExplanation, button: "Focus pane") { [weak self] in
+                _ = self?.focusOtherPane()
+            }
+        }
+        fitPanes()
+        paneLayout.arrange(split: isSplit, activeOnRight: activeOnRight)
+        paneLayout.titles(active: title(for: place), other: title(for: otherPlace))
+        installPaneClickMonitor()
         window.title = windowTitle
         window.subtitle = windowSubtitle
         clearBells()
@@ -2160,7 +2479,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         syncOverlays()
 
         if let shown, focus {
-            window.makeFirstResponder(shown)
+            if !window.makeFirstResponder(shown) { window.makeFirstResponder(nil) }
         } else if window.firstResponder === window
                     || (window.firstResponder as? NSView)?.isHiddenOrHasHiddenAncestor == true {
             // Nothing has the keyboard, or a terminal that is no longer
@@ -2194,7 +2513,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func fillPlaceholder(_ content: Content) {
         let row = state.selectedRow
         switch content {
-        case .empty, .terminal, .view:
+        case .empty, .terminal, .view, .review:
             // Rows held from the last snapshot can still be chosen; with none
             // listed, what is wrong is the feed, not the sessions.
             if state.rows.isEmpty, let feed = delegate?.store.feed, let down = WorkspaceSidebar.feedExplanation(feed) {
@@ -2703,6 +3022,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         var shown: NSView?
         if case let .terminal(id) = content { shown = terminals[id]?.view }
         if case let .view(id) = content { shown = viewTerminals[id]?.view }
+        if case .review = content { shown = reviewView }
         if let shown, !shown.isHidden, window.makeFirstResponder(shown) { return }
         if !placeholder.isHidden, !placeholder.button.isHidden, window.makeFirstResponder(placeholder.button) { return }
         window.makeFirstResponder(nil)
@@ -2763,6 +3083,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// item shown, or the window resized. The width of what is shown is
     /// reported when it changed; a hidden one reports nothing.
     private func splitResized() {
+        if isOpen && isSplit { fitPanes() }
         let sidebarShown = sidebarItem.flatMap { $0.isCollapsed ? nil : $0.viewController.view.frame.width }
         let inspectorShown = inspectorItem.flatMap { $0.isCollapsed ? nil : $0.viewController.view.frame.width }
         // Mid-animation an item is narrower than it may be, so a width is
@@ -2811,6 +3132,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let collapsed = inspectorItem?.isCollapsed ?? true
         guard collapsed != reportedInspectorCollapsed else { return }
         reportedInspectorCollapsed = collapsed
+        if collapsed { inspector.discardContext() }
         delegate?.workspaceInspectorChanged(collapsed: collapsed, tab: inspectorTab)
     }
 
@@ -3000,7 +3322,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         switcher.onCancel = { [weak self] in self?.closeSwitcher(restoring: true) }
         switcher.onLeave = { [weak self] in self?.closeSwitcher(restoring: false) }
         let paneController = NSViewController()
-        paneController.view = pane
+        otherPlaceholder.frame = otherPane.bounds
+        otherPlaceholder.autoresizingMask = [.width, .height]
+        otherPane.addSubview(otherPlaceholder)
+        paneLayout.other.onFocus = { [weak self] in _ = self?.focusOtherPane() }
+        paneLayout.active.onFocus = { [weak self] in self?.updateContent(focus: true) }
+        paneController.view = paneLayout
 
         let split = NSSplitViewController()
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
@@ -3014,6 +3341,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         let paneItem = NSSplitViewItem(viewController: paneController)
         paneItem.minimumThickness = 320
+        contentItem = paneItem
 
         inspector.onTab = { [weak self] tab in self?.setInspectorTab(tab) }
         inspector.onWaiting = { [weak self] key in
@@ -3022,6 +3350,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         inspector.onAction = { [weak self] action in self?.delegate?.workspaceInspectorAction(action) }
         inspector.onAnswer = { [weak self] answer in self?.delegate?.workspaceAnswer(answer) }
+        inspector.onContext = { [weak self] row, completion in
+            self?.delegate?.workspaceContext(row, completion: completion)
+        }
         let inspectorController = NSViewController()
         inspectorController.view = inspector
         let inspectorItem = NSSplitViewItem(viewController: inspectorController)

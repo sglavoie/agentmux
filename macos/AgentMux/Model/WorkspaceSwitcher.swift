@@ -3,9 +3,8 @@ import Foundation
 /// The workspace's Go to… list as data: every place the sidebar lists, and
 /// which of them a typed query keeps.
 ///
-/// It only names places that are already there. Choosing one does what a
-/// click on its sidebar line does, so nothing is launched from here and a
-/// view is no more a session here than it is in the sidebar.
+/// Ordinary queries name open places. A leading > explicitly switches to
+/// actions, whose availability is supplied by the application.
 enum WorkspaceSwitcher {
     /// One place to go to.
     struct Entry: Equatable {
@@ -13,6 +12,7 @@ enum WorkspaceSwitcher {
             case session(AttentionCycler.Key)
             /// A utility view, by `WorkspaceUtilityView.id`.
             case view(String)
+            case command(WorkspaceCommand)
         }
 
         let place: Place
@@ -21,9 +21,16 @@ enum WorkspaceSwitcher {
         let detail: String
         /// Everything a query is matched against, folded (`fold`).
         let text: String
+        var unavailableReason: String?
 
-        init(place: Place, glyph: String, title: String, detail: String, also: [String] = []) {
+        var isAction: Bool {
+            if case .command = place { return true }
+            return false
+        }
+
+        init(place: Place, glyph: String, title: String, detail: String, also: [String] = [], unavailableReason: String? = nil) {
             self.place = place
+            self.unavailableReason = unavailableReason
             self.glyph = glyph
             self.title = title
             self.detail = detail
@@ -73,11 +80,25 @@ enum WorkspaceSwitcher {
     /// with those whose title starts with the query first. An empty query
     /// keeps them all.
     static func matches(_ query: String, in entries: [Entry]) -> [Entry] {
-        let wanted = fold(query).trimmingCharacters(in: .whitespaces)
+        let query = fold(query).trimmingCharacters(in: .whitespaces)
+        let actions = query.hasPrefix(">")
+        let wanted = (actions ? String(query.dropFirst()) : query).trimmingCharacters(in: .whitespaces)
+        let entries = entries.filter { $0.isAction == actions }
         let words = wanted.split(separator: " ")
         guard !words.isEmpty else { return entries }
         let kept = entries.filter { entry in words.allSatisfy { entry.text.contains($0) } }
         let leading = kept.filter { fold($0.title).hasPrefix(wanted) }
         return leading + kept.filter { !leading.contains($0) }
     }
+}
+
+/// Typed actions keep user-provided project and conversation identities out of
+/// shell command strings. Execution rechecks availability in the app delegate.
+enum WorkspaceCommand: Equatable {
+    case splitSession(AttentionCycler.Key)
+    case splitShell, splitChanges, focusReview, focusOtherPane, swapPanes, collapsePane
+    case launch(ProjectEntry)
+    case resume(RecentConversation)
+    case runs, runPlan, activity
+    case newTerminal, newShell, dashboard, overview, nextWaiting, settings, history, changes
 }

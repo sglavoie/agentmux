@@ -37,6 +37,8 @@ The everyday commands beyond the dashboard (`amx`):
 | `amx open-dashboard` | focus the dashboard, opening it in a new tab (Kitty) or as a popup over the attached terminal (tmux) if absent |
 | `amx project list` / `launch` | list configured projects; launch one in a new tab |
 | `amx session list` / `search` / `show` / `continue` / `fork` / `handoff` | conversation continuity |
+| `amx session activity --json` | recorded transitions, exits, and ASL events; `--days` and `--limit` bound retained history |
+| `amx session changes --directory PATH` / `--runtime-session ID` | checkout-wide changes; `--base REF` selects the comparison and `--file PATH` includes its diff |
 | `amx worktree list` / `reopen` / `diff` / `land` / `remove` / `prune` | managed Git worktrees: reopen, review, land by fast-forward, clean up |
 | `amx plans run` | start an `agent-session-loop` run of a ready plan under a supervising agent (`R` in Plans); `--check` reports readiness only |
 | `amx mute-toggle` | mute or unmute a session's notifications |

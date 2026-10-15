@@ -298,7 +298,8 @@ runs without embedded terminals.
   Ghostty's callback has returned, so a delegate may close the surface in
   response. Secure input, key sequences, and key tables only change the
   surface's state, at once when Ghostty calls on the main thread. Tabs,
-  splits, extra windows, and Ghostty's own chrome are refused.
+  splits, extra windows, and Ghostty's own chrome are refused; workspace panes are
+  managed by `WorkspacePaneLayout` and reuse the existing surface for each session.
 - **What the workspace does with them.** A bell in the terminal shown beeps
   only while the app is in front and `bell-features` includes `system`; a bell
   in a hidden session or view marks its sidebar line with 🔔 until it is shown
@@ -496,6 +497,15 @@ ASL answer panel work the same either way.
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
   raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session as its × does, after the same sheet; another window that has the keyboard closes instead), ⌘⇧W (close the window), ⌘M,
   ⌘, and ⌘Q.
+- **Two panes.** View and the command palette can split with a session shell or
+  native checkout review; the palette can also select another agent. Clicking a
+  pane promotes its selection and moves the existing surface between the active
+  and inactive containers without reattaching. Header controls show focus; View
+  also offers focus-other, swap, and hide-other. Detached and failed surfaces stay
+  explicit recovery states in either pane. Hiding a pane preserves its program;
+  closing the workspace detaches agents and collapses the split. Review close and
+  replacement are blocked during landing. `WorkspacePanesTests` covers these
+  transitions and confirms terminal geometry and attachment counts.
 - **Go to.** ⌘P shows `WorkspaceSwitcherView` above the pane: a field over
   the places `Model/WorkspaceSwitcher.swift` lists, which are the sidebar's
   sessions in its order and then the views, overlays left out, except that
@@ -503,7 +513,11 @@ ASL answer panel work the same either way.
   as ⌘L does. A query keeps the entries that hold every word of it, case and
   accents aside, those whose title starts with it first. Return or a click calls `activate(_:)` for a session and
   `showView(_:focus:)` for a view, what a click on the sidebar line calls, so
-  nothing is launched from it. The field has the keyboard while the list is
+  ordinary navigation never launches an agent. A leading `>` switches to actions
+  (also opened directly with **⌘⇧P**, **Session › Command Palette…**): launch
+  a configured project, focus or resume a recent conversation, open a shell,
+  review changes, search history, or use the workspace commands. Unavailable
+  actions show their reason and cannot be invoked. The field has the keyboard while the list is
   up; Escape and ⌘P give it back to what had it, and a click elsewhere leaves
   it where the click put it. A terminal under the list claims a click only
   when the window's own hit test lands on it, so a click on a row is the
@@ -559,6 +573,62 @@ ASL answer panel work the same either way.
   there is no server to ask. F1's list is `kittykeys.Workspace` on the Go
   side, and `TestWorkspaceFunctionKeysMatchTheApp` fails when the two lists
   name different keys.
+
+### Decision inbox, conversation history, and changes
+
+The inspector’s **Waiting** tab has category filters (permissions, questions,
+errors, completed turns, other), optional oldest-first order, and **Next waiting**.
+Filtering never changes the main sidebar order or the global attention cycle.
+**Context** fetches the actual supervisor question or current screen output,
+without attaching or sending keys. Context is memory-only and discarded when its
+question changes, the feed disconnects, or the inspector closes. **Answer…** still
+uses the existing independently authorized answer panels.
+
+**View › Conversation History…** opens a native search and transcript view. Search
+uses the same transcript backend as the CLI, with **All history**, **This project**,
+and **This conversation** scopes captured from the workspace session when opened.
+The automated-session toggle includes ASL and subagent conversations. Results show
+matching excerpts; the preview initially loads 50 messages and **Load earlier
+messages** adds 100. **Focus live session**, **Resume**, and **Fork** use exact
+harness-qualified identities. Resumes and forks from this view open in the workspace.
+An error remains visible, and an unknown launch outcome is never retried automatically.
+
+**View › Review Checkout Changes…**, or **Changes…** in the Session inspector,
+opens a checkout-wide review. An embedded session supplies its current directory;
+otherwise a folder picker selects the checkout. The comparison base defaults to
+HEAD and accepts another commit or reference. Files show additions/deletions,
+binary status, and untracked status; selecting one loads its unified diff, bounded
+to 2 MiB with an explicit truncation notice. **Open in editor** uses the configured
+editor in a workspace utility view. Git external diff drivers and textconv do not
+run. Changes belong to the checkout, which can be shared by multiple agents.
+
+Managed checkouts additionally show their source branch, ahead/behind counts,
+landing verdict, and warnings. **Compare with source** uses the recorded merge base.
+**Land…** requires explicit confirmation and uses the existing CLI fast-forward
+rules, which recheck clean/inactive status. It retains the worktree and branch.
+The review requires the companion `amx session changes` command from this build.
+
+### Native ASL Runs and plan launch
+
+**View › ASL Runs…** uses the complete `asl_snapshot` projection rather than the
+companion feed's waiting subset. Questionless pauses remain visible. The selected
+run shows its phase, current session, timestamps, blockers, and ASL-provided action
+availability. `WorkspaceRunsModel` fetches a fresh row before a control request and
+binds confirmation to the original run identity. Unknown outcomes retain the exact
+operation ID and parameters for **Retry Receipt**; polling never retries mutations.
+Open questions continue to use `ASLQuestionFlow`.
+
+`amx plans status PLAN --json` reads ASL's public status report for plan progress.
+It projects recorded verification from the event path ASL reports, filtering to the
+exact run and excluding arbitrary output and question prose. Reads are bounded to
+the last 4 MiB and 200 verification records, with truncation and missing evidence
+reported explicitly. The app rejects details belonging to a different run or plan.
+
+**Run a Plan…** previews `amx plans run --check` with explicit optional project,
+profile, worker, review, and commit choices. Only a successful matching readiness
+check enables launch; the existing CLI rechecks before creating a tmux supervising
+session. A pending, submitted, or uncertain launch cannot be repeated by the form.
+The app must be rebuilt with its companion CLI for the progress endpoint.
 
 ### Dashboard and utility views
 
@@ -1126,3 +1196,21 @@ The app logs to the unified log under the subsystem
 ```sh
 log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
 ```
+
+### Recorded activity
+
+View › Since Last Looked uses `amx session activity --json --days N --limit 1000`.
+The command projects actual daemon journal transitions, settled process exits,
+and accepted ASL lifecycle records; unchanged, suppressed, and duplicate reducer
+records are omitted before limiting. Stable record IDs survive journal rereads.
+Read IDs and the last marking time persist atomically in
+`~/Library/Application Support/AgentMux/activity-read.json` (0600), without output
+or transcript text. IDs expire after 91 days, beyond the maximum 90-day query.
+Marking read is explicit and covers only visible records, including when a query
+is truncated. Late-spooled events remain unread regardless of their timestamps.
+
+Supporting excerpts use the exact harness-qualified conversation and the latest
+assistant message timestamp at or before the recorded event. Missing timestamps
+or transcripts are explicit, and earlier messages can be loaded. Stale requests
+cannot replace a newer selection. Event navigation rechecks the live session
+feed and never uses a recycled terminal window ID to identify an agent.

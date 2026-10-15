@@ -33,6 +33,16 @@ final class WorkspaceSwitcherTests: XCTestCase {
         XCTAssertEqual(entries([], views: views.all).map(\.title), ["Dashboard", "Overview", "api"])
     }
 
+    func testActionsRequireExplicitModeAndNeverLeakIntoNavigation() {
+        let action = WorkspaceSwitcher.Entry(place: .command(.newShell), glyph: "›", title: "New Shell", detail: "⌘T")
+        let places = entries(sessions)
+        XCTAssertEqual(WorkspaceSwitcher.matches("", in: places + [action]), places)
+        XCTAssertEqual(WorkspaceSwitcher.matches("shell", in: places + [action]), [])
+        XCTAssertEqual(WorkspaceSwitcher.matches(">", in: places + [action]), [action])
+        XCTAssertEqual(WorkspaceSwitcher.matches(" > SHELL ", in: places + [action]), [action])
+        XCTAssertEqual(WorkspaceSwitcher.matches("> api", in: places + [action]), [])
+    }
+
     func testAQueryKeepsWhatHoldsEveryWord() {
         let listed = entries(sessions)
         XCTAssertEqual(WorkspaceSwitcher.matches("", in: listed), listed, "nothing typed keeps everything")
@@ -152,6 +162,20 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
         XCTAssertFalse(workspace.isSwitching, "the key that brings it up puts it away")
         XCTAssertTrue(workspace.window.firstResponder === terminal)
         XCTAssertEqual(app.made, [F.runtimeID(1)], "looking at the list attaches nothing")
+    }
+
+    func testUnavailableActionsExplainWithoutDispatchingOrClosing() {
+        var invoked = false
+        let entry = WorkspaceSwitcher.Entry(place: .command(.newTerminal), glyph: "›", title: "New Terminal Here", detail: "⌘↩",
+                                            unavailableReason: "Select an embedded session first")
+        workspace.toggleSwitcher(actions: true)
+        workspace.switcher.update([entry])
+        workspace.switcher.onChoose = { _ in invoked = true }
+        workspace.switcher.choose()
+        workspace.switcher.click(row: 0)
+        XCTAssertFalse(invoked)
+        XCTAssertTrue(workspace.isSwitching)
+        XCTAssertEqual(workspace.switcher.lastAnnouncement, entry.unavailableReason)
     }
 
     func testReturnGoesToTheSessionAsAClickWould() throws {

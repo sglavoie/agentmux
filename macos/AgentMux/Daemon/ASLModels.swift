@@ -212,6 +212,12 @@ struct ASLRow: Decodable, Equatable {
     var sessionID = ""
     var primaryState = ""
     var phase = ""
+    var activityLabel = ""
+    var harness = ""
+    var runStartedAt = ""
+    var runFinishedAt = ""
+    var lastActivityAt = ""
+    var warnings: [String] = []
     var pauseReason = ""
     var question: ASLRowQuestion?
     var actions: [String] = []
@@ -221,7 +227,11 @@ struct ASLRow: Decodable, Equatable {
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case label, phase, question, actions
+        case label, phase, question, actions, harness, warnings
+        case activityLabel = "activity_label"
+        case runStartedAt = "run_started_at"
+        case runFinishedAt = "run_finished_at"
+        case lastActivityAt = "last_activity_at"
         case rowID = "row_id"
         case planDir = "plan_dir"
         case runID = "run_id"
@@ -241,6 +251,12 @@ struct ASLRow: Decodable, Equatable {
         sessionID = c.lenient(.sessionID, "")
         primaryState = c.lenient(.primaryState, "")
         phase = c.lenient(.phase, "")
+        activityLabel = c.lenient(.activityLabel, "")
+        harness = c.lenient(.harness, "")
+        runStartedAt = c.lenient(.runStartedAt, "")
+        runFinishedAt = c.lenient(.runFinishedAt, "")
+        lastActivityAt = c.lenient(.lastActivityAt, "")
+        warnings = c.lenient(.warnings, [])
         pauseReason = c.lenient(.pauseReason, "")
         question = c.lenient(.question)
         actions = c.lenient(.actions, [])
@@ -261,14 +277,18 @@ struct ASLRow: Decodable, Equatable {
 /// `aslbridge.Snapshot`, reduced to its rows.
 struct ASLSnapshot: Decodable, Equatable {
     var rows: [ASLRow] = []
+    var warnings: [String] = []
+    var truncated = false
 
     init(rows: [ASLRow] = []) { self.rows = rows }
 
-    enum CodingKeys: String, CodingKey { case rows }
+    enum CodingKeys: String, CodingKey { case rows, warnings, truncated }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         rows = c.lenient(.rows, [])
+        warnings = c.lenient(.warnings, [])
+        truncated = c.lenient(.truncated, false)
     }
 }
 

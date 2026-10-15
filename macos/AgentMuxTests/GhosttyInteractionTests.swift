@@ -521,6 +521,7 @@ final class WorkspaceShortcutTests: XCTestCase {
         XCTAssertFalse(delegate.workspaceIsKey, "an offscreen test window is never key")
         let workspaceOnly: [(TestKey, String)] = [
             (.command("p", keyCode: 35), "Go to…"),
+            (.command("p", keyCode: 35, shifted: "P"), "Command Palette…"),
             (.command("1", keyCode: 18), "⌘1"),
             (.command("1", keyCode: 18, shifted: "!"), "⌘⇧1"),
             (.command("]", keyCode: 30), "⌘]"),
@@ -587,6 +588,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("t", keyCode: 17), "New Shell"),
             (.command("w", keyCode: 13), "Close"),
             (.command("p", keyCode: 35), "Go to…"),
+            (.command("p", keyCode: 35, shifted: "P"), "Command Palette…"),
             (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
             (.command("\r", keyCode: 36), "New Terminal Below"),
             (.command("r", keyCode: 15), "Name Session…"),

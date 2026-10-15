@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import os
 import UserNotifications
 
@@ -14,6 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// The ASL answer panel, made the first time a question is answered.
     private var aslPanel: ASLQuestionPanelController?
     private var promptPanel: PromptAnswerPanelController?
+    private var historyWindow: WorkspaceHistoryWindow?
+    private var activityWindow: WorkspaceActivityWindow?
+    private var runsWindow: WorkspaceRunsWindow?
+    private var changesWindow: WorkspaceChangesWindow?
+    private var paneChanges: WorkspaceChangesModel?
     /// The workspace window, made the first time it is shown.
     private(set) var workspace: WorkspaceWindowController?
     /// Set once the app is quitting, so the windows it takes down with it are
@@ -214,6 +220,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Dock icon is there for Settings.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         guard !Self.isRunningTests else { return false }
+        if activityVisible && !workspaceVisible && !settingsVisible {
+            activityWindow?.window?.makeKeyAndOrderFront(nil)
+            return false
+        }
+        if runsVisible && !workspaceVisible && !settingsVisible {
+            runsWindow?.window?.makeKeyAndOrderFront(nil)
+            return true
+        }
+        if changesVisible && !workspaceVisible && !settingsVisible {
+            changesWindow?.window?.makeKeyAndOrderFront(nil)
+            return false
+        }
+        if historyVisible && !workspaceVisible && !settingsVisible {
+            historyWindow?.window?.makeKeyAndOrderFront(nil)
+            return false
+        }
         switch Self.reopenTarget(workspace: workspaceVisible, settings: settingsVisible) {
         case .workspace: showWorkspace()
         case .settings: showPreferences(nil)
@@ -228,7 +250,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let running = runningChanges.sorted { $0.key < $1.key }.map(\.value)
+        var running = runningChanges.sorted { $0.key < $1.key }.map(\.value)
+        if historyWindow?.model.acting == true { running.append("opening a conversation") }
+        if runsWindow?.model.pendingWork == true { running.append("an ASL control operation") }
+        if runsWindow?.plan.launching == true { running.append("starting a supervised plan") }
+        if changesWindow?.model.landing == true || paneChanges?.landing == true { running.append("landing a worktree") }
         let unsent = aslPanel?.flow.unsent ?? (drafts: 0, sending: false)
         let reply = ASLQuestionFlow.quitQuestion(drafts: unsent.drafts, sending: unsent.sending)
         guard running.isEmpty, reply == nil else {
@@ -484,13 +510,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     private var workspaceVisible = false
     private var settingsVisible = false
+    private var historyVisible = false
+    private var activityVisible = false
+    private var runsVisible = false
+    private var changesVisible = false
 
     /// Regular while the workspace or Settings is open, so either can be
     /// found again from the Dock and ⌘Tab once it falls behind another
     /// app's window; the menu bar accessory otherwise. The answer panels
     /// float above every window and need neither.
     private func syncActivationPolicy() {
-        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible, settings: settingsVisible))
+        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || activityVisible, settings: settingsVisible))
     }
 
     nonisolated static func activationPolicy(workspace: Bool, settings: Bool) -> NSApplication.ActivationPolicy {
@@ -546,6 +576,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .mute: toggleSessionMute(nil)
         case .clearState: clearSessionState(nil)
         case .markActive: markSessionActive(nil)
+        case .reviewChanges: showChanges(nil)
         }
     }
 
@@ -732,7 +763,244 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if workspace?.toggleRecentPlace() != true { NSSound.beep() }
     }
     /// ⌘P: the list of sessions and views to go to by name.
-    @objc func showSwitcher(_ sender: Any?) { workspace?.toggleSwitcher() }
+    @objc func showSwitcher(_ sender: Any?) {
+        refreshProjects()
+        refreshRecent()
+        workspace?.toggleSwitcher()
+    }
+
+    @objc func showCommandPalette(_ sender: Any?) {
+        refreshProjects()
+        refreshRecent()
+        workspace?.toggleSwitcher(actions: true)
+    }
+
+    @objc func splitWorkspaceShell(_ sender: Any?) {
+        if workspace?.splitWithShell() != true { refuse("Select an embedded session to split with a shell.") }
+    }
+
+    @objc func focusOtherWorkspacePane(_ sender: Any?) { _ = workspace?.focusOtherPane() }
+    @objc func swapWorkspacePanes(_ sender: Any?) { workspace?.swapPanes() }
+    @objc func collapseWorkspacePane(_ sender: Any?) { workspace?.collapseOtherPane() }
+
+    @objc func splitWorkspaceChanges(_ sender: Any?) {
+        guard let workspace, let id = workspace.shownSessionRow?.embeddedRuntimeSessionID else {
+            return refuse("Select an embedded session to review its checkout alongside it.")
+        }
+        guard paneChanges?.landing != true else { return refuse("Wait for the worktree landing to finish.") }
+        let model = WorkspaceChangesModel(command: { [weak self] in self?.command })
+        model.onOpenFile = { [weak self] path in
+            self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
+        }
+        let view = NSHostingView(rootView: WorkspaceChangesView(model: model))
+        guard workspace.splitWithReview(view, canClose: { !model.landing }, onClose: { model.close() }) else { return }
+        paneChanges = model
+        model.open(runtimeSessionID: id)
+    }
+
+    @objc func showChanges(_ sender: Any?) {
+        let workspace = workspaceController()
+        workspace.show()
+        let controller = changesWindow ?? WorkspaceChangesWindow(model: WorkspaceChangesModel(command: { [weak self] in self?.command }))
+        guard !controller.model.landing else { controller.show(); return }
+        controller.onVisibilityChanged = { [weak self] visible in
+            self?.changesVisible = visible
+            self?.syncActivationPolicy()
+        }
+        controller.model.onOpenFile = { [weak self] path in
+            self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
+        }
+        if let id = workspace.shownSessionRow?.embeddedRuntimeSessionID {
+            controller.model.open(runtimeSessionID: id)
+        } else {
+            let picker = NSOpenPanel()
+            picker.canChooseFiles = false
+            picker.canChooseDirectories = true
+            picker.allowsMultipleSelection = false
+            picker.message = "Choose the checkout to review. Changes include every session using this directory."
+            picker.prompt = "Review"
+            guard picker.runModal() == .OK, let url = picker.url else { return }
+            controller.model.open(directory: url.path)
+        }
+        changesWindow = controller
+        controller.show()
+    }
+
+    @objc func showRuns(_ sender: Any?) { openRuns(launch: false) }
+    @objc func runPlan(_ sender: Any?) { openRuns(launch: true) }
+
+    private func openRuns(launch: Bool) {
+        let controller = runsWindow ?? WorkspaceRunsWindow(
+            model: WorkspaceRunsModel(command: { [weak self] in self?.command }),
+            plan: WorkspaceRunPlanModel(command: { [weak self] in self?.command }))
+        controller.onVisibilityChanged = { [weak self] visible in
+            self?.runsVisible = visible
+            self?.syncActivationPolicy()
+        }
+        controller.model.onAnswer = { [weak self] target in self?.answer(target) }
+        controller.model.onFocus = { [weak self] row in
+            guard let self else { return }
+            guard self.store.feed == .live,
+                  let session = self.store.sessions.first(where: { $0.aslRunID == row.runID }) else {
+                return self.refuse("No live session is associated with this ASL run in the current session list.")
+            }
+            self.focus(.focusing(session, title: row.displayLabel))
+        }
+        controller.plan.onStarted = { [weak self] id in
+            self?.finishOpeningInWorkspace(.success(id), label: "start supervised plan", progress: "")
+        }
+        runsWindow = controller
+        controller.show(launch: launch)
+    }
+
+    @objc func showActivity(_ sender: Any?) {
+        let controller = activityWindow ?? WorkspaceActivityWindow(model: WorkspaceActivityModel(command: { [weak self] in self?.command }))
+        controller.onVisibilityChanged = { [weak self] visible in
+            self?.activityVisible = visible
+            self?.syncActivationPolicy()
+        }
+        controller.model.onConversation = { [weak self] identity in self?.openHistory(conversation: identity) }
+        controller.model.onFocus = { [weak self] entry in
+            guard let self else { return }
+            guard self.store.feed == .live else { return self.refuse("Waiting for a live session list.") }
+            let live = Self.session(runtimeSessionID: entry.runtimeSessionID, in: self.store.sessions)
+                ?? self.store.sessions.first { entry.conversation != nil && $0.conversation == entry.conversation }
+            guard let live else { return self.refuse("No live session matches this recorded event. Open its conversation to inspect or resume it.") }
+            self.focus(.focusing(live, title: entry.title))
+        }
+        activityWindow = controller
+        controller.show()
+    }
+
+    @objc func showHistory(_ sender: Any?) { openHistory(conversation: nil) }
+
+    private func openHistory(conversation: ConversationIdentity?) {
+        let workspace = workspaceController()
+        workspace.show()
+        let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }))
+        controller.onVisibilityChanged = { [weak self] visible in
+            self?.historyVisible = visible
+            self?.syncActivationPolicy()
+        }
+        controller.model.onAction = { [weak self] conversation, fork, completion in
+            self?.openHistoryConversation(conversation, fork: fork, completion: completion)
+        }
+        controller.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
+        historyWindow = controller
+        if conversation != nil {
+            controller.model.query = ""
+            controller.model.scope = .conversation
+            controller.model.includeAutomated = true
+        }
+        controller.show(project: workspace.shownSessionRow?.project ?? "", conversation: conversation ?? workspace.shownSessionRow?.conversation)
+    }
+
+    private func openHistoryConversation(_ conversation: RecentConversation, fork: Bool, completion: @escaping (String?) -> Void) {
+        if !fork, store.feed == .live, let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
+            focus(.focusing(live, title: conversation.displayName))
+            completion(nil)
+            return
+        }
+        guard let command else { completion("amx is unavailable. Check Settings."); return }
+        if let reason = gate.unavailableReason(.sessions) { completion(reason); return }
+        let args = ["session", fork ? "fork" : "continue", "--backend", "tmux", "--json", "--", conversation.selector]
+        launchQueue.async { [weak self] in
+            let result = command.json(SessionContinueResult.self, args, timeout: AMXCommand.launchTimeout, mutates: true)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    switch result {
+                    case let .failure(error): completion(error.message)
+                    case let .success(value):
+                        self?.finishOpeningInWorkspace(.success(value.runtimeSessionID), label: fork ? "fork conversation" : "resume conversation", progress: "")
+                        completion(nil)
+                    case let .partial(value, _):
+                        self?.finishOpeningInWorkspace(.success(value.runtimeSessionID), label: "open conversation", progress: "")
+                        completion("The conversation changed, but opening it did not fully complete. Check the workspace before retrying.")
+                    }
+                }
+            }
+        }
+    }
+
+    var workspaceCommands: [WorkspaceSwitcher.Entry] {
+        func entry(_ command: WorkspaceCommand, _ title: String, _ detail: String = "", reason: String? = nil) -> WorkspaceSwitcher.Entry {
+            WorkspaceSwitcher.Entry(place: .command(command), glyph: "›", title: title, detail: detail, unavailableReason: reason)
+        }
+        var entries = [
+            entry(.newTerminal, "New Terminal Here", "⌘↩", reason: workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first"),
+            entry(.newShell, "New Shell", "⌘T"),
+            entry(.splitShell, "Split with Shell", reason: workspace?.splitUnavailableReason ?? (workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first")),
+            entry(.splitChanges, "Split with Checkout Changes", reason: workspace?.splitUnavailableReason ?? (workspace?.shownSessionRow?.embeddedRuntimeSessionID != nil ? nil : "Select an embedded session first")),
+            entry(.focusReview, "Focus Checkout Review", reason: workspace?.hasReview == true ? nil : "Open checkout review in a pane first"),
+            entry(.focusOtherPane, "Focus Other Pane", reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
+            entry(.swapPanes, "Swap Panes", reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
+            entry(.collapsePane, "Hide Other Pane", reason: workspace?.isSplit == true ? (workspace?.canHideOtherPane == true ? nil : "Wait for the checkout operation to finish") : "Open a second pane first"),
+            entry(.history, "Search Conversation History"),
+            entry(.activity, "Since Last Looked"),
+            entry(.runs, "Open ASL Runs"),
+            entry(.runPlan, "Run a Plan…", reason: command == nil ? "amx is not available" : nil),
+            entry(.changes, "Review Checkout Changes"),
+            entry(.dashboard, "Open Dashboard", "⌘D"),
+            entry(.overview, "Open Overview", "⌘O"),
+            entry(.nextWaiting, "Next Waiting Session", "⌘⇧A", reason: store.feed != .live ? "Waiting for a live session list" : (AttentionCycler.ordered(store.sessions).isEmpty ? "No sessions are waiting" : nil)),
+            entry(.settings, "Settings…", "⌘,"),
+        ]
+        entries += (workspace?.state.rows ?? []).filter { $0.embeddedRuntimeSessionID != nil }.map { row in
+            entry(.splitSession(row.key), "Split with \(row.displayName)", row.project,
+                  reason: workspace?.splitUnavailableReason ?? (workspace?.state.selection == row.key ? "Already in the active pane" : nil))
+        }
+        entries += (projects.state.value ?? []).map { project in
+            entry(.launch(project), "Launch \(project.title)", "\(project.profile) · \(project.directory)",
+                  reason: gate.unavailableReason(.project) ?? (projects.missingDirectories.contains(project.directory) ? "Project directory is missing" : nil))
+        }
+        entries += (recent.state.value ?? []).map { conversation in
+            let live = store.feed == .live && store.sessions.contains { $0.conversation == conversation.identity }
+            return entry(.resume(conversation), "\(live ? "Focus" : "Resume") \(conversation.displayName)",
+                         "\(conversation.harness) · \(conversation.snippet)", reason: gate.unavailableReason(.sessions))
+        }
+        return entries
+    }
+
+    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void) {
+        guard store.feed == .live else { completion(SecretText("Waiting for a live session list.")); return }
+        let command = self.command
+        QueueWorkRunner.concurrent().run({
+            WorkspaceWaitingContext.read(row, asl: DaemonClient()) { id in
+                guard let command else {
+                    return .failure(.launchFailed(binary: "amx", reason: "amx is still being resolved"))
+                }
+                return command.json(PromptLook.self, PromptLook.arguments(runtimeSessionID: id))
+            }
+        }, then: completion)
+    }
+
+    func workspacePerform(_ action: WorkspaceCommand) {
+        // Entries may have changed while the palette was open.
+        guard let entry = workspaceCommands.first(where: { $0.place == .command(action) }) else { return }
+        if let reason = entry.unavailableReason { return refuse(reason) }
+        switch action {
+        case let .splitSession(key): _ = workspace?.split(with: key)
+        case .splitShell: splitWorkspaceShell(nil)
+        case .splitChanges: splitWorkspaceChanges(nil)
+        case .focusOtherPane: focusOtherWorkspacePane(nil)
+        case .focusReview: _ = workspace?.focusReview()
+        case .swapPanes: swapWorkspacePanes(nil)
+        case .collapsePane: collapseWorkspacePane(nil)
+        case let .launch(project): launch(project)
+        case let .resume(conversation): continueConversation(conversation)
+        case .newTerminal: newSessionTerminal(nil)
+        case .newShell: newShellFromMenu(nil)
+        case .dashboard: openDashboardFromMenu(nil)
+        case .overview: openOverviewFromMenu(nil)
+        case .nextWaiting: nextAttention(nil)
+        case .settings: showPreferences(nil)
+        case .activity: showActivity(nil)
+        case .history: showHistory(nil)
+        case .runs: showRuns(nil)
+        case .runPlan: runPlan(nil)
+        case .changes: showChanges(nil)
+        }
+    }
 
     // MARK: Function keys
 
@@ -914,6 +1182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private func storeChanged() {
+        historyWindow?.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
         reconcileSnooze()
         statusItem?.refresh()
         workspace?.refresh()
@@ -1947,6 +2216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                     }
                     self.projects.state.finish(result, at: Date())
                     if let missing { self.projects.missingDirectories = missing }
+                    self.workspace?.refreshCommands()
                     self.statusItem?.refreshSubmenus()
                 }
             }
@@ -1989,6 +2259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                         Self.logger.error("session list: \(error.message, privacy: .public)")
                     }
                     self.recent.state.finish(result, at: Date())
+                    self.workspace?.refreshCommands()
                     self.statusItem?.refreshSubmenus()
                 }
             }
@@ -2458,7 +2729,9 @@ extension AppDelegate: NSMenuItemValidation {
     /// next session needing attention, the session list) stays enabled, and
     /// ⌘W closes whichever window has the keyboard.
     static let workspaceOnlyActions: Set<Selector> = [
-        #selector(showSwitcher(_:)),
+        #selector(showSwitcher(_:)), #selector(showCommandPalette(_:)),
+        #selector(splitWorkspaceShell(_:)), #selector(splitWorkspaceChanges(_:)),
+        #selector(focusOtherWorkspacePane(_:)), #selector(swapWorkspacePanes(_:)), #selector(collapseWorkspacePane(_:)),
         #selector(goToSession(_:)), #selector(showSessionInKitty(_:)),
         #selector(selectNextSession(_:)), #selector(selectPreviousSession(_:)),
         #selector(showNextSessionInKitty(_:)), #selector(showPreviousSessionInKitty(_:)),

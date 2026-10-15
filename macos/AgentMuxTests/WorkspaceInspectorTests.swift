@@ -86,6 +86,68 @@ final class WorkspaceInspectorTests: XCTestCase {
                        "with no waiting run known, only prompts are offered")
     }
 
+    func testInboxFiltersAndOldestOrderDoNotChangeSidebarOrder() {
+        let rows = WorkspaceInspector.waiting(sessions, now: now, glyphs: .fallback)
+        XCTAssertEqual(WorkspaceWaitingFilter.all.apply(rows, oldestFirst: true).map(\.key), [rows[1].key, rows[0].key])
+        XCTAssertEqual(WorkspaceWaitingFilter.permission.apply(rows, oldestFirst: false), [rows[1]])
+        XCTAssertEqual(WorkspaceWaitingFilter.completed.apply(rows, oldestFirst: false), [rows[0]])
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let before = workspace.state.rows
+        workspace.inspector.setWaitingFilter(.permission, oldestFirst: true)
+        XCTAssertEqual(workspace.inspector.visibleWaiting.count, 1)
+        XCTAssertEqual(workspace.state.rows, before)
+    }
+
+    func testLateContextIsDiscardedWhenThePromptChangesOrFeedIsLost() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let inspector = workspace.inspector
+        var finish: ((SecretText) -> Void)?
+        inspector.onContext = { _, completion in finish = completion }
+        inspector.toggleContext(try XCTUnwrap(inspector.model.waiting.first))
+        XCTAssertEqual((inspector.lines.first as? WorkspaceWaitingRowView)?.contextLabel.stringValue, "Loading context…")
+        var changed = sessions
+        changed[1].iconState = "question"
+        app.store.apply(snapshot: F.snapshot(changed))
+        finish?(SecretText("old prompt"))
+        XCTAssertFalse(inspector.lines.compactMap { ($0 as? WorkspaceWaitingRowView)?.contextLabel.stringValue }.contains("old prompt"))
+        inspector.toggleContext(try XCTUnwrap(inspector.model.waiting.first))
+        var stale = inspector.model
+        stale.current = false
+        stale.feedNotice = "Reconnecting…"
+        inspector.show(stale)
+        finish?(SecretText("late response"))
+        XCTAssertFalse(inspector.lines.compactMap { ($0 as? WorkspaceWaitingRowView)?.contextLabel.stringValue }.contains("late response"))
+    }
+
+    func testAnotherQuestionOnTheSameRunInvalidatesContext() {
+        var session = F.tmux(1, project: "api", icon: "question", attention: true)
+        session.aslRunID = "run-one"
+        var run = CompanionASLWaiting()
+        run.runID = "run-one"
+        run.planDir = "/plans/api"
+        run.latestQuestionID = "q-one"
+        run.unanswered = 1
+        let first = WorkspaceInspector.waiting([session], asl: [run], now: now)[0]
+        run.latestQuestionID = "q-two"
+        let second = WorkspaceInspector.waiting([session], asl: [run], now: now)[0]
+        XCTAssertEqual(first.answer, second.answer)
+        XCTAssertFalse(first.sameContext(as: second))
+    }
+
+    func testNextWaitingUsesTheFilteredOrderWithoutSendingAnAnswer() {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let inspector = workspace.inspector
+        inspector.setWaitingFilter(.all, oldestFirst: true)
+        var visited: [AttentionCycler.Key] = []
+        inspector.onWaiting = { visited.append($0) }
+        inspector.onAnswer = { _ in XCTFail("Navigation must not answer a question") }
+        inspector.nextWaiting()
+        inspector.nextWaiting()
+        inspector.nextWaiting()
+        let order = inspector.visibleWaiting.map(\.key)
+        XCTAssertEqual(visited, [order[0], order[1], order[0]])
+    }
+
     func testAnInspectionLeavesOutWhatIsNotKnown() {
         let idle = WorkspaceInspector.inspection(sessions[0], now: now, glyphs: .fallback)
         XCTAssertEqual(idle.title, "api — work")
@@ -270,7 +332,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.select(.embedded(F.runtimeID(2)))
         XCTAssertEqual(workspace.inspector.model.inspection?.title, "api — personal")
         var buttons = workspace.inspector.actionButtons
-        XCTAssertEqual(buttons.map(\.title), ["Name…", "Color…", "Icon…", "Mute", "Clear State", "Mark Active"])
+        XCTAssertEqual(buttons.map(\.title), ["Name…", "Color…", "Icon…", "Mute", "Clear State", "Mark Active", "Changes…"])
         XCTAssertTrue(buttons.allSatisfy(\.isEnabled))
         buttons[3].performClick(nil)
         buttons[0].performClick(nil)
@@ -282,7 +344,7 @@ final class WorkspaceInspectorTests: XCTestCase {
 
         workspace.select(AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
         buttons = workspace.inspector.actionButtons
-        XCTAssertEqual(buttons.map(\.isEnabled), [false, false, false, true, true, true],
+        XCTAssertEqual(buttons.map(\.isEnabled), [false, false, false, true, true, true, true],
                        "a Kitty session is named, colored, and given its icon in Kitty")
     }
 

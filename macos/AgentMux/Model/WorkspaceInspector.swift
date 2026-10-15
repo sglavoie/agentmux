@@ -38,6 +38,15 @@ struct WorkspaceWaitingRow: Equatable {
     /// What can be answered from the row without going to the session; nil
     /// when there is nothing to answer here, and the row only goes there.
     var answer: WorkspaceWaitingAnswer?
+    var category = WorkspaceWaitingFilter.other
+    var changedAt: Date?
+    var contextVersion = ""
+
+    /// Unlike the relative age label, this identity changes only when the
+    /// waiting item changes. It prevents late context from a previous prompt.
+    func sameContext(as other: WorkspaceWaitingRow) -> Bool {
+        key == other.key && changedAt == other.changedAt && answer == other.answer && category == other.category && contextVersion == other.contextVersion
+    }
 }
 
 /// What the right sidebar says about the session the pane is on.
@@ -67,13 +76,13 @@ struct WorkspaceInspection: Equatable {
 /// What a button of the right sidebar asks for the session the pane is on:
 /// what ⌘R and the session function keys do.
 enum WorkspaceInspectorAction: CaseIterable, Equatable {
-    case name, color, icon, mute, clearState, markActive
+    case name, color, icon, mute, clearState, markActive, reviewChanges
 
     /// Whether the action is one only an embedded session has here.
     var needsEmbedded: Bool {
         switch self {
         case .name, .color, .icon: return true
-        case .mute, .clearState, .markActive: return false
+        case .mute, .clearState, .markActive, .reviewChanges: return false
         }
     }
 
@@ -85,6 +94,7 @@ enum WorkspaceInspectorAction: CaseIterable, Equatable {
         case .mute: return muted ? "Unmute" : "Mute"
         case .clearState: return "Clear State"
         case .markActive: return "Mark Active"
+        case .reviewChanges: return "Changes…"
         }
     }
 
@@ -97,6 +107,7 @@ enum WorkspaceInspectorAction: CaseIterable, Equatable {
         case .mute: return "F10"
         case .clearState: return "F8"
         case .markActive: return "F11"
+        case .reviewChanges: return "Review the checkout shared by its sessions"
         }
     }
 }
@@ -153,7 +164,10 @@ enum WorkspaceInspector {
                 detail: detail.joined(separator: " · "),
                 glyph: row.glyph,
                 toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)",
-                answer: answer
+                answer: answer,
+                category: WorkspaceWaitingFilter.category(icon: session.iconState, answer: answer),
+                changedAt: session.changedAt,
+                contextVersion: "\(session.lastEventAt):\(runs[row.key]?.latestQuestionID ?? ""):\(runs[row.key]?.unanswered ?? 0)"
             )
         }
     }
@@ -255,5 +269,38 @@ enum WorkspaceInspectorLine: Equatable {
     /// Whether two lists of lines are the same lines, in the same order.
     static func sameLines(_ a: [WorkspaceInspectorLine], _ b: [WorkspaceInspectorLine]) -> Bool {
         a.count == b.count && zip(a, b).allSatisfy { $0.isSameLine(as: $1) }
+    }
+}
+
+/// Filtering never reorders the workspace sidebar or changes attention counts.
+enum WorkspaceWaitingFilter: String, CaseIterable {
+    case all = "All"
+    case permission = "Permissions"
+    case question = "Questions"
+    case error = "Errors"
+    case completed = "Completed turns"
+    case other = "Other"
+
+    static func category(icon: String, answer: WorkspaceWaitingAnswer?) -> Self {
+        if case .asl? = answer { return .question }
+        switch icon {
+        case "key": return .permission
+        case "question": return .question
+        case "error", "warning": return .error
+        case "stop": return .completed
+        default: return .other
+        }
+    }
+
+    func apply(_ rows: [WorkspaceWaitingRow], oldestFirst: Bool) -> [WorkspaceWaitingRow] {
+        let kept = rows.filter { self == .all || $0.category == self }
+        guard oldestFirst else { return kept }
+        // Stable ties; missing timestamps go last rather than pretending to
+        // be the oldest item.
+        return kept.enumerated().sorted {
+            let a = $0.element.changedAt ?? .distantFuture
+            let b = $1.element.changedAt ?? .distantFuture
+            return a == b ? $0.offset < $1.offset : a < b
+        }.map(\.element)
     }
 }

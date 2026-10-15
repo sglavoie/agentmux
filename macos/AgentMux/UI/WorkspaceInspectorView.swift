@@ -59,6 +59,27 @@ final class WorkspaceInspectorView: NSView {
     var onWaiting: ((AttentionCycler.Key) -> Void)?
     var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
     var onAction: ((WorkspaceInspectorAction) -> Void)?
+    var onContext: ((WorkspaceWaitingRow, @escaping (SecretText) -> Void) -> Void)?
+    let filterPicker = NSPopUpButton()
+    let oldestButton = NSButton(checkboxWithTitle: "Oldest first", target: nil, action: nil)
+    let nextButton = NSButton(title: "Next waiting", target: nil, action: nil)
+    private let inboxControls = NSStackView()
+    private(set) var waitingFilter = WorkspaceWaitingFilter.all
+    private(set) var oldestFirst = false
+    private var expanded: WorkspaceWaitingRow?
+    private var preview = SecretText()
+    private var contextSequence = 0
+    private var lastWaiting: AttentionCycler.Key?
+
+    var visibleWaiting: [WorkspaceWaitingRow] { waitingFilter.apply(model.waiting, oldestFirst: oldestFirst) }
+    private var displayedLines: [WorkspaceInspectorLine] {
+        guard model.tab == .waiting else { return model.lines }
+        let rows = visibleWaiting
+        let notice = model.current ? [] : model.feedNotice.map { [WorkspaceInspectorLine.note($0)] } ?? []
+        return rows.isEmpty ? notice + [.note(model.waiting.isEmpty ? Self.nothingWaiting : "No waiting items match this filter.")]
+            : notice + rows.map(WorkspaceInspectorLine.waiting)
+    }
+
     /// Takes a copied identifier; the general pasteboard unless a test says
     /// otherwise.
     var onCopy: (String) -> Void = { value in
@@ -98,13 +119,35 @@ final class WorkspaceInspectorView: NSView {
         scroll.drawsBackground = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
-        addSubview(tabs)
+        filterPicker.addItems(withTitles: WorkspaceWaitingFilter.allCases.map(\.rawValue))
+        filterPicker.target = self
+        filterPicker.action = #selector(filterChanged(_:))
+        filterPicker.setAccessibilityLabel("Waiting category")
+        oldestButton.target = self
+        oldestButton.action = #selector(filterChanged(_:))
+        nextButton.target = self
+        nextButton.action = #selector(nextWaiting(_:))
+        for control in [filterPicker, oldestButton, nextButton] {
+            control.controlSize = .small
+            control.refusesFirstResponder = true
+        }
+        inboxControls.orientation = .vertical
+        inboxControls.alignment = .leading
+        inboxControls.spacing = 4
+        [filterPicker, oldestButton, nextButton].forEach { inboxControls.addArrangedSubview($0) }
+        let header = NSStackView(views: [tabs, inboxControls])
+        header.orientation = .vertical
+        header.alignment = .leading
+        header.spacing = 6
+        header.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(header)
         addSubview(scroll)
         NSLayoutConstraint.activate([
-            tabs.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            tabs.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
-            tabs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
-            scroll.topAnchor.constraint(equalTo: tabs.bottomAnchor, constant: 6),
+            header.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
+            tabs.widthAnchor.constraint(equalTo: header.widthAnchor),
+            scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -126,8 +169,11 @@ final class WorkspaceInspectorView: NSView {
     /// built again only when they are different lines.
     func show(_ model: Model) {
         guard model != self.model else { return }
-        let old = self.model.lines
+        let old = displayedLines
         self.model = model
+        if let expanded, !model.current || model.tab != .waiting || !model.waiting.contains(where: { $0.sameContext(as: expanded) }) {
+            clearContext()
+        }
         rebuild(keeping: old)
     }
 
@@ -137,7 +183,9 @@ final class WorkspaceInspectorView: NSView {
             tabs.setLabel(tab.title + count, forSegment: index)
             if tab == model.tab { tabs.selectedSegment = index }
         }
-        let wanted = model.lines
+        inboxControls.isHidden = model.tab != .waiting
+        nextButton.isEnabled = model.current && !visibleWaiting.isEmpty
+        let wanted = displayedLines
         if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {
             for (view, line) in zip(lines, wanted) { update(view, to: line) }
         } else {
@@ -150,6 +198,10 @@ final class WorkspaceInspectorView: NSView {
         // to read.
         for (view, line) in zip(lines, wanted) {
             view.alphaValue = Self.dims(line, current: model.current) ? 0.5 : 1
+        }
+        for case let row as WorkspaceWaitingRowView in lines {
+            row.contextButton.isEnabled = model.current
+            row.showContext(expanded?.key == row.row.key ? preview.reveal() : nil)
         }
         holdWhileNotCurrent()
     }
@@ -190,7 +242,13 @@ final class WorkspaceInspectorView: NSView {
             view.onPress = { [weak self, weak view] in
                 if let key = view?.row.key { self?.onWaiting?(key) }
             }
-            view.onAnswer = { [weak self] answer in self?.onAnswer?(answer) }
+            view.onAnswer = { [weak self, weak view] answer in
+                self?.lastWaiting = view?.row.key
+                self?.onAnswer?(answer)
+            }
+            view.onContext = { [weak self, weak view] in
+                if let row = view?.row { self?.toggleContext(row) }
+            }
             return view
         case let .actions(muted, embedded):
             return actions(muted: muted, embedded: embedded)
@@ -284,6 +342,57 @@ final class WorkspaceInspectorView: NSView {
         (lines.last as? NSGridView)?.subviews.compactMap { $0 as? NSButton }.sorted { $0.tag < $1.tag } ?? []
     }
 
+    func setWaitingFilter(_ filter: WorkspaceWaitingFilter, oldestFirst: Bool) {
+        waitingFilter = filter
+        self.oldestFirst = oldestFirst
+        filterPicker.selectItem(withTitle: filter.rawValue)
+        oldestButton.state = oldestFirst ? .on : .off
+        if let expanded, !visibleWaiting.contains(where: { $0.key == expanded.key }) { clearContext() }
+        rebuild()
+    }
+
+    @objc private func filterChanged(_ sender: Any?) {
+        let filter = WorkspaceWaitingFilter(rawValue: filterPicker.titleOfSelectedItem ?? "") ?? .all
+        setWaitingFilter(filter, oldestFirst: oldestButton.state == .on)
+    }
+
+    @objc func nextWaiting(_ sender: Any? = nil) {
+        guard model.current, !visibleWaiting.isEmpty else { return }
+        let rows = visibleWaiting
+        let next = lastWaiting.flatMap { key in rows.firstIndex { $0.key == key } }.map { ($0 + 1) % rows.count } ?? 0
+        lastWaiting = rows[next].key
+        onWaiting?(rows[next].key)
+    }
+
+    func discardContext() {
+        clearContext()
+        rebuild()
+    }
+
+    private func clearContext() {
+        contextSequence += 1
+        expanded = nil
+        preview = SecretText()
+    }
+
+    func toggleContext(_ row: WorkspaceWaitingRow) {
+        guard model.current else { return }
+        let closing = expanded?.key == row.key
+        clearContext()
+        if closing { rebuild(); return }
+        expanded = row
+        preview = SecretText("Loading context…")
+        let sequence = contextSequence
+        rebuild()
+        guard let onContext else { return }
+        onContext(row) { [weak self] text in
+            guard let self, self.contextSequence == sequence, self.model.current,
+                  self.expanded?.sameContext(as: row) == true else { return }
+            self.preview = text
+            self.rebuild()
+        }
+    }
+
     @objc private func tabChosen(_ sender: Any?) {
         let all = WorkspaceInspectorTab.allCases
         guard all.indices.contains(tabs.selectedSegment) else { return }
@@ -314,6 +423,10 @@ final class WorkspaceWaitingRowView: NSBox {
     private(set) var row: WorkspaceWaitingRow
     var onPress: (() -> Void)?
     var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
+    var onContext: (() -> Void)?
+    let contextButton = NSButton(title: "Context", target: nil, action: nil)
+    let contextLabel = NSTextField(wrappingLabelWithString: "")
+    private let contextScroll = NSScrollView()
     /// Nil on a row with nothing to answer from here.
     private(set) var answerButton: NSButton?
     let titleLabel = NSTextField(labelWithString: "")
@@ -375,14 +488,35 @@ final class WorkspaceWaitingRowView: NSBox {
             answerButton = button
         }
         text.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        contextButton.target = self
+        contextButton.action = #selector(contextPressed(_:))
+        contextButton.controlSize = .small
+        contextButton.bezelStyle = .rounded
+        contextButton.refusesFirstResponder = true
+        contextLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        contextLabel.isSelectable = true
+        contextLabel.translatesAutoresizingMaskIntoConstraints = false
+        contextScroll.documentView = contextLabel
+        contextScroll.hasVerticalScroller = true
+        contextScroll.drawsBackground = false
+        contextScroll.isHidden = true
+        let column = NSStackView(views: [stack, contextButton, contextScroll])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 4
+        column.translatesAutoresizingMaskIntoConstraints = false
         let content = NSView()
-        content.addSubview(stack)
+        content.addSubview(column)
         contentView = content
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 6),
-            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -6),
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 8),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -8),
+            stack.widthAnchor.constraint(equalTo: column.widthAnchor),
+            contextScroll.widthAnchor.constraint(equalTo: column.widthAnchor),
+            contextScroll.heightAnchor.constraint(equalToConstant: 160),
+            contextLabel.widthAnchor.constraint(equalTo: contextScroll.contentView.widthAnchor),
+            column.topAnchor.constraint(equalTo: content.topAnchor, constant: 6),
+            column.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -6),
+            column.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 8),
+            column.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -8),
         ])
         for label in [titleLabel, detailLabel] {
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -394,6 +528,15 @@ final class WorkspaceWaitingRowView: NSBox {
         setAccessibilityRole(.button)
         update(row)
     }
+
+    func showContext(_ text: String?) {
+        contextScroll.isHidden = text == nil
+        contextLabel.stringValue = text ?? ""
+        contextButton.title = text == nil ? "Context" : "Hide context"
+        contextButton.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
+    }
+
+    @objc private func contextPressed(_ sender: Any?) { onContext?() }
 
     /// Shows `row` on this line: the same session, said anew. Whether it has
     /// an Answer… button is the line's own and does not change.

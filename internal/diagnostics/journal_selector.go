@@ -20,6 +20,9 @@ type Selector struct {
 	Stages        []string
 	Outcomes      []string
 	Limit         int
+	// RecordFilter narrows a projection before sorting and limiting. It must be
+	// pure: snapshots may revisit the same durable record after rotation.
+	RecordFilter func(TraceEnvelope) bool `json:"-"`
 }
 
 func (s Selector) matches(envelope TraceEnvelope) bool {
@@ -49,7 +52,8 @@ func (s Selector) matches(envelope TraceEnvelope) bool {
 	if s.Event != "" && envelope.Evidence["event"] != s.Event {
 		return false
 	}
-	return containsOrEmpty(s.Stages, envelope.Stage) && containsOrEmpty(s.Outcomes, envelope.Outcome)
+	return containsOrEmpty(s.Stages, envelope.Stage) && containsOrEmpty(s.Outcomes, envelope.Outcome) &&
+		(s.RecordFilter == nil || s.RecordFilter(envelope))
 }
 
 func envelopeHasEvidenceID(envelope TraceEnvelope, id string, keys ...string) bool {

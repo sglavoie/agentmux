@@ -14,6 +14,7 @@ func TestDecisionEnvelopeCarriesTheIdentityHeaderAndReplayInputs(t *testing.T) {
 		Event: "PreToolUse", Action: "active", TraceID: "trace-1", RequestID: "request-1",
 		ProducerHarness: "claude", Profile: "work", SessionID: "s1", RunID: "run-1",
 		TargetWindowID: 7, DaemonSeq: 3, SourceSeq: 9, Attempt: 2,
+		Origin:          &protocol.HookOrigin{RuntimeSessionID: "runtime-1"},
 		ReducerDecision: protocol.DecisionApplied, DecisionReason: protocol.DecisionReasonAccepted,
 		EffectiveBefore: &before, EffectiveAfter: &after,
 		ReducerInput: &protocol.ReducerInputEvidence{EmittedAt: 11, OriginWindowID: 7, GuardDuration: 1},
@@ -36,6 +37,7 @@ func TestDecisionEnvelopeCarriesTheIdentityHeaderAndReplayInputs(t *testing.T) {
 
 	want := map[string]string{
 		"event":                    "PreToolUse",
+		"runtime_session_id":       "runtime-1",
 		"action":                   "active",
 		"source_sequence":          "9",
 		"daemon_sequence":          "3",

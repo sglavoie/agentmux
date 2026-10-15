@@ -379,6 +379,61 @@ terminal, and any utility view whose program tracks the mouse.
 **Input methods** compose at the cursor; the agent receives the text when it
 is committed.
 
+## Native workflow views
+
+- **⌘⇧P** opens the command palette. In **⌘P**, type `>` to search actions.
+  It offers configured-project launches, recent-conversation resume/focus, shells,
+  history, checkout review, and workspace navigation. Unavailable actions explain why.
+- **Waiting** in the inspector supports category filters, oldest-first sorting,
+  expandable question/output context, and **Next waiting**. Answering still uses
+  the existing prompt or supervisor panel.
+- **View › Conversation History…** searches full transcripts, scoped to all history,
+  the selected session’s project, or its conversation. Preview, load earlier messages,
+  focus an existing session, resume, or fork into the workspace.
+- **View › Review Checkout Changes…** (also **Changes…** in the Session inspector)
+  shows checkout-wide files, line counts, and diffs against a chosen base. Open files
+  in the configured editor. Managed worktrees include source-branch comparison and
+  confirmed fast-forward landing, with the CLI’s existing clean/inactive checks.
+- **View › Since Last Looked…** shows recorded state transitions, process exits,
+  and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days,
+  select an event for its details and the last timestamped assistant output at or
+  before it, and open its conversation or focus the matching live session.
+  **Load earlier messages** searches further back for supporting output.
+  **Mark shown read** persists exactly the displayed event IDs; opening the view
+  does not mark anything read, and late-arriving events stay unread. Turn off
+  **Unread only** to revisit read events. Refresh reads newly recorded events.
+  The view reports unavailable transcripts, retention limits, truncation, and
+  unreadable journal records rather than reconstructing missing history.
+- **View › ASL Runs…** lists ASL's full active/actionable run projection, including
+  pauses with no unanswered question. Select a run for its current session, phase,
+  timestamps, blockers, plan session counts, and recorded verification results.
+  Verification is scoped to that run; bounded or unavailable evidence is labeled.
+  **Answer…** uses the existing supervisor question panel. **Resume**, **Stop After
+  Current…**, and **Abort…** are enabled only when ASL permits them and recheck that
+  permission on submission. An uncertain response offers **Retry Receipt** for the
+  same operation ID; polling never repeats a control operation.
+- **View › Run a Plan…** opens the native launch form, also available from Runs and
+  the command palette. Choose a plan directory or configured plan name, optionally
+  select the supervising project/profile and worker/review harnesses, then **Check
+  Readiness**. The preview shows the actual command and any preflight findings.
+  **Start Supervised Run** uses `amx plans run --backend tmux` and focuses the managed
+  supervising session. Changed options require another check. A submitted or
+  uncertain launch is not repeated by the form.
+
+**View › Split with Shell** keeps the current agent alongside a shell in its
+working directory. **Split with Checkout Changes** opens native review alongside
+it. To compare two agents, use **⌘⇧P** and choose **Split with <session name>**.
+Click either pane or its heading to focus it; the filled dot identifies the active
+pane. **Focus Checkout Review** in the palette returns to an opened review after
+navigating elsewhere. Sidebar selections and session actions apply to that pane. **Focus Other
+Pane**, **Swap Panes**, and **Hide Other Pane** are in View and the command palette.
+Hiding a pane preserves its agent or shell; closing a session still asks before
+ending it. Closing the workspace detaches both agents, preserves utility programs,
+and returns to a single pane when reopened.
+
+History and Changes also have separate resizable native windows. Their commands are
+available from the palette. The app and `amx` must both be rebuilt for checkout review.
+
 ## Global shortcuts
 
 | Default | Does |
@@ -501,8 +556,8 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
   so reopening the menu right away does not offer the toggle again. See
   [Daemon › Mute lag](daemon.md#mute-lag) for why there is no `mute_set`
   request.
-- **Paused ASL runs** are listed for answering only when their pause left an
-  open supervisor question.
+- **Paused ASL runs** appear in Waiting for answering only when their pause left
+  an open supervisor question. **View › ASL Runs…** also lists pauses without one.
 - **One Kitty per window ID.** Window IDs mean something only inside the Kitty
   that issued them, so Mute never tries another instance's socket.
 - **Other Kitty instances.** The daemon lists the instance whose hook it heard

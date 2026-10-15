@@ -137,6 +137,17 @@ enum WorkspaceMenu {
         view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
         view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
+        view.addItem(item("ASL Runs…", #selector(AppDelegate.showRuns(_:)), "", target: target))
+        view.addItem(item("Run a Plan…", #selector(AppDelegate.runPlan(_:)), "", target: target))
+        view.addItem(item("Since Last Looked…", #selector(AppDelegate.showActivity(_:)), "", target: target))
+        view.addItem(item("Conversation History…", #selector(AppDelegate.showHistory(_:)), "", target: target))
+        view.addItem(item("Review Checkout Changes…", #selector(AppDelegate.showChanges(_:)), "", target: target))
+        view.addItem(.separator())
+        view.addItem(item("Split with Shell", #selector(AppDelegate.splitWorkspaceShell(_:)), "", target: target))
+        view.addItem(item("Split with Checkout Changes", #selector(AppDelegate.splitWorkspaceChanges(_:)), "", target: target))
+        view.addItem(item("Focus Other Pane", #selector(AppDelegate.focusOtherWorkspacePane(_:)), "", target: target))
+        view.addItem(item("Swap Panes", #selector(AppDelegate.swapWorkspacePanes(_:)), "", target: target))
+        view.addItem(item("Hide Other Pane", #selector(AppDelegate.collapseWorkspacePane(_:)), "", target: target))
         view.addItem(.separator())
         // ⌘W closes what the pane is on, as it closes a tab elsewhere; the
         // window itself is ⌘⇧W. Its title follows what that is
@@ -145,6 +156,7 @@ enum WorkspaceMenu {
 
         let session = submenu("Session", in: main)
         session.addItem(item("Go to…", #selector(AppDelegate.showSwitcher(_:)), "p", target: target))
+        session.addItem(item("Command Palette…", #selector(AppDelegate.showCommandPalette(_:)), "P", target: target))
         session.addItem(item("Next Needing Attention", #selector(AppDelegate.nextAttention(_:)), "A", target: target))
         session.addItem(item("New Terminal Below", #selector(AppDelegate.newSessionTerminal(_:)), "\r", target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))
