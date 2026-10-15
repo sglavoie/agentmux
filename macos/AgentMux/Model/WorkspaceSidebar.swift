@@ -343,32 +343,61 @@ enum WorkspaceSidebar {
     }
 
     /// What the sidebar says about a feed that is not delivering snapshots;
-    /// nil while it is.
+    /// nil while it is. A daemon too old for the app sends the operator to
+    /// Restart Daemon, as the menu bar's notices do (`MenuBuilder.restartHint`).
     static func feedNotice(_ feed: FeedState) -> String? {
         switch feed {
         case .live: return nil
         case .connecting: return "Connecting to the daemon…"
         case .notRunning: return "Daemon not running"
-        case .daemonTooOld: return "Daemon too old — run amx daemon restart"
+        case .daemonTooOld: return "Daemon too old — \(MenuBuilder.restartHint)"
         case let .reconnecting(reason): return "Reconnecting… (\(reason))"
         }
     }
 
+    /// What the operator can do from the workspace about a feed that is not
+    /// delivering snapshots: the Start Daemon and Restart Daemon the menu
+    /// bar offers for it. Neither starts or ends an agent.
+    enum DaemonAction: Equatable {
+        case start
+        case restart
+
+        var title: String {
+            switch self {
+            case .start: return "Start Daemon"
+            case .restart: return "Restart Daemon"
+            }
+        }
+    }
+
+    /// The daemon action offered with the feed's notice; nil when there is
+    /// nothing to do but wait for the daemon to answer.
+    static func daemonAction(_ feed: FeedState) -> DaemonAction? {
+        switch feed {
+        case .notRunning: return .start
+        case .daemonTooOld: return .restart
+        case .live, .connecting, .reconnecting: return nil
+        }
+    }
+
     /// What the pane says when it has nothing to show and the feed is not
-    /// delivering snapshots, and whether it can offer to start the daemon;
+    /// delivering snapshots, and what it can offer to do about the daemon;
     /// nil while the feed is live.
-    static func feedExplanation(_ feed: FeedState) -> (title: String, message: String, startsDaemon: Bool)? {
+    static func feedExplanation(_ feed: FeedState) -> (title: String, message: String, action: DaemonAction?)? {
         guard let notice = feedNotice(feed) else { return nil }
+        let action = daemonAction(feed)
         switch feed {
         case .live: return nil
         case .connecting:
-            return (notice, "Sessions are listed once the daemon answers.", false)
+            return (notice, "Sessions are listed once the daemon answers.", action)
         case .notRunning:
-            return (notice, "Nothing is listed until the daemon runs. Starting it starts no agent.", true)
+            return (notice, "Nothing is listed until the daemon runs. Starting it starts no agent.", action)
         case .daemonTooOld:
-            return (notice, "This daemon cannot list sessions for the workspace. Restart it from a terminal.", false)
+            return (notice, "This daemon cannot list sessions for the workspace. Restarting it ends no agent.", action)
         case .reconnecting:
-            return ("Reconnecting…", "The sessions listed are the last ones the daemon reported. They keep running meanwhile.", false)
+            // Said only with nothing listed: the daemon has no sessions to
+            // hold, so the list fills when it answers.
+            return ("Reconnecting…", "The daemon is reconnecting. Sessions are listed once it answers; any that are running keep running meanwhile.", action)
         }
     }
 }

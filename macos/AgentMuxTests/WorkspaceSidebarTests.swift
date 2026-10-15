@@ -323,16 +323,23 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.notRunning), "Daemon not running")
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.reconnecting("no heartbeat")), "Reconnecting… (no heartbeat)")
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.connecting), "Connecting to the daemon…")
-        XCTAssertEqual(WorkspaceSidebar.feedNotice(.daemonTooOld), "Daemon too old — run amx daemon restart")
+        XCTAssertEqual(WorkspaceSidebar.feedNotice(.daemonTooOld), "Daemon too old — choose Restart Daemon")
+        XCTAssertTrue(WorkspaceSidebar.feedNotice(.daemonTooOld)?.contains(MenuBuilder.restartHint) ?? false,
+                      "it names the Restart Daemon offered with it, as the menu bar does")
         for feed in [FeedState.connecting, .notRunning, .daemonTooOld, .reconnecting("x")] {
             let notice = WorkspaceSidebar.feedNotice(feed)
             XCTAssertFalse(notice?.contains("`") ?? true, "no Markdown in a label")
             XCTAssertEqual(notice?.first?.isUppercase, true, "sentence case")
         }
         XCTAssertNil(WorkspaceSidebar.feedExplanation(.live))
-        XCTAssertEqual(WorkspaceSidebar.feedExplanation(.notRunning)?.startsDaemon, true)
-        XCTAssertEqual(WorkspaceSidebar.feedExplanation(.daemonTooOld)?.startsDaemon, false)
+        XCTAssertEqual(WorkspaceSidebar.feedExplanation(.notRunning)?.action, .start)
+        XCTAssertEqual(WorkspaceSidebar.feedExplanation(.daemonTooOld)?.action, .restart)
+        XCTAssertNil(WorkspaceSidebar.feedExplanation(.connecting)?.action)
         XCTAssertEqual(WorkspaceSidebar.feedExplanation(.reconnecting("x"))?.title, "Reconnecting…")
+        XCTAssertNil(WorkspaceSidebar.feedExplanation(.reconnecting("x"))?.action)
+        XCTAssertNil(WorkspaceSidebar.daemonAction(.live))
+        XCTAssertEqual(WorkspaceSidebar.DaemonAction.start.title, "Start Daemon")
+        XCTAssertEqual(WorkspaceSidebar.DaemonAction.restart.title, "Restart Daemon")
     }
 
     func testDisplayNamePrefersTheGivenName() {

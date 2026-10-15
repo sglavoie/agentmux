@@ -67,8 +67,12 @@ protocol WorkspaceDelegate: AnyObject {
     /// arrives on the main actor, possibly before this returns.
     func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void)
     /// Runs `amx daemon start`, because the operator asked for it from the
-    /// pane. It starts no agent.
+    /// pane or the sidebar. It starts no agent.
     func workspaceStartDaemon()
+    /// Runs `amx daemon restart`, because the operator asked for it from the
+    /// pane or the sidebar while the daemon is too old for the app. It ends
+    /// no agent.
+    func workspaceRestartDaemon()
     /// A program in one of the workspace's terminals asked for a desktop
     /// notification (OSC 9 or 777). `onScreen` is set when the terminal it
     /// came from is in the pane of the key window.
@@ -76,6 +80,14 @@ protocol WorkspaceDelegate: AnyObject {
     /// The pane shows the terminal of a session or view: it moved there, or
     /// the window became key on it. Its terminal notices are now read.
     func workspaceShowing(_ origin: TerminalNotice.Origin)
+}
+
+extension WorkspaceDelegate where Self: AppDelegate {
+    /// The app restarts the daemon from the workspace as it does from the
+    /// menu bar's Restart Daemon, which is the same command and notices.
+    func workspaceRestartDaemon() {
+        perform(.restartDaemon)
+    }
 }
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -251,6 +263,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var reportedInspectorWidth: CGFloat?
     private var splitObservation: NSObjectProtocol?
     let feedLabel = NSTextField(labelWithString: "")
+    /// Start Daemon or Restart Daemon under the feed's notice, whenever the
+    /// feed says one would help: held rows keep the pane's own button away,
+    /// so the sidebar offers it whatever is listed.
+    let feedButton = NSButton(title: "", target: nil, action: nil)
     let placeholder = WorkspacePlaceholderView()
     /// The Go to… list, above whatever the pane shows while it is up.
     let switcher = WorkspaceSwitcherView()
@@ -377,6 +393,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private let glyphs: Glyphs
     private let now: () -> Date
 
+    /// How often the ages the sidebar and the inspector show ("4m", "Since")
+    /// are said again while the window is open. The daemon sends nothing
+    /// while nothing changes, so without it they would stand still.
+    static let ageRefreshInterval: TimeInterval = 30
+    /// Runs while the window is open, and only then.
+    private(set) var ageTimer: Timer?
+
     init(delegate: WorkspaceDelegate, glyphs: Glyphs = .bundled, now: @escaping () -> Date = Date.init) {
         self.delegate = delegate
         self.glyphs = glyphs
@@ -403,6 +426,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             Self.logger.notice("workspace: opened")
             delegate?.workspaceVisibilityChanged(true)
         }
+        startAgeTimer()
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         refresh()
@@ -413,12 +437,33 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func openForTesting() {
         _ = window
         isOpen = true
+        startAgeTimer()
+        refresh()
+    }
+
+    private func startAgeTimer() {
+        guard ageTimer == nil else { return }
+        let timer = Timer(timeInterval: Self.ageRefreshInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshAges() }
+        }
+        timer.tolerance = Self.ageRefreshInterval / 6
+        RunLoop.main.add(timer, forMode: .common)
+        ageTimer = timer
+    }
+
+    /// Says the ages again, as a snapshot would: only the lines whose text
+    /// changed are drawn again, so the selection, the pointer's ×, and the
+    /// keyboard stay where they are.
+    func refreshAges() {
+        guard isOpen else { return }
         refresh()
     }
 
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
         isOpen = false
+        ageTimer?.invalidate()
+        ageTimer = nil
         Self.logger.notice("workspace: closed, detaching \(self.terminals.count) terminal(s)")
         for id in Array(terminals.keys) { discardTerminal(id) }
         detached.removeAll()
@@ -481,6 +526,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         feedLabel.stringValue = notice ?? ""
         feedLabel.isHidden = notice == nil
         feedLabel.toolTip = notice
+        let action = WorkspaceSidebar.daemonAction(store.feed)
+        feedButton.title = action?.title ?? ""
+        feedButton.isHidden = action == nil
         if let awaited {
             if let row = state.row(.embedded(awaited.runtimeSessionID)) {
                 Self.logger.notice("workspace: awaited session \(awaited.runtimeSessionID, privacy: .public) is listed; showing it")
@@ -916,16 +964,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
+    /// What ending a session keeps. It names Past Sessions, where the pane
+    /// sends the operator once an agent has stopped (`resumeTitle`).
+    static let conversationKept = "The conversation stays on disk and can be resumed from Past Sessions."
+
     private func askToClose(_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "End \(row.displayName)?"
         if row.attention || row.working {
             alert.informativeText = (row.attention ? "Its agent is waiting on you." : "Its agent is working.")
-                + " Ending it loses the work in progress. The conversation stays on disk and can be resumed from the Dashboard."
+                + " Ending it loses the work in progress. \(Self.conversationKept)"
         } else {
-            alert.informativeText = "Its agent is idle and stops when the session ends."
-                + " The conversation stays on disk and can be resumed from the Dashboard."
+            alert.informativeText = "Its agent is idle and stops when the session ends. \(Self.conversationKept)"
         }
         alert.addButton(withTitle: "End Session").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
@@ -1151,6 +1202,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         } else {
             // No target and no action: the item is listed, greyed out.
             name.action = nil
+            name.isEnabled = false
             name.toolTip = Self.namingNeedsEmbedded
         }
         let pin = NSMenuItem(title: row.pinned ? Self.unpinSessionTitle : Self.pinSessionTitle,
@@ -1345,9 +1397,36 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// and a Kitty row comes forward in Kitty. With `sessionsOnly` the step
     /// is the same one and stays in the app, as F7 and F9 do.
     func selectNeighbor(_ offset: Int, raising: Bool = false, sessionsOnly: Bool = false) {
+        switch neighborStop(offset, skipping: raising || sessionsOnly) {
+        case let .row(row)?: go(to: row, raising: raising)
+        case let .view(view)?: showView(view.id, focus: true)
+        case .section?, .group?, nil: break
+        }
+    }
+
+    /// ↑ and ↓ in the session list while none of its lines is selected,
+    /// because the pane's session, or the terminal beside it, was collapsed
+    /// away: the step is from there, and stays in the list as an arrow key
+    /// does. False when the pane is on nothing, which leaves the key to the
+    /// list.
+    func stepFromUnlistedPlace(_ offset: Int) -> Bool {
+        guard place != nil else { return false }
+        switch neighborStop(offset, skipping: false) {
+        case let .row(row)?: select(row.key)
+        case let .view(view)?: showView(view.id, focus: false)
+        case .section?, .group?, nil: return false
+        }
+        return true
+    }
+
+    /// The line `offset` steps from where the pane is; see `selectNeighbor`.
+    private func neighborStop(_ offset: Int, skipping: Bool) -> Item? {
         let listed = state.embeddedRuntimeSessionIDs
-        let skipping = raising || sessionsOnly
-        let beside = skipping ? views.view(viewSelection)?.besideRuntimeSessionID : nil
+        // A terminal beside a session counts as standing just below it when
+        // terminals are passed over, or when its line was collapsed away.
+        let shownView = views.view(viewSelection)
+        let viewListed = shownView.map { items.contains(.view($0)) } ?? false
+        let beside = skipping || !viewListed ? shownView?.besideRuntimeSessionID : nil
         // A collapsed project lists none of its sessions, but the one the
         // pane is on still stands where its row would be, so the step is from
         // there rather than from the top.
@@ -1363,7 +1442,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             case .section, .group: return []
             }
         }
-        guard !stops.isEmpty else { return }
+        guard !stops.isEmpty else { return nil }
         let here = stops.firstIndex { item in
             switch item {
             case let .row(row):
@@ -1377,11 +1456,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let step = beside != nil && offset < 0 ? offset + 1 : offset
         let next = here.map { (($0 + step) % stops.count + stops.count) % stops.count }
             ?? (offset < 0 ? stops.count - 1 : 0)
-        switch stops[next] {
-        case let .row(row): go(to: row, raising: raising)
-        case let .view(view): showView(view.id, focus: true)
-        case .section, .group: break
-        }
+        return stops[next]
     }
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer
@@ -1939,7 +2014,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     static let resumeTitle = "Resume from Past Sessions"
-    static let startDaemonTitle = "Start Daemon"
+    static let startDaemonTitle = WorkspaceSidebar.DaemonAction.start.title
+    static let restartDaemonTitle = WorkspaceSidebar.DaemonAction.restart.title
+
+    /// Asks the app to start or restart the daemon, from the pane's button or
+    /// the one under the sidebar.
+    private func performDaemonAction(_ action: WorkspaceSidebar.DaemonAction) {
+        Self.logger.notice("workspace: the operator asked to \(action == .start ? "start" : "restart", privacy: .public) the daemon")
+        switch action {
+        case .start: delegate?.workspaceStartDaemon()
+        case .restart: delegate?.workspaceRestartDaemon()
+        }
+    }
+
+    @objc private func daemonButtonPressed(_ sender: Any?) {
+        guard let feed = delegate?.store.feed, let action = WorkspaceSidebar.daemonAction(feed) else { return }
+        performDaemonAction(action)
+    }
 
     private func fillPlaceholder(_ content: Content) {
         let row = state.selectedRow
@@ -1948,9 +2039,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             // Rows held from the last snapshot can still be chosen; with none
             // listed, what is wrong is the feed, not the sessions.
             if state.rows.isEmpty, let feed = delegate?.store.feed, let down = WorkspaceSidebar.feedExplanation(feed) {
-                placeholder.show(title: down.title, message: down.message,
-                                 button: down.startsDaemon ? Self.startDaemonTitle : nil) { [weak self] in
-                    self?.delegate?.workspaceStartDaemon()
+                placeholder.show(title: down.title, message: down.message, button: down.action?.title) { [weak self] in
+                    if let action = down.action { self?.performDaemonAction(action) }
                 }
                 break
             }
@@ -2018,7 +2108,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .detached(id):
             placeholder.show(
                 title: "Detached",
-                message: "This view let go of the session: it was attached somewhere else, or detached with F12. The agent is still running.",
+                message: "This window let go of the session: it was attached somewhere else, or detached with F12. The agent is still running.",
                 button: "Reattach",
                 isDefault: true
             ) { [weak self] in self?.reattach(id) }
@@ -2143,6 +2233,17 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         !self.tableView(tableView, isGroupRow: row)
     }
 
+    /// What the operator's click or key may select: never a heading, and
+    /// never nothing. A click on the list's empty space, or ⌘-click on the
+    /// selected line, keeps the line selected, so the pane stays where it
+    /// is and so does the place restored at the next launch. The workspace
+    /// still clears the selection itself (`syncSidebarSelection`).
+    func tableView(_ tableView: NSTableView, selectionIndexesForProposedSelection proposed: IndexSet) -> IndexSet {
+        let selectable = proposed.filteredIndexSet { $0 < items.count && self.tableView(tableView, shouldSelectRow: $0) }
+        if selectable.isEmpty, !applying { return tableView.selectedRowIndexes }
+        return selectable
+    }
+
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         switch items[row] {
         case .section, .group: return 24
@@ -2205,10 +2306,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard !applying else { return }
         let index = sidebar.selectedRow
-        guard index >= 0, index < items.count else {
-            select(nil)
-            return
-        }
+        // The operator cannot empty the list's selection
+        // (`selectionIndexesForProposedSelection`); should it empty anyway,
+        // the pane stays where it is rather than going blank.
+        guard index >= 0, index < items.count else { return }
         switch items[index] {
         case let .row(row): select(row.key)
         case let .view(view): showView(view.id, focus: false)
@@ -2584,11 +2685,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.action = #selector(rowClicked(_:))
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
         sidebar.onCollapse = { [weak self] collapsed in self?.setSelectedProjectCollapsed(collapsed) }
+        sidebar.onStep = { [weak self] offset in self?.stepFromUnlistedPlace(offset) ?? false }
         sidebar.hasMenu = { [weak self] row in !(self?.contextMenuItems(forRow: row).isEmpty ?? true) }
         sidebar.registerForDraggedTypes([Self.dragType])
         sidebar.setDraggingSourceOperationMask(.move, forLocal: true)
         sidebar.setDraggingSourceOperationMask([], forLocal: false)
         let context = NSMenu()
+        // Each item says itself whether it can be chosen: End Session… is
+        // greyed out on a session already closing, which validation would
+        // otherwise turn back on.
+        context.autoenablesItems = false
         context.delegate = self
         sidebar.menu = context
         sidebar.setAccessibilityLabel("Sessions")
@@ -2610,7 +2716,15 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         feedLabel.isHidden = true
         feedLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [scroll, feedLabel])
+        feedButton.bezelStyle = .rounded
+        feedButton.controlSize = .small
+        feedButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        feedButton.target = self
+        feedButton.action = #selector(daemonButtonPressed(_:))
+        feedButton.isHidden = true
+        feedButton.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = NSStackView(views: [scroll, feedLabel, feedButton])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 4
@@ -2622,6 +2736,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             feedLabel.leadingAnchor.constraint(equalTo: stack.leadingAnchor, constant: 10),
             // As wide as the sidebar, so a long notice wraps there.
             feedLabel.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: -10),
+            feedButton.leadingAnchor.constraint(equalTo: stack.leadingAnchor, constant: 10),
         ])
 
         placeholder.frame = pane.bounds
@@ -2810,6 +2925,9 @@ final class WorkspaceSidebarView: NSTableView {
     var onReturn: (() -> Void)?
     /// ← (true) or → (false).
     var onCollapse: ((Bool) -> Void)?
+    /// ↑ (-1) or ↓ (1) while no line is selected; false leaves the key to
+    /// the list.
+    var onStep: ((Int) -> Bool)?
     /// Whether the line at an index has anything for its right-click menu;
     /// one that has nothing shows no menu rather than an empty one.
     var hasMenu: ((Int) -> Bool)?
@@ -2831,6 +2949,14 @@ final class WorkspaceSidebarView: NSTableView {
         if let collapsed = arrows[event.keyCode],
            event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]) {
             onCollapse?(collapsed)
+            return
+        }
+        // With no line selected — the pane's session was collapsed away —
+        // ↑ and ↓ go from that session, not from the top of the list.
+        let steps: [UInt16: Int] = [126: -1, 125: 1]
+        if selectedRow < 0, let offset = steps[event.keyCode],
+           event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]),
+           onStep?(offset) == true {
             return
         }
         super.keyDown(with: event)

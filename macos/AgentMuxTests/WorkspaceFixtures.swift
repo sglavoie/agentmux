@@ -206,6 +206,13 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
         daemonStarts += 1
     }
 
+    /// How many times the workspace asked for the daemon to be restarted.
+    private(set) var daemonRestarts = 0
+
+    func workspaceRestartDaemon() {
+        daemonRestarts += 1
+    }
+
     /// The desktop notifications terminals asked for, in order, and whether
     /// each came from what the key window showed.
     private(set) var terminalNotices: [(notice: TerminalNotice, onScreen: Bool)] = []

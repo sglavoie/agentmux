@@ -64,11 +64,18 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertEqual(app.made, [], "starting the daemon starts no agent")
 
         app.store.apply(.disconnected(.unsupported, retryIn: 0.5))
-        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Daemon too old — run amx daemon restart")
-        XCTAssertTrue(workspace.placeholder.button.isHidden, "a restart is the operator's, from a terminal")
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Daemon too old — choose Restart Daemon")
+        XCTAssertEqual(workspace.placeholder.button.title, WorkspaceWindowController.restartDaemonTitle)
+        XCTAssertFalse(workspace.placeholder.button.isHidden, "the Restart Daemon the notice names")
+        workspace.placeholder.press()
+        XCTAssertEqual(app.daemonRestarts, 1)
+        XCTAssertEqual(app.daemonStarts, 1)
 
         app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Reconnecting…")
+        XCTAssertFalse(workspace.placeholder.messageLabel.stringValue.contains("listed are"),
+                       "nothing is listed, so it does not speak of the sessions listed")
+        XCTAssertTrue(workspace.placeholder.button.isHidden, "nothing to do but wait")
         XCTAssertEqual(waitingNote, "Reconnecting… (the daemon is not answering)")
 
         app.store.apply(snapshot: F.snapshot([]))
