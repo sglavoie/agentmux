@@ -267,6 +267,16 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         XCTAssertEqual(switcher.lastAnnouncement, WorkspaceSwitcherView.spoken(selected))
         XCTAssertTrue(switcher.lastAnnouncement?.hasPrefix(selected.title) ?? false)
 
+        // Typing filters the list under a field that keeps the keyboard:
+        // what is left is said too.
+        switcher.enter("personal")
+        let top = try XCTUnwrap(switcher.selected)
+        XCTAssertEqual(switcher.lastAnnouncement,
+                       WorkspaceSwitcherView.spokenMatches(switcher.shown.count, top: top))
+        XCTAssertEqual(WorkspaceSwitcherView.spokenMatches(1, top: top), "1 match, \(WorkspaceSwitcherView.spoken(top))")
+        switcher.enter("nothing here")
+        XCTAssertEqual(switcher.lastAnnouncement, WorkspaceSwitcherView.noMatches)
+
         let cell = WorkspaceSwitcherCellView()
         cell.show(WorkspaceSwitcher.Entry(place: .view("dashboard"), glyph: "", title: "Dashboard", detail: "The TUI"))
         XCTAssertEqual(cell.accessibilityLabel(), "Dashboard, The TUI")

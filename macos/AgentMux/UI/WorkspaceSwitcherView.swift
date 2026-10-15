@@ -123,7 +123,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     /// Types a query, as the keyboard would.
     func enter(_ query: String) {
         field.stringValue = query
-        filter(keeping: nil)
+        typed()
     }
 
     var selected: WorkspaceSwitcher.Entry? {
@@ -148,11 +148,28 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     private(set) var lastAnnouncement: String?
 
     private func announce(_ entry: WorkspaceSwitcher.Entry) {
-        let spoken = Self.spoken(entry)
+        announce(Self.spoken(entry), priority: .high)
+    }
+
+    private func announce(_ spoken: String, priority: NSAccessibilityPriorityLevel) {
         lastAnnouncement = spoken
         NSAccessibility.post(element: field, notification: .announcementRequested,
-                             userInfo: [.announcement: spoken,
-                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
+                             userInfo: [.announcement: spoken, .priority: priority.rawValue])
+    }
+
+    /// What VoiceOver says after a keystroke filters the list: how many
+    /// places match, and the one Return goes to.
+    nonisolated static func spokenMatches(_ count: Int, top: WorkspaceSwitcher.Entry?) -> String {
+        guard count > 0, let top else { return noMatches }
+        return "\(count == 1 ? "1 match" : "\(count) matches"), \(spoken(top))"
+    }
+
+    /// The query changed: the list is filtered and, since the field keeps
+    /// the keyboard, what it now holds is said aloud at a priority that
+    /// lets the typing echo first.
+    private func typed() {
+        filter(keeping: nil)
+        announce(Self.spokenMatches(shown.count, top: selected), priority: .medium)
     }
 
     /// Goes to the selected place. With nothing matching there is none, and
@@ -189,7 +206,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     // MARK: Field
 
     func controlTextDidChange(_ notification: Notification) {
-        filter(keeping: nil)
+        typed()
     }
 
     func controlTextDidEndEditing(_ notification: Notification) {
