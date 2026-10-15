@@ -185,8 +185,9 @@ final class WorkspaceFindBar: NSView, NSSearchFieldDelegate {
 }
 
 /// The scrollbar over a utility view, drawn from where Ghostty says the
-/// viewport sits in the terminal's own buffer. Dragging the knob, or
-/// clicking the track, scrolls the terminal there (`scroll_to_row`).
+/// viewport sits in the terminal's own buffer. Dragging the knob scrolls the
+/// terminal there (`scroll_to_row`). The track is the terminal's last
+/// column: a click or a selection there reaches the terminal.
 @MainActor
 final class WorkspaceScrollbarView: NSView {
     static let width: CGFloat = 10
@@ -285,11 +286,18 @@ final class WorkspaceScrollbarView: NSView {
         NSBezierPath(roundedRect: knob, xRadius: knob.width / 2, yRadius: knob.width / 2).fill()
     }
 
+    /// Only the knob takes the pointer; the rest of the strip passes it to
+    /// the terminal underneath.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !isHidden, let scrollbar, scrollbar.scrolls, let superview else { return nil }
+        let local = convert(point, from: superview)
+        return Self.knobRect(scrollbar, in: bounds).contains(local) ? self : nil
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard let scrollbar else { return }
         let point = convert(event.locationInWindow, from: nil)
         let knob = Self.knobRect(scrollbar, in: bounds)
-        // A click on the track brings the knob's middle there.
         grab = knob.contains(point) ? point.y - knob.midY : 0
         lastRow = nil
         drag(to: point)

@@ -98,6 +98,18 @@ final class WorkspaceTerminalOverlaysTests: XCTestCase {
         XCTAssertNotEqual(light.0, dark.0, "the background changes with the appearance")
     }
 
+    func testOnlyTheScrollbarsKnobTakesThePointer() {
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        let bar = WorkspaceScrollbarView(frame: NSRect(x: 390, y: 0, width: 10, height: 200))
+        host.addSubview(bar)
+        bar.scrollbar = Ghostty.Scrollbar(total: 124, offset: 0, len: 24)
+        let knob = WorkspaceScrollbarView.knobRect(bar.scrollbar!, in: bar.bounds)
+        XCTAssertTrue(bar.hitTest(NSPoint(x: 395, y: knob.midY)) === bar, "the knob is taken")
+        XCTAssertNil(bar.hitTest(NSPoint(x: 395, y: 5)), "the track is the terminal's")
+        bar.scrollbar = Ghostty.Scrollbar(total: 24, offset: 0, len: 24)
+        XCTAssertNil(bar.hitTest(NSPoint(x: 395, y: 195)), "nothing to scroll, nothing taken")
+    }
+
     func testTheScrollbarMapsRowsToTheKnobAndBack() {
         let bottom = Ghostty.Scrollbar(total: 124, offset: 100, len: 24)
         XCTAssertTrue(bottom.scrolls)
