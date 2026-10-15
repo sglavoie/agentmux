@@ -109,7 +109,7 @@ enum ASLResponse {
     static func buttons(_ kind: ASLResponseKind) -> [ASLResponseButton] {
         switch kind {
         case .paused:
-            return [ASLResponseButton(label: "Reply and resume", method: ASLMethod.runResume, needsText: true)]
+            return [ASLResponseButton(label: "Reply and Resume", method: ASLMethod.runResume, needsText: true)]
         case .live:
             return [
                 ASLResponseButton(label: "Reply", method: ASLMethod.questionReply, needsText: true),
@@ -171,17 +171,18 @@ enum ASLResponse {
     static func refusal(row: ASLRow, method: String, view: ASLView, status: ASLStatus) -> String? {
         switch view {
         case .live: break
-        case .stale: return "actions are unavailable: this snapshot is read-only"
-        case .unavailable: return "actions are unavailable: agent-session-loop is not reachable"
+        case .stale: return "Actions are unavailable: this snapshot is read-only"
+        case .unavailable: return "Actions are unavailable: agent-session-loop is not reachable"
         }
         if !status.mutationsEnabled {
-            return "actions are unavailable: the daemon reports agent-session-loop mutations as disabled"
+            return "Actions are unavailable: the daemon reports agent-session-loop mutations as disabled"
         }
         if row.actionToken.trimmingCharacters(in: .whitespaces).isEmpty {
-            return "actions are unavailable: this run carries no action token"
+            return "Actions are unavailable: this run carries no action token"
         }
         if row.actions.contains(method) { return nil }
-        let label = ASLRefusal.methodLabel(method)
+        let name = ASLRefusal.methodLabel(method)
+        let label = name.prefix(1).uppercased() + name.dropFirst()
         let reason = row.disabledReasons[method]?.trimmingCharacters(in: .whitespaces) ?? ""
         if !reason.isEmpty { return "\(label) is unavailable: \(reason)" }
         return "\(label) is unavailable for this run"
@@ -247,42 +248,42 @@ enum ASLRefusal {
     static func text(_ error: ASLRequestError) -> String {
         switch error {
         case .notRunning:
-            return "the daemon is not running: nothing was sent"
+            return "The daemon is not running: nothing was sent"
         case .unsupported:
-            return "Daemon too old to answer questions — run amx daemon restart"
+            return "Daemon too old to answer questions — \(MenuBuilder.restartHint)"
         case .refused, .transport:
             break
         }
         switch code(error) {
         case "empty-text":
-            return "the answer is empty: type a reply before submitting"
+            return "The answer is empty: type a reply before submitting"
         case "question-body-too-large":
-            return "this question is too large to show here: open it in the agent-session-loop Workbench"
+            return "This question is too large to show here: open it in the agent-session-loop Workbench"
         case "missing-question-body":
-            return "this question carries no readable text: open it in the agent-session-loop Workbench"
+            return "This question carries no readable text: open it in the agent-session-loop Workbench"
         case "invalid-plan":
             return "agent-session-loop no longer recognizes this plan directory"
         case "mutation-failed":
             return "agent-session-loop could not record the action; nothing was applied"
         case "workbench-unavailable":
-            return "the Workbench is unavailable in this bridge session"
+            return "The Workbench is unavailable in this bridge session"
         case "invalid-request", "invalid-action":
-            return "the daemon refused the request as malformed"
+            return "The daemon refused the request as malformed"
         case "unknown-method", "unsupported-protocol":
-            return "this agent-session-loop build does not support this action"
+            return "This agent-session-loop build does not support this action"
         case "contract-set-mismatch":
-            return "agent mux and agent-session-loop were built from different contract sets: update the older one"
+            return "Agent Mux and agent-session-loop were built from different contract sets: update the older one"
         case "malformed-json", "frame-too-large", "internal-error":
             return "agent-session-loop reported an internal error"
         default:
-            return "the action did not complete; its outcome is unknown and it was not retried"
+            return "The action did not complete; its outcome is unknown and it was not retried"
         }
     }
 
     /// Why a question body could not be read. A read applies nothing, so it
     /// never borrows an action's "outcome is unknown" wording.
     static func readText(_ error: ASLRequestError) -> String {
-        let prefix = "could not load the question"
+        let prefix = "Could not load the question"
         switch error {
         case .notRunning: return "\(prefix): the daemon is not running"
         case .unsupported: return text(error)
@@ -591,7 +592,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         let text = draft
         if button.needsText, text.isBlank {
             // Nothing went wrong: the reply is still to be typed.
-            note("the answer is empty: type a reply before submitting", .info)
+            note("The answer is empty: type a reply before submitting", .info)
             return nil
         }
         if pending.operationID.isEmpty || pending.method != button.method || pending.resolution != button.resolution {
@@ -600,7 +601,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         } else if button.needsText, let sent = pending.text, sent != text {
             // Never a new ID behind the operator's back, and never other
             // words under the old one.
-            note(Self.retryCaption, .error)
+            note(retryCaption, .error)
             return nil
         }
         var params = ASLRequestParams(
@@ -621,8 +622,12 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         return .act(seq: actionSeq, params)
     }
 
-    /// The caption under a reply locked for its retry.
-    static let retryCaption = "Retry sends the answer as first submitted"
+    /// The caption under a reply locked for its retry, naming the button
+    /// that sends it again.
+    var retryCaption: String {
+        let button = ASLResponse.buttons(kind).first(where: \.needsText)?.label ?? "Reply"
+        return "\(button) sends the answer as first submitted"
+    }
 
     /// `handleASLActionDone`. A refusal that means the run moved closes the
     /// question in place; any other failure keeps it, with its pending operation ID, so a
@@ -654,7 +659,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         let remaining = questionIDs.filter { $0 != answeredID }
         if kind == .paused || remaining.isEmpty {
             let run = target.label.isEmpty ? "the run" : target.label
-            let notice = "the answer to \(run) was \(status)"
+            let notice = "The answer to \(run) was \(status)"
             self = ASLResponseState()
             return .close(notice: notice)
         }

@@ -83,7 +83,7 @@ final class ASLQuestionFlowTests: XCTestCase {
         XCTAssertEqual(service.calls, ["asl_snapshot", "asl_question q-api-1", "asl_action question.reply"])
         XCTAssertEqual(service.actions.first?.actionToken, "token-reply")
         XCTAssertEqual(service.actions.first?.text.reveal(), "yes, after the cutover")
-        XCTAssertEqual(closes, ["the answer to api migration was accepted"], "the panel closed itself and said so")
+        XCTAssertEqual(closes, ["The answer to api migration was accepted"], "the panel closed itself and said so")
         XCTAssertEqual(flow.phase, .idle)
         XCTAssertEqual(flow.state, ASLResponseState(), "the body and draft are cleared")
     }
@@ -94,11 +94,11 @@ final class ASLQuestionFlowTests: XCTestCase {
         service.bodies["q-web-1"] = .success(ASLFixtures.body(row, "q-web-1", "Paused: proceed?"))
         let flow = flow()
         flow.open(ASLAnswerTarget(runID: "run-paused"))
-        XCTAssertEqual(flow.state.buttons.map(\.label), ["Reply and resume"])
+        XCTAssertEqual(flow.state.buttons.map(\.label), ["Reply and Resume"])
         flow.setDraft("proceed")
         flow.submit(flow.state.buttons[0])
         XCTAssertEqual(service.actions.map(\.method), [ASLMethod.runResume])
-        XCTAssertEqual(closes, ["the answer to web was accepted"])
+        XCTAssertEqual(closes, ["The answer to web was accepted"])
     }
 
     func testRemainingQuestionsAreAnsweredInTurn() {
@@ -119,7 +119,7 @@ final class ASLQuestionFlowTests: XCTestCase {
         XCTAssertEqual(service.actions.map(\.questionID), ["q-api-1", "q-api-2"])
         XCTAssertEqual(service.actions.map(\.actionToken), ["token-reply", "token-reply-2"])
         XCTAssertEqual(service.actions.last?.resolution, "continue")
-        XCTAssertEqual(closes, ["the answer to api migration was accepted"])
+        XCTAssertEqual(closes, ["The answer to api migration was accepted"])
     }
 
     func testTheEditorTakesTheKeyboardWhenOpenedAndAfterEachAnswer() {
@@ -195,23 +195,23 @@ final class ASLQuestionFlowTests: XCTestCase {
         let flow = flow()
         serve([ASLFixtures.replyRow()])
         flow.open(ASLAnswerTarget(runID: "run-gone"))
-        XCTAssertEqual(flow.phase, .refused("this run is no longer waiting on an answer"))
+        XCTAssertEqual(flow.phase, .refused("This run is no longer waiting on an answer"))
 
         service.snapshotResult = .failure(.refused("asl bridge disabled: \"secret\""))
         flow.open(ASLAnswerTarget(runID: "run-reply"))
-        XCTAssertEqual(flow.phase, .refused("could not load the question"))
+        XCTAssertEqual(flow.phase, .refused("Could not load the question"))
 
         service.snapshotResult = .failure(.transport("timed out"))
         flow.open(ASLAnswerTarget(runID: "run-api"))
-        XCTAssertEqual(flow.phase, .refused("could not load the question: agent-session-loop did not answer"))
+        XCTAssertEqual(flow.phase, .refused("Could not load the question: agent-session-loop did not answer"))
 
         service.snapshotResult = .failure(.notRunning)
         flow.open(ASLAnswerTarget(runID: "run-other"))
-        XCTAssertEqual(flow.phase, .refused("the daemon is not running: nothing was sent"))
+        XCTAssertEqual(flow.phase, .refused("The daemon is not running: nothing was sent"))
 
         serve([ASLFixtures.replyRow()], status: ASLStatus(available: true))
         flow.open(ASLAnswerTarget(runID: "run-reply"))
-        XCTAssertEqual(flow.phase, .refused("actions are unavailable: the daemon reports agent-session-loop mutations as disabled"))
+        XCTAssertEqual(flow.phase, .refused("Actions are unavailable: the daemon reports agent-session-loop mutations as disabled"))
         XCTAssertTrue(service.actions.isEmpty)
         XCTAssertTrue(closes.isEmpty)
     }
@@ -319,7 +319,7 @@ final class ASLQuestionFlowTests: XCTestCase {
 
         serve([])
         flow.open(ASLAnswerTarget(runID: "run-reply"))
-        XCTAssertEqual(flow.phase, .refused("this run is no longer waiting on an answer"))
+        XCTAssertEqual(flow.phase, .refused("This run is no longer waiting on an answer"))
         XCTAssertTrue(flow.keptDrafts(run: "run-reply").isEmpty)
 
         serve([row])
@@ -351,16 +351,16 @@ final class ASLQuestionFlowTests: XCTestCase {
         flow.cancel()
         XCTAssertTrue(ASLQuestionPanelController.mayClose(flow))
         runner.release() // the action's reply
-        XCTAssertEqual(late, ["the answer to api migration was accepted"])
+        XCTAssertEqual(late, ["The answer to api migration was accepted"])
         XCTAssertTrue(closes.isEmpty, "a late result never closes a panel opened since")
         XCTAssertTrue(flow.keptDrafts(run: "run-reply").isEmpty, "the answered draft is not kept")
     }
 
     func testLateNotices() {
         XCTAssertEqual(ASLQuestionFlow.lateNotice(label: "", .failure(.refused("no-open-question: x"))),
-                       "the answer to the run was not applied: the run changed since it was selected")
+                       "The answer to the run was not applied: the run changed since it was selected")
         XCTAssertEqual(ASLQuestionFlow.lateNotice(label: "api", .failure(.transport("t"))),
-                       "the answer to api did not complete: the action did not complete; its outcome is unknown and it was not retried")
+                       "The answer to api did not complete. The action did not complete; its outcome is unknown and it was not retried")
     }
 
     func testABodyThatFailedToLoadLoadsAgain() {

@@ -72,7 +72,7 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertEqual(ASLResponse.buttons(.live).map(\.resolution), ["", "continue", "pause"])
         XCTAssertEqual(ASLResponse.buttons(.live).map(\.needsText), [true, false, false])
         XCTAssertEqual(ASLResponse.buttons(.paused),
-                       [ASLResponseButton(label: "Reply and resume", method: ASLMethod.runResume, needsText: true)])
+                       [ASLResponseButton(label: "Reply and Resume", method: ASLMethod.runResume, needsText: true)])
     }
 
     func testKindForAndGateMethod() {
@@ -105,22 +105,22 @@ final class ASLResponseStateTests: XCTestCase {
             if case let .refused(reason) = ASLResponseState.open(row: row, view: view, status: status) { return reason }
             return nil
         }
-        XCTAssertEqual(refusal(row, view: .stale), "actions are unavailable: this snapshot is read-only")
-        XCTAssertEqual(refusal(row, view: .unavailable), "actions are unavailable: agent-session-loop is not reachable")
+        XCTAssertEqual(refusal(row, view: .stale), "Actions are unavailable: this snapshot is read-only")
+        XCTAssertEqual(refusal(row, view: .unavailable), "Actions are unavailable: agent-session-loop is not reachable")
         XCTAssertEqual(refusal(row, status: ASLStatus(available: true)),
-                       "actions are unavailable: the daemon reports agent-session-loop mutations as disabled")
+                       "Actions are unavailable: the daemon reports agent-session-loop mutations as disabled")
         var tokenless = row
         tokenless.actionToken = "  "
-        XCTAssertEqual(refusal(tokenless), "actions are unavailable: this run carries no action token")
+        XCTAssertEqual(refusal(tokenless), "Actions are unavailable: this run carries no action token")
         var disabled = row
         disabled.actions = []
         disabled.disabledReasons = [ASLMethod.questionReply: "the question was withdrawn"]
-        XCTAssertEqual(refusal(disabled), "reply is unavailable: the question was withdrawn")
+        XCTAssertEqual(refusal(disabled), "Reply is unavailable: the question was withdrawn")
         disabled.disabledReasons = [:]
-        XCTAssertEqual(refusal(disabled), "reply is unavailable for this run")
+        XCTAssertEqual(refusal(disabled), "Reply is unavailable for this run")
         var paused = ASLFixtures.pausedRow()
         paused.actions = []
-        XCTAssertEqual(refusal(paused), "resume is unavailable for this run")
+        XCTAssertEqual(refusal(paused), "Resume is unavailable for this run")
         XCTAssertNil(refusal(row))
     }
 
@@ -178,7 +178,7 @@ final class ASLResponseStateTests: XCTestCase {
         state.setDraft("  \n ")
         XCTAssertFalse(state.canSubmit(state.buttons[0]))
         XCTAssertNil(state.submit(state.buttons[0], mint: mint))
-        XCTAssertEqual(state.notice, "the answer is empty: type a reply before submitting")
+        XCTAssertEqual(state.notice, "The answer is empty: type a reply before submitting")
         XCTAssertEqual(state.noticeKind, .info, "a reply still to be typed is no error")
         XCTAssertFalse(state.inFlight)
         XCTAssertTrue(state.canSubmit(state.buttons[1]), "Continue needs no answer")
@@ -187,16 +187,26 @@ final class ASLResponseStateTests: XCTestCase {
     func testPausedRunOffersOnlyReplyAndResume() {
         var state = opened(ASLFixtures.pausedRow(), body: "The run paused: proceed?")
         XCTAssertEqual(state.kind, .paused)
-        XCTAssertEqual(state.buttons.map(\.label), ["Reply and resume"])
+        XCTAssertEqual(state.buttons.map(\.label), ["Reply and Resume"])
         state.setDraft("proceed with the migration")
         let effect = state.submit(state.buttons[0], mint: mint)
         guard case let .act(seq, sent) = effect else { return XCTFail("no submission: \(String(describing: effect))") }
         XCTAssertEqual(sent.method, ASLMethod.runResume)
         XCTAssertEqual(sent.text.reveal(), "proceed with the migration")
         let after = state.actionFinished(seq: seq, .success(ASLOperation(operationID: sent.operationID, status: "accepted")))
-        XCTAssertEqual(after, .close(notice: "the answer to web was accepted"), "a resume closes the form and says so")
+        XCTAssertEqual(after, .close(notice: "The answer to web was accepted"), "a resume closes the form and says so")
         XCTAssertFalse(state.active)
         XCTAssertTrue(state.drafts.isEmpty)
+    }
+
+    func testRetryCaptionNamesTheButtonThatSendsTheAnswerAgain() {
+        XCTAssertEqual(opened().retryCaption, "Reply sends the answer as first submitted")
+        XCTAssertEqual(opened(ASLFixtures.pausedRow()).retryCaption, "Reply and Resume sends the answer as first submitted")
+    }
+
+    func testATooOldDaemonIsSentToRestartDaemon() {
+        XCTAssertTrue(ASLRefusal.text(.unsupported).hasSuffix(MenuBuilder.restartHint),
+                      "the menu offers Restart Daemon only beside a notice that names it")
     }
 
     func testNavigatesQuestionsAndFetchesEachBodySeparately() {
@@ -257,7 +267,7 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertNotEqual(first.operationID, second.operationID)
 
         XCTAssertEqual(state.actionFinished(seq: seq2, .success(ASLOperation(status: "accepted"))),
-                       .close(notice: "the answer to api migration was accepted"))
+                       .close(notice: "The answer to api migration was accepted"))
         XCTAssertEqual(state, ASLResponseState(), "the form is cleared after its last question")
     }
 
@@ -295,7 +305,7 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertNil(state.actionFinished(seq: seq, .failure(.transport("read timed out"))))
         XCTAssertTrue(state.active)
         XCTAssertEqual(state.status, "failed")
-        XCTAssertEqual(state.notice, "the action did not complete; its outcome is unknown and it was not retried")
+        XCTAssertEqual(state.notice, "The action did not complete; its outcome is unknown and it was not retried")
         XCTAssertEqual(state.noticeKind, .error)
         XCTAssertEqual(state.draft.reveal(), "an answer", "the draft survives an ambiguous outcome")
 
@@ -350,7 +360,7 @@ final class ASLResponseStateTests: XCTestCase {
         // Even a draft that changed some other way never goes under the old ID.
         state.drafts[state.target.questionID] = "edited words"
         XCTAssertNil(state.submit(state.buttons[0], mint: mint))
-        XCTAssertEqual(state.notice, ASLResponseState.retryCaption)
+        XCTAssertEqual(state.notice, "Reply sends the answer as first submitted")
         XCTAssertEqual(state.pending.operationID, first.operationID, "no new ID is minted silently")
 
         state.drafts[state.target.questionID] = "first words"
@@ -386,7 +396,7 @@ final class ASLResponseStateTests: XCTestCase {
         // A draft changed some other way is refused without losing the ID.
         state.drafts["q-api-1"] = "changed words"
         XCTAssertNil(state.submit(state.buttons[0], mint: mint))
-        XCTAssertEqual(state.notice, ASLResponseState.retryCaption)
+        XCTAssertEqual(state.notice, "Reply sends the answer as first submitted")
         XCTAssertEqual(state.pending.operationID, first.operationID, "no new ID is minted silently")
 
         state.drafts["q-api-1"] = "first words"
@@ -512,6 +522,8 @@ final class ASLResponseStateTests: XCTestCase {
             XCTAssertEqual(ASLRefusal.code(error), code)
             let text = ASLRefusal.text(error)
             XCTAssertFalse(text.contains("backfill"), "\(code) repeats the bridge message: \(text)")
+            XCTAssertTrue(text.first?.isUppercase == true || text.hasPrefix("agent-session-loop"),
+                          "\(code) starts a sentence: \(text)")
             if stale {
                 XCTAssertTrue(ASLRefusal.isStale(error), code)
             } else {
@@ -567,7 +579,7 @@ final class ASLResponseStateTests: XCTestCase {
         var state = opened
         XCTAssertNil(state.questionLoaded(seq: seq, .failure(.transport("read timed out"))))
         XCTAssertTrue(state.loadFailed)
-        XCTAssertEqual(state.notice, "could not load the question: agent-session-loop did not answer")
+        XCTAssertEqual(state.notice, "Could not load the question: agent-session-loop did not answer")
         XCTAssertEqual(state.noticeKind, .error)
         state.setDraft("an answer")
         XCTAssertFalse(state.canSubmit(state.buttons[0]))
@@ -596,7 +608,7 @@ final class ASLResponseStateTests: XCTestCase {
             return XCTFail("did not advance")
         }
         XCTAssertNil(state.questionLoaded(seq: fetchSeq, .failure(.notRunning)))
-        XCTAssertEqual(state.notice, "could not load the question: the daemon is not running")
+        XCTAssertEqual(state.notice, "Could not load the question: the daemon is not running")
         XCTAssertTrue(state.reauthorize)
         guard case let .fetch(again, _, _) = state.reload() else { return XCTFail("Load Again did not fetch") }
         XCTAssertEqual(state.disabledReason(state.buttons[1]), "Re-authorizing…")
@@ -608,8 +620,8 @@ final class ASLResponseStateTests: XCTestCase {
 
     func testReadTextNeverUsesActionWording() {
         XCTAssertEqual(ASLRefusal.readText(.refused("internal-error: x")),
-                       "could not load the question: agent-session-loop reported an internal error")
-        XCTAssertEqual(ASLRefusal.readText(.refused("something-new: \"secret\"")), "could not load the question")
+                       "Could not load the question: agent-session-loop reported an internal error")
+        XCTAssertEqual(ASLRefusal.readText(.refused("something-new: \"secret\"")), "Could not load the question")
         XCTAssertEqual(ASLRefusal.readText(.refused("question-body-too-large: x")),
                        ASLRefusal.text(.refused("question-body-too-large: x")))
         XCTAssertEqual(ASLRefusal.readText(.unsupported), ASLRefusal.text(.unsupported))

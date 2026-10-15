@@ -198,11 +198,11 @@ final class ASLQuestionFlow: ObservableObject {
         let run = label.isEmpty ? "the run" : label
         switch result {
         case let .success(operation):
-            return "the answer to \(run) was \(ASLResponse.operationState(operation.status))"
+            return "The answer to \(run) was \(ASLResponse.operationState(operation.status))"
         case let .failure(error) where ASLRefusal.isStale(error):
-            return "the answer to \(run) was not applied: the run changed since it was selected"
+            return "The answer to \(run) was not applied: the run changed since it was selected"
         case let .failure(error):
-            return "the answer to \(run) did not complete: \(ASLRefusal.text(error))"
+            return "The answer to \(run) did not complete. \(ASLRefusal.text(error))"
         }
     }
 
@@ -218,7 +218,7 @@ final class ASLQuestionFlow: ObservableObject {
             let rows = result.snapshot?.rows ?? []
             guard let row = target.row(in: rows) else {
                 if !target.runID.isEmpty { keptDrafts[target.runID] = nil }
-                phase = .refused("this run is no longer waiting on an answer")
+                phase = .refused("This run is no longer waiting on an answer")
                 return
             }
             let view = ASLView.of(status: result.status, meta: result.meta, hasRows: !rows.isEmpty)
@@ -389,7 +389,7 @@ struct ASLQuestionView: View {
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.4)))
             .disabled(state.inFlight || state.draftLocked)
         if state.draftLocked {
-            Text(ASLResponseState.retryCaption).font(.caption).foregroundStyle(.secondary)
+            Text(state.retryCaption).font(.caption).foregroundStyle(.secondary)
         }
         if !state.notice.isEmpty {
             Text(state.notice).font(.callout).foregroundStyle(state.noticeKind.color)
@@ -546,7 +546,7 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: true
         )
-        panel.title = "Agent Mux — Supervisor question"
+        panel.title = "Agent Mux — Supervisor Question"
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
