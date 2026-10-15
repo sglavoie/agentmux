@@ -191,6 +191,48 @@ final class ASLQuestionFlowTests: XCTestCase {
         XCTAssertTrue(closes.isEmpty)
     }
 
+    func testAnsweringAgainAfterTheQuestionClosedReadsTheRunAfresh() {
+        let row = ASLFixtures.replyRow()
+        serve([row])
+        service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "First?"))
+        let flow = flow()
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        flow.observe(waiting: [])
+        XCTAssertTrue(flow.state.closed)
+
+        var next = ASLFixtures.replyRow()
+        next.question?.questionID = "q-api-2"
+        next.question?.questionIDs = ["q-api-2"]
+        serve([next])
+        service.bodies["q-api-2"] = .success(ASLFixtures.body(next, "q-api-2", "Second?"))
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        XCTAssertEqual(flow.phase, .open)
+        XCTAssertFalse(flow.state.closed, "the run's new question, not the closed one")
+        XCTAssertEqual(flow.state.body.reveal(), "Second?")
+        XCTAssertEqual(service.calls.filter { $0 == "asl_snapshot" }.count, 2)
+    }
+
+    func testUnsentRepliesAreCountedForTheQuitQuestion() {
+        let row = ASLFixtures.replyRow()
+        serve([row])
+        service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "First?"))
+        let runner = HeldRunner()
+        let flow = flow(runner: runner)
+        XCTAssertTrue(flow.unsent == (0, false))
+        flow.open(ASLAnswerTarget(runID: "run-reply"))
+        runner.release()
+        runner.release()
+        flow.setDraft("half written")
+        XCTAssertTrue(flow.unsent == (1, false))
+        flow.cancel()
+        XCTAssertTrue(flow.unsent == (1, false), "a draft kept for the run is still unsent")
+
+        XCTAssertNil(ASLQuestionFlow.quitQuestion(drafts: 0, sending: false))
+        XCTAssertEqual(ASLQuestionFlow.quitQuestion(drafts: 1, sending: false)?.title, "Quit with an unsent reply?")
+        XCTAssertEqual(ASLQuestionFlow.quitQuestion(drafts: 2, sending: false)?.title, "Quit with 2 unsent replies?")
+        XCTAssertEqual(ASLQuestionFlow.quitQuestion(drafts: 0, sending: true)?.title, "Quit while a reply is being sent?")
+    }
+
     func testRefusalsShowTheFixedSentence() {
         let flow = flow()
         serve([ASLFixtures.replyRow()])

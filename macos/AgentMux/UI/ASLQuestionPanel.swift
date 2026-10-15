@@ -97,10 +97,11 @@ final class ASLQuestionFlow: ObservableObject {
     }
 
     /// Opens the form for `target`. Asking again for the run already open
-    /// keeps it, drafts and all.
+    /// keeps it, drafts and all, unless its question has closed: the run is
+    /// asking again, so its new question is read afresh.
     func open(_ target: ASLAnswerTarget) {
         shown += 1
-        if answering == target, phase == .loading || phase == .open { return }
+        if answering == target, phase == .loading || (phase == .open && !state.closed) { return }
         keepDrafts()
         reset()
         answering = target
@@ -157,6 +158,28 @@ final class ASLQuestionFlow: ObservableObject {
     func reload() {
         guard phase == .open else { return }
         if let effect = state.reload() { perform(effect) }
+    }
+
+    /// What quitting would lose: replies typed and not sent, in the form or
+    /// kept for another run, and whether an answer is on its way with no
+    /// outcome yet. Drafts live in memory only.
+    var unsent: (drafts: Int, sending: Bool) {
+        let kept = keptDrafts.values.reduce(0) { $0 + $1.count }
+        guard phase == .open else { return (kept, false) }
+        return (kept + state.keptDrafts.count, state.inFlight)
+    }
+
+    /// The quit question for `unsent`, or nil when quitting loses nothing.
+    nonisolated static func quitQuestion(drafts: Int, sending: Bool) -> (title: String, message: String)? {
+        if sending {
+            return ("Quit while a reply is being sent?",
+                    "Agent Mux has not heard whether the run took it. Quitting now leaves the answer unconfirmed.")
+        }
+        switch drafts {
+        case 0: return nil
+        case 1: return ("Quit with an unsent reply?", "The reply you typed has not been sent, and is lost when Agent Mux quits.")
+        default: return ("Quit with \(drafts) unsent replies?", "The replies you typed have not been sent, and are lost when Agent Mux quits.")
+        }
     }
 
     /// The drafts kept for `runID`, for tests.

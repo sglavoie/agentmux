@@ -214,13 +214,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let running = runningChanges.sorted { $0.key < $1.key }.map(\.value)
-        guard running.isEmpty else {
-            Self.logger.notice("quit asked while amx is \(running.joined(separator: ", "), privacy: .public); asking")
+        let unsent = aslPanel?.flow.unsent ?? (drafts: 0, sending: false)
+        let reply = ASLQuestionFlow.quitQuestion(drafts: unsent.drafts, sending: unsent.sending)
+        guard running.isEmpty, reply == nil else {
+            Self.logger.notice("quit asked while amx is \(running.joined(separator: ", "), privacy: .public), \(unsent.drafts) unsent repl(ies), sending \(unsent.sending); asking")
             // Asked after this event, once AppKit has been told the answer
             // is coming.
             DispatchQueue.main.async { [weak self] in
                 MainActor.assumeIsolated {
-                    guard let self, self.askToQuitWhileChanging(running) else {
+                    guard let self, running.isEmpty || self.askToQuitWhileChanging(running),
+                          reply.map({ self.askToQuit($0.title, $0.message) }) ?? true else {
                         return sender.reply(toApplicationShouldTerminate: false)
                     }
                     if !self.confirmViewsBeforeQuit(sender) {
@@ -252,10 +255,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// restarting something: quitting closes its pipes, and amx can die of
     /// it halfway, leaving a session started but never shown, or half ended.
     private func askToQuitWhileChanging(_ running: [String]) -> Bool {
+        askToQuit(Self.quitWhileChangingQuestion(running),
+                  "Quitting now can stop it halfway. Wait for it to finish, or quit anyway and check the session list afterwards.")
+    }
+
+    private func askToQuit(_ question: String, _ message: String) -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = Self.quitWhileChangingQuestion(running)
-        alert.informativeText = "Quitting now can stop it halfway. Wait for it to finish, or quit anyway and check the session list afterwards."
+        alert.messageText = question
+        alert.informativeText = message
         alert.addButton(withTitle: "Quit Anyway").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         NSApp.activate()
