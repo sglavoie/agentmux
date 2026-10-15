@@ -147,8 +147,10 @@ enum WorkspaceSessionStatus: Equatable {
     case exited(String)
     /// The place the agent ran is gone, so what became of it was not seen.
     case lost(String)
-    /// The session was ended on purpose, or is not known at all.
+    /// The session was ended on purpose.
     case ended(String)
+    /// amx knows no such session: its record is gone.
+    case unknownSession(String)
     /// amx could not say.
     case unknown(String)
 
@@ -161,7 +163,8 @@ enum WorkspaceSessionStatus: Equatable {
             switch error.code {
             case "runtime_session_exited": return .exited(error.message)
             case "runtime_session_lost": return .lost(error.message)
-            case "runtime_session_ended", "not_found": return .ended(error.message)
+            case "runtime_session_ended": return .ended(error.message)
+            case "not_found": return .unknownSession(error.message)
             default: return .unknown(error.message.isEmpty ? error.code : error.message)
             }
         case let .failure(error):
@@ -182,7 +185,9 @@ enum WorkspaceSessionStatus: Equatable {
         case let .lost(reason):
             return ("Agent lost", "\(name) can no longer be found: the terminal it ran in is gone, as after a restart of the computer or of the tmux server. \(Self.detail(reason))It was not restarted. \(resumable ? resume : "Resume its conversation from the Dashboard.")")
         case .ended:
-            return ("Session ended", "\(name) was closed. Nothing was restarted.")
+            return ("Session ended", "\(name) was ended. Nothing was restarted. \(resumable ? resume : "")".trimmingCharacters(in: .whitespaces))
+        case .unknownSession:
+            return ("No longer known", "\(name) is no longer listed, and amx has no record of it. Nothing was restarted. \(resumable ? resume : "Start it again from the Dashboard.")")
         }
     }
 

@@ -640,7 +640,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             case .live:
                 Self.logger.notice("workspace: restored \(id, privacy: .public); reattaching its terminal")
                 self.select(key, focus: true)
-            case .exited, .lost, .ended:
+            case .exited, .lost, .ended, .unknownSession:
                 self.sessionGone(id, name: name, known: status)
                 self.updateContent(focus: false)
             case let .unknown(why):
@@ -1006,9 +1006,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func sayCloseFailed(_ name: String, _ message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "\(name) could not be closed"
+        alert.messageText = "\(name) could not be ended"
         alert.informativeText = message
-        alert.beginSheetModal(for: window)
+        sayLater(alert)
+    }
+
+    /// Shows a failure that answered after the operator asked: on the window
+    /// while it is open, or on its own when the window was closed meanwhile,
+    /// since a sheet on a closed window is never seen.
+    private func sayLater(_ alert: NSAlert) {
+        if isOpen {
+            alert.beginSheetModal(for: window)
+        } else {
+            NSApp.activate()
+            alert.runModal()
+        }
     }
 
     private func endSession(_ row: WorkspaceRow, _ id: String) {
@@ -1118,7 +1130,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                     alert.alertStyle = .warning
                     alert.messageText = "\(title) could not be named"
                     alert.informativeText = problem
-                    alert.beginSheetModal(for: self.window)
+                    self.sayLater(alert)
                 }
             }
         }
@@ -2147,7 +2159,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 self?.reattach(id)
             }
         case .closing:
-            placeholder.show(title: "Closing", message: "This session's agent is being ended.")
+            placeholder.show(title: "Ending", message: "This session's agent is being ended.")
         case let .rendererFailed(id):
             placeholder.show(
                 title: "The terminal stopped drawing",
@@ -3439,7 +3451,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         syncTrailingRoom()
     }
 
-    nonisolated static let closingDetail = "closing…"
+    nonisolated static let closingDetail = "ending…"
 
     /// What a utility view's line says of its program's progress (OSC 9;4).
     nonisolated static func progressText(_ progress: Ghostty.Progress) -> String {

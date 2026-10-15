@@ -756,7 +756,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.closed, [F.runtimeID(1)], "its terminal is let go at once")
         XCTAssertEqual(workspace.content, .closing(runtimeSessionID: F.runtimeID(1)))
         XCTAssertTrue(try cell(work.key).closeButton.isHidden)
-        XCTAssertEqual(try cell(work.key).detailLabel.stringValue, "closing…")
+        XCTAssertEqual(try cell(work.key).detailLabel.stringValue, "ending…")
         XCTAssertTrue(try XCTUnwrap(cell(work.key).accessibilityLabel()).contains(", closing"),
                       "VoiceOver hears what the line shows")
 

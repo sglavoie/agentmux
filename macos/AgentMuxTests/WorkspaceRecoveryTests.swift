@@ -101,7 +101,7 @@ final class WorkspaceRestorationTests: XCTestCase {
         XCTAssertEqual(WorkspaceSessionStatus.from(failure("runtime_session_exited")), .exited("why"))
         XCTAssertEqual(WorkspaceSessionStatus.from(failure("runtime_session_lost")), .lost("why"))
         XCTAssertEqual(WorkspaceSessionStatus.from(failure("runtime_session_ended")), .ended("why"))
-        XCTAssertEqual(WorkspaceSessionStatus.from(failure("not_found")), .ended("why"))
+        XCTAssertEqual(WorkspaceSessionStatus.from(failure("not_found")), .unknownSession("why"))
         XCTAssertEqual(WorkspaceSessionStatus.from(failure("registry_unavailable")), .unknown("why"))
         XCTAssertEqual(WorkspaceSessionStatus.from(.failure(.undecodable(status: 2, detail: "boom"))), .unknown("boom"))
 
@@ -114,6 +114,15 @@ final class WorkspaceRestorationTests: XCTestCase {
         // An amx from before the count answers without it: nobody is assumed attached.
         let older = AMXEnvelope.decode(AttachCheck.self, stdout: Data(#"{"schema_version":1,"data":{"runtime_session_id":"rs-1","state":"live"}}"#.utf8), status: 0)
         XCTAssertEqual(older.value?.clients, 0)
+    }
+
+    func testAnEndedSessionIsNotSaidToBeClosedAndAnUnknownOneIsNotSaidToBeEnded() throws {
+        let ended = try XCTUnwrap(WorkspaceSessionStatus.ended("").notice(for: "api — work"))
+        XCTAssertEqual(ended.message, "api — work was ended. Nothing was restarted.")
+        let unknown = try XCTUnwrap(WorkspaceSessionStatus.unknownSession("").notice(for: "api — work", resumable: true))
+        XCTAssertEqual(unknown.title, "No longer known")
+        XCTAssertFalse(unknown.message.contains("ended"), "nobody is known to have ended it")
+        XCTAssertTrue(unknown.message.contains("Past Sessions"))
     }
 
     func testExitedAndLostAreSaidDifferentlyAndNeitherPromisesARestart() throws {
