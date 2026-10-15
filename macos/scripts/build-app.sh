@@ -89,6 +89,14 @@ require_tool ditto
 
 # --- Build -----------------------------------------------------------------------
 
+# xcodebuild signs its own products with the identity sign.sh uses: the
+# DerivedData copy shares the installed app's bundle identifier, and an
+# ad-hoc one would take its privacy grants (signing-lib.sh).
+# shellcheck disable=SC1091
+. "$script_dir/signing-lib.sh"
+# shellcheck disable=SC2046
+set -- $(xcode_signing_settings)
+
 derived_data="$macos_dir/DerivedData"
 xcodebuild build \
 	-project "$macos_dir/AgentMux.xcodeproj" \
@@ -96,7 +104,7 @@ xcodebuild build \
 	-configuration "$configuration" \
 	-destination "platform=macOS,arch=$(uname -m)" \
 	-derivedDataPath "$derived_data" \
-	-quiet
+	-quiet "$@"
 
 product="$derived_data/Build/Products/$configuration/Agent Mux.app"
 if [ ! -f "$product/Contents/Info.plist" ]; then

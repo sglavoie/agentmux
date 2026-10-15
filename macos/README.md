@@ -143,6 +143,13 @@ the running server is on an earlier one.
 - **No identity.** Without one the app is signed ad-hoc, and macOS treats every
   build as a new app.
 - **`AMX_CODESIGN_IDENTITY`.** Overrides the identity. `-` forces ad-hoc.
+- **Xcode's own products.** `build-app.sh` and `test-app.sh` have xcodebuild
+  sign with the same identity (`scripts/signing-lib.sh`), so the copies in
+  `DerivedData`, the hosted tests' app among them, share the installed app's
+  designated requirement. They share its bundle identifier too, and an ad-hoc
+  copy would take the privacy grants (Files and Folders, notifications) the
+  installed app was given, so macOS would ask again on every switch between
+  them.
 - **Developer ID.** A Developer ID identity adds the hardened runtime and a
   secure timestamp. With `AMX_NOTARY_PROFILE`, the name of an
   `xcrun notarytool store-credentials` profile, the app is also notarized and

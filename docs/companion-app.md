@@ -101,7 +101,10 @@ macOS ties both grants to the app's code signature. A build signed with an
 Apple Development or Developer ID certificate keeps them across rebuilds. An
 ad-hoc build (no certificate in the keychain, or `AMX_CODESIGN_IDENTITY=-`)
 looks like a new app every time, so both grants are asked for again after each
-install. See [Signing](../macos/README.md#signing).
+install. Every copy shares the bundle identifier, so the build scripts sign
+the `DerivedData` copies with the same certificate: an ad-hoc copy answering a
+prompt would otherwise take the grant from the installed app. See
+[Signing](../macos/README.md#signing).
 
 ## Kitty (optional)
 

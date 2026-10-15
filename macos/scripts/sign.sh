@@ -8,7 +8,9 @@
 # Mac only. A certificate gives the app a designated requirement that survives a
 # rebuild, so privacy grants (notifications) are asked for once
 # rather than after every install; an ad-hoc signature is its cdhash, which
-# macOS treats as a new app each build. With a Developer ID the signature
+# macOS treats as a new app each build. build-app.sh and test-app.sh have
+# xcodebuild sign with the same identity (signing-lib.sh), so the DerivedData
+# copies do not take those grants away from the installed app. With a Developer ID the signature
 # carries the hardened runtime and a secure timestamp, which notarization
 # requires, and a notarytool keychain profile then notarizes and staples the app.
 #
@@ -39,15 +41,14 @@ app=$1
 
 require_tool codesign
 
+# shellcheck disable=SC1091
+. "$(CDPATH="" cd -- "$(dirname -- "$0")" && pwd)/signing-lib.sh"
+
 notary_profile="${AMX_NOTARY_PROFILE:-}"
+identity=$(signing_identity)
 if [ -n "${AMX_CODESIGN_IDENTITY:-}" ]; then
-	identity=$AMX_CODESIGN_IDENTITY
 	development=
 else
-	# The SHA-1 rather than the name, which an expired twin may share.
-	identity=$(security find-identity -v -p codesigning 2>/dev/null |
-		sed -n 's/^ *[0-9][0-9]*) \([0-9A-F]\{40\}\) "Apple Development: .*/\1/p' | head -n 1)
-	identity=${identity:--}
 	development=$identity
 fi
 

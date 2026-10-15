@@ -20,6 +20,7 @@
 #
 # Environment:
 #   AMX_MACOS_CACHE         cache root (default macos/.cache, gitignored)
+#   AMX_CODESIGN_IDENTITY   see sign.sh (default Apple Development, else ad-hoc)
 #   AMX_MAC_TEST_HOST       see remote-ui.sh
 #   AMX_UI_TEST_REMOTE_ONLY see remote-ui.sh
 
@@ -52,6 +53,13 @@ Release)
 	exit 1
 	;;
 esac
+
+# The test host shares the installed app's bundle identifier, so it is signed
+# with the identity sign.sh uses rather than ad-hoc (signing-lib.sh).
+# shellcheck disable=SC1091
+. "$script_dir/signing-lib.sh"
+# shellcheck disable=SC2046
+set -- "$@" $(xcode_signing_settings)
 
 "$script_dir/generate-project.sh"
 
