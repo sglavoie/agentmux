@@ -657,6 +657,16 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .view(id: "dashboard"))
     }
 
+    func testClosingTheDashboardTheWayItQuitsOffersToReopenIt() throws {
+        workspace.showView("dashboard")
+        workspace.closeView("dashboard")
+        XCTAssertEqual(workspace.viewSelection, "dashboard", "the pane stays where it was")
+        XCTAssertEqual(workspace.content, .viewEnded(id: "dashboard"))
+        XCTAssertEqual(workspace.placeholder.button.title, "Reopen")
+        workspace.placeholder.press()
+        XCTAssertEqual(workspace.content, .view(id: "dashboard"))
+    }
+
     func testAViewThatCannotStartSaysWhyAndIsRetriedOnlyWhenAsked() throws {
         app.viewProblem = "amx is still being resolved."
         workspace.showView("dashboard")

@@ -953,8 +953,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         if !view.isPermanent {
             retire(view)
         } else if viewSelection == id {
-            viewSelection = nil
-            syncSidebarSelection()
+            // The pane stays on it and says it closed, with Reopen, as when
+            // its program quits on its own.
+            endedViews.insert(id)
             updateContent(focus: false)
         }
     }
@@ -2085,7 +2086,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let name = views.view(id)?.title ?? "This view"
             placeholder.show(
                 title: "\(name) closed",
-                message: "It quit. No session was affected: the agents keep running.",
+                message: "It is no longer running. No session was affected: the agents keep running.",
                 button: "Reopen"
             ) { [weak self] in self?.restartView(id) }
         case let .viewUnavailable(id, message):
