@@ -58,7 +58,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxDashboardPlace",
+            "amxDashboardPlace", "amxTerminalTheme",
         ])
     }
 
@@ -157,6 +157,92 @@ final class AppPreferencesTests: XCTestCase {
         model.preferences.defaultFontSize = nil
         XCTAssertNil(AppPreferences.load(from: defaults).defaultFontSize)
         XCTAssertEqual(sizes, [18, nil])
+    }
+
+    func testTerminalThemePersistsAsGhosttysValue() {
+        let defaults = freshDefaults()
+        XCTAssertNil(AppPreferences.load(from: defaults).terminalTheme)
+        var preferences = AppPreferences()
+        preferences.terminalTheme = TerminalTheme("Dracula")
+        preferences.save(to: defaults)
+        XCTAssertEqual(defaults.string(forKey: AppPreferences.Key.terminalTheme), "Dracula")
+        preferences.terminalTheme = TerminalTheme(" Night Owl ", dark: "Dracula")
+        preferences.save(to: defaults)
+        XCTAssertEqual(defaults.string(forKey: AppPreferences.Key.terminalTheme), "light:Night Owl,dark:Dracula")
+        XCTAssertEqual(AppPreferences.load(from: defaults).terminalTheme, preferences.terminalTheme)
+        preferences.terminalTheme = nil
+        preferences.save(to: defaults)
+        XCTAssertNil(defaults.object(forKey: AppPreferences.Key.terminalTheme))
+    }
+
+    func testTerminalThemeReadsOnlyWhatGhosttyCanCarry() {
+        XCTAssertEqual(TerminalTheme(configValue: "dark: B , light:A"), TerminalTheme("A", dark: "B"))
+        for refused in ["", " ", "a,b", "light:A", "light:A,light:B", "light:A,dark:", "x:A,dark:B", "A\nB", "light:A,dark:B,c"] {
+            XCTAssertNil(TerminalTheme(configValue: refused), refused)
+        }
+        let defaults = freshDefaults()
+        defaults.set(true, forKey: AppPreferences.Key.terminalTheme)
+        XCTAssertNil(AppPreferences.load(from: defaults).terminalTheme)
+    }
+
+    func testAvailableThemesMergeBundledAndUserThemes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("amx-themes-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundled = root.appendingPathComponent("bundled"), user = root.appendingPathComponent("user")
+        for (dir, names) in [(bundled, ["Dracula", "3024 Day", ".DS_Store"]), (user, ["Dracula", "mine", "bad,name"])] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            for name in names { FileManager.default.createFile(atPath: dir.appendingPathComponent(name).path, contents: Data()) }
+        }
+        XCTAssertEqual(TerminalTheme.available(bundled: bundled, user: user), ["3024 Day", "Dracula", "mine"])
+        XCTAssertEqual(TerminalTheme.available(bundled: bundled, user: root.appendingPathComponent("missing")),
+                       ["3024 Day", "Dracula"])
+        XCTAssertTrue(TerminalTheme.available().contains("Catppuccin Mocha"), "the app bundles Ghostty's themes")
+    }
+
+    @MainActor
+    func testThemeChoicesAreSavedAndReportedImmediately() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        var themes: [TerminalTheme?] = []
+        model.onChange = { old, new in if old.terminalTheme != new.terminalTheme { themes.append(new.terminalTheme) } }
+
+        model.separateDarkTheme = true
+        XCTAssertNil(model.preferences.terminalTheme, "no Dark Mode theme without a theme")
+        model.themeName = "Night Owl"
+        model.separateDarkTheme = true
+        XCTAssertEqual(model.darkThemeName, "Night Owl", "starts from the theme in use")
+        model.darkThemeName = "Dracula"
+        model.themeName = "3024 Day"
+        XCTAssertEqual(AppPreferences.load(from: defaults).terminalTheme, TerminalTheme("3024 Day", dark: "Dracula"))
+        model.separateDarkTheme = false
+        model.themeName = nil
+        XCTAssertNil(defaults.object(forKey: AppPreferences.Key.terminalTheme))
+        XCTAssertEqual(themes, [
+            TerminalTheme("Night Owl"), TerminalTheme("Night Owl", dark: "Night Owl"),
+            TerminalTheme("Night Owl", dark: "Dracula"), TerminalTheme("3024 Day", dark: "Dracula"),
+            TerminalTheme("3024 Day"), nil,
+        ])
+
+        model.availableThemes = ["Dracula"]
+        model.themeName = "Gone"
+        XCTAssertEqual(model.themeChoices, ["Dracula", "Gone"], "a chosen theme stays listed")
+    }
+
+    /// A Settings theme reaches the config every terminal is built from, and
+    /// changing it reloads the open ones without resetting their zoom.
+    func testATerminalThemeChangeReloadsOpenTerminals() {
+        var old = AppPreferences()
+        XCTAssertNil(AppDelegate.terminalOverrides(old).theme)
+        var new = old
+        new.terminalTheme = TerminalTheme("Night Owl", dark: "Dracula")
+        XCTAssertEqual(AppDelegate.terminalOverrides(new).lines.last, "theme = light:Night Owl,dark:Dracula")
+        XCTAssertEqual(AppDelegate.terminalReload(from: old, to: new), .keepZoom)
+        XCTAssertEqual(AppDelegate.terminalReload(from: new, to: old), .keepZoom)
+        new.defaultFontSize = 18
+        XCTAssertEqual(AppDelegate.terminalReload(from: old, to: new), .resetFontSize, "a reset reloads the theme too")
+        old = new
+        new.recentDays = 3
+        XCTAssertNil(AppDelegate.terminalReload(from: old, to: new))
     }
 
     func testEnvironmentOverridesApply() {

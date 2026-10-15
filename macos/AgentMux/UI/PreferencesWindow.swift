@@ -87,6 +87,8 @@ final class PreferencesModel: ObservableObject {
     @Published var snapshot = PreferencesSnapshot()
     /// The config's effective size while no preference overrides it.
     @Published var configFontSize: Float = 13
+    /// The Ghostty themes a terminal can use, read again on `refresh()`.
+    @Published var availableThemes: [String]
     /// The daemon's own snooze, from the latest snapshot; nil when the feed is
     /// not live.
     @Published var daemonNotification: CompanionNotification?
@@ -117,6 +119,7 @@ final class PreferencesModel: ObservableObject {
         preferences = stored
         binaryPathDraft = stored.binaryPath
         environmentDrafts = stored.environment
+        availableThemes = TerminalTheme.available()
     }
 
     /// The binary field was submitted or left: what it holds is now the
@@ -139,6 +142,7 @@ final class PreferencesModel: ObservableObject {
             // Assigning saves the normalized values back, which is harmless.
             preferences = stored
         }
+        availableThemes = TerminalTheme.available()
         refreshLoginItem()
         onRefreshAuthorization?()
         onRefreshBackend?()
@@ -164,6 +168,48 @@ final class PreferencesModel: ObservableObject {
             launchAtLoginNote = message
             return message
         }
+    }
+
+    /// The theme in light mode, or every mode; nil uses the Ghostty config's
+    /// and also drops a Dark Mode theme.
+    var themeName: String? {
+        get { preferences.terminalTheme?.light }
+        set {
+            preferences.terminalTheme = newValue.flatMap { TerminalTheme($0, dark: preferences.terminalTheme?.dark) }
+        }
+    }
+
+    /// Whether Dark Mode has a theme of its own. Turning it on starts from
+    /// the theme in use, so nothing changes until another is picked.
+    var separateDarkTheme: Bool {
+        get { preferences.terminalTheme?.dark != nil }
+        set {
+            guard var theme = preferences.terminalTheme else { return }
+            theme.dark = newValue ? theme.light : nil
+            preferences.terminalTheme = theme
+        }
+    }
+
+    /// The theme in Dark Mode.
+    var darkThemeName: String {
+        get { preferences.terminalTheme.map { $0.dark ?? $0.light } ?? "" }
+        set {
+            guard let light = preferences.terminalTheme?.light,
+                  let theme = TerminalTheme(light, dark: newValue) else { return }
+            preferences.terminalTheme = theme
+        }
+    }
+
+    /// What the theme pickers list: the available themes, plus any chosen
+    /// one that is not among them (removed, or set with `defaults write`),
+    /// so a picker never shows a blank selection.
+    var themeChoices: [String] {
+        var choices = availableThemes
+        for name in [preferences.terminalTheme?.light, preferences.terminalTheme?.dark].compactMap({ $0 })
+        where !choices.contains(name) {
+            choices.append(name)
+        }
+        return choices
     }
 
     /// Why the binary override in use will not work, checked the way the
@@ -436,6 +482,22 @@ struct PreferencesView: View {
                     : "Overrides the Ghostty config's font-size. ")
                     + "Changing this updates all open terminals. ⌘+ and ⌘− zoom the focused terminal; "
                     + "⌘⇧- returns to this size. New terminals start at this size.")
+                Picker("Theme", selection: $model.themeName) {
+                    Text("From the Ghostty config").tag(String?.none)
+                    Divider()
+                    ForEach(model.themeChoices, id: \.self) { Text($0).tag(String?.some($0)) }
+                }
+                Toggle("Use another theme in Dark Mode", isOn: $model.separateDarkTheme)
+                    .disabled(model.themeName == nil)
+                if model.separateDarkTheme {
+                    Picker("Dark Mode theme", selection: $model.darkThemeName) {
+                        ForEach(model.themeChoices, id: \.self) { Text($0).tag($0) }
+                    }
+                }
+                note((model.themeName == nil
+                    ? "Uses the Ghostty config's theme. "
+                    : "Overrides the Ghostty config's theme; colors it sets one by one still apply. ")
+                    + "Changing this recolors all open terminals.")
                 Picker("Launch projects in", selection: $model.preferences.launchBackend) {
                     ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
                 }

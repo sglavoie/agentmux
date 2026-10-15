@@ -23,11 +23,12 @@ struct AppPreferences: Equatable {
         static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
         static let defaultFontSize = "amxDefaultFontSize"
         static let dashboardPlace = "amxDashboardPlace"
+        static let terminalTheme = "amxTerminalTheme"
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
-            launchBackend, openWorkspaceAtLaunch, defaultFontSize, dashboardPlace,
+            launchBackend, openWorkspaceAtLaunch, defaultFontSize, dashboardPlace, terminalTheme,
         ]
     }
 
@@ -66,6 +67,9 @@ struct AppPreferences: Equatable {
     var defaultFontSize: Float?
     /// `amxDashboardPlace`: where the dashboard shortcut shows the dashboard.
     var dashboardPlace: DashboardPlacePreference = .workspace
+    /// `amxTerminalTheme`: the Ghostty theme every terminal uses; nil uses
+    /// the Ghostty config's.
+    var terminalTheme: TerminalTheme?
 
     init() {}
 
@@ -89,6 +93,9 @@ struct AppPreferences: Equatable {
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
         preferences.dashboardPlace = defaults.string(forKey: Key.dashboardPlace)
             .flatMap(DashboardPlacePreference.init(rawValue:)) ?? .workspace
+        // Only a stored string: `defaults.string` would read a stray true as "1".
+        preferences.terminalTheme = (defaults.object(forKey: Key.terminalTheme) as? String)
+            .flatMap(TerminalTheme.init(configValue:))
         return preferences
     }
 
@@ -115,6 +122,11 @@ struct AppPreferences: Equatable {
         defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
         DefaultFontSize.save(defaultFontSize, to: defaults)
         defaults.set(dashboardPlace.rawValue, forKey: Key.dashboardPlace)
+        if let terminalTheme {
+            defaults.set(terminalTheme.configValue, forKey: Key.terminalTheme)
+        } else {
+            defaults.removeObject(forKey: Key.terminalTheme)
+        }
     }
 
     static func clamp(_ value: Int, _ range: ClosedRange<Int>) -> Int {
@@ -168,6 +180,74 @@ enum DefaultFontSize {
         } else {
             defaults.removeObject(forKey: AppPreferences.Key.defaultFontSize)
         }
+    }
+}
+
+/// A Ghostty theme by name, or one for each system appearance. Persisted as
+/// the `theme` value Ghostty reads: `Name`, or `light:Light,dark:Dark`.
+struct TerminalTheme: Equatable {
+    /// The theme in light mode, and in dark mode too when `dark` is nil.
+    var light: String
+    /// The theme in dark mode, when it differs by appearance.
+    var dark: String?
+
+    /// Nil for a name Ghostty's `theme` syntax cannot carry.
+    init?(_ light: String, dark: String? = nil) {
+        guard let light = Self.name(light) else { return nil }
+        self.light = light
+        if let dark {
+            guard let dark = Self.name(dark) else { return nil }
+            self.dark = dark
+        }
+    }
+
+    /// Reads `Name` or `light:A,dark:B` in either order; anything else is nil.
+    init?(configValue: String) {
+        let parts = configValue.split(separator: ",", omittingEmptySubsequences: false).map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+        switch parts.count {
+        case 1:
+            self.init(parts[0])
+        case 2:
+            var named: [String: String] = [:]
+            for part in parts {
+                guard let colon = part.firstIndex(of: ":") else { return nil }
+                named[String(part[..<colon])] = String(part[part.index(after: colon)...])
+            }
+            guard named.count == 2, let light = named["light"], let dark = named["dark"] else { return nil }
+            self.init(light, dark: dark)
+        default:
+            return nil
+        }
+    }
+
+    var configValue: String {
+        guard let dark else { return light }
+        return "light:\(light),dark:\(dark)"
+    }
+
+    /// A theme name, trimmed, or nil when it is empty or holds what Ghostty
+    /// reads as syntax: a comma, a colon, or a line break.
+    static func name(_ raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, Ghostty.isSingleLine(name),
+              name.rangeOfCharacter(from: CharacterSet(charactersIn: ",:")) == nil else { return nil }
+        return name
+    }
+
+    /// The themes a terminal can use: those the app bundles and any in
+    /// `~/.config/ghostty/themes`, which Ghostty also searches, sorted and
+    /// without duplicates.
+    static func available(
+        bundled: URL? = Bundle.main.resourceURL?.appendingPathComponent("ghostty/themes"),
+        user: URL? = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/ghostty/themes")
+    ) -> [String] {
+        let names = [bundled, user].compactMap { $0 }.flatMap { dir in
+            (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        }
+        return Set(names.filter { !$0.hasPrefix(".") }.compactMap(name))
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 }
 

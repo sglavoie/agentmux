@@ -498,6 +498,55 @@ final class GhosttySurfaceTests: XCTestCase {
         XCTAssertLessThan(try surfaceSize().cell_width_px, reset, "Reset restores the config's font size")
     }
 
+    /// The colour Ghostty last drew at a surface's top-left corner (its
+    /// padding, so always the background), read from the IOSurface its Metal
+    /// renderer presents in the view's layer; nil until a frame is there.
+    private func renderedCorner(_ view: Ghostty.SurfaceView) -> [Int]? {
+        guard let surface = view.surface else { return nil }
+        ghostty_surface_draw(surface)
+        guard let contents = view.layer?.contents, CFGetTypeID(contents as CFTypeRef) == IOSurfaceGetTypeID() else { return nil }
+        let io = contents as! IOSurfaceRef
+        guard IOSurfaceGetWidth(io) > 4, IOSurfaceGetHeight(io) > 4,
+              IOSurfaceLock(io, .readOnly, nil) == kIOReturnSuccess else { return nil }
+        defer { IOSurfaceUnlock(io, .readOnly, nil) }
+        let row = IOSurfaceGetBaseAddress(io).advanced(by: 2 * IOSurfaceGetBytesPerRow(io))
+        let bgra = row.advanced(by: 2 * 4).assumingMemoryBound(to: UInt8.self)
+        return [Int(bgra[2]), Int(bgra[1]), Int(bgra[0])]
+    }
+
+    private func waitForCorner(_ view: Ghostty.SurfaceView, _ what: String, near expected: [Int]) -> [Int]? {
+        var last: [Int]?
+        ghosttyWait(what, timeout: 5) {
+            last = renderedCorner(view)
+            return last.map { zip($0, expected).allSatisfy { abs($0 - $1) <= 12 } } ?? false
+        }
+        return last
+    }
+
+    /// What the operator sees: picking a theme in Settings repaints the
+    /// terminals already open, the one on screen at once and a hidden one
+    /// as soon as it is shown again.
+    func testAThemeChangeRepaintsOpenSurfaces() throws {
+        window.contentView = nil
+        view = nil
+        ghostty.shutdown()
+        var overrides = Ghostty.ConfigOverrides(theme: "Catppuccin Latte")
+        ghostty = Ghostty.App { Ghostty.Config(userConfig: nil, overrides: overrides) }
+        view = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        window.contentView = view
+        let hidden = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        defer { hidden.close() }
+        let latte = [0xEF, 0xF1, 0xF5], mocha = [0x1E, 0x1E, 0x2E]
+        XCTAssertNotNil(waitForCorner(view, "the Latte background", near: latte))
+
+        overrides.theme = "Catppuccin Mocha"
+        XCTAssertTrue(ghostty.reloadConfig())
+        XCTAssertNotNil(waitForCorner(view, "the Mocha background", near: mocha))
+
+        window.contentView = hidden
+        XCTAssertNotNil(waitForCorner(hidden, "the hidden view's Mocha background", near: mocha))
+    }
+
     func testAPerSurfaceFontSizeOverridesTheAppConfiguration() throws {
         var large = Self.cat
         large.fontSize = 30

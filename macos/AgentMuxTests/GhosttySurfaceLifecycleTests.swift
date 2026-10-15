@@ -267,6 +267,23 @@ final class GhosttySurfaceLifecycleTests: XCTestCase {
         [a, b, c].forEach { $0.close() }
     }
 
+    /// A theme picked in Settings recolors open surfaces without touching
+    /// their zoom.
+    func testAThemeReloadKeepsEachSurfacesZoom() throws {
+        let cat = Ghostty.SurfaceConfiguration(program: URL(fileURLWithPath: "/bin/cat"))
+        let view = try XCTUnwrap(ghostty.makeSurface(cat))
+        defer { view.close() }
+        XCTAssertTrue(view.performBindingAction("increase_font_size:6"))
+        let zoomed = ghostty_surface_size(try XCTUnwrap(view.surface)).cell_width_px
+
+        overrides.theme = "Catppuccin Mocha"
+        XCTAssertTrue(ghostty.reloadConfig())
+        XCTAssertEqual(ghostty.config.diagnostics, [])
+        let background = try XCTUnwrap(ghostty.config.get("background", as: ghostty_config_color_s.self, initial: .init()))
+        XCTAssertEqual([background.r, background.g, background.b], [0x1E, 0x1E, 0x2E])
+        XCTAssertEqual(ghostty_surface_size(try XCTUnwrap(view.surface)).cell_width_px, zoomed)
+    }
+
     // MARK: Focus, visibility, scale
 
     func testOnlyTheFirstResponderOfTheKeyWindowIsFocused() throws {

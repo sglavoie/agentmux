@@ -312,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if let terminals { return terminals }
         let model = preferencesModel
         let runtime = Ghostty.App {
-            Ghostty.Config(overrides: Ghostty.ConfigOverrides(fontSize: model.preferences.defaultFontSize))
+            Ghostty.Config(overrides: Self.terminalOverrides(model.preferences))
         }
         guard runtime.readiness == .ready else {
             Self.logger.error("embedded terminals are unavailable: Ghostty did not start")
@@ -1509,8 +1509,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
-        if old.defaultFontSize != new.defaultFontSize {
-            applyDefaultFontSize()
+        switch Self.terminalReload(from: old, to: new) {
+        case .resetFontSize: applyDefaultFontSize()
+        case .keepZoom: terminals?.reloadConfig()
+        case nil: break
         }
         // While a recorder listens the shortcuts stay unregistered; it
         // registers them once, with what it recorded, when it stops.
@@ -1526,6 +1528,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             scheduleResolve()
         }
         notifications?.enabled = new.useAppNotifications
+    }
+
+    /// What Settings forces on every terminal's Ghostty config.
+    nonisolated static func terminalOverrides(_ preferences: AppPreferences) -> Ghostty.ConfigOverrides {
+        Ghostty.ConfigOverrides(fontSize: preferences.defaultFontSize, theme: preferences.terminalTheme?.configValue)
+    }
+
+    enum TerminalReload: Equatable {
+        /// A new default zoom: reload, then reset every terminal to it.
+        case resetFontSize
+        /// A new theme: every open terminal, shown or hidden, takes the new
+        /// colors and keeps its own zoom.
+        case keepZoom
+    }
+
+    /// How open terminals take a Settings change; nil when it is not theirs.
+    nonisolated static func terminalReload(from old: AppPreferences, to new: AppPreferences) -> TerminalReload? {
+        if old.defaultFontSize != new.defaultFontSize { return .resetFontSize }
+        if old.terminalTheme != new.terminalTheme { return .keepZoom }
+        return nil
     }
 
     /// Reload first so ⌘⇧- uses the new default, then reset even manually

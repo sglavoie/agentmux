@@ -11,6 +11,10 @@ extension Ghostty {
     struct ConfigOverrides: Equatable {
         /// The font size in points, or nil to keep the user config's.
         var fontSize: Float?
+        /// A `theme` value (`Name` or `light:A,dark:B`), or nil to keep the
+        /// user config's. Colors the user config sets one by one still win,
+        /// as they do over any theme in Ghostty.
+        var theme: String?
         /// Raw `key = value` lines appended last, for settings with no field
         /// of their own. A line holding a newline is dropped.
         var settings: [String] = []
@@ -33,6 +37,9 @@ extension Ghostty {
             lines.append("window-inherit-font-size = true")
             if let fontSize {
                 lines.append("font-size = \(Self.number(fontSize))")
+            }
+            if let theme, Ghostty.isSingleLine(theme), !theme.isEmpty {
+                lines.append("theme = \(theme)")
             }
             return lines + settings.filter(Ghostty.isSingleLine)
         }

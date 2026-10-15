@@ -45,6 +45,22 @@ final class GhosttyConfigTests: XCTestCase {
         sized.fontSize = 12.5
         XCTAssertTrue(sized.lines.contains("font-size = 12.5"))
         XCTAssertFalse(sized.lines.contains { $0.hasPrefix("command") })
+
+        var themed = Ghostty.ConfigOverrides(theme: "light:Night Owl,dark:Dracula")
+        XCTAssertEqual(themed.lines.last, "theme = light:Night Owl,dark:Dracula")
+        for refused in ["", "Dracula\ncommand = /bin/sh"] {
+            themed.theme = refused
+            XCTAssertFalse(themed.lines.contains { $0.hasPrefix("theme") }, refused)
+        }
+    }
+
+    /// The Settings theme beats the user file's.
+    func testThemeOverrideBeatsTheUserFile() throws {
+        let user = try writeUserConfig("theme = Dracula\n")
+        let config = Ghostty.Config(userConfig: user, overrides: Ghostty.ConfigOverrides(theme: "Catppuccin Mocha"))
+        XCTAssertEqual(config.diagnostics, [])
+        let background = try XCTUnwrap(config.get("background", as: ghostty_config_color_s.self, initial: .init()))
+        XCTAssertEqual([background.r, background.g, background.b], [0x1E, 0x1E, 0x2E])
     }
 
     func testDefaultsApplyWithoutAUserFile() {

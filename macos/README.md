@@ -268,7 +268,8 @@ runs without embedded terminals.
   and `TERMINFO` are Ghostty's and are dropped from a caller's environment.
 - **Configuration.** Three layers: Ghostty's defaults, then
   `~/.config/agent-mux/ghostty.conf` if it exists, then the overrides the app
-  forces (`confirm-close-surface = false`, and a font size when one is set).
+  forces (`confirm-close-surface = false`, and a font size and a theme when
+  one is set).
   Ghostty.app's own config is not read; the file may
   `config-file = ~/.config/ghostty/config` to share it. The app configuration
   names no command. `reloadConfig()` rebuilds the layers and hands the result
@@ -276,6 +277,11 @@ runs without embedded terminals.
   Preferences › Workspace › Default zoom saves a size from 6–72 points and
   applies it immediately to all open terminals, including hidden views.
   Reset removes that override and restores the config's `font-size`.
+  Preferences › Workspace › Theme picks one of the themes the app bundles
+  (or any in `~/.config/ghostty/themes`), optionally another for Dark Mode,
+  and recolors every open terminal at once without touching its zoom;
+  "From the Ghostty config" removes the override. Colors the config sets one
+  by one (`background`, `palette`, …) still win over the theme, as in Ghostty.
   **⌘+** (or **⌘=**) and **⌘−** adjust only the focused terminal;
   **⌘⇧-** restores the saved default. New terminals start at that default;
   shortcut changes are not persisted, but a session's terminal made again
@@ -1059,6 +1065,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxDashboardPlace` | `workspace` | Where the dashboard shortcut and Open Dashboard show the dashboard: `workspace` (the workspace's own view), or `kitty` (a dashboard tab in Kitty when a Kitty is running, else the workspace). |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
+| `amxTerminalTheme` | none | The Ghostty `theme` every terminal uses, as Ghostty writes it: `Name` or `light:Name,dark:Name`; unset uses the Ghostty config. Changes recolor all open terminals. |
 
 Preferences › Workspace also shows the backend setup, read from
 `amx backend status --json` each time amx is resolved
