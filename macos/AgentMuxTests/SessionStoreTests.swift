@@ -56,6 +56,18 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.feed, .daemonTooOld, "health does not override what subscribe learned")
     }
 
+    func testAReconnectTheAppAskedForKeepsTheFeedAndTitle() {
+        let store = SessionStore()
+        var changes = 0
+        store.apply(.subscribed(SubscriptionAck()))
+        store.apply(.frame(.snapshot(seq: 1, snapshot([1], key: 1))))
+        store.onChange = { changes += 1 }
+        store.apply(.disconnected(.reconnectRequested, retryIn: 0))
+        XCTAssertEqual(store.feed, .live)
+        XCTAssertEqual(store.title(glyphs: .fallback), "🔑1", "the counts do not blink")
+        XCTAssertEqual(changes, 0)
+    }
+
     func testDisconnectsReadAsOperatorPhrases() {
         let store = SessionStore()
         store.apply(.disconnected(.refused("subscriber_limit"), retryIn: 1))

@@ -119,6 +119,11 @@ final class SessionStore {
             return
         case let .disconnected(reason, _):
             switch reason {
+            case .reconnectRequested:
+                // The app asked for a fresh connection (the notification
+                // claim changed, a daemon just started); the next is made at
+                // once, and whatever the feed was it still is until then.
+                return
             case .notRunning:
                 declareNotRunning()
             case .unsupported:
