@@ -2034,16 +2034,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// focusing the first.
     private func continueConversation(_ conversation: RecentConversation) {
         if let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
-            focus(.focusing(live, title: conversation.selector))
+            focus(.focusing(live, title: conversation.displayName))
             return
         }
         guard let command else {
             return reportFailure(title: Self.launchFailedTitle, preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
         }
-        let label = "continue \(conversation.selector)"
-        let progress = Self.launchingNotice(conversation.selector)
+        // The operator reads the name; the selector goes to the log only.
+        Self.logger.notice("continuing \(conversation.selector, privacy: .public)")
+        let label = "continue \(conversation.displayName)"
+        let progress = Self.launchingNotice(conversation.displayName)
         store.show(notice: progress)
-        let change = beginChange(Self.launchingChange(conversation.selector))
+        let change = beginChange(Self.launchingChange(conversation.displayName))
         if preferencesModel.preferences.launchBackend.launchesInWorkspace {
             let arguments = RecentSessions.workspaceContinueArguments(for: conversation)
             launchQueue.async { [weak self] in

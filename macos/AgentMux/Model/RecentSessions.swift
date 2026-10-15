@@ -40,6 +40,14 @@ struct RecentConversation: Decodable, Equatable, Hashable {
     /// The `harness:session-id` selector `amx session continue` takes.
     var selector: String { "\(harness):\(id)" }
 
+    /// What the operator reads for the conversation: its project, else the
+    /// folder it ran in, else its selector.
+    var displayName: String {
+        if !project.isEmpty { return project }
+        let folder = (cwd as NSString).lastPathComponent
+        return folder.isEmpty || folder == "/" ? selector : folder
+    }
+
     /// The conversation identity a live session reports.
     var identity: ConversationIdentity { ConversationIdentity(harness: harness, sessionID: id) }
 

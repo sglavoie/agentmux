@@ -135,4 +135,10 @@ final class RecentSessionsTests: XCTestCase {
         XCTAssertNil(recent.state.value, "the menu does not show the 7-day list as the 30-day one")
         XCTAssertTrue(recent.needsRefresh(now: now.addingTimeInterval(1)), "it is fetched again at once")
     }
+
+    func testAConversationIsNamedByProjectThenFolderThenSelector() {
+        XCTAssertEqual(RecentConversation(id: "5f3e", harness: "claude", project: "api", cwd: "/srv/web").displayName, "api")
+        XCTAssertEqual(RecentConversation(id: "5f3e", harness: "claude", cwd: "/srv/web").displayName, "web")
+        XCTAssertEqual(RecentConversation(id: "5f3e", harness: "claude").displayName, "claude:5f3e")
+    }
 }
