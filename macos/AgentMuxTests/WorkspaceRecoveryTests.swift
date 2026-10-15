@@ -225,6 +225,20 @@ final class WorkspaceRecoveryTests: XCTestCase {
         XCTAssertEqual(app.asked, [F.runtimeID(2)])
     }
 
+    func testRestoringOffersWhatBringsADaemonBack() throws {
+        workspace.restore(.session(runtimeSessionID: F.runtimeID(2)))
+        app.store.apply(.disconnected(.notRunning, retryIn: 0.5))
+        XCTAssertEqual(workspace.content, .restoring(runtimeSessionID: F.runtimeID(2)))
+        XCTAssertEqual(workspace.placeholder.button.title, "Start Daemon")
+        XCTAssertTrue(workspace.placeholder.messageLabel.stringValue.contains("once the daemon lists it"))
+        workspace.placeholder.press()
+        XCTAssertEqual(app.daemonStarts, 1)
+        XCTAssertEqual(workspace.content, .restoring(runtimeSessionID: F.runtimeID(2)), "starting the daemon keeps the restore")
+
+        app.store.apply(.disconnected(.unsupported, retryIn: 0.5))
+        XCTAssertEqual(workspace.placeholder.button.title, "Restart Daemon")
+    }
+
     func testTheSessionIsAskedAboutOnceWhileTheAnswerIsPending() throws {
         app.holdsAnswers = true
         app.store.apply(snapshot: F.snapshot(sessions))

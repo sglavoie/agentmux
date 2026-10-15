@@ -349,6 +349,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// session, kept while a view is about it: a terminal whose session is
     /// no longer listed still says whose it was.
     private var sessionNames: [String: String] = [:]
+    /// Each sidebar line's `decoration` as last drawn.
+    private var drawnDecorations: [String?] = []
     /// The font size each session's last terminal had when it was let go,
     /// by runtime session, so a zoom survives the window closing. Kept for
     /// the app's lifetime.
@@ -425,6 +427,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             isOpen = true
             Self.logger.notice("workspace: opened")
             delegate?.workspaceVisibilityChanged(true)
+            comeBackToSelection()
         }
         startAgeTimer()
         NSApp.activate()
@@ -436,9 +439,24 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// tests: everything else behaves as it does on screen.
     func openForTesting() {
         _ = window
-        isOpen = true
+        if !isOpen {
+            isOpen = true
+            comeBackToSelection()
+        }
         startAgeTimer()
         refresh()
+    }
+
+    /// Reopening comes back to the session the window was on the way a
+    /// launch does: a terminal that attached to it while the window was
+    /// closed keeps it, so it is attached again only once amx says nobody
+    /// else has it.
+    private func comeBackToSelection() {
+        guard let key = state.selection, viewSelection == nil, !key.runtimeSessionID.isEmpty else { return }
+        let id = key.runtimeSessionID
+        let conversation = state.row(key)?.conversation
+            ?? (shownConversation?.runtimeSessionID == id ? shownConversation?.conversation : nil)
+        restore(.session(runtimeSessionID: id), conversation: conversation)
     }
 
     private func startAgeTimer() {
@@ -2080,6 +2098,18 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 self.activate(row)
             }
         case .restoring:
+            // A daemon that is down or too old never says: what would bring
+            // it back is offered here, not only under the sidebar.
+            if !state.current, let feed = delegate?.store.feed, let down = WorkspaceSidebar.feedExplanation(feed),
+               let action = down.action {
+                placeholder.show(
+                    title: down.title,
+                    message: "The window comes back to the session it was on once the daemon lists it. \(down.message)",
+                    button: action.title,
+                    isDefault: true
+                ) { [weak self] in self?.performDaemonAction(action) }
+                break
+            }
             placeholder.show(
                 title: "Restoring",
                 message: state.current
@@ -2185,11 +2215,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 }
             }
         let dimmed: CGFloat = state.current ? 1 : 0.5
-        if force || wanted != items || sidebar.alphaValue != dimmed {
+        let decorations = wanted.map(decoration)
+        if force || wanted != items || sidebar.alphaValue != dimmed || decorations != drawnDecorations {
             // A snapshot mostly moves ages and glyphs: only those lines are
-            // drawn again, and the pointer's × stays where it is.
-            let changed = force ? nil : Self.changedLines(from: items, to: wanted)
+            // drawn again, and the pointer's × stays where it is. A line
+            // whose ⌘ digit or session name moved is one of them, though
+            // its own item is the same: a session started above it, in a
+            // collapsed project, or the session beside it was renamed.
+            var changed = force ? nil : Self.changedLines(from: items, to: wanted)
+            if changed != nil, decorations.count == drawnDecorations.count {
+                changed?.formUnion(IndexSet(decorations.indices.filter { decorations[$0] != drawnDecorations[$0] }))
+            }
             items = wanted
+            drawnDecorations = decorations
             sidebar.alphaValue = dimmed
             if let changed {
                 if !changed.isEmpty { reload(changed) }
@@ -2203,6 +2241,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         syncSidebarSelection()
         reloadInspector()
         if isSwitching { switcher.update(switcherEntries()) }
+    }
+
+    /// What a line draws that its item does not carry: a session's ⌘ digit,
+    /// or the name of the session a view is about.
+    private func decoration(_ item: Item) -> String? {
+        switch item {
+        case let .row(row): return sessionKey(of: row.key)
+        case let .view(view): return view.aboutRuntimeSessionID.flatMap { sessionNames[$0] }
+        case .section, .group: return nil
+        }
     }
 
     private func syncSidebarSelection() {

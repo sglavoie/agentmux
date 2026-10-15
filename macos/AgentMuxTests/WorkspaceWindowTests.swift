@@ -529,6 +529,20 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNil(workspace.sessionKey(of: .embedded("rs-not-listed")))
     }
 
+    func testALineKeepsItsDigitTrueWhenASessionStartsInACollapsedProject() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let web = try row("web", "work").key
+        let line = try cell(web)
+        XCTAssertEqual(line.keyLabel.stringValue, "⌘3")
+        workspace.setCollapsed(project: "api", pinned: false, true)
+
+        // Only the collapsed header's count changes; the web line's own
+        // item does not, but its digit does.
+        app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "spare")]))
+        XCTAssertEqual(workspace.sessionKey(of: web), "4")
+        XCTAssertEqual(try cell(web).keyLabel.stringValue, "⌘4")
+    }
+
     func testShiftRaisesAKittySessionInKitty() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         // An embedded session has nowhere else to go: it is focused here.
@@ -1295,6 +1309,20 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.openForTesting()
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(app.made.count, 3, "only the selected session is attached again")
+    }
+
+    func testReopeningNeverTakesASessionAnotherTerminalAttachedMeanwhile() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "personal"))
+        workspace.window.close()
+
+        // `amx attach` in another terminal took the session while closed.
+        app.statuses[F.runtimeID(2)] = .live(clients: 1)
+        workspace.openForTesting()
+        XCTAssertEqual(app.asked.last, F.runtimeID(2), "amx is asked before anything attaches")
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(2)))
+        XCTAssertEqual(app.made.count, 1, "the other terminal keeps the session")
     }
 
     /// A session's zoom is the terminal's, and the terminal is let go with
