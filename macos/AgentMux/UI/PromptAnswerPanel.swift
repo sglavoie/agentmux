@@ -203,7 +203,9 @@ struct PromptAnswerView: View {
         .onChange(of: flow.state?.phase) { _, phase in
             if phase == .open { focused = true }
         }
-        .onKeyPress { press in
+        // A key held down repeats; only its first press is an answer, or a
+        // held key would answer the next prompt the look shows.
+        .onKeyPress(phases: .down) { press in
             guard let key = Self.key(press.characters, modifiers: press.modifiers),
                   flow.state?.canPress == true else { return .ignored }
             flow.press(key)

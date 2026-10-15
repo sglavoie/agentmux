@@ -143,6 +143,18 @@ final class PromptAnswerTests: XCTestCase {
         XCTAssertEqual(state.press(PromptKey.digits[0]), .press(seq: 4, arguments: ["send", id, "--key", "1"]))
     }
 
+    func testAConfirmedKeyThatFailsConfirmsNothingAfterIt() {
+        var (state, _) = PromptAnswerState.open(target)
+        state.looked(seq: 1, .success(asking))
+        _ = state.press(two)
+        _ = state.pressed(seq: 2, .failure(refusal("confirmation_required")))
+        XCTAssertEqual(state.press(two), .press(seq: 3, arguments: ["send", id, "--key", "2", "--yes"]))
+        XCTAssertEqual(state.pressed(seq: 3, .failure(refusal("no_prompt_showing"))), .look(seq: 4, settle: true))
+        state.looked(seq: 4, .success(asking))
+        XCTAssertEqual(state.press(two), .press(seq: 5, arguments: ["send", id, "--key", "2"]),
+                       "the next key is asked about again, not sent with --yes")
+    }
+
     func testRefusalsAreWordedForThePanel() {
         var (state, _) = PromptAnswerState.open(target)
         state.looked(seq: 1, .success(asking))

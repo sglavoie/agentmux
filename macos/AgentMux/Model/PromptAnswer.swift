@@ -269,6 +269,10 @@ struct PromptAnswerState: Equatable {
             note("This session runs an agent-session-loop run, and what is sent reaches its supervisor. Press the key again to confirm.", .confirm)
             return nil
         case let .failure(error):
+            // A confirmed key that failed confirmed that press only: the
+            // next key, on whatever prompt the look shows, is asked about
+            // afresh.
+            confirmed = false
             note(Self.text(error), .error)
         }
         seq += 1
