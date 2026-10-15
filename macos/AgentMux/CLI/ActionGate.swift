@@ -15,22 +15,32 @@ struct ActionGate: Equatable {
         case sessions
     }
 
-    /// nil until the binary is resolved and probed.
+    /// nil until the binary is resolved and probed, and while a probe has
+    /// not answered: unknown, which is never taken for absent.
     var capabilities: AMXCapabilities?
-    /// Why no amx could be resolved at all.
+    /// Why no amx could be resolved, or why what it offers is not known.
     var problem: String?
     var binaryPath = "amx"
+    /// Whether an amx was found. Its commands can run while what it offers
+    /// is still being asked, so what every amx has is not held up for that.
+    var resolved = false
 
-    init(capabilities: AMXCapabilities? = nil, problem: String? = nil, binaryPath: String = "amx") {
+    init(capabilities: AMXCapabilities? = nil, problem: String? = nil, binaryPath: String = "amx", resolved: Bool = false) {
         self.capabilities = capabilities
         self.problem = problem
         self.binaryPath = binaryPath
+        self.resolved = resolved || capabilities != nil
     }
+
+    static let resolving = "amx is still being resolved"
+    static let checking = "amx is still being checked"
 
     /// nil when `feature` is available.
     func unavailableReason(_ feature: Feature) -> String? {
         if let problem { return problem }
-        guard let capabilities else { return "amx is still being resolved" }
+        // Every amx the app runs has these.
+        if feature == .sessions, resolved { return nil }
+        guard let capabilities else { return resolved ? Self.checking : Self.resolving }
         let missing: String?
         switch feature {
         case .project: missing = capabilities.project ? nil : "project"

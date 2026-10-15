@@ -256,6 +256,13 @@ final class HotKeyCenter {
         case registered(HotKeyCombo)
         case failed(HotKeyCombo, OSStatus)
 
+        /// The shortcut that works now; nil when there is none or the system
+        /// refused it, so nothing shows a key that does nothing.
+        var registeredCombo: HotKeyCombo? {
+            guard case let .registered(combo) = self else { return nil }
+            return combo
+        }
+
         /// What Preferences says about it; nil when all is well.
         var problem: String? {
             guard case .failed(let combo, let status) = self else { return nil }

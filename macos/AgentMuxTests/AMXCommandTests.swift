@@ -277,6 +277,30 @@ final class AMXCommandTests: XCTestCase {
         XCTAssertEqual(AMXCommand.exitCode(waitStatus: SIGKILL), 128 + SIGKILL)
     }
 
+    /// A timeout ends what the child started too: a login shell's profile,
+    /// or the tmux client amx waits on, would otherwise run on, orphaned.
+    func testATimeoutKillsTheChildsChildrenToo() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appendingPathComponent("grandchild")
+        XCTAssertEqual(ProcessOutput.execute(
+            "/bin/sh", arguments: ["-c", "sleep 30 & echo $! > '\(pidFile.path)'; wait"], timeout: 0.5
+        ), .timedOut)
+        let text = try String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        let grandchild = try XCTUnwrap(pid_t(text))
+        let deadline = Date().addingTimeInterval(3)
+        // Orphaned, it is reaped by launchd once it dies.
+        while kill(grandchild, 0) == 0, Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+        XCTAssertEqual(kill(grandchild, 0), -1, "the grandchild outlived the timeout")
+        XCTAssertEqual(errno, ESRCH)
+    }
+
+    func testAChildEndedByASignalReportsIt() throws {
+        let output = try XCTUnwrap(ProcessOutput.run("/bin/sh", arguments: ["-c", "kill -9 $$"], timeout: 5))
+        XCTAssertEqual(output.status, SIGKILL)
+    }
+
     func testChildThatIgnoresTerminateIsKilled() {
         let start = Date()
         XCTAssertNil(ProcessOutput.run("/bin/sh", arguments: ["-c", "trap '' TERM; exec 1>&- 2>&-; while :; do sleep 0.05; done"], timeout: 0.2))
@@ -377,6 +401,33 @@ final class AMXCommandTests: XCTestCase {
         }
         XCTAssertEqual(AMXCapabilities.probe(amx), AMXCapabilities(notificationsSnooze: true))
         XCTAssertEqual(recorder.calls.map(\.1), [["--help"], ["notifications", "--help"]])
+    }
+
+    /// A help that did not come (a timeout on a busy machine) leaves what
+    /// amx offers unknown: never read as an amx that lacks it all.
+    func testAnUnansweredProbeIsUnknownNotAbsent() {
+        let recorder = Recorder()
+        var amx = command(recorder, output: nil)
+        amx.runner = { _, _, _, _ in .timedOut }
+        XCTAssertNil(AMXCapabilities.probe(amx))
+        amx.runner = { _, arguments, _, _ in
+            guard arguments == ["--help"] else { return .timedOut }
+            return .finished(ProcessOutput(status: 0, stdout: Data("Available Commands:\n  mute-toggle  M\n".utf8), stderr: Data()))
+        }
+        XCTAssertNil(AMXCapabilities.probe(amx), "a subcommand's help that did not come is unknown too")
+    }
+
+    func testTheResolversVersionIsReadOnce() {
+        let reads = Locked<[String]>([])
+        let cache = VersionCache { path in
+            reads.set(reads.get() + [path])
+            return path == "/bin/amx" ? AMXVersion.parse("amx version 0.9.0 (revision abc)") : nil
+        }
+        XCTAssertEqual(cache.read("/bin/amx")?.version, "0.9.0")
+        XCTAssertEqual(cache.read("/bin/amx")?.version, "0.9.0")
+        XCTAssertNil(cache.read("/slow/amx"))
+        XCTAssertNil(cache.read("/slow/amx"))
+        XCTAssertEqual(reads.get(), ["/bin/amx", "/slow/amx"])
     }
 }
 

@@ -115,6 +115,32 @@ struct AMXVersion: Equatable {
     }
 }
 
+/// The `--version` answers read during one resolve, so the binary chosen is
+/// not asked again for what the resolver already read while comparing
+/// copies. An answer that did not come is remembered too: asked again, a
+/// slow binary would cost its whole timeout a second time.
+final class VersionCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var answers: [String: AMXVersion?] = [:]
+    private let reader: (String) -> AMXVersion?
+
+    init(reader: @escaping (String) -> AMXVersion? = { AMXVersion.read(binary: $0) }) {
+        self.reader = reader
+    }
+
+    func read(_ path: String) -> AMXVersion? {
+        lock.lock()
+        if let answer = answers[path] {
+            lock.unlock()
+            return answer
+        }
+        lock.unlock()
+        let answer = reader(path)
+        lock.lock(); answers[path] = .some(answer); lock.unlock()
+        return answer
+    }
+}
+
 /// `52189e529adf-dirty`, or `unknown` without a revision, as `buildinfo` prints it.
 func revisionLabel(revision: String?, dirty: Bool) -> String {
     var label = revision.map { String($0.prefix(12)) } ?? "unknown"

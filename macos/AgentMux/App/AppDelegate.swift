@@ -66,12 +66,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Health requests run here, so a slow resolve never holds up the daemon
     /// line.
     private let healthQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.health", qos: .utility)
-    /// Focus, mute, and snooze requests run here, so a click never waits
-    /// behind a health check or a launch.
+    /// Focus and snooze requests run here: each is one short round-trip on
+    /// the daemon's socket, so a click never waits behind an amx subprocess,
+    /// a health check, or a launch.
     private let focusQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.focus", qos: .userInitiated)
-    /// Launches, continues, and closes run here, one at a time: each can take
-    /// up to a minute or two, and none of them should hold up a click.
+    /// The quick amx commands (a session's status, naming, mute, the state
+    /// keys, open-dashboard) run here, one at a time, so that two mutes of
+    /// one session land in the order they were clicked, and an amx that takes
+    /// its full ten seconds never holds up a focus.
+    private let amxQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.amx", qos: .userInitiated)
+    /// Launches and continues run here, one at a time: each can take up to
+    /// two minutes, and none of them should hold up a click.
     private let launchQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.launch", qos: .userInitiated)
+    /// Ending a session and restarting the daemon run here, one at a time,
+    /// apart from launches: neither should wait minutes behind a launch that
+    /// has nothing to do with it.
+    private let controlQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.control", qos: .userInitiated)
+    /// The amx commands that change something and are running now, by what
+    /// the quit confirmation calls them. Quitting closes their pipes, and amx
+    /// can die of it halfway through.
+    private var runningChanges: [Int: String] = [:]
+    private var nextChange = 0
     /// The project and Recent lists load here, so a slow transcript refresh
     /// never holds up a health check or a click.
     private let listQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.lists", qos: .utility, attributes: .concurrent)
@@ -139,7 +154,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         setUpPreferences()
         setUpHotKeys()
         store.onChange = { [weak self] in self?.storeChanged() }
-        startSubscription()
+        // The first subscribe waits for amx to be resolved, so it reports the
+        // build doctor compares; a slow login shell holds it up no longer
+        // than this, and the daemon line is polled meanwhile.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstSubscribeWait) { [weak self] in
+            MainActor.assumeIsolated { self?.startSubscription() }
+        }
         refreshDaemonStatus()
         let timer = Timer(timeInterval: Self.healthInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -152,11 +172,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            // A socket held across sleep may be half-open; do not wait for
-            // the heartbeat watchdog to find out.
+            // The daemon's socket is local, so it does not go half-open while
+            // both ends sleep: a stream that is still good is kept (one that
+            // is not ends at its EOF, or by the watchdog, which does not
+            // count the sleep). A feed waiting out a retry dials now.
             MainActor.assumeIsolated {
-                Self.logger.notice("woke from sleep; reconnecting the feed")
-                self?.subscription?.reconnectNow()
+                guard let self, self.store.feed != .live else { return }
+                Self.logger.notice("woke from sleep; dialing the feed")
+                self.reconnectIfWaiting()
             }
         }
         trackActiveKitty()
@@ -190,17 +213,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // One sheet names every shell, editor, or pager whose program would
-        // be lost; a session's terminal only detaches, so it never asks.
-        let asked = workspace?.confirmQuit { [weak self] confirmed in
+        let running = runningChanges.sorted { $0.key < $1.key }.map(\.value)
+        guard running.isEmpty else {
+            Self.logger.notice("quit asked while amx is \(running.joined(separator: ", "), privacy: .public); asking")
+            // Asked after this event, once AppKit has been told the answer
+            // is coming.
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.askToQuitWhileChanging(running) else {
+                        return sender.reply(toApplicationShouldTerminate: false)
+                    }
+                    if !self.confirmViewsBeforeQuit(sender) {
+                        self.isTerminating = true
+                        sender.reply(toApplicationShouldTerminate: true)
+                    }
+                }
+            }
+            return .terminateLater
+        }
+        if confirmViewsBeforeQuit(sender) { return .terminateLater }
+        isTerminating = true
+        return .terminateNow
+    }
+
+    /// One sheet names every shell, editor, or pager whose program would be
+    /// lost; a session's terminal only detaches, so it never asks. True when
+    /// it asked, in which case the answer goes to `sender` from here.
+    private func confirmViewsBeforeQuit(_ sender: NSApplication) -> Bool {
+        workspace?.confirmQuit { [weak self] confirmed in
             // A window that closes because the app is quitting was open:
             // the next launch reopens it.
             if confirmed { self?.isTerminating = true }
             sender.reply(toApplicationShouldTerminate: confirmed)
         } ?? false
-        if asked { return .terminateLater }
-        isTerminating = true
-        return .terminateNow
+    }
+
+    /// Whether to quit while amx is still launching, continuing, ending, or
+    /// restarting something: quitting closes its pipes, and amx can die of
+    /// it halfway, leaving a session started but never shown, or half ended.
+    private func askToQuitWhileChanging(_ running: [String]) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = Self.quitWhileChangingQuestion(running)
+        alert.informativeText = "Quitting now can stop it halfway. Wait for it to finish, or quit anyway and check the session list afterwards."
+        alert.addButton(withTitle: "Quit Anyway").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// `Quit while amx is still launching api?`
+    nonisolated static func quitWhileChangingQuestion(_ running: [String]) -> String {
+        switch running.count {
+        case 0: return "Quit Agent Mux?"
+        case 1: return "Quit while amx is still \(running[0])?"
+        default:
+            return "Quit while amx is still \(running.dropLast().joined(separator: ", ")) and \(running[running.count - 1])?"
+        }
+    }
+
+    /// Records an amx command that changes something, for the quit
+    /// confirmation; `endChange` with the token it returns once it is done.
+    private func beginChange(_ label: String) -> Int {
+        nextChange += 1
+        runningChanges[nextChange] = label
+        return nextChange
+    }
+
+    private func endChange(_ token: Int) {
+        runningChanges[token] = nil
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -442,7 +523,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
             return
         }
-        focusQueue.async {
+        amxQueue.async {
             let status = WorkspaceSessionStatus.from(command.json(AttachCheck.self, ["attach", runtimeSessionID]))
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -460,12 +541,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             completion(preferences.binaryMenuProblem ?? "amx has not been found yet.")
             return
         }
-        launchQueue.async {
+        let change = beginChange("ending a session")
+        controlQueue.async { [weak self] in
             let problem = SessionClose.problem(command.json(
                 SessionClose.self, ["close", runtimeSessionID, "--yes"], timeout: AMXCommand.actionTimeout, mutates: true
             ))
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    self?.endChange(change)
                     Self.logger.notice("close \(runtimeSessionID, privacy: .public): \(problem ?? "closed", privacy: .public)")
                     completion(problem)
                 }
@@ -523,7 +606,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             completion(preferences.binaryMenuProblem ?? "amx has not been found yet.")
             return
         }
-        focusQueue.async {
+        amxQueue.async {
             let result = command.json(NameSessionResult.self, NameSessionResult.arguments(runtimeSessionID: runtimeSessionID, name: name))
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -646,7 +729,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             guard socket?.isEmpty == false else { return refuse(KittyEndpoint.listenOnMissing) }
         }
         let arguments = ["hook-indicator", event] + Self.hookTarget(row.target) + ["--strict"]
-        focusQueue.async { [weak self] in
+        amxQueue.async { [weak self] in
             let result = command.run(arguments, kittyListenOn: socket)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -687,7 +770,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if let listed = store.sessions.first(where: { $0.embeddedRuntimeSessionID == id }) {
             store.expectMute(key, muted: !listed.muted)
         }
-        focusQueue.async { [weak self] in
+        amxQueue.async { [weak self] in
             let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(runtimeSessionID: id))
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -715,7 +798,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     // MARK: Companion feed
 
+    /// How long the first subscribe waits for amx to be resolved.
+    static let firstSubscribeWait: TimeInterval = 3
+
+    /// Opens the companion feed, once; later calls do nothing.
     private func startSubscription() {
+        guard subscription == nil, !isTerminating else { return }
         let client = SubscriptionClient(request: subscribeRequest.params) { [weak self] event in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.handle(event) }
@@ -763,6 +851,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             break
         }
         store.apply(event)
+        followDaemonBuild()
         if store.feed != lastFeed {
             lastFeed = store.feed
             Self.logger.notice("feed: \(String(describing: self.store.feed), privacy: .public)")
@@ -987,6 +1076,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             store.show(notice: preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
             return
         }
+        if let busy = daemonBusy { return report(busy) }
         let log = DaemonStart.stderrLog()
         let exited: @Sendable (pid_t, Int32) -> Void = { [weak self] pid, code in
             DispatchQueue.main.async {
@@ -1011,6 +1101,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var daemonStartPID: pid_t?
     private var daemonStartExit: Int32?
     private var daemonStartLog: URL?
+    /// Set while `amx daemon restart` runs.
+    private var daemonRestartRunning = false
+
+    /// What the daemon start or restart under way is doing, or nil. While one
+    /// runs, another is refused and the menu greys both out: a restart
+    /// arriving behind a start, or a second restart, would stop the daemon
+    /// the first had just brought up.
+    var daemonBusy: String? {
+        if daemonRestartRunning { return DaemonStart.restartingNotice }
+        if daemonStartPID != nil { return DaemonStart.startingNotice }
+        return nil
+    }
 
     private func daemonStartExited(pid: pid_t, code: Int32) {
         Self.logger.notice("amx daemon start (pid \(pid)) exited \(code)")
@@ -1030,6 +1132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .started:
             daemonStartPID = nil
             store.replace(notice: DaemonStart.startingNotice, with: nil)
+            statusItem?.refresh()
         case .failed:
             daemonStartPID = nil
             let exit = daemonStartExit.map { "exited \($0)" } ?? "still running"
@@ -1046,11 +1149,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard let command else {
             return report(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
         }
+        if let busy = daemonBusy { return report(busy) }
+        daemonRestartRunning = true
+        let change = beginChange("restarting the daemon")
         store.show(notice: DaemonStart.restartingNotice)
-        launchQueue.async { [weak self] in
+        controlQueue.async { [weak self] in
             let result = command.run(["daemon", "restart"], timeout: AMXCommand.actionTimeout, mutates: true)
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.finishRestart(result) }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.endChange(change)
+                    self.daemonRestartRunning = false
+                    self.finishRestart(result)
+                    self.statusItem?.refresh()
+                }
             }
         }
     }
@@ -1098,73 +1210,220 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
+    /// Which resolve is the current one: what an older, slower one finds is
+    /// dropped.
+    private var resolveGeneration = 0
+    private var resolveRunning = false
+    /// The daemon build the current amx was chosen against; nil when no
+    /// daemon answered then.
+    private var resolvedDaemonBuild: DaemonBuild?
+    /// The resolve or probe retry waiting its turn.
+    private var pendingRetry: DispatchWorkItem?
+    private var resolveRetries = 0
+    private var probeRetries = 0
+    /// Why what amx offers is not known, once every probe went unanswered.
+    private var capabilityProblem: String?
+
+    /// How long a resolve that found no amx, or a probe amx did not answer,
+    /// waits before it is tried again: an amx installed, or a machine less
+    /// busy, a moment later is picked up without a relaunch. Bounded, so an
+    /// amx that is not coming is not looked for all day.
+    nonisolated static let retryDelays: [TimeInterval] = [2, 5, 15, 30, 60]
+
     /// Reads the login shell's environment, asks the daemon which build it
-    /// runs, resolves amx against both, and probes what it can do. The shell
-    /// can take seconds, so none of it runs on the main thread; it is read
-    /// once, and a later resolve (after an override changes) reuses it.
-    private func resolveBinary() {
+    /// runs, and resolves amx against both. The shell can take seconds, so
+    /// none of it runs on the main thread; it is read once, and a later
+    /// resolve (after an override changes) reuses it.
+    ///
+    /// amx is usable as soon as it is found: what it offers (`--help`) and
+    /// the backend report are asked for afterwards, so a slow answer there
+    /// holds up only the items that depend on it. `--version` is read once,
+    /// by the resolver when it compares copies, and reused.
+    ///
+    /// `daemonBuild` is the build a live feed reports, which saves asking;
+    /// `retry` keeps the count of earlier attempts.
+    private func resolveBinary(daemonBuild known: DaemonBuild? = nil, retry: Bool = false) {
+        pendingRetry?.cancel()
+        pendingRetry = nil
+        if !retry { resolveRetries = 0 }
+        resolveGeneration += 1
+        let generation = resolveGeneration
+        resolveRunning = true
         let detected = detectedEnvironment
         let overrides = preferencesModel.preferences.environment
         work.async { [weak self] in
             let shell = detected ?? LaunchEnvironment.current()
             let environment = shell.applying(overrides).namingBundledRuntime(resources: Bundle.main.resourceURL)
-            let build = DaemonClient().health().build
-            let resolution = AMXBinaryResolver.live(searchPath: environment.path, daemonBuild: build).resolve()
-            var snapshot = PreferencesSnapshot()
-            snapshot.detectedEnvironment = shell
+            let build = known ?? DaemonClient().health().build
+            let versions = VersionCache()
+            var resolver = AMXBinaryResolver.live(searchPath: environment.path, daemonBuild: build)
+            resolver.identity = { versions.read($0) }
+            let resolution = resolver.resolve()
             var command: AMXCommand?
+            var binaryVersion: AMXVersion?
             var report: AMXBuildReport?
             switch resolution {
             case let .success(binary):
-                let amx = AMXCommand(binary: binary.url, launchEnvironment: environment)
-                command = amx
-                snapshot.binary = binary
-                snapshot.binaryVersion = AMXVersion.read(binary: binary.url.path)
-                report = AMXBuildReport.of(binary: binary.url, version: snapshot.binaryVersion)
-                snapshot.capabilities = AMXCapabilities.probe(amx)
-                snapshot.backend = BackendSetup(BackendStatus.fetch(amx))
-                Self.log(snapshot.backend)
+                command = AMXCommand(binary: binary.url, launchEnvironment: environment)
+                binaryVersion = versions.read(binary.url.path)
+                report = AMXBuildReport.of(binary: binary.url, version: binaryVersion)
                 Self.logger.notice("running \(binary.url.path, privacy: .public) (\(String(describing: binary.source), privacy: .public))")
             case let .failure(notFound):
-                snapshot.binaryProblem = notFound.message
-                snapshot.binaryMenuProblem = notFound.menuMessage
                 Self.logger.error("\(notFound.message, privacy: .public)")
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.detectedEnvironment = shell
-                    if self.command?.binary != command?.binary || self.command?.launchEnvironment != command?.launchEnvironment {
-                        self.projects.state.reset()
-                        self.projects.missingDirectories = []
-                        self.recent.state.reset()
-                    }
-                    self.command = command
-                    self.workspace?.retryTerminal()
-                    let waiting = self.statusQuestions
-                    self.statusQuestions = []
-                    for (id, completion) in waiting {
-                        if command == nil {
-                            completion(.unknown(self.preferences.binaryMenuProblem ?? "amx was not found."))
-                        } else {
-                            self.sessionStatus(runtimeSessionID: id, completion: completion)
-                        }
-                    }
-                    // Doctor compares the build subscribe reported with the
-                    // daemon's, so a new selection needs a new subscribe.
-                    if self.subscribeRequest.report(build: report) {
-                        self.subscription?.reconnectNow()
-                    }
-                    snapshot.daemonStatus = self.store.daemonStatus
-                    self.preferences = snapshot
-                    self.publishPreferences()
-                    // Listed and surveyed at launch, once the gate knows what
-                    // this amx can do, so the first menu opening already knows
-                    // which projects can be launched.
-                    self.refreshProjects()
+                    guard let self, generation == self.resolveGeneration else { return }
+                    self.finishResolve(resolution, command: command, version: binaryVersion, report: report,
+                                       shell: shell, build: build, generation: generation)
                 }
             }
         }
+    }
+
+    /// Publishes what a resolve found, then asks the amx it found what it
+    /// offers, or schedules another look when it found none.
+    private func finishResolve(
+        _ resolution: Result<AMXBinaryResolver.Resolution, AMXBinaryResolver.NotFound>,
+        command: AMXCommand?, version: AMXVersion?, report: AMXBuildReport?,
+        shell: LaunchEnvironment, build: DaemonBuild?, generation: Int
+    ) {
+        resolveRunning = false
+        resolvedDaemonBuild = build
+        detectedEnvironment = shell
+        let same = self.command?.binary == command?.binary && self.command?.launchEnvironment == command?.launchEnvironment
+        if !same {
+            projects.state.reset()
+            projects.missingDirectories = []
+            recent.state.reset()
+        }
+        var snapshot = PreferencesSnapshot()
+        snapshot.detectedEnvironment = shell
+        if case let .failure(notFound) = resolution {
+            snapshot.binaryProblem = notFound.message
+            snapshot.binaryMenuProblem = notFound.menuMessage
+        } else {
+            snapshot.binary = try? resolution.get()
+            snapshot.binaryVersion = version
+            // The same amx keeps what it was found to offer until it is
+            // asked again.
+            if same, command != nil {
+                snapshot.capabilities = preferences.capabilities
+                snapshot.backend = preferences.backend
+            } else {
+                capabilityProblem = nil
+            }
+        }
+        self.command = command
+        workspace?.retryTerminal()
+        let waiting = statusQuestions
+        statusQuestions = []
+        for (id, completion) in waiting {
+            if command == nil {
+                completion(.unknown(snapshot.binaryMenuProblem ?? "amx was not found."))
+            } else {
+                sessionStatus(runtimeSessionID: id, completion: completion)
+            }
+        }
+        // Doctor reads the build an app reports only to compare it with the
+        // daemon's; the daemon decides nothing by it. A live stream is kept,
+        // and the next subscribe carries it.
+        if subscribeRequest.report(build: report), store.feed == .live {
+            Self.logger.notice("amx build changed; reported at the next subscribe")
+        }
+        snapshot.daemonStatus = store.daemonStatus
+        preferences = snapshot
+        publishPreferences()
+        statusItem?.refresh()
+        // The first subscribe waited for this, so it reports the build.
+        startSubscription()
+
+        guard let command else {
+            scheduleRetry(attempt: &resolveRetries, what: "resolving amx again") { $0.resolveBinary(retry: true) }
+            return
+        }
+        resolveRetries = 0
+        probeRetries = 0
+        probe(command, generation: generation, backend: true)
+        followDaemonBuild()
+    }
+
+    /// Asks `amx` what it offers, then (with `backend`) for its backend
+    /// report, publishing each as it comes. An unanswered probe is asked
+    /// again, a few times, rather than read as an amx that lacks everything.
+    private func probe(_ amx: AMXCommand, generation: Int, backend: Bool) {
+        work.async { [weak self] in
+            let capabilities = AMXCapabilities.probe(amx)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.finishProbe(capabilities, generation: generation) }
+            }
+            guard backend else { return }
+            let setup = BackendSetup(BackendStatus.fetch(amx))
+            Self.log(setup)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, generation == self.resolveGeneration, self.preferences.backend != setup else { return }
+                    self.preferences.backend = setup
+                    self.publishPreferences()
+                }
+            }
+        }
+    }
+
+    private func finishProbe(_ capabilities: AMXCapabilities?, generation: Int) {
+        guard generation == resolveGeneration, let command else { return }
+        if let capabilities {
+            probeRetries = 0
+            capabilityProblem = nil
+            preferences.capabilities = capabilities
+        } else if preferences.capabilities == nil {
+            Self.logger.notice("\(command.binary.path, privacy: .public) did not answer --help")
+            let scheduled = scheduleRetry(attempt: &probeRetries, what: "asking amx what it offers again") {
+                guard generation == $0.resolveGeneration, let amx = $0.command else { return }
+                $0.probe(amx, generation: generation, backend: false)
+            }
+            if !scheduled {
+                capabilityProblem = "\(command.binary.path) did not say which commands it has; see the log"
+            }
+        }
+        publishPreferences()
+        statusItem?.refresh()
+        statusItem?.refreshSubmenus()
+        // Listed and surveyed once the gate knows what this amx can do, so
+        // the first menu opening already knows which projects can be
+        // launched.
+        refreshProjects()
+    }
+
+    /// Runs `action` after the next of `retryDelays`; false, scheduling
+    /// nothing, once they are spent.
+    @discardableResult
+    private func scheduleRetry(attempt: inout Int, what: String, _ action: @escaping @MainActor (AppDelegate) -> Void) -> Bool {
+        guard attempt < Self.retryDelays.count else { return false }
+        let delay = Self.retryDelays[attempt]
+        attempt += 1
+        Self.logger.notice("\(what, privacy: .public) in \(Int(delay))s")
+        pendingRetry?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                action(self)
+            }
+        }
+        pendingRetry = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        return true
+    }
+
+    /// Resolves again when the live daemon runs another build than the one
+    /// amx was chosen against: one started (or replaced) since may be the
+    /// artifact `~/.local/bin/amx` is, which then runs instead of the
+    /// bundled copy.
+    private func followDaemonBuild() {
+        guard store.feed == .live, !resolveRunning, let build = store.snapshot?.daemon.build,
+              build != resolvedDaemonBuild else { return }
+        Self.logger.notice("daemon runs build \(build.version, privacy: .public) (\(build.revision ?? "unknown", privacy: .public)); resolving amx again")
+        resolveBinary(daemonBuild: build)
     }
 
     /// Reads `amx backend status` again for Settings, which otherwise shows
@@ -1272,8 +1531,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         presenter.onClaimChange = { [weak self, unowned presenter] claim in
             guard let self else { return }
             Self.logger.notice("notifications: backend claim \(claim.backend ? "on" : "off", privacy: .public) (\(String(describing: presenter.authorization), privacy: .public))")
+            // The daemon routes notifications by the role claimed in
+            // subscribe, at once, so a changed claim needs a new subscribe;
+            // an unchanged one keeps the stream.
+            guard self.subscribeRequest.claim != claim else { return }
             self.subscribeRequest.claim = claim
-            // The role is claimed in subscribe, so a change needs a new one.
             self.subscription?.reconnectNow()
         }
         presenter.report = { [weak self] id, disposition, error in
@@ -1459,7 +1721,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             snapshot: store.snapshot,
             kittyPIDs: KittyEndpoint.runningKittyPIDs()
         )
-        focusQueue.async { [weak self] in
+        amxQueue.async { [weak self] in
             let outcome = DashboardOpener.open(candidates: candidates) { socket in
                 command.json(OpenDashboardResult.self, ["open-dashboard"], kittyListenOn: socket)
             }
@@ -1529,8 +1791,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var gate: ActionGate {
         ActionGate(
             capabilities: preferences.capabilities,
-            problem: command == nil ? preferences.binaryMenuProblem : nil,
-            binaryPath: command?.binary.path ?? "amx"
+            problem: command == nil ? preferences.binaryMenuProblem : capabilityProblem,
+            binaryPath: command?.binary.path ?? "amx",
+            resolved: command != nil
         )
     }
 
@@ -1546,8 +1809,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return MenuBuilder.ActionsInput(
             gate: gate,
             dashboardPlace: prefs.dashboardPlace,
-            dashboardHotKey: prefs.hotKeyDashboard,
-            nextAttentionHotKey: prefs.hotKeyNextAttention,
+            // Only a shortcut the system took: one refused, taken by another
+            // app, or set aside while a recorder listens does nothing.
+            dashboardHotKey: dashboardHotKey?.registration.registeredCombo,
+            nextAttentionHotKey: attentionHotKey?.registration.registeredCombo,
             feedLive: live,
             waiting: live ? AttentionCycler.ordered(store.sessions).count : 0,
             projects: projects.state,
@@ -1558,6 +1823,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             liveConversations: store.sessions.compactMap(\.conversation).filter { !$0.sessionID.isEmpty },
             notification: live ? store.snapshot?.notification : nil,
             snoozeSupported: snoozeSupported,
+            daemonBusy: daemonBusy,
             configPath: AMXConfigPath.resolve(command?.launchEnvironment ?? detectedEnvironment),
             now: Date()
         )
@@ -1661,6 +1927,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let arguments = ProjectCatalog.launchArguments(for: project, directory: directory)
         let progress = Self.launchingNotice(project.title)
         store.show(notice: progress)
+        let change = beginChange(Self.launchingChange(project.title))
         launchQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
                 command.json(ProjectLaunchResult.self, arguments, kittyListenOn: socket,
@@ -1668,6 +1935,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    self?.endChange(change)
                     self?.finishOpening(outcome, label: "launch \(project.profile)/\(project.title)", progress: progress) { $0.windowID }
                 }
             }
@@ -1701,10 +1969,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let label = "launch \(project.profile)/\(project.title)"
         let progress = Self.launchingNotice(project.title)
         store.show(notice: progress)
+        let change = beginChange(Self.launchingChange(project.title))
         launchQueue.async { [weak self] in
             let result = command.json(ProjectLaunchResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    self?.endChange(change)
                     self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label, progress: progress)
                 }
             }
@@ -1749,12 +2019,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let label = "continue \(conversation.selector)"
         let progress = Self.launchingNotice(conversation.selector)
         store.show(notice: progress)
+        let change = beginChange(Self.launchingChange(conversation.selector))
         if preferencesModel.preferences.launchBackend.launchesInWorkspace {
             let arguments = RecentSessions.workspaceContinueArguments(for: conversation)
             launchQueue.async { [weak self] in
                 let result = command.json(SessionContinueResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
+                        self?.endChange(change)
                         self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label, progress: progress)
                     }
                 }
@@ -1770,6 +2042,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    self?.endChange(change)
                     self?.finishOpening(outcome, label: label, progress: progress) { $0.windowID }
                 }
             }
@@ -1832,7 +2105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         // Shown at once, so a menu reopened before the daemon publishes the
         // change does not offer the toggle the click already made.
         store.expectMute(socket: socket, windowID: row.windowID, muted: !row.muted)
-        focusQueue.async { [weak self] in
+        amxQueue.async { [weak self] in
             let result = command.json(MuteToggleResult.self, MuteToggleResult.arguments(windowID: row.windowID), kittyListenOn: socket)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -2046,6 +2319,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         name.isEmpty ? "Launching…" : "Launching \(name)…"
     }
 
+    /// A launch or continue, as the quit confirmation names it.
+    nonisolated static func launchingChange(_ name: String) -> String {
+        name.isEmpty ? "launching a session" : "launching \(name)"
+    }
+
     /// The menu line for a failure: the message, after the title unless the
     /// message already says it.
     nonisolated static func failureLine(title: String, message: String) -> String {
@@ -2115,10 +2393,24 @@ extension AppDelegate: NSMenuItemValidation {
             return workspace?.shownSessionRow != nil
         case #selector(newSessionTerminal(_:)):
             return workspace?.canOpenTerminalBesideSession == true
+        case #selector(toggleWorkspaceSidebar(_:)):
+            item.title = Self.sidebarItemTitle(shown: workspace.map { !$0.isSidebarCollapsed } ?? false)
+        case #selector(toggleWorkspaceInspector(_:)):
+            item.title = Self.inspectorItemTitle(shown: workspace.map { !$0.isInspectorCollapsed } ?? false)
         default:
             break
         }
         return true
+    }
+
+    /// What the sidebar's item does now, as a Mac app's View menu says it.
+    nonisolated static func sidebarItemTitle(shown: Bool) -> String {
+        shown ? "Hide Sidebar" : "Show Sidebar"
+    }
+
+    /// What the inspector's item does now.
+    nonisolated static func inspectorItemTitle(shown: Bool) -> String {
+        shown ? "Hide Inspector" : "Show Inspector"
     }
 }
 

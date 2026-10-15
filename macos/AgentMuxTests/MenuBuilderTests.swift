@@ -123,6 +123,29 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(MenuBuilder.entries(truncated).last, .info("More sessions than the daemon lists"))
     }
 
+    /// A second start or restart could stop the daemon the first just
+    /// brought up, so both are greyed out, with what is under way, while one
+    /// runs: in the feed lines, the notice's offer, and Notifications.
+    func testDaemonActionsAreGreyedOutWhileOneRuns() {
+        var down = input([], feed: .notRunning)
+        down.daemonBusy = DaemonStart.startingNotice
+        XCTAssertEqual(MenuBuilder.entries(down),
+                       [.info("Daemon: not running"), .unavailable("Start Daemon", reason: DaemonStart.startingNotice)])
+        var old = input([], feed: .daemonTooOld)
+        old.daemonBusy = DaemonStart.restartingNotice
+        XCTAssertEqual(MenuBuilder.entries(old).last, .unavailable("Restart Daemon", reason: DaemonStart.restartingNotice))
+        var noticed = input([])
+        noticed.notice = MenuBuilder.snoozeUnsupported
+        noticed.daemonBusy = DaemonStart.restartingNotice
+        XCTAssertTrue(MenuBuilder.entries(noticed).contains(.unavailable("Restart Daemon", reason: DaemonStart.restartingNotice)))
+        var actions = MenuBuilder.ActionsInput()
+        actions.notification = CompanionNotification()
+        actions.snoozeSupported = false
+        actions.daemonBusy = DaemonStart.restartingNotice
+        XCTAssertEqual(MenuBuilder.notificationEntries(actions),
+                       [.info(MenuBuilder.snoozeUnsupported), .unavailable("Restart Daemon", reason: DaemonStart.restartingNotice)])
+    }
+
     func testFeedStates() {
         XCTAssertEqual(MenuBuilder.entries(input([], feed: .notRunning)),
                        [.info("Daemon: not running"), .action(.startDaemon, "Start Daemon")])

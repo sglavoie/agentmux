@@ -85,12 +85,22 @@ struct AMXCapabilities: Equatable {
         muteToggleJSON = muteToggle?.flags.contains("--json") ?? false
     }
 
-    static func probe(_ command: AMXCommand) -> AMXCapabilities {
-        let root = command.help()
-        return AMXCapabilities(
-            root: root,
-            notifications: root?.subcommands.contains("notifications") == true ? command.help(["notifications"]) : nil,
-            muteToggle: root?.subcommands.contains("mute-toggle") == true ? command.help(["mute-toggle"]) : nil
-        )
+    /// Asks the binary; nil when a help it should have given did not come
+    /// (it failed, or outlasted its timeout on a busy machine). That is
+    /// unknown, not absent: the menu must not tell the operator to reinstall
+    /// an amx that was only slow to answer.
+    static func probe(_ command: AMXCommand) -> AMXCapabilities? {
+        guard let root = command.help() else { return nil }
+        var notifications: AMXHelp?
+        if root.subcommands.contains("notifications") {
+            guard let help = command.help(["notifications"]) else { return nil }
+            notifications = help
+        }
+        var muteToggle: AMXHelp?
+        if root.subcommands.contains("mute-toggle") {
+            guard let help = command.help(["mute-toggle"]) else { return nil }
+            muteToggle = help
+        }
+        return AMXCapabilities(root: root, notifications: notifications, muteToggle: muteToggle)
     }
 }

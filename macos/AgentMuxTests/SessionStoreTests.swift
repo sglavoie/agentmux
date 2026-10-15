@@ -142,6 +142,27 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(AppDelegate.failureLine(title: "Could not restart the daemon", message: ""), "Could not restart the daemon")
     }
 
+    func testAnUnreadableSnapshotIsReconnectingAndSaysWhy() {
+        let store = SessionStore()
+        store.apply(.disconnected(.unreadableSnapshot, retryIn: 10))
+        XCTAssertEqual(store.feed, .reconnecting(DaemonPhrase.unreadableSnapshot))
+    }
+
+    func testQuitWhileAmxChangesSomethingNamesWhat() {
+        XCTAssertEqual(AppDelegate.launchingChange("API"), "launching API")
+        XCTAssertEqual(AppDelegate.launchingChange(""), "launching a session")
+        XCTAssertEqual(AppDelegate.quitWhileChangingQuestion(["launching API"]), "Quit while amx is still launching API?")
+        XCTAssertEqual(AppDelegate.quitWhileChangingQuestion(["launching API", "ending a session", "restarting the daemon"]),
+                       "Quit while amx is still launching API, ending a session and restarting the daemon?")
+    }
+
+    func testSidebarAndInspectorItemsSayWhatTheyWillDo() {
+        XCTAssertEqual(AppDelegate.sidebarItemTitle(shown: true), "Hide Sidebar")
+        XCTAssertEqual(AppDelegate.sidebarItemTitle(shown: false), "Show Sidebar")
+        XCTAssertEqual(AppDelegate.inspectorItemTitle(shown: true), "Hide Inspector")
+        XCTAssertEqual(AppDelegate.inspectorItemTitle(shown: false), "Show Inspector")
+    }
+
     func testDaemonStartVerdict() {
         XCTAssertEqual(DaemonStart.verdict(feed: .notRunning, exitCode: nil, deadlinePassed: false), .waiting)
         XCTAssertEqual(DaemonStart.verdict(feed: .connecting, exitCode: 0, deadlinePassed: false), .waiting,

@@ -31,6 +31,18 @@ final class ActionGateTests: XCTestCase {
         XCTAssertEqual(missing.unavailableReason(.sessions), "amx was not found")
     }
 
+    /// Found but not yet asked (or not yet answering): what every amx has
+    /// is offered, and the rest waits without being called missing.
+    func testAnAmxStillBeingCheckedIsNotCalledMissingAnything() {
+        let gate = ActionGate(binaryPath: "/bin/amx", resolved: true)
+        XCTAssertNil(gate.unavailableReason(.sessions))
+        XCTAssertEqual(gate.unavailableReason(.project), ActionGate.checking)
+        XCTAssertEqual(gate.unavailableReason(.openDashboard), ActionGate.checking)
+        XCTAssertEqual(gate.unavailableReason(.muteToggle), ActionGate.checking)
+        let silent = ActionGate(problem: "/bin/amx did not say which commands it has; see the log", binaryPath: "/bin/amx", resolved: true)
+        XCTAssertEqual(silent.unavailableReason(.project), "/bin/amx did not say which commands it has; see the log")
+    }
+
     func testCapabilitiesFromHelpGateTheMenu() {
         let oldRoot = AMXHelp(subcommands: ["session", "mute-toggle", "notifications"], flags: [])
         let capabilities = AMXCapabilities(root: oldRoot, notifications: AMXHelp(subcommands: ["test"], flags: []),

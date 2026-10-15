@@ -206,6 +206,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 override: kittySocketOverride, rowSocket: "", snapshotSocket: "", kittyPIDs: KittyEndpoint.runningKittyPIDs()
             ).isEmpty
         }
+        let actions = delegate?.actionsInput
         return MenuBuilder.Input(
             feed: store.feed,
             daemonStatus: store.daemonStatus,
@@ -213,8 +214,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             snapshot: store.snapshot,
             notice: store.notice,
             kittyReachable: reachable,
-            gate: delegate?.actionsInput.gate ?? ActionGate(),
-            order: delegate?.attentionOrder ?? WorkspaceOrder()
+            gate: actions?.gate ?? ActionGate(),
+            order: delegate?.attentionOrder ?? WorkspaceOrder(),
+            daemonBusy: actions?.daemonBusy
         )
     }
 

@@ -51,6 +51,14 @@ final class HotKeyTests: XCTestCase {
         XCTAssertNil(HotKeyConflicts.problem(for: .none, systemCombos: [combo]))
     }
 
+    /// The status menu shows a shortcut only while the system holds it.
+    func testOnlyARegisteredShortcutIsOneToShow() {
+        let combo = HotKeyPreference.dashboard.default
+        XCTAssertEqual(HotKeyCenter.Registration.registered(combo).registeredCombo, combo)
+        XCTAssertNil(HotKeyCenter.Registration.failed(combo, OSStatus(eventHotKeyExistsErr)).registeredCombo)
+        XCTAssertNil(HotKeyCenter.Registration.none.registeredCombo)
+    }
+
     func testCarbonRefusals() {
         let combo = HotKeyPreference.dashboard.default
         XCTAssertEqual(

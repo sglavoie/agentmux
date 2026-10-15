@@ -95,6 +95,9 @@ enum MenuBuilder {
         /// The workspace sidebar's arrangement, which orders Needs attention
         /// the way the next-attention shortcut visits it.
         var order = WorkspaceOrder()
+        /// What the daemon start or restart under way is doing; nil when none
+        /// is. Start Daemon and Restart Daemon are greyed out meanwhile.
+        var daemonBusy: String?
     }
 
     /// What the action items and their submenus are built from.
@@ -122,6 +125,9 @@ enum MenuBuilder {
         var notification: CompanionNotification?
         /// False once the daemon has answered that it has no snooze.
         var snoozeSupported = true
+        /// What the daemon start or restart under way is doing; nil when none
+        /// is.
+        var daemonBusy: String?
         var configPath = ""
         var now = Date()
     }
@@ -135,18 +141,18 @@ enum MenuBuilder {
             entries.append(.info("Daemon: connecting…"))
         case .notRunning:
             entries.append(.info(DaemonStatusLine.title(for: .notRunning)))
-            entries.append(.action(.startDaemon, "Start Daemon"))
+            entries.append(daemonAction(.startDaemon, "Start Daemon", busy: input.daemonBusy))
         case .daemonTooOld:
             entries.append(.info(DaemonStatusLine.title(for: input.daemonStatus)))
             entries.append(.info("Daemon too old for this app"))
-            entries.append(.action(.restartDaemon, "Restart Daemon"))
+            entries.append(daemonAction(.restartDaemon, "Restart Daemon", busy: input.daemonBusy))
         case let .reconnecting(reason):
             entries.append(.info("Daemon: reconnecting · \(reason)"))
         }
         if let notice = input.notice, !notice.isEmpty {
             entries.append(.info(notice))
             if notice.contains(restartHint), input.feed != .daemonTooOld {
-                entries.append(.action(.restartDaemon, "Restart Daemon"))
+                entries.append(daemonAction(.restartDaemon, "Restart Daemon", busy: input.daemonBusy))
             }
         }
         guard input.feed == .live, input.snapshot != nil else { return entries }
@@ -208,6 +214,14 @@ enum MenuBuilder {
             entries.append(.info("More sessions than the daemon lists"))
         }
         return entries
+    }
+
+    /// Start Daemon or Restart Daemon, greyed out with what is under way
+    /// while a start or restart runs: a second one could stop the daemon the
+    /// first has just started.
+    static func daemonAction(_ action: MenuAction, _ title: String, busy: String?) -> MenuEntry {
+        guard let busy else { return .action(action, title) }
+        return .unavailable(title, reason: busy)
     }
 
     // MARK: ASL questions
@@ -441,7 +455,7 @@ enum MenuBuilder {
             return [.info("The daemon is not connected")]
         }
         guard input.snoozeSupported else {
-            return [.info(snoozeUnsupported), .action(.restartDaemon, "Restart Daemon")]
+            return [.info(snoozeUnsupported), daemonAction(.restartDaemon, "Restart Daemon", busy: input.daemonBusy)]
         }
         let snooze = SnoozeState(notification)
         let snoozed = snooze.isSnoozed(now: input.now)
