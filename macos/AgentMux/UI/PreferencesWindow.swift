@@ -354,7 +354,8 @@ struct PreferencesView: View {
             Section("Shortcuts") {
                 LabeledContent(HotKeyPreference.dashboard.label) {
                     HotKeyRecorderView(combo: $model.preferences.hotKeyDashboard, model: model,
-                                       recorder: dashboardRecorder, other: attentionRecorder)
+                                       recorder: dashboardRecorder, other: attentionRecorder,
+                                       defaultCombo: HotKeyPreference.dashboard.default)
                 }
                 problem(for: HotKeyPreference.dashboard)
                 Picker("Show the dashboard in", selection: $model.preferences.dashboardPlace) {
@@ -363,7 +364,8 @@ struct PreferencesView: View {
                 note("In Kitty, the shortcut brings Kitty forward on the Agent Mux dashboard tab, opening one when none is running.")
                 LabeledContent(HotKeyPreference.nextAttention.label) {
                     HotKeyRecorderView(combo: $model.preferences.hotKeyNextAttention, model: model,
-                                       recorder: attentionRecorder, other: dashboardRecorder)
+                                       recorder: attentionRecorder, other: dashboardRecorder,
+                                       defaultCombo: HotKeyPreference.nextAttention.default)
                 }
                 problem(for: HotKeyPreference.nextAttention)
                 note("Focuses the first session waiting on a stop, key, error, or question, in the order "
@@ -565,6 +567,8 @@ struct HotKeyRecorderView: View {
     @ObservedObject var recorder: HotKeyRecorder
     /// The other shortcut's recorder, stopped when this one starts.
     let other: HotKeyRecorder
+    /// The shortcut the app ships with, which Restore Default puts back.
+    let defaultCombo: HotKeyCombo
 
     var body: some View {
         HStack {
@@ -575,6 +579,10 @@ struct HotKeyRecorderView: View {
             }
             if combo != nil, !recorder.isRecording {
                 Button("Clear") { combo = nil }
+            }
+            if combo != defaultCombo, !recorder.isRecording {
+                Button("Restore Default") { combo = defaultCombo }
+                    .help("Use \(defaultCombo.displayString) again")
             }
         }
         .onDisappear { recorder.stop() }
