@@ -59,10 +59,19 @@ enum WorkspaceMenu {
     static func make(target: AppDelegate) -> NSMenu {
         let main = NSMenu()
 
+        // The standard application menu. Hide Others has no ⌥⌘H: no shortcut
+        // here holds Option, which stays the focused program's.
         let app = submenu("Agent Mux", in: main)
+        app.addItem(item("About Agent Mux", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""))
+        app.addItem(.separator())
         app.addItem(item("Settings…", #selector(AppDelegate.showPreferences(_:)), ",", target: target))
         app.addItem(.separator())
+        let services = submenu("Services", in: app)
+        NSApp.servicesMenu = services
+        app.addItem(.separator())
         app.addItem(item("Hide Agent Mux", #selector(NSApplication.hide(_:)), "h"))
+        app.addItem(item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), ""))
+        app.addItem(item("Show All", #selector(NSApplication.unhideAllApplications(_:)), ""))
         app.addItem(.separator())
         app.addItem(item("Quit Agent Mux", #selector(NSApplication.terminate(_:)), "q"))
 
@@ -109,8 +118,12 @@ enum WorkspaceMenu {
         view.addItem(item("Scroll to Top", #selector(NSResponder.scrollToBeginningOfDocument(_:)), key(NSHomeFunctionKey)))
         view.addItem(item("Scroll to Bottom", #selector(NSResponder.scrollToEndOfDocument(_:)), key(NSEndFunctionKey)))
         view.addItem(.separator())
-        view.addItem(item("Toggle Sidebar", #selector(AppDelegate.toggleWorkspaceSidebar(_:)), "b", target: target))
-        view.addItem(item("Toggle Inspector", #selector(AppDelegate.toggleWorkspaceInspector(_:)), "B", target: target))
+        let sidebar = item("Toggle Sidebar", #selector(AppDelegate.toggleWorkspaceSidebar(_:)), "b", target: target)
+        sidebar.identifier = toggleSidebarIdentifier
+        view.addItem(sidebar)
+        let inspector = item("Toggle Inspector", #selector(AppDelegate.toggleWorkspaceInspector(_:)), "B", target: target)
+        inspector.identifier = toggleInspectorIdentifier
+        view.addItem(inspector)
         view.addItem(.separator())
         // The digits are all the sessions'.
         view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
@@ -167,7 +180,10 @@ enum WorkspaceMenu {
 
         let window = submenu("Window", in: main)
         window.addItem(item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
+        window.addItem(item("Zoom", #selector(NSWindow.performZoom(_:)), ""))
         window.addItem(item("Close Window", #selector(NSWindow.performClose(_:)), "W"))
+        window.addItem(.separator())
+        window.addItem(item("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), ""))
         window.addItem(.separator())
         let workspace = NSMenuItem(title: "Workspace", action: #selector(AppDelegate.openWorkspace(_:)), keyEquivalent: "")
         workspace.target = target
@@ -180,6 +196,11 @@ enum WorkspaceMenu {
     static let nextSessionTitle = "Next Session, Skipping Terminals"
     static let previousSessionTitle = "Previous Session, Skipping Terminals"
     static let showInKittyIdentifier = NSUserInterfaceItemIdentifier("amx.session.showInKitty")
+    /// The View menu's sidebar and inspector items, whose titles the app
+    /// sets to Show or Hide as each is (`WorkspaceWindowController`'s
+    /// `isSidebarCollapsed` and `isInspectorCollapsed`).
+    static let toggleSidebarIdentifier = NSUserInterfaceItemIdentifier("amx.view.toggleSidebar")
+    static let toggleInspectorIdentifier = NSUserInterfaceItemIdentifier("amx.view.toggleInspector")
 
     /// Shows the Session menu's Show in Kitty submenu only while one of the
     /// digits goes to a session in Kitty, and lists only those sessions in

@@ -130,10 +130,29 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         shown.indices.contains(table.selectedRow) ? shown[table.selectedRow] : nil
     }
 
-    /// Moves the selection, stopping at either end.
+    /// Moves the selection, stopping at either end. The field keeps the
+    /// keyboard, so VoiceOver follows the field and not the list: the place
+    /// moved to is said aloud.
     func move(_ offset: Int) {
         guard !shown.isEmpty else { return }
         select(min(max(table.selectedRow + offset, 0), shown.count - 1))
+        if let selected { announce(selected) }
+    }
+
+    /// What VoiceOver says of a place: its title, then the line under it.
+    nonisolated static func spoken(_ entry: WorkspaceSwitcher.Entry) -> String {
+        entry.detail.isEmpty ? entry.title : "\(entry.title), \(entry.detail)"
+    }
+
+    /// What was last said, for tests.
+    private(set) var lastAnnouncement: String?
+
+    private func announce(_ entry: WorkspaceSwitcher.Entry) {
+        let spoken = Self.spoken(entry)
+        lastAnnouncement = spoken
+        NSAccessibility.post(element: field, notification: .announcementRequested,
+                             userInfo: [.announcement: spoken,
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
     /// Goes to the selected place. With nothing matching there is none, and
@@ -264,5 +283,7 @@ final class WorkspaceSwitcherCellView: NSTableCellView {
         detailLabel.stringValue = entry.detail
         detailLabel.isHidden = entry.detail.isEmpty
         toolTip = entry.detail
+        // The line is said as one, as the session list's are.
+        setAccessibilityLabel(WorkspaceSwitcherView.spoken(entry))
     }
 }

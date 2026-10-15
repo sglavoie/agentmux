@@ -197,7 +197,43 @@ final class WorkspaceScrollbarView: NSView {
             guard scrollbar != oldValue else { return }
             isHidden = !(scrollbar?.scrolls ?? false)
             needsDisplay = true
+            if !isHidden { NSAccessibility.post(element: self, notification: .valueChanged) }
         }
+    }
+
+    /// The first row a page up (`pages` < 0) or down (`pages` > 0) from
+    /// where the viewport sits would show, within the buffer: what
+    /// VoiceOver's decrement and increment scroll to.
+    nonisolated static func pagedRow(_ scrollbar: Ghostty.Scrollbar, pages: Int) -> UInt64 {
+        let last = scrollbar.total > scrollbar.len ? scrollbar.total - scrollbar.len : 0
+        let step = max(scrollbar.len, 1)
+        if pages < 0 {
+            let back = step * UInt64(-pages)
+            return scrollbar.offset > back ? scrollbar.offset - back : 0
+        }
+        return min(last, scrollbar.offset + step * UInt64(pages))
+    }
+
+    // VoiceOver reads where the viewport is, 0 at the top of history and 1
+    // at the bottom as a scroller's value is, and pages with increment and
+    // decrement.
+    override func accessibilityValue() -> Any? {
+        scrollbar.map { NSNumber(value: $0.position) }
+    }
+
+    override func accessibilityValueDescription() -> String? {
+        guard let scrollbar else { return nil }
+        return "\(Int((scrollbar.position * 100).rounded())) percent"
+    }
+
+    override func accessibilityPerformIncrement() -> Bool { page(1) }
+
+    override func accessibilityPerformDecrement() -> Bool { page(-1) }
+
+    private func page(_ pages: Int) -> Bool {
+        guard let scrollbar, scrollbar.scrolls else { return false }
+        onScroll?(Self.pagedRow(scrollbar, pages: pages))
+        return true
     }
 
     /// The first row to show, as the knob is moved.
@@ -215,6 +251,7 @@ final class WorkspaceScrollbarView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.scrollBar)
         setAccessibilityLabel("Terminal history")
+        setAccessibilityOrientation(.vertical)
     }
 
     required init?(coder: NSCoder) {
