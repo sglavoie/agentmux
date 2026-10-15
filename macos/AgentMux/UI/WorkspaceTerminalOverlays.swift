@@ -191,7 +191,7 @@ final class WorkspaceFindBar: NSView, NSSearchFieldDelegate {
 @MainActor
 final class WorkspaceScrollbarView: NSView {
     static let width: CGFloat = 10
-    static let minimumKnob: CGFloat = 24
+    nonisolated static let minimumKnob: CGFloat = 24
 
     var scrollbar: Ghostty.Scrollbar? {
         didSet {

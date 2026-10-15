@@ -1,5 +1,13 @@
 import AppKit
 
+/// The responder actions behind Undo and Redo. AppKit sends `undo:` and
+/// `redo:` up the chain (a text field's editor answers them) but declares
+/// neither to Swift, so they are named here for `#selector`.
+@objc private protocol UndoActions {
+    func undo(_ sender: Any?)
+    func redo(_ sender: Any?)
+}
+
 /// The app's main menu, installed at launch (`install(target:)`) so Settings
 /// and the answer panels have the standard editing keys before the workspace
 /// was ever opened. The embedded terminals offer every key equivalent to it before they
@@ -79,8 +87,8 @@ enum WorkspaceMenu {
         // panels, the switcher's search): a terminal implements none of them
         // as enabled, so ⌘Z and ⌘⇧Z still reach the agent there.
         let edit = submenu("Edit", in: main)
-        edit.addItem(item("Undo", Selector(("undo:")), "z"))
-        edit.addItem(item("Redo", Selector(("redo:")), "Z"))
+        edit.addItem(item("Undo", #selector(UndoActions.undo(_:)), "z"))
+        edit.addItem(item("Redo", #selector(UndoActions.redo(_:)), "Z"))
         edit.addItem(.separator())
         edit.addItem(item("Cut", #selector(NSText.cut(_:)), "x"))
         edit.addItem(item("Copy", #selector(NSText.copy(_:)), "c"))

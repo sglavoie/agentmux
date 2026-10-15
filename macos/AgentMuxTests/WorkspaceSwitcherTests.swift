@@ -67,8 +67,8 @@ final class WorkspaceSwitcherTests: XCTestCase {
         var named = F.tmux(1, project: "api", profile: "work")
         named.name = "release notes"
         var views = WorkspaceViews()
-        views.openTerminal(beside: F.runtimeID(1))
-        views.openTerminal(beside: F.runtimeID(2))
+        _ = views.openTerminal(beside: F.runtimeID(1))
+        _ = views.openTerminal(beside: F.runtimeID(2))
         views.open(WorkspaceUtilityView(kind: .pager, target: F.runtimeID(3), title: "Scrollback"))
         let rows = WorkspaceSidebar.groups([named, F.tmux(2, project: "web", profile: "personal")],
                                            snapshotSocket: "", glyphs: .fallback).flatMap(\.rows)

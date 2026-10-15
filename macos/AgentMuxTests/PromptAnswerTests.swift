@@ -223,9 +223,11 @@ final class PromptAnswerTests: XCTestCase {
         XCTAssertEqual(PromptAnswerView.key("y", modifiers: .shift), PromptKey.answers[0])
         XCTAssertEqual(PromptAnswerView.key("\r", modifiers: []), PromptKey.navigation[2])
         // Arrow keys carry the function and numeric-pad flags; they are not shortcuts.
-        XCTAssertEqual(PromptAnswerView.key("\u{F700}", modifiers: [.function, .numericPad]), PromptKey.navigation[0])
-        XCTAssertEqual(PromptAnswerView.key("\u{F701}", modifiers: [.function, .numericPad]), PromptKey.navigation[1])
-        XCTAssertNil(PromptAnswerView.key("\u{F700}", modifiers: [.command, .function, .numericPad]))
+        // SwiftUI deprecates `.function` but still sets it, so it is spelled by value.
+        let arrow: EventModifiers = [EventModifiers(rawValue: 1 << 6), .numericPad]
+        XCTAssertEqual(PromptAnswerView.key("\u{F700}", modifiers: arrow), PromptKey.navigation[0])
+        XCTAssertEqual(PromptAnswerView.key("\u{F701}", modifiers: arrow), PromptKey.navigation[1])
+        XCTAssertNil(PromptAnswerView.key("\u{F700}", modifiers: arrow.union(.command)))
         for modifiers: EventModifiers in [.command, .control, .option, [.command, .shift]] {
             XCTAssertNil(PromptAnswerView.key("2", modifiers: modifiers))
             XCTAssertNil(PromptAnswerView.key("n", modifiers: modifiers))

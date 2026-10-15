@@ -12,7 +12,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     /// The most places shown without scrolling.
     static let visibleRows = 8
 
-    static let noMatches = "No matches"
+    nonisolated static let noMatches = "No matches"
 
     let field = NSTextField()
     let table = NSTableView()

@@ -402,7 +402,7 @@ final class NotificationPresenterTests: XCTestCase {
         let api = TerminalNotice.Origin.session(runtimeSessionID: "rs-1")
         let shell = TerminalNotice.Origin.view(id: "shell-1")
         let present = { (origin: TerminalNotice.Origin) in
-            presenter.presentTerminal(TerminalNotice(title: "t", body: "b", source: "s", origin: origin), snoozed: false, muted: false, onScreen: false)
+            _ = presenter.presentTerminal(TerminalNotice(title: "t", body: "b", source: "s", origin: origin), snoozed: false, muted: false, onScreen: false)
         }
         present(shell)
         for _ in 0..<(NotificationPresenter.terminalNoticesKept * 2 + 5) { present(api) }

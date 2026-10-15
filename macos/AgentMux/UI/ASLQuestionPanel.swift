@@ -250,7 +250,7 @@ final class ASLQuestionFlow: ObservableObject {
             switch ASLResponseState.open(row: row, view: view, status: result.status) {
             case let .refused(reason):
                 phase = .refused(reason)
-            case var .opened(opened, effect):
+            case .opened(var opened, let effect):
                 opened.restore(drafts: keptDrafts[row.runID] ?? [:])
                 keptDrafts[row.runID] = nil
                 state = opened

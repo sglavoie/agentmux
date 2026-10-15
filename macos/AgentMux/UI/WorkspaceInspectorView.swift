@@ -50,10 +50,10 @@ final class WorkspaceInspectorView: NSView {
         return true
     }
 
-    static let nothingWaiting = "Nothing is waiting on you."
-    static let noSession = "No session is shown."
-    static let kittyOnly = "A Kitty session has this in Kitty."
-    static let waitForDaemon = "Available once the daemon answers again."
+    nonisolated static let nothingWaiting = "Nothing is waiting on you."
+    nonisolated static let noSession = "No session is shown."
+    nonisolated static let kittyOnly = "A Kitty session has this in Kitty."
+    nonisolated static let waitForDaemon = "Available once the daemon answers again."
 
     var onTab: ((WorkspaceInspectorTab) -> Void)?
     var onWaiting: ((AttentionCycler.Key) -> Void)?
