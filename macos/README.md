@@ -439,14 +439,17 @@ ASL answer panel work the same either way.
   since tmux holds the sessions and `amx attach` does not need the daemon.
   The first snapshot after the reconnect then decides what is still there.
   The daemon line is `WorkspaceSidebar.feedNotice` (`Connecting to the
-  daemon…`, `Daemon not running`, `Daemon too old — run amx daemon restart`,
-  `Reconnecting… (reason)`). With no rows to hold, the pane says the same
-  instead of "No live sessions" (`feedExplanation`) and offers **Start
-  Daemon** when it is not running (`workspaceStartDaemon`, the menu's
-  `amx daemon start`); the inspector's Waiting tab says it instead of
-  "Nothing is waiting on you".
-  A wake from sleep reconnects the feed at once; the terminals are local
-  processes and are not touched.
+  daemon…`, `Daemon not running`, `Daemon too old — choose Restart Daemon`,
+  `Reconnecting… (reason)`). Under it, whatever is listed, the sidebar offers
+  **Start Daemon** when it is not running (`workspaceStartDaemon`, the menu's
+  `amx daemon start`) and **Restart Daemon** when it is too old
+  (`workspaceRestartDaemon`); a second start or restart is refused while one
+  runs. With no rows to hold, the pane says the same instead of "No live
+  sessions" (`feedExplanation`) and offers the same action. The inspector
+  shows the daemon line above the lines it holds, and its Answer… and action
+  buttons wait until the feed is live again.
+  A wake from sleep keeps a healthy feed and redials one that was waiting to
+  retry; the terminals are local processes and are not touched.
 - **Coming back.** `WorkspaceRestoration` (`Model/WorkspaceRecovery.swift`)
   keeps two preferences: whether the window was open (`amxWorkspaceWindowOpen`)
   and where its pane was (`amxWorkspacePlace`: `session:<id>`,
@@ -844,7 +847,7 @@ an action that was not offered:
 
 | Category | Actions | Used for |
 | --- | --- | --- |
-| `amx.session` | Mute session, Snooze All for 1 Hour | A session notification, of a Kitty window or a tmux session |
+| `amx.session` | Mute Session, Snooze All for 1 Hour | A session notification, of a Kitty window or a tmux session |
 | `amx.session.snooze` | Snooze All for 1 Hour | One with no session to mute |
 | `amx.asl` / `amx.asl.snooze` | Answer…, then the offered session actions | An ASL question |
 | `amx.prompt` | Answer… | A permission prompt of a tmux session, when the daemon offered `respond` |
@@ -903,7 +906,7 @@ The rules are ported from `tui/asl` into `Model/ASLResponseState.swift`, so
 the panel and the TUI's Runs view agree:
 
 - A live wait offers **Reply**, **Continue**, and **Pause**. A paused run
-  offers only **Reply and resume**. Reply needs text; ⌘↩ sends it.
+  offers only **Reply and Resume**. Reply needs text; ⌘↩ sends it.
 - The form opens only when the daemon reports ASL reachable, the snapshot is
   not stale, mutations are enabled, the row carries a token, and the row
   permits the method. Otherwise the panel shows the same fixed sentence the TUI
@@ -947,7 +950,7 @@ The panel decides nothing about whether a session may be written to. It runs
 two `amx send` invocations and shows what they answer:
 
 1. `amx send <runtime-session-id> --look --json` reads the screen. It runs
-   when the panel opens, on **Look again**, and 0.6 seconds after every key.
+   when the panel opens, on **Look Again**, and 0.6 seconds after every key.
 2. `amx send <runtime-session-id> --key <name> --json` presses one key.
 
 The rules are in `Model/PromptAnswer.swift`:
@@ -967,7 +970,7 @@ The rules are in `Model/PromptAnswer.swift`:
   message, which names command-line flags.
 - A key held with ⌘, ⌃, or ⌥ is left to the menus and never reaches the
   session.
-- A first look that fails can be tried again with **Look again**, and
+- A first look that fails can be tried again with **Look Again**, and
   reopening the panel on that session starts over. A look you ask for clears
   the notice an earlier key or look left (the look 0.6 seconds after a key
   keeps that key's), and a confirmation asked before it is asked afresh.

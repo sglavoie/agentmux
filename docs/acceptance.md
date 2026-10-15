@@ -641,7 +641,7 @@ macOS and Kitty versions beside the result:
       `macos/README.md` says.
 - [ ] **Native notification.** A session notification arrives as a native
       banner, `amx notifications test` reports it confirmed via the app, and
-      clicking the banner focuses the pane. Mute session and Snooze All for
+      clicking the banner focuses the pane. Mute Session and Snooze All for
       1 Hour on the banner work, for a tmux session as for a Kitty window.
 - [ ] **Fallback.** With the app quit, the next notification goes through
       Alerter, and `amx debug tail` names the `alerter` backend.

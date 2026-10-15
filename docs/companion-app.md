@@ -93,7 +93,7 @@ Two grants matter:
   or turned off in Preferences, the daemon uses Alerter as before. Change it
   later in System Settings › Notifications › Agent Mux. The app rereads the
   permission every 10 seconds and whenever its menu opens.
-- **Login item.** Preferences › Launch at Login registers the app with
+- **Login item.** Preferences › Launch at login registers the app with
   `SMAppService`. It shows in System Settings › General › Login Items, and
   removing it there is respected: the app does not add it back.
 
