@@ -397,7 +397,8 @@ ASL answer panel work the same either way.
 - **Accessibility.** A terminal is a text area to VoiceOver
   (`SurfaceView+Accessibility.swift`, ported from upstream): its value is
   the screen's text, reread at most every half second, with the selection
-  and ranges in UTF-16 units.
+  and ranges in UTF-16 units of that text (never Ghostty's grid-cell
+  offsets, which `selectedRange()` keeps for the input method).
 - **Keyboard with the sidebar hidden.** A hidden sidebar never takes the
   keyboard: when a terminal it would have gone to ends, the pane's terminal,
   the placeholder's button, or the window takes it instead, so the arrow keys

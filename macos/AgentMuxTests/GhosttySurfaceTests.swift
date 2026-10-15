@@ -292,7 +292,75 @@ final class GhosttySurfaceTests: XCTestCase {
         view.performBindingAction("select_all")
         ghosttyWait("the selection") { view.accessibilitySelectedText() != nil }
         XCTAssertTrue(try XCTUnwrap(view.accessibilitySelectedText()).contains("third"))
-        XCTAssertEqual(view.accessibilitySelectedTextRange(), view.selectedRange())
+        XCTAssertEqual(
+            view.accessibilityString(for: view.accessibilitySelectedTextRange()),
+            view.accessibilitySelectedText())
+    }
+
+    /// The selected range names the selection in the screen's text, not the
+    /// grid cells Ghostty counts it in: line breaks, short rows, wide and
+    /// multi-unit characters all set the two apart.
+    func testAccessibilitySelectionRangeMatchesVisibleText() throws {
+        window.contentView = nil
+        view = nil
+        view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
+            program: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf 'first\\nsécond 日本 😀 x\\nthird\\n'; exec cat"])))
+        window.contentView = view
+        XCTAssertTrue(window.makeFirstResponder(view))
+        window.reportsKey = true
+        ghosttyWait("the text to be drawn") {
+            view.accessibilityContents = nil
+            return (view.accessibilityValue() as? String ?? "").contains("third")
+        }
+        XCTAssertEqual(view.accessibilitySelectedTextRange(), NSRange(location: 0, length: 0), "nothing is selected")
+
+        func mouse(_ type: NSEvent.EventType, _ p: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        }
+        // Ghostty's default padding is 2pt; the view's origin is bottom left.
+        // A drag takes in its last cell only past that cell's middle.
+        func cell(row: Int, column: Int, at fraction: Double = 0.25) -> NSPoint {
+            let size = view.cellSize
+            return NSPoint(x: 2 + (Double(column) + fraction) * size.width,
+                           y: view.bounds.height - 2 - (Double(row) + 0.5) * size.height)
+        }
+        func drag(from start: NSPoint, to end: NSPoint) {
+            let away = NSPoint(x: view.bounds.width - 20, y: 20)
+            view.mouseMoved(with: mouse(.mouseMoved, away))
+            view.mouseDown(with: mouse(.leftMouseDown, away))
+            view.mouseUp(with: mouse(.leftMouseUp, away))
+            view.mouseMoved(with: mouse(.mouseMoved, start))
+            view.mouseDown(with: mouse(.leftMouseDown, start))
+            for step in 1...20 {
+                let t = Double(step) / 20
+                view.mouseDragged(with: mouse(.leftMouseDragged, NSPoint(
+                    x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)))
+            }
+            view.mouseUp(with: mouse(.leftMouseUp, end))
+        }
+        func assertRangeRecoversSelection(_ expected: String, file: StaticString = #filePath, line: UInt = #line) {
+            view.accessibilityContents = nil
+            XCTAssertEqual(view.accessibilitySelectedText(), expected, file: file, line: line)
+            let range = view.accessibilitySelectedTextRange()
+            XCTAssertGreaterThan(range.length, 0, file: file, line: line)
+            XCTAssertLessThanOrEqual(NSMaxRange(range), view.accessibilityNumberOfCharacters(), file: file, line: line)
+            XCTAssertEqual(view.accessibilityString(for: range), view.accessibilitySelectedText(), file: file, line: line)
+            let screen = view.accessibilityValue() as? String ?? ""
+            XCTAssertEqual((screen as NSString).range(of: expected), range, file: file, line: line)
+        }
+
+        // A word on the third row: grid cells put it at 2 × columns.
+        drag(from: cell(row: 2, column: 0), to: cell(row: 2, column: 4, at: 0.75))
+        ghosttyWait("the third row's selection") { view.accessibilitySelectedText() == "third" }
+        assertRangeRecoversSelection("third")
+
+        // From the wide characters on the second row, past an emoji of two
+        // UTF-16 units, into the third row.
+        drag(from: cell(row: 1, column: 7), to: cell(row: 2, column: 2, at: 0.75))
+        ghosttyWait("the selection across rows") { view.accessibilitySelectedText()?.hasSuffix("thi") == true }
+        assertRangeRecoversSelection("日本 😀 x\nthi")
     }
 
     func testFramebufferTracksTheViewInBackingPixels() throws {
