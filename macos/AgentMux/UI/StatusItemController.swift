@@ -44,6 +44,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private(set) var isMenuOpen = false
     /// The entries the main menu was last built from.
     private var builtEntries: [MenuEntry]?
+    /// The action submenus open right now. Rebuilding the main menu drops
+    /// the items they hang from, which closes them under the pointer, so
+    /// while one is open a rebuild waits for it to close.
+    private(set) var openSubmenus: Set<ObjectIdentifier> = []
 
     private let preferencesItem = NSMenuItem(title: "Settings…", action: #selector(preferences(_:)), keyEquivalent: ",")
     private let quitItem = NSMenuItem(title: "Quit Agent Mux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -183,7 +187,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// Rebuilds the open menu when what it would show has changed; a snapshot
     /// that changes nothing visible leaves the items (and the highlight) be.
     func rebuildMenuIfChanged() {
-        guard currentEntries() != builtEntries else {
+        guard openSubmenus.isEmpty, currentEntries() != builtEntries else {
             refreshSubmenus()
             return
         }
@@ -289,14 +293,23 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        guard menu === self.menu else { return }
+        guard menu === self.menu else {
+            openSubmenus.insert(ObjectIdentifier(menu))
+            return
+        }
         isMenuOpen = true
         delegate?.store.noticeWasSeen()
     }
 
     func menuDidClose(_ menu: NSMenu) {
-        guard menu === self.menu else { return }
+        guard menu === self.menu else {
+            openSubmenus.remove(ObjectIdentifier(menu))
+            // What changed while it was open is shown now.
+            if isMenuOpen { rebuildMenuIfChanged() }
+            return
+        }
         isMenuOpen = false
+        openSubmenus = []
     }
 
     @objc private func sessionClicked(_ sender: NSMenuItem) {

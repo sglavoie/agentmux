@@ -110,4 +110,21 @@ final class StatusItemControllerTests: XCTestCase {
         store.apply(snapshot: snapshot())
         XCTAssertEqual(store.notice, "Later", "a notice never shown stays")
     }
+
+    func testAnOpenSubmenuHoldsTheRebuildUntilItCloses() throws {
+        store.apply(snapshot: snapshot())
+        controller.menuNeedsUpdate(controller.menu)
+        controller.menuWillOpen(controller.menu)
+        let submenu = try XCTUnwrap(controller.submenus.values.first)
+        controller.menuWillOpen(submenu)
+        let parents = controller.menu.items.filter { $0.submenu != nil }
+
+        store.show(notice: "Kitty is not running.")
+        XCTAssertFalse(titles.contains("Kitty is not running."), "the items an open submenu hangs from stay")
+        XCTAssertEqual(controller.menu.items.filter { $0.submenu != nil }.map(ObjectIdentifier.init),
+                       parents.map(ObjectIdentifier.init))
+
+        controller.menuDidClose(submenu)
+        XCTAssertTrue(titles.contains("Kitty is not running."), "shown once the submenu closes")
+    }
 }
