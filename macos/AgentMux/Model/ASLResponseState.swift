@@ -362,6 +362,10 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     var loadFailed = false
     var buttons: [ASLResponseButton] = []
     var pending = ASLPendingSubmission()
+    /// Submissions whose outcome is unknown, kept by question while the form
+    /// is on another one, so returning to a question retries under its first
+    /// operation ID and words rather than minting another.
+    var unresolved: [String: ASLPendingSubmission] = [:]
     /// The previous closure spent the captured token; the next fetch re-mints
     /// it, and nothing may be submitted until it has.
     var reauthorize = false
@@ -526,11 +530,25 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         guard questionIDs.count > 1, !inFlight, !closed else { return nil }
         let next = min(max(questionIndex + delta, 0), questionIDs.count - 1)
         guard next != questionIndex else { return nil }
+        if status == "failed", !pending.operationID.isEmpty {
+            unresolved[target.questionID] = pending
+        }
         questionIndex = next
         target.questionID = questionIDs[next]
-        pending = ASLPendingSubmission()
-        status = ""
+        resumePending()
         return startFetch()
+    }
+
+    /// Takes up the current question's submission whose outcome is unknown,
+    /// if it has one, or starts it clean.
+    private mutating func resumePending() {
+        if let kept = unresolved.removeValue(forKey: target.questionID) {
+            pending = kept
+            status = "failed"
+        } else {
+            pending = ASLPendingSubmission()
+            status = ""
+        }
     }
 
     // MARK: Submitting
@@ -631,6 +649,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
     private mutating func advance() -> ASLPanelEffect {
         let answeredID = target.questionID
         drafts[answeredID] = nil
+        unresolved[answeredID] = nil
         pending = ASLPendingSubmission()
         let remaining = questionIDs.filter { $0 != answeredID }
         if kind == .paused || remaining.isEmpty {
@@ -644,7 +663,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         questionIndex = min(max(questionIndex, 0), remaining.count - 1)
         target.questionID = remaining[questionIndex]
         reauthorize = true
-        status = ""
+        resumePending()
         let effect = startFetch()
         let (index, total) = position
         note("Answer sent — question \(index) of \(total)", .info)
@@ -674,6 +693,7 @@ struct ASLResponseState: Equatable, CustomStringConvertible, CustomDebugStringCo
         fetchSeq += 1
         reauthorize = false
         pending = ASLPendingSubmission()
+        unresolved = [:]
         status = ""
         note(text, .error)
     }

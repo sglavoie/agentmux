@@ -359,6 +359,43 @@ final class ASLResponseStateTests: XCTestCase {
         XCTAssertEqual(retry?.text.reveal(), "first words")
     }
 
+    func testARetryAfterNavigatingAwayAndBackKeepsTheFirstSubmission() {
+        let row = ASLFixtures.replyRow()
+        var state = opened(row)
+        func load(_ effect: ASLPanelEffect?) {
+            guard case let .fetch(seq, _, questionID) = effect else { return XCTFail("no fetch: \(String(describing: effect))") }
+            XCTAssertNil(state.questionLoaded(seq: seq, .success(ASLFixtures.body(row, questionID, "?"))))
+        }
+        state.setDraft("first words")
+        guard case let .act(seq, first) = state.submit(state.buttons[0], mint: mint) else { return XCTFail("no submission") }
+        XCTAssertNil(state.actionFinished(seq: seq, .failure(.transport("read timed out"))))
+        XCTAssertTrue(state.draftLocked)
+
+        load(state.move(by: 1))
+        XCTAssertEqual(state.target.questionID, "q-api-2")
+        XCTAssertFalse(state.draftLocked, "the other question has nothing to retry")
+        state.setDraft("second words")
+        XCTAssertEqual(state.draft.reveal(), "second words")
+
+        load(state.move(by: -1))
+        XCTAssertEqual(state.target.questionID, "q-api-1")
+        XCTAssertTrue(state.draftLocked, "the unknown outcome travels with its question")
+        state.setDraft("changed words")
+        XCTAssertEqual(state.draft.reveal(), "first words")
+
+        // A draft changed some other way is refused without losing the ID.
+        state.drafts["q-api-1"] = "changed words"
+        XCTAssertNil(state.submit(state.buttons[0], mint: mint))
+        XCTAssertEqual(state.notice, ASLResponseState.retryCaption)
+        XCTAssertEqual(state.pending.operationID, first.operationID, "no new ID is minted silently")
+
+        state.drafts["q-api-1"] = "first words"
+        let retry = params(state.submit(state.buttons[0], mint: mint))
+        XCTAssertEqual(retry?.operationID, first.operationID)
+        XCTAssertEqual(retry?.text.reveal(), "first words")
+        XCTAssertEqual(minted, 1)
+    }
+
     func testASnapshotWithoutTheRunClosesTheQuestion() {
         var state = opened()
         state.setDraft("typed")
