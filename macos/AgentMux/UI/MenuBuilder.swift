@@ -60,6 +60,10 @@ enum MenuEntry: Equatable {
     /// An action this amx or daemon cannot run, greyed out with the reason as
     /// its tooltip.
     case unavailable(String, reason: String)
+    /// An action that cannot run right now, greyed out with the reason as its
+    /// tooltip; it keeps its action so it keeps the shortcut it shows when
+    /// it can, as a macOS menu item does.
+    case unavailableAction(MenuAction, String, reason: String)
     /// A project whose directory is missing: greyed out with the reason as
     /// its tooltip, while its ⌥ "in Folder…" alternate still launches it
     /// somewhere else.
@@ -343,9 +347,9 @@ enum MenuBuilder {
             entries.append(.action(.openDashboard, "Open Dashboard"))
         }
         if !input.feedLive {
-            entries.append(.unavailable(HotKeyPreference.nextAttention.label, reason: "The daemon is not connected"))
+            entries.append(.unavailableAction(.nextAttention, HotKeyPreference.nextAttention.label, reason: "The daemon is not connected"))
         } else if input.waiting == 0 {
-            entries.append(.unavailable(HotKeyPreference.nextAttention.label, reason: "No session is waiting"))
+            entries.append(.unavailableAction(.nextAttention, HotKeyPreference.nextAttention.label, reason: "No session is waiting"))
         } else {
             entries.append(.action(.nextAttention, HotKeyPreference.nextAttention.label))
         }
@@ -371,6 +375,26 @@ enum MenuBuilder {
         case .recent: return recentEntries(input)
         case .notifications: return notificationEntries(input)
         }
+    }
+
+    /// The longest a line of text in the menu runs before it is cut.
+    static let menuLineLimit = 100
+
+    /// A line of text as a menu item shows it: its first line, cut at a word
+    /// within `menuLineLimit` with an ellipsis, and the whole text as the
+    /// tooltip when anything was left out. An error from amx can run to
+    /// several lines and hundreds of characters, which would otherwise widen
+    /// the whole menu.
+    static func menuLine(_ text: String) -> (title: String, toolTip: String?) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let first = trimmed.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        guard first.count > menuLineLimit || first != trimmed else { return (trimmed, nil) }
+        guard first.count > menuLineLimit else { return (first + " …", trimmed) }
+        var cut = String(first.prefix(menuLineLimit))
+        if let space = cut.lastIndex(of: " "), cut.distance(from: cut.startIndex, to: space) > menuLineLimit / 2 {
+            cut = String(cut[..<space])
+        }
+        return (cut.trimmingCharacters(in: .whitespaces.union(.punctuationCharacters)) + "…", trimmed)
     }
 
     /// Projects under one header per profile. A project whose directory is
@@ -541,7 +565,9 @@ enum MenuBuilder {
             return [item, alternate]
         }
         func infoItem(_ text: String) -> NSMenuItem {
-            let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+            let line = menuLine(text)
+            let item = NSMenuItem(title: line.title, action: nil, keyEquivalent: "")
+            item.toolTip = line.toolTip
             item.isEnabled = false
             return item
         }
@@ -580,6 +606,11 @@ enum MenuBuilder {
             case let .unavailable(title, reason):
                 let item = infoItem(title)
                 item.toolTip = reason
+                return [item]
+            case let .unavailableAction(action, title, reason):
+                let item = infoItem(title)
+                item.toolTip = reason
+                item.representedObject = ActionBox(action)
                 return [item]
             case let .unavailableProject(project, reason):
                 let item = infoItem(project.title)

@@ -1586,6 +1586,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let origin = Self.origin(of: response, in: store.sessions, snapshotKitty: store.snapshot?.kitty ?? CompanionKitty())
         switch response.disposition {
         case .clicked:
+            if response.notificationID.hasPrefix(NotificationPresenter.appPrefix) {
+                // The app's own failure: its line is in the status menu,
+                // which a click opens on it.
+                return DispatchQueue.main.async { [weak self] in
+                    MainActor.assumeIsolated { self?.statusItem?.openMenu() }
+                }
+            }
             if !response.embeddedRuntimeSessionID.isEmpty {
                 return focusSession(response.embeddedRuntimeSessionID)
             }

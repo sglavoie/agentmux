@@ -56,7 +56,7 @@ final class ActionGateTests: XCTestCase {
             .separator,
             .action(.openWorkspace, "Open Workspace"),
             .unavailable("Open Dashboard", reason: "amx has no open-dashboard command; run just install"),
-            .unavailable("Next Waiting Session", reason: "No session is waiting"),
+            .unavailableAction(.nextAttention, "Next Waiting Session", reason: "No session is waiting"),
             .submenuRef(.projects, "Launch Project", reason: "amx has no project command; run just install"),
             .submenuRef(.recent, "Recent", reason: nil),
             .submenuRef(.notifications, "Notifications", reason: nil),
@@ -80,7 +80,7 @@ final class ActionGateTests: XCTestCase {
             .separator,
             .action(.openWorkspace, "Open Workspace"),
             .action(.openDashboard, "Open Dashboard"),
-            .unavailable("Next Waiting Session", reason: "The daemon is not connected"),
+            .unavailableAction(.nextAttention, "Next Waiting Session", reason: "The daemon is not connected"),
             .submenuRef(.projects, "Launch Project", reason: nil),
             .submenuRef(.recent, "Recent", reason: nil),
             .submenuRef(.notifications, "Notifications", reason: "The daemon is not connected"),
@@ -95,11 +95,11 @@ final class ActionGateTests: XCTestCase {
         var input = MenuBuilder.ActionsInput()
         input.gate = ActionGate(capabilities: full)
         input.waiting = 2
-        XCTAssertEqual(MenuBuilder.actionEntries(input)[3], .unavailable("Next Waiting Session", reason: "The daemon is not connected"))
+        XCTAssertEqual(MenuBuilder.actionEntries(input)[3], .unavailableAction(.nextAttention, "Next Waiting Session", reason: "The daemon is not connected"))
         input.feedLive = true
         XCTAssertEqual(MenuBuilder.actionEntries(input)[3], .action(.nextAttention, "Next Waiting Session"))
         input.waiting = 0
-        XCTAssertEqual(MenuBuilder.actionEntries(input)[3], .unavailable("Next Waiting Session", reason: "No session is waiting"))
+        XCTAssertEqual(MenuBuilder.actionEntries(input)[3], .unavailableAction(.nextAttention, "Next Waiting Session", reason: "No session is waiting"))
     }
 
     // MARK: Project submenu

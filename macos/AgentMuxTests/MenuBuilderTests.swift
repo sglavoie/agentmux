@@ -252,4 +252,20 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(KittyActivator.target(socket: "unix:/tmp/mykitty", running: running), 10)
         XCTAssertNil(KittyActivator.target(socket: "unix:/tmp/kitty-20", running: []))
     }
+
+    func testALongOrManyLinedMessageIsCutWithTheWholeAsTooltip() {
+        XCTAssertTrue(MenuBuilder.menuLine("Kitty is not running.") == ("Kitty is not running.", nil))
+        let multi = MenuBuilder.menuLine("amx exited with status 2\nerror: config.toml line 4\nmore")
+        XCTAssertEqual(multi.title, "amx exited with status 2 …")
+        XCTAssertEqual(multi.toolTip, "amx exited with status 2\nerror: config.toml line 4\nmore")
+        let long = String(repeating: "word ", count: 60)
+        let cut = MenuBuilder.menuLine(long)
+        XCTAssertLessThanOrEqual(cut.title.count, MenuBuilder.menuLineLimit + 1)
+        XCTAssertTrue(cut.title.hasSuffix("word…"))
+        XCTAssertEqual(cut.toolTip, long.trimmingCharacters(in: .whitespaces))
+
+        let items = MenuBuilder.items(for: [.info(long)], target: NSObject(), sessionAction: #selector(NSObject.description), actionSelector: #selector(NSObject.hash))
+        XCTAssertEqual(items.first?.title, cut.title)
+        XCTAssertEqual(items.first?.toolTip, cut.toolTip)
+    }
 }

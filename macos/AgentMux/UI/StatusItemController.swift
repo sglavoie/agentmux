@@ -161,6 +161,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         if isMenuOpen { rebuildMenuIfChanged() }
     }
 
+    /// Opens the status menu, as a click on the icon does.
+    func openMenu() {
+        statusItem.button?.performClick(nil)
+    }
+
     /// Blinks the icon a few times: a failure the operator asked about, when
     /// app notifications cannot say so.
     func flash(times: Int = 3, interval: TimeInterval = 0.15) {

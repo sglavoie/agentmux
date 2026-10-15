@@ -178,6 +178,21 @@ final class HotKeyTests: XCTestCase {
         XCTAssertEqual(open.keyEquivalent, "", "the dashboard's shortcut is turned off")
     }
 
+    @MainActor
+    func testAGreyedNextWaitingSessionKeepsItsShortcut() throws {
+        let items = MenuBuilder.items(
+            for: [.unavailableAction(.nextAttention, "Next Waiting Session", reason: "No session is waiting")],
+            target: NSObject(), sessionAction: #selector(NSObject.description), actionSelector: #selector(NSObject.hash)
+        )
+        let next = try XCTUnwrap(items.first)
+        XCTAssertFalse(next.isEnabled)
+        XCTAssertEqual(next.toolTip, "No session is waiting")
+        var input = MenuBuilder.ActionsInput()
+        input.nextAttentionHotKey = HotKeyPreference.nextAttention.default
+        StatusItemController.showHotKeys(on: items, input)
+        XCTAssertEqual(next.keyEquivalent, try XCTUnwrap(HotKeyPreference.nextAttention.default.menuKeyEquivalent).key)
+    }
+
     func testShortcutsAreNamedAsTheMenuNamesThem() {
         XCTAssertEqual(HotKeyPreference.dashboard.label, "Open Dashboard")
         XCTAssertEqual(HotKeyPreference.nextAttention.label, "Next Waiting Session")
