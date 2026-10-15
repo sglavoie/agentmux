@@ -775,6 +775,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// F10: toggles the mute of the shown session.
     @objc func toggleSessionMute(_ sender: Any?) {
         guard let row = workspace?.shownSessionRow else { return refuse(Self.noSessionShown) }
+        workspaceToggleMute(row)
+    }
+
+    /// Toggles the mute of a listed session: the one the pane is on, or the
+    /// line a right-click was on.
+    func workspaceToggleMute(_ row: WorkspaceRow) {
         switch row.target {
         case let .kitty(socket, windowID):
             toggleMute(MenuSessionRow(title: row.project, windowID: windowID, kittySocket: socket, toolTip: "", muted: row.muted))

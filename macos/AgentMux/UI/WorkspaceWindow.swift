@@ -49,6 +49,9 @@ protocol WorkspaceDelegate: AnyObject {
     /// Does what one of the inspector's buttons asks for the session the
     /// pane is on.
     func workspaceInspectorAction(_ action: WorkspaceInspectorAction)
+    /// Mutes a listed session, or unmutes it: the right-click menu's Mute,
+    /// for a line that may not be the one the pane is on.
+    func workspaceToggleMute(_ row: WorkspaceRow)
     /// Answer… on a waiting session of the inspector: opens the panel that
     /// answers it. The pane stays where it is.
     func workspaceAnswer(_ answer: WorkspaceWaitingAnswer)
@@ -1236,6 +1239,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             name.isEnabled = false
             name.toolTip = Self.namingNeedsEmbedded
         }
+        // The inspector's Color…, Icon…, and Mute, for the line under the
+        // pointer rather than the session the pane is on.
+        let looks = [WorkspaceInspectorAction.color, .icon, .mute].map { action in
+            let item = NSMenuItem(title: action.title(muted: row.muted), action: #selector(clickedSessionAction(_:)), keyEquivalent: "")
+            item.representedObject = [row.key, action] as [Any]
+            if row.embeddedRuntimeSessionID != nil || !action.needsEmbedded {
+                item.target = self
+            } else {
+                item.action = nil
+                item.isEnabled = false
+                item.toolTip = WorkspaceInspectorView.kittyOnly
+            }
+            return item
+        }
         let pin = NSMenuItem(title: row.pinned ? Self.unpinSessionTitle : Self.pinSessionTitle,
                              action: #selector(pinClickedSession(_:)), keyEquivalent: "")
         pin.representedObject = row.key
@@ -1245,7 +1262,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let show = NSMenuItem(title: Self.showInKittyTitle, action: #selector(activateClickedSession(_:)), keyEquivalent: "")
             show.representedObject = row.key
             show.target = self
-            return [name, pin, .separator(), show]
+            return [name] + looks + [pin, .separator(), show]
         }
         // What the × and the Session menu do, for the line under the pointer.
         let terminal = NSMenuItem(title: Self.newTerminalTitle, action: #selector(openTerminalBesideClickedSession(_:)), keyEquivalent: "")
@@ -1258,13 +1275,26 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         end.representedObject = row.key
         end.target = self
         end.isEnabled = closing[id] == nil
-        guard detached.contains(id) else { return [name, pin, .separator(), terminal, copy, .separator(), end] }
+        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, copy, .separator(), end] }
         // What a click or Return on the line does: attach again, taking the
         // session from whichever terminal has it.
         let reattach = NSMenuItem(title: Self.reattachTitle, action: #selector(reattachClickedSession(_:)), keyEquivalent: "")
         reattach.representedObject = row.key
         reattach.target = self
-        return [name, pin, .separator(), reattach, terminal, copy, .separator(), end]
+        return [name] + looks + [pin, .separator(), reattach, terminal, copy, .separator(), end]
+    }
+
+    @objc private func clickedSessionAction(_ sender: Any?) {
+        guard let named = (sender as? NSMenuItem)?.representedObject as? [Any],
+              let key = named.first as? AttentionCycler.Key, let action = named.last as? WorkspaceInspectorAction,
+              let row = state.row(key)
+        else { return }
+        switch action {
+        case .color: openPicker(.colorPicker, for: row)
+        case .icon: openPicker(.iconPicker, for: row)
+        case .mute: delegate?.workspaceToggleMute(row)
+        case .name, .clearState, .markActive: return
+        }
     }
 
     @objc private func activateClickedSession(_ sender: Any?) {
@@ -1347,11 +1377,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// pickers in Kitty.
     @discardableResult
     func openPicker(_ kind: WorkspaceUtilityView.Kind) -> Bool {
-        guard let id = shownSessionRow?.embeddedRuntimeSessionID,
-              let picker = WorkspaceUtilityView.picker(kind, runtimeSessionID: id) else {
+        guard let row = shownSessionRow, openPicker(kind, for: row) else {
             Self.logger.notice("workspace: no embedded session is shown; no picker opened")
             return false
         }
+        return true
+    }
+
+    /// Opens the icon or color picker for a listed embedded session, and
+    /// reports whether it is one.
+    @discardableResult
+    func openPicker(_ kind: WorkspaceUtilityView.Kind, for row: WorkspaceRow) -> Bool {
+        guard let id = row.embeddedRuntimeSessionID,
+              let picker = WorkspaceUtilityView.picker(kind, runtimeSessionID: id) else { return false }
         open(picker)
         return true
     }

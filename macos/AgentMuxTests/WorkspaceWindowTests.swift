@@ -199,7 +199,7 @@ final class WorkspaceWindowTests: XCTestCase {
         // wherever the pane is.
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top", "", "New Terminal Below",
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "New Terminal Below",
                                             "Copy Runtime Session ID", "", "End Session…"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(asked.map(\.0), [personal])
@@ -228,9 +228,9 @@ final class WorkspaceWindowTests: XCTestCase {
         // A Kitty window is named in Kitty; other lines have no menu.
         let kitty = try row("web", "work")
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top", "", "Show in Kitty"])
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Show in Kitty"])
         XCTAssertNil(items[0].action, "listed, and greyed out")
-        XCTAssertNotNil(items[1].action, "a Kitty session can be pinned")
+        XCTAssertNotNil(items[4].action, "a Kitty session can be pinned")
         XCTAssertTrue(workspace.contextMenuItems(forRow: 0).isEmpty)
         XCTAssertTrue(workspace.contextMenuItems(forRow: -1).isEmpty)
         workspace.select(kitty.key)
@@ -256,7 +256,7 @@ final class WorkspaceWindowTests: XCTestCase {
 
         // The right-click menu pins the session under the pointer.
         var items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        _ = try XCTUnwrap(items[1].target).perform(try XCTUnwrap(items[1].action), with: items[1])
+        _ = try XCTUnwrap(items[4].target).perform(try XCTUnwrap(items[4].action), with: items[4])
         XCTAssertEqual(lines(), ["[Pinned]", "web/work", "[api]", "api/personal", "api/work"],
                        "a project with nothing left under it is not listed")
         XCTAssertEqual(workspace.sessionKey(of: kitty.key), "1", "the digits follow the list")
@@ -279,7 +279,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.refresh()
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[api]", "api/personal"])
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Unpin", "", "Show in Kitty"],
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Unpin", "", "Show in Kitty"],
                        "a Kitty session is ended, and has its terminals, in Kitty")
         workspace.setPinned(kitty.key, false)
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[api]", "api/personal", "[web]", "web/work"])
@@ -923,9 +923,9 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
         workspace.select(kitty.key)
         items = workspace.contextMenuItems(forRow: try index(of: work.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Pin to Top", "", "Reattach", "New Terminal Below",
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Reattach", "New Terminal Below",
                                             "Copy Runtime Session ID", "", "End Session…"])
-        _ = try XCTUnwrap(items[3].target).perform(try XCTUnwrap(items[3].action), with: items[3])
+        _ = try XCTUnwrap(items[6].target).perform(try XCTUnwrap(items[6].action), with: items[6])
         XCTAssertEqual(workspace.state.selection, work.key)
         XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)])
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))

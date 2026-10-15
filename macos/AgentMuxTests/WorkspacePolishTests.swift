@@ -156,6 +156,36 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertEqual(app.ended, [])
     }
 
+    /// The inspector's Color…, Icon…, and Mute act on the line under the
+    /// pointer, wherever the pane is; a Kitty session has the pickers in
+    /// Kitty but is muted from here.
+    func testTheRightClickMenuColorsIconsAndMutesTheClickedSession() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try XCTUnwrap(workspace.state.row(.embedded(F.runtimeID(1))))
+        let personal = try XCTUnwrap(workspace.state.row(.embedded(F.runtimeID(2))))
+        workspace.activate(work)
+        let items = workspace.contextMenuItems(forRow: try index(of: personal.key))
+        func item(_ title: String) throws -> NSMenuItem { try XCTUnwrap(items.first { $0.title == title }) }
+
+        try perform(item("Color…"))
+        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.picker(.colorPicker, runtimeSessionID: F.runtimeID(2))?.id)
+        try perform(item("Icon…"))
+        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.picker(.iconPicker, runtimeSessionID: F.runtimeID(2))?.id)
+        try perform(item("Mute"))
+        XCTAssertEqual(app.muteToggles, [personal])
+
+        let kitty = try XCTUnwrap(workspace.state.rows.first { $0.embeddedRuntimeSessionID == nil })
+        let kittyItems = workspace.contextMenuItems(forRow: try index(of: kitty.key))
+        for title in ["Color…", "Icon…"] {
+            let picker = try XCTUnwrap(kittyItems.first { $0.title == title })
+            XCTAssertFalse(picker.isEnabled, "\(title) is a Kitty session's in Kitty")
+            XCTAssertEqual(picker.toolTip, WorkspaceInspectorView.kittyOnly)
+        }
+        let mute = try XCTUnwrap(kittyItems.first { $0.title == "Mute" })
+        try perform(mute)
+        XCTAssertEqual(app.muteToggles, [personal, kitty])
+    }
+
     func testAViewOffersCloseAndAHeadingNoMenu() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         // A heading, and the Dashboard while nothing runs in it, have nothing.

@@ -162,6 +162,10 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     private(set) var inspectorActions: [WorkspaceInspectorAction] = []
     func workspaceInspectorAction(_ action: WorkspaceInspectorAction) { inspectorActions.append(action) }
 
+    /// The sessions the right-click menu muted or unmuted, in order.
+    private(set) var muteToggles: [WorkspaceRow] = []
+    func workspaceToggleMute(_ row: WorkspaceRow) { muteToggles.append(row) }
+
     /// What the inspector's Answer… buttons asked to answer, in order.
     private(set) var answers: [WorkspaceWaitingAnswer] = []
     func workspaceAnswer(_ answer: WorkspaceWaitingAnswer) { answers.append(answer) }
