@@ -269,10 +269,20 @@ struct WorkspaceViews: Equatable {
     }
 
     /// What the one sheet shown before quitting asks, naming every view
-    /// whose program is still running.
+    /// whose program is still running. A title shared by several views is
+    /// named once, with how many there are.
     static func quitQuestion(_ titles: [String]) -> String {
         if titles.count == 1 { return "A process is still running in \(titles[0]). Quit anyway?" }
-        let list = titles.dropLast().joined(separator: ", ") + " and " + titles[titles.count - 1]
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for title in titles {
+            if counts[title] == nil { order.append(title) }
+            counts[title, default: 0] += 1
+        }
+        let names = order.map { counts[$0]! > 1 ? "\($0) (\(counts[$0]!))" : $0 }
+        let list = names.count == 1
+            ? names[0]
+            : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
         return "Processes are still running in \(list). Quit anyway?"
     }
 

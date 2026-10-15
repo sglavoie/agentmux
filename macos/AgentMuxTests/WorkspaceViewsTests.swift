@@ -86,6 +86,13 @@ final class WorkspaceViewsModelTests: XCTestCase {
                        "Processes are still running in Shell, main.go and api. Quit anyway?")
     }
 
+    func testTheQuitQuestionNamesARepeatedTitleOnce() {
+        XCTAssertEqual(WorkspaceViews.quitQuestion(Array(repeating: "Terminal", count: 7)),
+                       "Processes are still running in Terminal (7). Quit anyway?")
+        XCTAssertEqual(WorkspaceViews.quitQuestion(["Terminal", "main.go", "Terminal"]),
+                       "Processes are still running in Terminal (2) and main.go. Quit anyway?")
+    }
+
     func testTheKeybindingReferenceAndThePickersAreTheOperatorsToOpen() {
         XCTAssertEqual(WorkspaceUtilityView.keybindings.arguments, ["workspace-view", "keybindings"])
         let icon = WorkspaceUtilityView.picker(.iconPicker, runtimeSessionID: F.runtimeID(2))
