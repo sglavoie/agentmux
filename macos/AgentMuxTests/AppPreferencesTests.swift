@@ -221,6 +221,39 @@ final class AppPreferencesTests: XCTestCase {
     }
 
     @MainActor
+    func testEnvironmentIsCommittedOnlyWhenEditingEnds() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        var changes: [(AppPreferences, AppPreferences)] = []
+        model.onChange = { changes.append(($0, $1)) }
+
+        for prefix in ["/", "/us", "/usr/bi"] {
+            model.environmentDrafts["PATH"] = prefix
+        }
+        XCTAssertTrue(changes.isEmpty, "typing a PATH changes nothing amx runs with")
+        XCTAssertEqual(model.preferences.environment, [:])
+        XCTAssertNil(defaults.object(forKey: EnvironmentOverrides.defaultsKey))
+
+        model.environmentDrafts["PATH"] = "/usr/bin:/bin"
+        model.commitEnvironment()
+        XCTAssertEqual(changes.count, 1)
+        XCTAssertEqual(changes.first?.1.environment, ["PATH": "/usr/bin:/bin"])
+        XCTAssertEqual(EnvironmentOverrides.load(from: defaults), ["PATH": "/usr/bin:/bin"])
+        model.commitEnvironment()
+        XCTAssertEqual(changes.count, 1, "committing again changes nothing")
+
+        model.environmentDrafts["PATH"] = ""
+        model.commitEnvironment()
+        XCTAssertEqual(model.preferences.environment, [:], "an emptied field removes the override")
+        XCTAssertEqual(model.environmentDrafts, [:])
+
+        // An override written elsewhere shows in the field.
+        EnvironmentOverrides.save(["AMX_CONFIG": "~/x.toml"], to: defaults)
+        model.refresh()
+        XCTAssertEqual(model.environmentDrafts, ["AMX_CONFIG": "~/x.toml"])
+    }
+
+    @MainActor
     func testWordingOfTheMenuBarSection() {
         XCTAssertEqual(PreferencesModel.recentDaysLabel(1), "Recent: last day")
         XCTAssertEqual(PreferencesModel.recentDaysLabel(7), "Recent: last 7 days")

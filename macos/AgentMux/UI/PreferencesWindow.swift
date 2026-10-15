@@ -53,10 +53,11 @@ struct PreferencesSnapshot: Equatable {
 
 /// Everything Preferences edits. Each change is saved to `UserDefaults` as it
 /// is made, and `onChange` hands the app the old and new values so it can
-/// apply the live ones at once. The amx binary path is the exception: it is
-/// typed into `binaryPathDraft` and reaches `preferences` only when the field
-/// is submitted or loses focus, so a half-typed path never replaces the amx
-/// the app runs.
+/// apply the live ones at once. The amx binary path and the environment are
+/// the exceptions: they are typed into `binaryPathDraft` and
+/// `environmentDrafts` and reach `preferences` only when a field is submitted
+/// or loses focus, so a half-typed path or PATH never replaces the amx the
+/// app runs or the environment it runs in.
 @MainActor
 final class PreferencesModel: ObservableObject {
     let defaults: UserDefaults
@@ -67,6 +68,9 @@ final class PreferencesModel: ObservableObject {
             if preferences.binaryPath != oldValue.binaryPath {
                 binaryPathDraft = preferences.binaryPath
             }
+            if preferences.environment != oldValue.environment {
+                environmentDrafts = preferences.environment
+            }
             preferences.save(to: defaults)
             onChange?(oldValue, preferences)
         }
@@ -75,6 +79,9 @@ final class PreferencesModel: ObservableObject {
     /// The amx binary field as typed; `commitBinaryPath` makes it the
     /// preference.
     @Published var binaryPathDraft: String
+    /// The Environment fields as typed, by name; `commitEnvironment` makes
+    /// them the overrides.
+    @Published var environmentDrafts: [String: String]
 
     /// Read-only facts about the running app.
     @Published var snapshot = PreferencesSnapshot()
@@ -109,12 +116,19 @@ final class PreferencesModel: ObservableObject {
         let stored = AppPreferences.load(from: defaults)
         preferences = stored
         binaryPathDraft = stored.binaryPath
+        environmentDrafts = stored.environment
     }
 
     /// The binary field was submitted or left: what it holds is now the
     /// override, and the app resolves amx again if that changed it.
     func commitBinaryPath() {
         preferences.binaryPath = binaryPathDraft
+    }
+
+    /// An Environment field was submitted or left: what the fields hold are
+    /// now the overrides, an empty one removing its variable.
+    func commitEnvironment() {
+        preferences.environment = environmentDrafts.filter { !$0.value.isEmpty }
     }
 
     /// Re-reads what may have changed elsewhere: the login item in System
@@ -301,9 +315,10 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     /// A closed window records nothing, and ends any editing of the binary
-    /// path.
+    /// path or the environment.
     func windowWillClose(_ notification: Notification) {
         model.commitBinaryPath()
+        model.commitEnvironment()
         dashboardRecorder.stop()
         attentionRecorder.stop()
     }
@@ -321,6 +336,7 @@ struct PreferencesView: View {
     @ObservedObject var dashboardRecorder: HotKeyRecorder
     @ObservedObject var attentionRecorder: HotKeyRecorder
     @FocusState private var binaryFieldFocused: Bool
+    @FocusState private var environmentFieldFocused: String?
 
     var body: some View {
         Form {
@@ -465,11 +481,16 @@ struct PreferencesView: View {
                             .labelsHidden()
                             .font(.system(.body, design: .monospaced))
                             .frame(minWidth: 260)
+                            .focused($environmentFieldFocused, equals: name)
+                            .onSubmit { model.commitEnvironment() }
                             .help(detected.map { "From your login shell: \($0)" } ?? "Your login shell does not set \(name).")
                     }
                 }
                 note("Gray values are what your login shell sets. Type one to give amx another; "
                     + "clear it to go back. The next amx run uses it.")
+            }
+            .onChange(of: environmentFieldFocused) { left, _ in
+                if left != nil { model.commitEnvironment() }
             }
         }
         .formStyle(.grouped)
@@ -493,15 +514,12 @@ struct PreferencesView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// One variable's override; an empty field removes it.
+    /// One variable's field as typed; `commitEnvironment` applies it, and an
+    /// empty one then removes the override.
     private func environmentBinding(_ name: String) -> Binding<String> {
         Binding(
-            get: { model.preferences.environment[name] ?? "" },
-            set: { value in
-                var overrides = model.preferences.environment
-                overrides[name] = value.isEmpty ? nil : value
-                model.preferences.environment = overrides
-            }
+            get: { model.environmentDrafts[name] ?? "" },
+            set: { model.environmentDrafts[name] = $0 }
         )
     }
 
