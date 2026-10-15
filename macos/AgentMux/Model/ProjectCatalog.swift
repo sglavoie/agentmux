@@ -158,7 +158,13 @@ struct ProjectCatalog: Equatable {
 
     static func directoryExists(_ path: String) -> Bool {
         var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
+        return FileManager.default.fileExists(atPath: expandingTilde(path), isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+
+    /// A configured directory as a path on disk. amx lists it as written,
+    /// and configuration may start it with `~`, which amx expands itself.
+    static func expandingTilde(_ path: String) -> String {
+        (path as NSString).expandingTildeInPath
     }
 
     /// The projects by profile, profiles in the order configuration first

@@ -50,6 +50,13 @@ final class ProjectCatalogTests: XCTestCase {
         XCTAssertFalse(ProjectCatalog.directoryExists(root.appendingPathComponent("absent").path))
     }
 
+    func testDirectoryExistsExpandsAConfiguredTilde() {
+        // amx lists a directory as configuration writes it, `~` and all.
+        XCTAssertTrue(ProjectCatalog.directoryExists("~"))
+        XCTAssertEqual(ProjectCatalog.expandingTilde("~/projects/api"), NSHomeDirectory() + "/projects/api")
+        XCTAssertEqual(ProjectCatalog.expandingTilde("/srv/api"), "/srv/api")
+    }
+
     // MARK: Cache
 
     func testCatalogRefreshesOnlyWhenOlderThanAMinute() {

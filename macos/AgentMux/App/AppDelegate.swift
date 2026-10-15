@@ -1954,7 +1954,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         panel.prompt = "Launch"
         panel.message = "Choose the folder to launch \(project.title) in."
         if !project.directory.isEmpty {
-            panel.directoryURL = URL(fileURLWithPath: project.directory, isDirectory: true)
+            panel.directoryURL = URL(fileURLWithPath: ProjectCatalog.expandingTilde(project.directory), isDirectory: true)
         }
         NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
