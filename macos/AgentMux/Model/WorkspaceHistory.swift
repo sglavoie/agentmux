@@ -41,17 +41,37 @@ struct WorkspaceTranscript: Decodable, Equatable {
     let session: RecentConversation
     let messages: [Message]
     let total: Int
+    let start: Int
+    let matchMessages: [Int]
+    let matchTerms: [String]
+    let focusMessage: Int?
+
+    var end: Int { start + messages.count }
+
+    init(session: RecentConversation, messages: [Message], total: Int, start: Int,
+         matchMessages: [Int], matchTerms: [String], focusMessage: Int?) {
+        self.session = session; self.messages = messages; self.total = total; self.start = start
+        self.matchMessages = matchMessages; self.matchTerms = matchTerms; self.focusMessage = focusMessage
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         session = try c.decode(RecentConversation.self, forKey: .session)
         messages = try c.decodeIfPresent([Message].self, forKey: .messages) ?? []
         total = try c.decodeIfPresent(Int.self, forKey: .total) ?? messages.count
+        start = try c.decodeIfPresent(Int.self, forKey: .start) ?? max(0, total - messages.count)
+        matchMessages = try c.decodeIfPresent([Int].self, forKey: .matchMessages) ?? []
+        matchTerms = try c.decodeIfPresent([String].self, forKey: .matchTerms) ?? []
+        focusMessage = try c.decodeIfPresent(Int.self, forKey: .focusMessage)
     }
 
     enum CodingKeys: String, CodingKey {
         case session, messages
         case total = "messages_total"
+        case start = "messages_start"
+        case matchMessages = "match_messages"
+        case matchTerms = "match_terms"
+        case focusMessage = "focus_message"
     }
 }
 
@@ -80,7 +100,12 @@ final class WorkspaceHistoryModel: ObservableObject {
     private let runner: ASLWorkRunner
     private var searchGeneration = 0
     private var transcriptGeneration = 0
-    private var messageLimit = 50
+    @Published private(set) var resultsQuery = ""
+    @Published private(set) var matchIndex = 0
+    @Published private(set) var scrollRequest: ScrollRequest?
+    struct ScrollRequest: Equatable { let sequence: Int; let message: Int }
+    private var scrollSequence = 0
+    private var loadedQuery = ""
     private var pendingSearch: DispatchWorkItem?
 
     init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent()) {
@@ -90,7 +115,22 @@ final class WorkspaceHistoryModel: ObservableObject {
 
     var selected: WorkspaceHistoryEntry? { entries.first { $0.id == selection } }
     var canAct: Bool { selected != nil && !acting && !loading && error == nil }
-    var canLoadEarlier: Bool { (transcript?.total ?? 0) > (transcript?.messages.count ?? 0) && !reading }
+    var canLoadEarlier: Bool { (transcript?.start ?? 0) > 0 && !reading }
+    var canLoadLater: Bool { guard let transcript else { return false }; return transcript.end < transcript.total && !reading }
+    var matchingMessages: [Int] { transcript?.matchMessages ?? [] }
+
+    func moveMatch(_ delta: Int) {
+        guard !reading, !matchingMessages.isEmpty else { return }
+        matchIndex = (matchIndex + delta + matchingMessages.count) % matchingMessages.count
+        let message = matchingMessages[matchIndex]
+        if let transcript, (transcript.start..<transcript.end).contains(message) { scroll(to: message) }
+        else { loadTranscript() }
+    }
+
+    private func scroll(to message: Int) {
+        scrollSequence += 1
+        scrollRequest = ScrollRequest(sequence: scrollSequence, message: message)
+    }
 
     func open(project: String, conversation: ConversationIdentity?) {
         self.project = project
@@ -103,6 +143,8 @@ final class WorkspaceHistoryModel: ObservableObject {
         pendingSearch?.cancel()
         // Invalidate old reads immediately, before the debounce elapses.
         searchGeneration += 1
+        transcriptGeneration += 1
+        reading = false
         loading = true
         let pending = DispatchWorkItem { [weak self] in self?.search() }
         pendingSearch = pending
@@ -151,6 +193,7 @@ final class WorkspaceHistoryModel: ObservableObject {
             switch result {
             case let .failure(error): self.error = error.message
             case let .success(entries):
+                self.resultsQuery = query
                 self.entries = entries.filter { wanted == nil || $0.conversation.identity == wanted }
                 let keep = self.selection.flatMap { id in self.entries.contains { $0.id == id } ? id : nil }
                 self.select(keep ?? self.entries.first?.id)
@@ -159,33 +202,57 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     func select(_ id: String?) {
+        if selection == id, loadedQuery == resultsQuery, transcript != nil { return }
         selection = id
+        loadedQuery = resultsQuery
         transcript = nil
         transcriptError = nil
-        messageLimit = 50
+        actionNotice = nil
+        matchIndex = 0
+        scrollRequest = nil
         loadTranscript()
     }
 
-    func loadEarlier() {
-        guard canLoadEarlier else { return }
-        messageLimit += 100
-        loadTranscript()
+    func loadEarlier(anchor: Int? = nil) {
+        guard canLoadEarlier, let transcript else { return }
+        readWindow(from: max(0, transcript.start - 100), count: min(100, transcript.start),
+                   retaining: transcript, anchor: anchor ?? transcript.start)
     }
 
-    func loadTranscript() {
+    func loadLater(anchor: Int? = nil) {
+        guard canLoadLater, let transcript else { return }
+        readWindow(from: transcript.end, count: 100, retaining: transcript, anchor: anchor ?? max(transcript.start, transcript.end - 1))
+    }
+
+    func loadTranscript() { readWindow() }
+
+    private func readWindow(from: Int? = nil, count: Int = 50, retaining: WorkspaceTranscript? = nil, anchor: Int? = nil) {
         transcriptGeneration += 1
         let generation = transcriptGeneration
         reading = false
         guard let selected, let command = command() else { return }
         reading = true
         transcriptError = nil
-        let args = ["session", "show", "--json", "--last", String(messageLimit), "--", selected.id]
+        var args = ["session", "show", "--json"]
+        if !loadedQuery.isEmpty { args += ["--find", loadedQuery, "--match", String(matchIndex + 1)] }
+        if let from { args += ["--from", String(from), "--count", String(count)] }
+        else if loadedQuery.isEmpty { args += ["--last", "50"] }
+        args += ["--", selected.id]
         runner.run({ command.json(WorkspaceTranscript.self, args, timeout: 30) }) { [weak self] result in
             guard let self, generation == self.transcriptGeneration, self.selection == selected.id else { return }
             self.reading = false
             switch result {
             case let .failure(error): self.transcriptError = error.message
-            case let .success(value), let .partial(value, _): self.transcript = value
+            case let .success(value), let .partial(value, _):
+                if let retaining, value.end == retaining.start || retaining.end == value.start {
+                    let messages = value.start < retaining.start ? value.messages + retaining.messages : retaining.messages + value.messages
+                    self.transcript = WorkspaceTranscript(session: value.session, messages: messages, total: value.total,
+                        start: min(value.start, retaining.start), matchMessages: value.matchMessages,
+                        matchTerms: value.matchTerms, focusMessage: value.focusMessage)
+                } else { self.transcript = value }
+                if let focus = value.focusMessage, let index = value.matchMessages.firstIndex(of: focus) { self.matchIndex = index }
+                if let anchor { self.scroll(to: anchor) }
+                else if let focus = value.focusMessage { self.scroll(to: focus) }
             }
         }
     }

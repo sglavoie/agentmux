@@ -125,17 +125,8 @@ func TestEmptyListFooterRendersWithoutPanic(t *testing.T) {
 		}
 	}()
 	out := stripAnsi(renderFooter(m))
-	// The essential band must still render — the palette is fixed-order and
-	// reserves space for the row keys in their unavailable style regardless of
-	// selection. Keys below the one-row budget are omitted rather than moved,
-	// and `? more` is what says so.
-	//
-	// `a actions` is the assertion's subject: on an empty list it is
-	// unavailable, and it is essential-band, so it cannot be dropped for width
-	// either. A key that is unavailable still occupies its place in the fixed
-	// order, which is what makes an availability change a restyle rather than a
-	// reflow of the row under the operator's eye.
-	for _, want := range []string{"j/k up/down", "a actions", ": commands", footerHintMore} {
+	// An empty list offers launch and discovery instead of unavailable row actions.
+	for _, want := range []string{"l launch", "S past sessions", ": commands", "? help"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in empty-list footer, got:\n%s", want, out)
 		}

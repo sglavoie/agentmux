@@ -247,7 +247,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let cell = tableView.makeView(withIdentifier: WorkspaceSwitcherCellView.identifier, owner: nil) as? WorkspaceSwitcherCellView
             ?? WorkspaceSwitcherCellView()
-        cell.show(shown[row])
+        cell.show(shown[row], query: field.stringValue)
         return cell
     }
 }
@@ -302,9 +302,14 @@ final class WorkspaceSwitcherCellView: NSTableCellView {
         fatalError("init(coder:) is not supported for this view")
     }
 
-    func show(_ entry: WorkspaceSwitcher.Entry) {
+    func show(_ entry: WorkspaceSwitcher.Entry, query: String = "") {
         glyphLabel.stringValue = entry.glyph
-        titleLabel.stringValue = entry.title
+        let title = NSMutableAttributedString(string: entry.title)
+        for range in WorkspaceSwitcher.highlightRanges(query, in: entry.title) {
+            title.addAttributes([.font: NSFont.boldSystemFont(ofSize: NSFont.systemFontSize),
+                                 .underlineStyle: NSUnderlineStyle.single.rawValue], range: range)
+        }
+        titleLabel.attributedStringValue = title
         detailLabel.stringValue = entry.unavailableReason ?? entry.detail
         detailLabel.isHidden = detailLabel.stringValue.isEmpty
         titleLabel.textColor = entry.unavailableReason == nil ? .labelColor : .secondaryLabelColor

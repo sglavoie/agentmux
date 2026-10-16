@@ -67,7 +67,8 @@ func Project(record diagnostics.TraceEnvelope) (Entry, bool) {
 	if entry.At.IsZero() {
 		return Entry{}, false
 	}
-	if record.Stage == "daemon.process_lifecycle" {
+	switch record.Stage {
+	case "daemon.process_lifecycle":
 		if record.Outcome != "settled" {
 			return Entry{}, false
 		}
@@ -76,7 +77,7 @@ func Project(record diagnostics.TraceEnvelope) (Entry, bool) {
 			entry.Title = "Worker process exited"
 		}
 		entry.Detail = record.Reason
-	} else if record.Stage == "daemon.decision" {
+	case "daemon.decision":
 		if record.Outcome != "applied" && record.Outcome != "acknowledged" && record.Outcome != "bypassed" {
 			return Entry{}, false
 		}
@@ -119,7 +120,7 @@ func Project(record diagnostics.TraceEnvelope) (Entry, bool) {
 			}
 			entry.Detail += reason
 		}
-	} else {
+	default:
 		return Entry{}, false
 	}
 	var identity []byte

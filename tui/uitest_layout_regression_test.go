@@ -108,7 +108,7 @@ func TestUITestModalLayoutRegressions(t *testing.T) {
 	}
 }
 
-func TestUITestStillReportsNarrowConfigPickerWidthOverflow(t *testing.T) {
+func TestUITestNarrowConfigPickerFits(t *testing.T) {
 	obs, err := RunUITestFixture("wide_profiles", UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, []UITestAction{
 		{Type: UITestActionKey, Key: keyA},
 		{Type: UITestActionKey, Key: keyDashboardLaunch},
@@ -117,8 +117,8 @@ func TestUITestStillReportsNarrowConfigPickerWidthOverflow(t *testing.T) {
 		t.Fatalf("RunUITestFixture returned error: %v", err)
 	}
 	final := obs[len(obs)-1]
-	if !hasIssueType(final.Screen.Issues, UITestIssueModalWidthOverflow) {
-		t.Fatalf("expected modal width overflow at 80x24, got %s", formatUITestIssueTypes(final.Screen.Issues))
+	if len(final.Screen.Issues) != 0 {
+		t.Fatalf("expected a fitting profile picker at 80x24, got %s", formatUITestIssueTypes(final.Screen.Issues))
 	}
 }
 

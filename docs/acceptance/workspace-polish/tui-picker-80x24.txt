@@ -1,0 +1,24 @@
+Agent Mux · Urgency · all projects                             ○ checking health
+Ru╭──────────────────────────────────────────────────────────────────────────╮
+pl│ Launch new session with profile: platform-services-monorepo              │
+  │                                                                          │
+  │ claude-production-primary  🦊 claude (current)                           │
+  │ codex-experimental-sandbox  🤖 codex                                     │
+  │ copilot-enterprise-review-board  🧑 copilot                              │
+  │                                                                          │
+  │ ⚠  Switching harness: claude → codex. New session will launch with this  │
+  │ harness.                                                                 │
+  │ Home: ~/.config/agent-mux/homes/codex-experimental-sandbox-workspace     │
+  ╰──────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+ Choose profile
+  enter select  esc/q cancel
+  j/k up/down

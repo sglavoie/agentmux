@@ -476,6 +476,7 @@ file. The exact inventory is:
 | [`compact-below-split-floor.json`](scenarios/compact-below-split-floor.json) | `project_families` | below the split's width floor the dashboard is the queue alone — no divider, no inspector, and no metadata the one-line row cannot carry — and the footer is the six labelled essentials, which is all 72 cells pay for |
 | [`compact-family-below-split-floor.json`](scenarios/compact-family-below-split-floor.json) | `project_families` | the same floor in Projects view: a collapsed family summary carries its own tally and nothing beside it, and the one-cell-wider fold hint tips the footer wholesale into its bare-key spelling |
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits with long profile names, reached the way the dashboard reaches it now — `a` for the actions menu, then its `C` entry |
+| [`config-picker-narrow-fit.json`](scenarios/config-picker-narrow-fit.json) | `wide_profiles` | profile identities and selected-home details fit at 80×24 after moving the cursor |
 | [`config-picker-selection-transition.json`](scenarios/config-picker-selection-transition.json) | `wide_profiles` | `l` → `C` → `down` restores the old colored profile row and keeps the new selection within the modal |
 | [`contextual-help-from-session-view.json`](scenarios/contextual-help-from-session-view.json) | `basic` | `?` opens the generated keymap over the truncated transcript viewer, which stays as the backdrop |
 | [`duplicate-names-collisions.json`](scenarios/duplicate-names-collisions.json) | `duplicate_names` | conditional disambiguation: each colliding pair is separated by exactly the thing that differs — `(main)`/`(amx/feat-x)`, `(work)`/`(personal)`, `(#51)`/`(#61)` — and the name that occurs once is left bare |
@@ -638,11 +639,14 @@ and the difference is the point rather than a quirk of the detector:
   it sheds entries, which is why a short terminal still shows a list; only a
   viewport too short for even one entry plus a header raises
   `modal_height_overflow`.
-- The **`wide_profiles` config picker** still claims a natural width and needs
-  ≥ ~130 cols.
+- The **profile picker** is responsive too. Rows show identity and harness;
+  only the selected profile's home is shown below the list, wrapped to the
+  available width. Short terminals reduce decoration and scroll the list around
+  its cursor. `config-picker-narrow-fit.json` and `config-picker-fit.json` cover
+  narrow and wide layouts; the in-package tests also cover 60-column and short
+  layouts. A harness-switch warning takes priority over home-path detail when
+  space is tight.
 
-Author a *negative* scenario by opening a modal that claims a natural width at
-a narrow size and asserting the overflow is caught — that is the intended
-"fails deterministically when an overlay needs more columns than the terminal
-can provide" behavior, and `config-picker-fit.json` plus the in-package
-`TestUITestModalConfigPickerWidthOverflow` are where it is still guarded.
+The synthetic width/height overflow tests still verify that the detector reports
+content that actually exceeds the viewport. Responsive layouts are judged by
+what they render at the available size.

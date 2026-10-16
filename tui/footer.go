@@ -714,6 +714,17 @@ func listPositionText(_ Model, position string) string {
 // drop pass could only produce the same answer.
 func listFooterTokens(m Model, position string) []prioritizedFooterToken {
 	palette := listFooterPalette()
+	if m.items.Len() == 0 {
+		bindings := dashboardBindings()
+		palette = []listFooterCandidate{
+			listCommandBinding(bindings, commands.OpenLauncher, footerSectionLaunch, footerPriorityEssential).irreducible(),
+			listCommandBinding(bindings, commands.SearchAllSessions, footerSectionApp, footerPriorityPrimary),
+			listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways).irreducible(),
+			listCommandBinding(bindings, commands.ShowKeyboardHelp, footerSectionApp, footerPriorityEssential).irreducible(),
+			listCommandBinding(bindings, commands.ClearFilters, footerSectionApp, footerPriorityEssential).availableWhen(footerAlways).shownWhen(listFilterActive),
+			listCommandBinding(bindings, commands.Quit, footerSectionApp, footerPriorityPrimary),
+		}
+	}
 	tokens := make([]prioritizedFooterToken, 0, len(palette))
 	for _, c := range palette {
 		tok, ok := c.render(m, position)

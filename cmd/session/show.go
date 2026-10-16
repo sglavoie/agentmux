@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/searchquery"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +28,14 @@ var sessionShowCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		last, _ := cmd.Flags().GetInt("last")
+		query, _ := cmd.Flags().GetString("find")
+		match, _ := cmd.Flags().GetInt("match")
+		from, _ := cmd.Flags().GetInt("from")
+		count, _ := cmd.Flags().GetInt("count")
+		windowed := query != "" || from >= 0
+		if from < -1 || count < 1 || count > 500 || match < 1 || (last != 0 && windowed) || (match != 1 && query == "") {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("use --last alone, or --find/--from with --count 1–500 and a positive --match (requires --find)"))
+		}
 		if last < 0 {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--last %d: want 0 (metadata only) or a positive count", last))
 		}
@@ -47,7 +56,7 @@ var sessionShowCmd = &cobra.Command{
 		markLive(views, live, sessionCommandsCurrentWindow())
 		view := views[0]
 		var tail *sessionMessageTail
-		if last > 0 {
+		if last > 0 || windowed {
 			reader, ok := sessionCommandsSessionReaders()[meta.Harness]
 			if !ok {
 				return cli.CommandFailure(cmd, jsonOutput, "command_failed", fmt.Errorf("no transcript reader for harness %q", meta.Harness))
@@ -56,12 +65,18 @@ var sessionShowCmd = &cobra.Command{
 			if err != nil {
 				return cli.CommandFailure(cmd, jsonOutput, "command_failed", fmt.Errorf("reading %s: %w", meta.Path, err))
 			}
-			tail = lastConversationMessages(messages, last)
+			if windowed {
+				tail = conversationMessageWindow(messages, query, match, from, count)
+			} else {
+				tail = lastConversationMessages(messages, last)
+			}
 		}
 		if jsonOutput {
 			data := sessionShowData{Session: view}
 			if tail != nil {
 				data.Messages, data.MessagesTotal = tail.Messages, &tail.Total
+				data.MessagesStart = &tail.Start
+				data.MatchMessages, data.MatchTerms, data.FocusMessage = tail.Matches, tail.Terms, tail.Focus
 			}
 			return cli.WriteJSON(cmd, data)
 		}
@@ -77,11 +92,14 @@ var sessionShowCmd = &cobra.Command{
 
 type sessionShowData struct {
 	Session sessionView `json:"session"`
-	// Messages and MessagesTotal are present only under --last: the closing
-	// user/assistant messages oldest first, and how many such messages the
-	// conversation holds in all.
+	// Message fields are present only under --last, --find, or --from: visible
+	// user/assistant prose in chronological order, its total, and window start.
 	Messages      []sessionMessage `json:"messages,omitempty"`
 	MessagesTotal *int             `json:"messages_total,omitempty"`
+	MessagesStart *int             `json:"messages_start,omitempty"`
+	MatchMessages []int            `json:"match_messages,omitempty"`
+	MatchTerms    []string         `json:"match_terms,omitempty"`
+	FocusMessage  *int             `json:"focus_message,omitempty"`
 }
 
 // sessionMessage is one user or assistant message as show prints it. Tool
@@ -96,6 +114,10 @@ type sessionMessage struct {
 type sessionMessageTail struct {
 	Messages []sessionMessage
 	Total    int
+	Start    int
+	Matches  []int
+	Terms    []string
+	Focus    *int
 }
 
 // lastConversationMessages keeps the last n user/assistant messages, oldest
@@ -117,7 +139,32 @@ func lastConversationMessages(messages []transcript.Message, n int) *sessionMess
 	if n < total {
 		kept = kept[total-n:]
 	}
-	return &sessionMessageTail{Messages: kept, Total: total}
+	return &sessionMessageTail{Messages: kept, Total: total, Start: total - len(kept)}
+}
+
+// Message ordinals refer only to visible prose, never hidden reasoning or tool
+// payloads. The query terms are the same ones search and the TUI use.
+func conversationMessageWindow(messages []transcript.Message, query string, match, from, count int) *sessionMessageTail {
+	all := lastConversationMessages(messages, len(messages))
+	all.Terms = searchquery.Parse(query)
+	for i, message := range all.Messages {
+		if searchquery.Terms(all.Terms).ContainsAny(strings.ToLower(message.Text)) {
+			all.Matches = append(all.Matches, i)
+		}
+	}
+	if len(all.Matches) > 0 {
+		focus := all.Matches[min(match-1, len(all.Matches)-1)]
+		all.Focus = &focus
+	}
+	if from < 0 {
+		from = max(0, all.Total-count)
+		if all.Focus != nil {
+			from = max(0, *all.Focus-count/2)
+		}
+	}
+	all.Start = min(from, all.Total)
+	all.Messages = all.Messages[all.Start:min(all.Start+count, all.Total)]
+	return all
 }
 
 // writeSessionMessages prints the tail under the metadata: a heading that says
@@ -131,6 +178,8 @@ func writeSessionMessages(out io.Writer, tail sessionMessageTail, now time.Time)
 		b.WriteString("\nno user or assistant messages to show\n")
 	case len(tail.Messages) == tail.Total:
 		fmt.Fprintf(&b, "\nall %d user and assistant %s:\n", tail.Total, plural("message", tail.Total))
+	case tail.Start+len(tail.Messages) < tail.Total:
+		fmt.Fprintf(&b, "\nmessages %d–%d of %d user and assistant messages:\n", tail.Start+1, tail.Start+len(tail.Messages), tail.Total)
 	default:
 		fmt.Fprintf(&b, "\nlast %d of %d user and assistant messages:\n", len(tail.Messages), tail.Total)
 	}

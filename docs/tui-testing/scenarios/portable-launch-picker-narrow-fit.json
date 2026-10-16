@@ -9,7 +9,7 @@
   "assertions": [
     { "type": "mode_equals", "mode": "config_picker" },
     { "type": "contains_text", "text": "Launch new session with profile: api" },
-    { "type": "contains_text", "text": "~/.claude-work (current)" },
+    { "type": "contains_text", "text": "Home: ~/.claude-work" },
     { "type": "contains_text", "text": "codex-work" },
     { "type": "excludes_text", "text": "requires" },
     { "type": "excludes_text", "text": "Kitty" },

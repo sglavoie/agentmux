@@ -63,6 +63,7 @@ final class WorkspaceInspectorView: NSView {
     let filterPicker = NSPopUpButton()
     let oldestButton = NSButton(checkboxWithTitle: "Oldest first", target: nil, action: nil)
     let nextButton = NSButton(title: "Next waiting", target: nil, action: nil)
+    let updatesButton = NSButton(title: "Update list", target: nil, action: nil)
     private let inboxControls = NSStackView()
     private(set) var waitingFilter = WorkspaceWaitingFilter.all
     private(set) var oldestFirst = false
@@ -70,14 +71,21 @@ final class WorkspaceInspectorView: NSView {
     private var preview = SecretText()
     private var contextSequence = 0
     private var lastWaiting: AttentionCycler.Key?
+    private var heldWaiting: [WorkspaceWaitingRow]?
+    private var pointerInside = false
 
-    var visibleWaiting: [WorkspaceWaitingRow] { waitingFilter.apply(model.waiting, oldestFirst: oldestFirst) }
+    var visibleWaiting: [WorkspaceWaitingRow] { heldWaiting ?? waitingFilter.apply(model.waiting, oldestFirst: oldestFirst) }
     private var displayedLines: [WorkspaceInspectorLine] {
         guard model.tab == .waiting else { return model.lines }
         let rows = visibleWaiting
         let notice = model.current ? [] : model.feedNotice.map { [WorkspaceInspectorLine.note($0)] } ?? []
-        return rows.isEmpty ? notice + [.note(model.waiting.isEmpty ? Self.nothingWaiting : "No waiting items match this filter.")]
-            : notice + rows.map(WorkspaceInspectorLine.waiting)
+        guard !rows.isEmpty else { return notice + [.note(model.waiting.isEmpty ? Self.nothingWaiting : "No waiting items match this filter.")] }
+        guard waitingFilter == .all else { return notice + [.heading("\(waitingFilter.rawValue) (\(rows.count))")] + rows.map(WorkspaceInspectorLine.waiting) }
+        return notice + [0, 1, 2].flatMap { priority -> [WorkspaceInspectorLine] in
+            let group = rows.filter { $0.category.priority == priority }
+            guard let first = group.first else { return [] }
+            return [.heading("\(first.category.groupTitle) (\(group.count))")] + group.map(WorkspaceInspectorLine.waiting)
+        }
     }
 
     /// Takes a copied identifier; the general pasteboard unless a test says
@@ -98,6 +106,7 @@ final class WorkspaceInspectorView: NSView {
 
     init() {
         super.init(frame: .zero)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self, userInfo: nil))
         tabs.target = self
         tabs.action = #selector(tabChosen(_:))
         tabs.controlSize = .small
@@ -127,14 +136,16 @@ final class WorkspaceInspectorView: NSView {
         oldestButton.action = #selector(filterChanged(_:))
         nextButton.target = self
         nextButton.action = #selector(nextWaiting(_:))
-        for control in [filterPicker, oldestButton, nextButton] {
+        updatesButton.target = self
+        updatesButton.action = #selector(applyWaitingUpdates(_:))
+        for control in [filterPicker, oldestButton, nextButton, updatesButton] {
             control.controlSize = .small
             control.refusesFirstResponder = true
         }
         inboxControls.orientation = .vertical
         inboxControls.alignment = .leading
         inboxControls.spacing = 4
-        [filterPicker, oldestButton, nextButton].forEach { inboxControls.addArrangedSubview($0) }
+        [filterPicker, oldestButton, nextButton, updatesButton].forEach { inboxControls.addArrangedSubview($0) }
         let header = NSStackView(views: [tabs, inboxControls])
         header.orientation = .vertical
         header.alignment = .leading
@@ -170,6 +181,14 @@ final class WorkspaceInspectorView: NSView {
     func show(_ model: Model) {
         guard model != self.model else { return }
         let old = displayedLines
+        let oldWaiting = visibleWaiting
+        let newWaiting = waitingFilter.apply(model.waiting, oldestFirst: oldestFirst)
+        let changed = oldWaiting.count != newWaiting.count || zip(oldWaiting, newWaiting).contains { !$0.sameContext(as: $1) }
+        if model.tab == .waiting && (pointerInside || expanded != nil), changed {
+            // Do not move a target under a pointer or an open context. The live
+            // snapshot still invalidates its answer/context buttons immediately.
+            heldWaiting = oldWaiting.map { old in newWaiting.first { $0.sameContext(as: old) } ?? old }
+        } else { heldWaiting = nil }
         self.model = model
         if let expanded, !model.current || model.tab != .waiting || !model.waiting.contains(where: { $0.sameContext(as: expanded) }) {
             clearContext()
@@ -184,6 +203,8 @@ final class WorkspaceInspectorView: NSView {
             if tab == model.tab { tabs.selectedSegment = index }
         }
         inboxControls.isHidden = model.tab != .waiting
+        updatesButton.isEnabled = heldWaiting != nil
+        updatesButton.title = heldWaiting == nil ? "List up to date" : "Update list (\(model.waiting.count) waiting)"
         nextButton.isEnabled = model.current && !visibleWaiting.isEmpty
         let wanted = displayedLines
         if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {
@@ -200,7 +221,7 @@ final class WorkspaceInspectorView: NSView {
             view.alphaValue = Self.dims(line, current: model.current) ? 0.5 : 1
         }
         for case let row as WorkspaceWaitingRowView in lines {
-            row.contextButton.isEnabled = model.current
+            row.contextButton.isEnabled = rowIsCurrent(row.row)
             row.showContext(expanded?.key == row.row.key ? preview.reveal() : nil)
         }
         holdWhileNotCurrent()
@@ -211,8 +232,10 @@ final class WorkspaceInspectorView: NSView {
     /// may no longer be so, and the daemon is not there to say.
     private func holdWhileNotCurrent() {
         for case let row as WorkspaceWaitingRowView in lines {
-            row.answerButton?.isEnabled = model.current
-            row.answerButton?.toolTip = model.current ? nil : Self.waitForDaemon
+            let current = rowIsCurrent(row.row)
+            row.answerButton?.isEnabled = current
+            row.answerButton?.toolTip = current ? nil : (model.current ? "This item changed. Update the waiting list." : Self.waitForDaemon)
+            if !current && model.current { row.detailLabel.stringValue = "Changed · update the waiting list" }
         }
         guard !model.current else { return }
         for button in actionButtons {
@@ -243,8 +266,9 @@ final class WorkspaceInspectorView: NSView {
                 if let key = view?.row.key { self?.onWaiting?(key) }
             }
             view.onAnswer = { [weak self, weak view] answer in
-                self?.lastWaiting = view?.row.key
-                self?.onAnswer?(answer)
+                guard let self, let view, self.rowIsCurrent(view.row) else { return }
+                self.lastWaiting = view.row.key
+                self.onAnswer?(answer)
             }
             view.onContext = { [weak self, weak view] in
                 if let row = view?.row { self?.toggleContext(row) }
@@ -343,6 +367,7 @@ final class WorkspaceInspectorView: NSView {
     }
 
     func setWaitingFilter(_ filter: WorkspaceWaitingFilter, oldestFirst: Bool) {
+        heldWaiting = nil
         waitingFilter = filter
         self.oldestFirst = oldestFirst
         filterPicker.selectItem(withTitle: filter.rawValue)
@@ -357,6 +382,7 @@ final class WorkspaceInspectorView: NSView {
     }
 
     @objc func nextWaiting(_ sender: Any? = nil) {
+        applyWaitingUpdates(nil)
         guard model.current, !visibleWaiting.isEmpty else { return }
         let rows = visibleWaiting
         let next = lastWaiting.flatMap { key in rows.firstIndex { $0.key == key } }.map { ($0 + 1) % rows.count } ?? 0
@@ -366,6 +392,22 @@ final class WorkspaceInspectorView: NSView {
 
     func discardContext() {
         clearContext()
+        heldWaiting = nil
+        rebuild()
+    }
+
+    private func rowIsCurrent(_ row: WorkspaceWaitingRow) -> Bool {
+        model.current && model.waiting.contains { $0.sameContext(as: row) }
+    }
+
+    override func mouseEntered(with event: NSEvent) { pointerInside = true }
+    override func mouseExited(with event: NSEvent) {
+        pointerInside = false
+        if expanded == nil { applyWaitingUpdates(nil) }
+    }
+
+    @objc func applyWaitingUpdates(_ sender: Any?) {
+        heldWaiting = nil
         rebuild()
     }
 
@@ -376,7 +418,7 @@ final class WorkspaceInspectorView: NSView {
     }
 
     func toggleContext(_ row: WorkspaceWaitingRow) {
-        guard model.current else { return }
+        guard rowIsCurrent(row) else { return }
         let closing = expanded?.key == row.key
         clearContext()
         if closing { rebuild(); return }

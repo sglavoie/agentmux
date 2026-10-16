@@ -173,7 +173,7 @@ func TestRenderConfigPickerBoxDashboardLaunchHeader(t *testing.T) {
 	}
 }
 
-func TestRenderConfigPickerBoxExpandsForProfileRows(t *testing.T) {
+func TestRenderConfigPickerSeparatesSelectedHomeFromRows(t *testing.T) {
 	m := testModel()
 	m.cfg.HarnessEmojis = map[string]string{
 		"claude":  "⭕",
@@ -217,7 +217,7 @@ func TestRenderConfigPickerBoxExpandsForProfileRows(t *testing.T) {
 	if currentLine == "" {
 		t.Fatalf("expected vta-claude row in output:\n%s", stripAnsi(raw))
 	}
-	for _, want := range []string{"⭕ claude", "/Users/sglavoie/.claude", "(current)"} {
+	for _, want := range []string{"⭕ claude", "(current)"} {
 		if !strings.Contains(currentLine, want) {
 			t.Fatalf("current row should keep %q on one line, got %q\nfull output:\n%s", want, currentLine, stripAnsi(raw))
 		}

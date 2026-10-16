@@ -1,0 +1,24 @@
+Agent Mux · Urgency · all projects                             ○ checking health
+> Sessions · focused
+                              No running sessions.
+
+                 press  l  to launch     press  ?  for all keys
+
+                      Configure projects: amx config edit
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  l launch · S past sessions · : commands · ? help · q quit

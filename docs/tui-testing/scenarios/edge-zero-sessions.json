@@ -21,7 +21,7 @@
     },
     {
       "type": "contains_text",
-      "text": "\u2502(no session selected)"
+      "text": "│(no session selected)"
     },
     {
       "type": "excludes_text",
@@ -29,6 +29,22 @@
     },
     {
       "type": "no_layout_issues"
+    },
+    {
+      "type": "contains_text",
+      "text": "Configure projects: amx config edit"
+    },
+    {
+      "type": "contains_text",
+      "text": "l launch"
+    },
+    {
+      "type": "excludes_text",
+      "text": "a actions"
+    },
+    {
+      "type": "excludes_text",
+      "text": "j/k up/down"
     }
   ]
 }

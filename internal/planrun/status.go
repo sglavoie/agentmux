@@ -118,7 +118,7 @@ func readVerification(path, runID string) ([]VerificationRecord, bool, error) {
 	if err != nil {
 		return rows, false, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only descriptor; read errors are reported below
 	info, err = f.Stat()
 	if err != nil {
 		return rows, false, err

@@ -69,9 +69,8 @@ func TestUITestModalNoIssuesWhenFits(t *testing.T) {
 // pinned the old wrapped-description legend, whose widest row could not fit, and
 // leaving it in place would have meant the menu passed its acceptance by
 // continuing to be clipped. The detector itself is unweakened: the genuine
-// clipping cases are TestUITestModalConfigPickerWidthOverflow below, which still
-// reports modal_width_overflow for a real overflowing box, and the synthetic
-// line/height overflow tests in uitest_screen_test.go.
+// clipping cases are the synthetic line/height overflow tests in
+// uitest_screen_test.go. The profile picker below now fits narrow widths too.
 func TestUITestActionsMenuFitsEveryTargetSize(t *testing.T) {
 	for _, size := range []struct{ w, h int }{{80, 24}, {100, 24}, {120, 30}, {160, 45}} {
 		m := actionsModalAt(size.w, size.h)
@@ -87,15 +86,12 @@ func TestUITestActionsMenuFitsEveryTargetSize(t *testing.T) {
 	}
 }
 
-// TestUITestModalConfigPickerWidthOverflow pins the profile-picker sizing
-// regression: at a terminal narrower than its widest profile row the picker
-// reports modal_width_overflow, and at a wide terminal it does not.
-func TestUITestModalConfigPickerWidthOverflow(t *testing.T) {
-	if iss := detectModalFitIssues(configPickerModalAt(60, 40)); !hasIssueType(iss, UITestIssueModalWidthOverflow) {
-		t.Errorf("expected modal_width_overflow for config picker at 60x40, got %v", iss)
-	}
-	if iss := detectModalFitIssues(configPickerModalAt(140, 50)); hasIssueType(iss, UITestIssueModalWidthOverflow) {
-		t.Errorf("config picker at 140x50 should not overflow width, got %v", iss)
+// The responsive profile list and selected detail fit ordinary terminal sizes.
+func TestUITestModalConfigPickerFitsNarrowAndWide(t *testing.T) {
+	for _, size := range [][2]int{{60, 24}, {80, 24}, {140, 50}} {
+		if iss := detectModalFitIssues(configPickerModalAt(size[0], size[1])); len(iss) != 0 {
+			t.Errorf("config picker at %dx%d: %v", size[0], size[1], iss)
+		}
 	}
 }
 

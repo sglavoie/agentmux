@@ -112,3 +112,80 @@ No installation, commit, or release has been performed.
 All seven requested improvements are implemented. Screenshot inspection remains
 an environmental validation limitation. No installation, commit, or release was
 performed.
+
+## Follow-up polish on 2026-10-15
+
+This pass improves the existing workflows above. It also resolves the earlier
+screenshot validation limitation using current-process ScreenCaptureKit capture.
+
+- [x] History opens a bounded window around the actual matching prose message,
+  including old matches outside the latest 50 messages. Terms are highlighted;
+  previous/next matching-message navigation and earlier/later paging retain a
+  stable message anchor. Refreshing the same search preserves the open preview.
+- [x] Changes shows old/new line numbers, addition/deletion shading, and hunk
+  boundaries with previous/next controls. Text remains selectable, and each
+  checkout/base/file retains its scroll position.
+- [x] Waiting groups decisions and errors ahead of completions with section
+  counts. Hovering or reading context holds the list in place. Changed questions
+  immediately lose their actions; explicit updates apply the fresh order.
+- [x] The palette accepts abbreviations and aliases, highlights matched title
+  characters, ranks exact names first, and then favors available contextual
+  actions. Unavailable entries retain their explanations and action checks.
+- [x] The TUI profile picker uses compact profile/harness rows with only the
+  selected home expanded below. It fits narrow and short terminals, follows the
+  cursor through long lists, and keeps harness-change warnings visible. The
+  empty dashboard offers launch, configuration, history, commands, and help.
+- [x] History, Changes, Activity, and Runs share heading, loading, error/retry,
+  and empty-state treatments. Failed reads are distinct from empty results;
+  retained results are labeled. ASL's exact **Retry Receipt** behavior remains.
+- [x] Hosted visual tests cover populated, empty, loading, and failed states in
+  light/dark appearances with long names and paths. Geometry assertions reject
+  unexpectedly enlarged windows; OCR checks that key labels and actions are
+  actually rendered. Screenshot review caught and fixed an error-notice layout
+  that forced windows taller than their minimum size.
+
+### Reviewed reference captures
+
+Each contact sheet contains History (upper left), Changes (upper right), Activity
+(lower left), and Runs (lower right). The images use fixture data and retain
+their native pixel dimensions. These are review references, not pixel-exact
+goldens; locale, system fonts, and scrolling appearance can vary between Macs.
+
+| State | Light | Dark |
+| --- | --- | --- |
+| Populated | [Capture](acceptance/workspace-polish/review-populated-light.png) | [Capture](acceptance/workspace-polish/review-populated-dark.png) |
+| Empty | [Capture](acceptance/workspace-polish/review-empty-light.png) | [Capture](acceptance/workspace-polish/review-empty-dark.png) |
+| Loading with retained results | [Capture](acceptance/workspace-polish/review-loading-light.png) | [Capture](acceptance/workspace-polish/review-loading-dark.png) |
+| Failed read with retained results | [Capture](acceptance/workspace-polish/review-failed-light.png) | [Capture](acceptance/workspace-polish/review-failed-dark.png) |
+
+Additional references: [History search](acceptance/workspace-polish/history.png),
+[History at minimum size](acceptance/workspace-polish/history-dark-minimum.png),
+[Changes](acceptance/workspace-polish/changes.png),
+[Changes at minimum size](acceptance/workspace-polish/changes-dark-minimum.png),
+[Waiting and palette, light](acceptance/workspace-polish/waiting-palette-light.png),
+[Waiting and palette, dark](acceptance/workspace-polish/waiting-palette-dark.png).
+The TUI's normalized 80×24 renders show the
+[selected profile detail](acceptance/workspace-polish/tui-picker-80x24.txt) and
+[empty dashboard](acceptance/workspace-polish/tui-empty-80x24.txt).
+[Capture provenance and hashes](acceptance/workspace-polish/manifest.json)
+record the fixture source, sizes, and review criteria.
+
+### Verification
+
+- `env -u AMX_RUNTIME_SESSION_ID just check`: passed, including all Go tests,
+  core race checks, vet, 175 TUI scenarios, and lint (zero issues). The full gate
+  also exposed two existing lint issues in activity projection and verification
+  log cleanup, which were corrected without changing their behavior.
+- `macos/scripts/test-app.sh`: 802 hosted tests passed, zero failures or skips.
+  This builds the Debug app and exercises the existing terminal lifecycle and
+  ASL authorization/receipt checks alongside the new interaction coverage.
+- Final `WorkspaceWorkflowPreviewTests` run: four tests passed, zero failures
+  or skips, producing 38 captures. Minimum sizes include the title bar. The
+  references above were inspected in both appearances; overflowing detail bodies
+  scroll while their primary actions remain visible.
+- Focused interaction tests verify an old match outside the tail, anchored
+  paging in both directions, real diff scroll restoration and hunk visibility,
+  palette ordering/Unicode highlights, and held-list stale-question disabling.
+- Visual tests capture only their own fixture windows. They require macOS 14.4
+  or later and skip on older versions; model and interaction tests still run.
+- `git diff --check`: passed.

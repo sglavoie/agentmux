@@ -94,6 +94,9 @@ func TestListFooterPaletteOrder(t *testing.T) {
 // for m if width were unlimited: the sequence any actual render must be a
 // prefix of.
 func shownFooterFragments(m Model) []string {
+	if m.items.Len() == 0 {
+		return []string{"l launch", "S past sessions", ": commands", "? help", "q quit"}
+	}
 	var out []string
 	for _, c := range listFooterPalette() {
 		if c.textFor != nil {
@@ -493,7 +496,7 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			out := strings.Join(stripAnsiLines(listFooterRows(tc.m)), "\n")
-			if !strings.Contains(out, "a actions") {
+			if m := tc.m; m.items.Len() > 0 && !strings.Contains(out, "a actions") {
 				t.Errorf("expected the route to the per-row commands in footer; got %q", out)
 			}
 			// The direct spellings are retired, and a footer that still named

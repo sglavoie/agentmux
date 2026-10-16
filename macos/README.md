@@ -1188,6 +1188,18 @@ run hosted inside the app. When the app sees XCTest in its environment, it
 skips the single-instance check and the status item, and it never spawns
 `amx`. This means `just mac-test` works while the installed app is running.
 
+`WorkspaceWorkflowPreviewTests` captures fixture windows in light and dark
+appearances using ScreenCaptureKit's current-process window API (macOS 14.4 or
+newer). It verifies the requested window dimensions and recognizes visible
+labels with Vision, so a blank or unexpectedly enlarged window fails. Captures
+cover History, Changes, Activity, and Runs in populated, empty, loading, and
+failed states, plus search highlights, diff navigation, Waiting, and the command
+palette. Fixtures use injected services and never read real conversations or
+operate a real run. PNGs are attached to the XCTest result and written to
+`/tmp/agentmux-polish-previews`; older macOS versions skip only these capture
+tests. Reviewed reference images and their provenance are recorded in
+[`docs/desktop-improvements.md`](../docs/desktop-improvements.md).
+
 ### Running the UI on another Mac
 
 The hosted tests launch the app, so they show windows on the Mac that runs

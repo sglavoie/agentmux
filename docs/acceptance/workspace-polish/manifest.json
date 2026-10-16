@@ -1,0 +1,178 @@
+{
+  "reviewed_on": "2026-10-15",
+  "source_test": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+  "capture": "ScreenCaptureKit current-process fixture windows; no live session or run data",
+  "minimum_macos": "14.4",
+  "appearances": [
+    "light",
+    "dark"
+  ],
+  "states": [
+    "populated",
+    "empty",
+    "loading",
+    "failed"
+  ],
+  "window_frame_points": {
+    "history": [
+      720,
+      450
+    ],
+    "changes": [
+      720,
+      450
+    ],
+    "activity": [
+      760,
+      480
+    ],
+    "runs": [
+      780,
+      500
+    ]
+  },
+  "contact_sheet_positions": [
+    "history: upper left",
+    "changes: upper right",
+    "activity: lower left",
+    "runs: lower right"
+  ],
+  "native_capture_count": 38,
+  "automated_checks": [
+    "Requested whole-window dimensions, including title bar",
+    "Visible labels and enabled actions via Vision OCR",
+    "History actions disabled during loading and failed reads"
+  ],
+  "review_notes": [
+    "Titles, retry controls and primary actions fit at minimum size",
+    "Long names wrap or truncate intentionally; detail bodies scroll",
+    "Diff numbering, change shading and history highlights remain readable in both appearances",
+    "Changed questions disable answers and context; palette explains unavailable actions"
+  ],
+  "tui_fixtures": {
+    "tui-picker-80x24.txt": "wide_profiles, keys a C j; selected Codex home and harness warning",
+    "tui-empty-80x24.txt": "no_sessions; launch/configuration/help affordances"
+  },
+  "files": [
+    {
+      "file": "changes-dark-minimum.png",
+      "sha256": "46e103d7af23ed436b7c929145adffad3640ffec9a93696975dae3933b27b93d",
+      "pixels": [
+        720,
+        450
+      ]
+    },
+    {
+      "file": "changes.png",
+      "sha256": "bd851d64cd8949cb8607d93a3ae1b6d03e15b487fe66372ef098305d849cb8f2",
+      "pixels": [
+        1000,
+        680
+      ]
+    },
+    {
+      "file": "history-dark-minimum.png",
+      "sha256": "dba039cd5759b6a17acb64bc03847468d6e975c2bded9a182ced60b1d9550134",
+      "pixels": [
+        720,
+        450
+      ]
+    },
+    {
+      "file": "history.png",
+      "sha256": "d7cd58fd76836824e5dd0d13a7b6a4b696ad726e93a387255e13ddabbb51a7b6",
+      "pixels": [
+        1000,
+        680
+      ]
+    },
+    {
+      "file": "review-empty-dark.png",
+      "sha256": "427e2a649bde22e0f6279eed337408d8d48d3d5d86b3315b18e350b26557180a",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "review-empty-light.png",
+      "sha256": "10109c8bba7ccc7809de93275836902c499fd5e9c6f932ebbff7b9e9cd9b81ff",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "review-failed-dark.png",
+      "sha256": "cc76031b1d7b16cc134245f6220a11a7c12d02ed25a43672e1419f59af8d3c82",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "review-failed-light.png",
+      "sha256": "17bda1a6b1e9e997ae1294bc650768c208f10636d559b9ceb48e08bf4f39fe9f",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "review-loading-dark.png",
+      "sha256": "14ad636eb6e1f2cfdabf0fe3f539fbfceaf50722b5db8168aedc7bae16b5402e",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "review-loading-light.png",
+      "sha256": "02dc247662cf4956e7f7c3de824a8d67815404f2ce352e33039829aa785ff47d",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "review-populated-dark.png",
+      "sha256": "41d288adb066b426be943b705eabb42195dbb42eed225efecae11979a1c87b91",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "review-populated-light.png",
+      "sha256": "0f0d854f208f9c118940b8e2277b8e259861d3483c68c584a7cc15043e3f2238",
+      "pixels": [
+        1580,
+        1130
+      ]
+    },
+    {
+      "file": "tui-empty-80x24.txt",
+      "sha256": "a9f33b1afb97697579df746b15f3190e160973e6fb402a3c9f7d4c581a0fe29d"
+    },
+    {
+      "file": "tui-picker-80x24.txt",
+      "sha256": "097dcddbc3eb129438061bc639dcd6e9dcadbfb8faa1a632937a020b729bd30b"
+    },
+    {
+      "file": "waiting-palette-dark.png",
+      "sha256": "ca885f32936e606ee044486ed142493e86ab65e4e6ff77d5e0d588305c8f8e62",
+      "pixels": [
+        850,
+        560
+      ]
+    },
+    {
+      "file": "waiting-palette-light.png",
+      "sha256": "ba6bf859d20eb12ce530d44210b21086b4434de6f0d69fc481e29e9c05674478",
+      "pixels": [
+        850,
+        560
+      ]
+    }
+  ]
+}

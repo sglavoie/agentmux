@@ -104,7 +104,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         var finish: ((SecretText) -> Void)?
         inspector.onContext = { _, completion in finish = completion }
         inspector.toggleContext(try XCTUnwrap(inspector.model.waiting.first))
-        XCTAssertEqual((inspector.lines.first as? WorkspaceWaitingRowView)?.contextLabel.stringValue, "Loading context…")
+        XCTAssertEqual(inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first { $0.row.key == inspector.model.waiting.first?.key }?.contextLabel.stringValue, "Loading context…")
         var changed = sessions
         changed[1].iconState = "question"
         app.store.apply(snapshot: F.snapshot(changed))
@@ -245,14 +245,14 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.setInspectorCollapsed(false)
         XCTAssertEqual(workspace.inspector.tabs.label(forSegment: 0), "Waiting 2")
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🛑 api — personal", "🔑 web — work"])
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 web — work", "🛑 api — personal"])
 
-        lines[0].press()
+        lines[1].press()
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
         XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(2)),
                       "as a click on its line in the session list does")
 
-        lines[1].press()
+        lines[0].press()
         XCTAssertEqual(app.external.map(\.project), ["web"], "a Kitty session comes forward in Kitty")
 
         var settled = sessions
@@ -274,7 +274,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.window.layoutIfNeeded()
 
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 api — personal", "🛑 docs — work", "🔑 web — work"])
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 api — personal", "🔑 web — work", "🛑 docs — work"])
         XCTAssertEqual(lines.map { $0.answerButton?.title }, ["Answer…", nil, nil], "only what can be answered from here has the button")
 
         let button = try XCTUnwrap(lines[0].answerButton)
@@ -434,7 +434,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertFalse(model.waiting.isEmpty, "the waiting rows are held")
         guard case .note = try XCTUnwrap(model.lines.first) else { return XCTFail("no note above the held lines") }
         XCTAssertEqual(workspace.inspector.alphaValue, 1, "the tabs are not dimmed")
-        XCTAssertEqual(workspace.inspector.lines.map(\.alphaValue), [1] + Array(repeating: 0.5, count: model.lines.count - 1))
+        XCTAssertEqual(workspace.inspector.lines.map(\.alphaValue), [1] + Array(repeating: 0.5, count: workspace.inspector.lines.count - 1))
     }
 
     func testACopiedIdentifierStaysCopiedWhileTheSessionChanges() throws {
@@ -467,12 +467,12 @@ final class WorkspaceInspectorTests: XCTestCase {
     func testAHoveredWaitingLineKeepsItsTintWhileItsAgeChanges() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.setInspectorCollapsed(false)
-        let line = try XCTUnwrap(workspace.inspector.lines.first as? WorkspaceWaitingRowView)
+        let line = try XCTUnwrap(workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first { $0.row.key == .embedded(F.runtimeID(2)) })
         line.isHovered = true
         var changed = sessions
         changed[1].reason = "permission"
         app.store.apply(snapshot: F.snapshot(changed))
-        XCTAssertTrue(workspace.inspector.lines.first === line)
+        XCTAssertTrue(workspace.inspector.lines.contains { $0 === line })
         XCTAssertEqual(line.detailLabel.stringValue, "permission · 5m")
         XCTAssertEqual(line.fillColor, WorkspaceWaitingRowView.hoveredFill)
         line.press()

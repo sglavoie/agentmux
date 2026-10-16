@@ -899,7 +899,19 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case .review?, nil: previous = nil
         }
         return WorkspaceSwitcher.entries(rows: state.rows, views: views.all, names: sessionNames, previous: previous)
-            + (delegate?.workspaceCommands ?? [])
+            + (delegate?.workspaceCommands ?? []).map { entry in
+                var entry = entry
+                if case let .command(command) = entry.place {
+                    switch command {
+                    case .newTerminal, .splitShell, .splitChanges, .history, .changes:
+                        if shownSessionRow != nil { entry.relevance = 10 }
+                    case .focusOtherPane, .swapPanes, .collapsePane:
+                        if isSplit { entry.relevance = 10 }
+                    default: break
+                    }
+                }
+                return entry
+            }
     }
 
     func refreshCommands() {

@@ -1,0 +1,43 @@
+{
+  "name": "config-picker-narrow-fit",
+  "fixture": "wide_profiles",
+  "size": {
+    "width": 80,
+    "height": 24
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "a"
+    },
+    {
+      "type": "key",
+      "key": "C"
+    },
+    {
+      "type": "key",
+      "key": "down"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "config_picker"
+    },
+    {
+      "type": "cursor_equals",
+      "cursor": 1
+    },
+    {
+      "type": "contains_text",
+      "text": "codex-experimental-sandbox"
+    },
+    {
+      "type": "contains_text",
+      "text": "Home: ~/.config/agent-mux/homes/"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

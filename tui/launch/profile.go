@@ -1,7 +1,10 @@
 package launch
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -24,78 +27,105 @@ type ProfileInput struct {
 	Purpose        ConfigPickerPurpose
 	Title          string
 	Width          int
+	Height         int
 	Cfg            *config.Config
 }
 
 // Render renders the profile picker overlay for restart/launch overrides.
 func (in ProfileInput) Render() string {
-	var sb strings.Builder
-	sb.WriteString(styleHeader.Render(in.Purpose.header()+": "+in.Title) + "\n\n")
-
-	maxName, maxHarness := 0, 0
-	for _, acc := range in.Accounts {
-		if n := layout.Width(acc.Name); n > maxName {
-			maxName = n
+	width := max(1, in.boxWidth()-styleOverlayBox.GetHorizontalFrameSize())
+	wrap := func(text string) string { return ansi.Hardwrap(text, width, true) }
+	header := styleHeader.Render(wrap(in.Purpose.header() + ": " + in.Title))
+	detail := ""
+	if in.Cursor >= 0 && in.Cursor < len(in.Accounts) {
+		selected := in.Accounts[in.Cursor]
+		detail = styleDim.Render(wrap("Home: " + selected.EffectiveHomeDir()))
+		if layout.Width(selected.Name) > width-25 {
+			detail = styleDim.Render(wrap("Profile: "+selected.Name)) + "\n" + detail
 		}
-		if h := layout.Width(harnessDisplayText(in.Cfg, acc.EffectiveHarness())); h > maxHarness {
-			maxHarness = h
+		if current, chosen := in.CurrentHarness, selected.EffectiveHarness(); current != "" && chosen != "" && !strings.EqualFold(current, chosen) {
+			detail = styleAttentionRow.Render(wrap("⚠  "+in.Purpose.harnessWarning(current, chosen))) + "\n" + detail
 		}
+	}
+	// Metadata consumes only the selected row's detail, never every row. A
+	// bounded list follows its cursor when there are more profiles than fit.
+	gaps := true
+	headerRows := strings.Count(header, "\n") + 1
+	detailRows := 0
+	if detail != "" {
+		detailRows = strings.Count(detail, "\n") + 1
+	}
+	available := headerRows + detailRows + len(in.Accounts) + 3
+	if in.Height > 0 {
+		available = max(1, in.Height-styleOverlayBox.GetVerticalFrameSize())
+	}
+	if available < headerRows+detailRows+4 {
+		gaps = false
+	}
+	if available < headerRows+detailRows+2 {
+		header = styleHeader.Render(layout.Truncate(in.Purpose.header()+": "+in.Title, width, "…"))
+		headerRows = 1
+		detailLimit := max(0, available-3)
+		detailLines := strings.Split(detail, "\n")
+		if len(detailLines) > detailLimit {
+			detailLines = detailLines[:detailLimit]
+		}
+		detail = strings.Join(detailLines, "\n")
+		detailRows = len(detailLines)
+	}
+	gapRows := 0
+	if gaps {
+		gapRows = 2
+	}
+	budget := max(1, available-headerRows-detailRows-gapRows)
+	if budget < len(in.Accounts) {
+		budget = max(1, budget-1)
+	}
+	start := max(0, min(in.Cursor-budget/2, len(in.Accounts)-budget))
+	end := min(len(in.Accounts), start+budget)
+	var lines []string
+	lines = append(lines, header)
+	if gaps {
+		lines = append(lines, "")
 	}
 	harnessColor := dashboard.HarnessColorMap(in.Cfg)
-	for i, acc := range in.Accounts {
-		namePad := maxName - layout.Width(acc.Name)
-		if namePad < 0 {
-			namePad = 0
-		}
-		name := accountStyle(acc.Color).Render(acc.Name) + strings.Repeat(" ", namePad)
-		harnessText := harnessDisplayText(in.Cfg, acc.EffectiveHarness())
-		pad := maxHarness - layout.Width(harnessText)
-		if pad < 0 {
-			pad = 0
-		}
-		harness := accountStyle(harnessColor[acc.EffectiveHarness()]).Render(harnessText) + strings.Repeat(" ", pad)
-		line := name + "  " + harness
-		if home := acc.EffectiveHomeDir(); home != "" {
-			line += "  " + styleDim.Render(home)
-		}
+	for i := start; i < end; i++ {
+		acc := in.Accounts[i]
+		suffix := "  " + harnessDisplayText(in.Cfg, acc.EffectiveHarness())
 		if strings.EqualFold(acc.Name, in.Current) {
-			line += styleDim.Render(" (current)")
+			suffix += " (current)"
 		}
+		nameWidth := max(1, width-layout.Width(suffix))
+		name := layout.Truncate(acc.Name, nameWidth, "…")
+		line := accountStyle(acc.Color).Render(name) + accountStyle(harnessColor[acc.EffectiveHarness()]).Render(suffix)
+		line = layout.StyledTruncate(line, width, "…")
 		if i == in.Cursor {
-			sb.WriteString(renderSelectedRow(line))
-		} else {
-			sb.WriteString(line)
+			line = renderSelectedRow(line)
 		}
-		sb.WriteByte('\n')
+		lines = append(lines, line)
 	}
-
-	if in.Cursor >= 0 && in.Cursor < len(in.Accounts) {
-		selectedHarness := in.Accounts[in.Cursor].EffectiveHarness()
-		currentHarness := in.CurrentHarness
-		if currentHarness != "" && selectedHarness != "" && !strings.EqualFold(currentHarness, selectedHarness) {
-			warning := "⚠  " + in.Purpose.harnessWarning(currentHarness, selectedHarness)
-			sb.WriteString("\n" + styleAttentionRow.Render(warning) + "\n")
+	if end-start < len(in.Accounts) && available > headerRows+detailRows+gapRows+1 {
+		lines = append(lines, styleDim.Render(fmt.Sprintf("%d–%d of %d profiles", start+1, end, len(in.Accounts))))
+	}
+	if detail != "" {
+		if gaps {
+			lines = append(lines, "")
 		}
+		lines = append(lines, detail)
 	}
-	return sb.String()
+	return strings.Join(lines, "\n") + "\n"
 }
 
-// RenderBox wraps Render in styleOverlayBox so the profile picker can be
-// composited as a centered modal on top of the dimmed base view. The box grows
-// to fit rendered profile rows and clamps to Width-4 on narrow terminals.
+func (in ProfileInput) boxWidth() int {
+	if in.Width <= 0 {
+		return 100
+	}
+	return max(1, min(100, in.Width-4))
+}
+
+// RenderBox wraps the responsive list and its selected-profile details.
 func (in ProfileInput) RenderBox() string {
-	content := strings.TrimRight(in.Render(), "\n")
-	boxWidth := 60
-	if contentWidth := layout.PopupWidth(content) + styleOverlayBox.GetHorizontalFrameSize(); contentWidth > boxWidth {
-		boxWidth = contentWidth
-	}
-	if avail := in.Width - 4; avail < boxWidth {
-		boxWidth = avail
-	}
-	if boxWidth < 1 {
-		boxWidth = 1
-	}
-	return styleOverlayBox.Width(boxWidth).Render(content)
+	return styleOverlayBox.Width(in.boxWidth()).Render(strings.TrimRight(in.Render(), "\n"))
 }
 
 // AccountIndex returns the index of the named account in the slice, or 0 if

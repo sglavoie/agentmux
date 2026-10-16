@@ -36,9 +36,11 @@ final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
 
 struct WorkspaceHistoryView: View {
     @ObservedObject var model: WorkspaceHistoryModel
+    @State private var visibleMessage: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("Conversation History").font(.title2)
             HStack {
                 TextField("Search full conversations", text: $model.query)
                     .textFieldStyle(.roundedBorder)
@@ -57,14 +59,18 @@ struct WorkspaceHistoryView: View {
                 Toggle("Include automated sessions", isOn: $model.includeAutomated)
                     .onChange(of: model.includeAutomated) { _, _ in model.search() }
                 Spacer()
-                if model.loading { ProgressView().controlSize(.small) }
-                Text("\(model.entries.count) conversations").foregroundStyle(.secondary)
+
+                Text("\(model.entries.count) \(model.entries.count == 1 ? "conversation" : "conversations")").foregroundStyle(.secondary)
             }
             if model.scope == .project { Text(model.project).font(.caption).foregroundStyle(.secondary) }
             if model.scope == .conversation, let identity = model.currentConversation {
                 Text(identity.encoded).font(.caption).foregroundStyle(.secondary)
             }
-            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if model.loading { WorkspaceLoading(title: "Searching conversations…", retained: !model.entries.isEmpty) }
+            if let error = model.error {
+                WorkspaceNotice(message: error + (model.entries.isEmpty ? "" : " Showing the previous results."), kind: .error,
+                                action: { model.search() })
+            }
             HSplitView {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.entries) { entry in
@@ -78,9 +84,11 @@ struct WorkspaceHistoryView: View {
                             if let matches = entry.matches { Text("\(matches) matches").font(.caption2).foregroundStyle(.secondary) }
                         }.padding(.vertical, 3).tag(entry.id)
                     }
-                }.frame(minWidth: 230, idealWidth: 320, maxWidth: 450)
+                }.frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
                     .overlay {
-                        if model.entries.isEmpty && !model.loading { Text("No conversations match.").foregroundStyle(.secondary) }
+                        if model.entries.isEmpty && !model.loading && model.error == nil {
+                            WorkspaceEmpty(title: "No conversations found", detail: "Try another search or broaden the search scope.", symbol: "magnifyingglass")
+                        }
                     }
                 VStack(alignment: .leading, spacing: 8) {
                     if let selected = model.selected {
@@ -93,25 +101,56 @@ struct WorkspaceHistoryView: View {
                         }.disabled(!model.canAct)
                         if let notice = model.actionNotice { Text(notice).font(.callout).textSelection(.enabled) }
                         if let error = model.transcriptError {
-                            Text(error).foregroundStyle(.red)
-                            Button("Load Again") { model.loadTranscript() }
+                            WorkspaceNotice(message: error, kind: .error, action: { model.loadTranscript() })
                         }
-                        if model.reading { ProgressView("Loading transcript…") }
+                        if model.reading { WorkspaceLoading(title: "Loading transcript…", retained: model.transcript != nil) }
                         if let transcript = model.transcript {
-                            Text("Showing \(transcript.messages.count) of \(transcript.total) messages").font(.caption).foregroundStyle(.secondary)
-                            if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier() } }
-                            ScrollView {
-                                LazyVStack(alignment: .leading, spacing: 16) {
-                                    ForEach(Array(transcript.messages.enumerated()), id: \.offset) { _, message in
-                                        VStack(alignment: .leading, spacing: 5) {
-                                            Text(message.role.capitalized).font(.headline)
-                                            Text(message.text.reveal()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                            HStack {
+                                Text(transcript.total == 0 ? "No messages" : "Messages \(transcript.start + 1)–\(transcript.end) of \(transcript.total)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                if !model.resultsQuery.isEmpty {
+                                    Text(model.matchingMessages.isEmpty ? "No matches in conversation prose" : "Matching message \(model.matchIndex + 1) of \(model.matchingMessages.count)")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    Button { model.moveMatch(-1) } label: { Image(systemName: "chevron.up") }
+                                        .help("Previous matching message").accessibilityLabel("Previous matching message")
+                                        .disabled(model.reading || model.matchingMessages.isEmpty)
+                                    Button { model.moveMatch(1) } label: { Image(systemName: "chevron.down") }
+                                        .help("Next matching message").accessibilityLabel("Next matching message")
+                                        .disabled(model.reading || model.matchingMessages.isEmpty)
+                                }
+                            }
+                            HStack {
+                                if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier(anchor: visibleMessage) } }
+                                Spacer()
+                                if model.canLoadLater { Button("Load later messages") { model.loadLater(anchor: visibleMessage) } }
+                            }
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    LazyVStack(alignment: .leading, spacing: 16) {
+                                        ForEach(transcript.start..<transcript.end, id: \.self) { index in
+                                            let message = transcript.messages[index - transcript.start]
+                                            VStack(alignment: .leading, spacing: 5) {
+                                                HStack {
+                                                    Text(message.role.capitalized).font(.headline)
+                                                    if let timestamp = message.timestamp, let date = WorkspaceActivityEntry.date(timestamp) {
+                                                        Text(date.formatted()).font(.caption).foregroundStyle(.secondary)
+                                                    }
+                                                }
+                                                Text(WorkspaceHighlight.text(message.text.reveal(), terms: transcript.matchTerms))
+                                                    .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                                            }.id(index)
                                         }
-                                    }
-                                }.padding(8)
+                                    }.scrollTargetLayout().padding(8)
+                                }
+                                .scrollPosition(id: $visibleMessage, anchor: .top)
+                                .onChange(of: model.scrollRequest) { _, request in
+                                    if let request { proxy.scrollTo(request.message, anchor: .top) }
+                                }
+                                .onAppear { if let request = model.scrollRequest { proxy.scrollTo(request.message, anchor: .top) } }
                             }
                         }
-                    } else { Text("Select a conversation to preview its transcript.").foregroundStyle(.secondary) }
+                    } else { WorkspaceEmpty(title: "Conversation preview", detail: "Select a conversation to read or resume it.", symbol: "text.bubble") }
                     Spacer(minLength: 0)
                 }.padding(12).frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
             }

@@ -519,5 +519,9 @@ func renderEmptyHero(in ListInput) string {
 			width = w
 		}
 	}
-	return layout.Center(styleEmptyHero.Render(title), width) + "\n\n" + layout.Center(hintLine, width) + "\n"
+	body := layout.Center(styleEmptyHero.Render(title), width) + "\n\n" + layout.Center(hintLine, width) + "\n"
+	if !in.Loading && !hasSessions && !hasFilters {
+		body += "\n" + layout.Center(styleDim.Render("Configure projects: amx config edit"), width) + "\n"
+	}
+	return body
 }

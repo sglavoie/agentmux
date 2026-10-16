@@ -33,12 +33,21 @@ amx session search --source user flaky    # only your own prompts (or --source h
 amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is open in Kitty, message count, transcript path, how it ended, and the commands that continue or fork it
 cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session show 09467ec1 --last 4       # the same, then its last 4 user and assistant messages in full, oldest first
+amx session show 09467ec1 --find '"race condition"' --match 2 --count 50  # prose around the second matching message
+amx session show 09467ec1 --from 100 --count 50 --json  # a bounded message window, with zero-based message ordinals
 amx session continue codex <session-id>
 amx session continue --here   # the most recently active conversation started in this directory or below it, named on stderr before acting
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes
 amx session handoff claude:<session-id> --profile codex-work
 ```
+
+`session show --find` uses the same terms and quoted phrases as search. It
+navigates user/assistant prose only; a match confined to tool output or hidden
+reasoning is not exposed. `--match` is one-based; `--from` and the JSON
+`messages_start`, `match_messages`, and `focus_message` ordinals are zero-based.
+Window size defaults to 50 and is limited to 500; `--last` remains a separate
+way to request the tail. JSON includes `match_terms` for highlighting.
 
 `continue`, `fork`, and `fork-worktree` also accept the single
 `<harness>:<session-id>` selector that `handoff` takes, so

@@ -382,18 +382,31 @@ is committed.
 ## Native workflow views
 
 - **⌘⇧P** opens the command palette. In **⌘P**, type `>` to search actions.
-  It offers configured-project launches, recent-conversation resume/focus, shells,
+  Match abbreviations such as `swcc` for Split with Checkout Changes, or aliases
+  such as `diff`, `preferences`, and `terminal`. Exact names rank first, followed
+  by available actions relevant to the current pane; matching title characters
+  are highlighted. It offers configured-project launches, recent-conversation resume/focus, shells,
   history, checkout review, and workspace navigation. Unavailable actions explain why.
 - **Waiting** in the inspector supports category filters, oldest-first sorting,
-  expandable question/output context, and **Next waiting**. Answering still uses
+  expandable question/output context, and **Next waiting**. The **All** filter groups decisions
+  before other attention and completed turns, with a count for each group. While
+  the pointer or an expanded context holds the list, updates wait behind
+  **Update list** so targets stay put; changed prompts are disabled immediately.
+  Answering still uses
   the existing prompt or supervisor panel.
 - **View › Conversation History…** searches full transcripts, scoped to all history,
   the selected session’s project, or its conversation. Preview, load earlier messages,
-  focus an existing session, resume, or fork into the workspace.
+  focus an existing session, resume, or fork into the workspace. Search opens
+  around its first matching prose message, even when it predates the latest 50
+  messages. Highlighted terms and previous/next matching-message buttons navigate
+  the conversation; loading earlier/later messages preserves the reading anchor.
 - **View › Review Checkout Changes…** (also **Changes…** in the Session inspector)
   shows checkout-wide files, line counts, and diffs against a chosen base. Open files
   in the configured editor. Managed worktrees include source-branch comparison and
   confirmed fast-forward landing, with the CLI’s existing clean/inactive checks.
+  The diff has old/new line numbers, addition/deletion shading, and previous/next
+  hunk controls. Switching files restores each file's scroll position for the
+  current checkout and comparison base.
 - **View › Since Last Looked…** shows recorded state transitions, process exits,
   and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days,
   select an event for its details and the last timestamped assistant output at or

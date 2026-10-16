@@ -81,11 +81,17 @@ func TestConfigPickerCursorMoveRestoresNormalRow(t *testing.T) {
 	if got := renderedLineContaining(t, secondPaint, "claude-production"); got != normalFirst {
 		t.Fatalf("departed profile row was not restored exactly:\n got %q\nwant %q", got, normalFirst)
 	}
+	if !strings.Contains(stripAnsi(secondPaint), "Home: /profiles/codex") {
+		t.Fatalf("selected home missing: %s", secondPaint)
+	}
+	if strings.Contains(stripAnsi(secondPaint), "Home: /profiles/claude") {
+		t.Fatal("old home retained")
+	}
 	selected := renderedLineContaining(t, secondPaint, "codex-sandbox")
 	if selected != renderSelectedRow(normalSecond) {
-		t.Fatalf("new profile row is not one highlight across name, harness, path, and marker:\n got %q\nwant %q", selected, renderSelectedRow(normalSecond))
+		t.Fatalf("new profile row is not one highlight across name, harness, and marker:\n got %q\nwant %q", selected, renderSelectedRow(normalSecond))
 	}
-	for _, text := range []string{"codex-sandbox", "🤖 codex", "/profiles/codex", "(current)"} {
+	for _, text := range []string{"codex-sandbox", "🤖 codex", "(current)"} {
 		if !strings.Contains(stripAnsi(selected), text) {
 			t.Errorf("selected row missing %q: %q", text, stripAnsi(selected))
 		}

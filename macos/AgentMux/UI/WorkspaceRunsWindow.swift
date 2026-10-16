@@ -8,17 +8,21 @@ struct WorkspaceRunsView: View {
     @State private var confirmation: Confirmation?
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("ASL Runs").font(.title2)
                 Spacer()
-                if model.loading { ProgressView().controlSize(.small) }
+
                 Button("Refresh") { model.refresh() }.disabled(model.loading)
                 Button("Run a Plan…") { plan.isPresented = true }
             }
-            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            if model.truncated { Text("ASL truncated this run list. Some runs are not shown.").foregroundStyle(.orange) }
-            ForEach(model.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
+            if model.loading { WorkspaceLoading(title: "Refreshing runs…", retained: !model.rows.isEmpty) }
+            if let error = model.error {
+                WorkspaceNotice(message: error + (error.hasSuffix(".") ? "" : ".") + (model.rows.isEmpty ? "" : " Showing the previous run list."), kind: .error,
+                                action: { model.refresh() })
+            }
+            if model.truncated { WorkspaceNotice(message: "ASL truncated this run list. Some runs are not shown.", kind: .warning) }
+            ForEach(model.warnings, id: \.self) { WorkspaceNotice(message: $0, kind: .warning) }
             if let notice = model.actionNotice { Text(notice).textSelection(.enabled) }
             if model.pending != nil {
                 Button("Retry Receipt") { model.retryReceipt() }.disabled(model.acting)
@@ -35,7 +39,7 @@ struct WorkspaceRunsView: View {
                             }
                         }.tag(row.rowID)
                     }
-                }.frame(minWidth: 190, idealWidth: 260, maxWidth: 360)
+                }.frame(minWidth: 190, idealWidth: 260, maxWidth: 300)
                 ScrollView {
                     if let row = model.selected {
                         VStack(alignment: .leading, spacing: 12) {
@@ -60,10 +64,9 @@ struct WorkspaceRunsView: View {
                                 control("Abort…", ASLMethod.runAbort)
                             }
                             if let error = model.detailError {
-                                Text(error).foregroundStyle(.red).textSelection(.enabled)
-                                if model.detail != nil { Text("Showing the last successfully read progress.").font(.caption).foregroundStyle(.secondary) }
+                                WorkspaceNotice(message: error + (error.hasSuffix(".") ? "" : ".") + (model.detail == nil ? "" : " Showing the previous progress."), kind: .error)
                             }
-                            if model.reading { ProgressView("Reading plan progress…") }
+                            if model.reading { WorkspaceLoading(title: "Reading plan progress…", retained: model.detail != nil) }
                             if let detail = model.detail {
                                 Divider()
                                 Text("Plan progress").font(.headline)
@@ -93,8 +96,9 @@ struct WorkspaceRunsView: View {
                                 }
                             }
                         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text(model.rows.isEmpty ? "No active or actionable ASL runs are listed." : "Select a run.").padding()
+                    } else if !model.loading && model.error == nil {
+                        WorkspaceEmpty(title: model.rows.isEmpty ? "No active runs" : "Run progress",
+                                       detail: model.rows.isEmpty ? "Start a plan to follow its progress here." : "Select a run to inspect its progress and controls.", symbol: "list.bullet.rectangle")
                     }
                 }.frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
             }

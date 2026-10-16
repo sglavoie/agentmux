@@ -32,21 +32,26 @@ struct WorkspaceActivityView: View {
     @ObservedObject var model: WorkspaceActivityModel
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("Since Last Looked").font(.title2)
             HStack {
                 Toggle("Unread only", isOn: $model.unreadOnly).onChange(of: model.unreadOnly) { _, _ in model.filterChanged() }
                 Picker("Look back", selection: $model.days) {
                     Text("1 day").tag(1); Text("7 days").tag(7); Text("30 days").tag(30); Text("90 days").tag(90)
                 }.frame(width: 180).onChange(of: model.days) { _, _ in model.refresh() }
                 Spacer()
-                if model.loading { ProgressView().controlSize(.small) }
+
                 Button("Refresh") { model.refresh() }.disabled(model.loading)
                 Button("Mark shown read") { model.markVisibleRead() }.disabled(model.visible.isEmpty || model.loading || model.error != nil)
             }
             Text("Recorded state changes, process exits, and ASL events. Opening this view does not mark events read.")
                 .font(.caption).foregroundStyle(.secondary)
             if let date = model.readState.lastMarkedAt { Text("Last marked read: \(date.formatted())").font(.caption).foregroundStyle(.secondary) }
-            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            if let error = model.readError { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if model.loading { WorkspaceLoading(title: "Loading activity…", retained: model.report != nil) }
+            if let error = model.error {
+                WorkspaceNotice(message: error + (model.report == nil ? "" : " Showing the previous activity."), kind: .error,
+                                action: { model.refresh() })
+            }
+            if let error = model.readError { WorkspaceNotice(message: error, kind: .error) }
             if let report = model.report {
                 Text("\(model.visible.count) shown · \(report.entries.count) loaded · Retained history starts \(WorkspaceActivityEntry.date(report.earliestAvailable)?.formatted() ?? "at an unknown time")")
                     .font(.caption).foregroundStyle(.secondary)
@@ -66,8 +71,11 @@ struct WorkspaceActivityView: View {
                             Text(entry.detail).font(.caption).lineLimit(2)
                         }.padding(.vertical, 3).tag(entry.id)
                     }
-                }.frame(minWidth: 260, idealWidth: 340, maxWidth: 450)
-                    .overlay { if model.visible.isEmpty && !model.loading { Text(model.unreadOnly ? "No unread events in this period." : "No recorded events in this period.").foregroundStyle(.secondary).padding() } }
+                }.frame(minWidth: 220, idealWidth: 280, maxWidth: 340)
+                    .overlay { if model.visible.isEmpty && !model.loading && model.error == nil {
+                        WorkspaceEmpty(title: model.unreadOnly ? "All caught up" : "No activity found",
+                                       detail: "No \(model.unreadOnly ? "unread" : "recorded") events in this period. Try a longer look-back period.")
+                    } }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         if let entry = model.selected {
@@ -82,10 +90,9 @@ struct WorkspaceActivityView: View {
                             }
                             Divider()
                             Text("Supporting output").font(.headline)
-                            if model.reading { ProgressView("Reading conversation…") }
+                            if model.reading { WorkspaceLoading(title: "Reading conversation…") }
                             if let error = model.transcriptError {
-                                Text(error).foregroundStyle(.red)
-                                Button("Try again") { model.loadTranscript() }
+                                WorkspaceNotice(message: error, kind: .error, action: { model.loadTranscript() })
                             }
                             if let excerpt = model.excerpt {
                                 Text("Last recorded assistant message at or before this event · \(excerpt.timestamp ?? "")").font(.caption).foregroundStyle(.secondary)

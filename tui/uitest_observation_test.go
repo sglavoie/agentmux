@@ -145,15 +145,11 @@ func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
 	}
 }
 
-// TestUITestConfigPickerModalFitPinsWidthFix is the config-picker counterpart to
-// TestUITestLayoutIssuesIncludeModalFit: it pins the profile-picker sizing fix
-// (commit 1f08e24) at the observation layer. The wide_profiles fixture's long
-// home-dir rows overflow the picker box at 120 cols (modal_width_overflow) but
-// fit once the terminal is wide enough for the widest row.
+// The profile picker remains readable with selected-home details at both sizes.
 func TestUITestConfigPickerModalFitPinsWidthFix(t *testing.T) {
 	fx := wideProfilesFixture()
 
-	// Narrow: the picker's widest row cannot fit, so the fit detector flags it.
+	// Narrow: responsive rows and wrapped details fit.
 	narrow, _ := newUITestFixtureDriver(fx, UITestSize{Width: 120, Height: 40})
 	cleanupUITestDriver(t, narrow)
 	if err := narrow.Key(keyA); err != nil {
@@ -166,11 +162,11 @@ func TestUITestConfigPickerModalFitPinsWidthFix(t *testing.T) {
 	if nobs.Mode != "config_picker" {
 		t.Fatalf("expected config_picker mode after C, got %q", nobs.Mode)
 	}
-	if !hasIssueType(nobs.Screen.Issues, UITestIssueModalWidthOverflow) {
-		t.Errorf("expected modal_width_overflow for the config picker at 120 wide, got %v", nobs.Screen.Issues)
+	if len(nobs.Screen.Issues) != 0 {
+		t.Errorf("expected a fitting profile picker at 120 wide, got %v", nobs.Screen.Issues)
 	}
 
-	// Wide: the box grows to fit its widest row (the sizing fix), so no issue.
+	// Wide: the same identity and detail remain visible.
 	wide, _ := newUITestFixtureDriver(fx, UITestSize{Width: 140, Height: 40})
 	cleanupUITestDriver(t, wide)
 	if err := wide.Key(keyA); err != nil {

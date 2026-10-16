@@ -22,6 +22,7 @@ enum WorkspaceSwitcher {
         /// Everything a query is matched against, folded (`fold`).
         let text: String
         var unavailableReason: String?
+        var relevance = 0
 
         var isAction: Bool {
             if case .command = place { return true }
@@ -34,7 +35,9 @@ enum WorkspaceSwitcher {
             self.glyph = glyph
             self.title = title
             self.detail = detail
-            text = WorkspaceSwitcher.fold(([title, detail] + also).joined(separator: " "))
+            let aliases: [String]
+            if case let .command(command) = place { aliases = command.searchAliases } else { aliases = [] }
+            text = WorkspaceSwitcher.fold(([title, detail] + also + aliases).joined(separator: " "))
         }
     }
 
@@ -76,20 +79,49 @@ enum WorkspaceSwitcher {
         return all
     }
 
-    /// The entries that hold every word of the query, in the order given,
-    /// with those whose title starts with the query first. An empty query
-    /// keeps them all.
+    /// Exact names win. Available contextual actions follow, with literal
+    /// matches ahead of abbreviations and stable input order breaking ties.
     static func matches(_ query: String, in entries: [Entry]) -> [Entry] {
-        let query = fold(query).trimmingCharacters(in: .whitespaces)
+        let query = fold(query).trimmingCharacters(in: .whitespacesAndNewlines)
         let actions = query.hasPrefix(">")
-        let wanted = (actions ? String(query.dropFirst()) : query).trimmingCharacters(in: .whitespaces)
-        let entries = entries.filter { $0.isAction == actions }
-        let words = wanted.split(separator: " ")
-        guard !words.isEmpty else { return entries }
-        let kept = entries.filter { entry in words.allSatisfy { entry.text.contains($0) } }
-        let leading = kept.filter { fold($0.title).hasPrefix(wanted) }
-        return leading + kept.filter { !leading.contains($0) }
+        let wanted = (actions ? String(query.dropFirst()) : query).trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = wanted.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        return entries.enumerated().compactMap { index, entry -> (Entry, [Int])? in
+            guard entry.isAction == actions else { return nil }
+            let title = fold(entry.title)
+            guard words.allSatisfy({ entry.text.contains($0) || !highlightRanges($0, in: entry.title).isEmpty }) else { return nil }
+            let quality = title == wanted ? 0 : title.hasPrefix(wanted) ? 1 : title.contains(wanted) ? 2 : words.allSatisfy({ entry.text.contains($0) }) ? 3 : 4
+            return (entry, [wanted.isEmpty ? 1 : quality == 0 ? 0 : 1,
+                           entry.unavailableReason == nil ? 0 : 1,
+                           -entry.relevance, quality, index])
+        }.sorted { $0.1.lexicographicallyPrecedes($1.1) }.map { $0.0 }
     }
+
+    /// Ranges refer to the original string, so accent folding and emoji never
+    /// shift the highlight. Abbreviations may skip characters in a title.
+    static func highlightRanges(_ query: String, in text: String) -> [NSRange] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wanted = query.hasPrefix(">") ? String(query.dropFirst()) : query
+        var ranges: [NSRange] = []
+        for word in wanted.split(whereSeparator: { $0.isWhitespace }) {
+            if let range = text.range(of: String(word), options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]) {
+                ranges.append(NSRange(range, in: text))
+                continue
+            }
+            let needle = Array(fold(String(word)))
+            var next = 0
+            var matched: [NSRange] = []
+            for index in text.indices where next < needle.count {
+                let end = text.index(after: index)
+                if fold(String(text[index..<end])).contains(needle[next]) {
+                    matched.append(NSRange(index..<end, in: text)); next += 1
+                }
+            }
+            if next == needle.count { ranges += matched }
+        }
+        return ranges
+    }
+
 }
 
 /// Typed actions keep user-provided project and conversation identities out of
@@ -101,4 +133,19 @@ enum WorkspaceCommand: Equatable {
     case resume(RecentConversation)
     case runs, runPlan, activity
     case newTerminal, newShell, dashboard, overview, nextWaiting, settings, history, changes
+}
+
+
+extension WorkspaceCommand {
+    var searchAliases: [String] {
+        switch self {
+        case .changes, .splitChanges, .focusReview: return ["diff", "review", "git"]
+        case .settings: return ["preferences", "configuration"]
+        case .newShell, .newTerminal, .splitShell: return ["terminal", "shell", "console"]
+        case .history: return ["transcript", "conversation", "search"]
+        case .activity: return ["unread", "activity", "recent"]
+        case .nextWaiting: return ["attention", "inbox", "question", "permission"]
+        default: return []
+        }
+    }
 }

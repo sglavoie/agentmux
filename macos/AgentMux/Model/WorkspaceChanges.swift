@@ -56,6 +56,8 @@ final class WorkspaceChangesModel: ObservableObject {
     @Published private(set) var changes: WorkspaceChanges?
     @Published private(set) var selectedFile: String?
     @Published private(set) var patch = SecretText()
+    @Published private(set) var diff = WorkspaceDiff("")
+    @Published private(set) var patchIdentity: String?
     @Published private(set) var truncated = false
     @Published private(set) var loading = false
     @Published private(set) var reading = false
@@ -86,6 +88,7 @@ final class WorkspaceChangesModel: ObservableObject {
         return nil
     }
     var canLand: Bool { landingReason == nil }
+    var diffIdentity: String { [changes?.root ?? "", changes?.base ?? "", selectedFile ?? ""].joined(separator: "\u{0}") }
 
     func open(runtimeSessionID: String) {
         guard !landing else { return }
@@ -151,6 +154,8 @@ final class WorkspaceChangesModel: ObservableObject {
             case let .failure(error): self.patchError = error.message
             case let .success(value), let .partial(value, _):
                 self.patch = SecretText(value.patch ?? "No text diff is available.")
+                self.diff = WorkspaceDiff(self.patch.reveal())
+                self.patchIdentity = self.diffIdentity
                 self.truncated = value.truncated
             }
         }
@@ -219,5 +224,6 @@ final class WorkspaceChangesModel: ObservableObject {
         loading = false
         reading = false
         patch = SecretText()
+        diff = WorkspaceDiff("")
     }
 }

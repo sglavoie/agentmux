@@ -134,6 +134,10 @@ func TestSessionShowLastPrintsTheClosingMessages(t *testing.T) {
 		sessionShowCmd.SetErr(oldOut)
 		_ = sessionShowCmd.Flags().Set("json", "false")
 		_ = sessionShowCmd.Flags().Set("last", "0")
+		_ = sessionShowCmd.Flags().Set("find", "")
+		_ = sessionShowCmd.Flags().Set("match", "1")
+		_ = sessionShowCmd.Flags().Set("from", "-1")
+		_ = sessionShowCmd.Flags().Set("count", "50")
 	})
 	base, indexPath := sessionCommandMeta(t, harness.Codex)
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
@@ -207,5 +211,61 @@ func TestSessionShowLastPrintsTheClosingMessages(t *testing.T) {
 
 	if _, err := run(false, "-1"); err == nil || !strings.Contains(err.Error(), "--last -1") {
 		t.Fatalf("show --last -1 = %v; want a refusal", err)
+	}
+
+	// A search result before the tail opens directly, with message ordinals
+	// that a desktop client can use to page and navigate without guessing.
+	for range 120 {
+		messages[meta.Path] = append(messages[meta.Path], transcript.Message{Role: "assistant", Text: "Later reply"})
+	}
+	_ = sessionShowCmd.Flags().Set("find", `"fix the parser"`)
+	out, err = run(true, "0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	got = envelope.Data
+	if got.MessagesStart == nil || *got.MessagesStart != 0 || got.FocusMessage == nil || *got.FocusMessage != 0 || len(got.Messages) != 50 || len(got.MatchMessages) != 1 {
+		t.Fatalf("match window: %+v", got)
+	}
+	if len(got.MatchTerms) != 1 || got.MatchTerms[0] != "fix the parser" {
+		t.Fatalf("phrase terms: %v", got.MatchTerms)
+	}
+	if _, err := run(true, "10"); err == nil {
+		t.Fatal("--last and --find must conflict")
+	}
+	_ = sessionShowCmd.Flags().Set("from", "50")
+	out, err = run(true, "0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if *envelope.Data.MessagesStart != 50 || len(envelope.Data.Messages) != 50 {
+		t.Fatalf("page: %s", out)
+	}
+}
+
+func TestConversationMatchWindowsKeepProseIdentityAndBoundaries(t *testing.T) {
+	messages := []transcript.Message{
+		{Role: "tool", Text: "needle"},
+		{Role: "user", Text: "first Needle"},
+		{Role: "assistant", Text: "middle"},
+		{Role: "assistant", Text: "last NEEDLE"},
+	}
+	window := conversationMessageWindow(messages, "needle", 2, -1, 2)
+	if window.Total != 3 || window.Start != 1 || *window.Focus != 2 || len(window.Matches) != 2 || window.Messages[1].Text != "last NEEDLE" {
+		t.Fatalf("window = %+v", window)
+	}
+	missing := conversationMessageWindow(messages, "absent", 1, -1, 50)
+	if missing.Focus != nil || len(missing.Matches) != 0 || len(missing.Messages) != 3 {
+		t.Fatalf("missing = %+v", missing)
+	}
+	end := conversationMessageWindow(messages, "needle", 99, 100, 50)
+	if end.Start != 3 || len(end.Messages) != 0 || *end.Focus != 2 {
+		t.Fatalf("end = %+v", end)
 	}
 }

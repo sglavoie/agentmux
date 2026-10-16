@@ -132,6 +132,7 @@ func (m Model) configPickerInput() launch.ProfileInput {
 		Purpose:        purpose,
 		Title:          title,
 		Width:          m.width,
+		Height:         rootBodyHeight(m),
 		Cfg:            m.cfg,
 	}
 }

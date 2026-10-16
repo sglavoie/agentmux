@@ -294,13 +294,32 @@ enum WorkspaceWaitingFilter: String, CaseIterable {
 
     func apply(_ rows: [WorkspaceWaitingRow], oldestFirst: Bool) -> [WorkspaceWaitingRow] {
         let kept = rows.filter { self == .all || $0.category == self }
-        guard oldestFirst else { return kept }
         // Stable ties; missing timestamps go last rather than pretending to
         // be the oldest item.
         return kept.enumerated().sorted {
+            if self == .all, $0.element.category.priority != $1.element.category.priority {
+                return $0.element.category.priority < $1.element.category.priority
+            }
+            guard oldestFirst else { return $0.offset < $1.offset }
             let a = $0.element.changedAt ?? .distantFuture
             let b = $1.element.changedAt ?? .distantFuture
             return a == b ? $0.offset < $1.offset : a < b
         }.map(\.element)
+    }
+
+    var priority: Int {
+        switch self {
+        case .permission, .question, .error: return 0
+        case .other, .all: return 1
+        case .completed: return 2
+        }
+    }
+
+    var groupTitle: String {
+        switch priority {
+        case 0: return "Needs a decision"
+        case 1: return "Other attention"
+        default: return "Completed turns"
+        }
     }
 }

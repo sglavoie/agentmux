@@ -258,7 +258,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 // block and letting the box clip it. A narrow reading of it is a complete menu,
 // not a truncated one.
 func modalUsesResponsiveWidth(mode Mode) bool {
-	return mode == ModeCommandPalette || mode == ModeActions || mode == ModeLiveSessionPicker || mode == ModeASLResponse || mode == ModeHealth || mode == ModeSend || mode == ModePlanRun
+	return mode == ModeConfigPicker || mode == ModeCommandPalette || mode == ModeActions || mode == ModeLiveSessionPicker || mode == ModeASLResponse || mode == ModeHealth || mode == ModeSend || mode == ModePlanRun
 }
 
 // popupLineCount returns the number of rows a popup box occupies, matching the
