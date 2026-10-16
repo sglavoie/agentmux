@@ -1,0 +1,27 @@
+{
+  "name": "feedback-wide",
+  "fixture": "basic",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "app.show-feedback"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "feedback"
+    },
+    {
+      "type": "contains_text",
+      "text": "No retained action notices."
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

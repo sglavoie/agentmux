@@ -103,3 +103,59 @@ final class WorkspaceRunPlanTests: XCTestCase {
         XCTAssertFalse(model.canStart)
     }
 }
+
+extension WorkspaceRunPlanTests {
+    func testChoicesIncludeUnassignedProfilesAndKeepExactProjectIdentity() {
+        let runner = PlanWorkRunner()
+        let command = command { args in
+            let data = args.first == "project"
+                ? #"[{"title":"API","profile":"work","directory":"/repo"},{"title":"API","profile":"personal","directory":"/other"}]"#
+                : #"[{"name":"work","harness":"claude"},{"name":"review-only","harness":"codex"}]"#
+            return .finished(ProcessOutput(status: 0, stdout: Data("{\"schema_version\":1,\"data\":\(data)}".utf8), stderr: Data()))
+        }
+        let model = WorkspaceRunPlanModel(command: { command }, runner: runner)
+        model.loadChoices(); runner.release()
+        XCTAssertEqual(model.profiles.map(\.name), ["work", "review-only"])
+        model.project = "personal/API"
+        XCTAssertEqual(model.projectLabel, "API · personal")
+        XCTAssertEqual(model.profileLabel, "personal (project default)")
+        model.profile = "review-only"
+        XCTAssertNil(model.profileProblem)
+        XCTAssertTrue(model.arguments.contains("personal/API"))
+        XCTAssertTrue(model.destinationSummary.contains("review-only"))
+        model.profile = "missing"
+        XCTAssertNotNil(model.profileProblem)
+        model.project = "API"
+        XCTAssertNotNil(model.projectProblem)
+    }
+
+    func testReadyPlanWithoutResolvedProjectCannotStart() {
+        let runner = PlanWorkRunner()
+        let command = command { _ in
+            .finished(ProcessOutput(status: 0, stdout: Data(#"{"schema_version":1,"data":{"started":false,"readiness":{"state":"ready","complete_sessions":0,"pending_sessions":2,"findings":[]},"command":"asl run /plan","project":"","profile":"","directory":"/repo"}}"#.utf8), stderr: Data()))
+        }
+        let model = WorkspaceRunPlanModel(command: { command }, runner: runner)
+        model.plan = "/plan"; model.check(); runner.release()
+        XCTAssertFalse(model.canStart)
+        XCTAssertEqual(model.projectLabel, "Infer from plan workspace")
+    }
+
+    func testChoiceFailureKeepsPreviousCatalogAndExplainsMissingDirectory() {
+        let runner = PlanWorkRunner()
+        var fail = false
+        let command = command { args in
+            if fail { return .timedOut }
+            let data = args.first == "project"
+                ? #"[{"title":"Missing","profile":"work","directory":"/absent","directory_problem":"does not exist"}]"#
+                : #"[{"name":"work","harness":"claude"}]"#
+            return .finished(ProcessOutput(status: 0, stdout: Data("{\"schema_version\":1,\"data\":\(data)}".utf8), stderr: Data()))
+        }
+        let model = WorkspaceRunPlanModel(command: { command }, runner: runner)
+        model.loadChoices(); runner.release()
+        model.project = "work/Missing"
+        XCTAssertTrue(model.projectProblem?.contains("does not exist") == true)
+        fail = true; model.loadChoices(); runner.release()
+        XCTAssertEqual(model.projects.count, 1)
+        XCTAssertNotNil(model.choicesError)
+    }
+}

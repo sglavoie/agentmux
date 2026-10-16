@@ -30,7 +30,7 @@ amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening p
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts and a matched line (one you or the agent wrote before tool output); the conversation you search from comes last, and a terminal says how many automated sessions also match
 amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
 amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output, including Claude's background-task notices)
-amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is open in Kitty, message count, transcript path, how it ended, and the commands that continue or fork it
+amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is live, message count, transcript path, how it ended, and the commands that continue or fork it
 cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session show 09467ec1 --last 4       # the same, then its last 4 user and assistant messages in full, oldest first
 amx session show 09467ec1 --find '"race condition"' --match 2 --count 50  # prose around the second matching message
@@ -60,17 +60,56 @@ works: `amx session continue 7f67dc81`. An exact ID always wins over a longer
 one it begins, and a prefix that several conversations share is refused with
 every candidate.
 
-`session continue` focuses the exact live Kitty owner when one exists and
-otherwise resumes the closed conversation. `session list` and `session search`
+`session continue` opens the exact live session when one exists—attaching on
+tmux or focusing its Kitty tab—and otherwise resumes the closed conversation. `session list` and `session search`
 in a terminal mark those conversations with `●` in a LIVE column, and the one
-open in the window the command runs in with `here`; `session show` names their
-Kitty window, and all three put the tab under `live` in `--json`; when the daemon or
+open in the window the command runs in with `here`; `session show` identifies their live backend target, and all three put the tab under `live` in `--json`; when the daemon or
 Kitty cannot be asked, the column and line are left out rather than reporting
 nothing open. Native forks are used for Claude
 and Codex. Copilot forks use a portable handoff because Copilot does not expose
 native fork semantics. Worktree forks create a tracked isolated Git worktree
 and never copy uncommitted changes unless `--allow-dirty` is explicitly
 confirmed.
+
+## Launch destinations
+
+| Entry point | Destination |
+| --- | --- |
+| CLI launch commands | `--backend`, then `[defaults] launch_backend`, then Kitty for compatibility |
+| Terminal dashboard | Configured backend; when unset, tmux outside Kitty and Kitty inside it |
+| App → Launch Project | App Settings → **Launch projects in**; Automatic means workspace (tmux), independently of the CLI configuration |
+| App → Run a Plan | Workspace (tmux), shown beside the supervisor selection |
+| Open an existing live session | Its recorded backend; launch preferences do not move it |
+
+The launcher header names its actual destination and the status line names the
+highlighted project's effective profile, including a one-time override. App
+Settings also reports the CLI backend so an override is visible. The app's
+Launch Project menu repeats the destination above the profile groups.
+
+## Action feedback
+
+Failed and unconfirmed dashboard actions remain available in `:` → **Show
+Action Feedback**, even after later actions succeed. Each notice carries its
+first occurrence time and, when known, the session it concerns. `Tab` and
+`Shift+Tab` select notices; `j`/`k`, page keys, and `g`/`G` scroll long messages.
+Press `y` to copy the selected message or `Y` to copy all notices; `d` dismisses
+the selected notice and `D` dismisses all completed notices. Active operations
+and available close recovery remain visible.
+
+`Enter` inspects the notice's session without attaching or repeating the action;
+notices without a session open health details. `h` opens health, `c` opens the
+configuration in the configured editor, and `Esc` returns to the dashboard.
+`u` recovers the most recently closed session while its countdown is visible.
+
+A lifecycle operation still awaiting its result after ten seconds says **Still
+waiting**. This is not a timeout verdict or permission to repeat it: inspect
+the live session and connection health first. A late result replaces that
+operation's notice. Dismissing a notice does not cancel the operation.
+Successful feedback still clears after four seconds, and close recovery keeps
+its separate 30-second deadline. Notices live for this dashboard process.
+Recovery resumes the exact conversation when its identity is known, validating
+its transcript first. Otherwise it explicitly offers a project relaunch. A failed
+resume never silently starts a fresh conversation.
 
 ## Dashboard
 
@@ -80,8 +119,8 @@ amx
 
 This opens the dashboard, or focuses the existing dashboard tab if one is
 already running. When opened with the bundled `Ctrl+Shift+D` binding, the
-dashboard selects the running session from the Kitty tab that triggered it;
-an unmanaged source tab leaves the current/default dashboard selection alone.
+dashboard selects the session it was opened from: the attached tmux session
+or the Kitty tab. An unmanaged source leaves the current/default selection alone.
 
 The dashboard answers a small keymap. Everything else it can do is reached
 through two surfaces it opens: `a` for the row under the cursor, `:` for the
@@ -94,7 +133,7 @@ below for where each key went.
 
 - `j`/`k` or `↑`/`↓`: move the cursor, or scroll the inspector when it has focus
 - `PgUp`/`PgDn`, `Home`/`End`: page, or jump to the ends of the focused pane
-- `Enter`: focus the selected session's Kitty tab; on a family summary, fold or
+- `Enter`: open the selected session (attach on tmux, focus its tab on Kitty); on a family summary, fold or
   unfold the family instead
 - `n`/`N`: move to the next/previous **Needs you** session. A target inside a
   folded family unfolds it and lands the cursor on the row; nothing is focused,
@@ -125,7 +164,7 @@ below for where each key went.
   run asks you to send a second time to confirm. The key is dead on a Kitty
   row, and on a row whose run has a question open, which is answered from Runs.
   Pasting into the form is not supported; pipe to `amx send --stdin` for that
-- `u`: relaunch the session you just closed, while the five-second recovery
+- `u`: resume the exact conversation when known, otherwise relaunch the project, while the 30-second recovery
   window named on the toast is still open
 - `:`: open the command palette; it is one line per command rather than a card,
   so more of them are on screen at once. Type to search, use `↑`/`↓`,
@@ -157,7 +196,7 @@ supports less-style `Ctrl+d/u/f/b` paging, and `y` copies the selected raw
 line), **Manage Worktrees**, **Show Runs** (the `agent-session-loop`
 intervention cockpit), **Show Projects View** / **Show Urgency View**, **Cycle
 Profile Filter**, **Show Session Details** and **Show Session Timeline** (the
-per-session hook event log), **Resort Tabs**, and **Undo Last Close**.
+per-session hook event log), **Resort Tabs**, and **Resume Last Closed Conversation** or **Relaunch Last Closed Session**.
 
 The dashboard profile cycle is an `@profile` filter: it follows
 case-insensitive alphabetical profile order, preserves any active word,
@@ -184,7 +223,7 @@ nothing at all, so nothing you remember can now mean something else.
 | --- | --- |
 | `space` (focus) | `Enter` |
 | `e` peek, `r` restart, `c` profile override, `C` launch another, `x` clear icon, `X` close, `o` shell, `O` editor, `y` copy title, `L` lock, `m` mute | `a`, then the same letter. The menu's mnemonics are unchanged; you can also move to the entry and press `Enter` |
-| `u` undo close | `u` — it came back. What it undoes expires after five seconds, and a capability that has to be found by name before it lapses is not reachable. `:` → **Undo Last Close** still works |
+| `u` undo close | `u` — it came back. What it undoes expires after 30 seconds, and a capability that has to be found by name before it lapses is not reachable. `:` → **Resume Last Closed Conversation** or **Relaunch Last Closed Session** still works |
 | `s` / `S` past sessions | `s` / `S` — both came back for browsing. `:` → **Search This Project's Past Sessions** / **Search All Past Sessions** still works |
 | `P` plans, `W` worktrees, `A` runs | `:` → **Search Plans** / **Manage Worktrees** / **Show Runs** |
 | `d` session detail, `T` timeline | `i` for the inspector, or `:` → **Show Session Details** / **Show Session Timeline** |
@@ -325,7 +364,7 @@ leaves the highlight on the same project.
 Mouse behavior mirrors these controls: click a filter chip to remove that exact
 component, wheel over the list to move the session selection, and wheel over the
 inspector to scroll it. One click on a session selects it; a second click on the
-same session focuses its Kitty tab. The three things the header still offers a
+same session opens its existing terminal. The three things the header still offers a
 pointer are clickable: the view label, the health reading at the right edge, and
 the scope. Terminal-native text selection remains available with
 Shift-drag; Agent Mux does not intercept the modified drag.
@@ -418,8 +457,9 @@ when the window closes or the daemon restarts.
 amx overview
 ```
 
-`F2` in the bundled Kitty snippet opens the same surface as an overlay. It is a
-grid: one tile per managed session in this Kitty instance, each with a
+`F2` opens the same surface from an attached tmux terminal, the macOS workspace,
+or Kitty. It is a grid of managed tmux sessions and, when available, sessions
+in the current Kitty instance. Each tile has a
 three-line header — which session, what it is doing and for how long, and what
 is running it — and a live preview of that pane's screen below a divider. It
 answers "what is every session doing right now" in one glance, which the list
@@ -472,7 +512,8 @@ under the same rules and the same confirmations, as `a` on a dashboard row.
   replacement, or a close asks for a y/n confirmation when
   `confirm_destructive = true`; the prompt names the session and what saying yes
   destroys. `Esc` or `q` backs out; `Ctrl+C` leaves the overview entirely
-- `u`: relaunch the session you just closed from here. It is offered for five
+- `u`: recover the session you just closed from here: resume its exact conversation
+  when known, otherwise relaunch its project. It is offered for 30
   seconds after a confirmed close and is named on the feedback row for exactly
   that long, which is why it is the one real binding that is deliberately not on
   the footer
@@ -499,9 +540,11 @@ under the same rules and the same confirmations, as `a` on a dashboard row.
   tool warnings, and seen completions do not. The jump selects the card without
   focusing its pane or marking its completion read. No matches leaves selection
   unchanged.
-- `Enter`: focus the selected session's Kitty tab and leave. The tab is captured
-  when you press the key, so a refresh landing during the round trip cannot
-  hand you a different pane. A focus that fails leaves you on the overview with
+- `Enter`: open the selected session. A tmux session attaches here (F12 returns),
+  or switches the hosting terminal when the overview is a popup; a Kitty
+  session focuses its tab and leaves. The target is captured when you press
+  the key, so a refresh cannot hand you a different pane. A failure leaves
+  you on the overview with
   the reason on the feedback row and the same tile selected, which is the only
   state retrying makes sense from
 - `1`–`9`, `0`: select and immediately focus the corresponding card among the
@@ -560,20 +603,17 @@ it on the next refresh. A tile whose read has not landed yet says `(loading…)`
 a pane that has genuinely printed nothing says `(no output)`, which is a
 different answer.
 
-The overview is a singleton. Invoking it again — `F2` from any tab, or `amx
-overview` from a shell — focuses the one already open rather than drawing a
-second copy, and hands it nothing: it already shows every session, so it keeps
-the selection and the page you left it on. Unlike the dashboard and the overlay
-pickers, it reports a Kitty listing or focus failure as an error instead of
-assuming nothing is open, because the degraded answer there is a second
-full-screen surface polling Kitty beside the first.
+Inside Kitty, the overview is a singleton: invoking it again focuses the
+existing overview tab and keeps its selection and page. A failed Kitty listing
+or focus is reported rather than treated as an absent overview. A terminal
+outside Kitty runs the overview locally; a tmux popup uses the attached terminal.
 
-The topology it draws comes from the daemon's published window snapshot when one
-is available and attributable to this Kitty instance, exactly as the dashboard's
-does, and falls back to listing Kitty directly when it is not. A refresh that is
-delayed says so on the feedback row — `Kitty refresh delayed; showing cached
-sessions (Ns old)` — and keeps drawing the last good list rather than emptying
-the grid.
+Kitty rows use the daemon's published window snapshot when attributable to the
+current Kitty instance, falling back to a direct listing. Tmux rows come from
+the private server and runtime registry. A delayed refresh keeps the last good
+list and says `Session refresh delayed; showing cached sessions (Ns old)`;
+a partial tmux outage is identified separately. Cached rows do not prove that
+their agents are still running.
 
 ## The agent-session-loop cockpit
 

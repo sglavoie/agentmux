@@ -1,0 +1,78 @@
+{
+  "reviewed_on": "2026-10-16",
+  "source_test": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+  "capture": "ScreenCaptureKit current-process fixture windows; no live sessions",
+  "minimum_macos": "14.4",
+  "appearances": [
+    "light",
+    "dark"
+  ],
+  "review_notes": [
+    "Formatted text and code remain readable, selectable, and searchable at minimum size",
+    "Waiting titles wrap and actions remain visible in both appearances",
+    "History and Changes retain content space and legible actions at 720 by 450 points",
+    "Action notices retain targets, timestamps, and contextual actions at 120x32 and 60x18"
+  ],
+  "tui_source": [
+    "docs/tui-testing/scenarios/feedback-notices-wide.json",
+    "docs/tui-testing/scenarios/feedback-notices-narrow.json"
+  ],
+  "files": [
+    {
+      "file": "changes-dark-minimum.png",
+      "sha256": "a2254df53b919399d4e76fc30c5df7b46433c8cf31388969ae08f25ba4587240",
+      "pixels": [
+        720,
+        450
+      ]
+    },
+    {
+      "file": "feedback-120x32.txt",
+      "sha256": "a22decebb8ff9e7afa351f94008f489ef503ea5b2c2087ce0e97a09f91d7b360"
+    },
+    {
+      "file": "feedback-60x18.txt",
+      "sha256": "803b596f5bcbe271f4824de6d4a1c6c88551648c348a610daa56ed69b84eeb4d"
+    },
+    {
+      "file": "history-dark-minimum.png",
+      "sha256": "87649f419fbeb5e16d02e339f023d743d0add5d796201c15ebd97a415cca58bc",
+      "pixels": [
+        720,
+        450
+      ]
+    },
+    {
+      "file": "transcript-dark.png",
+      "sha256": "09412ac0c4fb9fcfb65cb1b2e04ad2e374f9bec60ab479e193d173b4d49b957d",
+      "pixels": [
+        720,
+        450
+      ]
+    },
+    {
+      "file": "transcript-light.png",
+      "sha256": "51a5147c5c5a689bc04339574723bd52d4d901de02d314ccc5f1e372b0de6f3c",
+      "pixels": [
+        720,
+        450
+      ]
+    },
+    {
+      "file": "waiting-dark.png",
+      "sha256": "2f5b5fc7d6e18adebd7a578b67526746272346cb444c12b99aa4181ce992efc7",
+      "pixels": [
+        340,
+        560
+      ]
+    },
+    {
+      "file": "waiting-light.png",
+      "sha256": "4bb00ec6e89e89efca44e9c9c7af20f058b7d2b8289adbfc55b36d9abeb74464",
+      "pixels": [
+        340,
+        560
+      ]
+    }
+  ]
+}

@@ -453,17 +453,17 @@ func healthTopologyIssue(f HealthFacts) HealthIssue {
 		Title: "Sessions",
 	}
 	if !f.TopologyWarm {
-		issue.Observed = "no window tree has been rendered yet"
+		issue.Observed = "no session list has been rendered yet"
 		if f.TopologyErr != "" {
 			issue.State = HealthFailed
-			issue.Summary = "no window tree: " + f.TopologyErr
-			issue.Compact = "kitty unavailable"
+			issue.Summary = "no session list: " + f.TopologyErr
+			issue.Compact = "sessions unavailable"
 			issue.Remedy = "amx doctor --strict"
 			issue.Details = []string{"the dashboard has never rendered a session list, so there is nothing cached to fall back on"}
 			return issue
 		}
 		issue.State = HealthUnknown
-		issue.Summary = "waiting for the first window tree"
+		issue.Summary = "waiting for the first session list"
 		issue.Compact = "sessions loading"
 		return issue
 	}

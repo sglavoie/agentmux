@@ -22,8 +22,8 @@ func TestPickerStickyInputRendered(t *testing.T) {
 	if !strings.HasSuffix(firstLine, "press / to filter") {
 		t.Errorf("expected header hint 'press / to filter' in initial render, got header=%q\n%s", firstLine, out)
 	}
-	if len(firstLine) != m.width {
-		t.Errorf("expected header hint to be right-aligned to width %d, got width %d header=%q", m.width, len(firstLine), firstLine)
+	if layout.Width(firstLine) != m.width {
+		t.Errorf("expected header hint to be right-aligned to width %d, got width %d header=%q", m.width, layout.Width(firstLine), firstLine)
 	}
 
 	// After pressing `/`: search mode active → prompt with cursor.

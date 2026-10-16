@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -66,7 +67,7 @@ func latestActiveToastStatus(m Model, now time.Time) (statusMessage, bool) {
 			continue
 		}
 		return statusMessage{
-			Text:     t.Text,
+			Text:     toastDisplayText(t),
 			Severity: toastStatusSeverity(t.Severity),
 		}, true
 	}
@@ -138,7 +139,7 @@ func topologyStatus(m Model, now time.Time) (statusMessage, bool) {
 	age, warm := topologyAge(m, now)
 	if !warm {
 		if m.err != nil {
-			return statusMessage{Text: "Kitty error: " + m.err.Error(), Severity: statusError}, true
+			return statusMessage{Text: "Session refresh failed: " + m.err.Error(), Severity: statusError}, true
 		}
 		return statusMessage{}, false
 	}
@@ -146,7 +147,7 @@ func topologyStatus(m Model, now time.Time) (statusMessage, bool) {
 		return statusMessage{}, false
 	}
 	return statusMessage{
-		Text:     fmt.Sprintf("Kitty refresh delayed; showing cached sessions (%ds old)", int(age/time.Second)),
+		Text:     fmt.Sprintf("Session refresh delayed; showing cached sessions (%ds old)", int(age/time.Second)),
 		Severity: statusWarning,
 	}, true
 }
@@ -354,6 +355,8 @@ func fallbackStatusText(m Model) string {
 		return "Delete session"
 	case ModeChipPicker:
 		return "Choose " + chipPickerStatusLabel(m.chipPickerKind)
+	case ModeFeedback:
+		return "Action feedback"
 	case ModeHealth:
 		return "Health details"
 	case ModeProjectSwitcher:
@@ -437,7 +440,12 @@ func pickerStatusText(m Model) string {
 	selected := selectedPickerCount(m.pickerSelected)
 	total := len(m.pickerSessions)
 	visible := len(m.pickerFilteredIdx)
-	base := fmt.Sprintf("Launch Sessions: %d selected", selected)
+	base := fmt.Sprintf("Launch Sessions: %d selected · in %s", selected, commands.LaunchDestination())
+	if m.pickerCursor >= 0 && m.pickerCursor < len(m.pickerFilteredIdx) {
+		if profile := m.pickerEffectiveProfile(m.pickerFilteredIdx[m.pickerCursor]); profile != "" {
+			base += " · profile " + profile
+		}
+	}
 	switch {
 	case total == 0:
 		return base

@@ -85,7 +85,8 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
 		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
 		{commands.ResortTabs, commands.GroupApplication, "Resort Tabs", []string{"reorder", "tabs"}, ""},
-		{commands.UndoClose, commands.GroupApplication, "Undo Last Close", []string{"restore", "reopen"}, keyUndoClose},
+		{commands.UndoClose, commands.GroupApplication, "Relaunch Last Closed Session", []string{"restore", "reopen", "undo last close"}, keyUndoClose},
+		{commands.ShowFeedback, commands.GroupApplication, "Show Action Feedback", []string{"errors", "failures", "notices", "waiting"}, ""},
 		{commands.ShowHealth, commands.GroupApplication, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
 		{commands.DismissDeprecation, commands.GroupApplication, "Dismiss Deprecation Warning", []string{"banner", "warning"}, ""},
 		{commands.ShowKeyboardHelp, commands.GroupApplication, "Show Keyboard Shortcuts", []string{"help", "keys"}, "?"},
@@ -188,6 +189,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.ToggleListView:     noDashboardKey,
 		commands.ResortTabs:         noDashboardKey,
 		commands.UndoClose:          keyUndoClose,
+		commands.ShowFeedback:       noDashboardKey,
 		commands.ShowHealth:         noDashboardKey,
 		commands.DismissDeprecation: noDashboardKey,
 	}
@@ -380,7 +382,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 32 {
-		t.Fatalf("clean catalog has %d visible commands, want 32", visible)
+	if visible != 33 {
+		t.Fatalf("clean catalog has %d visible commands, want 33", visible)
 	}
 }

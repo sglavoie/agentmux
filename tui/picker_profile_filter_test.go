@@ -150,7 +150,7 @@ func TestPickerProfileIndicatorAndEntryReset(t *testing.T) {
 	m.width = 120
 
 	out := stripAnsi(renderPicker(m))
-	if !strings.Contains(out, "Launch Sessions  [profile: All]") {
+	if !strings.Contains(out, "Launch Sessions → Kitty  [profile: All]") {
 		t.Fatalf("initial picker header missing All profile indicator:\n%s", out)
 	}
 	footer := stripAnsi(renderFooter(m))

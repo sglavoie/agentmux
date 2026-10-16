@@ -2,6 +2,11 @@ package commands
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -49,4 +54,36 @@ func ConversationHandoff(deps actions.Dependencies, meta transcript.SessionMeta,
 		_, err := Registry.Execute(context.Background(), deps, actions.Handoff, actions.Request{Conversation: &meta, Parameters: parameters})
 		return ActionDoneMsg{Err: err}
 	}
+}
+
+// RecoverClosed reuses the continuity service's source validation and live-owner
+// checks. A known conversation never silently falls back to a fresh launch.
+func RecoverClosed(ctx context.Context, deps actions.Dependencies, project config.Session, identity conversation.Identity, backend runtimesession.BackendKind) error {
+	deps.Backend = backend // A recorded empty backend still means Kitty.
+	id, request := actions.Launch, actions.Request{Project: &project}
+	if identity.Valid() {
+		if deps.Readers == nil {
+			deps.Readers = map[string]transcript.Reader{
+				harness.Claude: transcript.NewClaudeReader(), harness.Codex: transcript.NewCodexReader(), harness.Copilot: transcript.NewCopilotReader(),
+			}
+		}
+		index, err := transcript.LoadIndex()
+		if err != nil {
+			return fmt.Errorf("loading conversation for recovery: %w", err)
+		}
+		key := transcript.IndexKey(identity.Harness, identity.SessionID)
+		meta, found := index.Get(key)
+		if !found {
+			if err := index.Refresh(deps.Config, deps.Readers); err != nil {
+				return fmt.Errorf("finding closed conversation: %w", err)
+			}
+			meta, found = index.Get(key)
+		}
+		if !found {
+			return fmt.Errorf("closed conversation is not indexed; open Past Sessions and refresh before resuming")
+		}
+		id, request = actions.Continue, actions.Request{Conversation: &meta}
+	}
+	_, err := Registry.Execute(ctx, deps, id, request)
+	return err
 }

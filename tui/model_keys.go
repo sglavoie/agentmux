@@ -59,6 +59,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleChipPickerKey(msg)
 	case ModeProjectSwitcher:
 		return m.handleProjectSwitcherKey(msg)
+	case ModeFeedback:
+		return m.handleFeedbackKey(msg)
 	case ModeHealth:
 		return m.handleHealthKey(msg)
 	default:

@@ -9,6 +9,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
     let loading: Bool
     let jump: Int?
     let jumpSequence: Int
+    var reviewState: WorkspaceReviewState? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSScrollView {
@@ -30,6 +31,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
         text.textContainerInset = NSSize(width: 8, height: 10)
         text.setAccessibilityLabel("Unified diff, old and new line numbers")
         scroll.documentView = text
+        context.coordinator.observe(scroll, store: reviewState)
         return scroll
     }
 
@@ -40,7 +42,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
         guard !loading else { return }
         if state.identity != identity || state.diff != diff {
             if let previous = state.identity { state.positions[previous] = scroll.contentView.bounds.origin }
-            let position = state.positions[identity] ?? .zero
+            let position = state.positions[identity] ?? reviewState?.position(identity) ?? .zero
             state.identity = identity
             state.diff = diff
             let rendered = Self.render(diff)
@@ -89,6 +91,20 @@ struct WorkspaceDiffView: NSViewRepresentable {
     }
 
     final class Coordinator {
+        private var observer: NSObjectProtocol?
+        private var store: WorkspaceReviewState?
+        func observe(_ scroll: NSScrollView, store: WorkspaceReviewState?) {
+            self.store = store
+            scroll.contentView.postsBoundsChangedNotifications = true
+            observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification,
+                object: scroll.contentView, queue: .main) { [weak self, weak scroll] _ in
+                guard let self, let scroll, let id = self.identity else { return }
+                let point = scroll.contentView.bounds.origin
+                self.positions[id] = point
+                self.store?.savePosition(point, id: id)
+            }
+        }
+        deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
         var identity: String?
         var diff: WorkspaceDiff?
         var positions: [String: NSPoint] = [:]

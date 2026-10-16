@@ -23,9 +23,8 @@
 // close that failed, or that nobody could confirm, leaves nothing behind: the
 // recovery would relaunch a session that is still running.
 //
-// The five-second deadline starts at that confirmation, not at dispatch. The
-// window is meant to be five seconds of the operator looking at the result, and
-// a close that took two seconds to confirm would otherwise offer three.
+// The 30-second deadline starts at confirmation, so a slow close does not
+// consume the time available to recover it.
 
 package sessionactions
 
@@ -33,16 +32,18 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // RecoveryWindow is how long a confirmed close stays recoverable.
-const RecoveryWindow = 5 * time.Second
+const RecoveryWindow = 30 * time.Second
 
 // maxRecoveryEntries bounds the stack. It is what keeps a close whose completion
 // never arrives — a dropped message, a surface torn down mid-flight — from
 // growing the list without limit, since a reserved entry has no deadline yet and
 // so cannot be swept by time. Well past any plausible number of closes inside one
-// five-second window.
+// 30-second window.
 const maxRecoveryEntries = 16
 
 // Snapshot is everything a relaunch needs, captured before the close.
@@ -50,12 +51,22 @@ const maxRecoveryEntries = 16
 // It is captured first and stored second. Reconstructing it afterwards would
 // mean reading a row that is by then deliberately gone.
 type Snapshot struct {
+	Conversation conversation.Identity
+	Backend      runtimesession.BackendKind
 	// Session is the launch template rebuilt from the closed row.
 	Session config.Session
 	// Account is the profile the session ran under.
 	Account config.Account
 	// Label is what to call it in a sentence, typically the row's title.
 	Label string
+}
+
+// Verb describes the actual operation. A launch template is not an exact undo.
+func (s Snapshot) Verb() string {
+	if s.Conversation.Valid() {
+		return "resume"
+	}
+	return "relaunch"
 }
 
 // Reconstructable reports whether the snapshot names something launchable. A row
@@ -74,7 +85,7 @@ const (
 	stageAvailable
 	// stageClaimed is an entry whose relaunch is in flight. It keeps its
 	// deadline, so a relaunch that fails becomes available again with the time
-	// it had left rather than a fresh five seconds.
+	// it had left rather than a fresh 30 seconds.
 	stageClaimed
 )
 
@@ -254,6 +265,16 @@ func (r Recovery) Latest(now time.Time) (Snapshot, bool) {
 		}
 	}
 	return Snapshot{}, false
+}
+
+// SecondsRemaining is rounded up for the entry the recovery key will take.
+func (r Recovery) SecondsRemaining(now time.Time) int {
+	for i := len(r.entries) - 1; i >= 0; i-- {
+		if r.entries[i].recoverable(now) {
+			return int((r.entries[i].deadline.Sub(now) + time.Second - 1) / time.Second)
+		}
+	}
+	return 0
 }
 
 // Deadline reports when the last still-recoverable entry expires, which is how

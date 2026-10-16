@@ -154,10 +154,10 @@ func TestCloseIsAnnouncedBeforeItIsRecoverable(t *testing.T) {
 		t.Fatalf("recoverable closes after confirmation = %v, want %s", got, label)
 	}
 	text := toastByID(confirmed, undoCloseToastID)
-	if !strings.Contains(text, "closed "+label) || !strings.Contains(text, keyUndoClose+" undo") {
+	if !strings.Contains(text, "closed "+label) || !strings.Contains(text, keyUndoClose+" relaunch") {
 		t.Fatalf("recovery toast = %q, want the close and the undo key", text)
 	}
-	assertStatusBarContains(t, confirmed, keyUndoClose+" undo")
+	assertStatusBarContains(t, confirmed, keyUndoClose+" relaunch")
 	// The per-dispatch channel has nothing left to say once the recovery toast
 	// carries the result.
 	if got := toastByID(confirmed, actionFeedbackToastID(1)); got != "" {
@@ -225,7 +225,7 @@ func TestCloseIsRecoverableWithConfirmationEnabled(t *testing.T) {
 }
 
 // TestTheWindowStartsWhenTheCloseIsConfirmed: a close that takes two seconds to
-// report back still offers the operator five seconds of undo.
+// report back still offers the operator thirty seconds of undo.
 func TestTheWindowStartsWhenTheCloseIsConfirmed(t *testing.T) {
 	at := undoTestNow
 	m := undoTestModel(&at)
@@ -381,7 +381,7 @@ func TestUndoLastWithoutEntriesIsOfferedDisabled(t *testing.T) {
 
 // TestUndoKeyAndPaletteAgree: `u` is bound at the dashboard again, and the two
 // routes reach the same effect against the same stack. The key exists because
-// the affordance lasts five seconds — long enough to press one letter, not long
+// the affordance lasts thirty seconds — long enough to press one letter, not long
 // enough to open a palette and type a name.
 func TestUndoKeyAndPaletteAgree(t *testing.T) {
 	at := undoTestNow
@@ -509,7 +509,7 @@ func TestTransientCloseSkipsUndo(t *testing.T) {
 }
 
 // TestClosingTheHostingTabOffersNoRecovery: the dashboard is standing in that
-// tab, so the surface that would show the undo — and the five seconds it would
+// tab, so the surface that would show the undo — and the thirty seconds it would
 // last — end with the close.
 func TestClosingTheHostingTabOffersNoRecovery(t *testing.T) {
 	at := undoTestNow

@@ -671,6 +671,9 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 		}
 	}
 	d.loadSessionsWith(client, fx.Config, fx.overlay(), fx.Portable)
+	for _, notice := range fx.Notices {
+		d.model.pushToast(notice)
+	}
 	return d, client
 }
 

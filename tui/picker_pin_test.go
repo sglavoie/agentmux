@@ -222,8 +222,8 @@ func TestPickerPinSaveFailureLeavesOrderingUnchanged(t *testing.T) {
 	updated, cmd := m.Update(keyPress("P"))
 	got := updated.(Model)
 
-	if cmd == nil {
-		t.Fatal("failed pin save returned no toast command")
+	if cmd != nil || len(got.toasts) == 0 || !got.toasts[0].Persistent {
+		t.Fatal("failed pin save must retain the failure without an expiry ticker")
 	}
 	if len(got.pickerPinned) != 0 {
 		t.Fatalf("failed pin save changed pin state: %v", got.pickerPinned)

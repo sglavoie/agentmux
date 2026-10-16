@@ -95,6 +95,11 @@ func renderFooter(m Model) string {
 			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply scope"), renderFooterBinding("esc/q/p", "cancel")),
 			footerStyledLine(m.width, "  ", renderFooterBinding("/", "search"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
 		)
+	case ModeFeedback:
+		lines = nonEmptyFooterLines(
+			footerStyledLine(m.width, "  ", renderFooterBinding("tab", "next notice"), renderFooterBinding("j/k", "scroll"), renderFooterBinding("enter", "inspect"), renderFooterBinding("u", "recover")),
+			footerStyledLine(m.width, "  ", renderFooterBinding("y/Y", "copy/all"), renderFooterBinding("d/D", "dismiss/all"), renderFooterBinding("h", "health"), renderFooterBinding("esc/q", "close")),
+		)
 	case ModeHealth:
 		lines = nonEmptyFooterLines(
 			footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),

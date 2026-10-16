@@ -181,10 +181,10 @@ func TestColdRefreshFailureStaysRed(t *testing.T) {
 	m.now = func() time.Time { return staleTestEpoch }
 	m = applyRefreshErr(m, errors.New("kitten @ ls: connection refused"))
 
-	assertTopologyReading(t, m, dashboard.HealthFailed, "no window tree: kitten @ ls: connection refused")
+	assertTopologyReading(t, m, dashboard.HealthFailed, "no session list: kitten @ ls: connection refused")
 	// A cold failure is the whole state of the dashboard, so it is what the one
 	// header indicator reads out — not a phrase buried under an overall count.
-	if got := stripAnsi(headerHealthSegment(m).text); !strings.Contains(got, "kitty unavailable") {
+	if got := stripAnsi(headerHealthSegment(m).text); !strings.Contains(got, "sessions unavailable") {
 		t.Fatalf("header indicator = %q, want the cold-failure reading", got)
 	}
 	if got := dashboard.HealthOverall(healthIssues(m)); got != dashboard.HealthFailed {

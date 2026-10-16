@@ -400,3 +400,22 @@ func TestASurfaceOpensOnTheRowOfTheRuntimeSessionItWasStartedOn(t *testing.T) {
 		t.Fatalf("source tab = %d, %v; want %d (the overview reads it the same way)", live.SourceTabID, err, want)
 	}
 }
+
+func TestLaunchDestinationMatchesEffectBackend(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		terminals PortableTerminals
+		want      string
+	}{
+		{"legacy", PortableTerminals{}, "Kitty"},
+		{"tmux", PortableTerminals{Launch: runtimesession.BackendTmux}, "tmux"},
+		{"workspace", PortableTerminals{Launch: runtimesession.BackendTmux, Desktop: func(protocol.WorkspaceViewRequest) error { return nil }}, "workspace (tmux)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			usePortable(t, tc.terminals)
+			if got := LaunchDestination(); got != tc.want {
+				t.Fatalf("destination = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

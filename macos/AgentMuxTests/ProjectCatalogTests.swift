@@ -130,6 +130,8 @@ final class ProjectCatalogTests: XCTestCase {
         XCTAssertEqual(ProjectCatalog.launchArguments(for: ProjectEntry(profile: "", title: "X")), ["project", "launch", "--title", "X"])
         XCTAssertEqual(ProjectCatalog.launchArguments(for: project, directory: "/src/hotfix"),
                        ["project", "launch", "--title", "API", "--profile", "work", "--directory", "/src/hotfix"])
+        XCTAssertEqual(ProjectCatalog.kittyLaunchArguments(for: project, directory: "/src/hotfix").suffix(4),
+                       ["--directory", "/src/hotfix", "--backend", "kitty"])
         XCTAssertEqual(ProjectCatalog.workspaceLaunchArguments(for: project, directory: "/src/hotfix").suffix(4),
                        ["--directory", "/src/hotfix", "--backend", "tmux"])
 

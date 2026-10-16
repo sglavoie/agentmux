@@ -13,7 +13,8 @@ No day has been recorded yet.
 - Profiles and harnesses used:
 - Cases touched (multiple-profiles, all-harnesses, permission-prompts,
   long-running-jobs, asl, overview, conversation-continuity, kitty-fallback):
-- Friction:
+- Friction (task; hesitation; repeated navigation; extra steps/time):
+- Polish observations (destination clarity; retained failures; keyboard review):
 - Failures (what was on screen; bundle or export saved as):
 - Fixes installed today (commit; checks run again):
 -->

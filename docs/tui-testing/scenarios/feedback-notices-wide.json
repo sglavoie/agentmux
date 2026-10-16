@@ -1,0 +1,35 @@
+{
+  "name": "feedback-notices-wide",
+  "fixture": "action_feedback",
+  "size": {
+    "width": 120,
+    "height": 32
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "app.show-feedback"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "feedback"
+    },
+    {
+      "type": "contains_text",
+      "text": "Restart outcome unconfirmed."
+    },
+    {
+      "type": "contains_text",
+      "text": "09:01:00"
+    },
+    {
+      "type": "contains_text",
+      "text": "inspect this session"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

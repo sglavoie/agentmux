@@ -48,18 +48,36 @@ struct WorkspaceEmpty: View {
 
 enum WorkspaceHighlight {
     static func text(_ text: String, terms: [String]) -> AttributedString {
-        var result = AttributedString(text)
+        applying(to: AttributedString(text), terms: terms)
+    }
+
+    static func applying(to attributed: AttributedString, terms: [String]) -> AttributedString {
+        var result = attributed
+        let text = String(result.characters)
         for term in terms where !term.isEmpty {
             var start = text.startIndex
             while start < text.endIndex, let range = text.range(of: term, options: .caseInsensitive, range: start..<text.endIndex) {
                 if let lower = AttributedString.Index(range.lowerBound, within: result),
                    let upper = AttributedString.Index(range.upperBound, within: result) {
                     result[lower..<upper].backgroundColor = .yellow.opacity(0.35)
-                    result[lower..<upper].font = .body.bold()
                 }
                 start = range.upperBound
             }
         }
         return result
+    }
+}
+
+/// Refresh relative ages without fetching data. The tooltip retains the exact
+/// source timestamp, including its timezone, for comparison and diagnostics.
+struct WorkspaceTimestamp: View {
+    let title: String
+    let value: String
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            Text("\(title): \(WorkspaceWording.relativeTime(value, now: context.date))")
+                .font(.caption).foregroundStyle(.secondary).help(value)
+                .accessibilityLabel("\(title): \(value)")
+        }
     }
 }

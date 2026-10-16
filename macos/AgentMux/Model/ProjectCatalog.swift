@@ -64,6 +64,7 @@ struct ProjectEntry: Decodable, Equatable, Hashable {
     var harness = ""
     var directory = ""
     var groups: [String] = []
+    var directoryProblem: String?
 
     init(profile: String, title: String, harness: String = "", directory: String = "", groups: [String] = []) {
         self.profile = profile
@@ -73,7 +74,10 @@ struct ProjectEntry: Decodable, Equatable, Hashable {
         self.groups = groups
     }
 
-    enum CodingKeys: String, CodingKey { case profile, title, harness, directory, groups }
+    enum CodingKeys: String, CodingKey {
+        case profile, title, harness, directory, groups
+        case directoryProblem = "directory_problem"
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -82,6 +86,7 @@ struct ProjectEntry: Decodable, Equatable, Hashable {
         harness = c.lenient(.harness, "")
         directory = c.lenient(.directory, "")
         groups = c.lenient(.groups, [])
+        directoryProblem = c.lenient(.directoryProblem)
     }
 }
 
@@ -189,8 +194,13 @@ struct ProjectCatalog: Equatable {
         return arguments
     }
 
-    /// The same launch on the private tmux server, for the workspace to
-    /// embed: what Launch Project runs when there is no Kitty to open a tab in.
+    /// An explicit app preference must override the command-line default,
+    /// even when config.toml sends other launches to tmux.
+    static func kittyLaunchArguments(for project: ProjectEntry, directory: String? = nil) -> [String] {
+        launchArguments(for: project, directory: directory) + ["--backend", "kitty"]
+    }
+
+    /// The same launch on the private tmux server, for the workspace to embed.
     static func workspaceLaunchArguments(for project: ProjectEntry, directory: String? = nil) -> [String] {
         launchArguments(for: project, directory: directory) + ["--backend", "tmux"]
     }

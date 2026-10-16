@@ -20,7 +20,7 @@
 //     the one binding it can point at when something was dropped. Here `?` is
 //     already on the row and never droppable, so a marker would be the same key
 //     printed twice on a line that is short of room by construction.
-//   - It never offers `u`. A close is undoable for five seconds and only after
+//   - It never offers `u`. A close is undoable for thirty seconds and only after
 //     it is confirmed, so a permanent entry would be dim almost always; the
 //     offer is made on the feedback row, where it appears with the recovery and
 //     expires with it. See the last entry of gridBindings.

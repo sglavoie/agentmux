@@ -484,7 +484,7 @@ func TestHealthOverlayNamesStaleAndColdTopologySeparately(t *testing.T) {
 	if issue.State != dashboard.HealthFailed {
 		t.Fatalf("cold failure = %s, want failed", issue.State.Label())
 	}
-	if !strings.Contains(healthBody(cold), "no window tree: kitty: connection refused") {
+	if !strings.Contains(healthBody(cold), "no session list: kitty: connection refused") {
 		t.Fatalf("cold failure is not reported as one:\n%s", healthBody(cold))
 	}
 }

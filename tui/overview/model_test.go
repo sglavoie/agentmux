@@ -1333,7 +1333,7 @@ func TestTheFeedbackRowDistinguishesTheLifecycleStates(t *testing.T) {
 		m, _ := started(t, 0)
 		m = only(t, m, commands.ErrMsg{Seq: firstRefreshSeq, Err: errors.New("daemon unreachable")})
 		got := m.feedback()
-		if !strings.HasPrefix(got, "Kitty error: ") || !strings.Contains(got, "daemon unreachable") {
+		if !strings.HasPrefix(got, "Session refresh failed: ") || !strings.Contains(got, "daemon unreachable") {
 			t.Fatalf("feedback = %q, want the cold failure and its reason", got)
 		}
 	})
@@ -1359,7 +1359,7 @@ func TestTheFeedbackRowDistinguishesTheLifecycleStates(t *testing.T) {
 		m = only(t, m, snapshot(firstRefreshSeq, 0, nil))
 		r.now = r.now.Add(protocol.KittySnapshotStaleAfter)
 		got := m.feedback()
-		if !strings.HasPrefix(got, "Kitty refresh delayed") {
+		if !strings.HasPrefix(got, "Session refresh delayed") {
 			t.Fatalf("feedback = %q, want the delay warning rather than a claim about an unrefreshable list", got)
 		}
 		if !strings.Contains(got, "6s old") {
@@ -1373,7 +1373,7 @@ func TestTheFeedbackRowDistinguishesTheLifecycleStates(t *testing.T) {
 		m = only(t, m, commands.TickMsg{})
 		m = only(t, m, commands.ErrMsg{Seq: m.refreshActiveSeq, Err: errors.New("down")})
 		r.now = r.now.Add(20 * time.Second)
-		if got := m.feedback(); !strings.HasPrefix(got, "Kitty refresh delayed") {
+		if got := m.feedback(); !strings.HasPrefix(got, "Session refresh delayed") {
 			t.Fatalf("feedback = %q; with rows on screen the age is what the operator needs, not the subprocess's words", got)
 		}
 	})

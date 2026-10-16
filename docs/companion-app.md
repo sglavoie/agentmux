@@ -590,3 +590,37 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
 - **Codex hooks run in a shared process.** Codex 0.160 runs hooks inside its
   managed `app-server`, which carries the Kitty window of the pane that started
   it, so every Codex session's hooks are attributed to that one window.
+
+## Review-window shortcuts
+
+History remembers its search, scope, selected conversation, and reading position
+across app restarts. Messages format headings, lists, inline code, and fenced code
+blocks; **Copy code** copies only that block. Search highlights remain visible in
+formatted prose and code. Changes remembers the comparison base and selected file
+for each checkout, with separate scroll positions for each checkout/base/file.
+
+Workspace restoration also keeps both panes, their physical arrangement, divider
+position, and which pane was active. Each agent attachment is checked before it
+is restored; a session attached elsewhere stays detached. Utility programs return
+as ended views with an explicit Reopen action. An embedded Changes review returns
+to its checkout without running a terminal program.
+
+Conversation History opens with search focused. `⌘F` returns to search; Down
+from search moves to the results. `⌘G` and `⌘⇧G` move between matching messages.
+`⌘Return` resumes or focuses the selected conversation; `⌘⇧Return` forks it.
+
+In Checkout Changes, `⌘G` and `⌘⇧G` move between hunks, `⌘R` refreshes the
+comparison, and `⌘E` opens the selected file in the editor. **Focus Files**
+(`⌘⇧F`) and **Edit Base** (`⌘⇧E`) move keyboard focus without changing selection.
+Closing a standalone review window with `⌘W` returns to the workspace. In a
+split workspace, review shortcuts belong to the focused review pane.
+Refreshes keep the current search, selection, and focus; relative run timestamps
+show their exact source values in tooltips.
+
+Run a Plan offers searchable project and supervisor choices. Search matches
+names and project directories; arrows select and Return applies a choice.
+Projects with unavailable directories explain why they cannot be chosen.
+**Infer from plan workspace** and **Use project default** keep inference
+explicit; **Check Readiness** displays the resolved project and supervisor.
+If inference is ambiguous, choose a project before starting. An option change
+requires another check. Every native plan run launches in the workspace.

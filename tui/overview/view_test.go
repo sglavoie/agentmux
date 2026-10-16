@@ -856,6 +856,7 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"github.com/sglavoie/agentmux/tui/sessionactions": true,
 	}
 	allowedCommands := map[string]bool{
+		"commands.RecoverClosed":       true, // recovery through the same continuity registry
 		"commands.OverviewPreferences": true, // only c changes this daemon-lifetime UI setting
 		"commands.RefreshOverview":     true,
 		"commands.Focus":               true,
@@ -916,10 +917,11 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 // The clock rule is the same as the lifecycle's and matters more here, because
 // two of the things this half decides are timed: how long a report stays on the
 // feedback row, and how long a close stays undoable. Both read deps.now, so an
-// acceptance sequence can advance a frozen clock past a five-second recovery
+// acceptance sequence can advance a frozen clock past a thirty-second recovery
 // window without sleeping.
 func TestTheActingHalfMutatesOnlyThroughADispatchedAction(t *testing.T) {
 	allowedImports := map[string]bool{
+		"github.com/sglavoie/agentmux/internal/conversation": true, // immutable recovery identity
 		"context": true, // the registry's Execute takes one
 		"fmt":     true,
 		"time":    true,
@@ -939,6 +941,7 @@ func TestTheActingHalfMutatesOnlyThroughADispatchedAction(t *testing.T) {
 	// stamping and correlation the controller requires and the two lookups that
 	// resolve a captured row's configured project.
 	allowedCommands := map[string]bool{
+		"commands.RecoverClosed":            true, // recovery through the same continuity registry
 		"commands.Peek":                     true,
 		"commands.Restart":                  true,
 		"commands.ClearStatus":              true,

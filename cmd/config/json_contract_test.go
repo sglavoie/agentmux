@@ -10,12 +10,13 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/spf13/cobra"
+	"strings"
 )
 
 // Config leaves that share the retained command envelope. `asl-sync` has its
 // own audit in asl_sync_json_test.go; this one covers the rest of the family.
 func TestConfigJSONCommandSurfaceIsVersioned(t *testing.T) {
-	for _, command := range []*cobra.Command{configValidateCmd} {
+	for _, command := range []*cobra.Command{configValidateCmd, configProfilesCmd} {
 		if command.Flags().Lookup("json") == nil {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}
@@ -93,5 +94,45 @@ func TestConfigValidateJSONStrictMissingDirectoryIsAFindingWithQuietExit(t *test
 	}
 	if data.Valid || len(data.InvalidProjectDirectories) != 1 {
 		t.Fatalf("data = %+v", data)
+	}
+}
+
+func TestProfilesCatalogIncludesUnassignedProfilesWithoutPrivateConfiguration(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "config.toml")
+	body := strings.Replace(validConfigBody(home), "[harness_emojis]", "[harness_emojis]\ncodex = \"🧪\"", 1) + "\n[[profiles]]\nname = \"review-only\"\nharness = \"codex\"\nhome_dir = \"/private/reviewer\"\ncolor = \"blue\"\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AMX_CONFIG", path)
+	oldOut := configProfilesCmd.OutOrStdout()
+	t.Cleanup(func() { configProfilesCmd.SetOut(oldOut); _ = configProfilesCmd.Flags().Set("json", "false") })
+	_ = configProfilesCmd.Flags().Set("json", "true")
+	var out bytes.Buffer
+	configProfilesCmd.SetOut(&out)
+	if err := configProfilesCmd.RunE(configProfilesCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		SchemaVersion int                 `json:"schema_version"`
+		Data          []map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.SchemaVersion != 1 {
+		t.Fatal(out.String())
+	}
+	found := false
+	for _, row := range envelope.Data {
+		if len(row) != 2 {
+			t.Fatalf("profile catalog leaked extra fields: %v", row)
+		}
+		if row["name"] == "review-only" && row["harness"] == "codex" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("unassigned profile omitted: %s", out.String())
 	}
 }

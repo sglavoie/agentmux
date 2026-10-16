@@ -173,4 +173,8 @@ func planRunFailureText(err error) string {
 	return sentenceCase(err.Error())
 }
 
-func renderPlanRunBox(m Model) string { return runform.Render(m.planRun, m.width) }
+func renderPlanRunBox(m Model) string {
+	state := m.planRun
+	state.Destination = commands.LaunchDestination()
+	return runform.Render(state, m.width)
+}

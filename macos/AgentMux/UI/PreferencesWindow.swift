@@ -542,6 +542,11 @@ struct PreferencesView: View {
                 Picker("Launch projects in", selection: $model.preferences.launchBackend) {
                     ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
+                if case let .status(status) = model.snapshot.backend {
+                    note(model.preferences.launchBackend.explanation(cliBackend: status.launchBackend))
+                } else {
+                    note(model.preferences.launchBackend.explanation(cliBackend: nil))
+                }
                 note("Agents launched in the workspace run on Agent Mux's own tmux server: they keep running "
                     + "when the window closes, when the app quits, and across app updates.")
                 Toggle("Open the workspace at launch", isOn: $model.preferences.openWorkspaceAtLaunch)

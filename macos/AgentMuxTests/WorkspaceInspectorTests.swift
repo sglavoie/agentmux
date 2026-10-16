@@ -289,9 +289,9 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertFalse(lines[0].titleLabel.isAccessibilityElement())
         XCTAssertFalse(lines[0].detailLabel.isAccessibilityElement())
         let children = (lines[0].accessibilityChildren() ?? []).compactMap { $0 as? NSAccessibilityProtocol }
-        XCTAssertEqual(children.map { $0.accessibilityRole() }, [.button], "only Answer… is said under the line")
+        XCTAssertEqual(children.map { $0.accessibilityRole() }, [.button, .button], "answer and context remain accessible")
         XCTAssertEqual(children.first?.accessibilityLabel(), "Answer api — personal")
-        XCTAssertEqual(lines[1].accessibilityChildren()?.count, 0, "a line with no button has nothing under it")
+        XCTAssertEqual(lines[1].accessibilityChildren()?.count, 1, "context remains available without an answer")
         XCTAssertEqual(button.accessibilityLabel(), "Answer api — personal")
 
         button.performClick(nil)

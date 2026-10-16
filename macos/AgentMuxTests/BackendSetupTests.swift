@@ -172,3 +172,13 @@ final class BackendSetupTests: XCTestCase {
         XCTAssertEqual(environment.forwarded["AMX_TMUX_RUNTIME"], "/opt/custom/tmux")
     }
 }
+
+extension BackendSetupTests {
+    func testAppDestinationExplainsCLIOverride() {
+        let text = LaunchBackendPreference.automatic.explanation(cliBackend: "kitty")
+        XCTAssertTrue(text.contains("workspace (tmux)"))
+        XCTAssertTrue(text.contains("Command-line launches use Kitty"))
+        XCTAssertTrue(text.contains("overrides config.toml"))
+        XCTAssertEqual(LaunchBackendPreference.kitty.destination, "Kitty")
+    }
+}

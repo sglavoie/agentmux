@@ -17,7 +17,9 @@ final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
             window.minSize = NSSize(width: 720, height: 450)
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.contentView = NSHostingView(rootView: WorkspaceHistoryView(model: model))
+            let host = WorkspaceReviewHost(rootView: WorkspaceHistoryView(model: model))
+            host.closesWindow = true
+            window.contentView = host
             window.setFrameAutosaveName("WorkspaceHistory")
             window.center()
             self.window = window
@@ -37,16 +39,21 @@ final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
 struct WorkspaceHistoryView: View {
     @ObservedObject var model: WorkspaceHistoryModel
     @State private var visibleMessage: Int?
+    private enum Focus: Hashable { case search, results }
+    @FocusState private var focus: Focus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Conversation History").font(.title2)
             HStack {
                 TextField("Search full conversations", text: $model.query)
+                    .focused($focus, equals: .search)
+                    .onKeyPress(.downArrow) { focus = .results; return .handled }
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { model.search() }
                     .onChange(of: model.query) { _, _ in model.scheduleSearch() }
                 Button("Search") { model.search() }
+                    .help("Search conversations. ⌘F focuses the search field.")
             }
             HStack {
                 Picker("Search in", selection: $model.scope) {
@@ -81,10 +88,11 @@ struct WorkspaceHistoryView: View {
                             }
                             Text("\(entry.conversation.harness) · \(entry.conversation.profile)").font(.caption).foregroundStyle(.secondary)
                             Text(entry.preview.reveal()).font(.caption).lineLimit(3)
-                            if let matches = entry.matches { Text("\(matches) matches").font(.caption2).foregroundStyle(.secondary) }
+                            if let matches = entry.matches { Text("\(matches) \(matches == 1 ? "match" : "matches")").font(.caption).foregroundStyle(.secondary) }
                         }.padding(.vertical, 3).tag(entry.id)
                     }
-                }.frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
+                }.focused($focus, equals: .results)
+                    .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
                     .overlay {
                         if model.entries.isEmpty && !model.loading && model.error == nil {
                             WorkspaceEmpty(title: "No conversations found", detail: "Try another search or broaden the search scope.", symbol: "magnifyingglass")
@@ -96,9 +104,15 @@ struct WorkspaceHistoryView: View {
                         Text(selected.conversation.cwd).font(.caption).textSelection(.enabled)
                         HStack {
                             Button(model.liveConversations.contains(selected.id) ? "Focus live session" : "Resume") { model.act(fork: false) }
-                            Button("Fork") { model.act(fork: true) }
+                                .buttonStyle(.borderedProminent)
+                                .help("Resume or focus the selected session (⌘Return)")
+                            Button("Fork") { model.act(fork: true) }.help("Fork the selected conversation (⌘⇧Return)")
                             if model.acting { ProgressView().controlSize(.small) }
                         }.disabled(!model.canAct)
+                        Text(model.liveConversations.contains(selected.id)
+                             ? "Return to the running conversation, or fork a separate conversation."
+                             : "Continue this conversation in the workspace, or fork a separate one.")
+                            .font(.caption).foregroundStyle(.secondary)
                         if let notice = model.actionNotice { Text(notice).font(.callout).textSelection(.enabled) }
                         if let error = model.transcriptError {
                             WorkspaceNotice(message: error, kind: .error, action: { model.loadTranscript() })
@@ -113,10 +127,10 @@ struct WorkspaceHistoryView: View {
                                     Text(model.matchingMessages.isEmpty ? "No matches in conversation prose" : "Matching message \(model.matchIndex + 1) of \(model.matchingMessages.count)")
                                         .font(.caption).foregroundStyle(.secondary)
                                     Button { model.moveMatch(-1) } label: { Image(systemName: "chevron.up") }
-                                        .help("Previous matching message").accessibilityLabel("Previous matching message")
+                                        .help("Previous matching message (⌘⇧G)").accessibilityLabel("Previous matching message")
                                         .disabled(model.reading || model.matchingMessages.isEmpty)
                                     Button { model.moveMatch(1) } label: { Image(systemName: "chevron.down") }
-                                        .help("Next matching message").accessibilityLabel("Next matching message")
+                                        .help("Next matching message (⌘G)").accessibilityLabel("Next matching message")
                                         .disabled(model.reading || model.matchingMessages.isEmpty)
                                 }
                             }
@@ -137,13 +151,13 @@ struct WorkspaceHistoryView: View {
                                                         Text(date.formatted()).font(.caption).foregroundStyle(.secondary)
                                                     }
                                                 }
-                                                Text(WorkspaceHighlight.text(message.text.reveal(), terms: transcript.matchTerms))
-                                                    .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                                                WorkspaceTranscriptText(text: message.text.reveal(), terms: transcript.matchTerms)
                                             }.id(index)
                                         }
                                     }.scrollTargetLayout().padding(8)
                                 }
                                 .scrollPosition(id: $visibleMessage, anchor: .top)
+                                .onChange(of: visibleMessage) { _, message in model.rememberVisibleMessage(message) }
                                 .onChange(of: model.scrollRequest) { _, request in
                                     if let request { proxy.scrollTo(request.message, anchor: .top) }
                                 }
@@ -155,5 +169,24 @@ struct WorkspaceHistoryView: View {
                 }.padding(12).frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
             }
         }.padding(12)
+            .onAppear { focus = .search }
+            .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
+    }
+    private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        if modifiers == .command {
+            switch key {
+            case "f": focus = .search
+            case "g": model.moveMatch(1)
+            case "\r": model.act(fork: false)
+            default: return false
+            }
+        } else if modifiers == [.command, .shift] {
+            switch key {
+            case "g": model.moveMatch(-1)
+            case "\r": model.act(fork: true)
+            default: return false
+            }
+        } else { return false }
+        return true
     }
 }

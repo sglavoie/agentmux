@@ -1301,7 +1301,7 @@ func TestAcceptanceRepeatedTopologyFailuresRetainTheListAndThenRecover(t *testin
 	// Once the frozen tree is older than the daemon's own staleness threshold,
 	// the row says how old it has become.
 	s.advance(protocol.KittySnapshotStaleAfter)
-	if frame := s.frame(); !strings.Contains(frame, "Kitty refresh delayed") {
+	if frame := s.frame(); !strings.Contains(frame, "Session refresh delayed") {
 		t.Fatalf("a tree frozen past the stale threshold is not reported as delayed:\n%s", frame)
 	}
 
@@ -1346,7 +1346,7 @@ func TestAcceptanceAColdOutageNamesTheErrorAndStillOwesTheSourcePane(t *testing.
 
 	for round := 1; round <= 3; round++ {
 		s.deliver(jobTopology)
-		if frame := s.frame(); !strings.Contains(frame, "Kitty error: "+outage.Error()) {
+		if frame := s.frame(); !strings.Contains(frame, "Session refresh failed: "+outage.Error()) {
 			t.Fatalf("cold outage round %d does not name the failure:\n%s", round, frame)
 		}
 		if s.m.loaded {
@@ -1364,7 +1364,7 @@ func TestAcceptanceAColdOutageNamesTheErrorAndStillOwesTheSourcePane(t *testing.
 		t.Fatalf("first successful read selected index %d and source tab %d, want top-left and source tab %d",
 			s.m.selected, s.m.sourceTabID, acceptanceTabID(9))
 	}
-	if frame := s.frame(); strings.Contains(frame, "Kitty error") {
+	if frame := s.frame(); strings.Contains(frame, "Session refresh failed") {
 		t.Fatalf("the recovered frame still names the outage:\n%s", frame)
 	}
 	if got := s.targetWindows(); !sameInts(got, windowRange(0, 4)) {
@@ -1622,8 +1622,8 @@ func TestAcceptanceAClosedSessionLeavesTheTreeAndIsRestoredByUndo(t *testing.T) 
 		t.Fatal("a confirmed close left nothing to undo")
 	}
 	// The offer is on the FEEDBACK row rather than the footer: `u` is real for
-	// five seconds and the footer would otherwise advertise it forever.
-	if frame := s.frame(); !strings.Contains(frame, "u undo") {
+	// thirty seconds and the footer would otherwise advertise it forever.
+	if frame := s.frame(); !strings.Contains(frame, "u relaunch") {
 		t.Fatalf("the frame does not offer the undo:\n%s", frame)
 	}
 
@@ -1942,7 +1942,7 @@ func TestAcceptanceWithConfirmationOffACloseRunsAtOnceAndStillOffersTheUndo(t *t
 	if !s.m.recoverable() {
 		t.Fatal("a prompt-free close left nothing to undo")
 	}
-	if frame := s.frame(); !strings.Contains(frame, "u undo") {
+	if frame := s.frame(); !strings.Contains(frame, "u relaunch") {
 		t.Fatalf("the frame does not offer the undo:\n%s", frame)
 	}
 
@@ -2012,7 +2012,7 @@ func TestAcceptanceClosingTheHostingTabWarnsAndOffersNoUndo(t *testing.T) {
 	if s.m.recoverable() {
 		t.Fatal("the hosting tab's close was offered an undo this process could not survive to run")
 	}
-	if frame := s.frame(); strings.Contains(frame, "u undo") {
+	if frame := s.frame(); strings.Contains(frame, "u relaunch") {
 		t.Fatalf("the frame offers an undo for the hosting tab:\n%s", frame)
 	}
 	if frame := s.frame(); !strings.Contains(frame, "closed "+acceptanceProject(1)) {

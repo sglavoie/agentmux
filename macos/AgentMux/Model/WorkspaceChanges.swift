@@ -73,10 +73,13 @@ final class WorkspaceChangesModel: ObservableObject {
     private var target: [String] = []
     private var generation = 0
     private var patchGeneration = 0
+    let reviewState: WorkspaceReviewState
+    private var originalTarget: [String] = []
 
-    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent()) {
+    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), defaults: UserDefaults? = nil) {
         self.command = command
         self.runner = runner
+        reviewState = WorkspaceReviewState(defaults: defaults)
     }
 
     var landingReason: String? {
@@ -94,7 +97,7 @@ final class WorkspaceChangesModel: ObservableObject {
         guard !landing else { return }
         target = ["--runtime-session", runtimeSessionID]
         changes = nil
-        base = "HEAD"
+        restoreComparison()
         refresh()
     }
 
@@ -102,8 +105,21 @@ final class WorkspaceChangesModel: ObservableObject {
         guard !landing else { return }
         target = ["--directory", directory]
         changes = nil
-        base = "HEAD"
+        restoreComparison()
         refresh()
+    }
+
+    private func restoreComparison() {
+        originalTarget = target
+        let saved = reviewState.comparison(target)
+        base = saved?.base ?? "HEAD"
+        selectedFile = saved?.file
+    }
+
+    private func saveComparison() {
+        let value = WorkspaceReviewState.Comparison(base: base, file: selectedFile)
+        reviewState.saveComparison(value, target: target)
+        reviewState.saveComparison(value, target: originalTarget)
     }
 
     func refresh() {
@@ -140,6 +156,7 @@ final class WorkspaceChangesModel: ObservableObject {
         patchGeneration += 1
         let sequence = patchGeneration
         selectedFile = file
+        saveComparison()
         patch = SecretText()
         patchError = nil
         truncated = false

@@ -1,265 +1,103 @@
 # Agent Mux
 
-Session manager for **Claude Code**, **GitHub Copilot CLI**, and
-**OpenAI Codex**, in any terminal. Agents run on a private tmux server of its
-own, so they outlive the terminal that started them; `amx` in a terminal
-emulator and the macOS workspace (`Agent Mux.app`) both list, show, and answer
-them. It groups live sessions and configured launch targets,
-preserves transcript and plan history, supports continuity handoffs, keeps per-profile
-isolated homes (`CLAUDE_CONFIG_DIR`, `COPILOT_HOME`, `CODEX_HOME`); and uses an
-always-on local daemon to own each session's durable state. Harness hooks are
-thin, fire-and-forget event clients. Kitty is an optional backend: sessions can
-run as Kitty tabs instead, and nothing else needs it.
+Manage Claude Code, GitHub Copilot CLI, and OpenAI Codex sessions from one
+terminal dashboard or the macOS workspace. Agents run on a private tmux
+server and keep running when you close the terminal or app. Kitty is an
+optional backend.
 
-The binary is **`amx`**.
+Agent Mux groups sessions by project and profile, shows which agents need you,
+searches past conversations and plans, and supports resume, fork, handoff,
+and managed Git worktrees. It can also start and supervise prepared
+`agent-session-loop` plans.
 
-## What it does
+## First session
 
-- manages multiple configured projects from one Bubble Tea dashboard,
-- shows every live session at once as a grid of live pane previews (`F2`, or
-  `amx overview`),
-- supports multiple harness profiles side by side,
-- gives each project a default profile, but lets you override it for one launch,
-- searches filesystem-backed Past Sessions and Plans without a database,
-- creates standalone handoff files and manages Git worktrees through safe reopen,
-  cleanup, branch-retention, and metadata-recovery workflows,
-- syncs hook commands into each profile so each session's icon tracks agent state,
-- starts an `agent-session-loop` run of a ready plan from the Plans view, and
-  answers, resumes, stops, and aborts in-flight runs from the `A` cockpit view,
-- keeps the Kitty tab workflow intact for sessions launched there
-  ([Kitty](#kitty-optional)).
+Requires Go 1.26+, [just](https://github.com/casey/just), tmux 3.5+ on `PATH`,
+and an installed agent CLI. On macOS, native notifications additionally need
+[alerter](https://github.com/vjeantet/alerter) 26.x+ when enabled. The optional
+macOS app bundles tmux.
 
-The everyday commands beyond the dashboard (`amx`):
+From this checkout:
 
-| Command | What it does |
-| --- | --- |
-| `amx overview` | grid of every live session (`F2`) |
-| `amx open-dashboard` | focus the dashboard, opening it in a new tab (Kitty) or as a popup over the attached terminal (tmux) if absent |
-| `amx project list` / `launch` | list configured projects; launch one in a new tab |
-| `amx session list` / `search` / `show` / `continue` / `fork` / `handoff` | conversation continuity |
-| `amx session activity --json` | recorded transitions, exits, and ASL events; `--days` and `--limit` bound retained history |
-| `amx session changes --directory PATH` / `--runtime-session ID` | checkout-wide changes; `--base REF` selects the comparison and `--file PATH` includes its diff |
-| `amx worktree list` / `reopen` / `diff` / `land` / `remove` / `prune` | managed Git worktrees: reopen, review, land by fast-forward, clean up |
-| `amx plans run` | start an `agent-session-loop` run of a ready plan under a supervising agent (`R` in Plans); `--check` reports readiness only |
-| `amx mute-toggle` | mute or unmute a session's notifications |
-| `amx notifications` / `snooze` / `test` | say where notifications go and whether they are snoozed; show, set, or clear the snooze; test notifications |
-| `amx daemon status` / `restart` | the always-on daemon |
-| `amx doctor --strict` | installation and daemon health |
-| `amx config init` / `edit` / `validate` | configuration |
-
-Most take `--json` and answer with the schema-v1 envelope.
-
-## Prerequisites
-
-- Go 1.26+
-- tmux 3.5 or newer on `PATH` (`brew install tmux`). `Agent Mux.app` bundles
-  its own, so an installation that only launches from the app needs none.
-- [`just`](https://github.com/casey/just) for the provided build/install tasks
-- [`alerter`](https://github.com/vjeantet/alerter) 26.x or newer on macOS when
-  any native notification is enabled (`brew install vjeantet/tap/alerter`)
-- `agent-session-loop` (optional) for the `A` cockpit view. Without it, Agent
-  Mux behaves exactly as it did before the integration existed. Install or
-  upgrade it *before* upgrading Agent Mux; a bridge that is missing or speaks
-  an older protocol is reported as unavailable, never driven. Run
-  `amx config asl-sync` once after installing both halves: the daemon is spawned
-  detached and does not inherit your shell's `PATH`, so pairing resolves the
-  executable and persists an absolute path.
-
-## Install
-
-```bash
-git clone <repo-url> ~/path/to/agent-mux
-cd ~/path/to/agent-mux
+```sh
 just install
+amx config edit
 ```
 
-This builds `amx`, copies it to `~/.local/bin/amx`, and seeds
-`~/.config/agent-mux/config.toml` with a starter config if it does not already
-exist. It creates and links nothing of Kitty's. `just uninstall` stops the
-daemon and removes the binary (and the Kitty snippet, if one was linked); it
-leaves `config.toml` and everything under `~/.local/share/agent-mux`.
-
-Then say where launches go. In `~/.config/agent-mux/config.toml`:
+Installation puts `amx` in `~/.local/bin` and creates a starter configuration
+at `~/.config/agent-mux/config.toml` if none exists. Ensure `~/.local/bin` is on
+your `PATH`. In the configuration, set the launch destination:
 
 ```toml
 [defaults]
 launch_backend = "tmux"
 ```
 
-and check it with `amx backend status --check`. The dashboard started in a
-terminal that is not Kitty launches on tmux without the setting; the setting is
-what makes `amx project launch`, `amx session continue`, and the other
-commands do the same. Left unset, `launch_backend` still means Kitty, so a
-configuration written for Kitty keeps working; that default moves to tmux once
-the desktop trial ([Daily-driver trial](docs/daily-driver-trial.md)) has passed.
+Adapt a starter `[[profiles]]` entry to an agent you have installed and
+authenticated, then point a `[[projects]]` entry at your checkout and that
+profile. [Profile setup](docs/operations.md#harness-profiles) explains isolated
+homes and authentication.
 
-Run `amx` for the dashboard. `Enter` on a session attaches this terminal to
-it; `F12` detaches and comes back. Attached, `F1` lists the keys the private
-tmux configuration binds: `F2` the live overview, `F4` the next session that
-needs you, `F7`/`F9` the previous and next session, `Ctrl+Shift+D` the
-dashboard as a popup. `amx attach <runtime-session-id>` attaches from any
-shell. See [Usage](docs/usage.md).
-
-`just install` replaces the `amx` binary, and the daemon restarts itself the
-next time a hook or CLI command reaches it and finds it older than the binary
-(`amx daemon restart` does it now), so a new behavior is live without
-reloading anything.
-
-### Kitty (optional)
-
-Kitty is a second backend, for sessions that run as Kitty tabs. Nothing above
-needs it. To use it:
-
-```bash
-just install-kitty    # links agent-mux.conf into ~/.config/kitty/
+```sh
+amx config validate
+amx config hooks-sync
+amx backend status --check
+amx
 ```
 
-Your `kitty.conf` must include:
+Press `:` and choose **Open Launcher**, highlight your project, and press `Enter`.
+The launcher shows the destination and effective profile. `Enter` on the live
+session attaches; `F12` detaches back to the dashboard. Attached, `F1` shows
+the shortcuts and `F2` opens the live overview.
 
-```conf
-allow_remote_control yes
-listen_on unix:/tmp/kitty-{kitty_pid}
-include agent-mux.conf
+An unset command-line backend still means Kitty for compatibility. Explicitly
+setting `launch_backend = "tmux"` keeps launches consistent across terminals.
+The app's Launch Project preference is separate and shown in its menu;
+[launch destination rules](docs/usage.md#launch-destinations) explain precedence.
+The default will change only after the [daily-driver trial](docs/daily-driver-trial.md).
+
+## Everyday use
+
+| Task | Entry point |
+| --- | --- |
+| Find sessions needing input | Dashboard, or `F4` while attached |
+| See every live pane | `F2` or `amx overview` |
+| Resume or fork a conversation | `s` for project history, `S` for all history |
+| Read an action failure | `:` → **Show Action Feedback**; notices remain until dismissed |
+| Work with plans and worktrees | `:` → **Search Plans** or **Manage Worktrees** |
+| Check installation health | `amx doctor --strict` |
+
+See [Usage](docs/usage.md) for navigation, filtering, continuity, worktrees,
+and CLI examples.
+
+## macOS workspace (optional)
+
+With macOS 14+ and Xcode, after installing `amx`:
+
+```sh
+just mac-install
 ```
 
-and launches go there with `launch_backend = "kitty"` (or unset, for now) or
-`--backend kitty`. `just kitty-smoke`, run from a Kitty window, checks the
-installed `amx` against that Kitty.
+Agent Mux.app shows sessions in a native workspace with embedded terminals,
+conversation history, checkout changes, and run controls. Closing the app
+leaves agents running. See [the companion guide](docs/companion-app.md) for
+setup and [macOS build instructions](macos/README.md) for development.
 
-The `listen_on unix:` socket matters for more than the dashboard: it is the only
-endpoint the detached daemon can dial. Kitty hands a `launch
---allow-remote-control` child (such as the F8 keybinding) a process-local
-`fd:N` descriptor in `KITTY_LISTEN_ON`, which is meaningless to any other
-process. Agent Mux normalizes that `fd:N` back to `unix:/tmp/kitty-<kitty_pid>`
-before forwarding it, and never persists or dials a raw `fd:` endpoint. If the
-`listen_on` line is missing, the daemon cannot reach Kitty from a hook fired by
-such a child.
+## Kitty (optional)
 
-Reload Kitty. The bundled config keeps the dashboard hotkey and tab-navigation
-bindings, including `F2` for the live session overview,
-`F4` for the next attention tab, `F8` to clear the current tab's markers and
-state icons, `F11` to mark the current tab active (`⚡` until its next real
-hook event, the end of a turn observed after the mark, `F8`, or the usual
-ten-minute staleness), and `F7`/`F9` for
-previous or next managed tabs. On macOS, `F11` reaches Kitty only with
-"Use F1, F2, etc. keys as standard function keys" enabled or as `fn`+`F11`;
-otherwise the system takes it for Show Desktop.
-It also disables Kitty tab bell markers and audible bells for any Kitty
-instance that includes the snippet, so Agent Mux's tab icons remain the
-attention signal. `F1` opens the same binding reference from inside Kitty, and
-it is generated from the catalog the snippet itself is generated from, so the
-two cannot disagree about what a key does.
+Use `just install-kitty` and follow [Kitty setup](docs/operations.md#kitty-optional).
+Its bindings include `F2` for the live session overview and
+`F4` for the next attention tab. Reload Kitty after changing bindings.
 
-Reloading matters for bindings and nothing else: a new or changed
-**keybinding** only reaches a running Kitty once that instance reloads its
-configuration (`Ctrl+Shift+F5`, or restart Kitty). Upgrading from a
-release without `F2` is exactly that case: `amx overview` works from any shell
-straight away, but the key does nothing until Kitty has re-read the snippet.
+## Maintenance and reference
 
-### Menu bar companion (optional, macOS)
-
-`Agent Mux.app` puts the live sessions and their attention counts in the menu
-bar, focuses a session from a row or a global shortcut, shows the daemon's
-notifications as native banners, and answers ASL supervisor questions. It
-needs macOS 14+ and Xcode, and `amx` installed first:
-
-```bash
-just install
-just mac-install    # Release build into /Applications, then relaunch
-```
-
-The app needs no Kitty: Launch Project starts agents in its own workspace
-window. To focus sessions that run as Kitty tabs, Kitty needs
-`allow_remote_control yes` and `listen_on unix:/tmp/kitty`. See [Menu bar companion](docs/companion-app.md) for
-permissions, shortcuts, and troubleshooting, and
-[`macos/README.md`](macos/README.md) for building and signing.
-
-### Upgrading the pair
-
-Agent Mux and `agent-session-loop` are released as a pair, and the install order
-is part of the contract: **ASL first, then Agent Mux**. The Agent Mux install
-restarts the daemon, and a daemon restarted against a stale ASL says nothing
-about whether the two halves agree.
-
-```bash
-just verify-asl-install        # in the ASL checkout, after installing it
-just install-restart-smoke     # in this checkout
-just cockpit-smoke             # from any terminal; needs tmux, not Kitty
-amx config asl-sync --check
-```
-
-`install-restart-smoke` stages the binary beside its destination and renames it
-into place, so there is no window where `amx` is absent or half-copied, and a
-running daemon keeps its already-open executable. It then restarts the daemon,
-waits for `ready: true` (and, when ASL is required, for the bridge handshake that
-follows it), and gates on `amx doctor --strict`, which verifies that
-the CLI and the daemon are the same artifact by hash and revision.
-
-`just update` does the same and also syncs the hook files
-(`amx config hooks-sync`) and rebuilds and reinstalls the menu bar app (it needs
-Xcode). It installs `amx` and the app before restarting the daemon, so
-`amx doctor --strict` checks the app's bundled `amx` against the daemon too.
-It is the one command to run after pulling or committing in this checkout, and
-it runs from any terminal: restarted outside Kitty, the daemon keeps the Kitty
-its predecessor was reading, and with no Kitty running it is ready without one.
-
-A pairing preflight refuses whole-root if a live run still carries state the new
-build cannot pair with, naming each run. Let those runs finish rather than
-migrating around them.
-
-Cutting an actual release — as opposed to reinstalling one — runs
-`just paired-release-gate asl_root=… signing_key=…`, which performs all of the
-above plus both full suites and produces a signed evidence record and annotated
-tags in both repositories. See
-[Paired releases](docs/paired-releases.md) for the procedure, the
-evidence schema, how to verify a record's signature, and how to roll back.
-
-## Harness profiles
-
-A profile name is a unique launch identity, not a display label. Each project
-stores the profile it should launch by default, and one-time launcher overrides
-target another profile by this same `name`. If you use the same account or
-project family across harnesses, give each harness variant its own ID, such as
-`vta` for Claude and `vta-codex` for Codex.
-
-### Claude Code
-
-Claude profiles launch `claude` and export `CLAUDE_CONFIG_DIR=<home_dir>`.
-
-### GitHub Copilot CLI
-
-Copilot profiles launch `copilot` and export `COPILOT_HOME=<home_dir>`.
-
-Authenticate each Copilot profile inside its own home:
-
-```bash
-COPILOT_HOME=~/.copilot-work copilot login
-```
-
-That keeps auth, settings, hooks, permissions, and session history isolated per
-profile.
-
-### OpenAI Codex
-
-Codex profiles launch `codex` and export `CODEX_HOME=<home_dir>`.
-
-Agent Mux syncs Codex lifecycle hooks into `$CODEX_HOME/hooks.json`. The sample
-Codex profile in `amx config init` includes
-`--dangerously-bypass-hook-trust` so Codex will run the managed hook commands;
-remove or override it if you prefer a different trust flow.
-
-## Documentation
-
-The detailed guides are organized by operational area:
-
-- [Dashboard, launcher, managed worktrees, past sessions, plans, and filtering](docs/usage.md)
-- [Harness hook setup and event contracts](docs/hooks.md)
-- [Daemon lifecycle, routing, diagnostics, and privacy](docs/daemon.md)
-- [Watchdog, tab icons, and stop confirmation](docs/watchdog.md)
-- [Menu bar companion (macOS)](docs/companion-app.md)
-- [Configuration commands and the operator index](docs/operations.md)
+- [Updates, paired ASL installation, and profile setup](docs/operations.md)
+- [Troubleshooting](docs/troubleshooting.md) and [daemon diagnostics](docs/daemon.md)
+- [Harness hooks](docs/hooks.md) and [watchdog state](docs/watchdog.md)
+- [ASL integration](docs/asl-integration.md) and [paired releases](docs/paired-releases.md)
 - [Build and test](docs/testing.md)
-- [agent-session-loop rollout](docs/asl-integration.md)
-- [Paired releases](docs/paired-releases.md)
 - [Screen classifier health](docs/screen-classifier-health.md)
-- [Troubleshooting](docs/troubleshooting.md)
+
+`just uninstall` stops the daemon and removes the binary; configuration and
+session data remain. `just mac-uninstall` removes the app and leaves agents
+running unless explicitly asked to end them.

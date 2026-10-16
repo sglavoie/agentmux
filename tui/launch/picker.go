@@ -20,6 +20,7 @@ import (
 // charging the root footer and the sticky status bar is app orchestration: the
 // launcher does not know how many lines the footer reflowed to.
 type PickerInput struct {
+	Destination string
 	// Sessions is the configured project list in launcher order (profile,
 	// then normalized title). Every index-keyed map below is keyed by an
 	// index into this slice, which is why pinning re-partitions FilteredIdx
@@ -141,6 +142,9 @@ func (in PickerInput) RenderList(height int) string {
 		}
 	}
 	header := "Launch Sessions"
+	if in.Destination != "" {
+		header += " → " + in.Destination
+	}
 	if selectedCount > 0 {
 		header += fmt.Sprintf("  [%d selected]", selectedCount)
 	}

@@ -57,6 +57,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         try png.write(to: directory.appendingPathComponent(name + ".png"))
         let recognition = VNRecognizeTextRequest()
         recognition.recognitionLevel = .accurate
+        recognition.minimumTextHeight = 0.005
         try VNImageRequestHandler(cgImage: capture).perform([recognition])
         let visible = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         XCTAssertGreaterThan(visible.count, 40, "Capture must contain rendered content, not just a window frame")
@@ -95,8 +96,17 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         model.open(directory: "/Projects/api")
         XCTAssertEqual(model.changes?.files.count, 2)
         XCTAssertFalse(model.patch.isEmpty)
-        try await render(WorkspaceChangesView(model: model), name: "changes", expected: ["Checkout Changes", "cursor", "Next Hunk"])
-        try await render(WorkspaceChangesView(model: model), name: "changes-dark-minimum", width: 720, height: 450, dark: true, expected: ["Checkout Changes", "Next Hunk"])
+        try await render(WorkspaceChangesView(model: model), name: "changes", expected: ["Checkout Changes", "cursor", "Open in editor"])
+        try await render(WorkspaceChangesView(model: model), name: "changes-dark-minimum", width: 720, height: 450, dark: true, expected: ["Checkout Changes", "Open in editor"])
+    }
+
+    func testRichTranscriptAtMinimumSize() async throws {
+        let prose = "# Pagination review\nUse **bounded pages** and `next_cursor`.\n\n- Preserve the existing ordering.\n- Return a cursor only when more results exist.\n\n```go\nfunc next_cursor(page Page) string {\n    return page.Cursor\n}\n```\n\n## Verification\n1. Empty results remain empty.\n2. A second page never repeats a record.\n\n" + String(repeating: "Long transcripts remain selectable and scrollable.\n\n", count: 40)
+        for dark in [false, true] {
+            try await render(ScrollView { WorkspaceTranscriptText(text: prose, terms: ["next_cursor"]).padding(16) },
+                             name: "transcript-rich-\(dark)", width: 720, height: 450, dark: dark,
+                             expected: ["Pagination review", "next_cursor", "Copy code", "return page.Cursor"])
+        }
     }
 }
 
@@ -125,6 +135,9 @@ extension WorkspaceWorkflowPreviewTests {
             inspector.show(.init(waiting: [completed, question]))
             inspector.onContext = { _, done in done(SecretText("Should the endpoint keep the existing cursor format?")) }
             inspector.toggleContext(question)
+            try await render(PreviewNativeView(view: inspector).padding(12), name: "waiting-action-\(dark ? "dark" : "light")",
+                             width: 340, height: 560, dark: dark,
+                             expected: ["Needs a decision", "Answer", "Should the endpoint"])
             var changed = question
             changed.contextVersion = "two"
             inspector.show(.init(waiting: [completed, changed]))
@@ -211,7 +224,7 @@ extension WorkspaceWorkflowPreviewTests {
                 try await render(WorkspaceHistoryView(model: history), name: "history-\(suffix)", width: 720, height: 450, dark: dark,
                                  expected: ["Conversation History", "Search"] + notice + historyContent)
                 try await render(WorkspaceChangesView(model: changes), name: "changes-\(suffix)", width: 720, height: 450, dark: dark,
-                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["Next Hunk"]))
+                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["Open in editor"]))
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
                                  expected: ["Since Last Looked", "Mark shown read"] + notice + (state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,
@@ -225,4 +238,19 @@ private struct PreviewNativeView<T: NSView>: NSViewRepresentable {
     let view: T
     func makeNSView(context: Context) -> T { view }
     func updateNSView(_ nsView: T, context: Context) {}
+}
+
+extension WorkspaceWorkflowPreviewTests {
+    func testPlanChoicesPreview() async throws {
+        let amx = command { args in
+            if args.first == "project" { return #"[{"title":"API","profile":"work","directory":"/Projects/api"}]"# }
+            return #"[{"name":"work","harness":"claude"},{"name":"review-only","harness":"codex"}]"#
+        }
+        let model = WorkspaceRunPlanModel(command: { amx }, runner: PreviewRunner())
+        model.plan = "/Plans/Improve session review"
+        for dark in [false, true] {
+            try await render(WorkspaceRunPlanView(model: model), name: "plan-choices-\(dark)", width: 720, height: 640, dark: dark,
+                             expected: ["Project", "Supervisor", "Infer from plan workspace", "Use project default", "Launch in workspace", "Check Readiness"])
+        }
+    }
 }

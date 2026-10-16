@@ -782,14 +782,14 @@ func TestAConfirmedCloseIsOfferedAnUndoAndRelaunches(t *testing.T) {
 		t.Fatal("a confirmed close left nothing to undo")
 	}
 	offer := m.feedback()
-	if !strings.HasPrefix(offer, "closed ") || !strings.Contains(offer, "u undo (5s)") {
+	if !strings.HasPrefix(offer, "closed ") || !strings.Contains(offer, "u relaunch (30s)") {
 		t.Fatalf("the feedback row says %q, want the undo offer", offer)
 	}
 	// The offer is on the FEEDBACK row and nowhere else. A close is undoable for
-	// five seconds; a permanent footer entry would go on naming `u` for the rest
+	// thirty seconds; a permanent footer entry would go on naming `u` for the rest
 	// of the session, which is the advertised-but-dead key this surface is not
 	// allowed to have.
-	if !strings.Contains(frameOf(m), "u undo (5s)") {
+	if !strings.Contains(frameOf(m), "u relaunch (30s)") {
 		t.Fatalf("the frame does not carry the undo offer:\n%s", frameOf(m))
 	}
 	if hints := hintRowOf(m); strings.Contains(hints, "undo") {
@@ -850,7 +850,7 @@ func TestAFailedRelaunchIsOfferedAgainForWhatWasLeftOfItsWindow(t *testing.T) {
 		t.Fatal("a failed relaunch consumed the recovery; there is nothing left to retry")
 	}
 	// The released entry is back on the offer, so the failure has to displace the
-	// offer rather than sit under it: redrawing "closed X · u undo" here would be
+	// offer rather than sit under it: redrawing "closed X · u relaunch" here would be
 	// exactly what a dropped keystroke looks like.
 	got := m.feedback()
 	if !strings.Contains(got, "launch failed") {
@@ -863,7 +863,7 @@ func TestAFailedRelaunchIsOfferedAgainForWhatWasLeftOfItsWindow(t *testing.T) {
 	// It expires with the window the close started, not with a fresh one.
 	r.now = r.now.Add(sessionactions.RecoveryWindow + time.Second)
 	if m.recoverable() {
-		t.Fatal("the retry was granted a fresh five seconds")
+		t.Fatal("the retry was granted a fresh thirty seconds")
 	}
 }
 
@@ -887,9 +887,9 @@ func TestReviewRecoveryRetryFeedbackDeadline(t *testing.T) {
 
 		// `u` late in the window, and the launch fails with half a second of it
 		// left.
-		r.now = confirmedAt.Add(4 * time.Second)
+		r.now = confirmedAt.Add(sessionactions.RecoveryWindow - time.Second)
 		m = press(t, m, "u")
-		r.now = confirmedAt.Add(4500 * time.Millisecond)
+		r.now = confirmedAt.Add(sessionactions.RecoveryWindow - 500*time.Millisecond)
 		m = only(t, m, recoveryDoneMsg{
 			request: r.relaunchRequests[0],
 			label:   r.relaunches[0].Label,
@@ -933,12 +933,12 @@ func TestReviewRecoveryRetryFeedbackDeadline(t *testing.T) {
 		m = closeSelected(t, m, r)
 		confirmedAt := r.now
 
-		r.now = confirmedAt.Add(4 * time.Second)
+		r.now = confirmedAt.Add(sessionactions.RecoveryWindow - time.Second)
 		m = press(t, m, "u")
 		// The launch takes two seconds to fail, which is one second past the
 		// deadline the claim was made under. The entry is released onto an offer
 		// that has already expired.
-		r.now = confirmedAt.Add(6 * time.Second)
+		r.now = confirmedAt.Add(sessionactions.RecoveryWindow + time.Second)
 		m = only(t, m, recoveryDoneMsg{
 			request: r.relaunchRequests[0],
 			label:   r.relaunches[0].Label,
@@ -985,7 +985,7 @@ func TestReviewRecoveryRetryFeedbackDeadline(t *testing.T) {
 
 		// The first relaunch fails a second past ITS deadline, while the second
 		// close stays recoverable for another second.
-		r.now = confirmedAt.Add(6 * time.Second)
+		r.now = confirmedAt.Add(sessionactions.RecoveryWindow + time.Second)
 		m = only(t, m, recoveryDoneMsg{
 			request: r.relaunchRequests[0],
 			label:   r.relaunches[0].Label,
@@ -1003,7 +1003,7 @@ func TestReviewRecoveryRetryFeedbackDeadline(t *testing.T) {
 		if strings.Contains(got, "retry") {
 			t.Fatalf("the feedback row says %q, want no retry for the lapsed entry", got)
 		}
-		if !strings.Contains(got, "u undo") || !strings.Contains(got, restorable.Label) {
+		if !strings.Contains(got, "u relaunch") || !strings.Contains(got, restorable.Label) {
 			t.Fatalf("the feedback row says %q, want the offer naming %q — the close `u` would actually take", got, restorable.Label)
 		}
 		// And it takes exactly that one.
@@ -1056,7 +1056,7 @@ func TestOnlyAConfirmedCloseIsRecoverable(t *testing.T) {
 }
 
 // TestClosingTheHostingTabIsNeverRecoverable. Closing it takes the grid, the
-// feedback row, and the five seconds the offer would have lasted with it, so an
+// feedback row, and the thirty seconds the offer would have lasted with it, so an
 // offer made there is an affordance that dies before it can be used.
 func TestClosingTheHostingTabIsNeverRecoverable(t *testing.T) {
 	sessions := viewSessions(3)
@@ -1066,7 +1066,7 @@ func TestClosingTheHostingTabIsNeverRecoverable(t *testing.T) {
 	if m.recoverable() {
 		t.Fatal("closing the hosting tab was offered an undo")
 	}
-	if strings.Contains(m.feedback(), "u undo") {
+	if strings.Contains(m.feedback(), "u relaunch") {
 		t.Fatalf("the feedback row offers an undo: %q", m.feedback())
 	}
 }
@@ -1083,7 +1083,7 @@ func TestAnExpiredOfferIsWithdrawn(t *testing.T) {
 	if m.recoverable() {
 		t.Fatal("the offer outlived its window")
 	}
-	if strings.Contains(m.feedback(), "u undo") {
+	if strings.Contains(m.feedback(), "u relaunch") {
 		t.Fatalf("the feedback row still offers the expired undo: %q", m.feedback())
 	}
 	m = press(t, m, "u")
@@ -1193,7 +1193,7 @@ func TestAnEmptyGridKeepsItsHelpItsExitAndItsRecovery(t *testing.T) {
 			t.Fatalf("the empty grid lost the %q hint:\n%s", hint, frame)
 		}
 	}
-	if got := m.feedback(); !strings.Contains(got, "u undo") {
+	if got := m.feedback(); !strings.Contains(got, "u relaunch") {
 		t.Fatalf("the empty grid says %q, want the recovery offer it still holds", got)
 	}
 

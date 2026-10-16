@@ -334,6 +334,17 @@ func LaunchesInKitty() bool {
 	return Portable.Launch == "" || Portable.Launch == runtimesession.BackendKitty
 }
 
+// LaunchDestination names the backend the effect layer will actually use.
+func LaunchDestination() string {
+	if LaunchesInKitty() {
+		return "Kitty"
+	}
+	if Portable.Desktop != nil {
+		return "workspace (tmux)"
+	}
+	return "tmux"
+}
+
 // portableSessions lists the sessions on the portable backends, each carrying
 // its process-local ID as both tab and window ID.
 //

@@ -4,6 +4,8 @@ import SwiftUI
 /// Also embeddable beside an agent in the workspace's second pane.
 struct WorkspaceChangesView: View {
     @ObservedObject var model: WorkspaceChangesModel
+    private enum Focus: Hashable { case base, files }
+    @FocusState private var focus: Focus?
     @State private var hunk: Int?
     @State private var jumpSequence = 0
     @State private var confirmedTree: WorkspaceWorktreeReview.Review?
@@ -16,8 +18,9 @@ struct WorkspaceChangesView: View {
                 Text("Includes changes from every session using this checkout.").font(.caption).foregroundStyle(.secondary)
             }
             HStack {
-                TextField("Comparison base", text: $model.base).textFieldStyle(.roundedBorder).onSubmit { model.refresh() }
-                Button("Compare") { model.refresh() }.disabled(model.loading || model.landing)
+                TextField("Comparison base", text: $model.base).focused($focus, equals: .base).textFieldStyle(.roundedBorder).onSubmit { model.refresh() }
+                    .help("Compare against a branch or commit. ⌘⇧E focuses this field.")
+                Button("Compare") { model.refresh() }.help("Refresh comparison (⌘R)").disabled(model.loading || model.landing)
             }
             if model.loading { WorkspaceLoading(title: "Comparing checkout…", retained: model.changes != nil) }
             if let error = model.error {
@@ -29,7 +32,7 @@ struct WorkspaceChangesView: View {
                 HStack {
                     VStack(alignment: .leading) {
                         Text("\(tree.branch ?? "Worktree") → \(tree.sourceBranch)").font(.headline)
-                        Text("\(tree.ahead) ahead · \(tree.behind) behind · \(tree.lands)").font(.caption)
+                        Text("\(tree.ahead) ahead · \(tree.behind) behind · \(WorkspaceWording.status(tree.lands))").font(.caption)
                         ForEach(tree.warnings ?? [], id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
                         ForEach(tree.conflicts ?? [], id: \.self) { Text("Conflict: \($0)").font(.caption).foregroundStyle(.red) }
                     }
@@ -52,18 +55,21 @@ struct WorkspaceChangesView: View {
                                         .font(.caption).foregroundStyle(.secondary)
                                 }.tag(file.path)
                             }
-                        }.frame(minWidth: 150, idealWidth: 220, maxWidth: 240)
+                        }.focused($focus, equals: .files).frame(minWidth: 150, idealWidth: 220, maxWidth: 240)
+                            .help("Changed files (⌘⇧F)")
                         VStack(alignment: .leading) {
                             HStack {
                                 Text(model.selectedFile ?? "Select a changed file").font(.headline).lineLimit(1).help(model.selectedFile ?? "")
                                 Spacer()
-                                Button("Open in editor") { model.openFile() }.disabled(model.selectedFile == nil)
+                                Button("Open in editor") { model.openFile() }.help("Open the selected file (⌘E)").disabled(model.selectedFile == nil)
                             }
                             HStack {
                                 Text("\(model.diff.hunks.count) \(model.diff.hunks.count == 1 ? "hunk" : "hunks")").font(.caption).foregroundStyle(.secondary)
                                 Spacer()
-                                Button("Previous Hunk") { moveHunk(-1) }
-                                Button("Next Hunk") { moveHunk(1) }
+                                Button { moveHunk(-1) } label: { Image(systemName: "chevron.up") }
+                                    .help("Previous hunk (⌘⇧G)").accessibilityLabel("Previous hunk")
+                                Button { moveHunk(1) } label: { Image(systemName: "chevron.down") }
+                                    .help("Next hunk (⌘G)").accessibilityLabel("Next hunk")
                             }.disabled(model.reading || model.patchError != nil || model.diff.hunks.isEmpty)
                             if model.reading { WorkspaceLoading(title: "Loading diff…") }
                             if let error = model.patchError {
@@ -72,7 +78,7 @@ struct WorkspaceChangesView: View {
                             if model.truncated { Text("Diff truncated at 2 MiB. Open the file for the full contents.").foregroundStyle(.orange) }
                             WorkspaceDiffView(diff: model.diff, identity: model.diffIdentity,
                                               loading: model.reading || model.patchIdentity != model.diffIdentity,
-                                              jump: hunk, jumpSequence: jumpSequence)
+                                              jump: hunk, jumpSequence: jumpSequence, reviewState: model.reviewState)
                                 .opacity(model.patchIdentity == model.diffIdentity ? 1 : 0)
                                 .onChange(of: model.diffIdentity) { _, _ in hunk = nil }
                                 .onChange(of: model.diff) { _, _ in hunk = nil }
@@ -85,6 +91,8 @@ struct WorkspaceChangesView: View {
             }
             Spacer(minLength: 0)
         }.padding(12)
+            .onAppear { focus = .files }
+            .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
             .alert("Land onto \(confirmedTree?.sourceBranch ?? "the source branch")?",
                    isPresented: Binding(get: { confirmedTree != nil }, set: { if !$0 { confirmedTree = nil } })) {
                 Button("Cancel", role: .cancel) { confirmedTree = nil }
@@ -96,6 +104,25 @@ struct WorkspaceChangesView: View {
                 Text("Fast-forward the source branch to the committed work in \(confirmedTree?.path ?? "this worktree"). The checkout must be clean and inactive. The worktree and its branch are retained.")
             }
     }
+    private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        if modifiers == .command {
+            switch key {
+            case "r": if !model.loading && !model.landing { model.refresh() }
+            case "e": model.openFile()
+            case "g": if !model.reading && model.patchError == nil { moveHunk(1) }
+            default: return false
+            }
+        } else if modifiers == [.command, .shift] {
+            switch key {
+            case "g": if !model.reading && model.patchError == nil { moveHunk(-1) }
+            case "f": focus = .files
+            case "e": focus = .base
+            default: return false
+            }
+        } else { return false }
+        return true
+    }
+
     private func moveHunk(_ delta: Int) {
         let count = model.diff.hunks.count
         guard count > 0 else { return }
@@ -119,7 +146,9 @@ final class WorkspaceChangesWindow: NSObject, NSWindowDelegate {
             window.minSize = NSSize(width: 720, height: 450)
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.contentView = NSHostingView(rootView: WorkspaceChangesView(model: model))
+            let host = WorkspaceReviewHost(rootView: WorkspaceChangesView(model: model))
+            host.closesWindow = true
+            window.contentView = host
             window.setFrameAutosaveName("WorkspaceChanges")
             window.center()
             self.window = window

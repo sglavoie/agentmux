@@ -46,7 +46,8 @@ const (
 // State is everything the form holds. It is replaced wholesale when the form
 // closes.
 type State struct {
-	Active bool
+	Destination string
+	Active      bool
 	// Plan is the plan the form was opened on. It is never rewritten while
 	// the form is open, so a refresh cannot retarget a run.
 	Plan plans.PlanMeta
@@ -277,6 +278,9 @@ func render(state State, width int) string {
 		}
 	}
 	add(styleHeader, "Run "+state.PlanTitle())
+	if state.Destination != "" {
+		add(styleDim, "Launch in "+state.Destination)
+	}
 	if state.Plan.CWD != "" {
 		add(styleDim, "in "+state.Plan.CWD)
 	}

@@ -18,6 +18,13 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
         }
     }
 
+    var destination: String { launchesInWorkspace ? "workspace (tmux)" : "Kitty" }
+
+    func explanation(cliBackend: String?) -> String {
+        let cli = cliBackend == "tmux" ? "tmux" : cliBackend == "kitty" ? "Kitty" : "unknown (check amx backend status)"
+        return "Launch Project uses \(destination). This app preference overrides config.toml for that action. Command-line launches use \(cli) unless --backend overrides it. Run a Plan always uses the workspace."
+    }
+
     /// Whether a launch goes to the workspace. What happens to be running
     /// never decides it.
     var launchesInWorkspace: Bool {

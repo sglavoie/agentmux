@@ -629,7 +629,7 @@ var retiredDashboardKeys = []string{
 	// Session actions, now entries in the `a` overlay.
 	"e", "r", "c", "C", "x", "X", "o", "O", "y", "L", "m",
 	// Surfaces, now palette entries. `u` is not among them: undo came back to
-	// the dashboard because the affordance it reaches lasts five seconds, which
+	// the dashboard because the affordance it reaches lasts thirty seconds, which
 	// is not long enough to open a palette and type a command name. It keeps its
 	// palette entry too — the key is the fast route, not the only one.
 	"P", "W", "A", "T", "d", "v", "R", "f", "b",

@@ -6,6 +6,24 @@ import Foundation
 /// Only the place is kept, never a program: restoring it shows a session that
 /// is still running and never starts one that is not.
 struct WorkspaceRestoration: Equatable {
+    enum Pane: Codable, Equatable {
+        case session(String)
+        case utility(WorkspaceUtilityView)
+        case review(String)
+    }
+    struct Layout: Codable, Equatable {
+        var active: Pane
+        var other: Pane?
+        var activeOnRight: Bool
+        var fraction: Double? = nil
+    }
+    static let layoutKey = "amxWorkspaceLayout"
+    var layout: Layout?
+
+    static func saveLayout(_ layout: Layout?, to defaults: UserDefaults = .standard) {
+        if let layout, let data = try? JSONEncoder().encode(layout) { defaults.set(data, forKey: layoutKey) }
+        else { defaults.removeObject(forKey: layoutKey) }
+    }
     /// Something the pane can be restored to.
     enum Place: Equatable {
         /// A session the workspace embeds.
@@ -87,6 +105,7 @@ struct WorkspaceRestoration: Equatable {
 
     static func load(from defaults: UserDefaults = .standard) -> WorkspaceRestoration {
         WorkspaceRestoration(
+            layout: defaults.data(forKey: layoutKey).flatMap { try? JSONDecoder().decode(Layout.self, from: $0) },
             windowOpen: defaults.bool(forKey: windowOpenKey),
             place: defaults.string(forKey: placeKey).flatMap(Place.init(encoded:)),
             conversation: defaults.string(forKey: conversationKey).flatMap(ConversationIdentity.init(encoded:)),

@@ -142,7 +142,7 @@ final class WorkspacePolishInteractionTests: XCTestCase {
         let inspector = WorkspaceInspectorView()
         inspector.show(.init(waiting: [completed, question]))
         XCTAssertEqual(inspector.visibleWaiting.map(\.key), [question.key, completed.key])
-        XCTAssertTrue(inspector.lines.flatMap(\.subviews).compactMap { ($0 as? NSTextField)?.stringValue }.contains("NEEDS A DECISION (1)"))
+        XCTAssertTrue(inspector.lines.flatMap(\.subviews).compactMap { ($0 as? NSTextField)?.stringValue }.contains("Needs a decision (1)"))
         inspector.onContext = { _, done in done(SecretText("Read this before answering")) }
         inspector.toggleContext(question)
         inspector.show(.init(waiting: [newer, completed, question]))

@@ -102,6 +102,12 @@ agent needs that cannot be typed.
 
 ## Keeping the log
 
+For polish feedback, record the task, the hesitation or repeated navigation,
+and the recovery effort (extra steps or time). Include whether the launch
+destination was clear, whether failures remained readable, and whether History
+and Changes could be used by keyboard. Rank recurring friction above isolated
+cosmetic preferences; these observations do not replace the required trial cases.
+
 One entry per workday in
 `docs/acceptance/ghostty-desktop/session-20/trial-log.md`, written that day:
 the date, what was used, and every point of friction or failure, with what was

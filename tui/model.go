@@ -368,6 +368,11 @@ type Model struct {
 
 	// transient status messages + launch-progress bookkeeping
 	toasts                   []Toast
+	toastTicking             bool
+	feedbackOffset           int
+	feedbackSelected         uint64
+	nextNoticeID             uint64
+	feedbackReturnMode       Mode
 	launchBatchID            int
 	launchBatchDone          int
 	launchBatchErrors        int
@@ -641,6 +646,7 @@ const (
 	ModeASLRuns                // agent-session-loop active and actionable runs
 	ModeASLResponse            // answer editor and closure buttons for one ASL question
 	ModeProjectSwitcher        // overlay choosing the dashboard's project scope
+	ModeFeedback               // retained action outcomes
 	ModeHealth                 // scrollable details for every health check, from cached facts
 	ModeSend                   // text and keys for one tmux session, sent without attaching
 	ModePlanRun                // choices for starting an agent-session-loop run of one plan

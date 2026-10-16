@@ -53,7 +53,7 @@ func TestTheWindowStartsAtConfirmationRatherThanDispatch(t *testing.T) {
 
 	justBefore := confirmedAt.Add(sessionactions.RecoveryWindow - time.Millisecond)
 	if len(r.Available(justBefore)) != 1 {
-		t.Fatal("entry expired before five seconds had passed since the confirmation")
+		t.Fatal("entry expired before thirty seconds had passed since the confirmation")
 	}
 	if len(r.Available(confirmedAt.Add(sessionactions.RecoveryWindow))) != 0 {
 		t.Fatal("entry outlived its deadline")

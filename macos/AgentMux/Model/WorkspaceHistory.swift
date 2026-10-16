@@ -107,10 +107,35 @@ final class WorkspaceHistoryModel: ObservableObject {
     private var scrollSequence = 0
     private var loadedQuery = ""
     private var pendingSearch: DispatchWorkItem?
+    private let reviewState: WorkspaceReviewState
+    private(set) var visibleMessage: Int?
 
-    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent()) {
+    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), defaults: UserDefaults? = nil) {
         self.command = command
         self.runner = runner
+        reviewState = WorkspaceReviewState(defaults: defaults)
+        if let saved = reviewState.history {
+            query = saved.query
+            scope = WorkspaceHistoryScope(rawValue: saved.scope) ?? .all
+            includeAutomated = saved.automated
+            project = saved.project
+            currentConversation = saved.conversation.flatMap(ConversationIdentity.init(encoded:))
+            selection = saved.selection
+            visibleMessage = saved.message.flatMap { $0 >= 0 ? $0 : nil }
+            loadedQuery = saved.resultsQuery ?? saved.query
+        }
+    }
+
+    func rememberVisibleMessage(_ message: Int?) {
+        guard let message, let transcript, (transcript.start..<transcript.end).contains(message) else { return }
+        visibleMessage = message
+        saveReview()
+    }
+
+    private func saveReview() {
+        reviewState.history = .init(query: query, scope: scope.rawValue, automated: includeAutomated,
+                                    project: project, conversation: currentConversation?.encoded,
+                                    selection: selection, message: visibleMessage, resultsQuery: loadedQuery)
     }
 
     var selected: WorkspaceHistoryEntry? { entries.first { $0.id == selection } }
@@ -133,9 +158,9 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     func open(project: String, conversation: ConversationIdentity?) {
-        self.project = project
-        currentConversation = conversation
-        if scope == .project && project.isEmpty || scope == .conversation && conversation == nil { scope = .all }
+        if !project.isEmpty { self.project = project }
+        if let conversation { currentConversation = conversation }
+        if scope == .project && self.project.isEmpty || scope == .conversation && currentConversation == nil { scope = .all }
         search()
     }
 
@@ -165,6 +190,7 @@ final class WorkspaceHistoryModel: ObservableObject {
 
     func search() {
         pendingSearch?.cancel()
+        saveReview()
         searchGeneration += 1
         let generation = searchGeneration
         error = nil
@@ -203,14 +229,18 @@ final class WorkspaceHistoryModel: ObservableObject {
 
     func select(_ id: String?) {
         if selection == id, loadedQuery == resultsQuery, transcript != nil { return }
+        let anchor = selection == id && loadedQuery == resultsQuery ? visibleMessage : nil
         selection = id
+        visibleMessage = anchor
         loadedQuery = resultsQuery
         transcript = nil
         transcriptError = nil
         actionNotice = nil
         matchIndex = 0
         scrollRequest = nil
-        loadTranscript()
+        saveReview()
+        if let anchor { readWindow(from: max(0, anchor - 20), anchor: anchor) }
+        else { loadTranscript() }
     }
 
     func loadEarlier(anchor: Int? = nil) {
@@ -251,7 +281,7 @@ final class WorkspaceHistoryModel: ObservableObject {
                         matchTerms: value.matchTerms, focusMessage: value.focusMessage)
                 } else { self.transcript = value }
                 if let focus = value.focusMessage, let index = value.matchMessages.firstIndex(of: focus) { self.matchIndex = index }
-                if let anchor { self.scroll(to: anchor) }
+                if let anchor, value.total > 0 { self.scroll(to: min(anchor, value.total - 1)) }
                 else if let focus = value.focusMessage { self.scroll(to: focus) }
             }
         }
@@ -268,6 +298,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     func close() {
+        saveReview()
         pendingSearch?.cancel()
         searchGeneration += 1
         transcriptGeneration += 1
@@ -275,6 +306,5 @@ final class WorkspaceHistoryModel: ObservableObject {
         reading = false
         transcript = nil
         entries = []
-        selection = nil
     }
 }

@@ -51,6 +51,17 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
     let active: Host
     let other: Host
     private var arrangement: Int?
+    var onResize: (() -> Void)?
+    var fraction: Double? {
+        guard arrangedSubviews.count == 2, bounds.width > 0 else { return nil }
+        return Double(arrangedSubviews[0].frame.width / bounds.width)
+    }
+    func restoreFraction(_ fraction: Double) {
+        guard fraction.isFinite, arrangedSubviews.count == 2 else { return }
+        let position = CGFloat(min(0.9, max(0.1, fraction))) * bounds.width
+        setPosition(min(max(Self.minimumPaneWidth, position), max(Self.minimumPaneWidth, bounds.width - Self.minimumPaneWidth - dividerThickness)), ofDividerAt: 0)
+    }
+    func splitViewDidResizeSubviews(_ notification: Notification) { onResize?() }
 
     init(active: NSView, other: NSView) {
         self.active = Host(body: active)

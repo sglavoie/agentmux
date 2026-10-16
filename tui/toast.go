@@ -1,4 +1,4 @@
-// This file is the root's transient feedback: the toast queue that reports what
+// This file is the root's action feedback: the toast queue that reports what
 // an action is doing and what became of it, and the close recovery those reports
 // offer.
 //
@@ -24,8 +24,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -48,34 +48,38 @@ const (
 // sticky status bar always sees the most recent active action first.
 const maxToasts = 3
 
-// defaultToastTTL is the lifetime of a transient toast. Progress toasts
-// reuse this so a stalled launch chain still clears itself eventually.
+// defaultToastTTL is the lifetime of a success or informational toast.
 const defaultToastTTL = 4 * time.Second
 
-// progressToastTTL is the lifetime of in-flight progress toasts — short
-// enough that an abandoned launch doesn't linger, long enough that the
-// per-launch tick (kitten @ launch is sub-second) won't TTL mid-flight.
+// progressToastTTL is the threshold for explaining that an operation is
+// still waiting. It never turns a missing result into success or failure.
 const progressToastTTL = 10 * time.Second
 
 // toastTickInterval drives the TTL sweeper. Coarse enough to avoid waking
 // the runloop too often, fine enough that visible expiry is snappy.
 const toastTickInterval = 250 * time.Millisecond
 
-// Toast is a transient message shown through the sticky status bar.
+// Toast is an operation notice shown through the status bar and feedback panel.
 type Toast struct {
+	NoticeID uint64
+	Occurred time.Time
+	Target   sessionactions.Target
 	Severity toastSeverity
 	Text     string
 	Expires  time.Time
 	// id ties a toast to a logical channel (e.g., a launch batch) so a
 	// follow-up push can replace the existing toast instead of stacking
 	// alongside it. Zero means "not addressable" — the toast is purely
-	// transient.
+	// uncorrelated.
 	id int
+	// Persistent notices survive until dismissed or replaced by their outcome.
+	Persistent bool
+	// Pending turns its deadline into a delayed-operation notice, never success.
+	Pending bool
 }
 
-// toastTickMsg fires on toastTickInterval while at least one toast is
-// alive. Handler sweeps expired toasts and re-arms the ticker if any
-// remain.
+// toastTickMsg fires while a toast has a deadline. Persistent notices alone
+// do not wake the event loop.
 type toastTickMsg struct{}
 
 // launchProgressMsg reports the result of a single picker-launched
@@ -95,48 +99,80 @@ func toastTickCmd() tea.Cmd {
 	})
 }
 
-// pushToast appends t to m.toasts, capping at maxToasts (newest on top).
-// Returns a cmd that arms the toast tick when the list transitions from
-// empty to non-empty; otherwise nil (the existing tick handles TTL).
-func (m *Model) pushToast(t Toast) tea.Cmd {
-	if t.Expires.IsZero() {
+// prepareToast chooses persistence by severity while keeping close recovery
+// on its independent deadline.
+func (m *Model) prepareToast(t Toast) Toast {
+	if t.NoticeID == 0 {
+		m.nextNoticeID++
+		t.NoticeID = m.nextNoticeID
+	}
+	if t.Occurred.IsZero() {
+		t.Occurred = modelNow(*m)
+	}
+	if t.id != undoCloseToastID && (t.Severity == toastError || t.Severity == toastWarning) {
+		t.Persistent = true
+	}
+	if t.Persistent && !t.Pending {
+		t.Expires = time.Time{}
+	} else if t.Expires.IsZero() {
 		t.Expires = modelNow(*m).Add(defaultToastTTL)
 	}
-	wasEmpty := len(m.toasts) == 0
-	// Newest on top: prepend and trim.
-	m.toasts = append([]Toast{t}, m.toasts...)
-	if len(m.toasts) > maxToasts {
-		m.toasts = m.toasts[:maxToasts]
+	return t
+}
+
+func (m *Model) armToastTick() tea.Cmd {
+	if m.toastTicking {
+		return nil
 	}
-	if wasEmpty {
-		return toastTickCmd()
+	for _, t := range m.toasts {
+		if !t.Expires.IsZero() {
+			m.toastTicking = true
+			return toastTickCmd()
+		}
 	}
 	return nil
 }
 
-// replaceToastByID replaces (or pushes) a toast carrying the given id.
-// Used for progress toasts so successive "Launched 1/N · …" updates
-// share one logical channel rather than stacking. Replacements move to the
-// top so the sticky status bar treats the update as the latest transient.
-// id == 0 means "not addressable" so the toast is appended as a fresh
-// transient entry instead of merging with whatever happens to sit in the slot.
-func (m *Model) replaceToastByID(id int, t Toast) tea.Cmd {
-	if t.Expires.IsZero() {
-		t.Expires = modelNow(*m).Add(defaultToastTTL)
+func (m *Model) pushToast(t Toast) tea.Cmd {
+	t = m.prepareToast(t)
+	// Only transient successes/information are capped. Dropping an unresolved
+	// failure when another action finishes would hide precisely what we retain.
+	kept := []Toast{t}
+	transient := 0
+	if !t.Persistent && !t.Pending {
+		transient++
 	}
-	t.id = id
-	if id != 0 {
-		for i := range m.toasts {
-			if m.toasts[i].id == id {
-				if i == 0 {
-					m.toasts[0] = t
-					return nil
-				}
-				copy(m.toasts[1:i+1], m.toasts[0:i])
-				m.toasts[0] = t
-				return nil
+	for _, old := range m.toasts {
+		if !old.Persistent && !old.Pending {
+			transient++
+			if transient > maxToasts {
+				continue
 			}
 		}
+		kept = append(kept, old)
+	}
+	m.toasts = kept
+	return m.armToastTick()
+}
+
+// An outcome replaces only the operation that produced it, including a delayed
+// notice. Unrelated successful actions cannot clear a retained failure.
+func (m *Model) replaceToastByID(id int, t Toast) tea.Cmd {
+	t.id = id
+	if id != 0 {
+		for _, previous := range m.toasts {
+			if previous.id == id {
+				t.NoticeID = previous.NoticeID
+				if t.Occurred.IsZero() {
+					t.Occurred = previous.Occurred
+				}
+				if !t.Target.HasSession {
+					t.Target = previous.Target
+				}
+				break
+			}
+		}
+		m.clearToastByID(id)
 	}
 	return m.pushToast(t)
 }
@@ -154,9 +190,8 @@ func (m *Model) clearToastByID(id int) {
 	m.toasts = kept
 }
 
-// sweepToasts drops every toast whose TTL has elapsed. Returns a cmd
-// re-arming the tick when any toast is still alive; nil otherwise so the
-// ticker quiesces when nothing is on screen.
+// sweepToasts expires transient notices and turns overdue operations into
+// retained notices. The ticker stops when no deadline remains.
 //
 // Both this and clearToastByID filter into a fresh array rather than compacting
 // with `m.toasts[:0]`. The model is copied by value on every update, so a
@@ -164,18 +199,21 @@ func (m *Model) clearToastByID(id int) {
 // stale one a pending command still holds included, which would see a toast it
 // never dropped replaced by a later one.
 func (m *Model) sweepToasts() tea.Cmd {
+	m.toastTicking = false
 	now := modelNow(*m)
 	kept := make([]Toast, 0, len(m.toasts))
 	for _, t := range m.toasts {
-		if now.Before(t.Expires) {
+		if t.Expires.IsZero() || now.Before(t.Expires) {
+			kept = append(kept, t)
+		} else if t.Pending {
+			t.Text = "Still waiting: " + t.Text
+			t.Persistent = true
+			t.Expires = time.Time{}
 			kept = append(kept, t)
 		}
 	}
 	m.toasts = kept
-	if len(m.toasts) == 0 {
-		return nil
-	}
-	return toastTickCmd()
+	return m.armToastTick()
 }
 
 // undoCloseToastID is the addressable id shared by every close-recovery toast.
@@ -188,11 +226,6 @@ const undoCloseToastID = -1
 // enforces and the lifetime of the toast advertising it have to be the same
 // number or the affordance outlives what it offers.
 const undoWindow = sessionactions.RecoveryWindow
-
-// undoWindowText is how the window is spelled on the toast. It is derived from
-// the window rather than typed beside it, so a toast cannot go on promising five
-// seconds after the stack starts granting some other number.
-var undoWindowText = fmt.Sprintf("%ds", int(undoWindow/time.Second))
 
 // actionFeedbackToastID gives one dispatch its own addressable toast channel, so
 // the in-flight message can be replaced by the outcome instead of stacking
@@ -215,9 +248,8 @@ func actionFeedbackToastID(request sessionactions.RequestID) int {
 // copied there and then edited in one place.
 
 // beginActionFeedback reports that a dispatched action is in flight. The toast
-// lives on the dispatch's own channel, so the outcome replaces it rather than
-// piling on top of it, and it carries the progress TTL so an operation that
-// never reports back still clears itself.
+// lives on the dispatch's own channel, so a late outcome replaces even an
+// overdue notice without clearing unrelated failures.
 func (m *Model) beginActionFeedback(request sessionactions.RequestID, action commands.ID, label, profile string) tea.Cmd {
 	wording, ok := sessionactions.FeedbackFor(action, label, profile)
 	if !ok {
@@ -230,6 +262,7 @@ func (m *Model) beginActionFeedback(request sessionactions.RequestID, action com
 	return m.replaceToastByID(actionFeedbackToastID(request), Toast{
 		Severity: toastInfo,
 		Text:     wording.Pending,
+		Pending:  request.Valid(),
 		Expires:  modelNow(*m).Add(ttl),
 	})
 }
@@ -240,6 +273,7 @@ func (m *Model) beginActionFeedback(request sessionactions.RequestID, action com
 // closeWithToast, because it also reserves the recovery.
 func (m *Model) withActionFeedback(d sessionactions.Dispatch, cmd tea.Cmd) tea.Cmd {
 	feedback := m.beginActionFeedback(d.Request, d.Action, sessionLabel(d.Target), d.Profile)
+	m.setFeedbackTarget(d.Request, d.Target)
 	if feedback == nil {
 		return cmd
 	}
@@ -269,6 +303,7 @@ func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
 		return nil
 	}
 	return m.replaceToastByID(id, Toast{
+		Target:   result.Target,
 		Severity: outcomeSeverity(result.Outcome),
 		Text:     text,
 		Expires:  modelNow(*m).Add(defaultToastTTL),
@@ -311,7 +346,18 @@ func (m *Model) closeWithToast(rs session.RunningSession, request sessionactions
 	if c := m.beginActionFeedback(request, commands.CloseSession, dashboard.SessionDisplayTitle(rs), ""); c != nil {
 		cmds = append(cmds, c)
 	}
+	m.setFeedbackTarget(request, sessionactions.Capture(rs))
 	return tea.Batch(cmds...)
+}
+
+func (m *Model) setFeedbackTarget(request sessionactions.RequestID, target sessionactions.Target) {
+	toasts := append([]Toast(nil), m.toasts...)
+	for i := range toasts {
+		if toasts[i].id == actionFeedbackToastID(request) {
+			toasts[i].Target = target
+		}
+	}
+	m.toasts = toasts
 }
 
 // recoverySnapshot reconstructs what a relaunch of rs would need, before the
@@ -320,7 +366,7 @@ func (m *Model) closeWithToast(rs session.RunningSession, request sessionactions
 // It answers false in two cases, and both mean "there will be no recovery to
 // offer". A profile that is not in the loaded configuration has no launch path.
 // And the tab this dashboard is itself running in takes the dashboard with it:
-// the surface that would show the undo, and the five seconds it would last, both
+// the surface that would show the undo, and the 30 seconds it would last, both
 // end with the close.
 func (m Model) recoverySnapshot(rs session.RunningSession) (sessionactions.Snapshot, bool) {
 	if m.actionHost.Hosts(sessionactions.Capture(rs)) {
@@ -334,10 +380,13 @@ func (m Model) recoverySnapshot(rs session.RunningSession) (sessionactions.Snaps
 	if !ok {
 		return sessionactions.Snapshot{}, false
 	}
+	identity, _ := conversation.New(rs.Harness, rs.HarnessSessionID)
 	return sessionactions.Snapshot{
-		Session: session.SessionFromRunning(rs),
-		Account: account,
-		Label:   dashboard.SessionDisplayTitle(rs),
+		Conversation: identity,
+		Backend:      rs.Backend,
+		Session:      session.SessionFromRunning(rs),
+		Account:      account,
+		Label:        dashboard.SessionDisplayTitle(rs),
 	}, true
 }
 
@@ -402,13 +451,14 @@ func (m *Model) refreshRecoveryToast(now time.Time) tea.Cmd {
 // would be offering something already gone.
 func (m *Model) undoToastText() string {
 	active := m.recovery.Available(modelNow(*m))
+	remaining := fmt.Sprintf("%ds", m.recovery.SecondsRemaining(modelNow(*m)))
 	switch len(active) {
 	case 0:
 		return ""
 	case 1:
-		return fmt.Sprintf("closed %s · %s undo (%s)", active[0].Label, keyUndoClose, undoWindowText)
+		return fmt.Sprintf("closed %s · %s %s (%s)", active[0].Label, keyUndoClose, active[0].Verb(), remaining)
 	default:
-		return fmt.Sprintf("closed %d sessions · %s undo last (%s)", len(active), keyUndoClose, undoWindowText)
+		return fmt.Sprintf("closed %d sessions · %s %s last (%s)", len(active), keyUndoClose, active[len(active)-1].Verb(), remaining)
 	}
 }
 
@@ -470,13 +520,12 @@ func (m *Model) undoLastCmd() tea.Cmd {
 		return m.refreshRecoveryToast(now)
 	}
 
-	sess := claimed.Snapshot.Session
 	label := claimed.Snapshot.Label
 	request := claimed.Request
 	cfg := m.cfg
 	client := m.client
 	launch := func() tea.Msg {
-		_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(client, cfg), actions.Launch, actions.Request{Project: &sess})
+		err := commands.RecoverClosed(context.Background(), commands.TerminalDependencies(client, cfg), claimed.Snapshot.Session, claimed.Snapshot.Conversation, claimed.Snapshot.Backend)
 		return recoveryDoneMsg{request: request, label: label, err: err}
 	}
 

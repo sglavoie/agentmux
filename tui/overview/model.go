@@ -56,7 +56,7 @@
 // cannot see.
 //
 // And a close made here is recoverable here: `u` relaunches a CONFIRMED close
-// for five seconds, from a recovery stack this program holds itself (the
+// for thirty seconds, from a recovery stack this program holds itself (the
 // Recovery type tui/sessionactions declares for both surfaces), and the tab
 // the overview is itself running in is never offered, because closing it
 // takes the grid and the offer with it.

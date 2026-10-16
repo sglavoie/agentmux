@@ -32,6 +32,11 @@ struct WorkspacePlanRunResult: Decodable {
     }
 }
 
+struct LaunchProfileChoice: Decodable, Equatable {
+    let name: String
+    let harness: String
+}
+
 @MainActor
 final class WorkspaceRunPlanModel: ObservableObject {
     @Published var isPresented = false
@@ -47,6 +52,11 @@ final class WorkspaceRunPlanModel: ObservableObject {
     @Published private(set) var notice: String?
     @Published private(set) var checkedArguments: [String]?
     @Published private(set) var submitted: Set<String> = []
+    @Published private(set) var projects: [ProjectEntry] = []
+    @Published private(set) var profiles: [LaunchProfileChoice] = []
+    @Published private(set) var loadingChoices = false
+    @Published private(set) var choicesLoaded = false
+    @Published private(set) var choicesError: String?
     var onStarted: ((String) -> Void)?
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner
@@ -69,10 +79,57 @@ final class WorkspaceRunPlanModel: ObservableObject {
     var canStart: Bool {
         !checking && !launching && !selector.isEmpty && !submitted.contains(selector)
             && checkedArguments == arguments && preview?.readiness.state == "ready"
+            && !(preview?.project.isEmpty ?? true) && !(preview?.profile.isEmpty ?? true)
+            && projectProblem == nil && profileProblem == nil
+    }
+
+    var selectedProject: ProjectEntry? {
+        projects.first { $0.profile + "/" + $0.title == project }
+    }
+    var projectProblem: String? {
+        guard choicesLoaded, !project.isEmpty else { return nil }
+        guard let selectedProject else { return "Choose a configured project from the list." }
+        if let problem = selectedProject.directoryProblem { return "Project directory \(problem): \(selectedProject.directory)" }
+        return nil
+    }
+    var profileProblem: String? {
+        guard choicesLoaded, !profile.isEmpty else { return nil }
+        return profiles.contains { $0.name == profile } ? nil : "Choose a configured supervisor profile from the list."
+    }
+    var projectLabel: String {
+        if let selectedProject { return "\(selectedProject.title) · \(selectedProject.profile)" }
+        if project.isEmpty, !optionsChanged, let preview, !preview.project.isEmpty { return "\(preview.project) (inferred)" }
+        return project.isEmpty ? "Infer from plan workspace" : project
+    }
+    var profileLabel: String {
+        if !profile.isEmpty { return profile }
+        if let selectedProject { return "\(selectedProject.profile) (project default)" }
+        if !optionsChanged, let preview, !preview.profile.isEmpty { return "\(preview.profile) (inferred)" }
+        return "Use project default"
+    }
+    var destinationSummary: String { "Launch in workspace (tmux) · supervisor: \(profileLabel)" }
+
+    func loadChoices() {
+        guard !loadingChoices else { return }
+        guard let command = command() else { choicesError = "amx is not available."; return }
+        loadingChoices = true
+        runner.run({
+            (ProjectCatalog.fetch(command), command.json([LaunchProfileChoice].self, ["config", "profiles"]).result)
+        }) { [weak self] projects, profiles in
+            guard let self else { return }
+            self.loadingChoices = false
+            switch (projects, profiles) {
+            case let (.success(projects), .success(profiles)):
+                self.projects = projects; self.profiles = profiles
+                self.choicesLoaded = true; self.choicesError = nil
+            case let (.failure(error), _), let (_, .failure(error)):
+                self.choicesError = error.message
+            }
+        }
     }
 
     func check() {
-        guard !checking, !launching, !selector.isEmpty else { return }
+        guard !checking, !launching, !selector.isEmpty, projectProblem == nil, profileProblem == nil else { return }
         guard let command = command() else { notice = "amx is not available."; return }
         let args = arguments
         checking = true; notice = nil; preview = nil; checkedArguments = nil

@@ -14,7 +14,7 @@
 //
 // One refusal is specific to this surface and is worth stating plainly: the tab
 // this overview is running in is never recoverable. Closing it takes the grid,
-// the feedback row, and the five seconds the offer would have lasted with it, so
+// the feedback row, and the 30 seconds the offer would have lasted with it, so
 // an offer made there would be an affordance that dies before it can be used.
 
 package overview
@@ -25,8 +25,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
@@ -61,10 +61,13 @@ func (m model) recoverySnapshot(rs session.RunningSession) (sessionactions.Snaps
 	if !ok {
 		return sessionactions.Snapshot{}, false
 	}
+	identity, _ := conversation.New(rs.Harness, rs.HarnessSessionID)
 	return sessionactions.Snapshot{
-		Session: session.SessionFromRunning(rs),
-		Account: account,
-		Label:   dashboard.SessionDisplayTitle(rs),
+		Conversation: identity,
+		Backend:      rs.Backend,
+		Session:      session.SessionFromRunning(rs),
+		Account:      account,
+		Label:        dashboard.SessionDisplayTitle(rs),
 	}, true
 }
 
@@ -97,7 +100,7 @@ func (m model) applyCloseOutcome(result sessionactions.Result) model {
 // recoverable reports whether `u` would do anything.
 //
 // It used to be what the footer drew a key's availability from, and it is not
-// any more: `u` is off the footer, because a close is undoable for five seconds
+// any more: `u` is off the footer, because a close is undoable for 30 seconds
 // after a confirmed close and a permanent entry would spend a slot on a key that
 // is dim almost always. What is left is the model's own predicate for the state
 // the offer above describes, which is the vocabulary the recovery tests state
@@ -115,13 +118,14 @@ func (m model) recoverable() bool {
 // with the entries it names.
 func (m model) recoveryOffer() string {
 	active := m.acts.recovery.Available(m.deps.now())
+	remaining := fmt.Sprintf("%ds", m.acts.recovery.SecondsRemaining(m.deps.now()))
 	switch len(active) {
 	case 0:
 		return ""
 	case 1:
-		return fmt.Sprintf("closed %s · u undo (%s)", active[0].Label, undoWindowText)
+		return fmt.Sprintf("closed %s · u %s (%s)", active[0].Label, active[0].Verb(), remaining)
 	default:
-		return fmt.Sprintf("closed %d sessions · u undo last (%s)", len(active), undoWindowText)
+		return fmt.Sprintf("closed %d sessions · u %s last (%s)", len(active), active[len(active)-1].Verb(), remaining)
 	}
 }
 
@@ -186,7 +190,6 @@ func (m model) handleRecoveryDone(msg recoveryDoneMsg) (tea.Model, tea.Cmd) {
 // function over the configuration and the client, so nothing it does can depend
 // on where the cursor has moved since the close.
 func relaunchCmd(cfg *config.Config, client kitty.KittyClient, request sessionactions.RequestID, snapshot sessionactions.Snapshot) tea.Cmd {
-	sess := snapshot.Session
 	label := snapshot.Label
 	return func() (msg tea.Msg) {
 		defer func() {
@@ -194,12 +197,7 @@ func relaunchCmd(cfg *config.Config, client kitty.KittyClient, request sessionac
 				msg = recoveryDoneMsg{request: request, label: label, err: fmt.Errorf("restore panicked: %v", r)}
 			}
 		}()
-		_, err := commands.Registry.Execute(
-			context.Background(),
-			commands.TerminalDependencies(client, cfg),
-			actions.Launch,
-			actions.Request{Project: &sess},
-		)
+		err := commands.RecoverClosed(context.Background(), commands.TerminalDependencies(client, cfg), snapshot.Session, snapshot.Conversation, snapshot.Backend)
 		return recoveryDoneMsg{request: request, label: label, err: err}
 	}
 }

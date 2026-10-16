@@ -201,7 +201,7 @@ var helpSections = []struct {
 	}},
 	{"App", []string{
 		"  :         open command palette — every command, searchable",
-		"  u         undo the last confirmed close (five seconds)",
+		"  u         recover last close: resume or relaunch (30 seconds)",
 		"  ?         show / hide this help",
 		"  i         show / hide the session inspector",
 		"  q         quit",

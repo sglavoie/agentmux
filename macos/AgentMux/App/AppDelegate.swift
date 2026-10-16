@@ -207,7 +207,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let controller = workspaceController()
         controller.show()
         if restoration.fullScreen { controller.enterFullScreen() }
-        if let place = restoration.place {
+        if let layout = restoration.layout {
+            controller.restoreLayout(layout, conversation: restoration.conversation)
+        } else if let place = restoration.place {
             controller.restore(place, conversation: restoration.conversation)
         } else {
             controller.showDashboardUnlessPlaced()
@@ -412,6 +414,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let controller = WorkspaceWindowController(delegate: self)
         workspace = controller
         if !Self.isRunningTests {
+            controller.onLayoutChanged = { WorkspaceRestoration.saveLayout($0) }
+            controller.makeRestoredReview = { [weak self] directory in
+                guard let self else { return nil }
+                let model = WorkspaceChangesModel(command: { [weak self] in self?.command }, defaults: .standard)
+                model.onOpenFile = { [weak self] path in
+                    self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
+                }
+                self.paneChanges = model
+                model.open(directory: directory)
+                return .init(view: WorkspaceReviewHost(rootView: WorkspaceChangesView(model: model)),
+                             canClose: { !model.landing }, close: { model.close() }, directory: { model.changes?.root ?? directory })
+            }
             let restoration = WorkspaceRestoration.load()
             // Before anything makes the window, which opens at these widths.
             controller.sidebarWidth = restoration.sidebarWidth.map { CGFloat($0) }
@@ -788,20 +802,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return refuse("Select an embedded session to review its checkout alongside it.")
         }
         guard paneChanges?.landing != true else { return refuse("Wait for the worktree landing to finish.") }
-        let model = WorkspaceChangesModel(command: { [weak self] in self?.command })
+        let model = WorkspaceChangesModel(command: { [weak self] in self?.command }, defaults: .standard)
         model.onOpenFile = { [weak self] path in
             self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
         }
-        let view = NSHostingView(rootView: WorkspaceChangesView(model: model))
+        let view = WorkspaceReviewHost(rootView: WorkspaceChangesView(model: model))
         guard workspace.splitWithReview(view, canClose: { !model.landing }, onClose: { model.close() }) else { return }
         paneChanges = model
+        workspace.reviewDirectory = { model.changes?.root }
         model.open(runtimeSessionID: id)
     }
 
     @objc func showChanges(_ sender: Any?) {
         let workspace = workspaceController()
         workspace.show()
-        let controller = changesWindow ?? WorkspaceChangesWindow(model: WorkspaceChangesModel(command: { [weak self] in self?.command }))
+        let controller = changesWindow ?? WorkspaceChangesWindow(model: WorkspaceChangesModel(command: { [weak self] in self?.command }, defaults: .standard))
         guard !controller.model.landing else { controller.show(); return }
         controller.onVisibilityChanged = { [weak self] visible in
             self?.changesVisible = visible
@@ -877,7 +892,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private func openHistory(conversation: ConversationIdentity?) {
         let workspace = workspaceController()
         workspace.show()
-        let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }))
+        let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }, defaults: .standard))
         controller.onVisibilityChanged = { [weak self] visible in
             self?.historyVisible = visible
             self?.syncActivationPolicy()
@@ -2176,6 +2191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return MenuBuilder.ActionsInput(
             gate: gate,
             dashboardPlace: prefs.dashboardPlace,
+            launchBackend: prefs.launchBackend,
             // Only a shortcut the system took: one refused, taken by another
             // app, or set aside while a recorder listens does nothing.
             dashboardHotKey: dashboardHotKey?.registration.registeredCombo,
@@ -2294,7 +2310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return launchInWorkspace(project, directory: directory, command: command)
         }
         let candidates = newTabCandidates()
-        let arguments = ProjectCatalog.launchArguments(for: project, directory: directory)
+        let arguments = ProjectCatalog.kittyLaunchArguments(for: project, directory: directory)
         let progress = Self.launchingNotice(project.title)
         store.show(notice: progress)
         let change = beginChange(Self.launchingChange(project.title))
@@ -2406,7 +2422,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return
         }
         let candidates = newTabCandidates()
-        let arguments = RecentSessions.continueArguments(for: conversation)
+        let arguments = RecentSessions.continueArguments(for: conversation) + ["--backend", "kitty"]
         launchQueue.async { [weak self] in
             let outcome = KittyTargetedCommand.run(candidates: candidates) { socket in
                 command.json(SessionContinueResult.self, arguments, kittyListenOn: socket,

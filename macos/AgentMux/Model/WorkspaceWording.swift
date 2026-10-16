@@ -1,0 +1,27 @@
+import Foundation
+
+/// Presentation only: protocol strings remain intact in models and decisions.
+enum WorkspaceWording {
+    static func status(_ value: String) -> String {
+        let labels = [
+            "fast_forward": "Ready to land", "nothing_to_land": "Nothing to land",
+            "diverged_clean": "Branches diverged; merge required", "conflicts": "Merge conflicts",
+            "unknown": "Not yet known", "not_ready": "Not ready", "ready": "Ready to run",
+            "running": "Running", "complete": "Complete", "paused": "Paused",
+            "pending": "Pending", "empty": "Not started", "verification-failed": "Verification failed",
+            "waiting_for_input": "Waiting for your answer", "waiting-for-input": "Waiting for your answer"
+        ]
+        if let label = labels[value] { return label }
+        // Unknown protocol values stay visible, with word separators expanded.
+        let words = value.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+        guard let first = words.first else { return "Not recorded" }
+        return first.uppercased() + words.dropFirst()
+    }
+
+    static func relativeTime(_ raw: String, now: Date) -> String {
+        guard let date = WorkspaceActivityEntry.date(raw) else { return "Time unavailable" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: now)
+    }
+}

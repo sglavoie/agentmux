@@ -196,8 +196,8 @@ func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
 	m := testModel()
 	updated, cmd := m.Update(commands.CopyDoneMsg{Err: errors.New("clipboard unavailable")})
 	m = updated.(Model)
-	if cmd == nil {
-		t.Fatal("expected copy error to arm toast tick")
+	if cmd != nil || !m.toasts[0].Persistent {
+		t.Fatal("copy failure should remain visible without an expiry ticker")
 	}
 	assertStatusBarContains(t, m, "copy: clipboard unavailable")
 }

@@ -316,9 +316,9 @@ final class WorkspaceInspectorView: NSView {
     }
 
     private static func heading(_ text: String) -> NSView {
-        let label = NSTextField(labelWithString: text.uppercased())
-        label.font = .systemFont(ofSize: 10, weight: .semibold)
-        label.textColor = .tertiaryLabelColor
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        label.textColor = .secondaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         // The room above a heading sets its section apart.
         let holder = NSView()
@@ -503,15 +503,22 @@ final class WorkspaceWaitingRowView: NSBox {
                                        owner: self, userInfo: nil))
 
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.lineBreakMode = .byWordWrapping
+        titleLabel.maximumNumberOfLines = 2
+        titleLabel.cell?.wraps = true
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
-        detailLabel.lineBreakMode = .byTruncatingTail
+        detailLabel.lineBreakMode = .byWordWrapping
+        detailLabel.maximumNumberOfLines = 2
+        detailLabel.cell?.wraps = true
 
         let text = NSStackView(views: [titleLabel, detailLabel])
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 1
+        let actions = NSStackView()
+        actions.orientation = .horizontal
+        actions.spacing = 8
         let stack = NSStackView(views: [text])
         stack.orientation = .horizontal
         stack.alignment = .centerY
@@ -526,7 +533,8 @@ final class WorkspaceWaitingRowView: NSBox {
             button.refusesFirstResponder = true
             button.setContentHuggingPriority(.required, for: .horizontal)
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
-            stack.addArrangedSubview(button)
+            button.bezelColor = .controlAccentColor
+            actions.addArrangedSubview(button)
             answerButton = button
         }
         text.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -534,6 +542,7 @@ final class WorkspaceWaitingRowView: NSBox {
         contextButton.action = #selector(contextPressed(_:))
         contextButton.controlSize = .small
         contextButton.bezelStyle = .rounded
+        contextButton.isBordered = false
         contextButton.refusesFirstResponder = true
         contextLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         contextLabel.isSelectable = true
@@ -542,7 +551,8 @@ final class WorkspaceWaitingRowView: NSBox {
         contextScroll.hasVerticalScroller = true
         contextScroll.drawsBackground = false
         contextScroll.isHidden = true
-        let column = NSStackView(views: [stack, contextButton, contextScroll])
+        actions.addArrangedSubview(contextButton)
+        let column = NSStackView(views: [stack, actions, contextScroll])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 4
@@ -589,6 +599,7 @@ final class WorkspaceWaitingRowView: NSBox {
         // The button's cell is the element VoiceOver reads.
         answerButton?.setAccessibilityLabel("Answer \(row.title)")
         answerButton?.cell?.setAccessibilityLabel("Answer \(row.title)")
+        contextButton.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
         toolTip = row.toolTip
         setAccessibilityLabel("\(row.title), \(row.detail)")
     }
@@ -602,6 +613,7 @@ final class WorkspaceWaitingRowView: NSBox {
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hit = super.hitTest(point) else { return nil }
         if let answerButton, hit.isDescendant(of: answerButton) { return hit }
+        if hit.isDescendant(of: contextButton) || hit.isDescendant(of: contextScroll) { return hit }
         return self
     }
 
@@ -633,10 +645,12 @@ final class WorkspaceWaitingRowView: NSBox {
         return true
     }
 
-    /// The labels' cells would be said again under the line; only its
-    /// Answer… button is an element of its own.
+    /// Expose the actions and expanded context without repeating the row labels.
     override func accessibilityChildren() -> [Any]? {
-        answerButton.map { NSAccessibility.unignoredChildren(from: [$0]) } ?? []
+        var children: [NSView] = answerButton.map { [$0] } ?? []
+        children.append(contextButton)
+        if !contextScroll.isHidden { children.append(contextScroll) }
+        return NSAccessibility.unignoredChildren(from: children)
     }
 }
 

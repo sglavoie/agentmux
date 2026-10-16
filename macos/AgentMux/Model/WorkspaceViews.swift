@@ -60,8 +60,8 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 /// The keybinding reference and the icon and color pickers are what Kitty
 /// shows as overlays. Here each is a view that takes the pane until its
 /// program ends, and then the pane goes back to where it was.
-struct WorkspaceUtilityView: Equatable {
-    enum Kind: String, Equatable {
+struct WorkspaceUtilityView: Equatable, Codable {
+    enum Kind: String, Equatable, Codable {
         case dashboard, overview, shell, editor, pager, terminal
         /// Past Sessions on one conversation, `harness:session_id`.
         case history

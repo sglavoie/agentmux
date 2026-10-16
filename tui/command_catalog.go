@@ -292,15 +292,31 @@ func applicationCommandDeclarations() []commands.Command[Model] {
 		},
 		{
 			ID: commands.UndoClose, Group: commands.GroupApplication,
-			Title:        commands.StaticTitle[Model]("Undo Last Close"),
-			Description:  "Relaunch the most recently closed session before undo expires.",
-			Aliases:      []string{"restore", "reopen"},
+			Title: func(m Model, _ commands.Context) string {
+				if snapshot, ok := m.recovery.Latest(modelNow(m)); ok && snapshot.Verb() == "resume" {
+					return "Resume Last Closed Conversation"
+				}
+				return "Relaunch Last Closed Session"
+			},
+			Description:  "Resume the exact conversation when known; otherwise relaunch its project. Available for 30 seconds after closing.",
+			Aliases:      []string{"restore", "reopen", "undo last close"},
 			Availability: undoCommandAvailability,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				// Bound first: undoLastCmd claims the entry it relaunches, and
 				// that claim has to be in the model this returns.
 				cmd := m.undoLastCmd()
 				return m, cmd
+			},
+		},
+		{
+			ID: commands.ShowFeedback, Group: commands.GroupApplication,
+			Title:       commands.StaticTitle[Model]("Show Action Feedback"),
+			Description: "Read, copy, or dismiss retained action outcomes and delayed operations.",
+			Aliases:     []string{"errors", "failures", "notices", "waiting"},
+			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
+				m.feedbackReturnMode, m.feedbackOffset, m.mode = m.mode, 0, ModeFeedback
+				m.feedbackSelected = selectedFeedback(m).NoticeID
+				return m, nil
 			},
 		},
 		{

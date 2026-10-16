@@ -109,6 +109,7 @@ enum MenuBuilder {
         var gate = ActionGate()
         /// Where Open Dashboard shows it; only Kitty needs `open-dashboard`.
         var dashboardPlace: DashboardPlacePreference = .workspace
+        var launchBackend: LaunchBackendPreference = .automatic
         /// The global shortcut Open Dashboard shows as its key; nil for none.
         var dashboardHotKey: HotKeyCombo?
         /// The global shortcut Next Waiting Session shows as its key.
@@ -375,7 +376,7 @@ enum MenuBuilder {
 
     static func entries(for submenu: MenuSubmenu, _ input: ActionsInput) -> [MenuEntry] {
         switch submenu {
-        case .projects: return projectEntries(input.projects, missing: input.missingProjectDirectories)
+        case .projects: return [.info("Launch in \(input.launchBackend.destination) · set in app Settings")] + projectEntries(input.projects, missing: input.missingProjectDirectories)
         case .recent: return recentEntries(input)
         case .notifications: return notificationEntries(input)
         }

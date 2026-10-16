@@ -331,14 +331,14 @@ func gridBindings() []gridBinding {
 		},
 		{
 			// u is the one binding that is real and deliberately NOT on the footer.
-			// A close is offered back for five seconds and only after a CONFIRMED
+			// A close is offered back for thirty seconds and only after a CONFIRMED
 			// close, so a permanent `u undo close` entry would spend a footer slot
 			// advertising a key that is dead almost all of the time. The offer is
 			// made where it is true instead — on the feedback row, by recoveryOffer,
 			// which appears when a recovery exists and expires with it.
 			keys:     []string{"u"},
 			helpKeys: "u",
-			help:     "Relaunch the session you just closed. It is offered for five seconds after a confirmed close and is named on the feedback row for exactly that long.",
+			help:     "Recover the last confirmed close within 30 seconds. Resume its exact conversation when known, otherwise relaunch its project; the feedback row names the action.",
 			section:  sectionAct,
 			run:      func(m model, _ string) (tea.Model, tea.Cmd) { return m, m.undoLastClose() },
 		}}

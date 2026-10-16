@@ -152,6 +152,8 @@ func modalBoxRenderer(mode Mode) func(Model) string {
 		return renderPlanRunBox
 	case ModeProjectSwitcher:
 		return renderProjectSwitcherBox
+	case ModeFeedback:
+		return renderFeedbackBox
 	case ModeHealth:
 		return renderHealthBox
 	default:
@@ -258,7 +260,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 // block and letting the box clip it. A narrow reading of it is a complete menu,
 // not a truncated one.
 func modalUsesResponsiveWidth(mode Mode) bool {
-	return mode == ModeConfigPicker || mode == ModeCommandPalette || mode == ModeActions || mode == ModeLiveSessionPicker || mode == ModeASLResponse || mode == ModeHealth || mode == ModeSend || mode == ModePlanRun
+	return mode == ModeConfigPicker || mode == ModeCommandPalette || mode == ModeActions || mode == ModeLiveSessionPicker || mode == ModeASLResponse || mode == ModeFeedback || mode == ModeHealth || mode == ModeSend || mode == ModePlanRun
 }
 
 // popupLineCount returns the number of rows a popup box occupies, matching the
@@ -404,6 +406,8 @@ func uitestModeName(mode Mode) string {
 		return "plan_run"
 	case ModeProjectSwitcher:
 		return "project_switcher"
+	case ModeFeedback:
+		return "feedback"
 	case ModeHealth:
 		return "health"
 	default:

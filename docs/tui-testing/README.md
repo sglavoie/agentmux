@@ -135,6 +135,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 
 | Name | Shape | Purpose |
 | --- | --- | --- |
+| `action_feedback` | two retained failures, one with a captured session | timestamps, selected-notice guidance, and long feedback wrapping |
 | `basic` | two Claude work projects + a Codex personal project | realistic multi-profile dashboard baseline |
 | `actions` | one session with a very long title | stresses the actions menu box width |
 | `asl_question` | `basic` with a human-actionable `❓🔁` supervisor handoff and a `⚡🔁` active run | ASL handoff presentation: attention grouping, gloss, and the `n`/`N` jump that replaced the retired `]q` chord |
@@ -497,6 +498,8 @@ file. The exact inventory is:
 | [`footer-survives-inspector.json`](scenarios/footer-survives-inspector.json) | `project_families` | the inspector shares the screen with the footer rather than displacing it, and the footer is now the only thing naming the key that hides the pane — the header's duplicate hint is gone |
 | [`full-screen-inspector-tab-inert.json`](scenarios/full-screen-inspector-tab-inert.json) | `paused_queue` | a terminal below the split floor opens the inspector over the whole body, and both Tab spellings answer nothing there: the keys stay on the one pane that is drawn, `home` still pauses the output on its first line, the hidden selection has not moved off `charlie`, and the footer withholds `switch pane` rather than naming a move that cannot happen |
 | [`health-details-overlay-narrow.json`](scenarios/health-details-overlay-narrow.json) | `health_states` | the details overlay wraps rather than clips at 62 columns, and `G` reaches the last body line — the configuration reading — instead of stopping a row short of it |
+| [`feedback-wide.json`](scenarios/feedback-wide.json) | `basic` | action feedback opens from the palette and fits a wide terminal |
+| [`feedback-narrow.json`](scenarios/feedback-narrow.json) | `basic` | retained action feedback and its controls fit a narrow terminal |
 | [`health-details-overlay-wide.json`](scenarios/health-details-overlay-wide.json) | `health_states` | the palette opens the full reading for every check at once: a running daemon, drifted hooks whose headline is the aggregate count with its remediation, and a configuration section that says it observed no deprecated keys rather than staying silent |
 | [`health-states-hooks-degraded.json`](scenarios/health-states-hooks-degraded.json) | `health_states` | one refresh tick reduces the two health causes — a live daemon beside hook files that are in sync, drifted, and missing at once — to the single worst reading `✖ hooks drifted` in the header, with the per-check pips and the degraded banner retired to the details overlay |
 | [`held-inspector-resumes-on-new-selection.json`](scenarios/held-inspector-resumes-on-new-selection.json) | `paused_queue` | the same round trip with the selection moved while the split was gone: the widening follows it, so the hold is dropped rather than carried onto another session — no `Paused`, no `output line 01`, and the tail of the new target on screen |
@@ -650,3 +653,5 @@ and the difference is the point rather than a quirk of the detector:
 The synthetic width/height overflow tests still verify that the detector reports
 content that actually exceeds the viewport. Responsive layouts are judged by
 what they render at the available size.
+
+The populated feedback scenarios [`feedback-notices-wide.json`](scenarios/feedback-notices-wide.json) and [`feedback-notices-narrow.json`](scenarios/feedback-notices-narrow.json) use `action_feedback` to verify timestamps, target-specific guidance, and responsive notice layout at 120 and 60 columns.

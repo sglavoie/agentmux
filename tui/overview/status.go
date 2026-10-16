@@ -18,7 +18,7 @@
 //     offer was that it was about the offer.
 //  1. A recoverable close. It outranks even a failed keystroke because it is the
 //     only entry that is IRREVERSIBLY LOST if it is not shown: the offer expires
-//     in five seconds and the session it would restore cannot be reconstructed
+//     in thirty seconds and the session it would restore cannot be reconstructed
 //     afterwards. Everything below it is still true on the next frame.
 //  2. A failed focus, or the report of an action that ran. Both are the outcome
 //     of something the operator just asked for, and nothing the surface could
@@ -71,12 +71,12 @@ func (m model) feedback() string {
 	age, warm := m.topologyAge()
 	if !warm {
 		if m.err != nil {
-			return "Kitty error: " + m.err.Error()
+			return "Session refresh failed: " + m.err.Error()
 		}
 		return "Loading live sessions…"
 	}
 	if age >= protocol.KittySnapshotStaleAfter {
-		return fmt.Sprintf("Kitty refresh delayed; showing cached sessions (%ds old)", int(age/time.Second))
+		return fmt.Sprintf("Session refresh delayed; showing cached sessions (%ds old)", int(age/time.Second))
 	}
 	if m.portableErr != nil {
 		// The tmux tiles are the last ones listed; say so rather than let

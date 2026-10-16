@@ -189,3 +189,57 @@ record the fixture source, sizes, and review criteria.
 - Visual tests capture only their own fixture windows. They require macOS 14.4
   or later and skip on older versions; model and interaction tests still run.
 - `git diff --check`: passed.
+
+## Reading and workflow polish on 2026-10-16
+
+This pass completes six improvements to existing workflows:
+
+- [x] History renders headings, lists, inline formatting, and fenced code blocks
+  with a copy action. Search highlights and message anchors survive formatting;
+  unfinished code fences remain readable while a conversation is being written.
+- [x] Restarting the app restores both workspace panes, the active side and
+  divider, and an embedded Changes review. History remembers its query, scope,
+  selection and message position; Changes remembers each checkout's base and
+  file, with scroll positions per comparison. Agent attachments retain ownership
+  checks; ended utility programs require explicit Reopen.
+- [x] TUI action notices retain their time and target. Select a notice to copy or
+  dismiss it, inspect its original session, check health, or open configuration.
+  An unconfirmed operation is never repeated by inspecting its notice.
+- [x] Close recovery lasts 30 seconds after confirmation. The offer says Resume
+  when the exact conversation is known and Relaunch otherwise. A missing or
+  invalid resume source reports an error without starting a fresh conversation.
+- [x] Searchable native choices keep typing, arrow navigation and Return on the
+  same available choice. Escape preserves selection and returns focus to the
+  opener. Existing review shortcuts and pane focus behavior remain covered.
+- [x] Waiting cards wrap long names and place actions on their own row. Review
+  toolbars give the content more room, primary actions stand out, and minimum
+  windows remain readable in both appearances.
+
+The focused coverage lives in `WorkspaceReadingPolishTests`,
+`WorkspaceContextPolishTests`, `tui/feedback_test.go`, and
+`tui/commands/recovery_test.go`, alongside the existing workflow, ownership and
+recovery tests. Hosted input tests exercise Return and Escape through AppKit;
+restoration tests create fresh models and views from isolated preferences.
+
+Reviewed fixtures: [formatted transcript, light](acceptance/workspace-reading-polish/transcript-light.png),
+[dark](acceptance/workspace-reading-polish/transcript-dark.png),
+[waiting actions, light](acceptance/workspace-reading-polish/waiting-light.png),
+[dark](acceptance/workspace-reading-polish/waiting-dark.png),
+[minimum History](acceptance/workspace-reading-polish/history-dark-minimum.png),
+[minimum Changes](acceptance/workspace-reading-polish/changes-dark-minimum.png),
+[TUI notices, 120×32](acceptance/workspace-reading-polish/feedback-120x32.txt),
+[60×18](acceptance/workspace-reading-polish/feedback-60x18.txt).
+[Provenance and hashes](acceptance/workspace-reading-polish/manifest.json) identify
+the fixture sources and review criteria. Captures use fixture data, without live
+agent sessions. Earlier acceptance captures remain unchanged.
+
+Validation for this pass:
+
+- `macos/scripts/test-app.sh`: 822 hosted tests passed, zero failures or skips,
+  including six screenshot tests. The app and hosted tests build together.
+- `env -u AMX_RUNTIME_SESSION_ID just check`: passed the full Go test suite,
+  core race checks, vet, 179 TUI scenarios and lint with zero issues. An initial
+  run encountered a transient failure in the existing real-tmux switcher test;
+  its focused rerun and the subsequent complete gate passed.
+- Captures were inspected in light and dark mode; saved artifact hashes and
+  documentation links were verified. `git diff --check` passed.

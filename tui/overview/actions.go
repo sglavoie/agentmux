@@ -70,11 +70,6 @@ const (
 	reportPendingWindow = 10 * time.Second
 )
 
-// undoWindowText is how the recovery window is spelled on the feedback row. It
-// is derived from the window the shared stack enforces rather than typed beside
-// it, so the offer cannot go on promising a number the stack stopped granting.
-var undoWindowText = fmt.Sprintf("%ds", int(sessionactions.RecoveryWindow/time.Second))
-
 // actionSurface is which modal, if any, is over the grid.
 //
 // It is one value rather than a set of booleans because the surfaces are
@@ -646,10 +641,8 @@ func (m model) retryRemaining() time.Duration {
 // retryWindowText spells what is LEFT of a window rather than the window itself,
 // rounded UP so a retry that is still claimable never reads "0s".
 //
-// The asymmetry with undoWindowText is deliberate. An offer is published at the
-// confirmation that starts its five seconds, so the constant is what it has; a
-// retry is published partway through one, and printing the constant there is
-// precisely the promise the stack has already stopped keeping.
+// A retry can arrive partway through the recovery window. Its countdown uses
+// the original deadline and never grants a fresh window after failure.
 func retryWindowText(remaining time.Duration) string {
 	seconds := int((remaining + time.Second - 1) / time.Second)
 	return fmt.Sprintf("%ds", max(seconds, 1))

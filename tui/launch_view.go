@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -18,6 +19,7 @@ import (
 // how many lines the reflowed footer and the sticky status bar took.
 func (m Model) pickerInput() launch.PickerInput {
 	return launch.PickerInput{
+		Destination:     commands.LaunchDestination(),
 		Sessions:        m.pickerSessions,
 		Running:         m.pickerRunning,
 		DirProblems:     m.pickerDirProblems,
@@ -87,7 +89,7 @@ func (m Model) pickerFilteredIndices(query string) []int {
 }
 
 func (m Model) pickerEffectiveProfile(origIdx int) string {
-	return m.pickerInput().EffectiveProfile(origIdx)
+	return (launch.PickerInput{Sessions: m.pickerSessions, ProfileOverride: m.pickerProfileOverride}).EffectiveProfile(origIdx)
 }
 
 func (m Model) pickerSessionWithResolvedProfile(origIdx int) config.Session {

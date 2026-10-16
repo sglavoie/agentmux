@@ -1,0 +1,32 @@
+Agent Mux · Urgency · all projects                                                                     ○ checking health
+Running (3)                                                │dotfiles
+dotfiles  Subagent      —                                  │Subagent · —
+api       Active        —                                  │Agent   codex · personal
+backend   Active        —                                  │Branch  —
+                                                           │Dir     ~/dotfiles
+                                                           │Watch   —
+                        ╭──────────────────────────────────────────────────────────────────────╮────────────────────────
+                        │ Action feedback                                                      │
+                        │                                                                      │
+                        │ > Oct 16 09:01:00 · api                                              │
+                        │ Restart outcome unconfirmed. Inspect the session before repeating    │
+                        │ the action.                                                          │
+                        │ enter: inspect this session · c: open configuration                  │
+                        │                                                                      │
+                        │ Oct 16 09:00:00 · Action notice                                      │
+                        │ Profile setup failed. Open configuration to review the selected      │
+                        │ profile.                                                             │
+                        │                                                                      │
+                        │ Check the session before repeating an unconfirmed action. Dismissing │
+                        │ a notice does not cancel an operation.                               │
+                        ╰──────────────────────────────────────────────────────────────────────╯
+                                                           │
+                                                           │
+                                                           │
+                                                           │
+                                                           │
+                                                           │
+
+ Restart outcome unconfirmed. Inspect the session before repeating the action. · : Show Action Feedback
+  tab next notice  j/k scroll  enter inspect  u recover
+  y/Y copy/all  d/D dismiss/all  h health  esc/q close

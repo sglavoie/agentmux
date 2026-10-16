@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/actions"
@@ -497,7 +496,8 @@ func (m *Model) launchBatchCmd(todo []launch.Queued, quitOnSuccess bool) tea.Cmd
 	if c := m.replaceToastByID(batchID, Toast{
 		Severity: toastInfo,
 		Text:     startText,
-		Expires:  time.Now().Add(progressToastTTL),
+		Pending:  true,
+		Expires:  modelNow(*m).Add(progressToastTTL),
 	}); c != nil {
 		toastCmd = c
 	}
@@ -565,13 +565,14 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 		severity = toastSuccess
 	}
 	text := launch.ProgressText(m.launchBatchDone, msg.total, msg.title)
-	expires := time.Now().Add(progressToastTTL)
+	expires := modelNow(m).Add(progressToastTTL)
 	if batchDone {
-		expires = time.Now().Add(defaultToastTTL)
+		expires = modelNow(m).Add(defaultToastTTL)
 	}
 	if c := m.replaceToastByID(msg.batchID, Toast{
 		Severity: severity,
 		Text:     text,
+		Pending:  !batchDone,
 		Expires:  expires,
 	}); c != nil {
 		cmds = append(cmds, c)

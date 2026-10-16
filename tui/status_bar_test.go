@@ -101,7 +101,7 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 	}{
 		{name: "search", m: Model{mode: ModeSearch, width: 80, filterText: "api"}, want: "Filter sessions: /api"},
 		{name: "confirm", m: Model{mode: ModeConfirm, width: 80, confirmAction: "close session"}, want: "Confirm close session"},
-		{name: "picker selection count", m: picker, want: "Launch Sessions: 2 selected - 2/3 visible"},
+		{name: "picker selection count", m: picker, want: "Launch Sessions: 2 selected · in Kitty - 2/3 visible"},
 		{name: "config picker", m: Model{mode: ModeConfigPicker, width: 80, configPickerReturnMode: ModePicker}, want: "Choose launch profile"},
 		{name: "help", m: Model{mode: ModeHelp, width: 80}, want: "Help"},
 		{name: "detail", m: Model{mode: ModeDetail, width: 80, detailWindowID: 17}, want: "Session details: window 17"},

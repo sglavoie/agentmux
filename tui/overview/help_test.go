@@ -46,7 +46,7 @@ func TestHelpCoversEveryBinding(t *testing.T) {
 
 // TestHelpDocumentsTheKeyThatIsNotOnTheFooter is the point of separating the two
 // projections, stated as an assertion. The undo is deliberately off the row —
-// it is real for five seconds after a confirmed close — and the overlay is where
+// it is real for thirty seconds after a confirmed close — and the overlay is where
 // an operator who has never closed anything finds out it exists at all.
 func TestHelpDocumentsTheKeyThatIsNotOnTheFooter(t *testing.T) {
 	body := helpText(helpContentWidth(120))

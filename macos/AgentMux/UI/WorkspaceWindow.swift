@@ -295,7 +295,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private let pane = NSView()
     private let otherPane = NSView()
     private let otherPlaceholder = WorkspacePlaceholderView()
-    private lazy var paneLayout = WorkspacePaneLayout(active: pane, other: otherPane)
+    private lazy var paneLayout: WorkspacePaneLayout = {
+        let layout = WorkspacePaneLayout(active: pane, other: otherPane)
+        layout.onResize = { [weak self] in self?.reportLayout() }
+        return layout
+    }()
     private var otherPlace: Place?
     private(set) var otherContent: Content = .empty
     private(set) var activeOnRight = false
@@ -303,6 +307,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var reviewView: NSView?
     private var reviewCanClose: () -> Bool = { true }
     private var reviewClosed: () -> Void = {}
+    struct RestoredReview {
+        var view: NSView
+        var canClose: () -> Bool
+        var close: () -> Void
+        var directory: () -> String?
+    }
+    var makeRestoredReview: ((String) -> RestoredReview?)?
+    var onLayoutChanged: (WorkspaceRestoration.Layout?) -> Void = { _ in }
+    var reviewDirectory: () -> String? = { nil }
+    private var pendingLayout: WorkspaceRestoration.Layout?
+    private var layoutChecking = false
+    private var applyingLayout = false
+    private var layoutGeneration = 0
+    private var layoutConversation: ConversationIdentity?
+    private var restoringFraction: Double?
     private var paneClickMonitor: Any?
     var isSplit: Bool { otherPlace != nil }
     var hasReview: Bool { reviewView != nil }
@@ -522,6 +541,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
+        reportLayout()
+        pendingLayout = nil
+        layoutGeneration += 1
         isOpen = false
         if let paneClickMonitor { NSEvent.removeMonitor(paneClickMonitor) }
         paneClickMonitor = nil
@@ -643,10 +665,101 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             }
         }
         continueRestoring()
+        continueRestoringLayout()
         updateContent(focus: false)
     }
 
     // MARK: Recovery
+
+    func restoreLayout(_ layout: WorkspaceRestoration.Layout, conversation: ConversationIdentity? = nil) {
+        var layout = layout
+        if layout.other == layout.active { layout.other = nil }
+        pendingLayout = layout
+        layoutConversation = conversation
+        layoutChecking = false
+        layoutGeneration += 1
+        continueRestoringLayout()
+    }
+
+    private func continueRestoringLayout() {
+        guard let layout = pendingLayout, !layoutChecking, state.current, isOpen else { return }
+        // The active pane goes through restore(_:), including its ownership
+        // check. Check the inactive session before allowing it to make a terminal.
+        if case let .session(encoded)? = layout.other,
+           case let .session(id)? = WorkspaceRestoration.Place(encoded: encoded),
+           state.row(.embedded(id)) != nil {
+            layoutChecking = true
+            let generation = layoutGeneration
+            delegate?.sessionStatus(runtimeSessionID: id) { [weak self] status in
+                guard let self, generation == self.layoutGeneration, self.pendingLayout != nil else { return }
+                self.layoutChecking = false
+                if status != .live(clients: 0) { self.detached.insert(id) }
+                self.applyLayout(layout)
+            }
+        } else { applyLayout(layout) }
+    }
+
+    private func applyLayout(_ layout: WorkspaceRestoration.Layout) {
+        applyingLayout = true
+        pendingLayout = nil
+        otherPlace = layout.other.flatMap(restorePane)
+        activeOnRight = otherPlace != nil && layout.activeOnRight
+        restoringFraction = layout.fraction
+        if case let .session(encoded) = layout.active, let place = WorkspaceRestoration.Place(encoded: encoded) {
+            restore(place, conversation: layoutConversation)
+        } else if let active = restorePane(layout.active) {
+            state.select(nil)
+            viewSelection = nil
+            reviewSelected = false
+            switch active {
+            case .review: reviewSelected = true
+            case let .view(id): viewSelection = id
+            case let .session(key): state.select(key)
+            }
+        }
+        applyingLayout = false
+        reloadSidebar()
+        updateContent(focus: true)
+    }
+
+    private func restorePane(_ pane: WorkspaceRestoration.Pane) -> Place? {
+        switch pane {
+        case let .session(encoded):
+            return WorkspaceRestoration.Place(encoded: encoded)?.sessionKey.map(Place.session)
+        case let .utility(view):
+            guard !view.isOverlay else { return nil }
+            views.open(view)
+            if !view.isPermanent { endedViews.insert(view.id) }
+            return .view(view.id)
+        case let .review(directory):
+            guard let review = makeRestoredReview?(directory) else { return nil }
+            reviewView = review.view
+            reviewCanClose = review.canClose
+            reviewClosed = review.close
+            reviewDirectory = review.directory
+            return .review
+        }
+    }
+
+    private func savedPane(_ place: Place?) -> WorkspaceRestoration.Pane? {
+        switch place {
+        case let .session(key)?:
+            return .session((key.runtimeSessionID.isEmpty
+                ? WorkspaceRestoration.Place.kitty(socket: key.socket, windowID: key.windowID)
+                : .session(runtimeSessionID: key.runtimeSessionID)).encoded)
+        case let .view(id)?: return views.view(id).flatMap { $0.isOverlay ? nil : .utility($0) }
+        case .review?: return reviewDirectory().map(WorkspaceRestoration.Pane.review)
+        case nil: return nil
+        }
+    }
+
+    private func reportLayout() {
+        guard isOpen, pendingLayout == nil, !applyingLayout else { return }
+        let active = restoring.map { WorkspaceRestoration.Pane.session($0.encoded) }
+            ?? savedPane(place)
+            ?? gone.map { .session(WorkspaceRestoration.Place.session(runtimeSessionID: $0.runtimeSessionID).encoded) }
+        if let active { onLayoutChanged(.init(active: active, other: savedPane(otherPlace), activeOnRight: activeOnRight, fraction: paneLayout.fraction)) }
+    }
 
     /// Comes back to where the workspace was when the app last ran. A view is
     /// shown at once. A session is shown once a live snapshot lists it and
@@ -776,6 +889,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The operator went somewhere: whatever the pane was waiting to say or
     /// to come back to is over.
     private func leaveRecovery() {
+        if !applyingLayout {
+            pendingLayout = nil
+            layoutChecking = false
+            layoutGeneration += 1
+        }
         statusQuestion += 1
         restoring = nil
         restoreChecking = false
@@ -786,6 +904,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// is pending the place it is heading for stays the reported one.
     private func reportPlace() {
         guard isOpen else { return }
+        reportLayout()
         let now: WorkspaceRestoration.Place?
         if let restoring {
             now = restoring
@@ -2277,6 +2396,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard isSplit else { return }
         activeOnRight.toggle()
         paneLayout.arrange(split: true, activeOnRight: activeOnRight)
+        reportLayout()
     }
 
     /// Hiding a pane never ends its agent or shell. Utility views stay in the
@@ -2482,6 +2602,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         fitPanes()
         paneLayout.arrange(split: isSplit, activeOnRight: activeOnRight)
+        if let fraction = restoringFraction {
+            restoringFraction = nil
+            window.contentView?.layoutSubtreeIfNeeded()
+            paneLayout.restoreFraction(fraction)
+        }
         paneLayout.titles(active: title(for: place), other: title(for: otherPlace))
         installPaneClickMonitor()
         window.title = windowTitle

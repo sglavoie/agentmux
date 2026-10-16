@@ -28,6 +28,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // This file supplies the deterministic data sources the harness driver runs
@@ -47,6 +48,7 @@ import (
 // and a default terminal size. Building a driver from a fixture never reads the
 // operator's real config and never launches a subprocess.
 type uitestFixture struct {
+	Notices     []Toast
 	Name        string
 	Description string
 	Size        UITestSize
@@ -185,6 +187,7 @@ type uitestASLOutcome struct {
 // returns freshly built values so callers can never mutate shared fixture
 // state across runs.
 var uitestFixtureBuilders = map[string]func() uitestFixture{
+	"action_feedback":    actionFeedbackFixture,
 	"basic":              basicFixture,
 	"actions":            actionsFixture,
 	"asl_question":       aslQuestionFixture,
@@ -208,6 +211,18 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"paused_queue":       pausedQueueFixture,
 	"preview_failure":    previewFailureFixture,
 	"portable_tmux":      portableTmuxFixture,
+}
+
+func actionFeedbackFixture() uitestFixture {
+	fixture := basicFixture()
+	fixture.Name = "action_feedback"
+	fixture.Description = "retained action outcomes with exact targets and recovery guidance"
+	fixture.Notices = []Toast{
+		{Severity: toastError, Text: "Profile setup failed. Open configuration to review the selected profile.", Occurred: time.Date(2026, 10, 16, 9, 0, 0, 0, time.UTC)},
+		{Severity: toastWarning, Text: "Restart outcome unconfirmed. Inspect the session before repeating the action.", Occurred: time.Date(2026, 10, 16, 9, 1, 0, 0, time.UTC),
+			Target: sessionactions.Capture(session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Harness: "claude"})},
+	}
+	return fixture
 }
 
 // uitestPreviewDefaults is the Preview block config.Load fills in for an
