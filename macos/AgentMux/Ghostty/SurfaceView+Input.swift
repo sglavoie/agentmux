@@ -59,6 +59,8 @@ extension Ghostty.SurfaceView {
             return
         }
 
+        if focused, !inKeySequence, !hasMarkedText(), WorkspaceShortcut.perform(event, in: NSApp.mainMenu) { return }
+
         // The surface may change the translating modifiers (option-as-alt).
         let translationModsGhostty = Ghostty.eventModifierFlags(
             mods: ghostty_surface_key_translation_mods(surface, Ghostty.ghosttyMods(event.modifierFlags))
@@ -149,6 +151,7 @@ extension Ghostty.SurfaceView {
         // AppKit sends some equivalents (Ctrl+/) to the first view in the
         // hierarchy rather than the first responder.
         guard focused, let surface else { return false }
+        if !inKeySequence, !hasMarkedText(), WorkspaceShortcut.perform(event, in: NSApp.mainMenu) { return true }
 
         var keyEvent = event.ghosttyKeyEvent(GHOSTTY_ACTION_PRESS)
         var flags = ghostty_binding_flags_e(0)

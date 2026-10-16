@@ -112,6 +112,32 @@ final class GhosttyInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testConfiguredWorkspaceShortcutsRunInsteadOfReachingTheTerminal() throws {
+        let savedMenu = NSApp.mainMenu
+        let savedWindowsMenu = NSApp.windowsMenu
+        defer { NSApp.mainMenu = savedMenu; NSApp.windowsMenu = savedWindowsMenu }
+        let menu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
+        NSApp.mainMenu = menu
+        let receiver = WorkspaceShortcutReceiver()
+        let item = try XCTUnwrap(menu.item(withTitle: "View")?.submenu?.items.first { $0.action == WorkspaceShortcut.splitShell.action })
+        item.target = receiver
+        var preferences = AppPreferences()
+        let keys: [(String, TestKey)] = [
+            ("shift+cmd+backslash", .command("\\", keyCode: 42, shifted: "|")),
+            ("ctrl+return", TestKey(keyCode: 36, characters: "\r", unmodified: "\r", flags: .control)),
+            ("opt+k", TestKey(keyCode: 40, characters: "˚", unmodified: "k", flags: .option)),
+        ]
+        for (binding, key) in keys {
+            preferences.workspaceShortcuts[WorkspaceShortcut.splitShell.rawValue] = binding
+            WorkspaceShortcut.apply(preferences, to: menu)
+            press(key)
+        }
+        XCTAssertEqual(receiver.calls, keys.count)
+        press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
+        expect("a", "configured shortcuts send no bytes to the agent")
+    }
+
+    @MainActor
     func testZoomKeysResizeTheFocusedTerminalWithoutSendingInput() throws {
         let savedMenu = NSApp.mainMenu
         let savedWindowsMenu = NSApp.windowsMenu
@@ -1049,4 +1075,10 @@ final class GhosttyClickMenuTests: XCTestCase {
             XCTAssertNil(view.lookUpWord(), "nothing to define over blank cells")
         }
     }
+}
+
+@MainActor
+private final class WorkspaceShortcutReceiver: NSObject {
+    var calls = 0
+    @objc func splitWorkspaceShell(_ sender: Any?) { calls += 1 }
 }

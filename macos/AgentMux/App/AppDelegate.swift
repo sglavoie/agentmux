@@ -1828,6 +1828,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
            old.hotKeyDashboard != new.hotKeyDashboard || old.hotKeyNextAttention != new.hotKeyNextAttention {
             registerHotKeys()
         }
+        if old.workspaceShortcuts != new.workspaceShortcuts || old.hotKeyDashboard != new.hotKeyDashboard || old.hotKeyNextAttention != new.hotKeyNextAttention,
+           let menu = NSApp.mainMenu {
+            WorkspaceShortcut.apply(new, to: menu)
+        }
         applyMenuBarPreferences(new)
         if recent.follow(days: new.recentDays) {
             statusItem?.refreshSubmenus()

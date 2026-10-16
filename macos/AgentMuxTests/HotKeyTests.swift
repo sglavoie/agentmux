@@ -117,7 +117,7 @@ final class HotKeyTests: XCTestCase {
         let dashboard = try XCTUnwrap(HotKeyPreference.dashboard.default.menuKeyEquivalent)
         XCTAssertEqual(dashboard.key, HotKeyCombo.layoutLabel(UInt32(kVK_ANSI_A))?.lowercased())
         XCTAssertEqual(dashboard.modifiers, [.control, .option, .command])
-        XCTAssertNil(HotKeyCombo(string: "ctrl+opt+return")?.menuKeyEquivalent)
+        XCTAssertEqual(HotKeyCombo(string: "ctrl+opt+return")?.menuKeyEquivalent?.key, "\r")
     }
 
     @MainActor

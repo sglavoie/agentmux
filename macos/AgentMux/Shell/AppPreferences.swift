@@ -9,6 +9,7 @@ struct AppPreferences: Equatable {
     enum Key {
         static let binaryPath = AMXBinaryResolver.overrideDefaultsKey
         static let launchAtLogin = "amxLaunchAtLogin"
+        static let workspaceShortcuts = "amxWorkspaceShortcuts"
         static let hotKeyDashboard = HotKeyPreference.dashboard.defaultsKey
         static let hotKeyNextAttention = HotKeyPreference.nextAttention.defaultsKey
         static let statusStyle = "amxStatusStyle"
@@ -28,7 +29,7 @@ struct AppPreferences: Equatable {
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
-            launchBackend, openWorkspaceAtLaunch, defaultFontSize, dashboardPlace, terminalTheme,
+            launchBackend, openWorkspaceAtLaunch, defaultFontSize, dashboardPlace, terminalTheme, workspaceShortcuts,
         ]
     }
 
@@ -42,6 +43,8 @@ struct AppPreferences: Equatable {
     /// itself lives with `SMAppService`; this mirrors it, and the app sets it
     /// to match at launch rather than re-adding an item removed elsewhere.
     var launchAtLogin = false
+    /// Absent uses the command default; an empty string clears its binding.
+    var workspaceShortcuts: [String: String] = [:]
     var hotKeyDashboard: HotKeyCombo? = HotKeyPreference.dashboard.default
     var hotKeyNextAttention: HotKeyCombo? = HotKeyPreference.nextAttention.default
     var statusStyle: StatusTitleStyle = .glyphs
@@ -77,6 +80,7 @@ struct AppPreferences: Equatable {
         var preferences = AppPreferences()
         preferences.binaryPath = trimmed(defaults.string(forKey: Key.binaryPath))
         preferences.launchAtLogin = bool(defaults, Key.launchAtLogin) ?? false
+        preferences.workspaceShortcuts = defaults.dictionary(forKey: Key.workspaceShortcuts)?.compactMapValues { $0 as? String } ?? [:]
         preferences.hotKeyDashboard = HotKeyPreference.dashboard.load(from: defaults)
         preferences.hotKeyNextAttention = HotKeyPreference.nextAttention.load(from: defaults)
         preferences.statusStyle = defaults.string(forKey: Key.statusStyle).flatMap(StatusTitleStyle.init(rawValue:)) ?? .glyphs
@@ -104,6 +108,7 @@ struct AppPreferences: Equatable {
     func save(to defaults: UserDefaults = .standard) {
         Self.setString(binaryPath, Key.binaryPath, defaults)
         defaults.set(launchAtLogin, forKey: Key.launchAtLogin)
+        defaults.set(workspaceShortcuts, forKey: Key.workspaceShortcuts)
         HotKeyPreference.dashboard.save(hotKeyDashboard, to: defaults)
         HotKeyPreference.nextAttention.save(hotKeyNextAttention, to: defaults)
         defaults.set(statusStyle.rawValue, forKey: Key.statusStyle)

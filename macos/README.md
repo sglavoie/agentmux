@@ -1072,6 +1072,23 @@ and the notice names such a session. A Kitty session's permission banner is
 unchanged: it offers nothing but its click. The logs (category `prompt`) name
 sessions, key names, and refusal codes, never screen text.
 
+## Workspace shortcuts
+
+Settings › Workspace shortcuts records keys for the new View commands and Command
+Palette. `WorkspaceShortcut` owns stable IDs, default bindings, and action
+selectors. Changes update existing menu items immediately; launch restores them
+from `AppPreferences`. These are local menu equivalents and are never registered
+with Carbon. Command-only combinations are accepted without weakening the global
+shortcut recorder's restrictions. Existing menu keys (including hidden aliases),
+other configurable commands, and the two global bindings are checked for conflicts.
+Conflicting stored bindings remain visible in Settings but are inactive.
+
+The terminal checks configured equivalents before encoding keys, including
+shifted punctuation and Control-Return. It retains Ghostty key sequences and IME
+composition handling, and validates the menu action before invoking it. Settings
+stops recording when another recorder starts, the selected command changes, the
+window closes, or the window loses focus.
+
 ## Global shortcuts
 
 Two Carbon hotkeys (`Shell/HotKey.swift`), which need no Accessibility
@@ -1131,6 +1148,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxLaunchAtLogin` | false | Mirrors the `SMAppService.mainApp` login item, which survives a logout. |
 | `amxHotKeyDashboard` | `ctrl+opt+cmd+a` | Empty turns it off. |
 | `amxHotKeyNextAttention` | `ctrl+opt+cmd+n` | Empty turns it off. |
+| `amxWorkspaceShortcuts` | `{}` | Command ID → combo string; absent uses the command default, empty clears it. |
 | `amxStatusStyle` | `glyphs` | `glyphs` (`⚡2 🔑1`), `compact` (the attention total), or `iconOnly`. |
 | `amxShowWorkingCount` | true | Includes `⚡N` in the glyph title. |
 | `amxRecentDays` | 7 | How far back the Recent submenu looks (1–90). |

@@ -2,20 +2,21 @@ import AppKit
 import Carbon
 import os
 
-/// One global shortcut: a virtual key code and Carbon modifier bits, as
+/// One shortcut: a virtual key code and Carbon modifier bits, as
 /// `RegisterEventHotKey` takes them. Its stored spelling is lowercase tokens
 /// joined by `+`, modifiers first in the order macOS displays them, e.g.
 /// `ctrl+opt+cmd+t`.
 struct HotKeyCombo: Equatable, Hashable {
+    enum Scope { case global, application }
     let keyCode: UInt32
     /// Carbon bits: `controlKey`, `optionKey`, `shiftKey`, `cmdKey`.
     let modifiers: UInt32
 
     static let modifierMask = UInt32(controlKey | optionKey | shiftKey | cmdKey)
 
-    /// Refuses what `refusal` refuses.
-    init?(keyCode: UInt32, modifiers: UInt32) {
-        guard Self.refusal(keyCode: keyCode, modifiers: modifiers) == nil else { return nil }
+    /// Global shortcuts use stricter rules than application menu equivalents.
+    init?(keyCode: UInt32, modifiers: UInt32, scope: Scope = .global) {
+        guard Self.refusal(keyCode: keyCode, modifiers: modifiers, scope: scope) == nil else { return nil }
         self.keyCode = keyCode
         self.modifiers = modifiers & Self.modifierMask
     }
@@ -26,9 +27,12 @@ struct HotKeyCombo: Equatable, Hashable {
     /// the key is a function key), may not be Command alone (with or without
     /// Shift, that is every app's own menu keys), and may not be a bare F1 to
     /// F11, which the workspace binds.
-    static func refusal(keyCode: UInt32, modifiers: UInt32) -> String? {
+    static func refusal(keyCode: UInt32, modifiers: UInt32, scope: Scope = .global) -> String? {
         guard keys[keyCode] != nil else { return "That key cannot be a shortcut" }
         let chord = modifiers & UInt32(controlKey | optionKey | cmdKey)
+        if scope == .application {
+            return chord != 0 || isFunctionKey(keyCode) ? nil : "Add ⌃, ⌥, or ⌘…"
+        }
         if chord == 0 {
             guard let number = functionKeyNumber(keyCode) else { return "Add ⌃, ⌥, or ⌘…" }
             if number <= workspaceFunctionKeys { return "F1–F11 are the workspace's; add ⌃, ⌥, or ⌘…" }
@@ -42,18 +46,18 @@ struct HotKeyCombo: Equatable, Hashable {
     static let workspaceFunctionKeys = 11
 
     /// A key pressed in the recorder.
-    init?(event: NSEvent) {
-        self.init(keyCode: UInt32(event.keyCode), modifiers: Self.carbonModifiers(event.modifierFlags))
+    init?(event: NSEvent, scope: Scope = .global) {
+        self.init(keyCode: UInt32(event.keyCode), modifiers: Self.carbonModifiers(event.modifierFlags), scope: scope)
     }
 
     /// Why the recorder refuses `event`; nil when it is a shortcut.
-    static func refusal(event: NSEvent) -> String? {
-        refusal(keyCode: UInt32(event.keyCode), modifiers: carbonModifiers(event.modifierFlags))
+    static func refusal(event: NSEvent, scope: Scope = .global) -> String? {
+        refusal(keyCode: UInt32(event.keyCode), modifiers: carbonModifiers(event.modifierFlags), scope: scope)
     }
 
     /// Parses the stored spelling; modifier aliases (`control`, `option`,
     /// `alt`, `command`) and any order or case are accepted.
-    init?(string: String) {
+    init?(string: String, scope: Scope = .global) {
         let tokens = string.lowercased().split(separator: "+", omittingEmptySubsequences: false)
             .map { $0.trimmingCharacters(in: .whitespaces) }
         guard let keyName = tokens.last, !keyName.isEmpty,
@@ -63,7 +67,7 @@ struct HotKeyCombo: Equatable, Hashable {
             guard let bit = Self.modifierAliases[token], modifiers & bit == 0 else { return nil }
             modifiers |= bit
         }
-        self.init(keyCode: keyCode, modifiers: modifiers)
+        self.init(keyCode: keyCode, modifiers: modifiers, scope: scope)
     }
 
     /// The canonical stored spelling.
@@ -94,6 +98,16 @@ struct HotKeyCombo: Equatable, Hashable {
         if modifiers & UInt32(cmdKey) != 0 { flags.insert(.command) }
         if let number = Self.functionKeyNumber(keyCode),
            let scalar = UnicodeScalar(NSF1FunctionKey + number - 1) {
+            return (String(Character(scalar)), flags)
+        }
+        let named: [String: UInt32] = [
+            "return": 13, "tab": 9, "space": 32, "delete": 8, "forwarddelete": UInt32(NSDeleteFunctionKey),
+            "escape": 27, "left": UInt32(NSLeftArrowFunctionKey), "right": UInt32(NSRightArrowFunctionKey),
+            "up": UInt32(NSUpArrowFunctionKey), "down": UInt32(NSDownArrowFunctionKey),
+            "home": UInt32(NSHomeFunctionKey), "end": UInt32(NSEndFunctionKey),
+            "pageup": UInt32(NSPageUpFunctionKey), "pagedown": UInt32(NSPageDownFunctionKey),
+        ]
+        if let name = Self.keys[keyCode]?.name, let value = named[name], let scalar = UnicodeScalar(value) {
             return (String(Character(scalar)), flags)
         }
         guard let label = Self.layoutLabel(keyCode) ?? (Self.characterKeyCodes.contains(keyCode) ? Self.keys[keyCode]?.symbol : nil)

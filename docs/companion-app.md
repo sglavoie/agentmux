@@ -423,6 +423,14 @@ is committed.
 **View › Split with Shell** keeps the current agent alongside a shell in its
 working directory. **Split with Checkout Changes** opens native review alongside
 it. To compare two agents, use **⌘⇧P** and choose **Split with <session name>**.
+To assign keys to the new commands, open **Settings › Workspace shortcuts**,
+choose a command, click **Record Shortcut**, and press the combination. Bindings
+apply immediately and persist across launches. **Clear** removes a binding;
+**Restore Default** restores the command's original binding (⌘⇧P for Command
+Palette, unassigned for the other new commands). These keys work while Agent Mux
+is active. The recorder checks conflicts with existing menu commands and the two
+global shortcuts; Escape cancels recording.
+
 Click either pane or its heading to focus it; the filled dot identifies the active
 pane. **Focus Checkout Review** in the palette returns to an opened review after
 navigating elsewhere. Sidebar selections and session actions apply to that pane. **Focus Other

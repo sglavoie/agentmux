@@ -324,6 +324,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     let model: PreferencesModel
     let dashboardRecorder = HotKeyRecorder()
     let attentionRecorder = HotKeyRecorder()
+    let workspaceRecorder = HotKeyRecorder()
     private(set) lazy var window: NSWindow = makeWindow()
     /// Kept clear between the window and the screen's visible edges.
     static let screenMargin: CGFloat = 60
@@ -347,7 +348,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow() -> NSWindow {
-        let view = PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder)
+        let view = PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder, workspaceRecorder: workspaceRecorder)
         // The grouped form's ideal height is all of its content.
         let contentHeight = NSHostingView(rootView: view.fixedSize(horizontal: false, vertical: true)).fittingSize.height
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
@@ -357,6 +358,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         window.delegate = self
         dashboardRecorder.window = window
         attentionRecorder.window = window
+        workspaceRecorder.window = window
         // Open as tall as the content wants, within the screen less a margin;
         // the form scrolls whatever does not fit.
         if let visible = NSScreen.main?.visibleFrame {
@@ -377,6 +379,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         model.commitEnvironment()
         dashboardRecorder.stop()
         attentionRecorder.stop()
+        workspaceRecorder.stop()
         onVisibilityChanged(false)
     }
 
@@ -393,6 +396,7 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
         dashboardRecorder.stop()
         attentionRecorder.stop()
+        workspaceRecorder.stop()
     }
 }
 
@@ -400,6 +404,8 @@ struct PreferencesView: View {
     @ObservedObject var model: PreferencesModel
     @ObservedObject var dashboardRecorder: HotKeyRecorder
     @ObservedObject var attentionRecorder: HotKeyRecorder
+    @ObservedObject var workspaceRecorder: HotKeyRecorder
+    @State private var workspaceShortcut = WorkspaceShortcut.splitShell
     @FocusState private var binaryFieldFocused: Bool
     @FocusState private var environmentFieldFocused: String?
 
@@ -409,7 +415,7 @@ struct PreferencesView: View {
                 LabeledContent(HotKeyPreference.dashboard.label) {
                     HotKeyRecorderView(combo: $model.preferences.hotKeyDashboard, model: model,
                                        recorder: dashboardRecorder, other: attentionRecorder,
-                                       defaultCombo: HotKeyPreference.dashboard.default)
+                                       defaultCombo: HotKeyPreference.dashboard.default, additionalOthers: [workspaceRecorder])
                 }
                 problem(for: HotKeyPreference.dashboard)
                 Picker("Show the dashboard in", selection: $model.preferences.dashboardPlace) {
@@ -419,11 +425,30 @@ struct PreferencesView: View {
                 LabeledContent(HotKeyPreference.nextAttention.label) {
                     HotKeyRecorderView(combo: $model.preferences.hotKeyNextAttention, model: model,
                                        recorder: attentionRecorder, other: dashboardRecorder,
-                                       defaultCombo: HotKeyPreference.nextAttention.default)
+                                       defaultCombo: HotKeyPreference.nextAttention.default, additionalOthers: [workspaceRecorder])
                 }
                 problem(for: HotKeyPreference.nextAttention)
                 note("Focuses the first session waiting on a stop, key, error, or question, in the order "
                     + "the workspace lists them; each press moves to the next. Both work from any app.")
+            }
+
+            Section("Workspace shortcuts") {
+                Picker("Command", selection: $workspaceShortcut) {
+                    ForEach(WorkspaceShortcut.allCases) { shortcut in Text(shortcut.title).tag(shortcut) }
+                }.onChange(of: workspaceShortcut) { _, _ in workspaceRecorder.stop() }
+                LabeledContent("Shortcut") {
+                    HotKeyRecorderView(
+                        combo: Binding(get: { workspaceShortcut.combo(in: model.preferences) },
+                                       set: { model.preferences.workspaceShortcuts[workspaceShortcut.rawValue] = $0?.string ?? "" }),
+                        model: model, recorder: workspaceRecorder, other: dashboardRecorder,
+                        defaultCombo: workspaceShortcut.defaultCombo, additionalOthers: [attentionRecorder],
+                        scope: .application,
+                        validate: { workspaceShortcut.problem(for: $0, preferences: model.preferences, menu: NSApp.mainMenu) })
+                }
+                if let problem = workspaceShortcut.problem(for: workspaceShortcut.combo(in: model.preferences), preferences: model.preferences, menu: NSApp.mainMenu) {
+                    Text(problem + " This binding is inactive until the conflict is resolved.").font(.caption).foregroundStyle(.orange)
+                }
+                note("Choose a command, click Record Shortcut, and press its keys. Changes apply immediately while Agent Mux is active. Esc cancels recording; Clear removes a binding.")
             }
 
             Section("Menu bar") {
@@ -646,21 +671,29 @@ struct HotKeyRecorderView: View {
     /// The other shortcut's recorder, stopped when this one starts.
     let other: HotKeyRecorder
     /// The shortcut the app ships with, which Restore Default puts back.
-    let defaultCombo: HotKeyCombo
+    let defaultCombo: HotKeyCombo?
+    var additionalOthers: [HotKeyRecorder] = []
+    var scope: HotKeyCombo.Scope = .global
+    var validate: (HotKeyCombo) -> String? = { _ in nil }
 
     var body: some View {
-        HStack {
-            Button(action: toggleRecording) {
-                Text(label)
-                    .frame(minWidth: 140)
-                    .foregroundStyle(recorder.isRecording ? Color.accentColor : Color.primary)
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack {
+                Button(action: toggleRecording) {
+                    Text(label)
+                        .frame(minWidth: 140)
+                        .foregroundStyle(recorder.isRecording ? Color.accentColor : Color.primary)
+                }
+                if combo != nil, !recorder.isRecording {
+                    Button("Clear") { combo = nil }
+                }
+                if combo != defaultCombo, !recorder.isRecording {
+                    Button("Restore Default") { combo = defaultCombo }
+                        .help(defaultCombo.map { "Use \($0.displayString) again" } ?? "Remove the custom shortcut")
+                }
             }
-            if combo != nil, !recorder.isRecording {
-                Button("Clear") { combo = nil }
-            }
-            if combo != defaultCombo, !recorder.isRecording {
-                Button("Restore Default") { combo = defaultCombo }
-                    .help("Use \(defaultCombo.displayString) again")
+            if recorder.isRecording, let hint = recorder.hint {
+                Text(hint).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
         }
         .onDisappear { recorder.stop() }
@@ -668,7 +701,7 @@ struct HotKeyRecorderView: View {
 
     private var label: String {
         if recorder.isRecording {
-            return recorder.hint ?? "Type a shortcut…"
+            return "Type a shortcut…"
         }
         return combo?.displayString ?? "Record Shortcut"
     }
@@ -679,8 +712,10 @@ struct HotKeyRecorderView: View {
             return
         }
         other.stop()
+        additionalOthers.forEach { $0.stop() }
         let binding = $combo
         recorder.start(
+            scope: scope, validate: validate,
             onStateChange: { [weak model] recording in model?.onRecordingChange?(recording) },
             onRecord: { binding.wrappedValue = $0 }
         )
@@ -696,6 +731,8 @@ final class HotKeyRecorder: ObservableObject {
     private var monitor: Any?
     private var onStateChange: ((Bool) -> Void)?
     private var onRecord: ((HotKeyCombo) -> Void)?
+    private var scope = HotKeyCombo.Scope.global
+    private var validate: (HotKeyCombo) -> String? = { _ in nil }
     /// How the key monitor is installed and removed; tests capture the
     /// callback the recorder registers.
     var addMonitor: (@escaping (NSEvent) -> NSEvent?) -> Any? = {
@@ -703,8 +740,10 @@ final class HotKeyRecorder: ObservableObject {
     }
     var removeMonitor: (Any) -> Void = { NSEvent.removeMonitor($0) }
 
-    func start(onStateChange: @escaping (Bool) -> Void, onRecord: @escaping (HotKeyCombo) -> Void) {
+    func start(scope: HotKeyCombo.Scope = .global, validate: @escaping (HotKeyCombo) -> String? = { _ in nil }, onStateChange: @escaping (Bool) -> Void, onRecord: @escaping (HotKeyCombo) -> Void) {
         stop()
+        self.scope = scope
+        self.validate = validate
         self.onStateChange = onStateChange
         isRecording = true
         hint = nil
@@ -726,13 +765,14 @@ final class HotKeyRecorder: ObservableObject {
         let chord = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if Int(event.keyCode) == HotKeyRecorder.escapeKeyCode, chord.isEmpty {
             stop()
-        } else if let combo = HotKeyCombo(event: event) {
+        } else if let combo = HotKeyCombo(event: event, scope: scope) {
+            if let problem = validate(combo) { hint = problem; return nil }
             // Recorded before stopping, so the shortcuts the app
             // registers again when recording ends are the new ones.
             onRecord?(combo)
             stop()
         } else {
-            hint = HotKeyCombo.refusal(event: event)
+            hint = HotKeyCombo.refusal(event: event, scope: scope)
         }
         return nil
     }
@@ -746,6 +786,7 @@ final class HotKeyRecorder: ObservableObject {
         isRecording = false
         hint = nil
         onRecord = nil
+        validate = { _ in nil }
         onStateChange?(false)
         onStateChange = nil
     }

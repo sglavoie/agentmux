@@ -58,7 +58,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxDashboardPlace", "amxTerminalTheme",
+            "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts",
         ])
     }
 

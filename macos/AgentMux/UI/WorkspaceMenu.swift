@@ -14,10 +14,11 @@ import AppKit
 /// encode the key for their program, so what is listed here is what the
 /// workspace keeps for itself; everything else reaches the agent.
 ///
-/// Every shortcut here holds ⌘, except Shift+Page Up and Shift+Page Down and
+/// By default, every shortcut here holds ⌘, except Shift+Page Up and Shift+Page Down and
 /// the function keys F1 to F11, which do here what they do in Kitty
 /// (`functionKeys`): any other key with Control, Option, or no modifier at all
-/// is the focused program's. Where the keyboard goes then depends on what has it: a
+/// is the focused program's unless assigned in Settings › Workspace shortcuts.
+/// Where the keyboard goes then depends on what has it: a
 /// session's terminal gives it to the agent, the Dashboard's to the TUI, and
 /// the session list keeps the arrow keys and Return for itself.
 ///
@@ -61,6 +62,7 @@ enum WorkspaceMenu {
     @MainActor
     static func install(target: AppDelegate) {
         if NSApp.mainMenu == nil { NSApp.mainMenu = make(target: target) }
+        if let menu = NSApp.mainMenu { WorkspaceShortcut.apply(AppPreferences.load(), to: menu) }
     }
 
     @MainActor
