@@ -25,7 +25,7 @@
     },
     {
       "type": "contains_text",
-      "text": "\u2502Agent   claude \u00b7 claude-production-primary"
+      "text": "claude \u00b7 claude-production-primary"
     },
     {
       "type": "excludes_text",

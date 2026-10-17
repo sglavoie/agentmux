@@ -184,8 +184,8 @@ func TestListFooterMarksOverflowWhenTruncated(t *testing.T) {
 	narrow := m
 	narrow.width = 100
 	out := strings.Join(stripAnsiLines(listFooterRows(narrow)), "\n")
-	if !strings.Contains(out, footerHintMore) {
-		t.Errorf("width 100 fits the whole palette on one row? got:\n%s", out)
+	if strings.Count(out, "?") != 1 {
+		t.Errorf("expected exactly one help route: %s", out)
 	}
 	for _, want := range []string{"j/k up/down", "a actions", ": commands", "/ filter", "? help"} {
 		if !strings.Contains(out, want) {

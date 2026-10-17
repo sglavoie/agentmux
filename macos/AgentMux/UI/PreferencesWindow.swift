@@ -60,6 +60,7 @@ struct PreferencesSnapshot: Equatable {
 /// app runs or the environment it runs in.
 @MainActor
 final class PreferencesModel: ObservableObject {
+    @Published var launchSettingsRequest = 0
     let defaults: UserDefaults
 
     @Published var preferences: AppPreferences {
@@ -405,11 +406,13 @@ struct PreferencesView: View {
     @ObservedObject var dashboardRecorder: HotKeyRecorder
     @ObservedObject var attentionRecorder: HotKeyRecorder
     @ObservedObject var workspaceRecorder: HotKeyRecorder
+    @FocusState private var launchFieldFocused: Bool
     @State private var workspaceShortcut = WorkspaceShortcut.splitShell
     @FocusState private var binaryFieldFocused: Bool
     @FocusState private var environmentFieldFocused: String?
 
     var body: some View {
+        ScrollViewReader { proxy in
         Form {
             Section("Shortcuts") {
                 LabeledContent(HotKeyPreference.dashboard.label) {
@@ -544,7 +547,7 @@ struct PreferencesView: View {
                     + "Changing this recolors all open terminals.")
                 Picker("Launch projects in", selection: $model.preferences.launchBackend) {
                     ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
+                }.id("launch-destination").focused($launchFieldFocused)
                 if case let .status(status) = model.snapshot.backend {
                     note(model.preferences.launchBackend.explanation(cliBackend: status.launchBackend))
                 } else {
@@ -622,6 +625,12 @@ struct PreferencesView: View {
         // content rather than run off a small screen.
         .frame(width: 560)
         .frame(minHeight: 320)
+        .onChange(of: model.launchSettingsRequest, initial: true) { _, request in
+            guard request > 0 else { return }
+            proxy.scrollTo("launch-destination", anchor: .center)
+            launchFieldFocused = true
+        }
+        }
     }
 
     @ViewBuilder

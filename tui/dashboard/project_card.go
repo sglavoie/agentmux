@@ -121,11 +121,11 @@ func projectCardTruncated(in ProjectCardInput, lines []string) []string {
 	return out
 }
 
-// projectCardMetaLines builds the card's fixed InspectorMetaLines block: what
+// projectCardMetaLines builds the card's fixed projectCardMetadataLines block: what
 // this family is, how its sessions are distributed, and then the four labelled
 // facts read across every member instead of off one.
 func projectCardMetaLines(in ProjectCardInput) []string {
-	lines := make([]string, InspectorMetaLines)
+	lines := make([]string, projectCardMetadataLines)
 	members := projectCardMembers(in)
 
 	label := in.Item.FamilyLabel

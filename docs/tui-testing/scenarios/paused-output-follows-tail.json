@@ -4,11 +4,11 @@
   "size": { "width": 120, "height": 32 },
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "Agent   claude · work" },
+    { "type": "contains_text", "text": "claude · work" },
     { "type": "contains_text", "text": "Dir     ~/projects/streaming" },
     { "type": "contains_text", "text": "output line 40" },
     { "type": "contains_text", "text": "output line 21" },
-    { "type": "excludes_text", "text": "output line 20" },
+    { "type": "excludes_text", "text": "output line 10" },
     { "type": "excludes_text", "text": "output line 01" },
     { "type": "excludes_text", "text": "Paused" },
     { "type": "contains_text", "text": "Working · 0:42" },

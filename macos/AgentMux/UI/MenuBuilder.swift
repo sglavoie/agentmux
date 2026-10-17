@@ -29,6 +29,7 @@ enum MenuAction: Equatable {
     /// Shows the workspace window, where tmux sessions' terminals are.
     case openWorkspace
     case openDashboard
+    case launchSettings
     /// Focuses the next session waiting on a human, as ⌃⌥⌘N does.
     case nextAttention
     case launchProject(ProjectEntry)
@@ -111,6 +112,7 @@ enum MenuBuilder {
         var dashboardPlace: DashboardPlacePreference = .workspace
         var launchBackend: LaunchBackendPreference = .workspace
         var cliLaunchBackend: String?
+        var cliLaunchBackendSource: String?
         /// The global shortcut Open Dashboard shows as its key; nil for none.
         var dashboardHotKey: HotKeyCombo?
         /// The global shortcut Next Waiting Session shows as its key.
@@ -377,7 +379,10 @@ enum MenuBuilder {
 
     static func entries(for submenu: MenuSubmenu, _ input: ActionsInput) -> [MenuEntry] {
         switch submenu {
-        case .projects: return [.info("Launch in \(input.launchBackend.destination(cliBackend: input.cliLaunchBackend)) · \(input.launchBackend == .followCLI ? "follows CLI configuration" : "set in app Settings")")] + projectEntries(input.projects, missing: input.missingProjectDirectories)
+        case .projects:
+            return [.info("Launch in \(input.launchBackend.destination(cliBackend: input.cliLaunchBackend)) · \(input.launchBackend.source(cliSource: input.cliLaunchBackendSource))"),
+                    .action(.launchSettings, "Launch Settings…"), .separator]
+                + projectEntries(input.projects, missing: input.missingProjectDirectories)
         case .recent: return recentEntries(input)
         case .notifications: return notificationEntries(input)
         }

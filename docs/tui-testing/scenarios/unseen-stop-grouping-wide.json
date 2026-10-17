@@ -17,7 +17,7 @@
     { "type": "contains_text", "text": "  ▌ working   Working   0:42" },
     { "type": "excludes_text", "text": "• ▌ read" },
     { "type": "excludes_text", "text": "• ▌ working" },
-    { "type": "contains_text", "text": "Agent   claude · work" },
+    { "type": "contains_text", "text": "claude · work" },
     { "type": "contains_text", "text": "Dir     ~/projects/read" },
     { "type": "no_layout_issues" }
   ]

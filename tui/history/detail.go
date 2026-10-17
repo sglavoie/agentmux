@@ -37,6 +37,7 @@ type DetailInput struct {
 	BodyHeight int
 
 	// Timeline sub-view state.
+	ViewMetadata   bool
 	ViewTimeline   bool
 	TimelineScroll int
 	TimelineFold   map[int]bool

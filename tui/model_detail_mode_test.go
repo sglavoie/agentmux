@@ -364,3 +364,30 @@ func TestDetailEventsMsgIgnoredOutsideDetailMode(t *testing.T) {
 		t.Fatalf("expected detailErr unchanged when mode != ModeDetail, got %v", got.detailErr)
 	}
 }
+
+func TestSessionDetailsMetadataToggleKeepsEventNavigation(t *testing.T) {
+	m := loadSessions(testModel(), detailSessions())
+	selected, ok := m.selectedSession()
+	if !ok {
+		t.Fatal("fixture needs a session")
+	}
+	next, _ := m.enterDetailMode(selected.WindowID, false)
+	m = next.(Model)
+	m.width, m.height = 60, 18
+	m = pressKey(m, "m")
+	if !m.detailMetadata || !strings.Contains(stripAnsi(renderDetail(m)), "Session metadata") {
+		t.Fatal("metadata did not open")
+	}
+	m = pressKey(m, "G")
+	if m.detailScroll == 0 {
+		t.Fatal("metadata did not scroll independently of the empty event ring")
+	}
+	m = pressKey(m, "t")
+	if m.detailMetadata || !m.detailViewTimeline {
+		t.Fatal("timeline did not replace metadata")
+	}
+	m = pressKey(m, "esc")
+	if m.mode != ModeList || m.detailMetadata {
+		t.Fatal("detail state leaked on close")
+	}
+}

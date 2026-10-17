@@ -75,7 +75,8 @@ type Toast struct {
 	// Persistent notices survive until dismissed or replaced by their outcome.
 	Persistent bool
 	// Pending turns its deadline into a delayed-operation notice, never success.
-	Pending bool
+	Pending     bool
+	Unconfirmed bool
 }
 
 // toastTickMsg fires while a toast has a deadline. Persistent notices alone
@@ -303,10 +304,11 @@ func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
 		return nil
 	}
 	return m.replaceToastByID(id, Toast{
-		Target:   result.Target,
-		Severity: outcomeSeverity(result.Outcome),
-		Text:     text,
-		Expires:  modelNow(*m).Add(defaultToastTTL),
+		Target:      result.Target,
+		Severity:    outcomeSeverity(result.Outcome),
+		Unconfirmed: result.Outcome == sessionactions.OutcomeUnconfirmed,
+		Text:        text,
+		Expires:     modelNow(*m).Add(defaultToastTTL),
 	})
 }
 

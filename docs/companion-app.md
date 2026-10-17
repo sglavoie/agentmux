@@ -625,3 +625,18 @@ Projects with unavailable directories explain why they cannot be chosen.
 explicit; **Check Readiness** displays the resolved project and supervisor.
 If inference is ambiguous, choose a project before starting. An option change
 requires another check. Every native plan run launches in the workspace.
+
+The Launch Project menu names both the destination and its source. **Launch
+Settings…** opens Settings at **Launch projects in**. Following CLI configuration
+also distinguishes an explicit `config.toml` choice from its compatibility default.
+
+Sidebar targets keep their positions while the pointer is inside the list,
+during a drag, or while its context menu is open. Attention badges still update;
+promotions and new rows appear when the interaction ends. Ended sessions held
+in place cannot be acted on.
+
+Conversation History’s results pane can be widened by dragging its divider.
+Rows show relative activity times (with exact times in tooltips), and all-history
+results include checkout paths alongside their existing project headings.
+Transcripts render tables, blockquotes, and nested list indentation. Code blocks
+offer **Wrap lines** while **Copy code** continues to copy the original text.

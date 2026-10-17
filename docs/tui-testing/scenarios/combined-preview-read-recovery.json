@@ -34,7 +34,7 @@
     },
     {
       "type": "excludes_text",
-      "text": "output line 20"
+      "text": "output line 10"
     },
     {
       "type": "no_layout_issues"

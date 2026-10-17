@@ -492,9 +492,13 @@ func renderPreviewPane(m Model, width, height int) string {
 			},
 		})
 	}
+	return dashboard.RenderInspector(inspectorInputFor(m, width, height))
+}
+
+func inspectorInputFor(m Model, width, height int) dashboard.InspectorInput {
 	sess, ok := m.selectedSession()
 	marker, _ := aslMarkerFor(m, sess)
-	return dashboard.RenderInspector(dashboard.InspectorInput{
+	return dashboard.InspectorInput{
 		Width:         width,
 		Height:        height,
 		Content:       inspectorContentFor(m, sess, ok),
@@ -508,7 +512,7 @@ func renderPreviewPane(m Model, width, height int) string {
 		Output:        dashboard.SplitOutput(m.previewText),
 		Error:         m.previewError,
 		Viewport:      m.inspectorViewport,
-	})
+	}
 }
 
 // inspectorContentFor decides which of the inspector's five situations the

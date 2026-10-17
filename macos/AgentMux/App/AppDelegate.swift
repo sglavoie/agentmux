@@ -1365,6 +1365,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             showWorkspace()
         case .openDashboard:
             openDashboard()
+        case .launchSettings:
+            showPreferences(nil)
+            preferencesModel.launchSettingsRequest += 1
         case .nextAttention:
             focusNextAttention()
         case let .launchProject(project):
@@ -2198,6 +2201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             dashboardPlace: prefs.dashboardPlace,
             launchBackend: prefs.launchBackend,
             cliLaunchBackend: preferences.backend.cliLaunchBackend,
+            cliLaunchBackendSource: preferences.backend.cliLaunchBackendSource,
             // Only a shortcut the system took: one refused, taken by another
             // app, or set aside while a recorder listens does nothing.
             dashboardHotKey: dashboardHotKey?.registration.registeredCombo,

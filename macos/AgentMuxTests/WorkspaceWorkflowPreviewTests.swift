@@ -57,11 +57,12 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         try png.write(to: directory.appendingPathComponent(name + ".png"))
         let recognition = VNRecognizeTextRequest()
         recognition.recognitionLevel = .accurate
+        recognition.recognitionLanguages = ["en-US"]
         recognition.minimumTextHeight = 0.005
         try VNImageRequestHandler(cgImage: capture).perform([recognition])
         let visible = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         XCTAssertGreaterThan(visible.count, 40, "Capture must contain rendered content, not just a window frame")
-        for text in expected { XCTAssertTrue(visible.localizedCaseInsensitiveContains(text), "Missing visible \(text) in \(name): \(visible)") }
+        for text in expected { XCTAssertTrue(visible.filter { !$0.isWhitespace }.localizedCaseInsensitiveContains(text.filter { !$0.isWhitespace }), "Missing visible \(text) in \(name): \(visible)") }
         let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
         attachment.name = name
         attachment.lifetime = .keepAlways
@@ -75,7 +76,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             if args[1] == "show" {
                 return #"{"session":{"id":"one","harness":"claude","project":"API","cwd":"/Projects/api"},"messages_total":2,"messages_start":0,"match_messages":[0,1],"match_terms":["pagination"],"focus_message":0,"messages":[{"role":"user","text":"Add pagination to the activity endpoint."},{"role":"assistant","text":"Added cursor pagination and updated the endpoint tests. The full suite passed. The changes are ready for review."}]}"#
             }
-            return #"{"results":[{"id":"one","harness":"claude","project":"API","profile":"work","cwd":"/Projects/api","preview":"Added cursor pagination and updated the endpoint tests.","matches":3},{"id":"two","harness":"codex","project":"Desktop","profile":"personal","preview":"Reviewed pagination for the conversation history view.","matches":1}]}"#
+            return #"{"results":[{"id":"one","harness":"claude","project":"API","profile":"work","cwd":"/Projects/api","last_at":"2026-10-16T12:00:00Z","preview":"Added cursor pagination and updated the endpoint tests.","matches":3},{"id":"two","harness":"codex","project":"Desktop","profile":"personal","preview":"Reviewed pagination for the conversation history view.","matches":1}]}"#
         }
         let model = WorkspaceHistoryModel(command: { amx }, runner: PreviewRunner())
         model.query = "pagination"
@@ -98,6 +99,30 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         XCTAssertFalse(model.patch.isEmpty)
         try await render(WorkspaceChangesView(model: model), name: "changes", expected: ["Checkout Changes", "cursor", "Open in editor"])
         try await render(WorkspaceChangesView(model: model), name: "changes-dark-minimum", width: 720, height: 450, dark: true, expected: ["Checkout Changes", "Open in editor"])
+    }
+
+    func testLaunchSettingsRouteShowsTheLaunchPreference() async throws {
+        let suite = "agentmux-launch-preview-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = PreferencesModel(defaults: defaults)
+        let view = PreferencesView(model: model, dashboardRecorder: HotKeyRecorder(),
+                                   attentionRecorder: HotKeyRecorder(), workspaceRecorder: HotKeyRecorder())
+            .task {
+                try? await Task.sleep(for: .milliseconds(50))
+                model.launchSettingsRequest += 1
+            }
+        try await render(view, name: "launch-settings", width: 560, height: 450,
+                         expected: ["Launch projects in", "Workspace"])
+    }
+
+    func testTranscriptTablesQuotesAndNestedListsAtMinimumSize() async throws {
+        let text = "| Check | Result |\n| --- | --- |\n| Routing | **Passed** |\n| Resume | Preserved |\n\n> Review note\n> - Parent item\n>   - Nested detail\n\n```sh\nprintf '%s' 'a deliberately long line that should also be readable with code wrapping enabled'\n```"
+        for dark in [false, true] {
+            try await render(ScrollView { WorkspaceTranscriptText(text: text, terms: ["Routing"]).padding(16) },
+                name: "transcript-structure-\(dark)", width: 720, height: 450, dark: dark,
+                expected: ["Routing", "Passed", "Review note", "Nested detail", "Wrap lines"])
+        }
     }
 
     func testRichTranscriptAtMinimumSize() async throws {

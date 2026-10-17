@@ -165,6 +165,7 @@ var helpSections = []struct {
 		"  enter     launch every selected project (in the launcher)",
 		"  f         cycle the launch profile (in the launcher)",
 		"  C         choose a profile for this launch (in the launcher)",
+		"  ctrl+e    edit launch settings in config.toml (in the launcher)",
 		"  d         choose a working directory for this launch (in the launcher)",
 		"  P         pin / unpin highlighted launcher project (in the launcher)",
 		"  p         toggle the launcher's preview pane (in the launcher)",
@@ -182,6 +183,7 @@ var helpSections = []struct {
 	// the dashboard no longer binds them at all.
 	{"Session detail", []string{
 		"  :         then \"Show Session Details\" to open it",
+		"  m         full session metadata ↔ event list",
 		"  t         flat event list ↔ phase timeline",
 		"  j/k ↑/↓   scroll; g/G jump to the ends; pgup/pgdn page",
 		"  enter     fold / unfold the phase under the cursor (timeline)",

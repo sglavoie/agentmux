@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/customization"
 	tuidashboard "github.com/sglavoie/agentmux/tui/dashboard"
 )
@@ -315,5 +316,32 @@ func TestKeybindingsOutsideKittyOpenInThisTerminal(t *testing.T) {
 	}
 	if len(shown[0]) != len(kittykeys.Tmux) || shown[0][0] != kittykeys.Tmux[0] {
 		t.Fatalf("the reference outside Kitty lists %d keys; want the tmux table", len(shown[0]))
+	}
+}
+
+func TestDashboardLaunchDestinationAndSourceFollowConfigurationAndFlag(t *testing.T) {
+	w := newPortableWorld(t, "api")
+	oldLoad, oldRun := loadRunnableConfig, runDashboard
+	t.Cleanup(func() { loadRunnableConfig, runDashboard = oldLoad, oldRun })
+	loadRunnableConfig = func() (*config.Config, error) { return w.cfg, nil }
+	runDashboard = func(_ *config.Config, client kitty.KittyClient, _ int) error {
+		if client != nil || commands.Portable.Launch != runtimesession.BackendTmux {
+			t.Fatal("wrong launch destination")
+		}
+		return nil
+	}
+	w.cfg.Defaults.LaunchBackend = "tmux"
+	if err := Run(0, "", View{}); err != nil {
+		t.Fatal(err)
+	}
+	if commands.Portable.LaunchSource != "config.toml" {
+		t.Fatal(commands.Portable.LaunchSource)
+	}
+	w.cfg.Defaults.LaunchBackend = "kitty"
+	if err := Run(0, "tmux", View{}); err != nil {
+		t.Fatal(err)
+	}
+	if commands.Portable.LaunchSource != "--backend" {
+		t.Fatal(commands.Portable.LaunchSource)
 	}
 }

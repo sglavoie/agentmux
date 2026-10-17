@@ -37,6 +37,10 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
         }
     }
 
+    func source(cliSource: String?) -> String {
+        self == .followCLI ? (cliSource.flatMap { $0.isEmpty ? nil : $0 } ?? "CLI configuration") : "app preference"
+    }
+
     func explanation(cliBackend: String?) -> String {
         if self == .followCLI {
             return "Launch Project and Recent conversation resumes follow config.toml: \(destination(cliBackend: cliBackend)). The destination is checked again before launching. Run a Plan always uses the workspace."
@@ -128,6 +132,7 @@ struct BackendStatus: Decodable, Equatable {
     }
 
     var launchBackend = ""
+    var launchBackendSource = ""
     var tmux = Tmux()
     var server = Server()
     var problems: [Problem] = []
@@ -135,6 +140,7 @@ struct BackendStatus: Decodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case tmux, server, problems
         case launchBackend = "launch_backend"
+        case launchBackendSource = "launch_backend_source"
     }
 
     init() {}
@@ -142,6 +148,7 @@ struct BackendStatus: Decodable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         launchBackend = c.lenient(.launchBackend, "")
+        launchBackendSource = c.lenient(.launchBackendSource, "")
         tmux = c.lenient(.tmux, Tmux())
         server = c.lenient(.server, Server())
         problems = c.lenient(.problems, [])
@@ -191,6 +198,11 @@ enum BackendSetup: Equatable {
         case let .success(status): self = .status(status)
         case let .failure(error): self = .unavailable(error.message)
         }
+    }
+
+    var cliLaunchBackendSource: String? {
+        if case let .status(status) = self { return status.launchBackendSource }
+        return nil
     }
 
     var cliLaunchBackend: String? {

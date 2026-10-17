@@ -143,7 +143,7 @@ func TestBackendStatusOfAWorkingSetupHasNoProblems(t *testing.T) {
 	if !status.Usable() || len(status.Problems) != 0 {
 		t.Fatalf("status = %+v", status)
 	}
-	if status.LaunchBackend != "tmux" || status.Tmux.Source != "bundled" || !status.Tmux.Verified || status.Tmux.Version != "3.7c" {
+	if status.LaunchBackendSource != "config.toml" || status.LaunchBackend != "tmux" || status.Tmux.Source != "bundled" || !status.Tmux.Verified || status.Tmux.Version != "3.7c" {
 		t.Fatalf("status = %+v", status)
 	}
 	if status.Server.Running || status.Server.Socket != "/tmp/agent-mux-test/tmux.sock" {
@@ -271,5 +271,12 @@ func TestBackendStatusWithALiveServerAndNoTmuxForTheNextOne(t *testing.T) {
 	}
 	if !status.Usable() || status.Tmux.Available || status.Server.Agents != 1 {
 		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestBackendStatusNamesTheCompatibilityDefault(t *testing.T) {
+	status := CollectBackendStatus(nil, nil, probe())
+	if status.LaunchBackend != "kitty" || status.LaunchBackendSource != "compatibility default" {
+		t.Fatalf("incorrect fallback provenance: %+v", status)
 	}
 }

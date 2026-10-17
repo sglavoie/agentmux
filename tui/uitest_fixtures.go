@@ -221,7 +221,7 @@ func actionFeedbackFixture() uitestFixture {
 	fixture.Description = "retained action outcomes with exact targets and recovery guidance"
 	fixture.Notices = []Toast{
 		{Severity: toastError, Text: "Profile setup failed. Open configuration to review the selected profile.", Occurred: time.Date(2026, 10, 16, 9, 0, 0, 0, time.UTC)},
-		{Severity: toastWarning, Text: "Restart outcome unconfirmed. Inspect the session before repeating the action.", Occurred: time.Date(2026, 10, 16, 9, 1, 0, 0, time.UTC),
+		{Severity: toastWarning, Unconfirmed: true, Text: "Restart outcome unconfirmed. Inspect the session before repeating the action.", Occurred: time.Date(2026, 10, 16, 9, 1, 0, 0, time.UTC),
 			Target: sessionactions.Capture(session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Harness: "claude"})},
 	}
 	return fixture

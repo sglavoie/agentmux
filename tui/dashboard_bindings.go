@@ -45,7 +45,7 @@ func dashboardBindings() commands.BindingSet {
 		// key refuses. That refusal is the summary guard: it is a property of the
 		// context, not a check the key performs. `handleListKey` answers Enter on a
 		// summary before it ever reaches here, by folding.
-		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "focus", Command: commands.FocusSession},
+		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "open session", Command: commands.FocusSession},
 		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project history", Command: commands.SearchProject},
 		{Keys: []string{keySend}, Display: keySend, Hint: "send", Command: commands.SendToSession},
 

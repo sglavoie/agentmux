@@ -199,6 +199,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         return IndexSet(old.indices.filter { old[$0] != new[$0] })
     }
 
+    /// Retain physical targets during an interaction, refreshing their live
+    /// values in place. New and reordered rows appear when the interaction ends.
+    static func holdingSidebar(_ old: [Item], latest: [Item]) -> [Item] {
+        old.map { previous in latest.first { previous.isSameLine(as: $0) } ?? previous }
+    }
+
     /// The heading the utility views are listed under.
     static let viewsSection = "Workspace"
     /// How long a just-launched session is waited for before the request to
@@ -251,6 +257,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var order = WorkspaceOrder()
     /// The line being dragged, from when the drag begins until it ends.
     private var dragged: Place?
+    private var sidebarMenuOpen = false
     private(set) var items: [Item] = []
     private(set) var content: Content = .empty
     /// Whether the window is on screen; terminals exist only while it is.
@@ -1426,6 +1433,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The menu a right-click on the session list shows: what can be done to
     /// the line under the pointer. A line with nothing to offer shows no menu
     /// (`WorkspaceSidebarView.hasMenu`).
+    func menuWillOpen(_ menu: NSMenu) { sidebarMenuOpen = true }
+    func menuDidClose(_ menu: NSMenu) {
+        sidebarMenuOpen = false
+        reloadSidebar()
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         for item in contextMenuItems(forRow: sidebar.clickedRow) { menu.addItem(item) }
@@ -1445,7 +1458,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         if index < 0 { return listMenuItems() }
         guard index < items.count else { return [] }
         switch items[index] {
-        case let .row(row): return sessionMenuItems(row)
+        case let .row(row): return state.row(row.key).map(sessionMenuItems) ?? []
         case let .view(view):
             // The Dashboard and the Overview have nothing to close until their
             // program runs.
@@ -1510,7 +1523,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         order.setCollapsed(project: project, pinned: pinned, collapsed)
         state.arrange(order)
         delegate?.workspaceOrderChanged(order)
-        reloadSidebar()
+        reloadSidebar(allowReorder: true)
     }
 
     private func sessionMenuItems(_ row: WorkspaceRow) -> [NSMenuItem] {
@@ -2814,7 +2827,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     // MARK: Sidebar
 
-    private func reloadSidebar(force: Bool = false) {
+    private func reloadSidebar(force: Bool = false, allowReorder: Bool = false) {
         // A session's terminals follow its row. One whose session is no
         // longer listed keeps running, among the workspace's own views.
         let listed = state.embeddedRuntimeSessionIDs
@@ -2827,7 +2840,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let about = Set(views.all.compactMap(\.aboutRuntimeSessionID))
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
         let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
-        let wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
+        var wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
             + state.groups.flatMap { group in
                 // A collapsed project lists its header only, which still
                 // counts what waits under it.
@@ -2835,15 +2848,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                     [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
                 }
             }
+        if !allowReorder, !items.isEmpty, sidebar.pointerInside || sidebarMenuOpen || dragged != nil {
+            wanted = Self.holdingSidebar(items, latest: wanted)
+        }
         let dimmed: CGFloat = state.current ? 1 : 0.5
         let decorations = wanted.map(decoration)
-        if force || wanted != items || sidebar.alphaValue != dimmed || decorations != drawnDecorations {
+        let ended = IndexSet(wanted.indices.filter { index in
+            if case let .row(row) = wanted[index] { return state.row(row.key) == nil }
+            return false
+        })
+        if force || wanted != items || sidebar.alphaValue != dimmed || decorations != drawnDecorations || !ended.isEmpty {
             // A snapshot mostly moves ages and glyphs: only those lines are
             // drawn again, and the pointer's × stays where it is. A line
             // whose ⌘ digit or session name moved is one of them, though
             // its own item is the same: a session started above it, in a
             // collapsed project, or the session beside it was renamed.
             var changed = force ? nil : Self.changedLines(from: items, to: wanted)
+            changed?.formUnion(ended)
             if changed != nil, decorations.count == drawnDecorations.count {
                 changed?.formUnion(IndexSet(decorations.indices.filter { decorations[$0] != drawnDecorations[$0] }))
             }
@@ -2966,7 +2987,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 ?? WorkspaceRowCellView()
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
                       sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false)
-            cell.onClose = { [weak self] in self?.detachSession(row.key) }
+            let current = state.row(row.key) != nil
+            cell.alphaValue = current ? 1 : 0.5
+            cell.closeButton.isEnabled = current
+            if !current { cell.detailLabel.stringValue = "Session ended" }
+            cell.onClose = { [weak self] in
+                guard let self, self.state.row(row.key) != nil else { return }
+                self.detachSession(row.key)
+            }
             return cell
         }
     }
@@ -3099,7 +3127,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             }
             views.moveTerminal(view.id, before: next)
         }
-        reloadSidebar()
+        reloadSidebar(allowReorder: true)
         // The waiting sessions are listed in the order they have here.
         reloadInspector()
         return true
@@ -3136,6 +3164,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         dragged = nil
+        reloadSidebar()
     }
 
     func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
@@ -3353,7 +3382,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func focusItem(at index: Int) {
         guard index >= 0, index < items.count else { return }
         switch items[index] {
-        case let .row(row): activate(row, reattaching: true)
+        case let .row(row):
+            if let current = state.row(row.key) { activate(current, reattaching: true) }
         case let .view(view): showView(view.id, focus: true)
         case let .group(group):
             if !group.needsAttention { setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed) }
@@ -3397,6 +3427,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.delegate = self
         sidebar.target = self
         sidebar.action = #selector(rowClicked(_:))
+        sidebar.onPointerChanged = { [weak self] in self?.reloadSidebar() }
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
         sidebar.onCollapse = { [weak self] collapsed in self?.setSelectedProjectCollapsed(collapsed) }
         sidebar.onStep = { [weak self] offset in self?.stepFromUnlistedPlace(offset) ?? false }
@@ -3649,6 +3680,25 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
 /// project — and nothing typed here reaches a program.
 @MainActor
 final class WorkspaceSidebarView: NSTableView {
+    private(set) var pointerInside = false
+    var onPointerChanged: (() -> Void)?
+    private var pointerTracking: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        if let pointerTracking { removeTrackingArea(pointerTracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil)
+        addTrackingArea(area)
+        pointerTracking = area
+        super.updateTrackingAreas()
+    }
+    override func mouseEntered(with event: NSEvent) {
+        pointerInside = true
+        onPointerChanged?()
+    }
+    override func mouseExited(with event: NSEvent) {
+        pointerInside = false
+        onPointerChanged?()
+    }
     var onReturn: (() -> Void)?
     /// ← (true) or → (false).
     var onCollapse: ((Bool) -> Void)?

@@ -12,7 +12,7 @@
     { "type": "contains_text", "text": "▌/api ✕" },
     { "type": "contains_text", "text": "▌@work ✕" },
     { "type": "contains_text", "text": "· ? help · esc clear filters" },
-    { "type": "contains_text", "text": "· ? more" },
+    { "type": "contains_text", "text": "? help" },
     { "type": "excludes_text", "text": "remove chip" },
     { "type": "excludes_text", "text": "Sessions: 3/7 visible" },
     { "type": "no_layout_issues" }

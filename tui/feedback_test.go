@@ -140,3 +140,27 @@ func TestFeedbackWrapsAndScrollsLongDiagnostic(t *testing.T) {
 		t.Fatal("feedback missing from layout checks")
 	}
 }
+
+func TestRetainedNoticeKeepsItsDetailsRouteAtNarrowWidths(t *testing.T) {
+	for _, width := range []int{24, 40, 60, 80, 100} {
+		m := testModel()
+		m.width = width
+		m.pushToast(Toast{Severity: toastError, Text: strings.Repeat("Restart diagnostic 世界 ", 20)})
+		line := stripAnsi(renderStatusBar(m))
+		if !strings.HasSuffix(line, ": feedback ↵") {
+			t.Fatalf("width %d hid recovery: %q", width, line)
+		}
+	}
+}
+
+func TestFeedbackExplainsUnconfirmedOutcomeAndNextStep(t *testing.T) {
+	m := testModel()
+	m.beginActionFeedback(1, commands.RestartSession, "api", "work")
+	m.reportActionOutcome(sessionactions.Result{Request: 1, Action: commands.RestartSession, Outcome: sessionactions.OutcomeUnconfirmed})
+	text := feedbackText(m)
+	for _, want := range []string{"What happened", "What remains uncertain", "Next step", "before repeating"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q: %s", want, text)
+		}
+	}
+}

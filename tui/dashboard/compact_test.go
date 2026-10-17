@@ -283,7 +283,7 @@ func TestCompactAndInspectorSayTheSameSentences(t *testing.T) {
 			tile := renderCompactLines(t, CompactInput{
 				Content: st.content, Session: s, Error: st.err, Output: st.output, Width: 46, Height: 10,
 			})
-			if got, want := tile[CompactMetaLines+1], full[InspectorMetaLines+1]; got != want {
+			if got, want := tile[CompactMetaLines+1], full[InspectorChromeHeight(inspectorInput(InspectorInput{Content: st.content, Session: s, Width: 46}))]; got != want {
 				t.Errorf("tile says %q where the inspector says %q", got, want)
 			}
 			if st.content != InspectorNoSelection && !strings.HasSuffix(tile[compactTitleRow], "0:42 · Working") {
@@ -413,28 +413,15 @@ func TestCompactIsPure(t *testing.T) {
 	}
 }
 
-// TestAddingTheCompactPreviewLeftTheInspectorAtSixRows is the regression the
-// shared-helper extraction exists to be checked against. The full pane's
-// metadata block is a fixed six lines and its divider sits under them.
-func TestAddingTheCompactPreviewLeftTheInspectorAtSixRows(t *testing.T) {
-	if InspectorMetaLines != 6 {
-		t.Fatalf("InspectorMetaLines = %d, want 6", InspectorMetaLines)
-	}
-	if InspectorChromeLines != 7 {
-		t.Fatalf("InspectorChromeLines = %d, want 7", InspectorChromeLines)
-	}
-	if CompactMetaLines != 2 || CompactChromeLines != 3 {
-		t.Fatalf("compact chrome = %d/%d, want 2 header rows and 3 chrome rows", CompactMetaLines, CompactChromeLines)
-	}
-	lines := renderInspectorLines(t, inspectorInput(InspectorInput{
+// A bare inspector spends no rows on unavailable metadata.
+func TestCompactAndInspectorHaveIndependentGeometry(t *testing.T) {
+	in := inspectorInput(InspectorInput{
 		Content: InspectorReady,
 		Session: session.RunningSession{WindowID: 9, Base: "x", Project: "x", Harness: harness.Claude},
 		Output:  SplitOutput("body\n"),
-	}))
-	if !strings.HasPrefix(strings.TrimSpace(lines[6]), "─") {
-		t.Fatalf("the inspector's divider is no longer on row 6: %q", lines[6])
-	}
-	if strings.Contains(lines[5], "─────") {
-		t.Fatalf("the inspector's divider moved up to row 5: %q", lines[5])
+	})
+	lines := renderInspectorLines(t, in)
+	if InspectorChromeHeight(in) != 3 || !strings.HasPrefix(lines[2], "─") || lines[3] != "body" {
+		t.Fatalf("bare inspector wastes output rows: %v", lines)
 	}
 }

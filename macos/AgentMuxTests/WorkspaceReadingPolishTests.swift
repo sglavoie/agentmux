@@ -14,6 +14,17 @@ final class WorkspaceReadingPolishTests: XCTestCase {
         ])
     }
 
+    func testTranscriptQuotesNestedListsAndTablesPreserveStructure() {
+        XCTAssertEqual(WorkspaceTranscriptBlock.parse("> ## Note\n> - Parent\n>   - Child\n>\n> ```sh\n> echo literal\n> ```"), [
+            .quote([.heading(2, "Note"), .item("•", "Parent"),
+                    .nestedItem(marker: "•", text: "Child", indent: 2), .code(language: "sh", text: "echo literal")])
+        ])
+        XCTAssertEqual(WorkspaceTranscriptBlock.parse("| Name | Value |\n| :--- | ---: |\n| **bold** | `a|b` |\n| pipe | a\\|b |"), [
+            .table(headers: ["Name", "Value"], rows: [["**bold**", "`a|b`"], ["pipe", "a|b"]])
+        ])
+        XCTAssertEqual(WorkspaceTranscriptBlock.parse("a | b\nnot a delimiter"), [.paragraph("a | b\nnot a delimiter")])
+    }
+
     func testSearchHighlightsRenderedMarkdownWithoutLosingInlineCode() {
         let value = WorkspaceTranscriptBlock.inline("Read **café** and `value`.", terms: ["CAFÉ", "value"])
         XCTAssertEqual(String(value.characters), "Read café and value.")

@@ -46,7 +46,7 @@ import (
 const (
 	// CompactMetaLines is the height of the compact header: identity and status
 	// on the first line, then agent. Fixed at every width and for every content
-	// state, exactly as InspectorMetaLines is.
+	// state. Session inspector metadata is measured separately.
 	CompactMetaLines = 2
 
 	// The fixed row each compact fact occupies, named for the same reason the

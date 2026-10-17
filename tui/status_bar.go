@@ -28,6 +28,7 @@ const (
 type statusMessage struct {
 	Text     string
 	Severity statusSeverity
+	Details  bool
 }
 
 // renderStatusBar draws the one status row every root composition reserves.
@@ -48,6 +49,9 @@ func renderStatusBar(m Model) string {
 		return statusBarStyle(statusIdle).Render(layout.PadRight("", m.width))
 	}
 	line := fitStatusBarText(msg.Text, m.width)
+	if msg.Details {
+		line = fitFeedbackStatus(msg.Text, m.width)
+	}
 	return statusBarStyle(msg.Severity).Render(line)
 }
 
@@ -67,7 +71,8 @@ func latestActiveToastStatus(m Model, now time.Time) (statusMessage, bool) {
 			continue
 		}
 		return statusMessage{
-			Text:     toastDisplayText(t),
+			Text:     t.Text,
+			Details:  t.Persistent,
 			Severity: toastStatusSeverity(t.Severity),
 		}, true
 	}
@@ -500,6 +505,19 @@ func chipPickerStatusLabel(kind chipPickerKind) string {
 	default:
 		return "option"
 	}
+}
+
+// Reserve the route to the retained notice before truncating its diagnostic.
+func fitFeedbackStatus(text string, width int) string {
+	const route = ": feedback ↵"
+	if width <= 0 {
+		return oneLineStatusText(text) + " · " + route
+	}
+	if width < layout.Width(route)+5 {
+		return layout.Truncate(route, width, "…")
+	}
+	room := width - layout.Width(route) - 3
+	return layout.PadRight(layout.Truncate(oneLineStatusText(text), room, "…"), room) + " · " + route
 }
 
 func fitStatusBarText(text string, width int) string {

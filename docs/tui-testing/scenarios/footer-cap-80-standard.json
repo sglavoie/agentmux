@@ -5,8 +5,8 @@
   "actions": [{ "type": "resize", "width": 80, "height": 26 }],
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
-    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help" },
-    { "type": "excludes_text", "text": "j/k move · enter focus · : cmds" },
+    { "type": "contains_text", "text": "  j/k up/down · enter open · a actions · : commands · / filter · ? help" },
+    { "type": "excludes_text", "text": "j/k move · enter open · : cmds" },
     { "type": "excludes_text", "text": "? more" },
     { "type": "excludes_text", "text": "]/[ jump chord" },
     { "type": "contains_text", "text": "Needs you (2)" },

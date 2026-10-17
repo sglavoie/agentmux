@@ -87,12 +87,22 @@ struct WorkspaceHistoryView: View {
                                 if model.liveConversations.contains(entry.id) { Text("Live").font(.caption).foregroundStyle(.green) }
                             }
                             Text("\(entry.conversation.harness) · \(entry.conversation.profile)").font(.caption).foregroundStyle(.secondary)
+                            if model.scope == .all && !entry.conversation.cwd.isEmpty {
+                                Text(entry.conversation.cwd)
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).help(entry.conversation.cwd)
+                            }
+                            if let lastAt = entry.conversation.lastAt {
+                                TimelineView(.periodic(from: .now, by: 30)) { context in
+                                    Text(lastAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
+                                        .font(.caption).foregroundStyle(.secondary).help(lastAt.formatted())
+                                }
+                            }
                             Text(entry.preview.reveal()).font(.caption).lineLimit(3)
                             if let matches = entry.matches { Text("\(matches) \(matches == 1 ? "match" : "matches")").font(.caption).foregroundStyle(.secondary) }
                         }.padding(.vertical, 3).tag(entry.id)
                     }
                 }.focused($focus, equals: .results)
-                    .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
+                    .frame(minWidth: 200, idealWidth: 300, maxWidth: .infinity)
                     .overlay {
                         if model.entries.isEmpty && !model.loading && model.error == nil {
                             WorkspaceEmpty(title: "No conversations found", detail: "Try another search or broaden the search scope.", symbol: "magnifyingglass")

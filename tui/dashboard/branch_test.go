@@ -57,7 +57,7 @@ func TestBranchReachesTheSelectedSessionContextRatherThanTheRow(t *testing.T) {
 	}
 
 	lines := renderInspectorLines(t, InspectorInput{Width: 78, Content: InspectorReady, Session: s})
-	if got := lines[inspectorBranchLine]; !strings.Contains(got, "amx/feat-x"+dirtyMarker) {
+	if got := lines[3]; !strings.Contains(got, "amx/feat-x"+dirtyMarker) {
 		t.Errorf("inspector branch line %q is missing the branch and its dirty marker", got)
 	}
 }
@@ -78,8 +78,8 @@ func TestBranchIsUncoloredAlongsideTheDirectory(t *testing.T) {
 		label string
 		value string
 	}{
-		{inspectorBranchLine, "Branch", "main"},
-		{inspectorDirLine, "Dir", "/tmp/api"},
+		{3, "Branch", "main"},
+		{2, "Dir", "/tmp/api"},
 	} {
 		line := lines[tc.idx]
 		if want := styleDim.Render(layout.PadRight(tc.label, inspectorLabelWidth)); !strings.Contains(line, want) {
@@ -104,7 +104,7 @@ func TestBranchLongEnoughToHaveNeededACapIsStillDrawnWhole(t *testing.T) {
 	s := session.RunningSession{WindowID: 1, Base: "api", Project: "api",
 		Branch: "release/2026-q3-migration-rollback"}
 	lines := renderInspectorLines(t, InspectorInput{Width: 120, Content: InspectorReady, Session: s})
-	if line := lines[inspectorBranchLine]; !strings.Contains(line, s.Branch) {
+	if line := lines[2]; !strings.Contains(line, s.Branch) {
 		t.Fatalf("inspector branch line %q truncated a branch it had room for", line)
 	}
 }

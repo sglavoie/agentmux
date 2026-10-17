@@ -19,7 +19,7 @@ import (
 // how many lines the reflowed footer and the sticky status bar took.
 func (m Model) pickerInput() launch.PickerInput {
 	return launch.PickerInput{
-		Destination:     commands.LaunchDestination(),
+		Destination:     commands.LaunchExplanation(),
 		Sessions:        m.pickerSessions,
 		Running:         m.pickerRunning,
 		DirProblems:     m.pickerDirProblems,

@@ -1,7 +1,7 @@
 // Package history owns the TUI's session-history domain: everything that
-// answers "what already happened" rather than "what is running now". The two
-// histories that exist here are the per-session event history — the detail
-// overlay, its row and footer chrome, and the phase timeline sub-view with its
+// answers "what already happened". The two histories that exist here are the
+// per-session event history — the detail overlay, its row and footer chrome,
+// its full session metadata sub-view, and the phase timeline sub-view with its
 // grouping, folding, and phase navigation — and Past Sessions transcript
 // history: the search results list and its row formatting, the transcript
 // viewer with its match scanning and cursor-tracking scroll, the full-message

@@ -235,6 +235,7 @@ func (m Model) enterDetailMode(windowID int, startInTimeline bool) (tea.Model, t
 	m.detailWindowID = windowID
 	m.detailEvents = nil
 	m.detailScroll = 0
+	m.detailMetadata = false
 	m.detailLoading = true
 	m.detailErr = nil
 	m.detailViewTimeline = startInTimeline
@@ -249,6 +250,7 @@ func (m *Model) exitDetailMode() {
 	m.detailWindowID = 0
 	m.detailEvents = nil
 	m.detailScroll = 0
+	m.detailMetadata = false
 	m.detailLoading = false
 	m.detailErr = nil
 	m.detailViewTimeline = false
@@ -271,7 +273,13 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
+	case "m":
+		m.detailMetadata = !m.detailMetadata
+		m.detailViewTimeline = false
+		m.detailScroll = 0
+		return m, nil
 	case keyToggleTimeline:
+		m.detailMetadata = false
 		m.detailViewTimeline = !m.detailViewTimeline
 		m.detailTimelineScroll = 0
 		return m, nil

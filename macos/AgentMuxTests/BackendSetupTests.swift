@@ -24,13 +24,16 @@ final class BackendSetupTests: XCTestCase {
         input.launchBackend = .followCLI
         input.cliLaunchBackend = "tmux"
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first,
-                       .info("Launch in workspace (tmux) · follows CLI configuration"))
+                       .info("Launch in workspace (tmux) · CLI configuration"))
         input.cliLaunchBackend = "kitty"
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first,
-                       .info("Launch in Kitty · follows CLI configuration"))
+                       .info("Launch in Kitty · CLI configuration"))
+        input.cliLaunchBackendSource = "compatibility default"
+        XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first, .info("Launch in Kitty · compatibility default"))
+        XCTAssertTrue(MenuBuilder.entries(for: .projects, input).contains(.action(.launchSettings, "Launch Settings…")))
         input.launchBackend = .workspace
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first,
-                       .info("Launch in workspace (tmux) · set in app Settings"))
+                       .info("Launch in workspace (tmux) · app preference"))
     }
 
     func testEveryChoiceHasItsOwnLabel() {

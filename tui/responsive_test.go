@@ -396,7 +396,7 @@ func TestCompactFooterIsOneRowAndKeepsTheRequiredTokens(t *testing.T) {
 	// row falls back to. The row must carry one of the two for every control.
 	required := [][2]string{
 		{"j/k up/down", "j/k"},
-		{"enter focus", "↵"},
+		{"enter open", "↵"},
 		{": commands", ":"},
 		{"? help", "?"},
 	}
@@ -432,7 +432,7 @@ func TestCompactFooterFallsBackWholesaleRatherThanMixingSpellings(t *testing.T) 
 		m := responsiveModel(width, 24, dashboard.ViewUrgency, false)
 		plain := stripAnsi(rootFooterLines(m)[0])
 		labelled := strings.Contains(plain, "j/k up/down")
-		for _, label := range []string{"enter focus", ": commands", "? help"} {
+		for _, label := range []string{"enter open", ": commands", "? help"} {
 			if strings.Contains(plain, label) != labelled {
 				t.Errorf("width %d: footer %q mixes labelled and bare spellings", width, plain)
 			}

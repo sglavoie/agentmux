@@ -7,14 +7,8 @@
 // it is said. Below it, the same pane shows that session's terminal output,
 // which is the one fact about a session that no projection can summarize.
 //
-// Two properties are the design rather than details of it.
-//
-// The metadata block is a FIXED six lines. Every line is always drawn, and a
-// fact this build cannot supply renders as `—` rather than collapsing the line.
-// A block that shrank with its content would move the divider and the output
-// under it on every cursor move, so scanning down a list would make the text the
-// operator is reading walk up and down the pane. Six lines cost six lines on the
-// session with nothing to say, and that is the cheaper half of the trade.
+// Metadata combines identity and status and omits unavailable fields. Geometry
+// and scrolling both measure this same block, so reclaimed rows become output.
 //
 // And the output half distinguishes five situations that the pane it replaces
 // collapsed into two. A read that has not landed, a buffer that is legitimately
@@ -45,30 +39,11 @@ import (
 )
 
 const (
-	// InspectorMetaLines is the height of the metadata block: title, status and
-	// age, agent, branch, directory, and the supervision/lock/mute/watchdog line.
-	// It is fixed at every width and for every content state.
-	InspectorMetaLines = 6
-
-	// The fixed row each metadata fact occupies. They are named because the
-	// block's geometry is a contract — the pane scans top to bottom and a fact
-	// that moved rows would defeat that — and a caller or a test that wants one
-	// line should say which fact it means rather than count.
-	inspectorTitleRow   = 0
-	inspectorStatusRow  = 1
-	inspectorAgentLine  = 2
-	inspectorBranchLine = 3
-	inspectorDirLine    = 4
-	inspectorWatchLine  = 5
-
-	// inspectorDividerLines is the rule between the metadata block and the
-	// output, which is also where the Paused indication is drawn.
-	inspectorDividerLines = 1
-
-	// InspectorChromeLines is what the inspector spends before a single line of
-	// output is drawn. A caller sizing the pane charges this once; the output
-	// region is whatever the height leaves after it.
-	InspectorChromeLines = InspectorMetaLines + inspectorDividerLines
+	// Project cards keep a fixed six-line summary; session inspectors measure
+	// their compact metadata with InspectorChromeHeight.
+	projectCardMetadataLines = 6
+	inspectorDividerLines    = 1
+	projectCardChromeLines   = projectCardMetadataLines + inspectorDividerLines
 
 	// inspectorLabelWidth is the label column of the three labelled metadata
 	// lines, sized to the longest label plus its gap so the values start on one
@@ -210,29 +185,39 @@ func RenderInspector(in InspectorInput) string {
 	return strings.Join(lines, "\n")
 }
 
-// inspectorMetaLines builds exactly InspectorMetaLines lines, each already
-// clamped to the pane's width.
-//
-// The order is the order the questions are asked in. Which session is this;
-// what is it doing and for how long; what is running it; which checkout it is
-// in and whether that checkout is dirty; where that is on disk; and who else is
-// touching it. The first two are the headline and carry the pane's only color;
-// the last four are metadata and wear the label column.
+// InspectorChromeHeight is shared by rendering and scroll geometry.
+func InspectorChromeHeight(in InspectorInput) int {
+	return len(inspectorMetaLines(in)) + inspectorDividerLines
+}
+
 func inspectorMetaLines(in InspectorInput) []string {
-	lines := make([]string, InspectorMetaLines)
 	if in.Content == InspectorNoSelection {
-		return lines
+		return nil
 	}
 	s := in.Session
 	group := StateGroup(s, in.LastActivity, in.IdleThreshold)
-
-	lines[inspectorTitleRow] = layout.StyledTruncate(inspectorTitleLine(in, s), in.Width, "…")
-	lines[inspectorStatusRow] = layout.StyledTruncate(inspectorStatusLine(in, s, group), in.Width, "…")
-	lines[inspectorAgentLine] = inspectorLabelled(in.Width, "Agent",
-		joinDetailTokens(harnessLabel(s.Harness), s.EffectiveProfile()))
-	lines[inspectorBranchLine] = inspectorLabelled(in.Width, "Branch", branchText(s))
-	lines[inspectorDirLine] = inspectorDirectoryLine(in.Width, s.Directory)
-	lines[inspectorWatchLine] = inspectorLabelled(in.Width, "Watch", inspectorWatchText(in, s))
+	identity := joinDetailTokens(harnessLabel(s.Harness), s.EffectiveProfile())
+	status := inspectorStatusLine(in, s, group)
+	inlineIdentity := identity != "" && layout.StyledWidth(status+metaSeparator+identity) <= in.Width
+	if inlineIdentity {
+		status += styleDim.Render(metaSeparator + identity)
+	}
+	lines := []string{
+		layout.StyledTruncate(inspectorTitleLine(in, s), in.Width, "…"),
+		layout.StyledTruncate(status, in.Width, "…"),
+	}
+	if identity != "" && !inlineIdentity {
+		lines = append(lines, inspectorLabelled(in.Width, "Agent", identity))
+	}
+	if s.Directory != "" {
+		lines = append(lines, inspectorDirectoryLine(in.Width, s.Directory))
+	}
+	if branch := branchText(s); branch != "" {
+		lines = append(lines, inspectorLabelled(in.Width, "Branch", branch))
+	}
+	if watch := inspectorWatchText(in, s); watch != "" {
+		lines = append(lines, inspectorLabelled(in.Width, "Watch", watch))
+	}
 	return lines
 }
 

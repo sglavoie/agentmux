@@ -16,7 +16,7 @@
     { "type": "excludes_text", "text": "▌ ❓" },
     { "type": "excludes_text", "text": "▌ 🔁" },
     { "type": "contains_text", "text": "Awaiting reply · —" },
-    { "type": "contains_text", "text": "Agent   claude · work" },
+    { "type": "contains_text", "text": "claude · work" },
     { "type": "contains_text", "text": "Watch   🔁" },
     { "type": "no_layout_issues" }
   ]

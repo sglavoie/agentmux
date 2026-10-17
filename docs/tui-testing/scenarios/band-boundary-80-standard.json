@@ -10,7 +10,7 @@
     { "type": "excludes_text", "text": "/ to filter" },
     { "type": "excludes_text", "text": "icons:" },
     { "type": "contains_text", "text": "Agent Mux · Urgency · all projects" },
-    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help" },
+    { "type": "contains_text", "text": "  j/k up/down · enter open · a actions · : commands · / filter · ? help" },
     { "type": "no_layout_issues" }
   ]
 }

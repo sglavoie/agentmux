@@ -9,7 +9,7 @@
     { "type": "contains_text", "text": "Running (2)" },
     { "type": "selected_title", "value": "api" },
     { "type": "contains_text", "text": "│Needs permission" },
-    { "type": "contains_text", "text": "│Agent   claude · work" },
+    { "type": "contains_text", "text": "claude · work" },
     { "type": "contains_text", "text": "│tmux pane output line 2" },
     { "type": "contains_text", "text": "Working            1:35" },
     { "type": "no_layout_issues" }

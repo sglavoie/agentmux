@@ -46,6 +46,7 @@ func renderFooter(m Model) string {
 		lines = nonEmptyFooterLines(
 			footerStyledLine(m.width, "  ",
 				renderFooterBinding("space", "toggle"), renderFooterBinding("enter", "launch"),
+				renderFooterBinding("ctrl+e", "settings"),
 				renderFooterBinding("f", "profile"), renderFooterBinding("P", "pin"),
 				renderFooterBinding("s", "sessions"), renderFooterBinding("C", "override"),
 				renderFooterBinding("d", "directory"),
@@ -223,7 +224,7 @@ func listModeFooterLines(m Model, position string) []string {
 //
 // Three spellings are tried in order, and the row never mixes them. The
 // labelled palette is dropped from the bottom of the priority ladder until it
-// fits, with footerHintMore appended once anything has been dropped. When only
+// fits. The visible help key leads to commands omitted for space. When only
 // the essentials remain and they still do not fit with the marker, the marker
 // goes: `? help` is on the row already, so losing `? more` costs a hint that
 // something dropped, not the way to reach what dropped. When even the labelled
@@ -297,7 +298,7 @@ func footerSingleRow(tokens []prioritizedFooterToken, indent string, truncated, 
 		}
 		parts = append(parts, rendered)
 	}
-	if truncated && !short {
+	if truncated && !short && !strings.Contains(ansi.Strip(strings.Join(parts, " ")), "? help") {
 		parts = append(parts, renderFooterBinding("?", "more"))
 	}
 	return indent + strings.Join(parts, sep)
@@ -599,14 +600,12 @@ func (c listFooterCandidate) shownWhen(fn func(Model) bool) listFooterCandidate 
 	return c
 }
 
-// listFooterPalette is the complete, fixed-order ModeList footer palette. Order
-// is invariant: a candidate never moves between states, and the only thing the
-// cursor row changes is whether a key renders available or dim.
+// listFooterPalette keeps navigation in a stable order and reserves space for
+// the selected session’s available answer or send action.
 //
-// The priority band is what the two-row budget spends: essentials survive any
-// width, and everything below is dropped from the bottom of the declaration up,
-// so the row is always a prefix of this list plus `? more`. Nothing is lost by
-// dropping — every candidate here is documented in the generated Dashboard help
+// The single row spends its budget on essentials before secondary hints.
+// Omitted commands remain available through the palette and Dashboard help.
+// Every binding here is documented in the generated Dashboard help
 // section, and most are also reachable from the command palette.
 // It is a function rather than a package variable because the command-backed
 // entries read the catalog, and the catalog's preview gate measures this very
@@ -618,7 +617,8 @@ func listFooterPalette() []listFooterCandidate {
 	// frame.
 	bindings := dashboardBindings()
 	return []listFooterCandidate{
-		// Essential: the six commands without which the dashboard cannot be driven
+		// Essential: navigation, the selected session’s next action, and the commands
+		// without which the dashboard cannot be driven
 		// at all — move the cursor, act on what it holds, reach every other command,
 		// and find out what those are. Dropping any of them would leave a row that
 		// cannot lead anywhere, so none of them ever drop.
@@ -631,9 +631,19 @@ func listFooterPalette() []listFooterCandidate {
 			availableWhen(footerAlways).
 			respelled(nil, listEnterLabel).
 			irreducible(),
+		listCommandBinding(bindings, commands.SendToSession, footerSectionRow, footerPriorityEssential).
+			shownWhen(dashboardCommandAvailable(commands.SendToSession)).
+			respelled(nil, listSendLabel),
+		listMetadata(footerPriorityEssential, func(m Model, _ string) string {
+			row, ok := m.selectedSession()
+			if commands.SendAvailability(commands.Context{Target: row, HasTarget: ok}).Reason == commands.ReasonSendASLQuestion {
+				return renderFooterBinding(": runs ↵", "answer run")
+			}
+			return ""
+		}),
 		listBinding("a", "actions", footerSectionRow, footerPriorityEssential, hasRow),
 		listBinding(":", "commands", footerSectionApp, footerPriorityEssential, footerAlways).irreducible(),
-		listCommandBinding(bindings, commands.FilterSessions, footerSectionApp, footerPriorityEssential),
+		listCommandBinding(bindings, commands.FilterSessions, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.ShowKeyboardHelp, footerSectionApp, footerPriorityEssential).irreducible(),
 
 		// Primary: where the cursor sits, what is filtering the list, and the rest of
@@ -685,7 +695,15 @@ func listEnterLabel(m Model) string {
 	if m.summarySelected() {
 		return "fold/unfold"
 	}
-	return "focus"
+	return "open"
+}
+
+func listSendLabel(m Model) string {
+	row, _ := m.selectedSession()
+	if row.State == "key" || row.State == "question" {
+		return "answer"
+	}
+	return "send prompt"
 }
 
 func listFilterActive(m Model) bool { return !m.activeFilter.IsEmpty() }

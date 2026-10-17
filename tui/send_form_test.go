@@ -413,3 +413,28 @@ func TestRetainedDraftAndPendingSendStayPrivateInModelFormatting(t *testing.T) {
 		}
 	}
 }
+
+func TestDashboardFooterPrioritizesTheSelectedSessionsNextAction(t *testing.T) {
+	for _, width := range []int{80, 100, 120} {
+		for _, state := range []string{"key", "question", "stop"} {
+			m := withListRows(testModelWithSessions(), tmuxTestRow(state))
+			m.width = width
+			line := stripAnsi(renderFooter(m))
+			want := "t answer"
+			if state == "stop" {
+				want = "t send prompt"
+			}
+			if !strings.Contains(line, want) {
+				t.Fatalf("%s at %d: %q", state, width, line)
+			}
+		}
+	}
+	row := tmuxTestRow("question")
+	row.ASLPhases = []string{"implement"}
+	m := withListRows(testModelWithSessions(), row)
+	m.width = 120
+	line := stripAnsi(renderFooter(m))
+	if !strings.Contains(line, ": runs ↵ answer run") || strings.Contains(line, "t answer") {
+		t.Fatalf("supervisor question offered the wrong answer route: %s", line)
+	}
+}

@@ -32,6 +32,7 @@ func historyDetailInput(m Model) history.DetailInput {
 		Height:         m.height,
 		BodyHeight:     rootBodyHeight(m),
 		ViewTimeline:   m.detailViewTimeline,
+		ViewMetadata:   m.detailMetadata,
 		TimelineScroll: m.detailTimelineScroll,
 		TimelineFold:   m.detailTimelineFold,
 		ShowSuppressed: m.detailShowSuppressed,

@@ -9,7 +9,7 @@
     { "type": "contains_text", "text": "dotfiles  Subagent      —" },
     { "type": "contains_text", "text": "api       Active        —" },
     { "type": "contains_text", "text": "backend   Active        —" },
-    { "type": "contains_text", "text": "Agent   codex · personal" },
+    { "type": "contains_text", "text": "codex · personal" },
     { "type": "contains_text", "text": "Dir     ~/dotfiles" },
     { "type": "excludes_text", "text": "1:" },
     { "type": "excludes_text", "text": "[P]" },

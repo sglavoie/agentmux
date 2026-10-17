@@ -23,7 +23,7 @@
     },
     {
       "type": "contains_text",
-      "text": "\u2502Agent   codex \u00b7 personal"
+      "text": "codex \u00b7 personal"
     },
     {
       "type": "contains_text",

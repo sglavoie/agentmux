@@ -66,38 +66,25 @@ func renderInspectorLines(t *testing.T, in InspectorInput) []string {
 	return lines
 }
 
-// TestInspectorMetadataGeometryIsFixed is the pane's scanning contract: the
-// divider and the output below it must sit on the same rows no matter what the
-// selected session can say about itself, so moving the cursor down a list does
-// not make the text the operator is reading walk up and down the pane.
-func TestInspectorMetadataGeometryIsFixed(t *testing.T) {
-	full := inspectorSession()
-	bare := session.RunningSession{WindowID: 12, Base: "bare", Project: "bare"}
+func inspectorChrome() int {
+	return InspectorChromeHeight(inspectorInput(InspectorInput{Content: InspectorReady, Session: inspectorSession()}))
+}
 
-	cases := []struct {
-		name string
-		in   InspectorInput
-	}{
-		{"ready", InspectorInput{Content: InspectorReady, Session: full, Output: SplitOutput("a\nb\n")}},
-		{"loading", InspectorInput{Content: InspectorLoading, Session: full}},
-		{"failed", InspectorInput{Content: InspectorFailed, Session: full, Error: "kitty: no such window"}},
-		{"vanished", InspectorInput{Content: InspectorVanished, Session: full}},
-		{"no selection", InspectorInput{Content: InspectorNoSelection}},
-		{"session with nothing to say", InspectorInput{Content: InspectorReady, Session: bare}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			lines := renderInspectorLines(t, tc.in)
-			divider := lines[InspectorMetaLines]
-			if !strings.HasPrefix(strings.TrimSpace(divider), "─") {
-				t.Errorf("the divider is not on row %d; row %d is %q", InspectorMetaLines, InspectorMetaLines, divider)
-			}
-			for i := 0; i < InspectorMetaLines; i++ {
-				if strings.Contains(lines[i], "─────") {
-					t.Errorf("the divider moved up to row %d: %q", i, lines[i])
-				}
-			}
-		})
+func TestInspectorMetadataUsesOnlyAvailableFacts(t *testing.T) {
+	for _, in := range []InspectorInput{
+		{Content: InspectorReady, Session: inspectorSession()},
+		{Content: InspectorReady, Session: session.RunningSession{Base: "bare"}},
+		{Content: InspectorNoSelection},
+	} {
+		in = inspectorInput(in)
+		lines := renderInspectorLines(t, in)
+		chrome := InspectorChromeHeight(in)
+		if !strings.HasPrefix(lines[chrome-1], "─") {
+			t.Fatalf("divider and measured chrome disagree: %v", lines)
+		}
+		if chrome > 5 {
+			t.Fatalf("unnecessary metadata: %v", lines)
+		}
 	}
 }
 
@@ -113,7 +100,7 @@ func TestInspectorNamesEveryMetadataFact(t *testing.T) {
 		Watchdog: protocol.WatchdogState{LastAction: "stop", LastEventAt: inspectorNow.Add(-3 * time.Minute).Unix(), ThresholdSec: 600},
 		Output:   SplitOutput("hello\n"),
 	})
-	for i, want := range []string{"api", "Working", "claude · work", "feature/queue*", "projects/api", "last event 3m"} {
+	for i, want := range []string{"api", "Working", "projects/api", "feature/queue*", "last event 3m"} {
 		if !strings.Contains(lines[i], want) {
 			t.Errorf("metadata line %d = %q, want it to name %q", i, lines[i], want)
 		}
@@ -121,27 +108,20 @@ func TestInspectorNamesEveryMetadataFact(t *testing.T) {
 	if !strings.Contains(lines[1], "0:42") {
 		t.Errorf("the status line lost its age: %q", lines[1])
 	}
-	if !strings.Contains(lines[5], loopMarkerGlyph) && !strings.Contains(lines[5], "🔒") {
-		t.Errorf("the watch line lost the lock bit: %q", lines[5])
+	if !strings.Contains(lines[4], loopMarkerGlyph) && !strings.Contains(lines[4], "🔒") {
+		t.Errorf("the watch line lost the lock bit: %q", lines[4])
 	}
 }
 
-// TestInspectorUnknownFactsKeepTheirLine pins the `—` rule. A build that cannot
-// supply a fact still spends the line, because a line that collapsed would move
-// every line under it.
-func TestInspectorUnknownFactsKeepTheirLine(t *testing.T) {
-	lines := renderInspectorLines(t, InspectorInput{
-		Content: InspectorReady,
-		Session: session.RunningSession{WindowID: 9, Base: "plain", Project: "plain"},
-	})
-	for _, i := range []int{3, 4, 5} {
-		if !strings.Contains(lines[i], inspectorUnknown) {
-			t.Errorf("metadata line %d = %q, want the %q placeholder", i, lines[i], inspectorUnknown)
-		}
+func TestInspectorUnknownFactsDoNotSpendOutputRows(t *testing.T) {
+	in := inspectorInput(InspectorInput{Content: InspectorReady, Session: session.RunningSession{Base: "plain"}})
+	lines := renderInspectorLines(t, in)
+	if InspectorChromeHeight(in) != 3 {
+		t.Fatalf("bare session spent extra rows: %v", lines)
 	}
-	for i, label := range map[int]string{2: "Agent", 3: "Branch", 4: "Dir", 5: "Watch"} {
-		if !strings.HasPrefix(lines[i], label) {
-			t.Errorf("metadata line %d = %q, want it to start with the %q label", i, lines[i], label)
+	for _, label := range []string{"Branch", "Dir", "Watch"} {
+		if strings.Contains(strings.Join(lines, "\n"), label) {
+			t.Fatalf("absent %s rendered: %v", label, lines)
 		}
 	}
 }
@@ -164,7 +144,7 @@ func TestInspectorSeparatesLoadingFromEmpty(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			body := strings.Join(renderInspectorLines(t, tc.in)[InspectorChromeLines:], "\n")
+			body := strings.Join(renderInspectorLines(t, tc.in)[InspectorChromeHeight(inspectorInput(tc.in)):], "\n")
 			if !strings.Contains(body, tc.want) {
 				t.Errorf("the %s output region did not say %q:\n%s", tc.name, tc.want, body)
 			}
@@ -176,21 +156,19 @@ func TestInspectorSeparatesLoadingFromEmpty(t *testing.T) {
 // rendered as if it were a conversation.
 func TestInspectorNoSelectionDrawsNoMetadata(t *testing.T) {
 	lines := renderInspectorLines(t, InspectorInput{Content: InspectorNoSelection})
-	for i := 0; i < InspectorMetaLines; i++ {
-		if strings.TrimSpace(lines[i]) != "" {
-			t.Errorf("an empty selection drew metadata on line %d: %q", i, lines[i])
-		}
+	if !strings.Contains(lines[1], previewNoSelectionText) {
+		t.Fatalf("empty selection reserved metadata: %v", lines)
 	}
 }
 
 func TestInspectorOutputFollowsTheTail(t *testing.T) {
 	lines := renderInspectorLines(t, InspectorInput{
-		Height:  InspectorChromeLines + 3,
+		Height:  inspectorChrome() + 3,
 		Content: InspectorReady,
 		Session: inspectorSession(),
 		Output:  SplitOutput("one\ntwo\nthree\nfour\nfive\n"),
 	})
-	body := lines[InspectorChromeLines:]
+	body := lines[inspectorChrome():]
 	if strings.Join(body, "|") != "three|four|five" {
 		t.Errorf("the output region showed %v, want the last three lines", body)
 	}
@@ -205,16 +183,16 @@ func TestInspectorPausedIndicationRidesTheDivider(t *testing.T) {
 	v := OutputViewport{}.ScrollUp(held, 2, 3)
 
 	lines := renderInspectorLines(t, InspectorInput{
-		Height:   InspectorChromeLines + 2,
+		Height:   inspectorChrome() + 2,
 		Content:  InspectorReady,
 		Session:  inspectorSession(),
 		Output:   latest,
 		Viewport: v,
 	})
-	if !strings.Contains(lines[InspectorMetaLines], inspectorPausedLabel) {
-		t.Errorf("the divider did not carry the Paused indication: %q", lines[InspectorMetaLines])
+	if !strings.Contains(lines[inspectorChrome()-1], inspectorPausedLabel) {
+		t.Errorf("the divider did not carry the Paused indication: %q", lines[inspectorChrome()-1])
 	}
-	if got := strings.Join(lines[InspectorChromeLines:], "|"); got != "held one|held two" {
+	if got := strings.Join(lines[inspectorChrome():], "|"); got != "held one|held two" {
 		t.Errorf("the paused pane showed %q, want the held snapshot rather than the newest one", got)
 	}
 
@@ -236,17 +214,17 @@ func TestInspectorHoldSurvivesAFailedRefresh(t *testing.T) {
 	for _, content := range []InspectorContent{InspectorFailed, InspectorLoading} {
 		t.Run(content.String(), func(t *testing.T) {
 			lines := renderInspectorLines(t, InspectorInput{
-				Height:   InspectorChromeLines + 2,
+				Height:   inspectorChrome() + 2,
 				Content:  content,
 				Session:  inspectorSession(),
 				Error:    "read timed out",
 				Viewport: v,
 			})
-			if got := strings.Join(lines[InspectorChromeLines:], "|"); got != "held one|held two" {
+			if got := strings.Join(lines[inspectorChrome():], "|"); got != "held one|held two" {
 				t.Errorf("a %s refresh replaced the held text with %q", content, got)
 			}
-			if !strings.Contains(lines[InspectorMetaLines], inspectorPausedLabel) {
-				t.Errorf("the pane kept held text without saying it was paused: %q", lines[InspectorMetaLines])
+			if !strings.Contains(lines[inspectorChrome()-1], inspectorPausedLabel) {
+				t.Errorf("the pane kept held text without saying it was paused: %q", lines[inspectorChrome()-1])
 			}
 		})
 	}
@@ -254,12 +232,12 @@ func TestInspectorHoldSurvivesAFailedRefresh(t *testing.T) {
 	// A vanished window outranks the hold: its metadata is still the answer, but
 	// there is no live buffer left for a snapshot of it to be a stale view OF.
 	lines := renderInspectorLines(t, InspectorInput{
-		Height:   InspectorChromeLines + 2,
+		Height:   inspectorChrome() + 2,
 		Content:  InspectorVanished,
 		Session:  inspectorSession(),
 		Viewport: v,
 	})
-	if !strings.Contains(strings.Join(lines[InspectorChromeLines:], "\n"), "(session not running)") {
+	if !strings.Contains(strings.Join(lines[inspectorChrome():], "\n"), "(session not running)") {
 		t.Errorf("a vanished session kept showing held output:\n%s", strings.Join(lines, "\n"))
 	}
 }
@@ -268,7 +246,7 @@ func TestInspectorHoldSurvivesAFailedRefresh(t *testing.T) {
 // inspector that cannot say which session it is describing is worse than one
 // that cannot show its output.
 func TestInspectorSurvivesAPaneTooShortForItsChrome(t *testing.T) {
-	for height := 1; height <= InspectorChromeLines+1; height++ {
+	for height := 1; height <= inspectorChrome()+1; height++ {
 		lines := renderInspectorLines(t, InspectorInput{
 			Height: height, Content: InspectorReady, Session: inspectorSession(),
 			Output: SplitOutput("alpha\nbeta\n"),
@@ -296,7 +274,7 @@ func TestInspectorClipsStyledAndWideOutput(t *testing.T) {
 	}
 	for _, width := range []int{12, 24, 48} {
 		out := RenderInspector(inspectorInput(InspectorInput{
-			Width: width, Height: InspectorChromeLines + len(output),
+			Width: width, Height: inspectorChrome() + len(output),
 			Content: InspectorReady, Session: inspectorSession(), Output: output,
 		}))
 		for i, line := range strings.Split(out, "\n") {
@@ -340,8 +318,8 @@ func TestInspectorWatchdogWarningMatchesTheActivityColumn(t *testing.T) {
 			if columnWarns != tc.want {
 				t.Fatalf("the activity column warned=%v, want %v", columnWarns, tc.want)
 			}
-			if got := strings.Contains(lines[5], ageWarningGlyph); got != tc.want {
-				t.Errorf("the watch line warned=%v while the activity column warned=%v: %q", got, tc.want, lines[5])
+			if got := strings.Contains(lines[4], ageWarningGlyph); got != tc.want {
+				t.Errorf("the watch line warned=%v while the activity column warned=%v: %q", got, tc.want, lines[4])
 			}
 		})
 	}
@@ -349,7 +327,7 @@ func TestInspectorWatchdogWarningMatchesTheActivityColumn(t *testing.T) {
 	// No recorded action is an absence of evidence about silence, not evidence
 	// of it, so the line says nothing rather than a number.
 	lines := renderInspectorLines(t, InspectorInput{Content: InspectorReady, Session: s})
-	if strings.Contains(lines[5], "last event") {
-		t.Errorf("a window with no watchdog entry reported an age: %q", lines[5])
+	if strings.Contains(lines[4], "last event") {
+		t.Errorf("a window with no watchdog entry reported an age: %q", lines[4])
 	}
 }

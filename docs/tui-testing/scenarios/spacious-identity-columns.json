@@ -5,7 +5,7 @@
   "assertions": [
     { "type": "mode_equals", "mode": "list" },
     { "type": "contains_text", "text": "platform-services-monorepo  Active      —" },
-    { "type": "contains_text", "text": "Agent   claude · claude-production-primary" },
+    { "type": "contains_text", "text": "claude · claude-production-primary" },
     { "type": "contains_text", "text": "Dir     ~/projects/platform-services-monorepo" },
     { "type": "excludes_text", "text": "claude-produc…" },
     { "type": "excludes_text", "text": "[claude" },

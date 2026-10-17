@@ -59,8 +59,8 @@ func cardFamily() []session.RunningSession {
 // when the cursor crosses from a family into one of its children.
 func TestProjectCardWearsTheInspectorGeometry(t *testing.T) {
 	lines := renderCardLines(t, cardInput(t, cardFamily(), 60, 14))
-	if !strings.HasPrefix(strings.TrimSpace(lines[InspectorMetaLines]), "─") {
-		t.Errorf("the card's divider is not on row %d: %q", InspectorMetaLines, lines[InspectorMetaLines])
+	if !strings.HasPrefix(strings.TrimSpace(lines[projectCardMetadataLines]), "─") {
+		t.Errorf("the card's divider is not on row %d: %q", projectCardMetadataLines, lines[projectCardMetadataLines])
 	}
 	for i, label := range map[int]string{2: "Agent", 3: "Branch", 4: "Dir", 5: "Watch"} {
 		if !strings.HasPrefix(lines[i], label) {
@@ -161,7 +161,7 @@ func TestProjectCardNeverDropsMembersSilently(t *testing.T) {
 	rows = append(rows, session.RunningSession{TabID: 3, WindowID: 31, Base: "cli", State: "bolt",
 		Directory: "/repo/cli", FamilyKey: "git:/repo", FamilyLabel: "monorepo", FamilyPrimaryRoot: "/repo"})
 
-	for height := 2; height <= InspectorChromeLines+3; height++ {
+	for height := 2; height <= projectCardChromeLines+3; height++ {
 		in := cardInput(t, rows, 60, height)
 		lines := renderCardLines(t, in)
 		body := strings.Join(lines, "\n")

@@ -13,13 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
-func toastDisplayText(t Toast) string {
-	if t.Persistent {
-		return t.Text + " · : Show Action Feedback"
-	}
-	return t.Text
-}
-
 func feedbackText(m Model) string {
 	lines := []string{"Action feedback", ""}
 	selected := selectedFeedback(m)
@@ -31,7 +24,7 @@ func feedbackText(m Model) string {
 		if t.Target.HasSession {
 			target = sessionLabel(t.Target)
 		}
-		lines = append(lines, fmt.Sprintf("%s %s · %s", marker, t.Occurred.Format("Jan 2 15:04:05"), target), t.Text)
+		lines = append(lines, fmt.Sprintf("%s %s · %s", marker, t.Occurred.Format("Jan 2 15:04:05"), target), "What happened", t.Text)
 		if t.NoticeID == selected.NoticeID {
 			next := "enter: check health"
 			if t.Target.HasSession {
@@ -40,7 +33,10 @@ func feedbackText(m Model) string {
 			if t.id == undoCloseToastID {
 				next = "u: recover last closed session"
 			}
-			lines = append(lines, next+" · c: open configuration")
+			if t.Pending || t.Unconfirmed {
+				lines = append(lines, "What remains uncertain", "The operation has no confirmed outcome. Check the session before repeating it.")
+			}
+			lines = append(lines, "Next step", next+" · c: open configuration")
 		}
 		lines = append(lines, "")
 	}

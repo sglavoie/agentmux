@@ -43,6 +43,44 @@ final class WorkspaceWindowTests: XCTestCase {
         })
     }
 
+    func testSidebarHoldsTargetsDuringHoverAndMenuWhileUpdatingAttention() throws {
+        var live = sessions
+        app.store.apply(snapshot: F.snapshot(live))
+        let key = AttentionCycler.Key.embedded(F.runtimeID(2))
+        let before = try index(of: key)
+        let entered = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: workspace.window.windowNumber,
+            context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+        workspace.sidebar.mouseEntered(with: entered)
+        live[1].unseen = true
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertEqual(try index(of: key), before)
+        guard case let .row(updated) = workspace.items[before] else { return XCTFail("Lost held row") }
+        XCTAssertTrue(updated.needsAttention, "Held position must still show current attention")
+        workspace.menuWillOpen(NSMenu())
+        workspace.sidebar.mouseExited(with: entered)
+        XCTAssertEqual(try index(of: key), before, "Open menu must retain its target")
+        workspace.menuDidClose(NSMenu())
+        let promoted = try index(of: key)
+        guard case let .group(group) = workspace.items[promoted - 1] else { return XCTFail("Missing attention group") }
+        XCTAssertTrue(group.needsAttention, "Promotion should apply when interaction ends")
+    }
+
+    func testEndedHeldSessionCannotBeOpenedOrActedOn() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let key = AttentionCycler.Key.embedded(F.runtimeID(2))
+        let before = try index(of: key)
+        workspace.menuWillOpen(NSMenu())
+        app.store.apply(snapshot: F.snapshot([sessions[0], sessions[2]]))
+        XCTAssertEqual(try index(of: key), before)
+        XCTAssertTrue(workspace.contextMenuItems(forRow: before).isEmpty)
+        let made = app.made
+        workspace.focusItem(at: before)
+        XCTAssertEqual(app.made, made)
+        workspace.menuDidClose(NSMenu())
+        XCTAssertFalse(workspace.items.contains { if case let .row(row) = $0 { return row.key == key }; return false })
+    }
+
     func testAttentionSnapshotMovesRowsAndAcknowledgmentRestoresThemWithoutChangingSelection() throws {
         var live = sessions
         app.store.apply(snapshot: F.snapshot(live))

@@ -111,6 +111,9 @@ func (in DetailInput) VisibleHeight() int {
 // become no-ops naturally — mirroring helpScrollBounds.
 func (in DetailInput) ScrollBounds(visibleHeight int) (total, visible int) {
 	total = len(in.Events)
+	if in.ViewMetadata {
+		total = len(in.metadataLines())
+	}
 	if in.Height == 0 {
 		return total, total
 	}

@@ -17,10 +17,9 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// BackendFlagUsage documents --backend on the surfaces. Unlike the launch
-// commands' flag it has no fixed default: the surface launches where it can
-// show the result.
-const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: kitty inside Kitty, tmux in any other terminal)"
+// BackendFlagUsage documents --backend on the surfaces. Without a configured
+// destination, the surface launches where it can show the result.
+const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: config.toml, otherwise kitty inside Kitty or tmux in other terminals)"
 
 // The seams the tests replace: a test must not read the operator's Kitty
 // environment or open their tmux server.
@@ -47,7 +46,7 @@ type tmuxAttacher interface {
 // for a surface running outside Kitty on the tmux backend: such a surface
 // never asks Kitty anything.
 //
-// requested is --backend, empty when the operator did not choose. Inside
+// requested is --backend or the configured preference, empty when neither was set. Inside
 // Kitty the default stays Kitty, and tmux sessions are listed beside the tabs
 // whenever the private server exists. In any other terminal the default is
 // tmux; when tmux cannot be used there, the surface falls back to the Kitty
@@ -86,7 +85,16 @@ func selectTerminalsWith(requested string, kittyClient func() kitty.KittyClient)
 			launch = runtimesession.BackendKitty
 		}
 	}
-	commands.Portable = commands.PortableTerminals{Tmux: server, Launch: launch, Attach: attachCommandFor(server), Send: sendFor(server), Desktop: desktopViews}
+	source := "terminal default"
+	if explicit {
+		source = "--backend"
+	} else if launch == runtimesession.BackendKitty {
+		source = "compatibility default"
+	}
+	if desktopViews != nil {
+		source = "workspace host"
+	}
+	commands.Portable = commands.PortableTerminals{Tmux: server, Launch: launch, LaunchSource: source, Attach: attachCommandFor(server), Send: sendFor(server), Desktop: desktopViews}
 	if !hosted && launch == runtimesession.BackendTmux {
 		return nil, nil
 	}

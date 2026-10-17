@@ -176,6 +176,8 @@ func (m Model) exitPicker() (tea.Model, tea.Cmd) {
 // silently ignored; press `/` to enter search mode and type a filter.
 func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "ctrl+e":
+		return m, commands.EditHere(m.cfg, config.DefaultConfigPath(), func(err error) tea.Msg { return commands.ActionDoneMsg{Err: err} })
 	case keySlash:
 		m.pickerSearchMode = true
 		return m, nil

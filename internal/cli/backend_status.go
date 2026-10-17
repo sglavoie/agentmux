@@ -18,9 +18,10 @@ import (
 // would be left running.
 type BackendStatus struct {
 	// LaunchBackend is where a launch goes without --backend.
-	LaunchBackend string           `json:"launch_backend"`
-	Tmux          TmuxStatus       `json:"tmux"`
-	Server        TmuxServerStatus `json:"server"`
+	LaunchBackendSource string           `json:"launch_backend_source"`
+	LaunchBackend       string           `json:"launch_backend"`
+	Tmux                TmuxStatus       `json:"tmux"`
+	Server              TmuxServerStatus `json:"server"`
 	// Problems is empty when launching on tmux would work as configured.
 	Problems []BackendProblem `json:"problems"`
 }
@@ -116,6 +117,10 @@ func CollectBackendStatus(cfg *config.Config, cfgErr error, probe BackendProbe) 
 		LaunchBackend: cfg.LaunchBackendOrDefault(),
 		Tmux:          TmuxStatus{MinVersion: tmux.MinVersion, Candidates: []tmux.Candidate{}},
 		Problems:      []BackendProblem{},
+	}
+	status.LaunchBackendSource = "compatibility default"
+	if cfg != nil && cfg.Defaults.LaunchBackend != "" {
+		status.LaunchBackendSource = "config.toml"
 	}
 	if cfgErr != nil {
 		status.Problems = append(status.Problems, BackendProblem{

@@ -46,6 +46,8 @@ type PortableTerminals struct {
 	Tmux backend.TargetLauncher
 	// Launch is the backend new agents start on. Empty means Kitty.
 	Launch runtimesession.BackendKind
+	// LaunchSource explains the already-resolved destination.
+	LaunchSource string
 	// Registry records tmux launches. Nil means the default registry file.
 	Registry *runtimesession.Store
 	// Attach builds the command that attaches this terminal to a portable
@@ -343,6 +345,15 @@ func LaunchDestination() string {
 		return "workspace (tmux)"
 	}
 	return "tmux"
+}
+
+// LaunchExplanation keeps destination and its source together at the point of use.
+func LaunchExplanation() string {
+	source := Portable.LaunchSource
+	if source == "" {
+		source = "compatibility default"
+	}
+	return LaunchDestination() + ": " + source
 }
 
 // portableSessions lists the sessions on the portable backends, each carrying

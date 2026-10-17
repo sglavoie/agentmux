@@ -38,7 +38,7 @@
     },
     {
       "type": "contains_text",
-      "text": "\u2502Agent   claude \u00b7 work"
+      "text": "claude \u00b7 work"
     },
     {
       "type": "contains_text",

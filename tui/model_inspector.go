@@ -73,7 +73,7 @@ const (
 	inspectorDividerCols = 1
 	// inspectorMinBodyRows is the floor on the body rows the split needs. Both
 	// panes are drawn to the same height, and the inspector spends
-	// dashboard.InspectorChromeLines of it before a single output line, so
+	// a compact metadata header and divider before a single output line, so
 	// anything shorter buys a queue of three rows beside an inspector showing
 	// nothing.
 	inspectorMinBodyRows = 10
@@ -182,14 +182,14 @@ func dashboardInspectorBodyRows(m Model) int {
 }
 
 // inspectorOutputRows is the number of output lines the inspector's viewport can
-// show at the current geometry — the pane's rows less the fixed metadata block
+// show at the current geometry — the pane's rows less the measured metadata block
 // and its divider. Zero means there is no viewport to scroll.
 func (m Model) inspectorOutputRows() int {
 	g := dashboardGeometry(m)
 	if !g.split {
 		return 0
 	}
-	rows := g.previewHeight - dashboard.InspectorChromeLines
+	rows := g.previewHeight - dashboard.InspectorChromeHeight(inspectorInputFor(m, g.previewWidth, g.previewHeight))
 	if rows < 0 {
 		return 0
 	}

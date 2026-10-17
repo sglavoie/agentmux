@@ -175,6 +175,7 @@ func (in DetailInput) Footer(total, visible int) string {
 		pos = fmt.Sprintf("%d–%d of %d", start, end, total)
 	}
 	hints := joinFooterBindings(" · ",
+		renderFooterBinding("m", "metadata"),
 		renderFooterBinding("t", "timeline"),
 		renderFooterBinding("↑/↓", "scroll"),
 		renderFooterBinding("pgup/pgdn", "page"),
@@ -190,6 +191,9 @@ func (in DetailInput) Footer(total, visible int) string {
 // slots collapse but the rest of the chrome still renders so the user has the
 // keymap and the event count.
 func (in DetailInput) Render() string {
+	if in.ViewMetadata {
+		return in.renderMetadata()
+	}
 	var sb strings.Builder
 	sb.WriteString(in.Header())
 	sb.WriteString("\n\n")

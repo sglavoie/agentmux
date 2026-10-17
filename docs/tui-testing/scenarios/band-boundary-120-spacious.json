@@ -11,7 +11,7 @@
     { "type": "contains_text", "text": "▌ api-feat-x   Working            3:07" },
     { "type": "excludes_text", "text": "icons:" },
     { "type": "contains_text", "text": "Agent Mux · Urgency · all projects" },
-    { "type": "contains_text", "text": "  j/k up/down · enter focus · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane · ? more" },
+    { "type": "contains_text", "text": "  j/k up/down · enter open · a actions · : commands · / filter · ? help · n/N needs you · tab switch pane" },
     { "type": "no_layout_issues" }
   ]
 }

@@ -397,6 +397,7 @@ type Model struct {
 
 	// detail pane state (ModeDetail). Fields are zeroed when the pane is
 	// closed so the placeholder render reads as a fresh state.
+	detailMetadata bool
 	detailWindowID int                     // 0 when pane is closed
 	detailEvents   []protocol.SessionEvent // events from the daemon for detailWindowID
 	detailScroll   int                     // top row index for the scrollable view

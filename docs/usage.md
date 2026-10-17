@@ -81,12 +81,19 @@ confirmed.
 | App → Run a Plan | Workspace (tmux), shown beside the supervisor selection |
 | Open an existing live session | Its recorded backend; launch preferences do not move it |
 
-The launcher header names its actual destination and the status line names the
+The launcher header names its actual destination and its source (`--backend`,
+`config.toml`, the workspace host, or the terminal/compatibility default).
+In the launcher, `Ctrl+e` opens configuration; restart the dashboard after changing
+`launch_backend`. The status line names the
 highlighted project's effective profile, including a one-time override. App
 Settings also reports the CLI backend so an override is visible. The app's
 Launch Project menu repeats the destination above the profile groups.
 
 ## Action feedback
+
+Retained notices reserve space for `: feedback ↵`: open the command palette,
+type `feedback`, and press Enter to read the full notice. Details separate what
+happened, any unconfirmed outcome, and the next step.
 
 Failed and unconfirmed dashboard actions remain available in `:` → **Show
 Action Feedback**, even after later actions succeed. Each notice carries its
@@ -191,6 +198,11 @@ below for where each key went.
   to run, `Esc` to close, and `Ctrl+c` to quit
 - `/`: edit the filter. The editor opens on the filter already on screen, so
   `Backspace` removes the last component; `Esc` restores what was committed
+- The selected session’s footer prioritizes `t answer` or `t send prompt` when
+  available; supervisor questions point to `: runs ↵`. The inspector combines
+  status and agent identity when they fit, omits absent metadata, and gives the
+  remaining rows to output. For full, wrapped field values, open **Show Session
+  Details** from `:` and press `m`; page keys scroll the metadata.
 - `i`: toggle the session inspector, full-screen when the terminal is too narrow
   to split
 - `p`: open the project switcher

@@ -6,7 +6,7 @@
 // list, its removable filter chips, and the filter DSL's completion menu
 // paint.
 //
-// It also owns the session inspector: its fixed metadata block, its five
+// It also owns the session inspector: its compact metadata block, its five
 // output-content states, its family-card form shown when the selection is a
 // family summary rather than a session, and the pure output viewport that
 // holds a snapshot while the operator is scrolled back. The compact tile
