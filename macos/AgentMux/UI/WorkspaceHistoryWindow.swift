@@ -166,7 +166,7 @@ struct WorkspaceHistoryView: View {
                             }
                             HStack {
                                 if model.newMessages > 0 {
-                                    Button("\(model.newMessages) new messages") { model.showNewMessages() }.disabled(model.reading)
+                                    Button("\(model.newMessages) new \(model.newMessages == 1 ? "message" : "messages")") { model.showNewMessages() }.disabled(model.reading)
                                 }
                                 if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier(anchor: visibleMessage) } }
                                 Spacer()

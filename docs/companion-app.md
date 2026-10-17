@@ -401,13 +401,29 @@ is committed.
   around its first matching prose message, even when it predates the latest 50
   messages. Highlighted terms and previous/next matching-message buttons navigate
   the conversation; loading earlier/later messages preserves the reading anchor.
+  Result snippets highlight the same terms and quoted phrases. Results load 50 at
+  a time; **Load more conversations** extends the list without changing the open
+  preview. Empty results offer **Clear search**, **Search all history**, and
+  **Include automated sessions** as applicable, with an actual hidden-match count.
+  **⌘R** refreshes the search and selected transcript; the preview's refresh button
+  refreshes just that conversation. Both keep the reading position and update
+  existing messages. A **new messages** button offers navigation to newly appended
+  messages. Nothing scrolls to them until you choose it. Superseded searches and
+  transcript reads are cancelled, including their running read subprocesses.
 - **View › Review Checkout Changes…** (also **Changes…** in the Session inspector)
   shows checkout-wide files, line counts, and diffs against a chosen base. Open files
   in the configured editor. Managed worktrees include source-branch comparison and
   confirmed fast-forward landing, with the CLI’s existing clean/inactive checks.
   The diff has old/new line numbers, addition/deletion shading, and previous/next
   hunk controls. Switching files restores each file's scroll position for the
-  current checkout and comparison base.
+  current checkout and comparison base. Refreshing a changed diff follows the
+  same nearby source text where possible, falling back to a nearby source line.
+  The compact toolbar leaves at least 240 points for the diff in the ordinary
+  populated 720×450 window. The pencil button opens the file in your editor.
+  The **…** menu offers remembered **Wrap lines** and text-size preferences, plus
+  **Copy unified patch** and **Copy changed source lines** (added and context lines
+  from the displayed hunks). Selecting text and copying strips line numbers and
+  diff markers; **Copy Unified Diff** in the context menu keeps patch syntax.
 - **View › Since Last Looked…** shows recorded state transitions, process exits,
   and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days,
   select an event for its details and the last timestamped assistant output at or

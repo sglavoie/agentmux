@@ -249,7 +249,7 @@ extension WorkspaceWorkflowPreviewTests {
                 try await render(WorkspaceHistoryView(model: history), name: "history-\(suffix)", width: 720, height: 450, dark: dark,
                                  expected: ["Conversation History", "Search"] + notice + historyContent)
                 try await render(WorkspaceChangesView(model: changes), name: "changes-\(suffix)", width: 720, height: 450, dark: dark,
-                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["src/api"]))
+                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["pagination_controller_test.go"]))
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
                                  expected: ["Since Last Looked", "Mark shown read"] + notice + (state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,
@@ -277,5 +277,42 @@ extension WorkspaceWorkflowPreviewTests {
             try await render(WorkspaceRunPlanView(model: model), name: "plan-choices-\(dark)", width: 720, height: 640, dark: dark,
                              expected: ["Project", "Supervisor", "Infer from plan workspace", "Use project default", "Launch in workspace", "Check Readiness"])
         }
+    }
+}
+
+extension WorkspaceWorkflowPreviewTests {
+    func testRefinedHistoryAndWrappedDiff() async throws {
+        var total = 3
+        let historyCommand = command { args in
+            if args[1] == "show" {
+                let messages = (0..<total).map { ["role": "assistant", "text": "Pagination reply \($0)"] }
+                let object: [String: Any] = ["session": ["id": "one", "harness": "claude", "project": "API"],
+                    "messages_total": total, "messages_start": 0, "messages": messages]
+                return String(decoding: try! JSONSerialization.data(withJSONObject: object), as: UTF8.self)
+            }
+            return #"{"sessions":[{"id":"one","harness":"claude","project":"API","snippet":"Pagination review"}],"total":1}"#
+        }
+        let history = WorkspaceHistoryModel(command: { historyCommand }, runner: PreviewRunner())
+        history.search()
+        history.rememberVisibleMessage(1)
+        total = 5
+        history.refreshTranscript()
+        XCTAssertEqual(history.newMessages, 2)
+        try await render(WorkspaceHistoryView(model: history), name: "history-new-messages", width: 720, height: 450,
+                         expected: ["2 new messages", "Pagination"])
+        let emptyCommand = command { _ in #"{"results":[],"total":0,"hidden_automated":7,"match_terms":["needle"]}"# }
+        let empty = WorkspaceHistoryModel(command: { emptyCommand }, runner: PreviewRunner())
+        empty.query = "needle"; empty.scope = .project; empty.open(project: "API", conversation: nil)
+        try await render(WorkspaceHistoryView(model: empty), name: "history-empty-scoped", width: 720, height: 450, dark: true,
+                         expected: ["Clear search", "Search all history", "7 automated matches"])
+        let changesCommand = command { args in
+            if args.first == "worktree" { return #"{"worktrees":[]}"# }
+            return #"{"root":"/Projects/api","base":"abc","files":[{"path":"pagination.swift","added":2,"deleted":0,"binary":false,"untracked":false}],"patch":"@@ -0,0 +1,2 @@\n+let page = readEvents(after: cursor, limit: requestedLimit, includeArchived: false)\n+return page","truncated":false}"#
+        }
+        let changes = WorkspaceChangesModel(command: { changesCommand }, runner: PreviewRunner())
+        changes.open(directory: "/Projects/api")
+        changes.diffFontSize = 16; changes.wrapDiffLines = true
+        try await render(WorkspaceChangesView(model: changes), name: "changes-wrapped-large", width: 720, height: 450, dark: true,
+                         expected: ["requestedLimit", "includeArchived", "return page"])
     }
 }

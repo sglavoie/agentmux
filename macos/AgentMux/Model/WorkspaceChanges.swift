@@ -85,8 +85,9 @@ final class WorkspaceChangesModel: ObservableObject {
         self.command = command
         self.runner = runner
         reviewState = WorkspaceReviewState(defaults: defaults)
-        diffFontSize = reviewState.diffAppearance.fontSize
-        wrapDiffLines = reviewState.diffAppearance.wrapLines
+        let appearance = reviewState.diffAppearance
+        diffFontSize = appearance.fontSize
+        wrapDiffLines = appearance.wrapLines
     }
 
     var landingReason: String? {

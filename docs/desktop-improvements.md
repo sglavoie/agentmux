@@ -243,3 +243,72 @@ Validation for this pass:
   its focused rerun and the subsequent complete gate passed.
 - Captures were inspected in light and dark mode; saved artifact hashes and
   documentation links were verified. `git diff --check` passed.
+
+## Review refinement on 2026-10-17
+
+All five follow-up improvements are implemented:
+
+- [x] Refresh the selected transcript without discarding its preview or reading
+  anchor. Updated prose replaces the old content; newly appended messages get an
+  explicit navigation button. Failed reads retain the preview and the offer.
+  Diff refreshes follow matching source text, with a nearby source-line fallback;
+  file switches and restarts retain the existing comparison positions.
+- [x] Compact the Changes heading, comparison controls, statistics, and file
+  toolbar. The populated 720×450 fixture has 259 points of diff viewport height;
+  a hosted geometry assertion requires at least 240, without enlarging the window.
+- [x] Separate the diff gutter from selectable text. Copying selected source strips
+  diff markers and preserves partial Unicode selections. The context menu copies
+  unified diff text; the toolbar menu copies the displayed patch or changed source
+  lines. Wrapping and text size are remembered across new models/app launches.
+- [x] Highlight backend-parsed search terms in result snippets, including quoted
+  phrases. Empty results offer concrete scope/query/automation actions; the backend
+  supplies an actual hidden-automated-match count under the active scope.
+- [x] Filter exact conversations and projects before transcript text reads, load
+  native results in pages of 50, preserve selection while appending, and cancel
+  superseded read processes. Previously loaded result counts are restored with
+  the saved selection. CLI/JSON paging exposes counts and continuation metadata.
+
+### Verification
+
+- `env -u AMX_RUNTIME_SESSION_ID just check`: passed all Go tests, core race
+  suites, vet, 185 TUI scenarios, and lint (zero issues).
+- `macos/scripts/test-app.sh`: 849 hosted tests passed, zero failures or skips.
+  This includes actual subprocess cancellation, copy/Unicode behavior, refreshed
+  transcript anchors, result pagination, restored preferences and selections,
+  shifted diff anchors, minimum-window geometry, and own-window screenshots.
+- Final focused run: 55 tests passed, zero failures or skips, covering the last
+  process-wait, gutter-rendering, and singular/plural wording refinements alongside
+  refreshed captures. All nine `WorkspaceWorkflowPreviewTests` passed.
+- `git diff --check`: passed.
+
+### Performance evidence
+
+On this Mac (Apple M2 Ultra), `BenchmarkHistoryArchiveScope` used 10,000 synthetic
+conversations with real warm search sidecars, five iterations per case. Searching
+all conversations averaged 210.82 ms with 21.3 MB allocated; exact-conversation
+scope averaged 0.010 ms with 1,192 bytes allocated. These are local observations,
+not service-level guarantees. An earlier run exposed a 3.4 MB allocation for an
+exact lookup; direct indexed lookup removed it.
+
+The hosted large-archive fixture measured about 339 ms from query change to
+settled results, including the 250 ms debounce, and about 22 ms to select/read a
+conversation. Decoding all 10,000 result rows averaged 41.11 ms; a 50-row page
+averaged 0.22 ms. This fixture measures native model/rendering and decoding with
+an injected command, separately from the Go sidecar benchmark. It does not claim
+end-to-end installed-application latency.
+
+### Reviewed captures
+
+Fresh fixtures use only test data; earlier acceptance images remain unchanged.
+
+- [Compact Changes, minimum window](acceptance/workspace-review-refinement/changes-dark-minimum.png)
+- [Larger wrapped diff text](acceptance/workspace-review-refinement/changes-wrapped-large.png)
+- [Search result highlighting](acceptance/workspace-review-refinement/history-dark-minimum.png)
+- [Actionable empty search](acceptance/workspace-review-refinement/history-empty-scoped.png)
+- [New messages without losing the reading position](acceptance/workspace-review-refinement/history-new-messages.png)
+- [Capture provenance and hashes](acceptance/workspace-review-refinement/manifest.json)
+
+Offset pages describe a changing archive, not a frozen snapshot. The native view
+removes duplicate identities across pages; refresh obtains a fresh ordering.
+Source text anchors for diff refresh are memory-only and are never saved in
+preferences. Neither tests nor captures launch real agents or install the app.

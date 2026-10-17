@@ -107,6 +107,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var loadingMore = false
     @Published private(set) var newMessages = 0
     private var nextOffset = 0
+    private var restoredResultCount = 50
     private var loadedSearch: [String] = []
     private var searchCancellation: ProcessCancellation?
     private var transcriptCancellation: ProcessCancellation?
@@ -150,6 +151,7 @@ final class WorkspaceHistoryModel: ObservableObject {
             selection = saved.selection
             visibleMessage = saved.message.flatMap { $0 >= 0 ? $0 : nil }
             loadedQuery = saved.resultsQuery ?? saved.query
+            restoredResultCount = max(50, saved.loadedResults ?? 50)
         }
     }
 
@@ -162,7 +164,8 @@ final class WorkspaceHistoryModel: ObservableObject {
     private func saveReview() {
         reviewState.history = .init(query: query, scope: scope.rawValue, automated: includeAutomated,
                                     project: project, conversation: currentConversation?.encoded,
-                                    selection: selection, message: visibleMessage, resultsQuery: loadedQuery)
+                                    selection: selection, message: visibleMessage, resultsQuery: loadedQuery,
+                                    loadedResults: max(nextOffset, restoredResultCount))
     }
 
     var selected: WorkspaceHistoryEntry? { entries.first { $0.id == selection } }
@@ -259,7 +262,7 @@ final class WorkspaceHistoryModel: ObservableObject {
         loading = !append
         loadingMore = append
         let offset = append ? nextOffset : 0
-        let limit = !append && signature == loadedSearch ? max(50, nextOffset) : 50
+        let limit = append ? 50 : signature == loadedSearch ? max(50, nextOffset) : restoredResultCount
         let args = Self.arguments(query: query, project: scope == .project ? project : nil,
                                   includeAutomated: includeAutomated, conversation: wanted?.encoded, offset: offset, limit: limit)
         let cancellation = ProcessCancellation()
@@ -272,6 +275,7 @@ final class WorkspaceHistoryModel: ObservableObject {
             case let .success(page):
                 self.resultsQuery = query
                 self.loadedSearch = signature
+                self.restoredResultCount = 50
                 self.resultTerms = page.matchTerms
                 self.totalResults = page.total
                 self.hasMoreResults = page.hasMore
@@ -300,8 +304,8 @@ final class WorkspaceHistoryModel: ObservableObject {
 
     func showNewMessages() {
         guard let transcript, !reading else { return }
-        readWindow(from: max(0, transcript.total - 50), anchor: max(0, transcript.total - newMessages))
-        newMessages = 0
+        let first = max(0, transcript.total - newMessages)
+        readWindow(from: first, anchor: first, acknowledgeNew: true)
     }
 
     func select(_ id: String?) {
@@ -334,12 +338,16 @@ final class WorkspaceHistoryModel: ObservableObject {
 
     func loadTranscript() { readWindow() }
 
-    private func readWindow(from: Int? = nil, count: Int = 50, retaining: WorkspaceTranscript? = nil, anchor: Int? = nil, refreshing: Bool = false) {
+    private func readWindow(from: Int? = nil, count: Int = 50, retaining: WorkspaceTranscript? = nil, anchor: Int? = nil, refreshing: Bool = false, acknowledgeNew: Bool = false) {
         transcriptCancellation?.cancel()
         transcriptGeneration += 1
         let generation = transcriptGeneration
         reading = false
-        guard let selected, let command = command() else { return }
+        guard let selected else { return }
+        guard let command = command() else {
+            transcriptError = "amx is unavailable. Check Settings and try again."
+            return
+        }
         reading = true
         transcriptError = nil
         var args = ["session", "show", "--json"]
@@ -356,6 +364,7 @@ final class WorkspaceHistoryModel: ObservableObject {
             switch result {
             case let .failure(error): self.transcriptError = error.message
             case let .success(value), let .partial(value, _):
+                if acknowledgeNew { self.newMessages = 0 }
                 if refreshing, let previousTotal { self.newMessages += max(0, value.total - previousTotal) }
                 if let retaining, value.end == retaining.start || retaining.end == value.start {
                     let messages = value.start < retaining.start ? value.messages + retaining.messages : retaining.messages + value.messages
@@ -364,7 +373,8 @@ final class WorkspaceHistoryModel: ObservableObject {
                         matchTerms: value.matchTerms, focusMessage: value.focusMessage)
                 } else { self.transcript = value }
                 if let focus = value.focusMessage, let index = value.matchMessages.firstIndex(of: focus) { self.matchIndex = index }
-                if let anchor, value.total > 0 { self.scroll(to: min(anchor, value.total - 1)) }
+                let destination = refreshing ? (self.visibleMessage ?? anchor) : anchor
+                if let destination, value.total > 0 { self.scroll(to: min(destination, value.total - 1)) }
                 else if let focus = value.focusMessage { self.scroll(to: focus) }
             }
         }

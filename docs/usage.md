@@ -1277,6 +1277,22 @@ Existing rows remain visible during refreshes. The header and sticky status bar
 mark them as cached while scanning, and the active text/chip query refreshes
 automatically when the scan completes.
 
+For bounded CLI/JSON reads, `amx session list` and `amx session search` accept
+`--offset N --limit N`. An explicit offset keeps search results in stable archive
+order (most recent first, with deterministic ties), including the current
+conversation. `--conversation harness:session-id` matches one exact conversation
+before reading transcript text; project filters also run before text scanning.
+JSON results include `total`, `offset`, `has_more`, and `hidden_automated`; search
+also returns parsed `match_terms` so clients highlight phrases consistently.
+Offsets describe the current index, not a frozen snapshot: clients should deduplicate
+identities across pages and refresh when an actively changing archive needs a fresh
+ordering. Existing commands without pagination still return all JSON rows.
+
+```sh
+amx session search --json --offset 0 --limit 50 -- '"race condition"'
+amx session list --json --conversation claude:EXACT_SESSION_ID
+```
+
 The JSON metadata file and `transcripts.search/` sidecars are disposable
 caches. If either is missing, malformed, or partially unreadable, Agent Mux
 quarantines or rebuilds the affected cache from transcript source files. Stable

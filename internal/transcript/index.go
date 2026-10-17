@@ -214,8 +214,15 @@ func (i *Index) List(filter ListFilter) []SessionMeta {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	out := make([]SessionMeta, 0, len(i.entries))
-	for _, meta := range i.entries {
+	entries := i.entries
+	if filter.Conversation != "" {
+		entries = nil
+		if meta, ok := i.entries[filter.Conversation]; ok {
+			entries = map[string]SessionMeta{filter.Conversation: meta}
+		}
+	}
+	out := make([]SessionMeta, 0, len(entries))
+	for _, meta := range entries {
 		if filter.Conversation != "" && IndexKey(meta.Harness, meta.ID) != filter.Conversation {
 			continue
 		}

@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-17",
+  "fixture_source": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+  "capture": "ScreenCaptureKit current-process fixture windows; native Retina resolution",
+  "test_command": "xcodebuild test (Debug), selected WorkspaceWorkflowPreviewTests with AMXCommandTests, WorkspaceReviewRefinementTests and HistoryReadCancellationTests",
+  "test_result": "55 tests passed, zero failures or skips",
+  "artifacts": [
+    {
+      "path": "changes-dark-minimum.png",
+      "sha256": "d4c39e07f7e59c163f06b53141ad6ce7856aae6bab47eefdcd0e8efc6c1bf05f",
+      "logical_window_size": [
+        720,
+        450
+      ]
+    },
+    {
+      "path": "changes-wrapped-large.png",
+      "sha256": "b8b6c2116a7e9921ac4eb21a286c37bfff8d42f8ac513c9d46ceb857afdcfb9e",
+      "logical_window_size": [
+        720,
+        450
+      ]
+    },
+    {
+      "path": "history-dark-minimum.png",
+      "sha256": "44fa53120eb5b0b94ccb546812a860cacdfc360844075ab5b76ca3413157b2dd",
+      "logical_window_size": [
+        720,
+        450
+      ]
+    },
+    {
+      "path": "history-empty-scoped.png",
+      "sha256": "aec939b44b136322fecdb4eea1bf4b73cdf39fd4bec8b346fce5908270077462",
+      "logical_window_size": [
+        720,
+        450
+      ]
+    },
+    {
+      "path": "history-new-messages.png",
+      "sha256": "1cceaa1a0f4acbf798f479e3a4ad5a78f77f75eee5b9c094949a093e8d63f959",
+      "logical_window_size": [
+        720,
+        450
+      ]
+    }
+  ],
+  "review_criteria": [
+    "Line beginnings remain visible beside the nonselectable gutter",
+    "Wrapped 16-point code fits without horizontal scrolling",
+    "Minimum window keeps primary actions and at least 240 points of diff height",
+    "Snippets highlight backend-parsed terms",
+    "Empty search offers scoped recovery actions",
+    "New messages are offered without moving the reader"
+  ]
+}

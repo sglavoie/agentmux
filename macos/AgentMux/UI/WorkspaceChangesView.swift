@@ -27,7 +27,7 @@ struct WorkspaceChangesView: View {
                     .help("Compare against a branch or commit. ⌘⇧E focuses this field.")
                 Button("Compare") { model.refresh() }.help("Refresh comparison (⌘R)").disabled(model.loading || model.landing)
                 if let changes = model.changes {
-                    Text("\(changes.files.count) files · +\(changes.files.reduce(0) { $0 + $1.added }) −\(changes.files.reduce(0) { $0 + $1.deleted })")
+                    Text("\(changes.files.count) \(changes.files.count == 1 ? "file" : "files") · +\(changes.files.reduce(0) { $0 + $1.added }) −\(changes.files.reduce(0) { $0 + $1.deleted })")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         .help("Compared with " + changes.base + ". Includes every session using this checkout.")
                 }

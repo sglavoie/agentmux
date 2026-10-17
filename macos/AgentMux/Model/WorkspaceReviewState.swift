@@ -12,6 +12,7 @@ final class WorkspaceReviewState {
         var selection: String?
         var message: Int?
         var resultsQuery: String? = nil
+        var loadedResults: Int? = nil
     }
     struct Comparison: Codable { var base: String; var file: String? }
     struct DiffAppearance: Codable {

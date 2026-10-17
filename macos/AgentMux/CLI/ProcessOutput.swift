@@ -99,7 +99,7 @@ struct ProcessOutput: Equatable {
         defer { readers.forEach { $0.finish() } }
         let exited = waitForExit(pid)
         let deadline = DispatchTime.now() + timeout
-        while exited.wait(timeout: min(deadline, .now() + 0.025)) == .timedOut {
+        while exited.wait(timeout: cancellation == nil ? deadline : min(deadline, .now() + 0.025)) == .timedOut {
             if cancellation?.isCancelled == true {
                 stop(group: pid, exited: exited)
                 return .cancelled

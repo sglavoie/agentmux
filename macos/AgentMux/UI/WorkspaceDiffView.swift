@@ -13,11 +13,14 @@ struct WorkspaceDiffView: NSViewRepresentable {
     var wrapLines = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
+    func makeNSView(context: Context) -> WorkspaceDiffContainer {
+        let container = WorkspaceDiffContainer()
+        let scroll = container.scroll
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
         scroll.borderType = .noBorder
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsetsZero
         let text = WorkspaceDiffTextView(frame: scroll.contentView.bounds)
         text.isEditable = false
         text.isSelectable = true
@@ -29,14 +32,13 @@ struct WorkspaceDiffView: NSViewRepresentable {
         text.textContainerInset = NSSize(width: 8, height: 10)
         text.setAccessibilityLabel("Unified diff; copy selects source text without line numbers or diff markers")
         scroll.documentView = text
-        scroll.verticalRulerView = WorkspaceDiffRuler(scrollView: scroll, orientation: .verticalRuler)
-        scroll.hasVerticalRuler = true
-        scroll.rulersVisible = true
+        context.coordinator.gutter = container.gutter
         context.coordinator.observe(scroll, store: reviewState)
-        return scroll
+        return container
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
+    func updateNSView(_ container: WorkspaceDiffContainer, context: Context) {
+        let scroll = container.scroll
         guard let text = scroll.documentView as? WorkspaceDiffTextView else { return }
         let state = context.coordinator
         guard !loading else { return }
@@ -57,7 +59,10 @@ struct WorkspaceDiffView: NSViewRepresentable {
             text.lineRanges = rendered.lines
             text.textStorage?.setAttributedString(rendered.text)
             let digits = max(3, String(diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
-            scroll.verticalRulerView?.ruleThickness = CGFloat(digits * 2 + 3) * fontSize * 0.61
+            container.gutter.digits = digits
+            container.gutterWidth = CGFloat(digits * 2 + 3) * fontSize * 0.61
+            container.needsLayout = true
+            container.layoutSubtreeIfNeeded()
             scroll.hasHorizontalScroller = !wrapLines
             text.isHorizontallyResizable = !wrapLines
             text.textContainer?.widthTracksTextView = wrapLines
@@ -71,7 +76,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
             if wrapLines { restored.x = 0 }
             scroll.contentView.scroll(to: restored)
             scroll.reflectScrolledClipView(scroll.contentView)
-            scroll.verticalRulerView?.needsDisplay = true
+            state.gutter?.needsDisplay = true
         }
         if state.jumpSequence != jumpSequence {
             state.jumpSequence = jumpSequence
@@ -109,6 +114,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
     }
 
     final class Coordinator {
+        weak var gutter: WorkspaceDiffGutter?
         private var observer: NSObjectProtocol?
         private var store: WorkspaceReviewState?
         func observe(_ scroll: NSScrollView, store: WorkspaceReviewState?) {
@@ -120,7 +126,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 let point = scroll.contentView.bounds.origin
                 self.positions[id] = point
                 self.store?.savePosition(point, id: id)
-                scroll.verticalRulerView?.needsDisplay = true
+                self.gutter?.needsDisplay = true
             }
         }
         deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
@@ -225,9 +231,31 @@ final class WorkspaceDiffTextView: NSTextView {
     }
 }
 
-private final class WorkspaceDiffRuler: NSRulerView {
+final class WorkspaceDiffContainer: NSView {
+    let scroll = NSScrollView()
+    let gutter = WorkspaceDiffGutter()
+    var gutterWidth: CGFloat = 66
     override var isFlipped: Bool { true }
-    override func drawHashMarksAndLabels(in rect: NSRect) {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        gutter.scrollView = scroll
+        addSubview(gutter)
+        addSubview(scroll)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() {
+        super.layout()
+        gutter.frame = NSRect(x: 0, y: 0, width: gutterWidth, height: bounds.height)
+        scroll.frame = NSRect(x: gutterWidth, y: 0, width: max(0, bounds.width - gutterWidth), height: bounds.height)
+        gutter.needsDisplay = true
+    }
+}
+
+final class WorkspaceDiffGutter: NSView {
+    var digits = 3
+    weak var scrollView: NSScrollView?
+    override var isFlipped: Bool { true }
+    override func draw(_ rect: NSRect) {
         guard let scroll = scrollView, let text = scroll.documentView as? WorkspaceDiffTextView,
               let layout = text.layoutManager, let container = text.textContainer else { return }
         NSColor.windowBackgroundColor.setFill()
@@ -239,7 +267,6 @@ private final class WorkspaceDiffRuler: NSRulerView {
         let font = text.textStorage.flatMap { $0.length > 0 ? $0.attribute(.font, at: 0, effectiveRange: nil) as? NSFont : nil }
             ?? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
-        let digits = max(3, String(text.diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
         func number(_ n: Int?) -> String { let s = n.map(String.init) ?? ""; return String(repeating: " ", count: max(0, digits - s.count)) + s }
         for index in first..<text.diff.lines.count {
             guard let lineRect = text.lineRect(index) else { continue }
