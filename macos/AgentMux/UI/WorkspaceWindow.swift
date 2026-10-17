@@ -411,7 +411,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// no longer listed still says whose it was.
     private var sessionNames: [String: String] = [:]
     /// Each sidebar line's `decoration` as last drawn.
-    private var drawnDecorations: [String?] = []
+    private struct LineDecoration: Equatable {
+        let label: String?
+        let selectionColor: NSColor?
+    }
+    private var drawnDecorations: [LineDecoration] = []
     /// The font size each session's last terminal had when it was let go,
     /// by runtime session, so a zoom survives the window closing. Kept for
     /// the app's lifetime, until a new default zoom replaces every one.
@@ -2045,6 +2049,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         for index in indexes {
             guard let rowView = sidebar.rowView(atRow: index, makeIfNecessary: false) as? WorkspaceRowView else { continue }
             rowView.tabColor = Self.tabColor(of: items[index])
+            rowView.selectionBorder.color = selectionColor(of: items[index]) ?? .controlAccentColor
         }
         syncHover(indexes)
     }
@@ -2853,13 +2858,15 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// What a line draws that its item does not carry: a session's ⌘ digit,
-    /// or the name of the session a view is about.
-    private func decoration(_ item: Item) -> String? {
+    /// or the name and selection color inherited by a view.
+    private func decoration(_ item: Item) -> LineDecoration {
+        let label: String?
         switch item {
-        case let .row(row): return sessionKey(of: row.key)
-        case let .view(view): return view.aboutRuntimeSessionID.flatMap { sessionNames[$0] }
-        case .section, .group: return nil
+        case let .row(row): label = sessionKey(of: row.key)
+        case let .view(view): label = view.aboutRuntimeSessionID.flatMap { sessionNames[$0] }
+        case .section, .group: label = nil
         }
+        return LineDecoration(label: label, selectionColor: selectionColor(of: item))
     }
 
     private func syncSidebarSelection() {
@@ -2960,9 +2967,25 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// A session's line is drawn on the session's color; every other line,
     /// the Dashboard and the Overview among them, on the list's own.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let view = WorkspaceRowView()
+        let view: WorkspaceRowView
+        if case let .view(utility) = items[row], utility.kind == .terminal {
+            view = WorkspaceTerminalRowView()
+        } else {
+            view = WorkspaceRowView()
+        }
         view.tabColor = Self.tabColor(of: items[row])
+        view.selectionBorder.color = selectionColor(of: items[row]) ?? .controlAccentColor
         return view
+    }
+
+    /// Terminals listed beneath a session share its focus border color.
+    private func selectionColor(of item: Item) -> NSColor? {
+        if case let .view(view) = item,
+           let id = view.besideRuntimeSessionID,
+           let row = state.row(.embedded(id)) {
+            return Self.tabColor(of: .row(row))
+        }
+        return Self.tabColor(of: item)
     }
 
     private static func tabColor(of item: Item) -> NSColor? {
@@ -3664,7 +3687,7 @@ final class WorkspaceSidebarView: NSTableView {
 /// while the line is not the selected one, and the list's own selection
 /// while it is.
 @MainActor
-final class WorkspaceRowView: NSTableRowView {
+class WorkspaceRowView: NSTableRowView {
     /// The text on a session's color. The daemon publishes colors bright
     /// enough for it.
     static let tabText = NSColor.black
@@ -3730,6 +3753,19 @@ final class WorkspaceRowView: NSTableRowView {
         NSBezierPath(roundedRect: bounds.insetBy(dx: Self.selectionInset, dy: 1),
                      xRadius: Self.selectionRadius, yRadius: Self.selectionRadius)
     }
+}
+
+/// An attached terminal uses only the session-colored border for selection.
+/// AppKit reapplies the table's highlight style when focus changes, so keep
+/// the override on this row rather than changing the whole sidebar.
+@MainActor
+final class WorkspaceTerminalRowView: WorkspaceRowView {
+    override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
+        get { .none }
+        set { super.selectionHighlightStyle = .none }
+    }
+
+    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
 }
 
 /// The border of the selected line. It takes no clicks.
