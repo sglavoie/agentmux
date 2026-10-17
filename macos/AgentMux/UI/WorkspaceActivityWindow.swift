@@ -31,6 +31,7 @@ final class WorkspaceActivityWindow: NSObject, NSWindowDelegate {
 }
 
 struct WorkspaceActivityView: View {
+    @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
     @ObservedObject var model: WorkspaceActivityModel
     @FocusState private var listFocused: Bool
     var body: some View {
@@ -39,6 +40,7 @@ struct WorkspaceActivityView: View {
                 Text("Since Last Looked").font(.title2).fixedSize()
                 WorkspaceStatus(loading: model.loading, title: "Loading activity…", retained: model.report != nil,
                                 feedback: activityFeedback, recover: { model.refresh() })
+                WorkspaceReadingMenu(preferences: preferences)
             }
             HStack {
                 Toggle("Unread only", isOn: $model.unreadOnly).onChange(of: model.unreadOnly) { _, _ in model.filterChanged() }
@@ -48,7 +50,12 @@ struct WorkspaceActivityView: View {
                 Spacer()
 
                 Button("Refresh") { model.refresh() }.disabled(model.loading).help("Refresh activity (⌘R)")
-                Button("Mark shown read") { model.markVisibleRead() }.disabled(model.visible.isEmpty || model.loading || model.error != nil)
+                Menu("Mark read") {
+                    Button("Mark selected read") { model.markSelectedRead() }.disabled(!model.canMarkSelectedRead)
+                    Button("Mark all \(model.visible.count) results read") { model.markVisibleRead() }
+                        .disabled(model.unreadResultCount == 0 || model.loading || model.error != nil)
+                }.fixedSize()
+                Button("Undo") { model.undoMarkRead() }.disabled(!model.canUndoRead).help("Undo the last activity read acknowledgement")
             }
             Text("Recorded state changes, process exits, and ASL events. Opening this view does not mark events read.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -79,7 +86,7 @@ struct WorkspaceActivityView: View {
                         if let entry = model.selected {
                             Text(entry.title).font(.title2)
                             Text(entry.date?.formatted() ?? entry.at).foregroundStyle(.secondary)
-                            Text(entry.detail).textSelection(.enabled)
+                            Text(entry.detail).font(.system(size: preferences.effectiveProseSize)).textSelection(.enabled)
                             HStack {
                                 if entry.conversation != nil || !entry.runtimeSessionID.isEmpty {
                                     Button("Focus live session") { model.onFocus?(entry) }.help("Focus live session (⌘Return)")
@@ -96,7 +103,7 @@ struct WorkspaceActivityView: View {
                             }
                             if let excerpt = model.excerpt {
                                 Text("Last recorded assistant message at or before this event · \(excerpt.timestamp ?? "")").font(.caption).foregroundStyle(.secondary)
-                                WorkspaceTranscriptText(text: excerpt.text.reveal(), terms: [])
+                                WorkspaceTranscriptText(text: excerpt.text.reveal(), terms: [], preferences: preferences)
                             } else if !model.reading {
                                 Text(entry.conversation == nil ? "This event has no recorded conversation identity." : "No timestamped assistant output at or before this event is available in the loaded messages.").foregroundStyle(.secondary)
                             }
@@ -117,7 +124,7 @@ struct WorkspaceActivityView: View {
         if let error = model.error { return WorkspaceFeedback(target: "Activity", message: error,
             nextStep: "Previous events remain visible. Check Settings if amx is unavailable, then refresh.") }
         if let error = model.readError { return WorkspaceFeedback(target: "Read markers", message: error,
-            nextStep: "Check that the activity read-marker file is writable, then use Mark shown read again.", recovery: nil) }
+            nextStep: "Check that the activity read-marker file is writable, then retry the read acknowledgement or Undo.", recovery: nil) }
         guard let report = model.report else { return nil }
         var warnings: [String] = []
         if report.truncated { warnings.append("Showing the newest 1,000 of \(report.matched) matching events. Older events remain unread.") }
@@ -128,8 +135,8 @@ struct WorkspaceActivityView: View {
     private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
         if modifiers == .command {
             switch key {
-            case "r": model.refresh()
-            case "\r": if let entry = model.selected { model.onFocus?(entry) }
+            case "r": if !model.loading { model.refresh() }
+            case "\r": if let entry = model.selected, entry.conversation != nil || !entry.runtimeSessionID.isEmpty { model.onFocus?(entry) }
             default: return false
             }
         } else if modifiers == [.command, .shift] {

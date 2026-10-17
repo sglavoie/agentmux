@@ -1168,6 +1168,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxDashboardPlace` | `workspace` | Where the dashboard shortcut and Open Dashboard show the dashboard: `workspace` (the workspace's own view), or `kitty` (a dashboard tab in Kitty when a Kitty is running, else the workspace). |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
 | `amxConfirmBeforeClosing` | true | Asks before closing a running utility view (⌘W) or ending a session (⌘⇧W). Changes apply immediately to shortcuts, menus, and sidebar close actions; app quit confirmation is separate. |
+| `amxReadingProseSize` | 13 | Prose size in History, Activity and Waiting (11–24 points), independent of code/diff/terminal-preview size. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
 | `amxTerminalTheme` | none | The Ghostty `theme` every terminal uses, as Ghostty writes it: `Name` or `light:Name,dark:Name`; unset uses the Ghostty config. Changes recolor all open terminals. |
 
@@ -1244,8 +1245,9 @@ records are omitted before limiting. Stable record IDs survive journal rereads.
 Read IDs and the last marking time persist atomically in
 `~/Library/Application Support/AgentMux/activity-read.json` (0600), without output
 or transcript text. IDs expire after 91 days, beyond the maximum 90-day query.
-Marking read is explicit and covers only visible records, including when a query
-is truncated. Late-spooled events remain unread regardless of their timestamps.
+Marking read is explicit: the Mark read menu offers the selected record or all
+loaded filtered results, with an exact count. Undo restores the last acknowledgement
+and its prior selection; neither action includes records omitted by a truncated query. Late-spooled events remain unread regardless of their timestamps.
 
 Supporting excerpts use the exact harness-qualified conversation and the latest
 assistant message timestamp at or before the recorded event. Missing timestamps

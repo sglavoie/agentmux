@@ -594,6 +594,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("t", keyCode: 17), "New Shell"),
             (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
             (.command("l", keyCode: 37, shifted: "L"), "Session List"),
+            (.command("i", keyCode: 34, shifted: "I"), "Waiting"),
             (.command("w", keyCode: 13), "Close"),
             (.function(NSF1FunctionKey, keyCode: 122), "F1"),
         ]
@@ -677,6 +678,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("m", keyCode: 46), "Minimize"),
             (.command("w", keyCode: 13, shifted: "W"), "End Session…"),
             (.command("l", keyCode: 37, shifted: "L"), "Session List"),
+            (.command("i", keyCode: 34, shifted: "I"), "Waiting"),
         ]
         for (key, title) in expected {
             XCTAssertEqual(owner(key), title, "\(key.flags.rawValue) \(key.unmodified)")

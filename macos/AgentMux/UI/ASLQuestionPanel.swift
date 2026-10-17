@@ -514,10 +514,14 @@ extension PanelNoticeKind {
 /// window that had it.
 struct KeyboardReturn {
     private var app: NSRunningApplication?
+    private weak var window: NSWindow?
+    private weak var responder: NSResponder?
 
     /// Called before a panel that is not yet shown activates the app.
     mutating func note(frontmost: NSRunningApplication? = NSWorkspace.shared.frontmostApplication) {
         app = Self.returnTarget(frontmost: frontmost, own: ProcessInfo.processInfo.processIdentifier)
+        window = app == nil ? NSApp.keyWindow : nil
+        responder = window?.firstResponder
     }
 
     /// Called once the panel is gone. Only while the app is still active:
@@ -525,6 +529,15 @@ struct KeyboardReturn {
     mutating func giveBack() {
         let app = self.app
         self.app = nil
+        if app == nil, NSApp.isActive, let window, window.isVisible,
+           NSApp.keyWindow == nil || NSApp.keyWindow === window {
+            window.makeKey()
+            if let responder, (responder as? NSView)?.isHiddenOrHasHiddenAncestor != true {
+                window.makeFirstResponder(responder)
+            }
+        }
+        window = nil
+        responder = nil
         guard let app, !app.isTerminated, NSApp.isActive, !AppDelegate.isRunningTests else { return }
         app.activate()
     }

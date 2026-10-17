@@ -213,6 +213,7 @@ enum WorkspaceMenu {
         workspace.target = target
         window.addItem(workspace)
         window.addItem(item("Session List", #selector(AppDelegate.focusSessionList(_:)), "L", target: target))
+        window.addItem(item("Waiting", #selector(AppDelegate.focusWaiting(_:)), "I", target: target))
         NSApp.windowsMenu = window
         return main
     }

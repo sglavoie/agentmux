@@ -1,5 +1,24 @@
 import SwiftUI
 
+/// Prose is shared by History, Activity and Waiting; terminal/code sizing stays independent.
+struct WorkspaceReadingMenu: View {
+    @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
+    var body: some View {
+        Menu {
+            Text("Reading text: \(Int(preferences.effectiveProseSize)) pt")
+            Button("Larger reading text") { preferences.proseSize = min(24, preferences.effectiveProseSize + 1) }.disabled(preferences.effectiveProseSize >= 24)
+            Button("Smaller reading text") { preferences.proseSize = max(11, preferences.effectiveProseSize - 1) }.disabled(preferences.effectiveProseSize <= 11)
+            Button("Reset reading text size") { preferences.proseSize = 13 }
+            Divider()
+            Text("Code and terminal output: \(Int(preferences.effectiveFontSize)) pt")
+            Button("Larger monospace text") { preferences.fontSize = min(24, preferences.effectiveFontSize + 1) }.disabled(preferences.effectiveFontSize >= 24)
+            Button("Smaller monospace text") { preferences.fontSize = max(10, preferences.effectiveFontSize - 1) }.disabled(preferences.effectiveFontSize <= 10)
+            Button("Reset monospace text size") { preferences.fontSize = 12 }
+        } label: { Image(systemName: "textformat.size") }
+            .menuStyle(.borderlessButton).fixedSize().help("Reading text size").accessibilityLabel("Reading text size")
+    }
+}
+
 /// A permanent toolbar slot: neither delayed progress nor a long failure changes
 /// the reader's geometry. Full, selectable details remain available in a popover.
 struct WorkspaceStatus: View {

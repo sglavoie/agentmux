@@ -83,6 +83,10 @@ final class FocusableView: NSView {
 @MainActor
 final class FakeWorkspaceApp: WorkspaceDelegate {
     let store = SessionStore()
+    var launchMenuRequests = 0
+    var performedCommands: [WorkspaceCommand] = []
+    func workspaceLaunchProjects(from view: NSView) { launchMenuRequests += 1 }
+    func workspacePerform(_ command: WorkspaceCommand) { performedCommands.append(command) }
     private(set) var made: [String] = []
     /// The font size each terminal was asked for, in the order made.
     private(set) var madeFontSizes: [Float?] = []

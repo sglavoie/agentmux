@@ -26,6 +26,41 @@ final class WorkspaceActivityTests: XCTestCase {
     }
     private var memory: WorkspaceActivityReadStore { .init(load: { .init() }, save: { _ in }) }
 
+    func testSelectedReadAndUndoRestorePersistedMarkersAndSelectionWithoutHidingLateEvents() throws {
+        let runner = ActivityRunner()
+        var saved = WorkspaceActivityReadState()
+        var failSave = false
+        var response = report([entry("one"), entry("two")])
+        let amx = command { _ in response }
+        let store = WorkspaceActivityReadStore(load: { saved }, save: {
+            if failSave { throw CocoaError(.fileWriteNoPermission) }
+            saved = $0
+        })
+        let model = WorkspaceActivityModel(command: { amx }, runner: runner, readStore: store)
+        model.refresh(); runner.release()
+        model.markSelectedRead()
+        XCTAssertEqual(Set(saved.read.keys), ["one"])
+        XCTAssertEqual(model.visible.map(\.id), ["two"])
+        XCTAssertTrue(model.canUndoRead)
+        response = report([entry("one"), entry("two"), entry("late", at: "2026-10-14T00:00:00Z")])
+        model.refresh(); runner.release(runner.pending.count - 1)
+        failSave = true
+        model.undoMarkRead()
+        XCTAssertTrue(model.canUndoRead, "failed Undo remains retryable")
+        XCTAssertEqual(Set(saved.read.keys), ["one"])
+        failSave = false
+        model.undoMarkRead()
+        XCTAssertTrue(saved.read.isEmpty)
+        XCTAssertNil(saved.lastMarkedAt)
+        XCTAssertEqual(model.selection, "one")
+        XCTAssertEqual(model.visible.map(\.id), ["one", "two", "late"])
+        XCTAssertFalse(model.canUndoRead)
+        model.markVisibleRead()
+        XCTAssertEqual(Set(saved.read.keys), ["one", "two", "late"])
+        model.undoMarkRead()
+        XCTAssertTrue(saved.read.isEmpty)
+    }
+
     func testMarkReadPersistsOnlyLoadedIDsAndLateOlderEventStaysUnread() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("read.json")
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }

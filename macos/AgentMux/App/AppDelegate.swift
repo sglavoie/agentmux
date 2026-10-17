@@ -45,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var lastActiveKittyPID: pid_t?
 
     private var projects = ProjectCatalog()
+    private var workspaceProjectMenu: NSMenu?
     private var recent = RecentSessions()
     /// False once the daemon answered that it has no notification_snooze.
     private var snoozeSupported = true
@@ -212,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         } else if let place = restoration.place {
             controller.restore(place, conversation: restoration.conversation)
         } else {
-            controller.showDashboardUnlessPlaced()
+            if !controller.state.rows.isEmpty { controller.showDashboardUnlessPlaced() }
         }
     }
 
@@ -397,15 +398,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     // MARK: Workspace
 
     /// Shows the workspace window, on `runtimeSessionID`'s terminal when one
-    /// is named. Opened on nothing in particular, it lands on the Dashboard.
+    /// is named. An empty workspace offers launch and history directly.
     func showWorkspace(focusing runtimeSessionID: String? = nil) {
         let controller = workspaceController()
+        refreshProjects()
         if let runtimeSessionID {
             controller.focus(runtimeSessionID: runtimeSessionID)
         } else {
             controller.show()
             // A restore under way, or an agent said to be gone, is a place.
-            controller.showDashboardUnlessPlaced()
+            if !controller.state.rows.isEmpty { controller.showDashboardUnlessPlaced() }
         }
     }
 
@@ -989,6 +991,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         return entries
     }
 
+    var workspaceLaunchDescription: String {
+        let choice = preferencesModel.preferences.launchBackend
+        return "Launch in \(choice.destination(cliBackend: preferences.backend.cliLaunchBackend)) · \(choice.source(cliSource: preferences.backend.cliLaunchBackendSource))"
+    }
+
+    var workspaceProjectGuidance: String {
+        ProjectCatalog.guidance(projects.state, unavailable: gate.unavailableReason(.project))
+    }
+
+    func workspaceLaunchProjects(from view: NSView) {
+        refreshProjects()
+        let menu = NSMenu(title: "Launch Project")
+        menu.autoenablesItems = false
+        workspaceProjectMenu = menu
+        updateWorkspaceProjectMenu()
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: view.bounds.height), in: view)
+        workspaceProjectMenu = nil
+    }
+
+    private func updateWorkspaceProjectMenu() {
+        guard let menu = workspaceProjectMenu else { return }
+        menu.removeAllItems()
+        let entries = gate.unavailableReason(.project).map { [MenuEntry.info($0), .action(.launchSettings, "Launch Settings…")] }
+            ?? MenuBuilder.entries(for: .projects, actionsInput)
+        MenuBuilder.items(for: entries, target: self, sessionAction: #selector(workspaceLaunchChosen(_:)),
+                          actionSelector: #selector(workspaceLaunchChosen(_:))).forEach(menu.addItem)
+    }
+
+    @objc private func workspaceLaunchChosen(_ sender: NSMenuItem) {
+        guard let box = sender.representedObject as? MenuBuilder.ActionBox else { return }
+        perform(box.action)
+    }
+
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void) {
         guard store.feed == .live else { completion(SecretText("Waiting for a live session list.")); return }
         let command = self.command
@@ -1144,6 +1179,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         workspace?.focusSidebar()
     }
 
+    @objc func focusWaiting(_ sender: Any?) {
+        showWorkspace()
+        workspace?.focusWaiting()
+    }
+
     // MARK: Companion feed
 
     /// How long the first subscribe waits for amx to be resolved.
@@ -1228,6 +1268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         if preferencesModel.snapshot != preferences { preferencesModel.snapshot = preferences }
         let notification = store.feed == .live ? store.snapshot?.notification : nil
         if preferencesModel.daemonNotification != notification { preferencesModel.daemonNotification = notification }
+        workspace?.refreshCommands()
     }
 
     // MARK: Daemon health
@@ -2255,6 +2296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                     }
                     self.projects.state.finish(result, at: Date())
                     if let missing { self.projects.missingDirectories = missing }
+                    self.updateWorkspaceProjectMenu()
                     self.workspace?.refreshCommands()
                     self.statusItem?.refreshSubmenus()
                 }

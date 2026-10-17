@@ -135,6 +135,14 @@ struct ProjectLaunchResult: Decodable, Equatable {
 /// older than a minute. Configuration changes rarely, and listing it is a
 /// process launch, so the menu never waits for it.
 struct ProjectCatalog: Equatable {
+    static func guidance(_ state: FetchState<[ProjectEntry]>, unavailable: String?) -> String {
+        if let unavailable { return unavailable }
+        if let error = state.error { return "Could not refresh projects: \(error). Choose Launch Project to try again." }
+        guard let entries = state.value else { return "Loading configured projects…" }
+        if entries.isEmpty { return "No projects configured. Run amx config edit to add a profile and a project, then choose Launch Project to refresh." }
+        return "Choose a configured project to start, or return to a past conversation."
+    }
+
     static let maxAge: TimeInterval = 60
     static let listArguments = ["project", "list"]
 

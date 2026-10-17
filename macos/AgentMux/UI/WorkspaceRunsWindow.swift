@@ -120,7 +120,7 @@ struct WorkspaceRunsView: View {
         guard !plan.isPresented && confirmation == nil else { return false }
         if modifiers == .command {
             switch key {
-            case "r": model.refresh()
+            case "r": if !model.loading { model.refresh() }
             case "\r": if let row = model.selected { model.onFocus?(row) }
             default: return false
             }

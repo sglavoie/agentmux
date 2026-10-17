@@ -87,6 +87,16 @@ final class WorkspaceActivityModel: ObservableObject {
     private var generation = 0
     private var transcriptGeneration = 0
     private var messageLimit = 50
+    private struct ReadUndo {
+        let state: WorkspaceActivityReadState
+        let selection: String?
+    }
+    private var readUndo: ReadUndo?
+    @Published private(set) var canUndoRead = false
+    var canMarkSelectedRead: Bool {
+        !loading && error == nil && selected.map { readState.read[$0.id] == nil } == true
+    }
+    var unreadResultCount: Int { visible.filter { readState.read[$0.id] == nil }.count }
 
     init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), readStore: WorkspaceActivityReadStore = .standard) {
         self.command = command
@@ -130,19 +140,45 @@ final class WorkspaceActivityModel: ObservableObject {
     func filterChanged() { if !visible.contains(where: { $0.id == selection }) { select(visible.first?.id) } }
 
     func markVisibleRead(now: Date = Date()) {
-        guard !loading, error == nil, !visible.isEmpty else { return }
+        markRead(visible.map(\.id), now: now)
+    }
+
+    func markSelectedRead(now: Date = Date()) {
+        guard canMarkSelectedRead, let selection else { return }
+        markRead([selection], now: now)
+    }
+
+    private func markRead(_ ids: [String], now: Date) {
+        let unread = ids.filter { readState.read[$0] == nil }
+        guard !loading, error == nil, !unread.isEmpty else { return }
+        let undo = ReadUndo(state: readState, selection: selection)
         var next = readState
         // The backend supports at most 90 days. Retain IDs for that whole window;
         // pruning by mark time cannot hide a newly arriving old event.
         next.read = next.read.filter { $0.value >= now.addingTimeInterval(-91 * 86400) }
-        for entry in visible { next.read[entry.id] = now }
+        for id in unread { next.read[id] = now }
         next.lastMarkedAt = now
         do {
             try readStore.save(next)
+            readUndo = undo
+            canUndoRead = true
             readState = next
             readError = nil
             filterChanged()
         } catch { readError = "Read markers were not saved: \(error.localizedDescription)" }
+    }
+
+    func undoMarkRead() {
+        guard let undo = readUndo else { return }
+        do {
+            try readStore.save(undo.state)
+            readState = undo.state
+            readUndo = nil
+            canUndoRead = false
+            readError = nil
+            if let id = undo.selection, visible.contains(where: { $0.id == id }) { select(id) }
+            else { filterChanged() }
+        } catch { readError = "Read markers could not be restored: \(error.localizedDescription). Try Undo again." }
     }
 
     func select(_ id: String?) {

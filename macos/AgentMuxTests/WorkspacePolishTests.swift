@@ -85,7 +85,7 @@ final class WorkspacePolishTests: XCTestCase {
 
         app.store.apply(snapshot: F.snapshot([]))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
-        XCTAssertEqual(workspace.placeholder.button.title, "Open Dashboard")
+        XCTAssertEqual(workspace.placeholder.button.title, "Launch Project…")
         XCTAssertEqual(waitingNote, WorkspaceInspectorView.nothingWaiting)
     }
 

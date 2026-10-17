@@ -86,12 +86,18 @@ protocol WorkspaceDelegate: AnyObject {
     /// the window became key on it. Its terminal notices are now read.
     func workspaceShowing(_ origin: TerminalNotice.Origin)
     var workspaceCommands: [WorkspaceSwitcher.Entry] { get }
+    var workspaceLaunchDescription: String { get }
+    var workspaceProjectGuidance: String { get }
+    func workspaceLaunchProjects(from view: NSView)
     func workspacePerform(_ command: WorkspaceCommand)
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void)
 }
 
 extension WorkspaceDelegate {
     var workspaceCommands: [WorkspaceSwitcher.Entry] { [] }
+    var workspaceLaunchDescription: String { "Launch in Workspace (tmux)" }
+    var workspaceProjectGuidance: String { "Choose a configured project to start, or return to a past conversation." }
+    func workspaceLaunchProjects(from view: NSView) {}
     func workspacePerform(_ command: WorkspaceCommand) {}
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void) {
         completion(SecretText("Context is unavailable."))
@@ -163,7 +169,7 @@ extension WorkspaceDelegate where Self: AppDelegate {
 /// the order they are listed here, or what the daemon says about the session
 /// the pane is on.
 /// It is not a session and not a view, never counts as waiting, starts
-/// nothing, and never takes the keyboard.
+/// nothing, and takes the keyboard only through Window › Waiting.
 @MainActor
 final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "workspace")
@@ -300,6 +306,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     let switcher = WorkspaceSwitcherView()
     /// What had the keyboard when the Go to… list took it.
     private weak var switcherReturn: NSResponder?
+    private weak var waitingReturn: NSResponder?
     private let pane = NSView()
     private let otherPane = NSView()
     private let otherPlaceholder = WorkspacePlaceholderView()
@@ -1050,6 +1057,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     func refreshCommands() {
         if isSwitching { switcher.update(switcherEntries()) }
+        if case .empty = content { fillPlaceholder(content) }
+    }
+
+    func focusWaiting() {
+        if window.firstResponder !== inspector { waitingReturn = window.firstResponder }
+        setInspectorCollapsed(false)
+        setInspectorTab(.waiting)
+        inspector.focusReader()
     }
 
     /// Puts the list away. With `restoring`, the keyboard goes back to what
@@ -2696,11 +2711,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 }
                 break
             }
+            if state.rows.isEmpty {
+                placeholder.show(title: "No live sessions",
+                    message: [delegate?.workspaceProjectGuidance ?? "", delegate?.workspaceLaunchDescription ?? ""].joined(separator: "\n\n"),
+                    button: "Launch Project…", secondary: [
+                        ("Conversation History", { [weak self] in self?.delegate?.workspacePerform(.history) }),
+                        ("Open Dashboard", { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }),
+                    ]) { [weak self] in
+                        guard let self else { return }
+                        self.delegate?.workspaceLaunchProjects(from: self.placeholder.button)
+                    }
+                break
+            }
             placeholder.show(
-                title: state.rows.isEmpty ? "No live sessions" : "No session selected",
-                message: state.rows.isEmpty
-                    ? "Sessions appear here as they start. The Dashboard launches them."
-                    : "Choose a session in the sidebar.",
+                title: "No session selected",
+                message: "Choose a session in the sidebar.",
                 button: "Open Dashboard"
             ) { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }
         case let .viewEnded(id):
@@ -3569,6 +3594,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         inspector.onAction = { [weak self] action in self?.delegate?.workspaceInspectorAction(action) }
         inspector.onAnswer = { [weak self] answer in self?.delegate?.workspaceAnswer(answer) }
+        inspector.onLeaveReader = { [weak self] in
+            guard let self else { return }
+            let back = self.waitingReturn
+            self.waitingReturn = nil
+            if let back, (back as? NSView)?.isHiddenOrHasHiddenAncestor != true, self.window.makeFirstResponder(back) { return }
+            self.focusListOrPane()
+        }
         inspector.onContext = { [weak self] row, completion in
             self?.delegate?.workspaceContext(row, completion: completion)
         }
@@ -3866,7 +3898,7 @@ final class WorkspaceLinkLabel: NSTextField {
 @MainActor
 final class WorkspacePlaceholderButton: NSButton {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if window?.firstResponder is NSText { return false }
+        if window?.firstResponder is NSText || window?.firstResponder is WorkspaceInspectorView { return false }
         return super.performKeyEquivalent(with: event)
     }
 }
@@ -3879,6 +3911,8 @@ final class WorkspacePlaceholderView: NSView {
     let messageLabel = NSTextField(wrappingLabelWithString: "")
     let button = WorkspacePlaceholderButton(title: "", target: nil, action: nil)
     private var onPress: (() -> Void)?
+    let secondaryActions = NSStackView()
+    private var secondaryHandlers: [() -> Void] = []
 
     init() {
         super.init(frame: .zero)
@@ -3888,7 +3922,9 @@ final class WorkspacePlaceholderView: NSView {
         button.bezelStyle = .rounded
         button.target = self
         button.action = #selector(pressed(_:))
-        let stack = NSStackView(views: [titleLabel, messageLabel, button])
+        secondaryActions.orientation = .vertical
+        secondaryActions.spacing = 6
+        let stack = NSStackView(views: [titleLabel, messageLabel, button, secondaryActions])
         stack.orientation = .vertical
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -3906,13 +3942,32 @@ final class WorkspacePlaceholderView: NSView {
     }
 
     /// With `isDefault`, Return presses the button, as it does a sheet's.
-    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = false, onPress: (() -> Void)? = nil) {
+    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = false, secondary: [(String, () -> Void)] = [], onPress: (() -> Void)? = nil) {
+        showSecondaryActions(secondary)
         titleLabel.stringValue = title
         messageLabel.stringValue = message
         button.title = label ?? ""
         button.isHidden = label == nil
         button.keyEquivalent = isDefault && label != nil ? "\r" : ""
         self.onPress = onPress
+    }
+
+    func showSecondaryActions(_ actions: [(String, () -> Void)]) {
+        secondaryHandlers = actions.map { $0.1 }
+        secondaryActions.isHidden = actions.isEmpty
+        if secondaryActions.arrangedSubviews.compactMap({ ($0 as? NSButton)?.title }) == actions.map({ $0.0 }) { return }
+        secondaryActions.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for (index, action) in actions.enumerated() {
+            let button = NSButton(title: action.0, target: self, action: #selector(secondaryPressed(_:)))
+            button.bezelStyle = .rounded
+            button.tag = index
+            secondaryActions.addArrangedSubview(button)
+        }
+    }
+
+    @objc private func secondaryPressed(_ sender: NSButton) {
+        guard secondaryHandlers.indices.contains(sender.tag) else { return }
+        secondaryHandlers[sender.tag]()
     }
 
     @objc private func pressed(_ sender: Any?) { onPress?() }

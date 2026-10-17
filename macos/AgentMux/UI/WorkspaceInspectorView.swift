@@ -1,10 +1,13 @@
 import AppKit
+import SwiftUI
+import Combine
 
 /// The workspace's right sidebar: the sessions waiting on the operator, or
 /// what there is to say about the session the pane is on.
 ///
-/// Nothing in it takes the keyboard. A click on a waiting session goes to
-/// it, Answer… on one opens the panel that answers it without going there,
+/// Pointer actions leave terminal focus alone. Window › Waiting explicitly
+/// gives the reader the keyboard for context, answer and next-item navigation.
+/// A click on a waiting session goes to it, Answer… on one opens the panel that answers it without going there,
 /// a click on an identifier copies it, and the buttons do what the
 /// session function keys do; the terminal that had the keyboard keeps it.
 @MainActor
@@ -73,6 +76,12 @@ final class WorkspaceInspectorView: NSView {
     private var lastWaiting: AttentionCycler.Key?
     private var heldWaiting: [WorkspaceWaitingRow]?
     private var pointerInside = false
+    private let readingPreferences: WorkspaceReadingPreferences
+    private var readingSubscription: AnyCancellable?
+    private var readerIndex = 0
+    var onLeaveReader: (() -> Void)?
+    private(set) var readingKey: AttentionCycler.Key?
+    let readerHint = NSTextField(wrappingLabelWithString: "↑↓ read · Return answer · N next · Esc return")
 
     var visibleWaiting: [WorkspaceWaitingRow] { heldWaiting ?? waitingFilter.apply(model.waiting, oldestFirst: oldestFirst) }
     private var displayedLines: [WorkspaceInspectorLine] {
@@ -102,9 +111,12 @@ final class WorkspaceInspectorView: NSView {
     /// The lines under the tabs, top to bottom.
     private(set) var lines: [NSView] = []
     private let stack = WorkspaceInspectorStack()
+    private let scroll = NSScrollView()
     private static let inset: CGFloat = 12
 
-    init() {
+    init(preferences: WorkspaceReadingPreferences? = nil) {
+        let preferences = preferences ?? .shared
+        readingPreferences = preferences
         super.init(frame: .zero)
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self, userInfo: nil))
         tabs.target = self
@@ -121,7 +133,6 @@ final class WorkspaceInspectorView: NSView {
         stack.edgeInsets = NSEdgeInsets(top: 4, left: Self.inset, bottom: Self.inset, right: Self.inset)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let scroll = NSScrollView()
         scroll.documentView = stack
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -146,7 +157,15 @@ final class WorkspaceInspectorView: NSView {
         inboxControls.alignment = .leading
         inboxControls.spacing = 4
         [filterPicker, oldestButton, nextButton, updatesButton].forEach { inboxControls.addArrangedSubview($0) }
-        let header = NSStackView(views: [tabs, inboxControls])
+        let readingMenu = NSHostingView(rootView: WorkspaceReadingMenu(preferences: preferences))
+        readingMenu.translatesAutoresizingMaskIntoConstraints = false
+        readingMenu.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        readingMenu.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        let tabRow = NSStackView(views: [tabs, readingMenu])
+        readerHint.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        readerHint.textColor = .secondaryLabelColor
+        readerHint.isHidden = true
+        let header = NSStackView(views: [tabRow, inboxControls, readerHint])
         header.orientation = .vertical
         header.alignment = .leading
         header.spacing = 6
@@ -157,7 +176,7 @@ final class WorkspaceInspectorView: NSView {
             header.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
             header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
-            tabs.widthAnchor.constraint(equalTo: header.widthAnchor),
+            tabRow.widthAnchor.constraint(equalTo: header.widthAnchor),
             scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -168,6 +187,9 @@ final class WorkspaceInspectorView: NSView {
         ])
         setAccessibilityLabel("Inspector")
         rebuild()
+        readingSubscription = preferences.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateReadingLayout() }
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -203,6 +225,7 @@ final class WorkspaceInspectorView: NSView {
             if tab == model.tab { tabs.selectedSegment = index }
         }
         inboxControls.isHidden = model.tab != .waiting
+        if model.tab != .waiting { readerHint.isHidden = true }
         updatesButton.isEnabled = heldWaiting != nil
         updatesButton.title = heldWaiting == nil ? "List up to date" : "Update list (\(model.waiting.count) waiting)"
         nextButton.isEnabled = model.current && !visibleWaiting.isEmpty
@@ -225,6 +248,7 @@ final class WorkspaceInspectorView: NSView {
             row.showContext(expanded?.key == row.row.key ? preview.reveal() : nil)
         }
         holdWhileNotCurrent()
+        updateReadingLayout()
     }
 
     /// Held lines can still be clicked to go to their session, which is
@@ -390,6 +414,74 @@ final class WorkspaceInspectorView: NSView {
         onWaiting?(rows[next].key)
     }
 
+    /// Explicit keyboard entry; ordinary inspector clicks still preserve terminal focus.
+    func focusReader() {
+        guard model.tab == .waiting else { return }
+        readerHint.isHidden = false
+        window?.makeFirstResponder(self)
+        if let key = readingKey, let row = visibleWaiting.first(where: { $0.key == key }), rowIsCurrent(row) {
+            if expanded?.sameContext(as: row) != true { toggleContext(row) }
+        } else { moveReader(0) }
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+    override func keyDown(with event: NSEvent) {
+        guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { super.keyDown(with: event); return }
+        switch event.keyCode {
+        case 125: moveReader(1)
+        case 126: moveReader(-1)
+        case 53: readerHint.isHidden = true; updateReadingLayout(); onLeaveReader?()
+        case 36, 76:
+            guard let row = visibleWaiting.first(where: { $0.key == readingKey }), rowIsCurrent(row), let answer = row.answer else { NSSound.beep(); return }
+            onAnswer?(answer)
+        case 116, 121:
+            guard let row = lines.compactMap({ $0 as? WorkspaceWaitingRowView }).first(where: { $0.row.key == readingKey }),
+                  !row.contextScroll.isHidden else { return }
+            let scroll = row.contextScroll
+            let direction: CGFloat = event.keyCode == 121 ? 1 : -1
+            let clip = scroll.contentView
+            let proposed = NSRect(origin: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + direction * clip.bounds.height * 0.85), size: clip.bounds.size)
+            clip.scroll(to: clip.constrainBoundsRect(proposed).origin)
+            scroll.reflectScrolledClipView(clip)
+        case 49:
+            if let row = visibleWaiting.first(where: { $0.key == readingKey }) { toggleContext(row) }
+        default:
+            if event.charactersIgnoringModifiers?.lowercased() == "n" { moveReader(1) }
+            else { super.keyDown(with: event) }
+        }
+    }
+
+    func moveReader(_ delta: Int) {
+        let prior = readingKey.flatMap { key in visibleWaiting.firstIndex { $0.key == key } }
+        applyWaitingUpdates(nil)
+        let rows = visibleWaiting
+        guard model.current, !rows.isEmpty else { return }
+        if let index = rows.firstIndex(where: { $0.key == readingKey }) {
+            readerIndex = (index + delta + rows.count) % rows.count
+        } else { readerIndex = min(prior ?? readerIndex, rows.count - 1) }
+        readingKey = rows[readerIndex].key
+        if expanded?.sameContext(as: rows[readerIndex]) != true { toggleContext(rows[readerIndex]) }
+        updateReadingLayout()
+        if let row = lines.compactMap({ $0 as? WorkspaceWaitingRowView }).first(where: { $0.row.key == readingKey }) {
+            stack.scrollToVisible(row.frame)
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        updateReadingLayout()
+    }
+
+    private func updateReadingLayout() {
+        for case let row as WorkspaceWaitingRowView in lines {
+            row.borderWidth = row.row.key == readingKey && !readerHint.isHidden ? 2 : 0
+            row.borderColor = .controlAccentColor
+            let otherHeight = max(0, stack.fittingSize.height - row.readingHeight)
+            let height = row.contextScroll.isHidden ? row.readingHeight : max(120, scroll.contentSize.height - otherHeight)
+            row.configureReading(preferences: readingPreferences, height: height)
+        }
+    }
+
     func discardContext() {
         clearContext()
         heldWaiting = nil
@@ -468,7 +560,8 @@ final class WorkspaceWaitingRowView: NSBox {
     var onContext: (() -> Void)?
     let contextButton = NSButton(title: "Context", target: nil, action: nil)
     let contextLabel = NSTextField(wrappingLabelWithString: "")
-    private let contextScroll = NSScrollView()
+    let contextScroll = NSScrollView()
+    private var contextHeight: NSLayoutConstraint!
     /// Nil on a row with nothing to answer from here.
     private(set) var answerButton: NSButton?
     let titleLabel = NSTextField(labelWithString: "")
@@ -560,10 +653,11 @@ final class WorkspaceWaitingRowView: NSBox {
         let content = NSView()
         content.addSubview(column)
         contentView = content
+        contextHeight = contextScroll.heightAnchor.constraint(equalToConstant: 160)
         NSLayoutConstraint.activate([
             stack.widthAnchor.constraint(equalTo: column.widthAnchor),
             contextScroll.widthAnchor.constraint(equalTo: column.widthAnchor),
-            contextScroll.heightAnchor.constraint(equalToConstant: 160),
+            contextHeight,
             contextLabel.widthAnchor.constraint(equalTo: contextScroll.contentView.widthAnchor),
             column.topAnchor.constraint(equalTo: content.topAnchor, constant: 6),
             column.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -6),
@@ -579,6 +673,15 @@ final class WorkspaceWaitingRowView: NSBox {
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         update(row)
+    }
+
+    var readingHeight: CGFloat { contextHeight.constant }
+
+    func configureReading(preferences: WorkspaceReadingPreferences, height: CGFloat) {
+        let isProse: Bool
+        if case .asl? = row.answer { isProse = true } else { isProse = row.key.runtimeSessionID.isEmpty }
+        contextLabel.font = isProse ? .systemFont(ofSize: preferences.effectiveProseSize) : .monospacedSystemFont(ofSize: preferences.effectiveFontSize, weight: .regular)
+        if contextHeight.constant != height { contextHeight.constant = height }
     }
 
     func showContext(_ text: String?) {

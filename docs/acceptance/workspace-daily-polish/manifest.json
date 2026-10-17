@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-17",
+  "fixture_source": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+  "fixture_sha256": "a26d5e5458d21068b379ae5d1155838007d58423b745976704c959717ca6aaff",
+  "capture": "ScreenCaptureKit current-process fixture windows, light/dark appearances; prose 22 points, no live user sessions",
+  "full_test_command": "macos/scripts/test-app.sh",
+  "full_test_result": "865 tests passed, zero failures or skips",
+  "review_criteria": [
+    "Primary actions remain visible at minimum window sizes with large text.",
+    "Waiting fills spare inspector space without an unnecessary outer scrollbar.",
+    "Prose and raw terminal output use independent text sizes.",
+    "History retains fixed status and navigation slots.",
+    "Empty workspace presents launch, history and dashboard actions."
+  ],
+  "artifacts": [
+    {
+      "path": "history-large-light.png",
+      "sha256": "1f2aa08cbf066dc586088dc2c88cb3b5faa6c10631689a614c824e09c4089c89",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        720,
+        450
+      ]
+    },
+    {
+      "path": "history-large-dark.png",
+      "sha256": "fd5e2e621cd0c397f164ff55b007f063b9b7804dc6c8f99f469f25a7bd8bd403",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        720,
+        450
+      ]
+    },
+    {
+      "path": "waiting-large-light.png",
+      "sha256": "9e39208fe20cea27c7e6826dd4dd421d28025a99c4b5591dd6646f23b3f8355f",
+      "logical_window_size": [
+        320,
+        600
+      ],
+      "pixel_size": [
+        320,
+        600
+      ]
+    },
+    {
+      "path": "waiting-large-dark.png",
+      "sha256": "69650340cc66d1064378c54850f7678b63c376f9f6fee3d4753dd33e234aa7ec",
+      "logical_window_size": [
+        320,
+        600
+      ],
+      "pixel_size": [
+        320,
+        600
+      ]
+    },
+    {
+      "path": "activity-large-light.png",
+      "sha256": "2f9bf09fc58242ae747348f181d3b09152f058c330278e5130a19086e82930f8",
+      "logical_window_size": [
+        760,
+        480
+      ],
+      "pixel_size": [
+        760,
+        480
+      ]
+    },
+    {
+      "path": "activity-large-dark.png",
+      "sha256": "0e172c1ff77a6540cad211516a7caefc1fc74e4c4dd8a57278b64183418a3f4a",
+      "logical_window_size": [
+        760,
+        480
+      ],
+      "pixel_size": [
+        760,
+        480
+      ]
+    },
+    {
+      "path": "empty-workspace-light.png",
+      "sha256": "9e845814436cc6fec93997dc6f4d3375c17f329d542f4c983dbc2f411acabd26",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        720,
+        450
+      ]
+    },
+    {
+      "path": "empty-workspace-dark.png",
+      "sha256": "9e3f34289b953bd81c529d95777dde74da97069eedbfa9d6a8077c65195227d7",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        720,
+        450
+      ]
+    }
+  ],
+  "final_focused_command": "xcodebuild test (Debug), WorkspaceDailyPolishTests, WorkspaceActivityTests, WorkspaceWorkflowPreviewTests",
+  "final_focused_result": "24 tests passed, zero failures or skips; final Swift concurrency cleanup included"
+}

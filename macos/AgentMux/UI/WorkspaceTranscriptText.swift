@@ -126,10 +126,10 @@ struct WorkspaceTranscriptText: View {
     let terms: [String]
     let preferences: WorkspaceReadingPreferences
 
-    init(text: String, terms: [String], preferences: WorkspaceReadingPreferences = .shared) {
+    @MainActor init(text: String, terms: [String], preferences: WorkspaceReadingPreferences? = nil) {
         blocks = WorkspaceTranscriptBlock.parse(text)
         self.terms = terms
-        self.preferences = preferences
+        self.preferences = preferences ?? .shared
     }
 
     var body: some View { WorkspaceTranscriptBlocks(blocks: blocks, terms: terms, preferences: preferences) }
@@ -138,7 +138,7 @@ struct WorkspaceTranscriptText: View {
 private struct WorkspaceTranscriptBlocks: View {
     let blocks: [WorkspaceTranscriptBlock]
     let terms: [String]
-    let preferences: WorkspaceReadingPreferences
+    @ObservedObject var preferences: WorkspaceReadingPreferences
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(blocks.indices, id: \.self) { index in
@@ -147,7 +147,7 @@ private struct WorkspaceTranscriptBlocks: View {
                     Text(WorkspaceTranscriptBlock.inline(text, terms: terms)).lineSpacing(3)
                 case let .heading(level, text):
                     Text(WorkspaceTranscriptBlock.inline(text, terms: terms))
-                        .font(level <= 2 ? .title3.weight(.semibold) : .headline)
+                        .font(.system(size: preferences.effectiveProseSize + (level <= 2 ? 3 : 0), weight: .semibold))
                         .accessibilityAddTraits(.isHeader).padding(.top, 4)
                 case let .item(marker, text):
                     HStack(alignment: .top, spacing: 8) {
@@ -187,7 +187,8 @@ private struct WorkspaceTranscriptBlocks: View {
                     WorkspaceTranscriptCode(language: language, text: text, terms: terms, preferences: preferences)
                 }
             }
-        }.textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+        }.font(.system(size: preferences.effectiveProseSize))
+            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

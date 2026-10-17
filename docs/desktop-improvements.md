@@ -312,3 +312,66 @@ Offset pages describe a changing archive, not a frozen snapshot. The native view
 removes duplicate identities across pages; refresh obtains a fresh ordering.
 Source text anchors for diff refresh are memory-only and are never saved in
 preferences. Neither tests nor captures launch real agents or install the app.
+
+## Daily workflow polish on 2026-10-17
+
+The six follow-up improvements are implemented:
+
+- [x] Waiting uses the space left by its controls and other rows for context,
+  with proportional supervisor questions and monospace terminal output. Window ›
+  Waiting (⌘⇧I) explicitly focuses its reader: arrows read items, Return opens the
+  existing answer panel, N advances, Space toggles context, and page keys scroll.
+  Changed questions remain disabled. Escape restores the previous keyboard focus
+  without attaching a detached session, and a pane's default Reattach button
+  cannot consume the reader's Return.
+- [x] History combines its heading and actions, compacts result metadata and
+  message navigation, and retains fixed status slots. Its minimum 720×450 window
+  reserves at least 240 points for transcript reading, including at 24-point
+  prose size and while refreshing. Earlier/later paging remains available in the
+  message navigation menu; the heading's tooltip retains the checkout path.
+- [x] History's advertised ⌘R invokes the same transcript read as its refresh
+  button, including after a search failure. It preserves selection, focus and
+  the reading anchor, and ignores duplicate refreshes while reading. The shortcut
+  audit also aligned Activity and Runs refresh shortcuts with their busy buttons,
+  and Activity's focus shortcut with its available focus action.
+- [x] Activity offers Mark selected read and Mark all N results read, explicitly
+  including loaded rows below the viewport. Undo restores the prior persisted
+  markers and selection. Failed saves retain the existing state and a failed Undo
+  stays retryable; late arrivals remain unread.
+- [x] History, Activity and Waiting share remembered prose sizing, independent
+  of code/diff/terminal-preview sizing. Open readers update immediately. Fixture
+  captures check large text with reachable primary controls in both appearances.
+- [x] An empty workspace offers Launch Project, Conversation History and Dashboard
+  directly. Launch reuses the existing project menu and action route, with the
+  effective destination/source shown in the empty pane. Configuration guidance,
+  pending project reads and failed reads are distinct. Existing daemon recovery
+  and session restoration retain their own actions.
+
+The new interaction coverage is in `WorkspaceDailyPolishTests` and
+`WorkspaceActivityTests`; `WorkspaceWorkflowPreviewTests` captures large-text
+History, Waiting, Activity and the empty workspace in light and dark appearances.
+
+Reviewed references:
+
+- [History, large reading text](acceptance/workspace-daily-polish/history-large-dark.png)
+- [Waiting, proportional context and keyboard reader](acceptance/workspace-daily-polish/waiting-large-dark.png)
+- [Activity, large reading text](acceptance/workspace-daily-polish/activity-large-light.png)
+- [Empty workspace actions](acceptance/workspace-daily-polish/empty-workspace-light.png)
+- [Capture provenance and hashes](acceptance/workspace-daily-polish/manifest.json)
+
+Validation:
+
+- `macos/scripts/test-app.sh`: 865 hosted macOS tests passed, zero failures or
+  skips. The Debug app and tests build together. This includes real key dispatch,
+  detached-session focus restoration, stale-question rejection, larger-text
+  geometry, read-marker persistence/Undo, and the existing lifecycle suites.
+- After removing default-argument actor-isolation warnings, a final focused build
+  and run of `WorkspaceDailyPolishTests`, `WorkspaceActivityTests`, and
+  `WorkspaceWorkflowPreviewTests` passed all 24 tests, zero failures or skips.
+  There were no actor-isolation warnings or layout constraint conflicts.
+- `env -u AMX_RUNTIME_SESSION_ID go test . ./cmd/dashboard`: passed, including
+  the repository's native menu/function-key contract checks.
+- Eight new fixture captures were inspected in light/dark appearances; artifact
+  hashes and fixture provenance were verified. `git diff --check` passed.
+
+No installation or release was performed; captures contain fixture data only.

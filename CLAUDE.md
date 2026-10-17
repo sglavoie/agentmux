@@ -109,8 +109,10 @@ The inspector on the pane's other side (`UI/WorkspaceInspectorView.swift`,
 built as data by `Model/WorkspaceInspector.swift`) lists the sessions waiting
 on the operator in `AttentionCycler` order and describes the session the pane
 is on, from the snapshot alone. It is hidden until asked for (⌘⇧B), is
-neither a session nor a view, and must never take the keyboard, count toward
-attention, or launch anything. A waiting row's Answer… button
+neither a session nor a view, and never counts toward attention or launches an
+agent. Pointer actions preserve terminal focus; Window › Waiting (⌘⇧I)
+explicitly focuses the keyboard reader for context and answer navigation.
+A waiting row's Answer… button
 (`WorkspaceWaitingAnswer`) only opens the ASL answer panel or the prompt
 answer panel; whether anything may be sent stays theirs and `amx send`'s to
 decide.
@@ -137,8 +139,8 @@ The workspace comes back where it was (`Model/WorkspaceRecovery.swift`): the
 app saves whether the window was open and which session or view its pane was
 on, and at launch `WorkspaceWindowController.restore(_:)` returns there once a
 live snapshot lists the session and `amx attach --json` reports no terminal
-attached to it. Restoring never takes a session from another terminal, and
-nothing in the workspace launches an agent: one that stopped is shown as
+attached to it. Restoring never takes a session from another terminal or
+launches an agent: one that stopped is shown as
 exited or lost, and the way on is the Dashboard or, when its conversation is
 known, Past Sessions opened on it (`amx workspace-view history`), where the
 operator presses `c`.

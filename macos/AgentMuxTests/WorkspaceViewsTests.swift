@@ -721,11 +721,18 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(app.madeViews, ["shell:/work/api", "dashboard"], "and starts nothing twice")
     }
 
-    func testTheEmptyPaneOffersTheDashboard() throws {
+    func testTheEmptyPaneOffersLaunchHistoryAndDashboard() throws {
         app.store.apply(snapshot: F.snapshot([]))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
-        XCTAssertEqual(workspace.placeholder.button.title, "Open Dashboard")
+        XCTAssertEqual(workspace.placeholder.button.title, "Launch Project…")
         workspace.placeholder.press()
+        XCTAssertEqual(app.launchMenuRequests, 1)
+        XCTAssertTrue(app.madeViews.isEmpty)
+        let buttons = workspace.placeholder.secondaryActions.arrangedSubviews.compactMap { $0 as? NSButton }
+        XCTAssertEqual(buttons.map(\.title), ["Conversation History", "Open Dashboard"])
+        buttons[0].performClick(nil)
+        XCTAssertEqual(app.performedCommands, [.history])
+        buttons[1].performClick(nil)
         XCTAssertEqual(workspace.viewSelection, "dashboard")
         XCTAssertEqual(app.madeViews, ["dashboard"])
 

@@ -253,8 +253,9 @@ Whatever has the keyboard decides where a key goes.
   about the session the pane is on (state, reason, times, flags, profile,
   conversation and runtime-session IDs, branch), copies an identifier when
   its line is clicked, and has buttons for what ⌘R and F5, F6, F8, F10, and
-  F11 do. Nothing in it takes the keyboard, and whether it is shown and
-  which tab it is on are kept across launches.
+  F11 do. Pointer actions preserve terminal focus; Window › Waiting (⌘⇧I)
+  explicitly focuses its keyboard reader. Whether it is shown and which tab it
+  is on are kept across launches.
 - **⌘1** to **⌘0** go to the first ten sessions in the order the sidebar
   lists them, top to bottom: ⌘1 is the first session and ⌘0 the tenth.
   Their items in the Session menu name the session each goes to, and are
@@ -429,8 +430,9 @@ is committed.
   select an event for its details and the last timestamped assistant output at or
   before it, and open its conversation or focus the matching live session.
   **Load earlier messages** searches further back for supporting output.
-  **Mark shown read** persists exactly the displayed event IDs; opening the view
-  does not mark anything read, and late-arriving events stay unread. Turn off
+  **Mark read** offers the selected event or all loaded results, with an exact
+  count and an Undo action. Opening the view does not mark anything read, and
+  late-arriving events stay unread. Turn off
   **Unread only** to revisit read events. Refresh reads newly recorded events.
   The view reports unavailable transcripts, retention limits, truncation, and
   unreadable journal records rather than reconstructing missing history.
@@ -689,3 +691,36 @@ find bar. **Edit › Search Conversation…** opens the selected session's recor
 conversation in History, scoped to that conversation, so searching can reach
 messages outside the terminal screen. It is available once the selected session
 has a recorded conversation identity.
+
+### Daily workflow polish
+
+An empty workspace offers **Launch Project…**, **Conversation History**, and
+**Open Dashboard** directly. Launch uses the same project menu and destination
+rules as the status menu; the empty pane names the effective destination and its
+source. With no configured projects it explains how to add a profile and project
+using `amx config edit`. Connection failures retain their existing recovery actions.
+
+**Window › Waiting** (⌘⇧I) focuses the inspector reader. Up/Down read the previous
+or next item, Return opens its existing answer panel, N reads the next waiting
+item, Space toggles context, and Page Up/Page Down scroll the context. Escape
+returns keyboard focus to the previous workspace control without attaching a session. Closing an answer panel returns to the reader
+when the workspace still owns focus. Changed questions remain disabled until
+refreshed; the reader never submits an answer itself. Context uses the inspector's
+available height, proportional text for supervisor questions, and monospace for
+terminal output.
+
+History, Activity and Waiting offer the same **Reading text size** menu. Prose
+size is remembered separately from code, diff and terminal-preview size. Both
+preferences update open readers immediately. History combines its heading and
+actions, compacts result metadata, and keeps progress and navigation in fixed
+slots. Its message navigation menu contains earlier/later paging and the loaded
+message range. The conversation heading's tooltip includes its checkout path.
+**⌘R** refreshes the selected transcript directly, just like its refresh button;
+search refresh uses Search or Return in the search field.
+
+Activity's **Mark read** menu offers **Mark selected read** and **Mark all N
+results read**. The latter includes loaded results below the viewport, and never
+includes records omitted by the query limit. **Undo** reverses the last successful
+acknowledgement, including the prior selection when it is still in scope. A failed
+save or Undo keeps the current markers and reports the failure. Opening or
+refreshing Activity continues to leave unread markers unchanged.

@@ -88,6 +88,44 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         try await render(WorkspaceHistoryView(model: model), name: "history-dark-minimum", width: 720, height: 450, dark: true, expected: ["pagination", "Fork"])
     }
 
+    func testDailyPolishReadingAndEmptyWorkspaceCaptures() async throws {
+        let preferences = WorkspaceReadingPreferences()
+        preferences.proseSize = 22
+        let amx = command { args in
+            if args[1] == "activity" {
+                return #"{"entries":[{"id":"one","at":"2026-10-17T12:00:00Z","kind":"completed","title":"API review complete","detail":"Working → Turn finished","event":"Stop","harness":"claude","profile":"work","session_id":"one","runtime_session_id":"one","run_id":"","trace_id":""}],"since":"2026-10-10T00:00:00Z","earliest_available":"2026-10-10T00:00:00Z","truncated":false,"corrupt_lines":0,"matched":1}"#
+            }
+            if args[1] == "show" {
+                return #"{"session":{"id":"one","harness":"claude","project":"API","cwd":"/Projects/api"},"messages_total":2,"messages_start":0,"messages":[{"role":"user","text":"Review the existing workflow."},{"role":"assistant","timestamp":"2026-10-17T11:59:00Z","text":"Keep reading positions stable. Make each action clear and easy to reach.\n\n- Preserve selection.\n- Keep the answer controls visible."}]}"#
+            }
+            return #"{"sessions":[{"id":"one","harness":"claude","project":"API","profile":"work","cwd":"/Projects/api","snippet":"Review the existing workflow."}]}"#
+        }
+        let history = WorkspaceHistoryModel(command: { amx }, runner: PreviewRunner())
+        history.search()
+        let activity = WorkspaceActivityModel(command: { amx }, runner: PreviewRunner(), readStore: .init(load: { .init() }, save: { _ in }))
+        activity.refresh()
+        for dark in [false, true] {
+            try await render(WorkspaceHistoryView(preferences: preferences, model: history), name: "daily-history-large-\(dark)",
+                             width: 720, height: 450, dark: dark, expected: ["Resume", "Fork", "Review the existing workflow"])
+            try await render(WorkspaceActivityView(preferences: preferences, model: activity), name: "daily-activity-large-\(dark)",
+                             width: 760, height: 480, dark: dark, expected: ["Mark read", "Undo", "Supporting output"])
+            let inspector = WorkspaceInspectorView(preferences: preferences)
+            let row = WorkspaceWaitingRow(key: .embedded("one"), title: "API · deployment review", detail: "Question · 2m", glyph: "?", toolTip: "",
+                answer: .asl(.init(runID: "run-one", planDir: "/plans/api")), category: .question)
+            inspector.onContext = { _, done in done(SecretText("Which deployment should proceed?\n\nThe endpoint checks passed. Review the staging results before choosing production.\n\n" + String(repeating: "Keep the current deployment available until verification completes.\n\n", count: 10))) }
+            inspector.show(.init(waiting: [row])); inspector.focusReader()
+            try await render(PreviewNativeView(view: inspector), name: "daily-waiting-large-\(dark)", width: 320, height: 600, dark: dark,
+                             expected: ["Answer", "Which deployment", "Return answer"])
+            let app = FakeWorkspaceApp()
+            app.store.apply(snapshot: WorkspaceFixture.snapshot([]))
+            let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+            workspace.openForTesting(); workspace.refresh()
+            try await render(PreviewNativeView(view: workspace.placeholder), name: "daily-empty-workspace-\(dark)", width: 720, height: 450,
+                             dark: dark, expected: ["Launch Project", "Conversation History", "Launch in Workspace"])
+            workspace.window.close()
+        }
+    }
+
     func testChangesPreview() async throws {
         let amx = command { args in
             if args[0] == "worktree" { return #"{"worktrees":[]}"# }
@@ -247,11 +285,11 @@ extension WorkspaceWorkflowPreviewTests {
                 let historyContent = state == "empty" ? ["No conversations found"]
                     : state == "populated" ? ["Resume", "Fork"] : ["Pagination is complete"]
                 try await render(WorkspaceHistoryView(model: history), name: "history-\(suffix)", width: 720, height: 450, dark: dark,
-                                 expected: ["Conversation History", "Search"] + notice + historyContent)
+                                 expected: ["Search"] + notice + historyContent)
                 try await render(WorkspaceChangesView(model: changes), name: "changes-\(suffix)", width: 720, height: 450, dark: dark,
                                  expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["pagination_controller_test.go"]))
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
-                                 expected: ["Since Last Looked", "Mark shown read"] + notice + (state == "empty" ? ["All caught up"] : ["Supporting output"]))
+                                 expected: ["Since Last Looked", "Mark read"] + notice + (state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,
                                  expected: ["ASL Runs", "Run a Plan"] + notice + (state == "empty" ? ["No active runs"] : state == "failed" ? ["Focus Session"] : ["Resume", "Abort"]))
             }
