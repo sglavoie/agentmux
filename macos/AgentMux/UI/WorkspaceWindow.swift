@@ -3671,6 +3671,7 @@ final class WorkspaceRowView: NSTableRowView {
 
     var tabColor: NSColor? {
         didSet {
+            selectionBorder.color = tabColor ?? .controlAccentColor
             needsDisplay = true
             syncCell()
         }
@@ -3702,8 +3703,8 @@ final class WorkspaceRowView: NSTableRowView {
         outline().fill()
     }
 
-    /// The selected line has a border in the accent color around the list's
-    /// selection, which on its own is a gray close to the lines beside it.
+    /// The selected line keeps its session's color as a border around the
+    /// list's selection, falling back to the accent color for uncolored rows.
     /// It is a view over the line, not something drawn here: a source list
     /// paints its selection without asking the row view to.
     let selectionBorder = WorkspaceSelectionBorderView()
@@ -3734,6 +3735,10 @@ final class WorkspaceRowView: NSTableRowView {
 /// The border of the selected line. It takes no clicks.
 @MainActor
 final class WorkspaceSelectionBorderView: NSView {
+    var color: NSColor = .controlAccentColor {
+        didSet { needsDisplay = true }
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
@@ -3750,7 +3755,7 @@ final class WorkspaceSelectionBorderView: NSView {
 
     /// Runs again when the appearance or the accent color changes.
     override func updateLayer() {
-        layer?.borderColor = NSColor.controlAccentColor.cgColor
+        layer?.borderColor = color.cgColor
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
