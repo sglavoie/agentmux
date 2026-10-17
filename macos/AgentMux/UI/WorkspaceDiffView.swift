@@ -1,8 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// TextKit keeps large patches selectable and scrollable without constructing
-/// thousands of SwiftUI views. Positions belong to a checkout/base/file tuple.
+/// TextKit keeps large patches selectable; the ruler is decoration, never clipboard text.
 struct WorkspaceDiffView: NSViewRepresentable {
     let diff: WorkspaceDiff
     let identity: String
@@ -10,6 +9,8 @@ struct WorkspaceDiffView: NSViewRepresentable {
     let jump: Int?
     let jumpSequence: Int
     var reviewState: WorkspaceReviewState? = nil
+    var fontSize: CGFloat = 12
+    var wrapLines = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSScrollView {
@@ -17,40 +18,60 @@ struct WorkspaceDiffView: NSViewRepresentable {
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
         scroll.borderType = .noBorder
-        let text = NSTextView(frame: scroll.contentView.bounds)
+        let text = WorkspaceDiffTextView(frame: scroll.contentView.bounds)
         text.isEditable = false
         text.isSelectable = true
         text.isRichText = true
-        text.isHorizontallyResizable = true
         text.isVerticallyResizable = true
         text.autoresizingMask = [.width]
-        text.minSize = NSSize(width: 0, height: 0)
+        text.minSize = .zero
         text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        text.textContainer?.containerSize = text.maxSize
-        text.textContainer?.widthTracksTextView = false
         text.textContainerInset = NSSize(width: 8, height: 10)
-        text.setAccessibilityLabel("Unified diff, old and new line numbers")
+        text.setAccessibilityLabel("Unified diff; copy selects source text without line numbers or diff markers")
         scroll.documentView = text
+        scroll.verticalRulerView = WorkspaceDiffRuler(scrollView: scroll, orientation: .verticalRuler)
+        scroll.hasVerticalRuler = true
+        scroll.rulersVisible = true
         context.coordinator.observe(scroll, store: reviewState)
         return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let text = scroll.documentView as? NSTextView else { return }
+        guard let text = scroll.documentView as? WorkspaceDiffTextView else { return }
         let state = context.coordinator
-        // Keep the old text and position until the replacement has arrived.
         guard !loading else { return }
-        if state.identity != identity || state.diff != diff {
-            if let previous = state.identity { state.positions[previous] = scroll.contentView.bounds.origin }
+        if state.identity != identity || state.diff != diff || state.fontSize != fontSize || state.wrapLines != wrapLines {
+            if let previous = state.identity {
+                state.positions[previous] = scroll.contentView.bounds.origin
+                state.anchors[previous] = text.readingAnchor()
+            }
             let position = state.positions[identity] ?? reviewState?.position(identity) ?? .zero
+            let anchor = state.anchors[identity]
             state.identity = identity
             state.diff = diff
-            let rendered = Self.render(diff)
+            state.fontSize = fontSize
+            state.wrapLines = wrapLines
+            let rendered = Self.render(diff, fontSize: fontSize)
             state.hunkRanges = rendered.hunks
+            text.diff = diff
+            text.lineRanges = rendered.lines
             text.textStorage?.setAttributedString(rendered.text)
+            let digits = max(3, String(diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
+            scroll.verticalRulerView?.ruleThickness = CGFloat(digits * 2 + 3) * fontSize * 0.61
+            scroll.hasHorizontalScroller = !wrapLines
+            text.isHorizontallyResizable = !wrapLines
+            text.textContainer?.widthTracksTextView = wrapLines
+            text.textContainer?.containerSize = NSSize(width: wrapLines ? scroll.contentSize.width : CGFloat.greatestFiniteMagnitude,
+                                                       height: CGFloat.greatestFiniteMagnitude)
+            if wrapLines { text.setFrameSize(NSSize(width: scroll.contentSize.width, height: text.frame.height)) }
+            scroll.tile()
             text.layoutManager?.ensureLayout(for: text.textContainer!)
-            scroll.contentView.scroll(to: position)
+            var restored = position
+            if let anchor, let y = text.position(for: anchor) { restored.y = y }
+            if wrapLines { restored.x = 0 }
+            scroll.contentView.scroll(to: restored)
             scroll.reflectScrolledClipView(scroll.contentView)
+            scroll.verticalRulerView?.needsDisplay = true
         }
         if state.jumpSequence != jumpSequence {
             state.jumpSequence = jumpSequence
@@ -62,15 +83,12 @@ struct WorkspaceDiffView: NSViewRepresentable {
         }
     }
 
-    static func render(_ diff: WorkspaceDiff) -> (text: NSAttributedString, hunks: [NSRange]) {
+    static func render(_ diff: WorkspaceDiff, fontSize: CGFloat = 12) -> (text: NSAttributedString, hunks: [NSRange], lines: [NSRange]) {
         let result = NSMutableAttributedString()
-        var hunks: [NSRange] = []
-        let digits = max(3, String(diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
-        func number(_ n: Int?) -> String { let s = n.map(String.init) ?? ""; return String(repeating: " ", count: max(0, digits - s.count)) + s }
-        for line in diff.lines {
-            let prefix = "\(number(line.old)) \(number(line.new)) │ "
+        var hunks: [NSRange] = [], ranges: [NSRange] = []
+        for (index, line) in diff.lines.enumerated() {
             var attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+                .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
                 .foregroundColor: NSColor.labelColor
             ]
             switch line.kind {
@@ -78,16 +96,16 @@ struct WorkspaceDiffView: NSViewRepresentable {
             case .removed: attributes[.backgroundColor] = NSColor.systemRed.withAlphaComponent(0.14)
             case .hunk:
                 attributes[.backgroundColor] = NSColor.controlAccentColor.withAlphaComponent(0.14)
-                attributes[.font] = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
-                hunks.append(NSRange(location: result.length, length: (prefix + line.text).utf16.count))
+                attributes[.font] = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold)
+                hunks.append(NSRange(location: result.length, length: line.text.utf16.count))
             case .metadata: attributes[.foregroundColor] = NSColor.secondaryLabelColor
             case .context: break
             }
-            let row = NSMutableAttributedString(string: prefix + line.text + "\n", attributes: attributes)
-            row.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: NSRange(location: 0, length: prefix.utf16.count))
-            result.append(row)
+            let row = line.text + (index + 1 < diff.lines.count ? "\n" : "")
+            ranges.append(NSRange(location: result.length, length: row.utf16.count))
+            result.append(NSAttributedString(string: row, attributes: attributes))
         }
-        return (result, hunks)
+        return (result, hunks, ranges)
     }
 
     final class Coordinator {
@@ -102,13 +120,133 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 let point = scroll.contentView.bounds.origin
                 self.positions[id] = point
                 self.store?.savePosition(point, id: id)
+                scroll.verticalRulerView?.needsDisplay = true
             }
         }
         deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
         var identity: String?
         var diff: WorkspaceDiff?
         var positions: [String: NSPoint] = [:]
+        // Content anchors are memory-only; preferences never persist source text.
+        var anchors: [String: WorkspaceDiffTextView.Anchor] = [:]
         var hunkRanges: [NSRange] = []
         var jumpSequence = 0
+        var fontSize: CGFloat = 0
+        var wrapLines = false
+    }
+}
+
+final class WorkspaceDiffTextView: NSTextView {
+    var diff = WorkspaceDiff("")
+    var lineRanges: [NSRange] = []
+
+    struct Anchor {
+        let line: WorkspaceDiff.Line
+        let index: Int
+        let offset: CGFloat
+    }
+
+    func lineIndex(at character: Int) -> Int? {
+        guard !lineRanges.isEmpty else { return nil }
+        var low = 0, high = lineRanges.count
+        while low < high {
+            let middle = (low + high) / 2
+            if lineRanges[middle].location <= character { low = middle + 1 } else { high = middle }
+        }
+        return max(0, low - 1)
+    }
+
+    func lineRect(_ index: Int) -> NSRect? {
+        guard lineRanges.indices.contains(index), let layout = layoutManager, let container = textContainer else { return nil }
+        let range = lineRanges[index]
+        guard range.length > 0 else { return nil }
+        let glyphs = layout.glyphRange(forCharacterRange: NSRange(location: range.location, length: 1), actualCharacterRange: nil)
+        var rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
+        rect.origin.y += textContainerOrigin.y
+        return rect
+    }
+
+    func readingAnchor() -> Anchor? {
+        guard let scroll = enclosingScrollView, let layout = layoutManager, let container = textContainer else { return nil }
+        let y = scroll.documentVisibleRect.minY
+        let point = NSPoint(x: 0, y: max(0, y - textContainerOrigin.y))
+        let character = layout.characterIndex(for: point, in: container, fractionOfDistanceBetweenInsertionPoints: nil)
+        guard let index = lineIndex(at: character), diff.lines.indices.contains(index), let rect = lineRect(index) else { return nil }
+        return Anchor(line: diff.lines[index], index: index, offset: y - rect.minY)
+    }
+
+    func position(for anchor: Anchor) -> CGFloat? {
+        // Prefer the same content nearest its previous position, then a nearby source line.
+        let matches = diff.lines.indices.filter { diff.lines[$0].text == anchor.line.text && diff.lines[$0].kind == anchor.line.kind }
+        let index = matches.min { abs($0 - anchor.index) < abs($1 - anchor.index) }
+            ?? diff.lines.indices.filter { diff.lines[$0].new != nil || diff.lines[$0].old != nil }.min {
+                abs((diff.lines[$0].new ?? diff.lines[$0].old ?? 0) - (anchor.line.new ?? anchor.line.old ?? 0))
+                < abs((diff.lines[$1].new ?? diff.lines[$1].old ?? 0) - (anchor.line.new ?? anchor.line.old ?? 0))
+            }
+        guard let index, let rect = lineRect(index) else { return nil }
+        return max(0, rect.minY + anchor.offset)
+    }
+
+    /// Keeps partial selections and Unicode intact, removing only actual diff markers.
+    func sourceText(in selection: NSRange) -> String {
+        let raw = string as NSString
+        var result = ""
+        for (index, range) in lineRanges.enumerated() {
+            guard diff.lines.indices.contains(index), [.added, .removed, .context].contains(diff.lines[index].kind), range.length > 0 else { continue }
+            let content = NSRange(location: range.location + 1, length: range.length - 1)
+            let intersection = NSIntersectionRange(selection, content)
+            if intersection.length > 0 { result += raw.substring(with: intersection) }
+        }
+        return result
+    }
+
+    override func copy(_ sender: Any?) { copySource(to: .general) }
+
+    func copySource(to pasteboard: NSPasteboard) {
+        let value = sourceText(in: selectedRange())
+        guard !value.isEmpty else { return }
+        pasteboard.clearContents()
+        pasteboard.setString(value, forType: .string)
+    }
+
+    @objc func copyUnifiedDiff(_ sender: Any?) {
+        let range = selectedRange()
+        let value = range.length > 0 ? (string as NSString).substring(with: range) : diff.patch
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        let item = NSMenuItem(title: "Copy Unified Diff", action: #selector(copyUnifiedDiff(_:)), keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+        return menu
+    }
+}
+
+private final class WorkspaceDiffRuler: NSRulerView {
+    override var isFlipped: Bool { true }
+    override func drawHashMarksAndLabels(in rect: NSRect) {
+        guard let scroll = scrollView, let text = scroll.documentView as? WorkspaceDiffTextView,
+              let layout = text.layoutManager, let container = text.textContainer else { return }
+        NSColor.windowBackgroundColor.setFill()
+        bounds.fill()
+        let visible = scroll.documentVisibleRect
+        let character = layout.characterIndex(for: NSPoint(x: 0, y: max(0, visible.minY - text.textContainerOrigin.y)),
+                                                in: container, fractionOfDistanceBetweenInsertionPoints: nil)
+        guard let first = text.lineIndex(at: character) else { return }
+        let font = text.textStorage.flatMap { $0.length > 0 ? $0.attribute(.font, at: 0, effectiveRange: nil) as? NSFont : nil }
+            ?? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
+        let digits = max(3, String(text.diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
+        func number(_ n: Int?) -> String { let s = n.map(String.init) ?? ""; return String(repeating: " ", count: max(0, digits - s.count)) + s }
+        for index in first..<text.diff.lines.count {
+            guard let lineRect = text.lineRect(index) else { continue }
+            if lineRect.minY > visible.maxY { break }
+            let line = text.diff.lines[index]
+            let label = "\(number(line.old)) \(number(line.new))"
+            (label as NSString).draw(at: NSPoint(x: 5, y: lineRect.minY - visible.minY), withAttributes: attributes)
+        }
     }
 }

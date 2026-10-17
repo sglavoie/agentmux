@@ -76,7 +76,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             if args[1] == "show" {
                 return #"{"session":{"id":"one","harness":"claude","project":"API","cwd":"/Projects/api"},"messages_total":2,"messages_start":0,"match_messages":[0,1],"match_terms":["pagination"],"focus_message":0,"messages":[{"role":"user","text":"Add pagination to the activity endpoint."},{"role":"assistant","text":"Added cursor pagination and updated the endpoint tests. The full suite passed. The changes are ready for review."}]}"#
             }
-            return #"{"results":[{"id":"one","harness":"claude","project":"API","profile":"work","cwd":"/Projects/api","last_at":"2026-10-16T12:00:00Z","preview":"Added cursor pagination and updated the endpoint tests.","matches":3},{"id":"two","harness":"codex","project":"Desktop","profile":"personal","preview":"Reviewed pagination for the conversation history view.","matches":1}]}"#
+            return #"{"match_terms":["pagination"],"results":[{"id":"one","harness":"claude","project":"API","profile":"work","cwd":"/Projects/api","last_at":"2026-10-16T12:00:00Z","preview":"Added cursor pagination and updated the endpoint tests.","matches":3},{"id":"two","harness":"codex","project":"Desktop","profile":"personal","preview":"Reviewed pagination for the conversation history view.","matches":1}]}"#
         }
         let model = WorkspaceHistoryModel(command: { amx }, runner: PreviewRunner())
         model.query = "pagination"
@@ -97,8 +97,8 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         model.open(directory: "/Projects/api")
         XCTAssertEqual(model.changes?.files.count, 2)
         XCTAssertFalse(model.patch.isEmpty)
-        try await render(WorkspaceChangesView(model: model), name: "changes", expected: ["Checkout Changes", "cursor", "Open in editor"])
-        try await render(WorkspaceChangesView(model: model), name: "changes-dark-minimum", width: 720, height: 450, dark: true, expected: ["Checkout Changes", "Open in editor"])
+        try await render(WorkspaceChangesView(model: model), name: "changes", expected: ["Checkout Changes", "cursor", "Compare"])
+        try await render(WorkspaceChangesView(model: model), name: "changes-dark-minimum", width: 720, height: 450, dark: true, expected: ["Checkout Changes", "Compare"])
     }
 
     func testLaunchSettingsRouteShowsTheLaunchPreference() async throws {
@@ -249,7 +249,7 @@ extension WorkspaceWorkflowPreviewTests {
                 try await render(WorkspaceHistoryView(model: history), name: "history-\(suffix)", width: 720, height: 450, dark: dark,
                                  expected: ["Conversation History", "Search"] + notice + historyContent)
                 try await render(WorkspaceChangesView(model: changes), name: "changes-\(suffix)", width: 720, height: 450, dark: dark,
-                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["Open in editor"]))
+                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["src/api"]))
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
                                  expected: ["Since Last Looked", "Mark shown read"] + notice + (state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,

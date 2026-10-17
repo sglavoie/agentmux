@@ -12,15 +12,26 @@ struct WorkspaceChangesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Checkout Changes").font(.title2)
-            if let changes = model.changes {
-                Text(changes.root).font(.caption).textSelection(.enabled)
-                Text("Includes changes from every session using this checkout.").font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Checkout Changes").font(.headline)
+                if let changes = model.changes {
+                    Text(changes.root).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .truncationMode(.middle).textSelection(.enabled)
+                        .help(changes.root + "\nIncludes changes from every session using this checkout.")
+                }
+                Spacer(minLength: 0)
             }
             HStack {
                 TextField("Comparison base", text: $model.base).focused($focus, equals: .base).textFieldStyle(.roundedBorder).onSubmit { model.refresh() }
+                    .frame(minWidth: 90, idealWidth: 150, maxWidth: 200)
                     .help("Compare against a branch or commit. ⌘⇧E focuses this field.")
                 Button("Compare") { model.refresh() }.help("Refresh comparison (⌘R)").disabled(model.loading || model.landing)
+                if let changes = model.changes {
+                    Text("\(changes.files.count) files · +\(changes.files.reduce(0) { $0 + $1.added }) −\(changes.files.reduce(0) { $0 + $1.deleted })")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .help("Compared with " + changes.base + ". Includes every session using this checkout.")
+                }
+                Spacer(minLength: 0)
             }
             if model.loading { WorkspaceLoading(title: "Comparing checkout…", retained: model.changes != nil) }
             if let error = model.error {
@@ -43,8 +54,6 @@ struct WorkspaceChangesView: View {
             }
             if let notice = model.landNotice { Text(notice).textSelection(.enabled) }
             if let changes = model.changes {
-                Text("\(changes.files.count) \(changes.files.count == 1 ? "file" : "files") · +\(changes.files.reduce(0) { $0 + $1.added }) −\(changes.files.reduce(0) { $0 + $1.deleted }) · base \(changes.base.prefix(12))")
-                    .font(.caption).foregroundStyle(.secondary)
                 if !changes.files.isEmpty {
                     HSplitView {
                         List(selection: Binding(get: { model.selectedFile }, set: { model.select($0) })) {
@@ -58,19 +67,33 @@ struct WorkspaceChangesView: View {
                         }.focused($focus, equals: .files).frame(minWidth: 150, idealWidth: 220, maxWidth: 240)
                             .help("Changed files (⌘⇧F)")
                         VStack(alignment: .leading) {
-                            HStack {
-                                Text(model.selectedFile ?? "Select a changed file").font(.headline).lineLimit(1).help(model.selectedFile ?? "")
-                                Spacer()
-                                Button("Open in editor") { model.openFile() }.help("Open the selected file (⌘E)").disabled(model.selectedFile == nil)
-                            }
-                            HStack {
-                                Text("\(model.diff.hunks.count) \(model.diff.hunks.count == 1 ? "hunk" : "hunks")").font(.caption).foregroundStyle(.secondary)
-                                Spacer()
+                            HStack(spacing: 6) {
+                                Text(model.selectedFile ?? "Select a changed file").font(.headline).lineLimit(1).truncationMode(.middle)
+                                    .help(model.selectedFile ?? "")
+                                Spacer(minLength: 0)
                                 Button { moveHunk(-1) } label: { Image(systemName: "chevron.up") }
                                     .help("Previous hunk (⌘⇧G)").accessibilityLabel("Previous hunk")
+                                    .disabled(model.reading || model.patchError != nil || model.diff.hunks.isEmpty)
                                 Button { moveHunk(1) } label: { Image(systemName: "chevron.down") }
-                                    .help("Next hunk (⌘G)").accessibilityLabel("Next hunk")
-                            }.disabled(model.reading || model.patchError != nil || model.diff.hunks.isEmpty)
+                                    .help("Next hunk (⌘G); \(model.diff.hunks.count) hunks").accessibilityLabel("Next hunk")
+                                    .disabled(model.reading || model.patchError != nil || model.diff.hunks.isEmpty)
+                                Button { model.openFile() } label: { Image(systemName: "square.and.pencil") }
+                                    .help("Open in editor (⌘E)").accessibilityLabel("Open in editor").disabled(model.selectedFile == nil)
+                                Menu {
+                                    Toggle("Wrap lines", isOn: $model.wrapDiffLines)
+                                    Button("Larger text") { model.diffFontSize = min(24, model.diffFontSize + 1) }.disabled(model.diffFontSize >= 24)
+                                    Button("Smaller text") { model.diffFontSize = max(10, model.diffFontSize - 1) }.disabled(model.diffFontSize <= 10)
+                                    Button("Reset text size") { model.diffFontSize = 12 }
+                                    Divider()
+                                    Button("Copy unified patch") { copy(model.diff.patch) }
+                                        .disabled(model.reading || model.patchIdentity != model.diffIdentity || model.patchError != nil)
+                                    Button("Copy changed source lines") {
+                                        copy(model.diff.lines.filter { $0.kind == .context || $0.kind == .added }.map { String($0.text.dropFirst()) }.joined(separator: "\n"))
+                                    }.disabled(model.reading || model.patchIdentity != model.diffIdentity || model.patchError != nil)
+                                } label: { Image(systemName: "ellipsis.circle") }
+                                    .menuStyle(.borderlessButton).fixedSize().help("Diff display and copy options")
+                                    .accessibilityLabel("Diff display and copy options")
+                            }
                             if model.reading { WorkspaceLoading(title: "Loading diff…") }
                             if let error = model.patchError {
                                 WorkspaceNotice(message: error, kind: .error, actionTitle: "Reload Diff", action: { model.select(model.selectedFile) })
@@ -78,7 +101,8 @@ struct WorkspaceChangesView: View {
                             if model.truncated { Text("Diff truncated at 2 MiB. Open the file for the full contents.").foregroundStyle(.orange) }
                             WorkspaceDiffView(diff: model.diff, identity: model.diffIdentity,
                                               loading: model.reading || model.patchIdentity != model.diffIdentity,
-                                              jump: hunk, jumpSequence: jumpSequence, reviewState: model.reviewState)
+                                              jump: hunk, jumpSequence: jumpSequence, reviewState: model.reviewState,
+                                              fontSize: model.diffFontSize, wrapLines: model.wrapDiffLines)
                                 .opacity(model.patchIdentity == model.diffIdentity ? 1 : 0)
                                 .onChange(of: model.diffIdentity) { _, _ in hunk = nil }
                                 .onChange(of: model.diff) { _, _ in hunk = nil }
@@ -104,6 +128,11 @@ struct WorkspaceChangesView: View {
                 Text("Fast-forward the source branch to the committed work in \(confirmedTree?.path ?? "this worktree"). The checkout must be clean and inactive. The worktree and its branch are retained.")
             }
     }
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
     private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
         if modifiers == .command {
             switch key {

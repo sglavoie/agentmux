@@ -195,6 +195,8 @@ func (i *Index) SetHidden(key string, hidden bool) error {
 // admin/debug command could set it to true). MainOnly requires an explicit
 // positive main classification, excluding automated, unknown, and legacy rows.
 type ListFilter struct {
+	// Conversation is an exact IndexKey (harness:id), applied before any text reads.
+	Conversation  string
 	Harness       []string
 	Profile       []string
 	Project       []string
@@ -214,6 +216,9 @@ func (i *Index) List(filter ListFilter) []SessionMeta {
 
 	out := make([]SessionMeta, 0, len(i.entries))
 	for _, meta := range i.entries {
+		if filter.Conversation != "" && IndexKey(meta.Harness, meta.ID) != filter.Conversation {
+			continue
+		}
 		if (meta.HiddenFromIndex || meta.Empty) && !filter.IncludeHidden {
 			continue
 		}

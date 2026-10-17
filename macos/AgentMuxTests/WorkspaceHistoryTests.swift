@@ -19,8 +19,8 @@ final class WorkspaceHistoryTests: XCTestCase {
 
     func testQueriesCannotBecomeFlagsAndProjectIsOneCSVValue() {
         let args = WorkspaceHistoryModel.arguments(query: "--all", project: "API, \"new\"", includeAutomated: false)
-        XCTAssertEqual(args, ["session", "search", "--json", "--project", "\"API, \"\"new\"\"\"", "--", "--all"])
-        XCTAssertEqual(WorkspaceHistoryModel.arguments(query: " ", project: nil, includeAutomated: true), ["session", "list", "--json", "--all"])
+        XCTAssertEqual(args, ["session", "search", "--json", "--project", "\"API, \"\"new\"\"\"", "--offset", "0", "--limit", "50", "--", "--all"])
+        XCTAssertEqual(WorkspaceHistoryModel.arguments(query: " ", project: nil, includeAutomated: true), ["session", "list", "--json", "--all", "--offset", "0", "--limit", "50"])
     }
 
     func testEmptyTranscriptDecodesWithoutMessagesField() throws {

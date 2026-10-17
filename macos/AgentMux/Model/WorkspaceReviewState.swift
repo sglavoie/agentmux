@@ -14,6 +14,18 @@ final class WorkspaceReviewState {
         var resultsQuery: String? = nil
     }
     struct Comparison: Codable { var base: String; var file: String? }
+    struct DiffAppearance: Codable {
+        var fontSize: Double = 12
+        var wrapLines: Bool = false
+    }
+    var diffAppearance: DiffAppearance {
+        get {
+            var value: DiffAppearance = read("diffAppearance") ?? .init()
+            value.fontSize = value.fontSize.isFinite ? min(24, max(10, value.fontSize)) : 12
+            return value
+        }
+        set { write(newValue, key: "diffAppearance") }
+    }
     struct Position: Codable { var x: Double; var y: Double }
     private let defaults: UserDefaults?
     init(defaults: UserDefaults? = nil) { self.defaults = defaults }

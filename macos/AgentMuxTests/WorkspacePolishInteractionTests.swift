@@ -86,7 +86,9 @@ final class WorkspacePolishInteractionTests: XCTestCase {
         XCTAssertEqual(model.scrollRequest?.message, 220, "an already loaded match needs no read")
         XCTAssertEqual(reads, previousReads)
         model.search(); runner.finish()
-        XCTAssertTrue(runner.pending.isEmpty, "refresh of the same selection/query preserves its transcript")
+        XCTAssertEqual(runner.pending.count, 1, "refresh must read fresh content while retaining the preview")
+        XCTAssertNotNil(model.transcript)
+        runner.finish()
         XCTAssertEqual(model.scrollRequest?.message, 220)
     }
 

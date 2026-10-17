@@ -3,6 +3,7 @@ import Foundation
 
 /// How one bounded run of a child process ended.
 enum ProcessRun: Equatable {
+    case cancelled
     /// It exited within its deadline.
     case finished(ProcessOutput)
     /// It never started; `reason` is why, for the log and the operator.
@@ -18,6 +19,13 @@ enum ProcessRun: Equatable {
 }
 
 /// One bounded run of a child process: what it wrote and how it ended.
+final class ProcessCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
+}
+
 struct ProcessOutput: Equatable {
     var status: Int32
     var stdout: Data
@@ -53,8 +61,10 @@ struct ProcessOutput: Equatable {
         _ executable: String,
         arguments: [String],
         environment: [String: String]? = nil,
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        cancellation: ProcessCancellation? = nil
     ) -> ProcessRun {
+        if cancellation?.isCancelled == true { return .cancelled }
         var stdoutPipe: [Int32] = [-1, -1]
         var stderrPipe: [Int32] = [-1, -1]
         guard pipe(&stdoutPipe) == 0 else { return .launchFailed(reason: String(cString: strerror(errno))) }
@@ -88,9 +98,16 @@ struct ProcessOutput: Equatable {
         ]
         defer { readers.forEach { $0.finish() } }
         let exited = waitForExit(pid)
-        if exited.wait(timeout: .now() + timeout) == .timedOut {
-            stop(group: pid, exited: exited)
-            return .timedOut
+        let deadline = DispatchTime.now() + timeout
+        while exited.wait(timeout: min(deadline, .now() + 0.025)) == .timedOut {
+            if cancellation?.isCancelled == true {
+                stop(group: pid, exited: exited)
+                return .cancelled
+            }
+            if DispatchTime.now() >= deadline {
+                stop(group: pid, exited: exited)
+                return .timedOut
+            }
         }
         let status = reap(pid)
         let grace = DispatchTime.now() + pipeGrace

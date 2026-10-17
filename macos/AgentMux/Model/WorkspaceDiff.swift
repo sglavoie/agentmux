@@ -10,6 +10,7 @@ struct WorkspaceDiff: Equatable {
         let old: Int?
         let new: Int?
     }
+    let patch: String
     let lines: [Line]
     let hunks: [Int]
 
@@ -39,6 +40,7 @@ struct WorkspaceDiff: Equatable {
                 lines.append(Line(text: text, kind: .metadata, old: nil, new: nil))
             }
         }
+        self.patch = patch
         self.lines = lines
         self.hunks = hunks
     }

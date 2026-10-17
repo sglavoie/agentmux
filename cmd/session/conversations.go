@@ -67,6 +67,9 @@ var sessionListCmd = &cobra.Command{
 		if err := selection.resolveProjects(cfg, idx); err != nil {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
 		}
+		allSelection := selection
+		allSelection.limit, allSelection.offset = 0, 0
+		total := len(allSelection.narrow(idx.List(selection.filter)))
 		metas := selection.narrow(idx.List(selection.filter))
 		out := cmd.OutOrStdout()
 		terminal := !jsonOutput && sessionListIsTerminal(out)
@@ -81,7 +84,7 @@ var sessionListCmd = &cobra.Command{
 		live, liveKnown := selection.liveConversations(true)
 		markLive(views, live, sessionCommandsCurrentWindow())
 		if jsonOutput {
-			return cli.WriteJSON(cmd, sessionListData{Sessions: views})
+			return cli.WriteJSON(cmd, sessionListData{Sessions: views, Total: total, Offset: selection.offset, HasMore: selection.offset+len(views) < total, HiddenAutomated: hiddenAutomated(selection, idx)})
 		}
 		if terminal {
 			if len(views) == 0 {
@@ -141,6 +144,7 @@ type sessionSelection struct {
 	filter transcript.ListFilter
 	here   []string
 	limit  int
+	offset int
 	// projectSelectors are the --project values as typed, and projects the
 	// project names resolveProjects found for them; narrow keeps the sessions
 	// belonging to any of those names.
@@ -168,6 +172,18 @@ func readSessionSelection(cmd *cobra.Command, cfg *config.Config) (sessionSelect
 	all, _ := cmd.Flags().GetBool("all")
 	selection.filter.MainOnly = !all
 	selection.projectSelectors, _ = cmd.Flags().GetStringSlice("project")
+	selection.offset, _ = cmd.Flags().GetInt("offset")
+	if selection.offset < 0 {
+		return selection, "invalid_arguments", fmt.Errorf("--offset must be nonnegative")
+	}
+	if exact, _ := cmd.Flags().GetString("conversation"); exact != "" {
+		h, id, found := strings.Cut(exact, ":")
+		identity, valid := conversation.New(h, id)
+		if !found || !valid {
+			return selection, "invalid_arguments", fmt.Errorf("--conversation requires an exact harness:session-id")
+		}
+		selection.filter.Conversation = transcript.IndexKey(identity.Harness, identity.SessionID)
+	}
 	selection.limit, _ = cmd.Flags().GetInt("limit")
 	if selection.limit < 0 {
 		return selection, "invalid_arguments", fmt.Errorf("--limit %d: want 0 (no limit) or a positive count", selection.limit)
@@ -220,6 +236,7 @@ func (s sessionSelection) narrow(metas []transcript.SessionMeta) []transcript.Se
 		}
 		metas = kept
 	}
+	metas = metas[min(s.offset, len(metas)):]
 	if s.limit > 0 && len(metas) > s.limit {
 		metas = metas[:s.limit]
 	}
@@ -315,6 +332,8 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	cmd.Flags().StringSlice("project", nil, "only sessions of this project, by title; \"amx\" also matches \"🐱amx\" (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("project", completeSessionProjects)
+	cmd.Flags().Int("offset", 0, "skip this many matching sessions before applying --limit")
+	cmd.Flags().String("conversation", "", "only this exact harness:session-id (no prefix matching)")
 	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all; a terminal shows 25 unless given)")
 	cmd.Flags().BoolP("all", "a", false, "include automated sessions (ASL runs, subagents, exec) and unclassified ones")
 }
@@ -363,7 +382,7 @@ func hiddenAutomated(selection sessionSelection, idx *transcript.Index) int {
 	if !selection.filter.MainOnly {
 		return 0
 	}
-	selection.limit = 0
+	selection.limit, selection.offset = 0, 0
 	all := selection.filter
 	all.MainOnly = false
 	return len(selection.narrow(idx.List(all))) - len(selection.narrow(idx.List(selection.filter)))
@@ -1099,7 +1118,11 @@ func parseConversationSelector(value string) (conversation.Identity, bool) {
 }
 
 type sessionListData struct {
-	Sessions []sessionView `json:"sessions"`
+	Total           int           `json:"total"`
+	Offset          int           `json:"offset"`
+	HasMore         bool          `json:"has_more"`
+	HiddenAutomated int           `json:"hidden_automated"`
+	Sessions        []sessionView `json:"sessions"`
 }
 
 type sessionActionData struct {

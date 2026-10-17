@@ -264,3 +264,25 @@ func BenchmarkIndexLoad_LegacyMigration(b *testing.B) {
 		}
 	}
 }
+
+// Same warm 10,000-conversation archive, with and without exact scope. This
+// measures the work a debounced native history search asks the backend to do.
+func BenchmarkHistoryArchiveScope(b *testing.B) {
+	body := strings.Repeat("ordinary transcript text\n", 100) + "needle phrase\n"
+	idx := populateBenchIndex(b, 10000, "conversation", body)
+	for _, scope := range []string{"", "claude:bench-5000"} {
+		name := "all"
+		if scope != "" {
+			name = "conversation"
+		}
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				results, err := Search(idx, nil, Query{Text: "needle", Conversation: scope})
+				if err != nil || len(results) == 0 {
+					b.Fatalf("results=%d error=%v", len(results), err)
+				}
+			}
+		})
+	}
+}

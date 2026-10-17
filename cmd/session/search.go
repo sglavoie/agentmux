@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/searchquery"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
 )
@@ -67,9 +68,11 @@ the query was typed there. The selector flags narrow the search the way they nar
 		// A terminal table says how many automated sessions match too, as the
 		// list does, so the search takes them in and sets them aside here: one
 		// pass over the sidecars rather than a second search for a count.
-		countHidden := terminal && selection.filter.MainOnly
+		countHidden := (terminal || jsonOutput) && selection.filter.MainOnly
 		results, err := transcript.Search(idx, readers, transcript.Query{
 			Text:          query,
+			Conversation:  selection.filter.Conversation,
+			Project:       selection.projects,
 			MessageSource: source,
 			Harness:       selection.filter.Harness,
 			Profile:       selection.filter.Profile,
@@ -83,6 +86,9 @@ the query was typed there. The selector flags narrow the search the way they nar
 		if countHidden {
 			results, hidden = setAutomatedAside(results, selection)
 		}
+		allSelection := selection
+		allSelection.limit, allSelection.offset = 0, 0
+		total := len(narrowSearchResults(results, allSelection))
 		results = narrowSearchResults(results, selection)
 		omitted := 0
 		if terminal {
@@ -106,9 +112,12 @@ the query was typed there. The selector flags narrow the search the way they nar
 		for i := range views {
 			views[i].sessionView = listed[i]
 		}
-		views = currentConversationLast(views)
+		// Explicit pages keep the stable archive order across page boundaries.
+		if !cmd.Flags().Changed("offset") {
+			views = currentConversationLast(views)
+		}
 		if jsonOutput {
-			return cli.WriteJSON(cmd, sessionSearchData{Query: query, Source: source, Results: views})
+			return cli.WriteJSON(cmd, sessionSearchData{Query: query, Source: source, Results: views, Total: total, Offset: selection.offset, HasMore: selection.offset+len(views) < total, HiddenAutomated: hidden, MatchTerms: searchquery.Parse(query)})
 		}
 		if terminal {
 			if len(views) == 0 {
@@ -181,7 +190,7 @@ func setAutomatedAside(results []transcript.Result, selection sessionSelection) 
 			main = append(main, result)
 		}
 	}
-	selection.limit = 0
+	selection.limit, selection.offset = 0, 0
 	return main, len(narrowSearchResults(results, selection)) - len(narrowSearchResults(main, selection))
 }
 
@@ -203,6 +212,12 @@ func narrowSearchResults(results []transcript.Result, selection sessionSelection
 }
 
 type sessionSearchData struct {
+	Total           int      `json:"total"`
+	Offset          int      `json:"offset"`
+	HasMore         bool     `json:"has_more"`
+	HiddenAutomated int      `json:"hidden_automated"`
+	MatchTerms      []string `json:"match_terms"`
+
 	Query   string              `json:"query"`
 	Source  string              `json:"source"`
 	Results []sessionSearchView `json:"results"`

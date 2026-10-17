@@ -30,6 +30,23 @@ struct WorkspaceHistoryEntry: Decodable, Equatable, Identifiable {
 
 struct WorkspaceHistorySearch: Decodable {
     let results: [WorkspaceHistoryEntry]
+    let total: Int
+    let hasMore: Bool
+    let hiddenAutomated: Int
+    let matchTerms: [String]
+    enum CodingKeys: String, CodingKey {
+        case results, sessions, total
+        case hasMore = "has_more", hiddenAutomated = "hidden_automated", matchTerms = "match_terms"
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        results = try c.decodeIfPresent([WorkspaceHistoryEntry].self, forKey: .results)
+            ?? c.decodeIfPresent([WorkspaceHistoryEntry].self, forKey: .sessions) ?? []
+        total = try c.decodeIfPresent(Int.self, forKey: .total) ?? results.count
+        hasMore = try c.decodeIfPresent(Bool.self, forKey: .hasMore) ?? false
+        hiddenAutomated = try c.decodeIfPresent(Int.self, forKey: .hiddenAutomated) ?? 0
+        matchTerms = try c.decodeIfPresent([String].self, forKey: .matchTerms) ?? []
+    }
 }
 
 struct WorkspaceTranscript: Decodable, Equatable {
@@ -83,6 +100,16 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published var scope = WorkspaceHistoryScope.all
     @Published var includeAutomated = false
     @Published private(set) var entries: [WorkspaceHistoryEntry] = []
+    @Published private(set) var totalResults = 0
+    @Published private(set) var hasMoreResults = false
+    @Published private(set) var hiddenAutomated = 0
+    @Published private(set) var resultTerms: [String] = []
+    @Published private(set) var loadingMore = false
+    @Published private(set) var newMessages = 0
+    private var nextOffset = 0
+    private var loadedSearch: [String] = []
+    private var searchCancellation: ProcessCancellation?
+    private var transcriptCancellation: ProcessCancellation?
     @Published private(set) var selection: String?
     @Published private(set) var transcript: WorkspaceTranscript?
     @Published private(set) var loading = false
@@ -166,6 +193,9 @@ final class WorkspaceHistoryModel: ObservableObject {
 
     func scheduleSearch() {
         pendingSearch?.cancel()
+        searchCancellation?.cancel()
+        transcriptCancellation?.cancel()
+        loadingMore = false
         // Invalidate old reads immediately, before the debounce elapses.
         searchGeneration += 1
         transcriptGeneration += 1
@@ -176,7 +206,8 @@ final class WorkspaceHistoryModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: pending)
     }
 
-    static func arguments(query: String, project: String?, includeAutomated: Bool) -> [String] {
+    static func arguments(query: String, project: String?, includeAutomated: Bool, conversation: String? = nil,
+                          offset: Int = 0, limit: Int = 50) -> [String] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         var args = ["session", query.isEmpty ? "list" : "search", "--json"]
         if includeAutomated { args.append("--all") }
@@ -184,47 +215,93 @@ final class WorkspaceHistoryModel: ObservableObject {
             // --project is a CSV flag. Quote one title even if it contains a comma.
             args += ["--project", "\"" + project.replacingOccurrences(of: "\"", with: "\"\"") + "\""]
         }
+        if let conversation { args += ["--conversation", conversation] }
+        args += ["--offset", String(offset), "--limit", String(limit)]
         if !query.isEmpty { args += ["--", query] }
         return args
     }
 
-    func search() {
+    func search() { fetchResults(append: false) }
+
+    func loadMoreResults() {
+        guard hasMoreResults, !loading, !loadingMore, error == nil else { return }
+        fetchResults(append: true)
+    }
+
+    private func fetchResults(append: Bool) {
         pendingSearch?.cancel()
+        searchCancellation?.cancel()
+        if !append {
+            transcriptCancellation?.cancel()
+            transcriptGeneration += 1
+            reading = false
+        }
         saveReview()
         searchGeneration += 1
         let generation = searchGeneration
         error = nil
         guard let command = command() else {
-            loading = false
+            loading = false; loadingMore = false
             error = "amx is unavailable. Check Settings and try again."
             return
         }
         guard scope != .conversation || currentConversation != nil, scope != .project || !project.isEmpty else {
-            loading = false
+            loading = false; loadingMore = false
             error = "Select a session in the workspace before using this search scope."
             return
         }
-        loading = true
         let wanted = scope == .conversation ? currentConversation : nil
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let args = Self.arguments(query: query, project: scope == .project ? project : nil, includeAutomated: includeAutomated)
-        runner.run({ () -> Result<[WorkspaceHistoryEntry], AMXCommandError> in
-            if query.isEmpty {
-                return command.json(SessionListData.self, args, timeout: 30).result.map { $0.sessions.map(WorkspaceHistoryEntry.init) }
-            }
-            return command.json(WorkspaceHistorySearch.self, args, timeout: 30).result.map(\.results)
-        }) { [weak self] result in
+        let signature = Self.arguments(query: query, project: scope == .project ? project : nil,
+                                       includeAutomated: includeAutomated, conversation: wanted?.encoded)
+        // A changed query/scope cannot append to retained results.
+        let append = append && signature == loadedSearch
+        loading = !append
+        loadingMore = append
+        let offset = append ? nextOffset : 0
+        let limit = !append && signature == loadedSearch ? max(50, nextOffset) : 50
+        let args = Self.arguments(query: query, project: scope == .project ? project : nil,
+                                  includeAutomated: includeAutomated, conversation: wanted?.encoded, offset: offset, limit: limit)
+        let cancellation = ProcessCancellation()
+        searchCancellation = cancellation
+        runner.run({ command.json(WorkspaceHistorySearch.self, args, timeout: 30, cancellation: cancellation).result }) { [weak self] result in
             guard let self, generation == self.searchGeneration else { return }
-            self.loading = false
+            self.loading = false; self.loadingMore = false
             switch result {
             case let .failure(error): self.error = error.message
-            case let .success(entries):
+            case let .success(page):
                 self.resultsQuery = query
-                self.entries = entries.filter { wanted == nil || $0.conversation.identity == wanted }
-                let keep = self.selection.flatMap { id in self.entries.contains { $0.id == id } ? id : nil }
-                self.select(keep ?? self.entries.first?.id)
+                self.loadedSearch = signature
+                self.resultTerms = page.matchTerms
+                self.totalResults = page.total
+                self.hasMoreResults = page.hasMore
+                self.hiddenAutomated = page.hiddenAutomated
+                self.nextOffset = offset + page.results.count
+                let entries = page.results.filter { wanted == nil || $0.conversation.identity == wanted }
+                if append {
+                    let known = Set(self.entries.map(\.id))
+                    self.entries += entries.filter { !known.contains($0.id) }
+                } else {
+                    self.entries = entries
+                    let keep = self.selection.flatMap { id in entries.contains { $0.id == id } ? id : nil }
+                    if let keep, keep == self.selection, self.loadedQuery == query, self.transcript != nil {
+                        self.refreshTranscript()
+                    } else { self.select(keep ?? entries.first?.id) }
+                }
             }
         }
+    }
+
+    func refreshTranscript() {
+        guard let transcript else { loadTranscript(); return }
+        let anchor = visibleMessage ?? scrollRequest?.message ?? transcript.start
+        readWindow(from: transcript.start, count: max(50, transcript.messages.count), anchor: anchor, refreshing: true)
+    }
+
+    func showNewMessages() {
+        guard let transcript, !reading else { return }
+        readWindow(from: max(0, transcript.total - 50), anchor: max(0, transcript.total - newMessages))
+        newMessages = 0
     }
 
     func select(_ id: String?) {
@@ -234,6 +311,7 @@ final class WorkspaceHistoryModel: ObservableObject {
         visibleMessage = anchor
         loadedQuery = resultsQuery
         transcript = nil
+        newMessages = 0
         transcriptError = nil
         actionNotice = nil
         matchIndex = 0
@@ -256,7 +334,8 @@ final class WorkspaceHistoryModel: ObservableObject {
 
     func loadTranscript() { readWindow() }
 
-    private func readWindow(from: Int? = nil, count: Int = 50, retaining: WorkspaceTranscript? = nil, anchor: Int? = nil) {
+    private func readWindow(from: Int? = nil, count: Int = 50, retaining: WorkspaceTranscript? = nil, anchor: Int? = nil, refreshing: Bool = false) {
+        transcriptCancellation?.cancel()
         transcriptGeneration += 1
         let generation = transcriptGeneration
         reading = false
@@ -268,12 +347,16 @@ final class WorkspaceHistoryModel: ObservableObject {
         if let from { args += ["--from", String(from), "--count", String(count)] }
         else if loadedQuery.isEmpty { args += ["--last", "50"] }
         args += ["--", selected.id]
-        runner.run({ command.json(WorkspaceTranscript.self, args, timeout: 30) }) { [weak self] result in
+        let cancellation = ProcessCancellation()
+        transcriptCancellation = cancellation
+        let previousTotal = transcript?.total
+        runner.run({ command.json(WorkspaceTranscript.self, args, timeout: 30, cancellation: cancellation) }) { [weak self] result in
             guard let self, generation == self.transcriptGeneration, self.selection == selected.id else { return }
             self.reading = false
             switch result {
             case let .failure(error): self.transcriptError = error.message
             case let .success(value), let .partial(value, _):
+                if refreshing, let previousTotal { self.newMessages += max(0, value.total - previousTotal) }
                 if let retaining, value.end == retaining.start || retaining.end == value.start {
                     let messages = value.start < retaining.start ? value.messages + retaining.messages : retaining.messages + value.messages
                     self.transcript = WorkspaceTranscript(session: value.session, messages: messages, total: value.total,
@@ -300,6 +383,9 @@ final class WorkspaceHistoryModel: ObservableObject {
     func close() {
         saveReview()
         pendingSearch?.cancel()
+        searchCancellation?.cancel()
+        transcriptCancellation?.cancel()
+        loadingMore = false
         searchGeneration += 1
         transcriptGeneration += 1
         loading = false

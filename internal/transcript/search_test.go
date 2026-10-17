@@ -467,3 +467,33 @@ func TestFirstMatchLineMarksALineEnteredNearTheMatch(t *testing.T) {
 		t.Fatalf("preview = %q, want a near-start match unmarked", got)
 	}
 }
+
+type scopedReadRecorder struct {
+	dispatchReader
+	paths []string
+}
+
+func (r *scopedReadRecorder) ReadMessages(path string) ([]Message, error) {
+	r.paths = append(r.paths, path)
+	return []Message{{Role: "user", Text: "needle"}}, nil
+}
+func TestSearchConversationScopePrecedesTranscriptReads(t *testing.T) {
+	idx := newTestIndex(t)
+	for _, entry := range []SessionMeta{
+		{ID: "same", Harness: "claude", Path: "wanted", Project: "API"},
+		{ID: "same", Harness: "codex", Path: "wrong-harness", Project: "API"},
+		{ID: "same-prefix", Harness: "claude", Path: "wrong-id", Project: "API"},
+	} {
+		must(t, idx.SetEntryForTest(IndexKey(entry.Harness, entry.ID), entry))
+	}
+	reader := &scopedReadRecorder{}
+	result, err := Search(idx, map[string]Reader{"claude": reader, "codex": reader}, Query{Text: "needle", Conversation: "claude:same", Project: []string{"API"}})
+	if err != nil || len(result) != 1 || len(reader.paths) != 1 || reader.paths[0] != "wanted" {
+		t.Fatalf("result=%v paths=%v err=%v", result, reader.paths, err)
+	}
+	reader.paths = nil
+	_, err = Search(idx, map[string]Reader{"claude": reader}, Query{Text: "needle", Conversation: "claude:same", Project: []string{"Elsewhere"}})
+	if err != nil || len(reader.paths) != 0 {
+		t.Fatalf("project scope read unrelated transcript: %v %v", reader.paths, err)
+	}
+}

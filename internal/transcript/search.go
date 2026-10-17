@@ -20,6 +20,7 @@ import (
 // text query. MainOnly excludes automated, unknown, and unmigrated legacy
 // entries. An empty Text returns metadata with no message-level scan.
 type Query struct {
+	Conversation  string
 	Text          string
 	MessageSource string // "", "any", "user", or "harness"
 	Harness       []string
@@ -100,11 +101,12 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		return nil, errors.New("transcript: Search requires a non-nil index")
 	}
 	metas := idx.List(ListFilter{
-		Harness:  q.Harness,
-		Profile:  q.Profile,
-		Project:  q.Project,
-		MainOnly: q.MainOnly,
-		Since:    q.Since,
+		Conversation: q.Conversation,
+		Harness:      q.Harness,
+		Profile:      q.Profile,
+		Project:      q.Project,
+		MainOnly:     q.MainOnly,
+		Since:        q.Since,
 	})
 
 	terms := searchquery.Parse(q.Text)

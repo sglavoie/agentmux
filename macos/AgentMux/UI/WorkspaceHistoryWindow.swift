@@ -67,7 +67,7 @@ struct WorkspaceHistoryView: View {
                     .onChange(of: model.includeAutomated) { _, _ in model.search() }
                 Spacer()
 
-                Text("\(model.entries.count) \(model.entries.count == 1 ? "conversation" : "conversations")").foregroundStyle(.secondary)
+                Text("\(model.entries.count) of \(model.totalResults) conversations").foregroundStyle(.secondary)
             }
             if model.scope == .project { Text(model.project).font(.caption).foregroundStyle(.secondary) }
             if model.scope == .conversation, let identity = model.currentConversation {
@@ -79,6 +79,7 @@ struct WorkspaceHistoryView: View {
                                 action: { model.search() })
             }
             HSplitView {
+                VStack(spacing: 6) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.entries) { entry in
                         VStack(alignment: .leading, spacing: 4) {
@@ -97,7 +98,7 @@ struct WorkspaceHistoryView: View {
                                         .font(.caption).foregroundStyle(.secondary).help(lastAt.formatted())
                                 }
                             }
-                            Text(entry.preview.reveal()).font(.caption).lineLimit(3)
+                            Text(WorkspaceHighlight.text(entry.preview.reveal(), terms: model.resultTerms)).font(.caption).lineLimit(3)
                             if let matches = entry.matches { Text("\(matches) \(matches == 1 ? "match" : "matches")").font(.caption).foregroundStyle(.secondary) }
                         }.padding(.vertical, 3).tag(entry.id)
                     }
@@ -105,9 +106,24 @@ struct WorkspaceHistoryView: View {
                     .frame(minWidth: 200, idealWidth: 300, maxWidth: .infinity)
                     .overlay {
                         if model.entries.isEmpty && !model.loading && model.error == nil {
-                            WorkspaceEmpty(title: "No conversations found", detail: "Try another search or broaden the search scope.", symbol: "magnifyingglass")
+                            VStack(spacing: 10) {
+                                Text("No conversations found").font(.headline)
+                                if !model.resultsQuery.isEmpty { Button("Clear search") { model.query = "" } }
+                                if model.scope != .all { Button("Search all history") { model.scope = .all } }
+                                if !model.includeAutomated {
+                                    Button(model.hiddenAutomated > 0 ? "Include \(model.hiddenAutomated) automated matches" : "Include automated sessions") { model.includeAutomated = true }
+                                }
+                            }.padding(12)
                         }
                     }
+                    if model.hasMoreResults {
+                        Button(model.loadingMore ? "Loading…" : "Load more conversations") { model.loadMoreResults() }
+                            .disabled(model.loading || model.loadingMore)
+                    }
+                    if !model.entries.isEmpty && model.hiddenAutomated > 0 {
+                        Button("Include \(model.hiddenAutomated) automated matches") { model.includeAutomated = true }.font(.caption)
+                    }
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     if let selected = model.selected {
                         Text(selected.conversation.displayName).font(.title2)
@@ -118,6 +134,10 @@ struct WorkspaceHistoryView: View {
                                 .help("Resume or focus the selected session (⌘Return)")
                             Button("Fork") { model.act(fork: true) }.help("Fork the selected conversation (⌘⇧Return)")
                             if model.acting { ProgressView().controlSize(.small) }
+                            Spacer()
+                            Button { model.refreshTranscript() } label: { Image(systemName: "arrow.clockwise") }
+                                .help("Refresh conversation without moving your place (⌘R)")
+                                .accessibilityLabel("Refresh conversation").disabled(model.reading)
                         }.disabled(!model.canAct)
                         Text(model.liveConversations.contains(selected.id)
                              ? "Return to the running conversation, or fork a separate conversation."
@@ -145,6 +165,9 @@ struct WorkspaceHistoryView: View {
                                 }
                             }
                             HStack {
+                                if model.newMessages > 0 {
+                                    Button("\(model.newMessages) new messages") { model.showNewMessages() }.disabled(model.reading)
+                                }
                                 if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier(anchor: visibleMessage) } }
                                 Spacer()
                                 if model.canLoadLater { Button("Load later messages") { model.loadLater(anchor: visibleMessage) } }
@@ -185,6 +208,7 @@ struct WorkspaceHistoryView: View {
     private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
         if modifiers == .command {
             switch key {
+            case "r": model.search()
             case "f": focus = .search
             case "g": model.moveMatch(1)
             case "\r": model.act(fork: false)

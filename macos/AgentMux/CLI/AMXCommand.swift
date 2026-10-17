@@ -47,6 +47,7 @@ struct AMXJSONError: Decodable, Equatable {
 
 /// Why an `amx` invocation produced no usable answer.
 enum AMXCommandError: Error, Equatable {
+    case cancelled
     /// The process could not be started.
     case launchFailed(binary: String, reason: String)
     /// The process did not finish within its timeout and was stopped. For a
@@ -62,6 +63,7 @@ enum AMXCommandError: Error, Equatable {
 
     var message: String {
         switch self {
+        case .cancelled: return "Read cancelled"
         case let .launchFailed(binary, reason):
             return reason.isEmpty ? "\(binary) could not be started" : "\(binary) could not be started: \(reason)"
         case let .timedOut(_, timeout, mutates):
@@ -199,7 +201,10 @@ struct AMXCommand {
     var binary: URL
     var launchEnvironment: LaunchEnvironment
     var inheritedEnvironment: [String: String] = ProcessInfo.processInfo.environment
-    var runner: Runner = { ProcessOutput.execute($0, arguments: $1, environment: $2, timeout: $3) }
+    private var usesDefaultRunner = true
+    var runner: Runner = { ProcessOutput.execute($0, arguments: $1, environment: $2, timeout: $3) } {
+        didSet { usesDefaultRunner = false }
+    }
 
     /// The child's whole environment.
     static func childEnvironment(
@@ -225,9 +230,17 @@ struct AMXCommand {
         _ arguments: [String],
         kittyListenOn: String? = nil,
         timeout: TimeInterval = defaultTimeout,
-        mutates: Bool = false
+        mutates: Bool = false,
+        cancellation: ProcessCancellation? = nil
     ) -> Result<ProcessOutput, AMXCommandError> {
-        switch runner(binary.path, arguments, environment(kittyListenOn: kittyListenOn), timeout) {
+        // Cancellation is for disposable reads only; mutations retain their receipt semantics.
+        let token = mutates ? nil : cancellation
+        if token?.isCancelled == true { return .failure(.cancelled) }
+        let result = usesDefaultRunner
+            ? ProcessOutput.execute(binary.path, arguments: arguments, environment: environment(kittyListenOn: kittyListenOn), timeout: timeout, cancellation: token)
+            : runner(binary.path, arguments, environment(kittyListenOn: kittyListenOn), timeout)
+        switch result {
+        case .cancelled: return .failure(.cancelled)
         case let .finished(output):
             return .success(output)
         case let .launchFailed(reason):
@@ -244,10 +257,11 @@ struct AMXCommand {
         _ arguments: [String],
         kittyListenOn: String? = nil,
         timeout: TimeInterval = defaultTimeout,
-        mutates: Bool = false
+        mutates: Bool = false,
+        cancellation: ProcessCancellation? = nil
     ) -> AMXCommandResult<T> {
         let full = arguments.contains("--json") ? arguments : arguments + ["--json"]
-        switch run(full, kittyListenOn: kittyListenOn, timeout: timeout, mutates: mutates) {
+        switch run(full, kittyListenOn: kittyListenOn, timeout: timeout, mutates: mutates, cancellation: cancellation) {
         case let .failure(error):
             return .failure(error)
         case let .success(output):

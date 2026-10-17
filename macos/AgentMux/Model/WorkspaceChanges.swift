@@ -53,6 +53,11 @@ struct WorkspaceLandResult: Decodable {
 @MainActor
 final class WorkspaceChangesModel: ObservableObject {
     @Published var base = "HEAD"
+    @Published var diffFontSize: Double = 12 { didSet { saveAppearance() } }
+    @Published var wrapDiffLines = false { didSet { saveAppearance() } }
+    private func saveAppearance() {
+        reviewState.diffAppearance = .init(fontSize: diffFontSize, wrapLines: wrapDiffLines)
+    }
     @Published private(set) var changes: WorkspaceChanges?
     @Published private(set) var selectedFile: String?
     @Published private(set) var patch = SecretText()
@@ -80,6 +85,8 @@ final class WorkspaceChangesModel: ObservableObject {
         self.command = command
         self.runner = runner
         reviewState = WorkspaceReviewState(defaults: defaults)
+        diffFontSize = reviewState.diffAppearance.fontSize
+        wrapDiffLines = reviewState.diffAppearance.wrapLines
     }
 
     var landingReason: String? {
