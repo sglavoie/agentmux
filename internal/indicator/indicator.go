@@ -101,14 +101,11 @@ func deliverFromStdinWithDeps(
 		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "payload_unreadable", nil))
 	default:
 		payloadSize, payloadHMAC = recorder.recordPayload([]byte(payloadJSON), "success", "payload_read")
-		captured, truncated := payloadJSON, false
-		if len(captured) > maxCapturedHookPayloadBytes {
-			captured, truncated = captured[:maxCapturedHookPayloadBytes], true
-		}
-		recorder.captureRawPayload(event, windowID, producerHarness, captured, truncated)
 	}
 	payload, err := hookevent.DecodeHookPayloadWithin(strings.NewReader(payloadJSON), maxHookPayloadBytes)
 	if err != nil {
+		recorder.captureRawPayload(event, windowID, producerHarness,
+			payloadJSON[:min(len(payloadJSON), maxCapturedHookPayloadBytes)], len(payloadJSON) > maxCapturedHookPayloadBytes)
 		recorder.record("hook.validation", "rejected", "invalid_payload", map[string]string{"error": err.Error()}, 0)
 		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_payload", nil))
 	}
@@ -116,6 +113,7 @@ func deliverFromStdinWithDeps(
 		recorder.record("hook.validation", "rejected", "invalid_request_id", nil, 0)
 		return finish(resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_request_id", nil))
 	}
+	recorder.sessionID = payload.EffectiveSessionID()
 	recorder.record("hook.validation", "success", "payload_valid", map[string]string{
 		"source_event_id_present": fmt.Sprint(payload.EffectiveSourceEventID() != ""),
 	}, 0)
@@ -143,6 +141,31 @@ func deliverFromStdinWithDeps(
 	}
 	discovery := discoverHarnessProcessForDelivery(producerHarness)
 	recorder.recordProcessDetection(discovery)
+	if discovery.SharedServer && recorder.runtimeSessionID == "" {
+		owner, reason := resolveCodexHookOwner(payload.EffectiveSessionID())
+		if reason != "" {
+			recorder.record("hook.runtime_session", "rejected", reason, nil, 0)
+			status := DeliveryPermanentFailure
+			if reason == protocol.OriginReasonRuntimeRegistryUnavailable {
+				status = DeliveryRetryableFailure
+			}
+			return finish(resultFor(started, traceID, requestID, status, reason, nil))
+		}
+		recorder.runtimeSessionID = string(owner.ID)
+		// The server's lifetime is shared. Track the registered terminal client
+		// so closing a different Codex client cannot settle this conversation.
+		discovery.Trackable = false
+		if owner.Process != nil {
+			discovery.PID = owner.Process.PID
+			discovery.StartToken = owner.Process.StartToken
+			discovery.Trackable = true
+		}
+	}
+	captured, truncated := payloadJSON, false
+	if len(captured) > maxCapturedHookPayloadBytes {
+		captured, truncated = captured[:maxCapturedHookPayloadBytes], true
+	}
+	recorder.captureRawPayload(event, windowID, producerHarness, captured, truncated)
 	result := deliverPayloadWithDeps(
 		event, windowID, producerHarness, amxBin, forwardPayloadJSON, discovery.PipeMode, discovery.Identity(),
 		traceID, requestID, payload.EffectiveSourceEventID(), payloadSize, payloadHMAC,

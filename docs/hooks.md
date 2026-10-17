@@ -39,6 +39,23 @@ producer stays explicitly unidentified instead of being guessed as Claude.
 `amx config hooks-status` detects older unstamped generated hooks; run
 `amx config hooks-sync` to resynchronize them.
 
+Codex's managed shared `app-server` can run several terminal clients while retaining
+the runtime environment of the first one. Hooks from that server route by an
+exact live conversation binding in the runtime registry, using the payload's
+`session_id`, rather than the inherited `AMX_RUNTIME_SESSION_ID`. This keeps a
+BrainNotes completion from updating another project's icon. An explicit
+`--runtime-session` still takes precedence. If the conversation is unbound or
+ambiguous, delivery records `codex_conversation_unbound` or
+`codex_conversation_ambiguous` and does not update another terminal. Resume a
+known conversation through Agent Mux to establish its binding; a fresh shared
+server conversation without one cannot be routed from directory or focus alone.
+For Codex versions offering `--no-daemon`, add that flag to the Agent Mux
+profile's `args` to keep newly launched clients and their hooks scoped to their
+own terminal, including fresh conversations. Existing shared-server clients
+continue using conversation-based routing until relaunched.
+Hook delivery records include the native conversation ID and resolved runtime
+ID so `amx debug tail --session <id>` can follow these deliveries.
+
 `agent-session-loop` / `asl` uses that same hook endpoint when `amx` is on
 `PATH`. It emits `AgentSessionLoopStarted`, `AgentSessionLoopTurnStarted`,
 `AgentSessionLoopTurnHeartbeat`, `AgentSessionLoopTurnHangSuspected`,

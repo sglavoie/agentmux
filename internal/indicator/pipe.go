@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,9 @@ type HarnessProcessDiscovery struct {
 	StartToken string
 	PipeMode   bool
 	Trackable  bool
+	// SharedServer means this process serves several independent Codex TUIs.
+	// Its inherited terminal/runtime variables do not identify a hook's owner.
+	SharedServer bool
 }
 
 // Identity returns a fresh transport value only when the discovery contains
@@ -109,6 +113,7 @@ func discoverHarnessProcess(pid int, producerHarness string, snapshot processSna
 				return HarnessProcessDiscovery{
 					Harness: matchedHarness, PID: pid, StartToken: startToken,
 					PipeMode: pipeMode, Trackable: startToken != "",
+					SharedServer: isManagedCodexAppServer(observed.CommandLine),
 				}
 			}
 		} else {
@@ -140,6 +145,14 @@ func discoverHarnessProcess(pid int, producerHarness string, snapshot processSna
 		pid = parent
 	}
 	return nearest
+}
+
+func isManagedCodexAppServer(cmdline string) bool {
+	fields := commandFields(cmdline)
+	index := harnessExecutableIndex(fields)
+	return index >= 0 && commandBase(fields[index]) == harness.Codex &&
+		len(fields) > index+1 && fields[index+1] == "app-server" &&
+		slices.Contains(fields[index+2:], "--managed-daemon")
 }
 
 // walkTree is retained for source compatibility with older package tests. New

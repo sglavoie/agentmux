@@ -44,6 +44,11 @@ Agents launched by AgentMux inherit AMX_RUNTIME_SESSION_ID (or receive
 --runtime-session), and their hooks route by that runtime session alone, on
 any terminal backend; Kitty variables are ignored for them.
 
+Codex managed shared app-server hooks instead resolve their native session_id
+against live registered conversations, because the server's inherited runtime
+environment belongs to only one of its clients. --runtime-session explicitly
+overrides that lookup. Unbound or ambiguous conversations are not delivered.
+
 Other hooks are legacy Kitty hooks. Those that fire outside Kitty (for example
 from another Copilot or Codex CLI surface sharing the same harness home) are
 treated as successful no-ops. For hooks running inside Kitty, KITTY_WINDOW_ID

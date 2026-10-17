@@ -84,7 +84,9 @@ type deliveryRecorder struct {
 	payloadHMAC             string
 	payloadSize             int64
 	windowID                int
-	// runtimeSessionID is the explicitly supplied runtime session, if any.
+	sessionID               string
+	// runtimeSessionID is the explicit runtime session or resolved shared-server
+	// conversation owner. Empty means ordinary delivery uses the environment.
 	runtimeSessionID string
 }
 
@@ -146,6 +148,7 @@ func (r *deliveryRecorder) envelope(stage, outcome, reason string, evidence map[
 	envelope.RequestID = r.requestID
 	envelope.Harness = r.harness
 	envelope.WindowID = r.windowID
+	envelope.SessionID = r.sessionID
 	envelope.Outcome = outcome
 	envelope.Reason = reason
 	envelope.LatencyMS = latencyMS
@@ -154,6 +157,12 @@ func (r *deliveryRecorder) envelope(stage, outcome, reason string, evidence map[
 			evidence = make(map[string]string)
 		}
 		evidence["config_dir"] = r.configDir
+	}
+	if r.runtimeSessionID != "" {
+		if evidence == nil {
+			evidence = make(map[string]string)
+		}
+		evidence["runtime_session_id"] = r.runtimeSessionID
 	}
 	envelope.Evidence = evidence
 	return envelope
