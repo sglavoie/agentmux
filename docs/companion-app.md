@@ -270,6 +270,11 @@ Whatever has the keyboard decides where a key goes.
   its row does. A session embedded here is focused here either way. macOS
   takes ⌘⇧3, ⌘⇧4, and ⌘⇧5 for screenshots before any app sees them, unless
   those are turned off in System Settings › Keyboard › Keyboard Shortcuts.
+- **⌘←** and **⌘→** cycle through the current project's sessions and the
+  terminals beneath them, wrapping at either end in sidebar order. Pinned
+  sessions still belong to their original project, and collapsed groups
+  expand when reached. These shortcuts are available while a session or
+  one of its terminals is shown; global views such as Dashboard have no project.
 - **⌘L** goes back to the session or view shown before this one, and again
   returns: the two most recently shown.
 - **⌘P** (**Session › Go to…**) lists every session and view over the pane.

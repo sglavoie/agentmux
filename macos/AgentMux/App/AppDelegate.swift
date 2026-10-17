@@ -719,6 +719,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
     @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }
     @objc func selectPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1) }
+    @objc func selectNextProjectTab(_ sender: Any?) { workspace?.selectProjectTab(1) }
+    @objc func selectPreviousProjectTab(_ sender: Any?) { workspace?.selectProjectTab(-1) }
     @objc func showNextSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(1, raising: true) }
     @objc func showPreviousSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(-1, raising: true) }
     /// ⌘1 to ⌘0: the item's tag is the session's place in the sidebar.
@@ -2856,6 +2858,7 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(focusOtherWorkspacePane(_:)), #selector(swapWorkspacePanes(_:)), #selector(collapseWorkspacePane(_:)),
         #selector(goToSession(_:)), #selector(showSessionInKitty(_:)),
         #selector(selectNextSession(_:)), #selector(selectPreviousSession(_:)),
+        #selector(selectNextProjectTab(_:)), #selector(selectPreviousProjectTab(_:)),
         #selector(showNextSessionInKitty(_:)), #selector(showPreviousSessionInKitty(_:)),
         #selector(toggleRecentPlace(_:)),
         #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)),
@@ -2880,6 +2883,8 @@ extension AppDelegate: NSMenuItemValidation {
 
     private func validateWorkspaceItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(selectNextProjectTab(_:)), #selector(selectPreviousProjectTab(_:)):
+            return workspace?.canSelectProjectTab == true
         case #selector(searchConversation(_:)):
             item.toolTip = "Search the selected agent's recorded conversation, including messages outside the visible terminal screen."
             return workspace?.shownSessionRow?.conversation != nil

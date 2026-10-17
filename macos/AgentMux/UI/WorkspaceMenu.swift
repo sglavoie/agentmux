@@ -168,6 +168,8 @@ enum WorkspaceMenu {
         session.addItem(.separator())
         session.addItem(item("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
         session.addItem(item("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
+        session.addItem(item("Next Tab in Project", #selector(AppDelegate.selectNextProjectTab(_:)), key(NSRightArrowFunctionKey), target: target))
+        session.addItem(item("Previous Tab in Project", #selector(AppDelegate.selectPreviousProjectTab(_:)), key(NSLeftArrowFunctionKey), target: target))
         // From session to session, passing over the terminals under one; a
         // Kitty session comes forward in Kitty.
         session.addItem(item(nextSessionTitle, #selector(AppDelegate.showNextSessionInKitty(_:)), "}", target: target))

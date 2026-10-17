@@ -1799,6 +1799,50 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
+    /// The project of the active session or one of its terminals. Global
+    /// utility views have no project, even if a session was shown before.
+    private var tabProject: String? {
+        guard !reviewSelected else { return nil }
+        if let viewSelection {
+            return views.view(viewSelection)?.besideRuntimeSessionID
+                .flatMap { state.row(.embedded($0))?.project }
+        }
+        return state.selectedRow?.project
+    }
+
+    var canSelectProjectTab: Bool { tabProject != nil }
+
+    /// ⌘← / ⌘→ wrap through this project's sessions and their terminals in
+    /// sidebar order, including pinned, promoted, and collapsed sessions.
+    func selectProjectTab(_ offset: Int) {
+        guard let project = tabProject else { return }
+        let stops = state.rows.filter { $0.project == project }.flatMap { row in
+            [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
+        }
+        guard let here = stops.firstIndex(where: { item in
+            switch item {
+            case let .row(row): return viewSelection == nil && row.key == state.selection
+            case let .view(view): return view.id == viewSelection
+            case .section, .group: return false
+            }
+        }) else { return }
+        let next = stops[((here + offset) % stops.count + stops.count) % stops.count]
+        let key: AttentionCycler.Key?
+        switch next {
+        case let .row(row): key = row.key
+        case let .view(view): key = view.besideRuntimeSessionID.map { .embedded($0) }
+        case .section, .group: return
+        }
+        if let group = group(of: key), group.collapsed {
+            setCollapsed(project: group.project, pinned: group.pinned, false)
+        }
+        switch next {
+        case let .row(row): go(to: row, raising: false)
+        case let .view(view): showView(view.id, focus: true)
+        case .section, .group: break
+        }
+    }
+
     /// ↑ and ↓ in the session list while none of its lines is selected,
     /// because the pane's session, or the terminal beside it, was collapsed
     /// away: the step is from there, and stays in the list as an arrow key

@@ -542,6 +542,101 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(app.ended, [], "closing a view ends no session")
     }
 
+    func testProjectTabsCycleSessionsAndTerminalsInBothDirections() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let personal = AttentionCycler.Key.embedded(F.runtimeID(2))
+        let work = AttentionCycler.Key.embedded(F.runtimeID(1))
+        workspace.select(personal, focus: true)
+        workspace.openTerminalBesideSession()
+        let personalTerminal = try XCTUnwrap(workspace.viewSelection)
+        workspace.select(work, focus: true)
+        workspace.openTerminalBesideSession()
+        let first = try XCTUnwrap(workspace.viewSelection)
+        workspace.openTerminalBesideSession()
+        let second = try XCTUnwrap(workspace.viewSelection)
+
+        // Start at the last terminal: wrap without entering web's session.
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.state.selection, personal)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(2)))
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.viewSelection, personalTerminal)
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.state.selection, work)
+        XCTAssertNil(workspace.viewSelection)
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.viewSelection, first)
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.viewSelection, second)
+        XCTAssertTrue(workspace.window.firstResponder === workspace.utilityTerminalView(for: second))
+
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.viewSelection, first)
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.state.selection, work)
+        XCTAssertNil(workspace.viewSelection)
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.viewSelection, personalTerminal)
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.state.selection, personal)
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.viewSelection, second)
+        XCTAssertEqual(app.external, [])
+
+        // Navigation follows a terminal drag, rather than its creation ordinal.
+        XCTAssertTrue(workspace.moveItem(at: try index(ofView: second), to: try index(ofView: first)))
+        workspace.select(work, focus: true)
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.viewSelection, second)
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.viewSelection, first)
+    }
+
+    func testProjectTabsIncludePinnedAndCollapsedSessionsInArrangedOrder() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let personal = AttentionCycler.Key.embedded(F.runtimeID(2))
+        let work = AttentionCycler.Key.embedded(F.runtimeID(1))
+        workspace.setPinned(try XCTUnwrap(workspace.state.rows.first { $0.project == "web" }).key, true)
+        workspace.select(work, focus: true)
+        workspace.openTerminalBesideSession()
+        let terminal = try XCTUnwrap(workspace.viewSelection)
+        workspace.select(work)
+        workspace.togglePinOfShownSession()
+        workspace.setCollapsed(project: WorkspaceSidebar.pinnedSection, pinned: true, true)
+        workspace.setCollapsed(project: "api", pinned: false, true)
+
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.viewSelection, terminal)
+        XCTAssertFalse(try XCTUnwrap(workspace.state.groups.first { $0.pinned }).collapsed)
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.state.selection, personal)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertFalse(try XCTUnwrap(workspace.state.groups.first { $0.project == "api" }).collapsed)
+        workspace.selectProjectTab(1)
+        XCTAssertEqual(workspace.state.selection, work, "wrap to the pin in the same project")
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.state.selection, personal)
+    }
+
+    func testProjectTabsAreInertWithoutAProjectAndStayOnASingleTab() throws {
+        XCTAssertFalse(workspace.canSelectProjectTab)
+        workspace.selectProjectTab(1)
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.selectSession(at: 2)
+        let only = workspace.state.selection
+        XCTAssertTrue(workspace.canSelectProjectTab)
+        workspace.selectProjectTab(1)
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.state.selection, only)
+        XCTAssertEqual(app.external, [])
+        workspace.showView("dashboard")
+        XCTAssertFalse(workspace.canSelectProjectTab)
+        workspace.selectProjectTab(1)
+        workspace.selectProjectTab(-1)
+        XCTAssertEqual(workspace.viewSelection, "dashboard")
+    }
+
     func testATerminalOpensRightBelowItsSessionAndIsNotASession() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let rowsBefore = workspace.state.rows

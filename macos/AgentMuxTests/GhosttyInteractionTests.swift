@@ -29,6 +29,7 @@ struct TestKey {
     static let end = function(NSEndFunctionKey, keyCode: 119)
     static let f12 = function(NSF12FunctionKey, keyCode: 111)
     static let left = function(NSLeftArrowFunctionKey, keyCode: 123)
+    static let right = function(NSRightArrowFunctionKey, keyCode: 124)
 
     func with(_ extra: NSEvent.ModifierFlags) -> TestKey {
         var key = self
@@ -152,6 +153,32 @@ final class GhosttyInteractionTests: XCTestCase {
         XCTAssertEqual(receiver.calls, keys.count)
         press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
         expect("a", "configured shortcuts send no bytes to the agent")
+    }
+
+    @MainActor
+    func testProjectTabArrowShortcutsAreClaimedBeforeTerminalInput() throws {
+        let savedMenu = NSApp.mainMenu
+        let savedWindowsMenu = NSApp.windowsMenu
+        defer { NSApp.mainMenu = savedMenu; NSApp.windowsMenu = savedWindowsMenu }
+        let menu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
+        NSApp.mainMenu = menu
+        let receiver = ProjectTabShortcutReceiver()
+        for key in [TestKey.left.with(.command), .right.with(.command)] {
+            let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()))
+            item.target = receiver
+        }
+        for scrollback in [Ghostty.Scrollback.terminal, .server] {
+            try record(scrollback: scrollback)
+            for key in [TestKey.right.with(.command), .left.with(.command)] {
+                let event = key.event()
+                if !view.performKeyEquivalent(with: event), !menu.performKeyEquivalent(with: event) {
+                    view.keyDown(with: event)
+                }
+            }
+            press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
+            expect("a", "project navigation sends no input to sessions or utility terminals")
+        }
+        XCTAssertEqual(receiver.steps, [1, -1, 1, -1])
     }
 
     @MainActor
@@ -569,6 +596,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("1", keyCode: 18, shifted: "!"), "⌘⇧1"),
             (.command("]", keyCode: 30), "⌘]"),
             (.command("[", keyCode: 33), "⌘["),
+            (.left.with(.command), "Previous Tab in Project"),
+            (.right.with(.command), "Next Tab in Project"),
             (.command("]", keyCode: 30, shifted: "}"), "⌘}"),
             (.command("[", keyCode: 33, shifted: "{"), "⌘{"),
             (.command("l", keyCode: 37), "Back to Last Shown"),
@@ -641,6 +670,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command(".", keyCode: 47), "Pin Session"),
             (.command("]", keyCode: 30), "Select Next Session"),
             (.command("[", keyCode: 33), "Select Previous Session"),
+            (.left.with(.command), "Previous Tab in Project"),
+            (.right.with(.command), "Next Tab in Project"),
             (.command("l", keyCode: 37), "Back to Last Shown"),
             (.function(NSF1FunctionKey, keyCode: 122), "Keybinding Reference"),
             (.function(NSF2FunctionKey, keyCode: 120), "Overview"),
@@ -1103,4 +1134,11 @@ final class GhosttyClickMenuTests: XCTestCase {
 private final class WorkspaceShortcutReceiver: NSObject {
     var calls = 0
     @objc func splitWorkspaceShell(_ sender: Any?) { calls += 1 }
+}
+
+@MainActor
+private final class ProjectTabShortcutReceiver: NSObject {
+    var steps: [Int] = []
+    @objc func selectNextProjectTab(_ sender: Any?) { steps.append(1) }
+    @objc func selectPreviousProjectTab(_ sender: Any?) { steps.append(-1) }
 }
