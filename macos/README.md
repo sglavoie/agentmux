@@ -385,7 +385,7 @@ ASL answer panel work the same either way.
   nothing leaves its project or its session, and the project lines and the
   **Workspace** section do not move.
 - **Pinning.** **Pin to Top** in a session's right-click menu, or **Session ›
-  Pin or Unpin Session** for the one the pane is on, moves the session out of
+  Pin or Unpin Session** (⌘.) for the one the pane is on, moves the session out of
   its project into a **Pinned** group listed above every project
   (`WorkspaceSidebar.groups(_:order:)`, `setPinned(_:_:)`); its line then
   names its project. A pinned session needing attention temporarily appears
