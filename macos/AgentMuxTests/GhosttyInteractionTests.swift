@@ -559,6 +559,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("b", keyCode: 11, shifted: "B"), "Toggle Inspector"),
             (.command("\r", keyCode: 36), "New Terminal Below"),
             (.command("r", keyCode: 15), "Name Session…"),
+            (.command("w", keyCode: 13, shifted: "W"), "End Session…"),
             (.function(NSF7FunctionKey, keyCode: 98), "F7"),
             (.function(NSF9FunctionKey, keyCode: 101), "F9"),
             (.function(NSF5FunctionKey, keyCode: 96), "F5"),
@@ -655,7 +656,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("9", keyCode: 25), "Session 9"),
             (.command("0", keyCode: 29), "Session 10"),
             (.command("m", keyCode: 46), "Minimize"),
-            (.command("w", keyCode: 13, shifted: "W"), "Close Window"),
+            (.command("w", keyCode: 13, shifted: "W"), "End Session…"),
             (.command("l", keyCode: 37, shifted: "L"), "Session List"),
         ]
         for (key, title) in expected {

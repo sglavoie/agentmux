@@ -195,7 +195,7 @@ terminals of their own beside the agents, and none of them needs Kitty.
   ends the one you are on, and so does the × in the top right corner of its row.
 - The × on a session row and ⌘W **detach its terminal**. The agent keeps
   running and stays in the sidebar; click its row or choose **Reattach** to
-  return. **Session › End Session…**, also in the row's context menu, ends
+  return. **Session › End Session…** (⌘⇧W), also in the row's context menu, ends
   the agent after confirmation. Its conversation remains on disk. A Kitty
   session has no ×; manage its terminal in Kitty.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you

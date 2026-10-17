@@ -34,9 +34,10 @@ final class GhosttyConfigTests: XCTestCase {
 
     /// The app configuration names no program: what runs is each surface's own.
     func testOverridesForceOnlyWhatTheHostOwns() {
-        let forced = ["keybind = super+0=unbind", "keybind = super+shift+0=unbind", "window-inherit-font-size = true"]
+        let forced = ["keybind = super+0=unbind", "keybind = super+shift+0=unbind",
+                      "keybind = super+shift+w=unbind", "window-inherit-font-size = true"]
         XCTAssertEqual(Ghostty.ConfigOverrides().lines, ["confirm-close-surface = true"] + forced,
-                       "⌘0 and ⌘⇧0 are the main menu's")
+                       "⌘0, ⌘⇧0, and ⌘⇧W are the main menu's")
 
         var sized = Ghostty.ConfigOverrides()
         sized.fontSize = 15

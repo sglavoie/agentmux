@@ -151,9 +151,9 @@ enum WorkspaceMenu {
         view.addItem(item("Swap Panes", #selector(AppDelegate.swapWorkspacePanes(_:)), "", target: target))
         view.addItem(item("Hide Other Pane", #selector(AppDelegate.collapseWorkspacePane(_:)), "", target: target))
         view.addItem(.separator())
-        // ⌘W closes what the pane is on, as it closes a tab elsewhere; the
-        // window itself is ⌘⇧W. Its title follows what that is
-        // (`AppDelegate.validateMenuItem`): Close View, or Detach Terminal.
+        // ⌘W closes what the pane is on, as it closes a tab elsewhere. Its
+        // title follows what that is (`AppDelegate.validateMenuItem`):
+        // Close View, or Detach Terminal. ⌘⇧W ends the shown session.
         view.addItem(item(WorkspaceWindowController.closeTitle, #selector(AppDelegate.closeWorkspaceView(_:)), "w", target: target))
 
         let session = submenu("Session", in: main)
@@ -163,7 +163,7 @@ enum WorkspaceMenu {
         session.addItem(item("New Terminal Below", #selector(AppDelegate.newSessionTerminal(_:)), "\r", target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))
         session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), "", target: target))
-        session.addItem(item(WorkspaceWindowController.endSessionTitle, #selector(AppDelegate.endWorkspaceSession(_:)), "", target: target))
+        session.addItem(item(WorkspaceWindowController.endSessionTitle, #selector(AppDelegate.endWorkspaceSession(_:)), "W", target: target))
         session.addItem(.separator())
         session.addItem(item("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
         session.addItem(item("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
@@ -204,7 +204,7 @@ enum WorkspaceMenu {
         let window = submenu("Window", in: main)
         window.addItem(item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
         window.addItem(item("Zoom", #selector(NSWindow.performZoom(_:)), ""))
-        window.addItem(item("Close Window", #selector(NSWindow.performClose(_:)), "W"))
+        window.addItem(item("Close Window", #selector(NSWindow.performClose(_:)), ""))
         window.addItem(.separator())
         window.addItem(item("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), ""))
         window.addItem(.separator())

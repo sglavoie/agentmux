@@ -17,6 +17,7 @@ var Workspace = []Action{
 	{Key: "f5", Section: "Sessions", Description: "set session harness icon (picker)"},
 	{Key: "f6", Section: "Sessions", Description: "set session color (picker)"},
 	{Key: "cmd+r", Section: "Sessions", Description: "name the shown session (an empty name removes it)"},
+	{Key: "cmd+shift+w", Section: "Sessions", Description: "end the shown session after confirmation"},
 	{Key: "f8", Section: "Sessions", Description: "clear markers and state icons from session"},
 	{Key: "f11", Section: "Sessions", Description: "mark session active (⚡ until the next real event)"},
 	{Key: "f10", Section: "Sessions", Description: "toggle mute on the shown session (suppresses notifications)"},

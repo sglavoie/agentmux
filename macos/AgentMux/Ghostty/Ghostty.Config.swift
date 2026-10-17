@@ -30,6 +30,8 @@ extension Ghostty {
             // fewer sessions that item is disabled, which leaves a key
             // Ghostty binds to it (`menuMayClaim`): Ghostty's reset_font_size
             // would run behind a menu that says otherwise. Actual Size is ⌘_.
+            // ⌘⇧W belongs to End Session…; when disabled it must not fall
+            // through to Ghostty's close_window binding.
             lines += Self.menuOwnedKeys.map { "keybind = \($0)=unbind" }
             // The workspace reads a surface's zoom back through what a new
             // window would inherit (`SurfaceView.fontSize`), to give it to
@@ -45,7 +47,7 @@ extension Ghostty {
         }
 
         /// Ghostty's default bindings for keys the main menu owns outright.
-        static let menuOwnedKeys = ["super+0", "super+shift+0"]
+        static let menuOwnedKeys = ["super+0", "super+shift+0", "super+shift+w"]
 
         /// A whole number without its ".0", so `14` rather than `14.0`.
         static func number(_ value: Float) -> String {
