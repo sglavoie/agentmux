@@ -11,11 +11,15 @@ final class WorkspaceInspectorTests: XCTestCase {
     private var workspace: WorkspaceWindowController!
     private let now = Date(timeIntervalSince1970: 600)
 
-    private let sessions = [
-        F.tmux(1, project: "api", profile: "work"),
-        F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 300_000),
-        F.kitty(4, project: "web", icon: "key", attention: true, changedAtMS: 60_000),
-    ]
+    private var sessions: [CompanionSession] {
+        var rows = [
+            F.tmux(1, project: "api", profile: "work"),
+            F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 300_000),
+            F.kitty(4, project: "web", icon: "key", attention: true, changedAtMS: 60_000),
+        ]
+        rows[1].unseen = true
+        return rows
+    }
 
     override func setUp() async throws {
         app = FakeWorkspaceApp()
@@ -183,7 +187,7 @@ final class WorkspaceInspectorTests: XCTestCase {
             .init(label: "Since", value: "5m"),
             .init(label: "Working for", value: "2m"),
             .init(label: "Last event", value: "<1m"),
-            .init(label: "Flags", value: "waiting on you, muted, looping"),
+            .init(label: "Flags", value: "waiting on you, unseen, muted, looping"),
         ])
         XCTAssertTrue(inspection.sections[1].fields.contains(.init(label: "Conversation", value: "c-1", copies: true)))
         XCTAssertTrue(inspection.sections[1].fields.contains(.init(label: "ASL run", value: "run-7", copies: true)))

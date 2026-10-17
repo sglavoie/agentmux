@@ -67,8 +67,8 @@ final class MenuBuilderTests: XCTestCase {
             return entries[(start + 1)...].prefix { if case .session = $0 { return true } else { return false } }
                 .compactMap { if case let .session(row) = $0 { return row.windowID } else { return nil } }
         }
-        // In the sidebar's order (projects p2, p4), however long each waited.
-        XCTAssertEqual(ids(after: "Needs attention"), [2, 4])
+        // The sidebar promotes the permission request above a seen completion.
+        XCTAssertEqual(ids(after: "Needs attention"), [4, 2])
         XCTAssertEqual(ids(after: "Working"), [1, 5])
         XCTAssertEqual(ids(after: "Idle"), [3])
     }

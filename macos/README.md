@@ -368,13 +368,19 @@ ASL answer panel work the same either way.
   profile, sorted by profile. A row shows the state glyph the tab title and
   the menu use, the harness, branch, age, and the reason it waits; a Kitty
   session is marked `Kitty`. A project's line counts its sessions that wait on
-  you. The order never follows attention, so a session keeps its place while
-  its state changes.
+  you. Sessions needing attention temporarily move into **Needs attention**
+  above the pinned and project groups, even when their project is collapsed.
+  Like Overview, this includes permission requests, errors, questions, and
+  unread completed turns. When the daemon marks a completion seen or resolves
+  the waiting status, the session returns to its saved position. Its terminal,
+  selection, pin, and dragged order are preserved. The temporary section
+  always stays expanded, names each session's project, and cannot be dragged.
 - **Dragging.** Press a session's row and drag it to move it among its
   project's sessions; the terminals beside it go with it. The order is a
   `WorkspaceOrder`, kept in the `amxWorkspaceSessionOrder` preference, and a
-  session launched later follows the dragged ones. A terminal beside a
-  session drags among that session's terminals (`WorkspaceViews.moveTerminal`),
+  session launched later follows the dragged ones. Dragging other sessions
+  preserves the saved places of those temporarily needing attention. A terminal
+  beside a session drags among that session's terminals (`WorkspaceViews.moveTerminal`),
   for as long as the app runs. `dropSlots(forItemAt:)` is the whole rule:
   nothing leaves its project or its session, and the project lines and the
   **Workspace** section do not move.
@@ -382,9 +388,10 @@ ASL answer panel work the same either way.
   Pin or Unpin Session** for the one the pane is on, moves the session out of
   its project into a **Pinned** group listed above every project
   (`WorkspaceSidebar.groups(_:order:)`, `setPinned(_:_:)`); its line then
-  names its project. Pinned sessions keep the order they were pinned in until
-  they are dragged among themselves, and **Unpin** puts one back under its
-  project. The pins are part of the `WorkspaceOrder`, kept in the
+  names its project. A pinned session needing attention temporarily appears
+  in **Needs attention** while keeping its pin. Pinned sessions keep the order
+  they were pinned in until they are dragged among themselves, and **Unpin**
+  puts one back under its project. The pins are part of the `WorkspaceOrder`, kept in the
   `amxWorkspacePinnedSessions` preference, and everything that follows
   sidebar order (⌘1 to ⌘0, the next-attention shortcut, the inspector's
   waiting list) follows them. Any session can be pinned, a Kitty one too. A
@@ -1102,8 +1109,8 @@ moves on to the next one.
 
 The next-attention shortcut visits the attention rows (stop, key, error,
 question) in the order the workspace sidebar lists every session
-(`WorkspaceSidebar.ordered`): projects by name, then each project's sessions
-as they stand there, dragged or not. How long a session has waited moves
+(`WorkspaceSidebar.ordered`): promoted attention sessions, then pinned sessions
+and projects in their saved order. How long a session has waited moves
 nothing, and the menu's Needs attention section lists them in the same order.
 Each press focuses the one after the session the last
 press focused, and wraps after the last one. A session is its Kitty socket

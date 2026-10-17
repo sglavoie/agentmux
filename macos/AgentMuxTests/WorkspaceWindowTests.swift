@@ -14,7 +14,9 @@ final class WorkspaceWindowTests: XCTestCase {
     private let sessions = [
         F.tmux(1, project: "api", profile: "work"),
         F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 2000),
-        F.kitty(4, project: "web", icon: "key", attention: true, changedAtMS: 1000),
+        // A seen completion stays in its project; attention transitions are
+        // exercised separately below so layout tests have a fixed baseline.
+        F.kitty(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000),
     ]
 
     override func setUp() async throws {
@@ -39,6 +41,74 @@ final class WorkspaceWindowTests: XCTestCase {
             if case let .row(row) = item { return row.key == key }
             return false
         })
+    }
+
+    func testAttentionSnapshotMovesRowsAndAcknowledgmentRestoresThemWithoutChangingSelection() throws {
+        var live = sessions
+        app.store.apply(snapshot: F.snapshot(live))
+        let selected = AttentionCycler.Key.embedded(F.runtimeID(1))
+        let waiting = AttentionCycler.Key.embedded(F.runtimeID(2))
+        workspace.select(waiting)
+        workspace.openTerminalBesideSession()
+        let companion = try XCTUnwrap(workspace.views.terminals(beside: F.runtimeID(2)).first)
+        workspace.select(selected)
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        let made = app.made
+        live[1].unseen = true
+        live[2].iconState = "key"
+        app.store.apply(snapshot: F.snapshot(live))
+
+        XCTAssertEqual(workspace.state.rows.map(\.key), [waiting, AttentionCycler.key(live[2], snapshotSocket: "unix:/tmp/kitty-1"), selected])
+        XCTAssertEqual(workspace.sessionKey(of: waiting), "1")
+        XCTAssertEqual(workspace.items[try index(of: waiting) + 1], .view(companion))
+        XCTAssertEqual(workspace.state.selection, selected)
+        XCTAssertEqual(workspace.sidebar.selectedRow, try index(of: selected))
+        XCTAssertTrue(workspace.terminalView(for: F.runtimeID(1)) === terminal)
+        XCTAssertEqual(app.made, made, "reordering must not attach or acknowledge sessions")
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try index(of: waiting)) as? WorkspaceRowCellView)
+        XCTAssertEqual(cell.titleLabel.stringValue, "api — personal")
+        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 3) as? WorkspaceGroupCellView)
+        XCTAssertEqual(header.nameLabel.stringValue, "Needs attention")
+        XCTAssertEqual(header.countLabel.stringValue, "2")
+        XCTAssertTrue(header.disclosureLabel.isHidden)
+        XCTAssertTrue(workspace.contextMenuItems(forRow: 3).isEmpty)
+        XCTAssertEqual(workspace.dropSlots(forItemAt: try index(of: waiting)), [])
+        workspace.focusItem(at: 3)
+        XCTAssertTrue(app.orders.isEmpty, "attention cannot be collapsed")
+
+        live[1].unseen = false
+        live[2].iconState = "bolt"
+        live[2].attention = false
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertFalse(workspace.state.groups.contains(where: \.needsAttention))
+        XCTAssertEqual(workspace.state.rows.map(\.project), ["api", "api", "web"])
+        XCTAssertEqual(workspace.items[try index(of: waiting) + 1], .view(companion))
+        XCTAssertEqual(workspace.state.selection, selected)
+        XCTAssertEqual(workspace.sidebar.selectedRow, try index(of: selected))
+        XCTAssertEqual(app.made, made)
+    }
+
+    func testDraggingKeepsTheSavedPositionAndPinOfPromotedSiblings() throws {
+        for pinned in [false, true] {
+            var live = (1...3).map { F.tmux($0, project: "api", profile: String($0)) }
+            let keys = (1...3).map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
+            app.store.apply(snapshot: F.snapshot(live))
+            for key in keys { workspace.setPinned(key, pinned) }
+            live[1].iconState = "stop"
+            live[1].unseen = true
+            live[1].attention = true
+            app.store.apply(snapshot: F.snapshot(live))
+            XCTAssertTrue(workspace.moveItem(at: try index(of: keys[2]), to: try index(of: keys[0])))
+            let saved = try XCTUnwrap(app.orders.last)
+            XCTAssertEqual(pinned ? saved.pinned : saved.projects["api"], [keys[2], keys[1], keys[0]].map(WorkspaceOrder.token))
+            live[1].unseen = false
+            app.store.apply(snapshot: F.snapshot(live))
+            XCTAssertEqual(workspace.state.rows.map(\.key), [keys[2], keys[1], keys[0]])
+            XCTAssertEqual(workspace.state.rows.map(\.pinned), [pinned, pinned, pinned])
+            // Restore the initial order before exercising the other group.
+            XCTAssertTrue(workspace.moveItem(at: try index(of: keys[0]), to: try index(of: keys[2])))
+            XCTAssertTrue(workspace.moveItem(at: try index(of: keys[1]), to: try index(of: keys[2])))
+        }
     }
 
     func testSidebarListsProjectsThenTheirSessions() throws {

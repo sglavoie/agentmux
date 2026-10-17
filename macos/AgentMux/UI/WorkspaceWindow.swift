@@ -183,7 +183,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             switch (self, other) {
             case let (.section(a), .section(b)): return a == b
             case let (.view(a), .view(b)): return a.id == b.id
-            case let (.group(a), .group(b)): return a.project == b.project && a.pinned == b.pinned
+            case let (.group(a), .group(b)):
+                return a.project == b.project && a.pinned == b.pinned && a.needsAttention == b.needsAttention
             case let (.row(a), .row(b)): return a.key == b.key && a.name.isEmpty == b.name.isEmpty
             default: return false
             }
@@ -1471,6 +1472,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static let reattachTitle = "Reattach"
 
     private func groupMenuItems(_ group: WorkspaceGroup) -> [NSMenuItem] {
+        guard !group.needsAttention else { return [] }
         let title = group.pinned
             ? (group.collapsed ? Self.expandPinnedTitle : Self.collapsePinnedTitle)
             : (group.collapsed ? Self.expandProjectTitle : Self.collapseProjectTitle)
@@ -1483,7 +1485,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     @objc private func toggleClickedGroup(_ sender: Any?) {
         guard let named = (sender as? NSMenuItem)?.representedObject as? [Any],
               let project = named.first as? String, let pinned = named.last as? Bool,
-              let group = state.groups.first(where: { $0.project == project && $0.pinned == pinned })
+              let group = state.groups.first(where: { !$0.needsAttention && $0.project == project && $0.pinned == pinned })
         else { return }
         setCollapsed(project: project, pinned: pinned, !group.collapsed)
     }
@@ -2941,7 +2943,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
                 ?? WorkspaceGroupCellView()
             cell.show(group)
-            cell.onToggle = { [weak self] in
+            cell.onToggle = group.needsAttention ? nil : { [weak self] in
                 self?.setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed)
             }
             return cell
@@ -3000,7 +3002,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         switch items[index] {
         case .section, .group:
             return []
-        case .row:
+        case let .row(row):
+            // Attention is a temporary position, not a saved drag order.
+            guard !row.needsAttention else { return [] }
             guard let group = items[..<index].lastIndex(where: { if case .group = $0 { return true } else { return false } })
             else { return [] }
             let end = items[(group + 1)...].firstIndex { item in
@@ -3039,16 +3043,22 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case .section, .group:
             return false
         case let .row(row):
-            guard let group = state.groups.first(where: { $0.pinned == row.pinned && (row.pinned || $0.project == row.project) })
+            guard let group = state.groups.first(where: { !$0.needsAttention && $0.pinned == row.pinned && (row.pinned || $0.project == row.project) })
             else { return false }
             var keys = group.rows.map(\.key).filter { $0 != row.key }
             var at = keys.count
             if slot < items.count, case let .row(next) = items[slot] { at = keys.firstIndex(of: next.key) ?? at }
             keys.insert(row.key, at: at)
+            // Keep the saved places of siblings temporarily in Needs attention.
+            let base = WorkspaceSidebar.groups(state.rows, order: order, prioritizeAttention: false)
+                .first { $0.pinned == row.pinned && (row.pinned || $0.project == row.project) }
+            let moved = Set(keys)
+            var next = keys.makeIterator()
+            let saved = (base?.rows.map(\.key) ?? keys).map { moved.contains($0) ? next.next()! : $0 }
             if row.pinned {
-                order.setPinned(keys)
+                order.setPinned(saved)
             } else {
-                order.set(keys, for: row.project)
+                order.set(saved, for: row.project)
             }
             state.arrange(order)
             delegate?.workspaceOrderChanged(order)
@@ -3315,7 +3325,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         switch items[index] {
         case let .row(row): activate(row, reattaching: true)
         case let .view(view): showView(view.id, focus: true)
-        case let .group(group): setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed)
+        case let .group(group):
+            if !group.needsAttention { setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed) }
         case .section: break
         }
     }
@@ -3335,7 +3346,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         } else if let beside = views.view(viewSelection)?.besideRuntimeSessionID {
             key = .embedded(beside)
         }
-        guard let group = group(of: key) else { return }
+        guard let group = group(of: key), !group.needsAttention else { return }
         setCollapsed(project: group.project, pinned: group.pinned, collapsed)
     }
 
@@ -3868,6 +3879,13 @@ final class WorkspaceGroupCellView: NSTableCellView {
     }
 
     func show(_ group: WorkspaceGroup) {
+        if group.needsAttention {
+            show(section: group.project)
+            countLabel.stringValue = String(group.rows.count)
+            countLabel.toolTip = "\(group.rows.count) waiting on you"
+            setAccessibilityLabel("\(group.project), \(group.rows.count) waiting")
+            return
+        }
         nameLabel.stringValue = group.project
         let waiting = group.attention
         countLabel.stringValue = waiting > 0 ? String(waiting) : ""
@@ -4061,8 +4079,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.stringValue = row.name
         nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
-        // A pinned session is not under its project's line, so it names it.
-        let place = row.pinned ? "\(row.project) — \(row.label)" : row.label
+        // A pinned or promoted session names the project it is away from.
+        let place = row.pinned || row.needsAttention ? "\(row.project) — \(row.label)" : row.label
         let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted

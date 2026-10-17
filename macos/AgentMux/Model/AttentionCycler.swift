@@ -3,8 +3,8 @@ import Foundation
 /// Which session the next-attention shortcut focuses.
 ///
 /// The rows waiting on a human are visited in the order the workspace
-/// sidebar lists every session (`WorkspaceSidebar.ordered`): projects by
-/// name, and a project's sessions as they stand there, dragged or not. How
+/// sidebar lists every session (`WorkspaceSidebar.ordered`): the temporary
+/// attention section, then pinned sessions and projects in their saved order. How
 /// long a session has waited moves nothing. Each press moves past the session
 /// the previous press focused and wraps after the last one.
 ///

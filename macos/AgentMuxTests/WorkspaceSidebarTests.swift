@@ -120,6 +120,65 @@ final class WorkspaceSidebarTests: XCTestCase {
 
     // MARK: Sidebar
 
+    func testAttentionMatchesOverviewAndUnreadCompletionAcknowledgment() {
+        for (icon, unseen, expected) in [
+            ("stop", true, true), ("stop", false, false),
+            ("key", false, true), ("error", false, true), ("question", false, true),
+            ("bolt", true, false), ("warning", true, false), ("compact", true, false),
+            ("subagent", true, false), ("", true, false), ("unknown", true, false),
+        ] {
+            var session = F.tmux(1, project: "api", icon: icon, attention: true)
+            session.unseen = unseen
+            XCTAssertEqual(session.needsAttention, expected, "\(icon), unseen=\(unseen)")
+            XCTAssertEqual(groups([session])[0].needsAttention, expected)
+        }
+    }
+
+    func testAttentionFloatsAboveAllProjectsAndPinsUntilAcknowledged() {
+        var sessions = [
+            F.tmux(1, project: "api", profile: "a", icon: "bolt"),
+            F.tmux(2, project: "web", profile: "b", icon: "stop", attention: true),
+            F.tmux(3, project: "web", profile: "c", icon: "bolt"),
+            F.kitty(4, project: "Needs attention", icon: "question", attention: true),
+        ]
+        sessions[1].unseen = true
+        var order = WorkspaceOrder()
+        order.setPinned(.embedded(F.runtimeID(1)), true)
+        order.set([.embedded(F.runtimeID(3)), .embedded(F.runtimeID(2))], for: "web")
+        order.setCollapsed(project: "web", pinned: false, true)
+        func built() -> [WorkspaceGroup] {
+            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", order: order)
+        }
+        var state = WorkspaceState()
+        state.apply(built())
+        let key = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        XCTAssertEqual(state.groups.map(\.project), ["Needs attention", "Pinned", "web"])
+        XCTAssertEqual(state.groups[0].rows.map(\.key), [key, .embedded(F.runtimeID(2))])
+        XCTAssertFalse(state.groups[0].collapsed, "waiting sessions escape collapsed projects")
+        XCTAssertEqual(state.rows.count, sessions.count, "sessions appear exactly once")
+        state.select(.embedded(F.runtimeID(2)))
+        let saved = order
+        state.apply(nil)
+        state.arrange(order)
+        XCTAssertEqual(state.groups, built(), "held rows retain their attention positions")
+
+        sessions[1].unseen = false // The icon and the older attention bit stay set.
+        sessions[3].iconState = "bolt"
+        sessions[3].attention = false
+        state.apply(built())
+        XCTAssertFalse(state.groups.contains(where: \.needsAttention))
+        XCTAssertEqual(state.groups.map(\.project), ["Pinned", "Needs attention", "web"])
+        XCTAssertEqual(state.groups.last?.rows.map(\.key), [.embedded(F.runtimeID(3)), .embedded(F.runtimeID(2))])
+        XCTAssertTrue(state.groups.last?.collapsed ?? false)
+        XCTAssertEqual(state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertEqual(order, saved, "promotion never rewrites the saved order")
+
+        sessions[0].iconState = "error"
+        XCTAssertTrue(built()[0].rows[0].pinned, "a promoted pin remains pinned")
+        sessions[0].iconState = "bolt"
+        XCTAssertTrue(built()[0].pinned, "it returns to Pinned when resolved")
+    }
+
     func testGroupsByProjectAndLabelsByProfile() {
         let sessions = [
             F.tmux(1, project: "web", profile: "work", harness: "codex", icon: "bolt"),
@@ -134,12 +193,12 @@ final class WorkspaceSidebarTests: XCTestCase {
         reasoned[0].dirty = true
         let built = groups(reasoned)
 
-        XCTAssertEqual(built.map(\.project), ["api", "API tools", "web"], "projects sort by name, not by attention")
-        XCTAssertEqual(built.map(\.attention), [2, 0, 0])
-        XCTAssertEqual(built[0].rows.map(\.label), ["personal", "work"], "rows sort by profile inside a project")
-        XCTAssertEqual(built[1].rows.map(\.label), ["copilot"], "a session with no profile is labeled by its harness")
+        XCTAssertEqual(built.map(\.project), ["Needs attention", "api", "API tools", "web"])
+        XCTAssertEqual(built.map(\.attention), [1, 1, 0, 0])
+        XCTAssertEqual(built[0].rows.map(\.label), ["work"], "the permission request floats above the seen completion")
+        XCTAssertEqual(built[2].rows.map(\.label), ["copilot"], "a session with no profile is labeled by its harness")
 
-        let personal = built[0].rows[0]
+        let personal = built[1].rows[0]
         XCTAssertEqual(personal.target, .embedded(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(personal.key, .embedded(F.runtimeID(2)))
         XCTAssertEqual(personal.glyph, "🛑")
@@ -147,14 +206,14 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(personal.detail, "claude · <1m")
         XCTAssertEqual(personal.toolTip, "tmux %2")
 
-        let work = built[0].rows[1]
+        let work = built[0].rows[0]
         XCTAssertEqual(work.target, .kitty(socket: "", windowID: 4))
         XCTAssertEqual(work.key, AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
         XCTAssertEqual(work.detail, "claude · 4m · permission · Kitty", "a Kitty row says where it opens")
         XCTAssertTrue(work.muted)
         XCTAssertEqual(work.toolTip, "window 4")
 
-        let web = built[2].rows[0]
+        let web = built[3].rows[0]
         XCTAssertEqual(web.detail, "codex · main*")
         XCTAssertTrue(web.working)
         XCTAssertFalse(web.attention)
@@ -408,13 +467,14 @@ final class WorkspaceSidebarTests: XCTestCase {
     // MARK: Mixed backends in the menu bar and the cycle
 
     func testNextAttentionCyclesAcrossBackendsInSidebarOrder() {
-        let sessions = [
+        var sessions = [
             F.tmux(1, project: "a", icon: "stop", attention: true, changedAtMS: ms(secondsAgo: 100)),
             F.kitty(4, project: "b", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 300)),
             F.tmux(2, project: "c", icon: "question", attention: true, changedAtMS: ms(secondsAgo: 200)),
             F.tmux(3, project: "d", icon: "bolt"),
             F.kitty(4, project: "e", socket: "unix:/tmp/kitty-2", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 50)),
         ]
+        sessions[0].unseen = true
         var cycler = AttentionCycler()
         var visited: [String] = []
         for _ in 0..<5 {

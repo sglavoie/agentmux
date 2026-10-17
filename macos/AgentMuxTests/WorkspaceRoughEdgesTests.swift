@@ -91,7 +91,7 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         workspace.focusSidebar()
         workspace.sidebar.keyDown(with: TestKey.function(NSUpArrowFunctionKey, keyCode: 126).event())
         XCTAssertNil(workspace.viewSelection)
-        XCTAssertEqual(workspace.state.selection, try row("web", "work").key, "the session before api/work, wrapping")
+        XCTAssertEqual(workspace.state.selection, try row("api", "personal").key, "the attention row before api/work stays visible")
     }
 
     func testTheArrowsAreTheListsWhenThePaneIsOnNothing() throws {

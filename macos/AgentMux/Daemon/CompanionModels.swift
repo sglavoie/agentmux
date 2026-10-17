@@ -397,6 +397,16 @@ struct CompanionSession: Decodable, Equatable {
     /// session claims, and on a v1 snapshot.
     var runtime: CompanionRuntime?
 
+    /// Matches Overview's attention tier. A completed turn leaves it when
+    /// the daemon acknowledges it; prompts and errors stay until resolved.
+    var needsAttention: Bool {
+        switch iconState {
+        case "key", "error", "question": return true
+        case "stop": return unseen
+        default: return false
+        }
+    }
+
     init(windowID: Int = 0) {
         self.windowID = windowID
     }

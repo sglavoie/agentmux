@@ -213,7 +213,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
     private let sessions = [
         F.tmux(1, project: "api", profile: "work"),
         F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 2000),
-        F.kitty(4, project: "web", icon: "key", attention: true, changedAtMS: 1000),
+        F.kitty(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000),
     ]
 
     override func setUp() async throws {
