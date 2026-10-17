@@ -11,14 +11,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
-
-var footerStripeBackgroundANSI = ansi.Style{}.
-	BackgroundColor(ansi.HexColor(footerStripeBackgroundHex)).
-	String()
 
 func renderFooter(m Model) string {
 	var lines []string
@@ -359,7 +357,7 @@ func renderFooterStripeRow(row string, maxWidth int) string {
 }
 
 func footerStripeBackgroundSequence() string {
-	return footerStripeBackgroundANSI
+	return ansi.Style{}.BackgroundColor(theme.Color(theme.Footer)).String()
 }
 
 // listPositionFragment returns a `start–end of total` indicator (mirroring

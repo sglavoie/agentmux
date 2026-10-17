@@ -13,22 +13,21 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
-const footerStripeBackgroundHex = theme.Footer
-
 var (
 	styleSelected  = theme.Selected()
-	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
-	styleDim       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleSearch    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
-	styleFooter    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleHeader    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
+	styleError     = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
+	styleDim       = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleSearch    = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
+	styleFooter    = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleHeader    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Primary)).
+			Foreground(theme.Color(theme.Primary)).
 			Bold(true)
 
 	// Popups retain their existing one-column padding and border geometry.
@@ -38,34 +37,34 @@ var (
 	// cursor row. The dim grey foreground keeps the key visible while signaling
 	// that pressing it would be a no-op.
 	styleFooterUnavailableKey = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(theme.Disabled)).
+					Foreground(theme.Color(theme.Disabled)).
 					Bold(true)
 
 	// Status bar styles own the fixed bottom row. Each style sets a
 	// background so the padded row reads as a full-width mode/status strip.
-	styleStatusIdle = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Text)).Background(lipgloss.Color(theme.Footer))
+	styleStatusIdle = lipgloss.NewStyle().Foreground(theme.Color(theme.Text)).Background(theme.Color(theme.Footer))
 	styleStatusInfo = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Secondary)).
-			Background(lipgloss.Color(theme.Footer))
+			Foreground(theme.Color(theme.Secondary)).
+			Background(theme.Color(theme.Footer))
 	styleStatusSuccess = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.Primary)).
-				Background(lipgloss.Color(theme.Footer))
+				Foreground(theme.Color(theme.Primary)).
+				Background(theme.Color(theme.Footer))
 	styleStatusWarning = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.Amber)).
-				Background(lipgloss.Color(theme.Footer))
+				Foreground(theme.Color(theme.Amber)).
+				Background(theme.Color(theme.Footer))
 	styleStatusError = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.Red)).
-				Background(lipgloss.Color(theme.Footer))
+				Foreground(theme.Color(theme.Red)).
+				Background(theme.Color(theme.Footer))
 
 	// Health pip and deprecation banner styles. OK is the active teal, Warn the
 	// attention amber, and Err the inline error red — the same three accents the
 	// rest of the dashboard states are painted in. styleBanner is a
 	// yellow-foreground accent so it reads as a warning without consuming a full
 	// background block.
-	stylePipOK   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
-	stylePipWarn = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
-	stylePipErr  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
-	styleBanner  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber)).Bold(true)
+	stylePipOK   = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary))
+	stylePipWarn = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
+	stylePipErr  = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
+	styleBanner  = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber)).Bold(true)
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection

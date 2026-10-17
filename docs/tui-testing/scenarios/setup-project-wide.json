@@ -1,0 +1,22 @@
+{
+  "name": "setup-project-wide",
+  "fixture": "setup_project",
+  "size": {
+    "width": 120,
+    "height": 24
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "type": "contains_text",
+      "text": "Add a project directory"
+    },
+    {
+      "type": "contains_text",
+      "text": "amx config edit"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

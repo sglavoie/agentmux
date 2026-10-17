@@ -121,8 +121,8 @@ extension WorkspaceDelegate where Self: AppDelegate {
 /// when its `amx attach` ends, when a live snapshot no longer lists its
 /// session, or when the window closes. None of those ends the agent.
 ///
-/// Only the × on an embedded session's row, or ⌘W on it, ends an agent, and
-/// both always ask first. The × on an opened
+/// The × on a session row and ⌘W detach its terminal. End Session… is
+/// a separate action that always asks before ending an agent. The × on an opened
 /// view closes that view and ends its program. A Kitty session and the
 /// Dashboard and Overview have none.
 ///
@@ -1132,8 +1132,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         return true
     }
 
-    /// ⌘W: closes what the pane is on, as the × on its row would. A view is
-    /// closed; an embedded session's agent is ended, after the same sheet.
+    /// ⌘W closes a utility view or detaches an embedded session terminal.
     /// Reports whether there was anything to close: a Kitty session is not
     /// the workspace's.
     @discardableResult
@@ -1146,8 +1145,18 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         if closeSelectedView() { return true }
         guard let row = state.selectedRow, row.embeddedRuntimeSessionID != nil else { return false }
-        closeSession(row.key)
+        detachSession(row.key)
         return true
+    }
+
+    /// Releases only this viewer. The live session stays listed and can be reopened.
+    func detachSession(_ key: AttentionCycler.Key) {
+        guard let row = state.row(key), let id = row.embeddedRuntimeSessionID, closing[id] == nil else { return }
+        detached.insert(id)
+        discardTerminal(id)
+        if place == .session(key), isSplit { _ = focusOtherPane(); collapseOtherPane() }
+        reloadSidebar(force: true)
+        updateContent(focus: false)
     }
 
     /// Closes a utility view, ending its program, whether or not the pane
@@ -1211,13 +1220,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// What ⌘W does where the pane is now, as its menu item says it.
     var closeShownTitle: String {
         if reviewSelected || viewSelection != nil { return Self.closeViewTitle }
-        if state.selectedRow?.embeddedRuntimeSessionID != nil { return Self.endSessionTitle }
+        if state.selectedRow?.embeddedRuntimeSessionID != nil { return Self.detachSessionTitle }
         return Self.closeTitle
     }
 
     static let closeTitle = "Close"
     static let closeViewTitle = "Close View"
     static let endSessionTitle = "End Session…"
+    static let detachSessionTitle = "Detach Terminal"
 
     /// Ends an embedded session's agent, always asking first: an idle agent's
     /// conversation is kept, but the agent is not. The row stays until a live
@@ -2735,7 +2745,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .detached(id):
             placeholder.show(
                 title: "Detached",
-                message: "This window let go of the session: it was attached somewhere else, or detached with F12. The agent is still running.",
+                message: "This window let go of the session. The agent is still running; reattach when you want to use it here.",
                 button: "Reattach",
                 isDefault: true
             ) { [weak self] in self?.reattach(id) }
@@ -2940,7 +2950,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 ?? WorkspaceRowCellView()
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
                       sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false)
-            cell.onClose = { [weak self] in self?.closeSession(row.key) }
+            cell.onClose = { [weak self] in self?.detachSession(row.key) }
             return cell
         }
     }
@@ -4062,8 +4072,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
         setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))
         closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
-        closeButton.toolTip = "End \(row.displayName)"
-        closeButton.setAccessibilityLabel("End \(row.displayName)")
+        closeButton.toolTip = "Detach \(row.displayName); agent keeps running"
+        closeButton.setAccessibilityLabel("Detach \(row.displayName); agent keeps running")
         syncTrailingRoom()
     }
 

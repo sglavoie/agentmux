@@ -14,7 +14,8 @@
 // each press is sent at once, and the form stays open on the screen that
 // results, since one prompt often leads to the next.
 //
-// The draft is the operator's prompt. It is drawn here and nowhere else: the
+// The draft is the operator's prompt. The root retains unsent drafts in memory
+// per session. Text is drawn here and nowhere else: the
 // State formats itself without it, so a model dump, a log line, or an error
 // can never carry it.
 //
@@ -33,7 +34,7 @@ import (
 )
 
 // State is everything the form holds. It is replaced wholesale when the form
-// closes, so clearing the draft is one assignment.
+// closes; the root keeps unsent drafts separately in process-local storage.
 type State struct {
 	Active bool
 	// Target is the row the form was opened on. It is never rewritten while
@@ -43,6 +44,8 @@ type State struct {
 	Title string
 	// Draft is the text being composed.
 	Draft string
+	// Cursor is a byte offset at a grapheme boundary.
+	Cursor int
 	// FocusKeys says the keys half has the keyboard.
 	FocusKeys bool
 	// Screen is the tail of the agent's screen, and ScreenErr why there is
@@ -95,9 +98,9 @@ const (
 )
 
 var (
-	styleHeader  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
-	styleDim     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleWarning = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleHeader  = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	styleDim     = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleWarning = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
 	styleBox     = theme.Popup()
 )
 
@@ -111,54 +114,59 @@ func Width(terminalWidth int) int {
 }
 
 // Render draws the form inside the overlay border.
-func Render(state State, terminalWidth int) string {
+func Render(state State, terminalWidth, terminalHeight int) string {
 	width := Width(terminalWidth)
-	return styleBox.Width(width).Render(strings.TrimRight(render(state, width), "\n"))
+	height := terminalHeight - styleBox.GetVerticalFrameSize()
+	if terminalHeight <= 0 {
+		height = 40
+	}
+	return styleBox.Width(width + styleBox.GetHorizontalFrameSize()).Render(strings.TrimRight(render(state, width, height), "\n"))
 }
 
-func render(state State, width int) string {
-	var lines []string
-	add := func(style lipgloss.Style, text string) {
-		for _, line := range layout.WrapHard(text, width) {
-			lines = append(lines, style.Render(line))
-		}
-	}
+func render(state State, width, height int) string {
 	title := state.Title
 	if title == "" {
 		title = "session"
 	}
-	add(styleHeader, "Send to "+title)
-	lines = append(lines, "")
-
-	add(styleDim, "Its screen")
-	lines = append(lines, screenBlock(state, width)...)
-	lines = append(lines, "")
-
-	if state.FocusKeys {
-		add(styleHeader, "Keys ▌")
-		add(styleDim, "each press is sent at once: 0-9  y  n  ↑ ↓ ← →  space  enter")
-	} else {
-		add(styleDim, "Keys")
+	heading := styleHeader.Render(layout.Truncate("Send to "+title, width, "…"))
+	if height < 8 {
+		return heading + "\n" + styleDim.Render(layout.Truncate("Enlarge terminal to edit", width, "…"))
 	}
-	lines = append(lines, "")
-
-	if state.FocusKeys {
-		add(styleDim, "Text")
-	} else {
-		add(styleHeader, "Text")
-	}
-	lines = append(lines, editorBlock(state, width)...)
-
+	notice := []string{}
 	if state.InFlight {
-		lines = append(lines, "", styleDim.Render("sending…"))
+		notice = []string{styleDim.Render("sending…")}
 	} else if state.Notice != "" {
-		lines = append(lines, "")
 		style := styleDim
 		if state.Warn {
 			style = styleWarning
 		}
-		add(style, state.Notice)
+		notice = layoutLines(style, state.Notice, width)
+		if len(notice) > 3 {
+			notice = append(notice[:2], style.Render(layout.Truncate("More in Action Feedback", width, "…")))
+		}
 	}
+	// Allocate screen and draft together so a full 14-line capture cannot push
+	// the editor below a short terminal. The caret remains inside the draft window.
+	fixed := 5 + len(notice)
+	if state.FocusKeys {
+		fixed++
+	}
+	available := max(2, height-fixed)
+	editorHeight := min(editorLines, max(1, available/2))
+	screenHeight := max(1, available-editorHeight)
+	screen := screenBlock(state, width)
+	if len(screen) > screenHeight {
+		screen = screen[len(screen)-screenHeight:]
+	}
+	lines := []string{heading, "", styleDim.Render("Its screen")}
+	lines = append(lines, screen...)
+	if state.FocusKeys {
+		lines = append(lines, styleHeader.Render("Keys ▌"), styleDim.Render(layout.Truncate("0-9 y n ↑↓←→ space enter · sent immediately", width, "…")), styleDim.Render("Text"))
+	} else {
+		lines = append(lines, styleDim.Render("Keys"), styleHeader.Render(layout.Truncate("Text · Enter: newline · arrows: move", width, "…")))
+	}
+	lines = append(lines, editorBlockHeight(state, width, editorHeight)...)
+	lines = append(lines, notice...)
 	return strings.Join(lines, "\n")
 }
 
@@ -193,25 +201,38 @@ func layoutLines(style lipgloss.Style, text string, width int) []string {
 
 // editorBlock is the draft with a caret while the text half has the keyboard.
 func editorBlock(state State, width int) []string {
+	return editorBlockHeight(state, width, editorLines)
+}
+
+func editorBlockHeight(state State, width, height int) []string {
 	if state.Draft == "" && state.FocusKeys {
 		return []string{styleDim.Render("(empty)")}
 	}
+	rows := editorRows(state.Draft, width)
+	cursor := min(max(state.Cursor, 0), len(state.Draft))
+	active := cursorRow(rows, cursor)
+	visible := max(1, height-2)
+	start := max(0, active-visible+1)
+	end := min(len(rows), start+visible)
 	var lines []string
-	for _, line := range strings.Split(state.Draft, "\n") {
-		if line == "" {
-			lines = append(lines, "")
-			continue
+	if start > 0 && height >= 3 {
+		lines = append(lines, styleDim.Render(layout.Truncate("↑ more text", width, "…")))
+	}
+	for i := start; i < end; i++ {
+		row := rows[i]
+		text := state.Draft[row.start:row.end]
+		if !state.FocusKeys && i == active {
+			at := min(cursor, row.end) - row.start
+			text = text[:at] + "▌" + text[at:]
 		}
-		lines = append(lines, layout.WrapHard(line, width)...)
+		if text == "" {
+			lines = append(lines, "")
+		} else {
+			lines = append(lines, layout.Truncate(text, width, ""))
+		}
 	}
-	if len(lines) == 0 {
-		lines = []string{""}
-	}
-	if !state.FocusKeys {
-		lines[len(lines)-1] += "▌"
-	}
-	if len(lines) > editorLines {
-		lines = lines[len(lines)-editorLines:]
+	if end < len(rows) && height >= 3 {
+		lines = append(lines, styleDim.Render(layout.Truncate("↓ more text", width, "…")))
 	}
 	return lines
 }

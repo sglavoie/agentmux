@@ -32,6 +32,16 @@ final class WorkspacePanesTests: XCTestCase {
         surfaces.removeAll()
     }
 
+    func testClosingOneAgentPaneDetachesOnlyThatPane() {
+        XCTAssertTrue(workspace.split(with: .embedded(two)))
+        XCTAssertTrue(workspace.closeShown())
+        XCTAssertFalse(workspace.isSplit)
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: one))
+        XCTAssertEqual(app.closed, [two])
+        XCTAssertEqual(app.ended, [])
+        XCTAssertNotNil(workspace.state.row(.embedded(two)))
+    }
+
     func testSplitFocusSwapAndSelectReuseAttachments() throws {
         XCTAssertTrue(workspace.split(with: .embedded(two)))
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: two))

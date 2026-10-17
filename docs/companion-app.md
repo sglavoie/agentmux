@@ -109,11 +109,12 @@ prompt would otherwise take the grant from the installed app. See
 ## Kitty (optional)
 
 Nothing in the app needs Kitty. **Launch projects in** (Preferences ›
-Workspace) is *Automatic* by default, which means the workspace: a Kitty that
-happens to be running takes no launch. Kitty is launched into only when that
-preference says **Kitty**, and then a launch with no Kitty to open a tab in
-fails and says so instead of becoming a tmux launch nobody chose. **Show in
-Kitty** and the Kitty socket preference are unchanged.
+Workspace) defaults to **Workspace (tmux)**. **Follow CLI configuration**
+reads the effective `config.toml` destination again before launching a project
+or resuming a closed conversation from Recent. **Kitty** explicitly launches into Kitty;
+if it cannot be reached the app reports the failure. The retired **Automatic**
+preference migrates to Workspace, preserving its destination. **Show in Kitty**
+and the Kitty socket preference are unchanged.
 
 For sessions that do run as Kitty tabs, focus, Recent, Mute, a dashboard shown
 in Kitty, and Launch Project sent to Kitty all reach it through its
@@ -192,11 +193,11 @@ terminals of their own beside the agents, and none of them needs Kitty.
   worktree editors) and from **View › New Shell** (⌘T). Each is listed while
   its program runs and goes away when it exits; **View › Close** (⌘W)
   ends the one you are on, and so does the × in the top right corner of its row.
-- The same × on a session's row **ends that session's agent**, as closing it
-  from the Dashboard does. It asks first when the agent is working or waiting
-  on you; an idle one closes at once. The conversation stays on disk and can
-  be resumed. ⌘W on a session does the same. A session that is a Kitty window
-  has no ×: close its tab.
+- The × on a session row and ⌘W **detach its terminal**. The agent keeps
+  running and stays in the sidebar; click its row or choose **Reattach** to
+  return. **Session › End Session…**, also in the row's context menu, ends
+  the agent after confirmation. Its conversation remains on disk. A Kitty
+  session has no ×; manage its terminal in Kitty.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you
   are on is working and lists it right under that session; pressed again, it
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[ stop

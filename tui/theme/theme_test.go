@@ -69,3 +69,39 @@ func luminance(hex string) float64 {
 	}
 	return 0.2126*channels[0] + 0.7152*channels[1] + 0.0722*channels[2]
 }
+
+func TestLightAndDarkThemesResolveExistingStylesAndKeepContrast(t *testing.T) {
+	t.Cleanup(func() { Configure("auto") })
+	style := Selected()
+	Configure("dark")
+	dark := style.Render("item")
+	ObserveBackground(false)
+	if style.Render("item") != dark {
+		t.Fatal("terminal overrode explicit dark preference")
+	}
+	Configure("auto")
+	ObserveBackground(false)
+	light := style.Render("item")
+	if light == dark || !strings.Contains(light, "38;2;32;38;48") {
+		t.Fatalf("existing style did not adapt: %q", light)
+	}
+	Configure("light")
+	ObserveBackground(true)
+	if style.Render("item") != light {
+		t.Fatal("terminal overrode explicit light preference")
+	}
+	for _, bg := range []string{"#FFFFFF", lightPalette[Surface], lightPalette[Selection], lightPalette[Footer]} {
+		for _, fg := range []string{Text, Muted, Disabled, Primary, Secondary, Amber, Red} {
+			a, b := luminance(lightPalette[fg]), luminance(bg)
+			if a < b {
+				a, b = b, a
+			}
+			if ratio := (a + 0.05) / (b + 0.05); ratio < 4.5 {
+				t.Errorf("light contrast %s on %s = %.2f", fg, bg, ratio)
+			}
+		}
+	}
+	if ansi.StringWidth(light) != ansi.StringWidth(dark) {
+		t.Fatal("appearance changed layout")
+	}
+}

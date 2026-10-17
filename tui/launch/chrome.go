@@ -5,20 +5,20 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/sglavoie/agentmux/tui/theme"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // Launcher styles stay local while deriving their colors from the shared palette.
 var (
 	styleSelected     = theme.Selected()
-	styleError        = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
-	styleDim          = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleSearch       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
-	styleHeader       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
-	styleAttentionRow = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleError        = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
+	styleDim          = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleSearch       = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
+	styleHeader       = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	styleAttentionRow = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
 
 	// styleOverlayBox wraps the profile-override overlay in a rounded border
 	// with the de-facto accent teal. Padding adds a single column of breathing

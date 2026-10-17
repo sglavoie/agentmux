@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -43,6 +45,8 @@ const childIndentWidth = 2
 // A non-positive Height means "unbounded": every row in Rows is rendered and
 // the ▲/▼ scroll indicators are suppressed.
 type ListInput struct {
+	// Setup is guidance from existing configuration and observed health.
+	Setup EmptyGuidance
 	// Items is the flattened projection of the filtered, sorted rows currently
 	// on screen: one entry per rendered line, indexed by Cursor and Offset. Its
 	// Rows half remains the source of truth every row's facts are read from.
@@ -500,6 +504,7 @@ func renderEmptyHero(in ListInput) string {
 	hasFilters := !in.Filter.IsEmpty()
 
 	title := "No running sessions."
+	detail := in.Setup.Detail
 	var hint heroHint
 	if in.Loading {
 		title = "Loading sessions…"
@@ -507,6 +512,11 @@ func renderEmptyHero(in ListInput) string {
 	} else if hasSessions && hasFilters {
 		title = "No sessions match the active filter."
 		hint = append(heroHint{{text: "press  "}, {text: "esc", key: true}, {text: "  to clear filters     "}}, heroAllKeysHint()...)
+	} else if in.Setup.Blocked {
+		if in.Setup.Title != "" {
+			title = in.Setup.Title
+		}
+		hint = append(heroHint{{text: "press  "}, {text: ":", key: true}, {text: "  for commands     "}}, heroAllKeysHint()...)
 	} else {
 		hint = append(heroHint{{text: "press  "}, {text: "l", key: true}, {text: "  to launch     "}}, heroAllKeysHint()...)
 	}
@@ -519,9 +529,21 @@ func renderEmptyHero(in ListInput) string {
 			width = w
 		}
 	}
-	body := layout.Center(styleEmptyHero.Render(title), width) + "\n\n" + layout.Center(hintLine, width) + "\n"
-	if !in.Loading && !hasSessions && !hasFilters {
-		body += "\n" + layout.Center(styleDim.Render("Configure projects: amx config edit"), width) + "\n"
+	body := ""
+	for _, line := range layout.WrapWords(title, width) {
+		body += layout.Center(styleEmptyHero.Render(line), width) + "\n"
+	}
+	body += "\n"
+	for _, line := range strings.Split(ansi.Wrap(hintLine, width, ""), "\n") {
+		body += layout.Center(line, width) + "\n"
+	}
+	if !in.Loading && !hasSessions && !hasFilters && detail != "" {
+		body += "\n"
+		for _, paragraph := range strings.Split(detail, "\n") {
+			for _, line := range layout.WrapWords(paragraph, max(1, width-4)) {
+				body += layout.Center(styleDim.Render(line), width) + "\n"
+			}
+		}
 	}
 	return body
 }

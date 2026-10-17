@@ -91,6 +91,8 @@ amx tui-test list-fixtures
 # family_unread
 # health_states
 # no_sessions
+# setup_profile
+# setup_project
 # paused_output
 # paused_queue
 # preview_failure
@@ -570,6 +572,12 @@ file. The exact inventory is:
 | [`project-session-shortcut.json`](scenarios/project-session-shortcut.json) | `basic` | dashboard `s` opens Past Sessions with the selected project filter |
 | [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
 | [`session-search-ending-wide.json`](scenarios/session-search-ending-wide.json) | `basic` | an unfiltered Past Sessions row follows its summary with `→` and how the conversation ended |
+| [`setup-profile-narrow.json`](scenarios/setup-profile-narrow.json) | `setup_profile` | empty dashboard names the missing setup step and fits the viewport |
+| [`setup-profile-wide.json`](scenarios/setup-profile-wide.json) | `setup_profile` | empty dashboard names the missing setup step and fits the viewport |
+| [`setup-project-narrow.json`](scenarios/setup-project-narrow.json) | `setup_project` | empty dashboard names the missing setup step and fits the viewport |
+| [`setup-project-wide.json`](scenarios/setup-project-wide.json) | `setup_project` | empty dashboard names the missing setup step and fits the viewport |
+| [`send-editor-narrow.json`](scenarios/send-editor-narrow.json) | `portable_tmux` | editing at 60×24 and reopening preserves the session draft and fits the overlay |
+| [`send-editor-wide.json`](scenarios/send-editor-wide.json) | `portable_tmux` | the same edit and draft recovery at 140×40 |
 | [`session-search-ending-narrow.json`](scenarios/session-search-ending-narrow.json) | `basic` | at 60 cells the summary yields room so the ending still shows, and the row fits |
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
 | [`session-view-hints-narrow-fit.json`](scenarios/session-view-hints-narrow-fit.json) | `basic` | transcript viewer hints truncate to the row budget and surface the actionable `? more` marker |

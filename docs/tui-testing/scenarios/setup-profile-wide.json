@@ -1,0 +1,22 @@
+{
+  "name": "setup-profile-wide",
+  "fixture": "setup_profile",
+  "size": {
+    "width": 120,
+    "height": 24
+  },
+  "actions": [],
+  "assertions": [
+    {
+      "type": "contains_text",
+      "text": "Add an agent profile"
+    },
+    {
+      "type": "contains_text",
+      "text": "amx config edit"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

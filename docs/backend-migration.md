@@ -169,7 +169,7 @@ removed. What changed is that nothing else depends on it:
 | A running session | reached on the backend it was launched on; a *recorded* empty backend means Kitty, so sessions and checkpoints from before the tmux backend read as they always did | the same |
 | Paired release gate | no step runs or names Kitty; `cockpit-smoke` is a real-tmux smoke that runs from any terminal and fails without a usable tmux | `just kitty-smoke`, from a Kitty window, in no gate |
 | Evidence record | schema 2: no `kitty-version` step, `environment.kitty` absent | schema-1 records, which name a Kitty, still load |
-| Agent Mux.app | **Launch projects in** › *Automatic* is the workspace, whatever is running | **Launch projects in** › *Kitty*; **Show in Kitty** and the Kitty socket preference are unchanged |
+| Agent Mux.app | **Launch projects in** defaults to *Workspace*; *Follow CLI configuration* is optional | **Launch projects in** › *Kitty*; **Show in Kitty** and the Kitty socket preference are unchanged |
 | `amx doctor` | `kitty`, `kitty_snapshot_stale`, and `renderer_drift` are raised only where Kitty is in use | unchanged |
 
 Still Kitty-shaped inside, and out of scope here: `kitty.UserVars` and
@@ -206,9 +206,9 @@ Done, with what holds it:
   `cmd/release.TestJustKittySmokeIsOptInAndFailsRatherThanSkips`.
 - **Evidence record.** `schema_version` 2 with `environment.kitty` optional;
   schema 1 still loads. `internal/release.TestLoadEvidenceStillReadsASchemaOneRecord`.
-- **App.** `LaunchBackendPreference.automatic` launches in the workspace.
-  `BackendSetupTests.testAutomaticLaunchesInTheWorkspace`,
-  `testKittyIsLaunchedIntoOnlyWhenChosen`.
+- **App.** The explicit default is Workspace; the retired automatic value migrates
+  to it. `BackendSetupTests.testFollowingCLIUsesTheReportedDestinationAndNeverGuesses`
+  covers the optional CLI-following choice and the preserved default.
 - **Coverage.** `portable_tmux` scenarios, narrow and wide, for resort, open
   shell and editor, the launch picker, and an action naming the tmux server
   (`docs/tui-testing/README.md`).

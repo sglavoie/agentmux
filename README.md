@@ -45,7 +45,7 @@ amx backend status --check
 amx
 ```
 
-Press `:` and choose **Open Launcher**, highlight your project, and press `Enter`.
+Press `l` to open the launcher, highlight your project, and press `Enter`.
 The launcher shows the destination and effective profile. `Enter` on the live
 session attaches; `F12` detaches back to the dashboard. Attached, `F1` shows
 the shortcuts and `F2` opens the live overview.

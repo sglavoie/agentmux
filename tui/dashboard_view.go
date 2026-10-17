@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
@@ -121,6 +122,7 @@ func dashboardListInput(m Model, width, height int) dashboard.ListInput {
 	now := modelNow(m)
 	return dashboard.ListInput{
 		Items:        m.items,
+		Setup:        dashboard.SetupGuidance(m.cfg, healthIssues(m)),
 		View:         m.listView,
 		Loading:      topologyLoading(m),
 		SessionCount: len(m.sessions),

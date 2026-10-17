@@ -208,6 +208,8 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"health_states":      healthStatesFixture,
 	"attention_overlap":  attentionOverlapFixture,
 	"no_sessions":        noSessionsFixture,
+	"setup_profile":      setupProfileFixture,
+	"setup_project":      setupProjectFixture,
 	"paused_queue":       pausedQueueFixture,
 	"preview_failure":    previewFailureFixture,
 	"portable_tmux":      portableTmuxFixture,

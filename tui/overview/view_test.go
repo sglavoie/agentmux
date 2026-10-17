@@ -850,6 +850,7 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"github.com/sglavoie/agentmux/internal/session":         true,
 		"github.com/sglavoie/agentmux/tui/commands":             true,
 		"github.com/sglavoie/agentmux/tui/dashboard":            true, // shared NeedsYou predicate
+		"github.com/sglavoie/agentmux/tui/theme":                true, // terminal appearance only
 		// The session-action vocabulary is types only on this side: the two
 		// action seams' signatures and the actionState field. Naming it here does
 		// not weaken the rule below, which is about the CALLS a file makes.

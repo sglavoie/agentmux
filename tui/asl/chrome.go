@@ -3,17 +3,18 @@ package asl
 import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // ASL styles stay local while deriving their colors from the shared palette.
 var (
 	styleSelected     = theme.Selected()
-	styleError        = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
-	styleDim          = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleHeader       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
-	styleStateWarning = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
-	styleBanner       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber)).Bold(true)
+	styleError        = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
+	styleDim          = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleHeader       = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	styleStateWarning = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
+	styleBanner       = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber)).Bold(true)
 
 	// styleOverlayBox wraps the response modal in a rounded border with the
 	// de-facto accent teal. Padding adds a single column of breathing room on

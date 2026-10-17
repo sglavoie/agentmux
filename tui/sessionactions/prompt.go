@@ -36,8 +36,8 @@ const promptNaturalWidth = 70
 // dashboard's confirm overlay derives them, so moving the rendering here does
 // not move its colors.
 var (
-	stylePromptVerb        = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
-	stylePromptConsequence = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	stylePromptVerb        = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	stylePromptConsequence = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
 	stylePromptBox         = theme.Popup()
 )
 

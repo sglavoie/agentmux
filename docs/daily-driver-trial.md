@@ -62,7 +62,7 @@ session that is already running.
    then `amx config validate` and `amx backend status --check`.
 
 2. Agent Mux.app: Preferences, Workspace: set **Launch projects in** to
-   **The workspace (tmux)** and turn on **Open the workspace at launch**.
+   **Workspace (tmux)** and turn on **Open the workspace at launch**.
 
 From then on a launch with no `--backend` starts an agent on the private tmux
 server and the workspace shows it. Sessions already in Kitty tabs stay where

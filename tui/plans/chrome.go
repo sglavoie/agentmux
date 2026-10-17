@@ -6,16 +6,17 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // Plan-view styles stay local while deriving their colors from the shared palette.
 var (
 	styleSelected = theme.Selected()
-	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
-	styleDim      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleSearch   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
-	styleHeader   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
+	styleError    = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
+	styleDim      = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleSearch   = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
+	styleHeader   = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 	styleChip     = lipgloss.NewStyle()
 )
 

@@ -262,13 +262,13 @@ var aslResponseFooterPalette = []footerEntry{
 	{"esc", "cancel", footerSectionApp, footerAlways, footerPriorityEssential},
 }
 
-// sendFooterPalette names the send form's keys. Enter means two things, and
-// the hint says which half each belongs to.
+// sendFooterPalette keeps the send, focus, discard and close actions visible.
+// Editor navigation is shown in the form and documented in Usage.
 var sendFooterPalette = []footerEntry{
 	{"ctrl+s", "send text", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"tab", "text/keys", footerSectionRow, footerAlways, footerPriorityEssential},
-	{"enter", "newline, or the key", footerSectionRow, footerAlways, footerPriorityPrimary},
-	{"esc", "close", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"ctrl+x", "discard draft", footerSectionRow, footerAlways, footerPriorityEssential},
+	{"esc", "keep & close", footerSectionApp, footerAlways, footerPriorityEssential},
 }
 
 // planRunFooterPalette names the run form's keys. Every row is a choice, so

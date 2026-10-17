@@ -753,13 +753,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
         if workspace?.closeShown() != true { NSSound.beep() }
     }
-    /// What ⌘W's item says it does: "Close View" on a utility view, "End
-    /// Session…" on an embedded session, and plain "Close" anywhere else.
+    /// What ⌘W closes: a view, a session attachment, or another window.
     var closeWorkspaceViewTitle: String {
         guard let workspace, workspace.isOpen, let key = NSApp.keyWindow, key === workspace.window else {
             return WorkspaceWindowController.closeTitle
         }
         return workspace.closeShownTitle
+    }
+    @objc func endWorkspaceSession(_ sender: Any?) {
+        guard let workspace, let row = workspace.shownSessionRow, row.embeddedRuntimeSessionID != nil else { return refuse(Self.noSessionShown) }
+        workspace.closeSession(row.key)
     }
     /// ⌘R: names the session the workspace's pane is on.
     @objc func nameSession(_ sender: Any?) {
@@ -2192,6 +2195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             gate: gate,
             dashboardPlace: prefs.dashboardPlace,
             launchBackend: prefs.launchBackend,
+            cliLaunchBackend: preferences.backend.cliLaunchBackend,
             // Only a shortcut the system took: one refused, taken by another
             // app, or set aside while a recorder listens does nothing.
             dashboardHotKey: dashboardHotKey?.registration.registeredCombo,
@@ -2297,16 +2301,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         )
     }
 
+    /// Read the same resolved default as the CLI at the moment of the action.
+    /// A failed read never guesses a destination or starts an agent.
+    private func resolveLaunchDestination(_ command: AMXCommand, completion: @escaping @MainActor (LaunchBackendPreference) -> Void) {
+        let generation = resolveGeneration
+        store.show(notice: "Checking launch destination…")
+        launchQueue.async { [weak self] in
+            let result = BackendStatus.fetch(command)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, generation == self.resolveGeneration else { return }
+                    switch result {
+                    case let .success(status):
+                        self.preferences.backend = .status(status)
+                        self.publishPreferences()
+                        self.statusItem?.refreshSubmenus()
+                        guard let choice = LaunchBackendPreference.followCLI.resolved(cliBackend: status.launchBackend) else {
+                            return self.reportFailure(title: Self.launchFailedTitle, "amx did not report a launch destination. Check amx backend status or choose Workspace or Kitty in Settings.")
+                        }
+                        completion(choice)
+                    case let .failure(error):
+                        self.reportFailure(title: Self.launchFailedTitle, "Could not read the CLI launch destination: \(error.message)")
+                    }
+                }
+            }
+        }
+    }
+
     /// Launch Project: the project launches on tmux and the workspace shows
     /// it. Only when Preferences names Kitty is it `amx project launch` in
     /// the Kitty used last, which is then brought forward on the new tab. A
     /// `directory` replaces the project's configured one for this launch.
-    private func launch(_ project: ProjectEntry, directory: String? = nil) {
+    private func launch(_ project: ProjectEntry, directory: String? = nil, destination: LaunchBackendPreference? = nil) {
         guard let command else {
             return reportFailure(title: Self.launchFailedTitle, preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
         }
         if let reason = gate.unavailableReason(.project) { return reportFailure(title: Self.launchFailedTitle, reason) }
-        if preferencesModel.preferences.launchBackend.launchesInWorkspace {
+        let choice = destination ?? preferencesModel.preferences.launchBackend
+        if choice == .followCLI {
+            resolveLaunchDestination(command) { [weak self] resolved in
+                self?.launch(project, directory: directory, destination: resolved)
+            }
+            return
+        }
+        if choice == .workspace {
             return launchInWorkspace(project, directory: directory, command: command)
         }
         let candidates = newTabCandidates()
@@ -2394,7 +2432,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// the Kitty it is pointed at, so asking it to continue a conversation
     /// live in another instance would resume a second copy instead of
     /// focusing the first.
-    private func continueConversation(_ conversation: RecentConversation) {
+    private func continueConversation(_ conversation: RecentConversation, destination: LaunchBackendPreference? = nil) {
         if let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
             focus(.focusing(live, title: conversation.displayName))
             return
@@ -2402,13 +2440,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard let command else {
             return reportFailure(title: Self.launchFailedTitle, preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
         }
+        let choice = destination ?? preferencesModel.preferences.launchBackend
+        if choice == .followCLI {
+            resolveLaunchDestination(command) { [weak self] resolved in
+                self?.continueConversation(conversation, destination: resolved)
+            }
+            return
+        }
         // The operator reads the name; the selector goes to the log only.
         Self.logger.notice("continuing \(conversation.selector, privacy: .public)")
         let label = "continue \(conversation.displayName)"
         let progress = Self.launchingNotice(conversation.displayName)
         store.show(notice: progress)
         let change = beginChange(Self.launchingChange(conversation.displayName))
-        if preferencesModel.preferences.launchBackend.launchesInWorkspace {
+        if choice == .workspace {
             let arguments = RecentSessions.workspaceContinueArguments(for: conversation)
             launchQueue.async { [weak self] in
                 let result = command.json(SessionContinueResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
@@ -2758,6 +2803,7 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(toggleRecentPlace(_:)),
         #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)),
         #selector(newSessionTerminal(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
+        #selector(endWorkspaceSession(_:)),
         #selector(focusNextSession(_:)), #selector(focusPreviousSession(_:)),
         #selector(pickSessionIcon(_:)), #selector(pickSessionColor(_:)),
         #selector(clearSessionState(_:)), #selector(toggleSessionMute(_:)), #selector(markSessionActive(_:)),
@@ -2777,6 +2823,8 @@ extension AppDelegate: NSMenuItemValidation {
 
     private func validateWorkspaceItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(endWorkspaceSession(_:)):
+            return workspace?.shownSessionRow?.embeddedRuntimeSessionID != nil
         case #selector(closeWorkspaceView(_:)):
             item.title = closeWorkspaceViewTitle
         case #selector(goToSession(_:)), #selector(showSessionInKitty(_:)):

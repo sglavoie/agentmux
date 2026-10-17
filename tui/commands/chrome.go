@@ -5,18 +5,19 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // Command styles stay local while deriving their colors from the shared palette.
 var (
 	styleSelected  = theme.Selected()
-	styleDim       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleSearch    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
-	styleFooter    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleHeader    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
+	styleDim       = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleSearch    = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
+	styleFooter    = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleHeader    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Primary)).
+			Foreground(theme.Color(theme.Primary)).
 			Bold(true)
 
 	// styleOverlayBox wraps the palette and actions popups in a rounded
@@ -28,7 +29,7 @@ var (
 	// styleFooterUnavailable renders actions that do not apply to the current
 	// cursor row. The dim grey foreground keeps the key visible while signaling
 	// that pressing it would be a no-op.
-	styleFooterUnavailable = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Disabled))
+	styleFooterUnavailable = lipgloss.NewStyle().Foreground(theme.Color(theme.Disabled))
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection

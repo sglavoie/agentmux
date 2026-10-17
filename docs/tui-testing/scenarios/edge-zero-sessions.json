@@ -32,7 +32,7 @@
     },
     {
       "type": "contains_text",
-      "text": "Configure projects: amx config edit"
+      "text": "Choose a project in the launcher."
     },
     {
       "type": "contains_text",

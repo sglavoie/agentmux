@@ -10,11 +10,13 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // Root model construction and the Bubble Tea entry points. Update is a pure
@@ -103,7 +105,9 @@ const firstTopologyRefreshSeq = 1
 // Init starts the refresh ticker and fetches the first session list. The
 // topology refresh it dispatches is the one newModel already armed.
 func (m Model) Init() tea.Cmd {
+	theme.ConfigureFromEnvironment()
 	cmds := []tea.Cmd{
+		tea.RequestBackgroundColor,
 		m.runTopologyRefreshCmd(m.topologyRefreshActiveSeq, m.initialSourceWindowID),
 		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		commands.Tick(m.interval),
@@ -128,6 +132,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		theme.ObserveBackground(msg.IsDark())
+		return m, nil
+	case tea.PasteMsg:
+		return m.handleSendPaste(msg)
 
 	case tea.WindowSizeMsg:
 		return m.handleWindowSize(msg)

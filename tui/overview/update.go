@@ -32,11 +32,15 @@ import (
 
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // Update routes one message.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		theme.ObserveBackground(msg.IsDark())
+		return m, nil
 	case commands.OverviewPreferencesMsg:
 		return m.handlePreferences(msg)
 	case tea.WindowSizeMsg:

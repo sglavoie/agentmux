@@ -75,7 +75,7 @@ func sendStep(t *testing.T, m Model, msg tea.Msg) Model {
 	if cmd == nil {
 		return m
 	}
-	if done, ok := cmd().(commands.SendDoneMsg); ok {
+	if done, ok := sendResult(cmd); ok {
 		updated, _ = m.Update(done)
 		m = updated.(Model)
 	}
@@ -141,7 +141,7 @@ func TestSendFormSendsTextOnPurposeAndThenCloses(t *testing.T) {
 	if m.mode != ModeList || m.send.Active || m.send.Draft != "" {
 		t.Fatalf("after a sent prompt: mode %v, form %v", m.mode, m.send)
 	}
-	if len(m.toasts) == 0 || !strings.Contains(m.toasts[0].Text, "sent to") {
+	if len(m.toasts) == 0 || !strings.Contains(m.toasts[0].Text, "Sent to") {
 		t.Fatalf("toasts = %+v, want one saying it was sent", m.toasts)
 	}
 }
@@ -218,7 +218,7 @@ func TestSendFormDropsAnswersMeantForAnEarlierForm(t *testing.T) {
 	m := typeString(sendFormOn(t, tmuxTestRow("stop")), "hello")
 	updated, cmd := m.Update(ctrlS)
 	m = updated.(Model)
-	late := cmd().(commands.SendDoneMsg)
+	late, _ := sendResult(cmd)
 	lateScreen := commands.SendScreenMsg{Seq: late.Seq, Text: "stale"}
 
 	m = pressKey(m, "esc")
@@ -231,7 +231,7 @@ func TestSendFormDropsAnswersMeantForAnEarlierForm(t *testing.T) {
 		updated, _ = m.Update(msg)
 		m = updated.(Model)
 	}
-	if !reflect.DeepEqual(m.send, before) || m.mode != ModeSend || len(m.toasts) != 0 {
+	if !reflect.DeepEqual(m.send, before) || m.mode != ModeSend || len(m.toasts) != 1 || m.toasts[0].Pending || m.toasts[0].Severity != toastSuccess {
 		t.Fatalf("a late answer changed the new form: %v -> %v", before, m.send)
 	}
 }
@@ -273,5 +273,143 @@ func TestSendFormFitsNarrowAndWideTerminals(t *testing.T) {
 	}
 	if _, ok := sendform.KeyFor("tab"); ok {
 		t.Fatal("tab is forwarded; it has to stay the form's own")
+	}
+}
+
+// Sending starts an independent notice ticker; only execute the send here.
+func sendResult(cmd tea.Cmd) (commands.SendDoneMsg, bool) {
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		return sendResult(batch[0])
+	}
+	done, ok := msg.(commands.SendDoneMsg)
+	return done, ok
+}
+
+func TestSendDraftEditingAndSessionIsolation(t *testing.T) {
+	m := sendFormOn(t, tmuxTestRow("stop"))
+	updated, _ := m.Update(tea.PasteMsg{Content: "first\r\n👩‍💻 café"})
+	m = updated.(Model)
+	m = pressKey(m, "home")
+	m = pressKey(m, "delete") // deletes the whole emoji
+	if m.send.Draft != "first\n café" {
+		t.Fatalf("draft after delete = %q", m.send.Draft)
+	}
+	m = pressKey(m, "end")
+	m = pressKey(m, "ctrl+w")
+	if m.send.Draft != "first\n " {
+		t.Fatalf("word deletion = %q", m.send.Draft)
+	}
+	m = pressKey(m, "esc")
+	other := tmuxTestRow("stop")
+	other.RuntimeSessionID = "rs-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	m, _ = m.openSendForm(other)
+	if m.send.Draft != "" {
+		t.Fatal("draft crossed session identities")
+	}
+	m = pressKey(m, "esc")
+	m, _ = m.openSendForm(tmuxTestRow("stop"))
+	if m.send.Draft != "first\n " {
+		t.Fatal("draft lost on close")
+	}
+	if strings.Contains(fmt.Sprintf("%v %+v %#v", m.sendDrafts, m.sendDrafts, m.sendDrafts), "first") {
+		t.Fatal("stored drafts exposed by formatting")
+	}
+	m = pressKey(m, "ctrl+x")
+	m = pressKey(m, "esc")
+	m, _ = m.openSendForm(tmuxTestRow("stop"))
+	if m.send.Draft != "" {
+		t.Fatal("explicit discard kept draft")
+	}
+}
+
+func TestSendLateFailureRemainsInFeedback(t *testing.T) {
+	recorder := installSendRecorder(t)
+	recorder.answers = []error{errors.New("connection lost")}
+	m := typeString(sendFormOn(t, tmuxTestRow("stop")), "private prompt")
+	updated, cmd := m.Update(ctrlS)
+	m = updated.(Model)
+	late, _ := sendResult(cmd)
+	m = pressKey(m, "esc")
+	updated, _ = m.Update(late)
+	m = updated.(Model)
+	if len(m.toasts) != 1 || !m.toasts[0].Persistent || m.toasts[0].Pending || !strings.Contains(m.toasts[0].Text, "Connection lost") {
+		t.Fatalf("late failure lost: %+v", m.toasts)
+	}
+	if !m.toasts[0].Target.HasSession {
+		t.Fatal("notice lost target")
+	}
+	m, _ = m.openSendForm(tmuxTestRow("stop"))
+	if m.send.Draft != "private prompt" {
+		t.Fatal("failed send lost draft")
+	}
+}
+
+func TestSendPasteInKeysModeNeverSends(t *testing.T) {
+	recorder := installSendRecorder(t)
+	m := sendFormOn(t, tmuxTestRow("key"))
+	updated, cmd := m.Update(tea.PasteMsg{Content: "1\ny"})
+	m = updated.(Model)
+	if cmd != nil || len(recorder.requests) != 0 || m.send.Draft != "" {
+		t.Fatal("paste answered a prompt")
+	}
+}
+
+func TestSendClosingAndReopeningCannotDuplicatePendingOperation(t *testing.T) {
+	recorder := installSendRecorder(t)
+	m := typeString(sendFormOn(t, tmuxTestRow("stop")), "first")
+	updated, cmd := m.Update(ctrlS)
+	m = updated.(Model)
+	m = pressKey(m, "esc")
+	m, _ = m.openSendForm(tmuxTestRow("stop"))
+	updated, duplicate := m.Update(ctrlS)
+	m = updated.(Model)
+	if duplicate != nil || !strings.Contains(m.send.Notice, "still waiting") {
+		t.Fatal("pending operation could be repeated")
+	}
+	m = typeString(m, " revised")
+	m = pressKey(m, "esc")
+	done, _ := sendResult(cmd)
+	updated, _ = m.Update(done)
+	m = updated.(Model)
+	m, _ = m.openSendForm(tmuxTestRow("stop"))
+	if m.send.Draft != "first revised" || len(recorder.requests) != 1 {
+		t.Fatal("late success erased newer draft or duplicated send")
+	}
+}
+
+func TestSendFullScreenAndLongDraftFitTogether(t *testing.T) {
+	for _, size := range [][2]int{{40, 20}, {60, 24}, {80, 24}, {140, 40}} {
+		m := sendFormOn(t, tmuxTestRow("stop"))
+		m.width, m.height = size[0], size[1]
+		m.send.Screen = strings.Repeat("agent output\n", 13) + "current prompt"
+		m.send.Insert(strings.Repeat("long line of text\n", 25))
+		box := renderSendBox(m)
+		if lines := strings.Count(box, "\n") + 1; lines > newRootChrome(m).bodyHeight() {
+			t.Fatalf("%v: %d lines exceed body", size, lines)
+		}
+		plain := ansi.Strip(box)
+		if !strings.Contains(plain, "current prompt") || !strings.Contains(plain, "▌") {
+			t.Fatalf("%v lost screen or caret: %s", size, plain)
+		}
+		for _, line := range strings.Split(box, "\n") {
+			if ansi.StringWidth(line) > m.width {
+				t.Fatalf("%v: overflowing line %q", size, line)
+			}
+		}
+	}
+}
+
+func TestRetainedDraftAndPendingSendStayPrivateInModelFormatting(t *testing.T) {
+	installSendRecorder(t)
+	const secret = "PRIVATE_DRAFT_SENTINEL"
+	m := typeString(sendFormOn(t, tmuxTestRow("stop")), secret)
+	updated, _ := m.Update(ctrlS)
+	m = updated.(Model)
+	m = pressKey(m, "esc")
+	for _, format := range []string{"%v", "%+v", "%#v"} {
+		if strings.Contains(fmt.Sprintf(format, m), secret) {
+			t.Fatalf("retained prompt exposed by %s", format)
+		}
 	}
 }

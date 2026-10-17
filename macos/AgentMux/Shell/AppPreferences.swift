@@ -62,7 +62,7 @@ struct AppPreferences: Equatable {
     /// Values amx runs with in place of the login shell's.
     var environment: [String: String] = [:]
     /// `amxLaunchBackend`: where Launch Project starts an agent.
-    var launchBackend: LaunchBackendPreference = .automatic
+    var launchBackend: LaunchBackendPreference = .workspace
     /// `amxOpenWorkspaceAtLaunch`: show the workspace window as soon as the
     /// app starts, even when it was closed last time.
     var openWorkspaceAtLaunch = false
@@ -91,8 +91,7 @@ struct AppPreferences: Equatable {
         preferences.snoozeUntil = defaults.object(forKey: Key.snoozeUntil) as? Date
         preferences.kittySocketOverride = trimmed(defaults.string(forKey: Key.kittySocketOverride))
         preferences.environment = EnvironmentOverrides.load(from: defaults)
-        preferences.launchBackend = defaults.string(forKey: Key.launchBackend)
-            .flatMap(LaunchBackendPreference.init(rawValue:)) ?? .automatic
+        preferences.launchBackend = LaunchBackendPreference.stored(defaults.string(forKey: Key.launchBackend))
         preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
         preferences.dashboardPlace = defaults.string(forKey: Key.dashboardPlace)

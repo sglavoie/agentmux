@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/sendform"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // The send form (ModeSend): answering the prompt a tmux session is showing,
@@ -34,6 +35,8 @@ func (m Model) openSendForm(rs session.RunningSession) (Model, tea.Cmd) {
 		FocusKeys: rs.State == "key" || rs.State == "question",
 		Seq:       m.send.Seq + 1,
 	}
+	m.send.Draft = m.sendDrafts.Get(string(rs.RuntimeSessionID))
+	m.send.Cursor = len(m.send.Draft)
 	m.mode = ModeSend
 	return m, commands.SendScreen(rs, m.send.Seq, 0)
 }
@@ -41,6 +44,7 @@ func (m Model) openSendForm(rs session.RunningSession) (Model, tea.Cmd) {
 // closeSendForm drops the form and everything in it. Seq survives, so an
 // answer still in flight to the closed form cannot match the next one.
 func (m *Model) closeSendForm() {
+	m.sendDrafts.Put(string(m.send.Target.RuntimeSessionID), m.send.Draft)
 	m.send = sendform.State{Seq: m.send.Seq}
 	m.mode = ModeList
 }
@@ -67,6 +71,11 @@ func (m Model) handleSendKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyTab, keyShiftTab:
 		m.send.FocusKeys = !m.send.FocusKeys
 		return m, nil
+	case "ctrl+x":
+		m.send.Draft, m.send.Cursor = "", 0
+		m.sendDrafts.Put(string(m.send.Target.RuntimeSessionID), "")
+		m.send.Confirmed = false
+		return m, nil
 	case keyCtrlS:
 		text := strings.TrimRight(m.send.Draft, "\n")
 		if strings.TrimSpace(text) == "" {
@@ -81,33 +90,80 @@ func (m Model) handleSendKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	switch key {
-	case keyEnter:
-		m.send.Draft += "\n"
-	case keyBackspace:
-		if runes := []rune(m.send.Draft); len(runes) > 0 {
-			m.send.Draft = string(runes[:len(runes)-1])
-		}
-	default:
-		m.send.Draft += msg.Key().Text
+	if !m.send.Edit(key, sendform.Width(m.width)) {
+		m.send.Insert(msg.Key().Text)
 	}
+
 	return m, nil
 }
 
+// sendOperation retains identity and a body-free notice after the form closes.
+type sendOperation struct {
+	Target   session.RunningSession
+	Title    string
+	NoticeID uint64
+	Draft    *sendform.Draft
+}
+
 func (m Model) submitSend(req commands.SendRequest) (tea.Model, tea.Cmd) {
+	for _, op := range m.sendOperations {
+		if op.Target.RuntimeSessionID == m.send.Target.RuntimeSessionID {
+			m.send.Notice, m.send.Warn = "A send to this session is still waiting for its result. Check Action Feedback before sending again.", true
+			return m, nil
+		}
+	}
 	req.Confirmed = m.send.Confirmed
 	m.send.Seq++
 	m.send.InFlight = true
 	m.send.Notice, m.send.Warn = "", false
-	return m, commands.Send(m.send.Target, req, m.send.Seq)
+	if m.sendOperations == nil {
+		m.sendOperations = make(map[int]sendOperation)
+	}
+	feedback := m.pushToast(Toast{Severity: toastInfo, Text: "Sending to " + m.send.Title, Pending: true,
+		Expires: modelNow(m).Add(progressToastTTL), Target: sessionactions.Target{Session: m.send.Target, HasSession: true}})
+	draft := sendform.Draft(m.send.Draft)
+	m.sendOperations[m.send.Seq] = sendOperation{Target: m.send.Target, Title: m.send.Title, NoticeID: m.nextNoticeID, Draft: &draft}
+	return m, tea.Batch(commands.Send(m.send.Target, req, m.send.Seq), feedback)
+}
+
+func (m *Model) finishSendNotice(op sendOperation, err error, retained bool) tea.Cmd {
+	notice := Toast{NoticeID: op.NoticeID, Target: sessionactions.Target{Session: op.Target, HasSession: true}, Severity: toastSuccess, Text: "Sent to " + op.Title, Persistent: retained}
+	if err != nil {
+		notice.Severity, notice.Text = toastWarning, "Send to "+op.Title+": "+sendRefusalText(err)
+	}
+	for i, t := range m.toasts {
+		if t.NoticeID == op.NoticeID {
+			notice.Occurred = t.Occurred
+			m.toasts = append(m.toasts[:i], m.toasts[i+1:]...)
+			break
+		}
+	}
+	return m.pushToast(notice)
+}
+
+func (m Model) handleSendPaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
+	if m.mode == ModeSend && m.send.Active && !m.send.InFlight && !m.send.FocusKeys {
+		m.send.Insert(msg.Content)
+	}
+	return m, nil
 }
 
 // handleSendDone shows what a send came to. Text that was written closes the
 // form: the prompt is the agent's now and the list is where its progress
 // shows. A key that was written keeps the form open on the screen it led to.
 func (m Model) handleSendDone(msg commands.SendDoneMsg) (tea.Model, tea.Cmd) {
-	if !m.send.Active || msg.Seq != m.send.Seq {
+	op, known := m.sendOperations[msg.Seq]
+	if !known {
 		return m, nil
+	}
+	delete(m.sendOperations, msg.Seq)
+	feedback := m.finishSendNotice(op, msg.Err, !m.send.Active || msg.Seq != m.send.Seq)
+	if !m.send.Active || msg.Seq != m.send.Seq {
+		// An accepted text is no longer an unsent draft. Never touch a newer form.
+		if msg.Err == nil && !msg.Keys && m.sendDrafts.Get(string(op.Target.RuntimeSessionID)) == string(*op.Draft) {
+			m.sendDrafts.Put(string(op.Target.RuntimeSessionID), "")
+		}
+		return m, feedback
 	}
 	m.send.InFlight = false
 	var refusal *commands.SendRefusal
@@ -115,19 +171,19 @@ func (m Model) handleSendDone(msg commands.SendDoneMsg) (tea.Model, tea.Cmd) {
 	case errors.As(msg.Err, &refusal) && refusal.Code == commands.SendRefusedConfirmation:
 		m.send.Confirmed = true
 		m.send.Notice, m.send.Warn = "This session runs an agent-session-loop run, and what is sent reaches its supervisor. Send again to confirm.", true
-		return m, nil
+		return m, feedback
 	case msg.Err != nil:
 		m.send.Notice, m.send.Warn = sendRefusalText(msg.Err), true
-		return m, commands.SendScreen(m.send.Target, m.send.Seq, 0)
+		return m, tea.Batch(feedback, commands.SendScreen(m.send.Target, m.send.Seq, 0))
 	}
 	m.send.Confirmed = false
 	if !msg.Keys {
-		title := m.send.Title
+		m.send.Draft = ""
 		m.closeSendForm()
-		return m, tea.Batch(m.pushToast(Toast{Severity: toastSuccess, Text: "sent to " + title}), m.requestTopologyRefresh())
+		return m, tea.Batch(feedback, m.requestTopologyRefresh())
 	}
 	m.send.Notice = "Sent."
-	return m, commands.SendScreen(m.send.Target, m.send.Seq, sendScreenSettle)
+	return m, tea.Batch(feedback, commands.SendScreen(m.send.Target, m.send.Seq, sendScreenSettle))
 }
 
 func (m Model) handleSendScreen(msg commands.SendScreenMsg) (tea.Model, tea.Cmd) {
@@ -141,7 +197,9 @@ func (m Model) handleSendScreen(msg commands.SendScreenMsg) (tea.Model, tea.Cmd)
 	return m, nil
 }
 
-func renderSendBox(m Model) string { return sendform.Render(m.send, m.width) }
+func renderSendBox(m Model) string {
+	return sendform.Render(m.send, m.width, newRootChrome(m).bodyHeight())
+}
 
 // sendRefusalText says what a refused send means in the form. The command's
 // own message names its flags, which are not what an operator in this form

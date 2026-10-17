@@ -590,9 +590,9 @@ func healthPlural(n int) string {
 // ── details overlay ──────────────────────────────────────────────────────────
 
 var (
-	styleHealthOK      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
-	styleHealthWarning = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
-	styleHealthFailed  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
+	styleHealthOK      = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary))
+	styleHealthWarning = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
+	styleHealthFailed  = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
 )
 
 func healthStateStyle(s HealthState) lipgloss.Style {

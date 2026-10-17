@@ -6,6 +6,18 @@ final class AppPreferencesTests: XCTestCase {
         UserDefaults(suiteName: "AppPreferencesTests-\(UUID().uuidString)")!
     }
 
+    func testLegacyLaunchDestinationMigratesAndFollowingCLIRoundTrips() {
+        let defaults = freshDefaults()
+        defaults.set("automatic", forKey: "amxLaunchBackend")
+        var preferences = AppPreferences.load(from: defaults)
+        XCTAssertEqual(preferences.launchBackend, .workspace)
+        preferences.save(to: defaults)
+        XCTAssertEqual(defaults.string(forKey: "amxLaunchBackend"), "workspace")
+        preferences.launchBackend = .followCLI
+        preferences.save(to: defaults)
+        XCTAssertEqual(AppPreferences.load(from: defaults).launchBackend, .followCLI)
+    }
+
     func testDefaults() {
         let preferences = AppPreferences.load(from: freshDefaults())
         XCTAssertEqual(preferences, AppPreferences())
@@ -21,7 +33,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertNil(preferences.snoozeUntil)
         XCTAssertEqual(preferences.kittySocketOverride, "")
         XCTAssertEqual(preferences.environment, [:])
-        XCTAssertEqual(preferences.launchBackend, .automatic)
+        XCTAssertEqual(preferences.launchBackend, .workspace)
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
         XCTAssertNil(preferences.defaultFontSize)
         XCTAssertEqual(preferences.dashboardPlace, .workspace)
@@ -48,7 +60,7 @@ final class AppPreferencesTests: XCTestCase {
         defaults.set("yes", forKey: "amxOpenWorkspaceAtLaunch")
         defaults.set("ghostty", forKey: "amxDashboardPlace")
         let stray = AppPreferences.load(from: defaults)
-        XCTAssertEqual(stray.launchBackend, .automatic)
+        XCTAssertEqual(stray.launchBackend, .workspace)
         XCTAssertFalse(stray.openWorkspaceAtLaunch)
         XCTAssertEqual(stray.dashboardPlace, .workspace)
     }

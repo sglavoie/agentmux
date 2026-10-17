@@ -42,6 +42,13 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 	// Every committed file is still executed below; rejecting untracked names
 	// prevents the documentation and acceptance recipe from silently diverging.
 	want := map[string]bool{
+		"setup-profile-narrow.json": false,
+		"setup-profile-wide.json":   false,
+		"setup-project-narrow.json": false,
+		"setup-project-wide.json":   false,
+
+		"send-editor-narrow.json":                              false,
+		"send-editor-wide.json":                                false,
 		"feedback-wide.json":                                   false,
 		"feedback-notices-wide.json":                           false,
 		"feedback-notices-narrow.json":                         false,

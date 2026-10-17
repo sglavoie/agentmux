@@ -78,6 +78,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // defaultRefreshInterval and defaultIdleThreshold are what an unset
@@ -308,11 +309,13 @@ func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) 
 // that is part of showing live panes, and an overview that paid for it would
 // spend an operator's first second on work they cannot see.
 func (m model) Init() tea.Cmd {
+	theme.ConfigureFromEnvironment()
 	var preferenceCmd tea.Cmd
 	if m.deps.preferences != nil {
 		preferenceCmd = m.deps.preferences(nil)
 	}
 	return tea.Batch(
+		tea.RequestBackgroundColor,
 		preferenceCmd,
 		m.deps.topology(m.refreshActiveSeq, m.startupSourceWindowID),
 		m.deps.tick(m.interval),

@@ -738,7 +738,7 @@ final class WorkspaceWindowTests: XCTestCase {
         try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: try index(of: key), makeIfNecessary: true) as? WorkspaceRowCellView)
     }
 
-    func testTheCloseButtonAsksEvenForAnIdleSession() throws {
+    func testExplicitEndSessionAsksEvenForAnIdleSession() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")
         workspace.activate(work)
@@ -748,7 +748,7 @@ final class WorkspaceWindowTests: XCTestCase {
 
         XCTAssertFalse(try cell(work.key).closeButton.isHidden)
         XCTAssertTrue(try cell(try row("web", "work").key).closeButton.isHidden, "a Kitty window is not the workspace's to close")
-        try cell(work.key).closeButton.performClick(nil)
+        workspace.closeSession(work.key)
         XCTAssertEqual(asked.map(\.0), [work], "an idle agent is ended only once the operator agrees")
         XCTAssertEqual(app.ended, [], "nothing ends before the answer")
         asked[0].1(true)
@@ -784,44 +784,36 @@ final class WorkspaceWindowTests: XCTestCase {
         var asked: [(WorkspaceRow, @MainActor (Bool) -> Void)] = []
         workspace.confirmClose = { row, answer in asked.append((row, answer)) }
 
-        try cell(busy.key).closeButton.performClick(nil)
+        workspace.closeSession(busy.key)
         XCTAssertEqual(asked.map(\.0), [busy])
         XCTAssertEqual(app.ended, [], "nothing ends before the answer")
         asked[0].1(false)
         XCTAssertEqual(app.ended, [])
         XCTAssertFalse(try cell(busy.key).closeButton.isHidden)
 
-        try cell(busy.key).closeButton.performClick(nil)
+        workspace.closeSession(busy.key)
         asked[1].1(true)
         XCTAssertEqual(app.ended, [F.runtimeID(2)])
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)), "the pane was elsewhere and stays there")
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
     }
 
-    func testCloseShownEndsTheSessionThePaneIsOnAsItsButtonDoes() throws {
+    func testClosingAnAttachmentKeepsTheAgentAndCanReattach() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let busy = try row("api", "personal")
-        workspace.activate(busy)
-        var asked: [(WorkspaceRow, @MainActor (Bool) -> Void)] = []
-        workspace.confirmClose = { row, answer in asked.append((row, answer)) }
-
+        workspace.activate(busy, reattaching: true)
+        workspace.confirmClose = { _, _ in XCTFail("detaching must not ask to end the agent") }
         XCTAssertTrue(workspace.closeShown())
-        XCTAssertEqual(asked.map(\.0), [busy])
-        XCTAssertEqual(app.ended, [], "nothing ends before the answer")
-        asked[0].1(true)
-        XCTAssertEqual(app.ended, [F.runtimeID(2)])
-
-        // An idle one asks too; a Kitty window is not the workspace's.
-        let idle = try row("api", "work")
-        workspace.activate(idle)
-        XCTAssertTrue(workspace.closeShown())
-        XCTAssertEqual(asked.map(\.0), [busy, idle])
-        XCTAssertEqual(app.ended, [F.runtimeID(2)])
-        asked[1].1(true)
-        XCTAssertEqual(app.ended, [F.runtimeID(2), F.runtimeID(1)])
-        workspace.select(try row("web", "work").key, focus: false)
-        XCTAssertFalse(workspace.closeShown())
-        XCTAssertEqual(app.ended, [F.runtimeID(2), F.runtimeID(1)])
+        XCTAssertEqual(app.ended, [])
+        XCTAssertEqual(app.closed, [F.runtimeID(2)])
+        XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(2)))
+        XCTAssertNotNil(workspace.state.row(busy.key))
+        workspace.activate(busy, reattaching: true)
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
+        try cell(busy.key).closeButton.performClick(nil)
+        XCTAssertEqual(app.ended, [])
+        XCTAssertEqual(app.closed, [F.runtimeID(2), F.runtimeID(2)])
+        XCTAssertTrue(try cell(busy.key).closeButton.toolTip?.contains("agent keeps running") == true)
     }
 
     func testASessionThatCouldNotBeClosedComesBack() throws {
@@ -833,7 +825,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.reportCloseProblem = { name, message in reported.append("\(name): \(message)") }
         workspace.confirmClose = { _, answer in answer(true) }
 
-        try cell(work.key).closeButton.performClick(nil)
+        workspace.closeSession(work.key)
         XCTAssertEqual(reported, ["api — work: tmux backend unavailable"])
         XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)], "its terminal is attached again")
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
@@ -862,7 +854,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.closeShownTitle, "Close")
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.activate(try row("api", "work"))
-        XCTAssertEqual(workspace.closeShownTitle, "End Session…")
+        XCTAssertEqual(workspace.closeShownTitle, "Detach Terminal")
         workspace.select(try row("web", "work").key)
         XCTAssertEqual(workspace.closeShownTitle, "Close", "a Kitty window is not the workspace's to end")
         workspace.showView(WorkspaceUtilityView.dashboard.id)

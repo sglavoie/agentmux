@@ -1,0 +1,55 @@
+{
+  "name": "send-editor-wide",
+  "fixture": "portable_tmux",
+  "size": {
+    "width": 140,
+    "height": 40
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "j"
+    },
+    {
+      "type": "key",
+      "key": "t"
+    },
+    {
+      "type": "text",
+      "text": "Review this change and keep the existing behavior."
+    },
+    {
+      "type": "key",
+      "key": "home"
+    },
+    {
+      "type": "text",
+      "text": "Please "
+    },
+    {
+      "type": "key",
+      "key": "esc"
+    },
+    {
+      "type": "key",
+      "key": "t"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "send"
+    },
+    {
+      "type": "contains_text",
+      "text": "Send to"
+    },
+    {
+      "type": "contains_text",
+      "text": "Please Review this change"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

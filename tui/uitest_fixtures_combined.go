@@ -190,3 +190,19 @@ func previewFailureFixture() uitestFixture {
 		},
 	}
 }
+
+func setupProfileFixture() uitestFixture {
+	f := noSessionsFixture()
+	f.Name = "setup_profile"
+	f.Description = "first session setup with no agent profiles"
+	f.Config.Profiles, f.Config.Accounts = nil, nil
+	f.Config.Projects, f.Config.Sessions = nil, nil
+	return f
+}
+func setupProjectFixture() uitestFixture {
+	f := noSessionsFixture()
+	f.Name = "setup_project"
+	f.Description = "first session setup with a profile but no project"
+	f.Config.Projects, f.Config.Sessions = nil, nil
+	return f
+}

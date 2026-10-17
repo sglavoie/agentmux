@@ -5,26 +5,26 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/sglavoie/agentmux/tui/theme"
 
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // History keeps its styles local but derives their colors from the shared
 // palette; timeline and detail-row styles remain specific to this view.
 var (
 	styleSelected = theme.Selected()
-	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
-	styleDim      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleSearch   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
-	styleFooter   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleHeader   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
+	styleError    = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
+	styleDim      = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleSearch   = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
+	styleFooter   = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleHeader   = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 	styleChip     = lipgloss.NewStyle()
-	styleBanner   = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber)).Bold(true)
+	styleBanner   = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber)).Bold(true)
 
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Primary)).
+			Foreground(theme.Color(theme.Primary)).
 			Bold(true)
 
 	// styleOverlayBox wraps the delete-choice prompt, the event detail pane,
@@ -36,7 +36,7 @@ var (
 
 	// styleAssistant colors assistant transcript lines with the active-teal
 	// already established for the `bolt` state.
-	styleAssistant = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
+	styleAssistant = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary))
 
 	// Detail-pane styles (ModeDetail). detailRowStyle is intentionally
 	// neutral so row text inherits the terminal's default foreground;
@@ -45,20 +45,20 @@ var (
 	// active-teal already established for `bolt` so the tool-name column
 	// reads as an accent without introducing a new palette color.
 	detailRowStyle  = lipgloss.NewStyle()
-	detailToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
+	detailToolStyle = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary))
 )
 
 // Timeline phase header and annotation styles (ModeDetail timeline sub-view).
 var (
-	styleTimelineActive   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(theme.Primary))
-	styleTimelineCompact  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(theme.Amber))
-	styleTimelineStop     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
-	styleTimelineError    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(theme.Red))
-	styleTimelineGap      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleTimelineSep      = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleTimelineTree     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleTimelineTool     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary))
-	styleTimelineExpanded = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted)).Italic(true)
+	styleTimelineActive   = lipgloss.NewStyle().Bold(true).Foreground(theme.Color(theme.Primary))
+	styleTimelineCompact  = lipgloss.NewStyle().Bold(true).Foreground(theme.Color(theme.Amber))
+	styleTimelineStop     = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
+	styleTimelineError    = lipgloss.NewStyle().Bold(true).Foreground(theme.Color(theme.Red))
+	styleTimelineGap      = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleTimelineSep      = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleTimelineTree     = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleTimelineTool     = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary))
+	styleTimelineExpanded = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted)).Italic(true)
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection

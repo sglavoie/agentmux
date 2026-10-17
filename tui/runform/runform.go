@@ -214,9 +214,9 @@ const (
 )
 
 var (
-	styleHeader  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
-	styleDim     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleWarning = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
+	styleHeader  = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	styleDim     = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleWarning = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
 	styleBox     = theme.Popup()
 )
 

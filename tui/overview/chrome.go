@@ -2,6 +2,7 @@ package overview
 
 import (
 	"charm.land/lipgloss/v2"
+
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
@@ -14,21 +15,21 @@ import (
 // selection rule in one sentence: the overview may paint the box, never what is
 // in it.
 var (
-	styleTitle                = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
-	styleDim                  = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleFeedback             = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Amber))
-	styleFooterKey            = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
-	styleFooterUnavailableKey = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Disabled)).Bold(true)
+	styleTitle                = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	styleDim                  = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleFeedback             = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
+	styleFooterKey            = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
+	styleFooterUnavailableKey = lipgloss.NewStyle().Foreground(theme.Color(theme.Disabled)).Bold(true)
 
 	// styleBorder is an unselected tile's quiet divider-colored box, so a screenful of them
 	// reads as a set of panes rather than as a drawing.
-	styleBorder = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Divider))
+	styleBorder = lipgloss.NewStyle().Foreground(theme.Color(theme.Divider))
 	// styleBorderSelected is the tile the keyboard is on. It is the footer's key
 	// color, which is the same teal the dashboard's hero hint uses for a binding,
 	// and bold on top.
-	styleBorderSelected = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Primary)).Bold(true)
+	styleBorderSelected = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
 	// The launching tab stays blue when the cursor moves elsewhere.
-	styleBorderSource = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary))
+	styleBorderSource = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary))
 )
 
 // borderSet is the six glyphs one tile's box is drawn from.

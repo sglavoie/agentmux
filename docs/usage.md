@@ -77,7 +77,7 @@ confirmed.
 | --- | --- |
 | CLI launch commands | `--backend`, then `[defaults] launch_backend`, then Kitty for compatibility |
 | Terminal dashboard | Configured backend; when unset, tmux outside Kitty and Kitty inside it |
-| App → Launch Project | App Settings → **Launch projects in**; Automatic means workspace (tmux), independently of the CLI configuration |
+| App → Launch Project | App Settings → **Launch projects in**: Workspace (default), Kitty, or Follow CLI configuration; the last reads the CLI default again before launching |
 | App → Run a Plan | Workspace (tmux), shown beside the supervisor selection |
 | Open an existing live session | Its recorded backend; launch preferences do not move it |
 
@@ -105,17 +105,30 @@ A lifecycle operation still awaiting its result after ten seconds says **Still
 waiting**. This is not a timeout verdict or permission to repeat it: inspect
 the live session and connection health first. A late result replaces that
 operation's notice. Dismissing a notice does not cancel the operation.
-Successful feedback still clears after four seconds, and close recovery keeps
+Successful feedback clears after four seconds, except a send whose form was
+closed: its outcome remains until dismissed. Close recovery keeps
 its separate 30-second deadline. Notices live for this dashboard process.
 Recovery resumes the exact conversation when its identity is known, validating
 its transcript first. Otherwise it explicitly offers a project relaunch. A failed
 resume never silently starts a fresh conversation.
+
+## Terminal appearance
+
+The dashboard, overview, and pickers adapt their colors to the terminal's
+reported background. If the terminal cannot report it, the dark palette is
+used. Set `AMX_TUI_THEME=light`, `dark`, or `auto` to override or restore
+automatic selection, for example `AMX_TUI_THEME=light amx`. Captured agent
+output keeps its original colors.
 
 ## Dashboard
 
 ```bash
 amx
 ```
+
+With no sessions, the dashboard uses existing configuration and health checks
+to suggest adding a profile, adding a project, checking connection health, or
+pressing `l` to launch.
 
 This opens the dashboard, or focuses the existing dashboard tab if one is
 already running. When opened with the bundled `Ctrl+Shift+D` binding, the
@@ -163,7 +176,13 @@ below for where each key went.
   pressed where nothing is asked, and a session running an agent-session-loop
   run asks you to send a second time to confirm. The key is dead on a Kitty
   row, and on a row whose run has a question open, which is answered from Runs.
-  Pasting into the form is not supported; pipe to `amx send --stdin` for that
+  The Text half supports paste, arrow keys, Home/End, Ctrl+Home/End,
+  Ctrl+w or Alt+Backspace to delete a word, and Page Up/Down to navigate long
+  drafts. Paste never presses keys in the Keys half. Escape keeps an unsent
+  draft in memory for that session; Ctrl+x explicitly discards it. Drafts are
+  never saved to disk and disappear when the dashboard exits. A pending send
+  continues after Escape, and its outcome appears in Action Feedback; another
+  send to that session waits for the outcome.
 - `u`: resume the exact conversation when known, otherwise relaunch the project, while the 30-second recovery
   window named on the toast is still open
 - `:`: open the command palette; it is one line per command rather than a card,

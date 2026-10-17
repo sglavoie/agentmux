@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
@@ -18,12 +19,12 @@ import (
 
 var (
 	styleSelected  = theme.Selected()
-	styleError     = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Red))
-	styleDim       = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	styleHeader    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Bold(true)
-	styleFooter    = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	styleError     = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
+	styleDim       = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleHeader    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	styleFooter    = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
 	styleFooterKey = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Primary)).
+			Foreground(theme.Color(theme.Primary)).
 			Bold(true)
 )
 

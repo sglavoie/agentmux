@@ -112,7 +112,7 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertEqual(asked, ["release notes"])
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil,
                                                      row: try index(of: .embedded(F.runtimeID(1)))) as? WorkspaceRowCellView)
-        XCTAssertEqual(cell.closeButton.toolTip, "End release notes")
+        XCTAssertEqual(cell.closeButton.toolTip, "Detach release notes; agent keeps running")
     }
 
     func testAViewAboutASessionNamesIt() throws {

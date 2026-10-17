@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -543,8 +544,10 @@ type Model struct {
 	// success, and mode exit.
 	aslResponse asl.ResponseState
 	// send is the send form (ModeSend). It holds the operator's draft and is
-	// zeroed wholesale when the form closes.
-	send sendform.State
+	// cleared when the form closes; unsent drafts and pending sends outlive it.
+	send           sendform.State
+	sendDrafts     sendform.Drafts
+	sendOperations map[int]sendOperation
 	// planRun is the run form (ModePlanRun), zeroed wholesale when it closes.
 	planRun runform.State
 	// aslOperations is the bounded body-free receipt window shown next to the

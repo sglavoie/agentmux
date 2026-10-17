@@ -153,7 +153,7 @@ enum WorkspaceMenu {
         view.addItem(.separator())
         // ⌘W closes what the pane is on, as it closes a tab elsewhere; the
         // window itself is ⌘⇧W. Its title follows what that is
-        // (`AppDelegate.validateMenuItem`): Close View, or End Session….
+        // (`AppDelegate.validateMenuItem`): Close View, or Detach Terminal.
         view.addItem(item(WorkspaceWindowController.closeTitle, #selector(AppDelegate.closeWorkspaceView(_:)), "w", target: target))
 
         let session = submenu("Session", in: main)
@@ -163,6 +163,7 @@ enum WorkspaceMenu {
         session.addItem(item("New Terminal Below", #selector(AppDelegate.newSessionTerminal(_:)), "\r", target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))
         session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), "", target: target))
+        session.addItem(item(WorkspaceWindowController.endSessionTitle, #selector(AppDelegate.endWorkspaceSession(_:)), "", target: target))
         session.addItem(.separator())
         session.addItem(item("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
         session.addItem(item("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))

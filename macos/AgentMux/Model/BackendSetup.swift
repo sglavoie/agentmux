@@ -2,37 +2,49 @@ import Foundation
 
 /// Where Launch Project starts an agent (`amxLaunchBackend`).
 enum LaunchBackendPreference: String, CaseIterable, Equatable {
-    /// The workspace. A running Kitty changes nothing: Kitty is launched
-    /// into only when chosen.
-    case automatic
-    /// Always a Kitty tab; with no Kitty the launch fails and says so.
+    case followCLI = "follow-cli"
     case kitty
-    /// Always the private tmux server, shown in the workspace.
     case workspace
+
+    /// Preserve the destination of the retired automatic preference on upgrade.
+    static func stored(_ value: String?) -> Self {
+        if value == "automatic" { return .workspace }
+        return value.flatMap(Self.init(rawValue:)) ?? .workspace
+    }
 
     var label: String {
         switch self {
-        case .automatic: return "Automatic (the workspace)"
+        case .followCLI: return "Follow CLI configuration"
         case .kitty: return "Kitty"
-        case .workspace: return "The workspace (tmux)"
+        case .workspace: return "Workspace (tmux)"
         }
     }
 
-    var destination: String { launchesInWorkspace ? "workspace (tmux)" : "Kitty" }
+    func resolved(cliBackend: String?) -> Self? {
+        guard self == .followCLI else { return self }
+        switch cliBackend {
+        case "tmux": return .workspace
+        case "kitty": return .kitty
+        default: return nil
+        }
+    }
+
+    func destination(cliBackend: String?) -> String {
+        switch resolved(cliBackend: cliBackend) {
+        case .workspace: return "workspace (tmux)"
+        case .kitty: return "Kitty"
+        default: return "CLI configuration (checking destination)"
+        }
+    }
 
     func explanation(cliBackend: String?) -> String {
+        if self == .followCLI {
+            return "Launch Project and Recent conversation resumes follow config.toml: \(destination(cliBackend: cliBackend)). The destination is checked again before launching. Run a Plan always uses the workspace."
+        }
         let cli = cliBackend == "tmux" ? "tmux" : cliBackend == "kitty" ? "Kitty" : "unknown (check amx backend status)"
-        return "Launch Project uses \(destination). This app preference overrides config.toml for that action. Command-line launches use \(cli) unless --backend overrides it. Run a Plan always uses the workspace."
+        return "Launch Project uses \(destination(cliBackend: cliBackend)). This app preference overrides config.toml for that action. Command-line launches use \(cli) unless --backend overrides it. Run a Plan always uses the workspace."
     }
 
-    /// Whether a launch goes to the workspace. What happens to be running
-    /// never decides it.
-    var launchesInWorkspace: Bool {
-        switch self {
-        case .automatic, .workspace: return true
-        case .kitty: return false
-        }
-    }
 }
 
 /// `amx backend status --json`: which tmux the private server runs, whether a
@@ -179,6 +191,11 @@ enum BackendSetup: Equatable {
         case let .success(status): self = .status(status)
         case let .failure(error): self = .unavailable(error.message)
         }
+    }
+
+    var cliLaunchBackend: String? {
+        if case let .status(status) = self { return status.launchBackend }
+        return nil
     }
 
     var lines: [(String, String)] {

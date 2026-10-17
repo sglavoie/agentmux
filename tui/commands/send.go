@@ -52,8 +52,8 @@ const SendRefusedConfirmation = "confirmation_required"
 // ErrNoSend reports a surface that was started with no way to send.
 var ErrNoSend = errors.New("this surface cannot send to sessions")
 
-// SendDoneMsg reports one send. Seq is the form's own counter, so a reply
-// that outlived its form is dropped.
+// SendDoneMsg reports one send. Seq identifies the operation even after its
+// form closes; the root retains its outcome without updating a newer form.
 type SendDoneMsg struct {
 	Seq    int
 	Keys   bool

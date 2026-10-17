@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // keybindingsModel is a minimal Bubble Tea model for the keybindings overlay.
@@ -25,10 +26,16 @@ func (m keybindingsModel) listed() []kittykeys.Action {
 	return kittykeys.Actions
 }
 
-func (m keybindingsModel) Init() tea.Cmd { return nil }
+func (m keybindingsModel) Init() tea.Cmd {
+	theme.ConfigureFromEnvironment()
+	return tea.RequestBackgroundColor
+}
 
 func (m keybindingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		theme.ObserveBackground(msg.IsDark())
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height

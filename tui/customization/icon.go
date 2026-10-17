@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // IconContext holds the inputs needed by the harness icon picker overlay.
@@ -66,7 +67,10 @@ func newIconPickerModel(ctx IconContext) (iconPickerModel, error) {
 	return iconPickerModel{ctx: ctx, cursor: cursor, items: items}, nil
 }
 
-func (m iconPickerModel) Init() tea.Cmd { return nil }
+func (m iconPickerModel) Init() tea.Cmd {
+	theme.ConfigureFromEnvironment()
+	return tea.RequestBackgroundColor
+}
 
 func (m iconPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	key, ok := msg.(tea.KeyPressMsg)

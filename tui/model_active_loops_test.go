@@ -52,7 +52,7 @@ func TestInitSchedulesActiveLoopRefresh(t *testing.T) {
 	if len(cmds) < 2 {
 		t.Fatalf("init batch command count = %d, want at least 2", len(cmds))
 	}
-	msg, ok := cmds[1]().(commands.ActiveLoopsMsg)
+	msg, ok := cmds[2]().(commands.ActiveLoopsMsg)
 	if !ok {
 		t.Fatalf("init command produced %T, want commands.ActiveLoopsMsg", msg)
 	}

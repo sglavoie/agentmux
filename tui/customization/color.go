@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // ColorContext holds the inputs needed by the color picker overlay.
@@ -66,10 +67,16 @@ func newColorPickerModel(ctx ColorContext) colorPickerModel {
 	return colorPickerModel{ctx: ctx, cursor: initialCursor, items: items}
 }
 
-func (m colorPickerModel) Init() tea.Cmd { return nil }
+func (m colorPickerModel) Init() tea.Cmd {
+	theme.ConfigureFromEnvironment()
+	return tea.RequestBackgroundColor
+}
 
 func (m colorPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		theme.ObserveBackground(msg.IsDark())
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
 	case tea.KeyPressMsg:
