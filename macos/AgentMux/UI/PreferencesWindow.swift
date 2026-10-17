@@ -503,6 +503,9 @@ struct PreferencesView: View {
             }
 
             Section("Workspace") {
+                Toggle("Confirm before closing views or ending sessions", isOn: $model.preferences.confirmBeforeClosing)
+                note("When off, Close View (⌘W) ends its program and End Session (⌘⇧W) stops the agent immediately. "
+                    + "This also applies to the same actions in menus and the sidebar.")
                 LabeledContent("Default zoom") {
                     HStack {
                         if model.preferences.defaultFontSize != nil {

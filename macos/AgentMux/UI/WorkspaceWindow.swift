@@ -386,6 +386,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// snapshot no longer lists them: whether the pane was on each when it
     /// was closed, and whether amx has answered.
     private var closing: [String: (wasShown: Bool, answered: Bool)] = [:]
+    /// Settings controls close actions, including Ghostty's close callback.
+    /// App quit confirmation remains independent of this preference.
+    var confirmBeforeClosing = true
     /// Stands in for the sheet that asks before a session is closed, for
     /// tests. Answers on the main actor.
     var confirmClose: ((_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
@@ -1166,10 +1169,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     /// Closes a utility view, ending its program, whether or not the pane
     /// shows it. A shell, editor, or pager whose program still needs it is
-    /// closed only once the operator agrees.
+    /// confirmed first when the close confirmation setting is enabled.
     func closeView(_ id: String) {
         guard let view = views.view(id) else { return }
-        guard needsConfirmBeforeClosing(id) else {
+        guard confirmBeforeClosing, needsConfirmBeforeClosing(id) else {
             closeViewNow(id)
             return
         }
@@ -1234,12 +1237,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static let endSessionTitle = "End Session…"
     static let detachSessionTitle = "Detach Terminal"
 
-    /// Ends an embedded session's agent, always asking first: an idle agent's
+    /// Ends an embedded session's agent, asking first by default: an idle agent's
     /// conversation is kept, but the agent is not. The row stays until a live
     /// snapshot drops it; if the pane was on the session it goes to the
     /// Dashboard.
     func closeSession(_ key: AttentionCycler.Key) {
         guard let row = state.row(key), let id = row.embeddedRuntimeSessionID, closing[id] == nil else { return }
+        guard confirmBeforeClosing else {
+            endSession(row, id)
+            return
+        }
         (confirmClose ?? askToClose)(row) { [weak self] confirmed in
             guard let self, confirmed, self.closing[id] == nil, let row = self.state.row(key) else { return }
             self.endSession(row, id)
@@ -1905,11 +1912,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// A terminal asked to be closed. A utility view whose program Ghostty
-    /// says is still running (`needsConfirm`) is closed only once the
-    /// operator agrees; an attachment's close only detaches, so it is never
+    /// says is still running (`needsConfirm`) asks first when confirmation
+    /// is enabled; an attachment's close only detaches, so it is never
     /// asked about.
     func terminalAskedToClose(_ view: NSView, needsConfirm: Bool) {
-        guard needsConfirm, let id = viewTerminals.first(where: { $0.value.view === view })?.key,
+        guard confirmBeforeClosing, needsConfirm, let id = viewTerminals.first(where: { $0.value.view === view })?.key,
               let utility = views.view(id), utility.asksBeforeClosing else {
             terminalEnded(view)
             return

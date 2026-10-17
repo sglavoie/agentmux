@@ -25,11 +25,13 @@ struct AppPreferences: Equatable {
         static let defaultFontSize = "amxDefaultFontSize"
         static let dashboardPlace = "amxDashboardPlace"
         static let terminalTheme = "amxTerminalTheme"
+        static let confirmBeforeClosing = "amxConfirmBeforeClosing"
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
             launchBackend, openWorkspaceAtLaunch, defaultFontSize, dashboardPlace, terminalTheme, workspaceShortcuts,
+            confirmBeforeClosing,
         ]
     }
 
@@ -66,6 +68,8 @@ struct AppPreferences: Equatable {
     /// `amxOpenWorkspaceAtLaunch`: show the workspace window as soon as the
     /// app starts, even when it was closed last time.
     var openWorkspaceAtLaunch = false
+    /// Ask before closing a utility program or ending a session; applies live.
+    var confirmBeforeClosing = true
     /// The terminal size at launch and on ⌘⇧-; nil uses the Ghostty config.
     var defaultFontSize: Float?
     /// `amxDashboardPlace`: where the dashboard shortcut shows the dashboard.
@@ -93,6 +97,7 @@ struct AppPreferences: Equatable {
         preferences.environment = EnvironmentOverrides.load(from: defaults)
         preferences.launchBackend = LaunchBackendPreference.stored(defaults.string(forKey: Key.launchBackend))
         preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
+        preferences.confirmBeforeClosing = bool(defaults, Key.confirmBeforeClosing) ?? true
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
         preferences.dashboardPlace = defaults.string(forKey: Key.dashboardPlace)
             .flatMap(DashboardPlacePreference.init(rawValue:)) ?? .workspace
@@ -124,6 +129,7 @@ struct AppPreferences: Equatable {
         EnvironmentOverrides.save(environment, to: defaults)
         defaults.set(launchBackend.rawValue, forKey: Key.launchBackend)
         defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
+        defaults.set(confirmBeforeClosing, forKey: Key.confirmBeforeClosing)
         DefaultFontSize.save(defaultFontSize, to: defaults)
         defaults.set(dashboardPlace.rawValue, forKey: Key.dashboardPlace)
         if let terminalTheme {

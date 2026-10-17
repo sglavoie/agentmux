@@ -35,6 +35,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.environment, [:])
         XCTAssertEqual(preferences.launchBackend, .workspace)
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
+        XCTAssertTrue(preferences.confirmBeforeClosing)
         XCTAssertNil(preferences.defaultFontSize)
         XCTAssertEqual(preferences.dashboardPlace, .workspace)
     }
@@ -70,7 +71,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts",
+            "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing",
         ])
     }
 
@@ -79,6 +80,7 @@ final class AppPreferencesTests: XCTestCase {
         var preferences = AppPreferences()
         preferences.binaryPath = " ~/bin/amx "
         preferences.launchAtLogin = true
+        preferences.confirmBeforeClosing = false
         preferences.hotKeyDashboard = nil
         preferences.hotKeyNextAttention = HotKeyCombo(string: "ctrl+opt+j")
         preferences.statusStyle = .compact
@@ -266,6 +268,25 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(applied.value(of: "PATH"), "/opt/bin")
         XCTAssertEqual(EnvironmentOverrides.names(detected: shell),
                        EnvironmentOverrides.commonNames + ["XDG_RUNTIME_DIR"])
+    }
+
+    @MainActor
+    func testCloseConfirmationPersistsAndChangesImmediately() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        var changes: [Bool] = []
+        model.onChange = { _, new in changes.append(new.confirmBeforeClosing) }
+        model.preferences.confirmBeforeClosing = false
+        XCTAssertFalse(AppPreferences.load(from: defaults).confirmBeforeClosing)
+        XCTAssertFalse(PreferencesModel(defaults: defaults).preferences.confirmBeforeClosing)
+        model.preferences.confirmBeforeClosing = true
+        XCTAssertTrue(AppPreferences.load(from: defaults).confirmBeforeClosing)
+        XCTAssertEqual(changes, [false, true])
+
+        for invalid: Any in ["false", 0, 1] {
+            defaults.set(invalid, forKey: AppPreferences.Key.confirmBeforeClosing)
+            XCTAssertTrue(AppPreferences.load(from: defaults).confirmBeforeClosing)
+        }
     }
 
     @MainActor

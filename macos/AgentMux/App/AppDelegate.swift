@@ -412,6 +412,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private func workspaceController() -> WorkspaceWindowController {
         if let workspace { return workspace }
         let controller = WorkspaceWindowController(delegate: self)
+        controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing
         workspace = controller
         if !Self.isRunningTests {
             controller.onLayoutChanged = { WorkspaceRestoration.saveLayout($0) }
@@ -1835,6 +1836,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     private func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
+        workspace?.confirmBeforeClosing = new.confirmBeforeClosing
         switch Self.terminalReload(from: old, to: new) {
         case .resetFontSize: applyDefaultFontSize()
         case .keepZoom: terminals?.reloadConfig()

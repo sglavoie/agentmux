@@ -444,10 +444,14 @@ ASL answer panel work the same either way.
 - **Closing from the sidebar.** A session row's × and ⌘W detach its terminal,
   leaving the agent running and listed. Click the row or choose Reattach to
   return. The Session menu and row context menu provide **End Session…** (⌘⇧W),
-  which runs `amx close <runtime-session-id> --yes` only after confirmation.
+  which runs `amx close <runtime-session-id> --yes` after confirmation by default.
   Its conversation stays on disk. ⌘W's menu item says **Detach Terminal** on
   a session and **Close View** on a utility view. Closing a utility view ends
   its program, asking first when Ghostty reports it still needs confirmation.
+  Turn off **Confirm before closing views or ending sessions** in Settings →
+  Workspace to skip both close confirmations immediately, including the same
+  actions in menus and the sidebar. This choice persists across launches;
+  app quit confirmation remains enabled.
   Kitty sessions, Dashboard, and Overview have no sidebar ×.
 
 - **Losing the daemon.** `WorkspaceState` replaces its rows only from a live
@@ -498,7 +502,7 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session attachment as its × does; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session after confirmation), ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session attachment as its × does; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session, with confirmation enabled by default), ⌘M,
   ⌘, and ⌘Q.
 - **Two panes.** View and the command palette can split with a session shell or
   native checkout review; the palette can also select another agent. Clicking a
@@ -1163,6 +1167,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxLaunchBackend` | `workspace` | `workspace` uses tmux; `kitty` explicitly uses Kitty; `follow-cli` reads the CLI configuration before project launches and Recent conversation resumes. A stored legacy `automatic` migrates to `workspace`. Unknown or missing values use `workspace`. |
 | `amxDashboardPlace` | `workspace` | Where the dashboard shortcut and Open Dashboard show the dashboard: `workspace` (the workspace's own view), or `kitty` (a dashboard tab in Kitty when a Kitty is running, else the workspace). |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
+| `amxConfirmBeforeClosing` | true | Asks before closing a running utility view (⌘W) or ending a session (⌘⇧W). Changes apply immediately to shortcuts, menus, and sidebar close actions; app quit confirmation is separate. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
 | `amxTerminalTheme` | none | The Ghostty `theme` every terminal uses, as Ghostty writes it: `Name` or `light:Name,dark:Name`; unset uses the Ghostty config. Changes recolor all open terminals. |
 

@@ -808,6 +808,29 @@ final class WorkspaceWindowTests: XCTestCase {
         try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: try index(of: key), makeIfNecessary: true) as? WorkspaceRowCellView)
     }
 
+    func testEndSessionCanSkipConfirmationAndRestoreItImmediately() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let busy = try row("api", "personal")
+        workspace.activate(busy)
+        app.holdsCloses = true
+        var asked: [WorkspaceRow] = []
+        workspace.confirmClose = { row, answer in asked.append(row); answer(false) }
+
+        workspace.confirmBeforeClosing = false
+        workspace.closeSession(busy.key)
+        XCTAssertTrue(asked.isEmpty)
+        XCTAssertEqual(app.ended, [F.runtimeID(2)])
+        XCTAssertEqual(app.closed, [F.runtimeID(2)])
+        workspace.closeSession(busy.key)
+        XCTAssertEqual(app.ended, [F.runtimeID(2)], "an in-flight close cannot be duplicated")
+
+        workspace.confirmBeforeClosing = true
+        let idle = try row("api", "work")
+        workspace.closeSession(idle.key)
+        XCTAssertEqual(asked, [idle])
+        XCTAssertEqual(app.ended, [F.runtimeID(2)], "cancelling still keeps the agent running")
+    }
+
     func testExplicitEndSessionAsksEvenForAnIdleSession() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")
@@ -1250,6 +1273,44 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.terminalAskedToClose(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))), needsConfirm: true)
         XCTAssertEqual(asked.count, 2)
         XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
+    }
+
+    func testCloseShownCanSkipConfirmationAndRestoreItImmediately() throws {
+        let shell = WorkspaceUtilityView(kind: .shell, target: "/work/api", title: "Shell")
+        workspace.open(shell)
+        app.runningViews = [shell.id]
+        var asked: [String] = []
+        workspace.confirmViewClose = { title, answer in asked.append(title); answer(false) }
+
+        workspace.confirmBeforeClosing = false
+        XCTAssertTrue(workspace.closeShown())
+        XCTAssertTrue(asked.isEmpty)
+        XCTAssertEqual(app.closedViews, [shell.id])
+        XCTAssertNil(workspace.views.view(shell.id))
+
+        workspace.open(shell)
+        workspace.confirmBeforeClosing = true
+        XCTAssertTrue(workspace.closeShown())
+        XCTAssertEqual(asked, ["Shell"])
+        XCTAssertEqual(app.closedViews, [shell.id])
+        XCTAssertNotNil(workspace.views.view(shell.id))
+    }
+
+    func testGhosttyCloseCanSkipConfirmationWithoutDisablingQuitConfirmation() throws {
+        let shell = WorkspaceUtilityView(kind: .shell, target: "/work/api", title: "Shell")
+        workspace.open(shell)
+        app.runningViews = [shell.id]
+        workspace.confirmBeforeClosing = false
+        workspace.confirmViewClose = { _, _ in XCTFail("close confirmation is disabled") }
+        var quitTitles: [String] = []
+        workspace.confirmQuitWithViews = { titles, answer in quitTitles = titles; answer(false) }
+        XCTAssertTrue(workspace.confirmQuit { XCTAssertFalse($0) })
+        XCTAssertEqual(quitTitles, ["Shell"])
+        XCTAssertTrue(app.closedViews.isEmpty)
+
+        workspace.terminalAskedToClose(try XCTUnwrap(workspace.utilityTerminalView(for: shell.id)), needsConfirm: true)
+        XCTAssertEqual(app.closedViews, [shell.id])
+        XCTAssertNil(workspace.views.view(shell.id))
     }
 
     func testClosingAViewWhoseProgramIsRunningAsksFirst() throws {
