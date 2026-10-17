@@ -124,18 +124,21 @@ enum WorkspaceTranscriptBlock: Equatable {
 struct WorkspaceTranscriptText: View {
     private let blocks: [WorkspaceTranscriptBlock]
     let terms: [String]
+    let preferences: WorkspaceReadingPreferences
 
-    init(text: String, terms: [String]) {
+    init(text: String, terms: [String], preferences: WorkspaceReadingPreferences = .shared) {
         blocks = WorkspaceTranscriptBlock.parse(text)
         self.terms = terms
+        self.preferences = preferences
     }
 
-    var body: some View { WorkspaceTranscriptBlocks(blocks: blocks, terms: terms) }
+    var body: some View { WorkspaceTranscriptBlocks(blocks: blocks, terms: terms, preferences: preferences) }
 }
 
 private struct WorkspaceTranscriptBlocks: View {
     let blocks: [WorkspaceTranscriptBlock]
     let terms: [String]
+    let preferences: WorkspaceReadingPreferences
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(blocks.indices, id: \.self) { index in
@@ -159,7 +162,7 @@ private struct WorkspaceTranscriptBlocks: View {
                 case let .quote(blocks):
                     HStack(alignment: .top, spacing: 10) {
                         Rectangle().fill(Color.secondary.opacity(0.4)).frame(width: 3)
-                        AnyView(WorkspaceTranscriptBlocks(blocks: blocks, terms: terms))
+                        AnyView(WorkspaceTranscriptBlocks(blocks: blocks, terms: terms, preferences: preferences))
                     }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 4)
                 case let .table(headers, rows):
                     ScrollView(.horizontal) {
@@ -181,34 +184,40 @@ private struct WorkspaceTranscriptBlocks: View {
                         }.padding(8)
                     }.background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
                 case let .code(language, text):
-                    WorkspaceTranscriptCode(language: language, text: text, terms: terms)
+                    WorkspaceTranscriptCode(language: language, text: text, terms: terms, preferences: preferences)
                 }
             }
         }.textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct WorkspaceTranscriptCode: View {
+struct WorkspaceTranscriptCode: View {
     let language: String
     let text: String
     let terms: [String]
-    @State private var copied = false
-    @State private var wrapLines = false
+    @ObservedObject var preferences: WorkspaceReadingPreferences
+    @State private var feedback = WorkspaceCopyFeedback()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(language.isEmpty ? "Code" : language).font(.caption.weight(.medium))
                 Spacer()
-                Toggle("Wrap lines", isOn: $wrapLines).toggleStyle(.checkbox).font(.caption)
+                Toggle("Wrap lines", isOn: $preferences.wrapLines).toggleStyle(.checkbox).font(.caption)
+                    .help("Remember wrapping for code blocks and checkout diffs")
+                Menu {
+                    Button("Larger text") { preferences.fontSize = min(24, preferences.effectiveFontSize + 1) }.disabled(preferences.effectiveFontSize >= 24)
+                    Button("Smaller text") { preferences.fontSize = max(10, preferences.effectiveFontSize - 1) }.disabled(preferences.effectiveFontSize <= 10)
+                    Button("Reset text size") { preferences.fontSize = 12 }
+                } label: { Image(systemName: "textformat.size") }
+                    .menuStyle(.borderlessButton).fixedSize().help("Code and diff text size").accessibilityLabel("Code and diff text size")
                 Button {
-                    NSPasteboard.general.clearContents()
-                    copied = NSPasteboard.general.setString(text, forType: .string)
-                } label: { Label(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "doc.on.doc") }
+                    feedback.copy(text)
+                } label: { Label(feedback.message ?? "Copy code", systemImage: feedback.succeeded ? "checkmark" : "doc.on.doc") }
                     .buttonStyle(.borderless).help("Copy this code block without Markdown fences")
             }.padding(8)
             Divider()
-            if wrapLines {
+            if preferences.wrapLines {
                 codeText.fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(10)
             } else {
@@ -218,10 +227,10 @@ private struct WorkspaceTranscriptCode: View {
             }
         }.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15)))
-            .onChange(of: text) { _, _ in copied = false }
+            .onChange(of: text) { _, _ in feedback = WorkspaceCopyFeedback() }
     }
     private var codeText: some View {
         Text(WorkspaceHighlight.applying(to: AttributedString(text), terms: terms))
-            .font(.system(.body, design: .monospaced))
+            .font(.system(size: preferences.effectiveFontSize, design: .monospaced))
     }
 }

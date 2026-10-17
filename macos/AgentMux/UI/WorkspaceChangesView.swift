@@ -8,19 +8,26 @@ struct WorkspaceChangesView: View {
     @FocusState private var focus: Focus?
     @State private var hunk: Int?
     @State private var jumpSequence = 0
+    @State private var copyFeedback = WorkspaceCopyFeedback()
+    @State private var showWorktreeDetails = false
     @State private var confirmedTree: WorkspaceWorktreeReview.Review?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Checkout Changes").font(.headline)
+        let fileLabels = WorkspaceWording.uniqueSuffixes(model.changes?.files.map(\.path) ?? [])
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Checkout Changes").font(.headline).fixedSize()
                 if let changes = model.changes {
                     Text(changes.root).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         .truncationMode(.middle).textSelection(.enabled)
                         .help(changes.root + "\nIncludes changes from every session using this checkout.")
                 }
-                Spacer(minLength: 0)
-            }
+                WorkspaceStatus(loading: model.loading, title: "Comparing checkout…", retained: model.changes != nil,
+                                showTarget: model.error == nil && model.landFeedback != nil,
+                                feedback: model.error.map { WorkspaceFeedback(target: model.changes?.root ?? "Checkout comparison", message: $0,
+                                    nextStep: "Showing the previous comparison when available. Check the base and refresh.") } ?? model.landFeedback,
+                                recover: { model.refresh() }).frame(maxWidth: 280)
+            }.frame(height: 24)
             HStack {
                 TextField("Comparison base", text: $model.base).focused($focus, equals: .base).textFieldStyle(.roundedBorder).onSubmit { model.refresh() }
                     .frame(minWidth: 90, idealWidth: 150, maxWidth: 200)
@@ -33,44 +40,52 @@ struct WorkspaceChangesView: View {
                 }
                 Spacer(minLength: 0)
             }
-            if model.loading { WorkspaceLoading(title: "Comparing checkout…", retained: model.changes != nil) }
-            if let error = model.error {
-                WorkspaceNotice(message: error + (model.changes == nil ? "" : " Showing the previous comparison."), kind: .error,
-                                action: { model.refresh() })
-            }
-            if let error = model.worktreeError { Text("Managed worktree review: \(error)").font(.caption).foregroundStyle(.secondary) }
-            if let tree = model.worktree {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("\(tree.branch ?? "Worktree") → \(tree.sourceBranch)").font(.headline)
-                        Text("\(tree.ahead) ahead · \(tree.behind) behind · \(WorkspaceWording.status(tree.lands))").font(.caption)
-                        ForEach(tree.warnings ?? [], id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
-                        ForEach(tree.conflicts ?? [], id: \.self) { Text("Conflict: \($0)").font(.caption).foregroundStyle(.red) }
+            HStack(spacing: 8) {
+                if let tree = model.worktree {
+                    Text("\(tree.branch ?? "Worktree") → \(tree.sourceBranch)").font(.caption).lineLimit(1).truncationMode(.middle)
+                        .help("\(tree.branch ?? "Worktree") → \(tree.sourceBranch)")
+                    Button { showWorktreeDetails = true } label: {
+                        Text(model.worktreeSummary).lineLimit(1)
+                    }.popover(isPresented: $showWorktreeDetails) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                WorkspacePath(path: tree.path).font(.headline)
+                                Text("\(tree.ahead) ahead · \(tree.behind) behind · \(WorkspaceWording.status(tree.lands))")
+                                ForEach(Array((tree.warnings ?? []).enumerated()), id: \.offset) { _, warning in Text(warning).foregroundStyle(.orange) }
+                                ForEach(Array((tree.conflicts ?? []).enumerated()), id: \.offset) { _, conflict in Text("Conflict: " + conflict).foregroundStyle(.red) }
+                                if let reason = model.landingReason { Text(reason).foregroundStyle(.secondary) }
+                            }.textSelection(.enabled).padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(width: 400, height: 240)
                     }
-                    Spacer()
-                    Button("Compare with source") { model.compareWithSource() }.disabled(model.loading || model.landing)
+                    Spacer(minLength: 0)
+                    Button("Compare with source") { model.compareWithSource() }.disabled(model.loading || model.reviewing || model.landing)
                     Button("Land…") { confirmedTree = tree }.disabled(!model.canLand).help(model.landingReason ?? "Fast-forward the source branch")
                 }
-            }
-            if let notice = model.landNotice { Text(notice).textSelection(.enabled) }
+                if let error = model.worktreeError {
+                    WorkspaceStatus(feedback: WorkspaceFeedback(target: "Managed worktree review", message: error,
+                        nextStep: "Refresh the comparison to reload the worktree review."), recover: { model.refresh() })
+                }
+            }.frame(height: 24)
             if let changes = model.changes {
                 if !changes.files.isEmpty {
                     HSplitView {
                         List(selection: Binding(get: { model.selectedFile }, set: { model.select($0) })) {
                             ForEach(changes.files) { file in
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(file.path).lineLimit(2)
+                                    WorkspacePath(path: file.path, display: fileLabels[file.path])
                                     Text(file.untracked ? "Untracked" : file.binary ? "Binary" : "+\(file.added) −\(file.deleted)")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }.tag(file.path)
                             }
                         }.focused($focus, equals: .files).frame(minWidth: 150, idealWidth: 220, maxWidth: 240)
                             .help("Changed files (⌘⇧F)")
-                        VStack(alignment: .leading) {
+                        VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
-                                Text(model.selectedFile ?? "Select a changed file").font(.headline).lineLimit(1).truncationMode(.middle)
+                                Text(model.selectedFile.map { fileLabels[$0] ?? $0 } ?? "Select a changed file").font(.headline).lineLimit(1).truncationMode(.head)
                                     .help(model.selectedFile ?? "")
-                                Spacer(minLength: 0)
+                                WorkspaceStatus(loading: model.reading, title: "Loading diff…", retained: model.patchIdentity == model.diffIdentity,
+                                                feedback: diffFeedback, recover: { model.select(model.selectedFile) })
+                                    .frame(maxWidth: 160)
                                 Button { moveHunk(-1) } label: { Image(systemName: "chevron.up") }
                                     .help("Previous hunk (⌘⇧G)").accessibilityLabel("Previous hunk")
                                     .disabled(model.reading || model.patchError != nil || model.diff.hunks.isEmpty)
@@ -94,19 +109,15 @@ struct WorkspaceChangesView: View {
                                     .menuStyle(.borderlessButton).fixedSize().help("Diff display and copy options")
                                     .accessibilityLabel("Diff display and copy options")
                             }
-                            if model.reading { WorkspaceLoading(title: "Loading diff…") }
-                            if let error = model.patchError {
-                                WorkspaceNotice(message: error, kind: .error, actionTitle: "Reload Diff", action: { model.select(model.selectedFile) })
-                            }
-                            if model.truncated { Text("Diff truncated at 2 MiB. Open the file for the full contents.").foregroundStyle(.orange) }
                             WorkspaceDiffView(diff: model.diff, identity: model.diffIdentity,
                                               loading: model.reading || model.patchIdentity != model.diffIdentity,
                                               jump: hunk, jumpSequence: jumpSequence, reviewState: model.reviewState,
-                                              fontSize: model.diffFontSize, wrapLines: model.wrapDiffLines)
+                                              fontSize: model.diffFontSize, wrapLines: model.wrapDiffLines,
+                                              onCopy: { copyFeedback = $0 })
                                 .opacity(model.patchIdentity == model.diffIdentity ? 1 : 0)
-                                .onChange(of: model.diffIdentity) { _, _ in hunk = nil }
-                                .onChange(of: model.diff) { _, _ in hunk = nil }
-                        }.padding(8).frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
+                                .onChange(of: model.diffIdentity) { _, _ in hunk = nil; copyFeedback = WorkspaceCopyFeedback() }
+                                .onChange(of: model.diff) { _, _ in hunk = nil; copyFeedback = WorkspaceCopyFeedback() }
+                        }.padding(4).frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 if changes.files.isEmpty && !model.loading && model.error == nil {
@@ -128,10 +139,18 @@ struct WorkspaceChangesView: View {
                 Text("Fast-forward the source branch to the committed work in \(confirmedTree?.path ?? "this worktree"). The checkout must be clean and inactive. The worktree and its branch are retained.")
             }
     }
-    private func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+    private var diffFeedback: WorkspaceFeedback? {
+        let target = model.selectedFile ?? "Diff"
+        if let error = model.patchError { return WorkspaceFeedback(target: target, message: error, nextStep: "Reload the diff, or refresh the comparison if the file changed.") }
+        if let message = copyFeedback.message {
+            return WorkspaceFeedback(target: target, message: message, kind: copyFeedback.succeeded ? .success : .error,
+                nextStep: model.truncated ? "The displayed diff is truncated at 2 MiB. Open the file for the full contents." : "", recovery: nil)
+        }
+        if model.truncated { return WorkspaceFeedback(target: target, message: "Diff truncated at 2 MiB.", kind: .warning,
+            nextStep: "Open the file in your editor for the full contents.", recovery: nil) }
+        return nil
     }
+    private func copy(_ text: String) { copyFeedback.copy(text) }
 
     private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
         if modifiers == .command {

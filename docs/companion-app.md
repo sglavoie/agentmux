@@ -656,3 +656,36 @@ Rows show relative activity times (with exact times in tooltips), and all-histor
 results include checkout paths alongside their existing project headings.
 Transcripts render tables, blockquotes, and nested list indentation. Code blocks
 offer **Wrap lines** while **Copy code** continues to copy the original text.
+
+Review-window progress and failures stay in fixed toolbar slots. Brief reads do
+not flash a spinner; slower reads label retained content **Previous results**.
+Click a status message for its full, selectable details and recovery guidance.
+Action feedback names the conversation, checkout, plan, or run it acted on,
+including when you have since selected something else. Refreshing only reads
+state; **Retry Receipt** checks the original run operation. A failed history
+search does not disable the selected transcript's refresh button.
+
+Activity and Runs support **⌘R** to refresh, **⌘⇧F** to focus their lists, and
+**⌘Return** to focus the selected live session. Activity also supports
+**⌘⇧Return** to open the recorded conversation. **⌘W** closes either window and
+returns to the workspace when it is open. Activity's supporting output uses the
+same headings, lists, tables, and code blocks as Conversation History.
+
+Checkout Changes summarizes worktree warnings and conflicts in a details button.
+The scrollable details keep long reports from pushing the diff or landing controls
+out of view. File labels use the shortest unique trailing path; tooltips and
+accessibility retain the full path. A retained worktree review cannot authorize
+landing while its replacement is being read.
+
+Code blocks and diffs share remembered **Wrap lines** and text size. Code blocks
+expose text size beside **Copy code**; diffs keep those controls in **…**. Copying
+code, a diff selection, or a patch acknowledges **Copied** without moving the
+reading area. A failed clipboard write reports the failure.
+
+**Edit › Find in Terminal…** searches terminal output, with the tmux prompt naming
+its actual scope: **Find on visible screen** for a full-screen agent, or **Find in
+terminal history** otherwise. Utility terminals name terminal history in their
+find bar. **Edit › Search Conversation…** opens the selected session's recorded
+conversation in History, scoped to that conversation, so searching can reach
+messages outside the terminal screen. It is available once the selected session
+has a recorded conversation identity.

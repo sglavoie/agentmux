@@ -98,6 +98,7 @@ enum WorkspaceMenu {
         edit.addItem(item("Select All", #selector(NSResponder.selectAll(_:)), "a"))
         edit.addItem(.separator())
         edit.addItem(item("Find…", #selector(Ghostty.SurfaceView.find(_:)), "f"))
+        edit.addItem(item("Search Conversation…", #selector(AppDelegate.searchConversation(_:)), "", target: target))
         edit.addItem(item("Find Next", #selector(Ghostty.SurfaceView.findNext(_:)), "g"))
         edit.addItem(item("Find Previous", #selector(Ghostty.SurfaceView.findPrevious(_:)), "G"))
 

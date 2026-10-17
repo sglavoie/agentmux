@@ -124,9 +124,13 @@ final class WorkspaceRunsTests: XCTestCase {
         model.refresh()
         service.actionError = .transport("lost reply")
         model.perform(ASLMethod.runAbort)
+        XCTAssertEqual(model.actionFeedback?.kind, .warning)
+        XCTAssertEqual(model.actionFeedback?.recovery, .receipt)
+        XCTAssertTrue(model.actionFeedback?.target.contains("run-one") == true)
         let original = model.pending
         XCTAssertNotNil(original)
         model.select("two")
+        XCTAssertTrue(model.actionFeedback?.target.contains("run-one") == true)
         model.perform(ASLMethod.runAbort)
         XCTAssertEqual(service.requests.count, 1)
         model.refresh()

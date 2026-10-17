@@ -35,7 +35,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         defer { window.close() }
         window.layoutIfNeeded()
         host.layoutSubtreeIfNeeded()
-        try await Task.sleep(for: .milliseconds(200))
+        try await Task.sleep(for: .milliseconds(450))
         XCTAssertEqual(window.frame.width, width, accuracy: 1, "Content must fit the requested window width")
         XCTAssertEqual(window.frame.height, height, accuracy: 1, "Content must fit the requested window height")
         // Capture this process's fixture window directly. A separate
@@ -240,7 +240,7 @@ extension WorkspaceWorkflowPreviewTests {
                     available = false; service.failed = true
                     history.search(); changes.refresh(); activity.refresh(); runs.refresh()
                 }
-                let notice = state == "loading" || state == "failed" ? ["Showing the"] : []
+                let notice = state == "loading" || state == "failed" ? ["Previous results"] : []
                 // Native disabled button text is deliberately faint; use retained
                 // content for OCR in those states and assert authorization directly.
                 if !notice.isEmpty { XCTAssertFalse(history.canAct) }

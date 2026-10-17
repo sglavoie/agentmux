@@ -1,5 +1,105 @@
 import SwiftUI
 
+/// A permanent toolbar slot: neither delayed progress nor a long failure changes
+/// the reader's geometry. Full, selectable details remain available in a popover.
+struct WorkspaceStatus: View {
+    var loading = false
+    var title = "Refreshing…"
+    var retained = false
+    var showTarget = false
+    var feedback: WorkspaceFeedback?
+    var recover: (() -> Void)?
+    @State private var showProgress = false
+    @State private var showDetails = false
+
+    private var color: Color {
+        switch feedback?.kind {
+        case .error: return .red
+        case .warning: return .orange
+        case .success: return .green
+        default: return .secondary
+        }
+    }
+    private var symbol: String {
+        switch feedback?.kind {
+        case .error: return "exclamationmark.circle"
+        case .warning: return "exclamationmark.triangle"
+        case .success: return "checkmark.circle"
+        default: return "info.circle"
+        }
+    }
+    var body: some View {
+        HStack(spacing: 6) {
+            if retained && (loading || feedback?.kind == .error) {
+                Text("Previous results").font(.callout).foregroundStyle(.secondary).fixedSize()
+            }
+            if let feedback {
+                Button { showDetails = true } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: symbol)
+                        if showTarget { Text(feedback.target).fontWeight(.semibold).lineLimit(1).truncationMode(.middle).frame(maxWidth: 140) }
+                        Text(feedback.message).lineLimit(1).truncationMode(.tail)
+                    }.foregroundStyle(color)
+                }
+                .buttonStyle(.plain)
+                .help([feedback.target, feedback.message, feedback.nextStep].filter { !$0.isEmpty }.joined(separator: "\n"))
+                .accessibilityLabel("\(feedback.target): \(feedback.message). Show details")
+                .popover(isPresented: $showDetails) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(feedback.target).font(.headline)
+                            Text(feedback.message)
+                            if !feedback.nextStep.isEmpty { Text(feedback.nextStep).foregroundStyle(.secondary) }
+                            if let recovery = feedback.recovery, let recover {
+                                Button(recovery.title) { recover() }.disabled(loading)
+                            }
+                        }.textSelection(.enabled).padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    }.frame(width: 380, height: 220)
+                }
+                if let recovery = feedback.recovery, let recover {
+                    Button(recovery.title, action: recover).disabled(loading).fixedSize()
+                }
+            } else if loading && showProgress {
+                ProgressView().controlSize(.small)
+                Text(title).lineLimit(1).foregroundStyle(.secondary)
+                    .help(retained ? "\(title) Showing the previous results." : title)
+                    .accessibilityLabel(retained ? "\(title) Showing the previous results." : title)
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.caption).frame(height: 24)
+        .task(id: loading) {
+            showProgress = false
+            guard loading else { return }
+            do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
+            guard !Task.isCancelled else { return }
+            showProgress = true
+        }
+    }
+}
+
+/// Paths keep their identifying suffix, while copying and accessibility retain
+/// the complete value. Use the same treatment in lists and review headings.
+struct WorkspacePath: View {
+    let path: String
+    var display: String? = nil
+    var body: some View {
+        Text(display ?? path).lineLimit(1).truncationMode(.head).help(path)
+            .textSelection(.enabled).accessibilityLabel(path)
+    }
+}
+
+/// The same acknowledgement for code and diff copies; failures are visible too.
+struct WorkspaceCopyFeedback: Equatable {
+    var message: String?
+    var succeeded = false
+    mutating func copy(_ text: String, to pasteboard: NSPasteboard = .general) {
+        pasteboard.clearContents()
+        succeeded = pasteboard.setString(text, forType: .string)
+        message = succeeded ? "Copied" : "Copy failed. Try again."
+    }
+}
+
 /// Shared presentation for the native read/review windows. A failed read and an
 /// empty successful read have distinct treatments; retained content is labeled.
 struct WorkspaceNotice: View {

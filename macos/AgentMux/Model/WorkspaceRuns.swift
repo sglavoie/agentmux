@@ -81,7 +81,8 @@ final class WorkspaceRunsModel: ObservableObject {
     @Published private(set) var stale = true
     @Published private(set) var error: String?
     @Published private(set) var detailError: String?
-    @Published private(set) var actionNotice: String?
+    @Published private(set) var actionFeedback: WorkspaceFeedback?
+    var actionNotice: String? { actionFeedback?.message }
     @Published private(set) var pending: ASLRequestParams?
     @Published private(set) var warnings: [String] = []
     @Published private(set) var truncated = false
@@ -189,18 +190,18 @@ final class WorkspaceRunsModel: ObservableObject {
 
     func perform(_ method: String, target: ASLRow? = nil) {
         if let target, (selected?.rowID != target.rowID || selected?.runID != target.runID) {
-            actionNotice = "The selected run changed. Select it again before using this control."
+            actionFeedback = WorkspaceFeedback(target: target.displayLabel + " · " + target.runID, message: "The selected run changed. Select it again before using this control.", kind: .warning)
             return
         }
         guard [ASLMethod.runResume, ASLMethod.runStopAfterCurrent, ASLMethod.runAbort].contains(method),
               disabledReason(method) == nil, let row = selected else { return }
-        acting = true; actionNotice = nil
+        acting = true; actionFeedback = nil
         let service = self.service
         runner.run({ service.snapshot() }) { [weak self] result in
             guard let self else { return }
             guard case let .success(snapshot) = result else {
                 self.acting = false
-                if case let .failure(error) = result { self.actionNotice = ASLRefusal.text(error) }
+                if case let .failure(error) = result { self.actionFeedback = WorkspaceFeedback(target: row.displayLabel + " · " + row.runID, message: ASLRefusal.text(error), nextStep: "Refresh the run before trying this control again.") }
                 return
             }
             guard let current = snapshot.snapshot?.rows.first(where: { $0.rowID == row.rowID && $0.runID == row.runID && $0.planDir == row.planDir }),
@@ -208,7 +209,7 @@ final class WorkspaceRunsModel: ObservableObject {
                   ASLResponse.refusal(row: current, method: method,
                     view: ASLView.of(status: snapshot.status, meta: snapshot.meta, hasRows: true), status: snapshot.status) == nil,
                   method != ASLMethod.runResume || (current.question?.questionID ?? "").isEmpty else {
-                self.acting = false; self.actionNotice = "The run changed or this control is no longer permitted. Refresh and select it again."; self.refresh(); return
+                self.acting = false; self.actionFeedback = WorkspaceFeedback(target: row.displayLabel + " · " + row.runID, message: "The run changed or this control is no longer permitted. Refresh and select it again.", kind: .warning); self.refresh(); return
             }
             self.submit(ASLRequestParams(method: method, planDir: current.planDir, rowID: current.rowID,
                 runID: current.runID, operationID: ASLResponse.newOperationID(), actionToken: current.actionToken))
@@ -221,6 +222,11 @@ final class WorkspaceRunsModel: ObservableObject {
         submit(pending)
     }
 
+    private func receiptFeedback(_ params: ASLRequestParams, _ message: String) -> WorkspaceFeedback {
+        WorkspaceFeedback(target: params.planDir + " · " + params.runID, message: message, kind: .warning,
+            nextStep: "Retry Receipt checks operation \(params.operationID). It does not create a new request.", recovery: .receipt)
+    }
+
     private func submit(_ params: ASLRequestParams) {
         pending = params
         let service = self.service
@@ -230,16 +236,19 @@ final class WorkspaceRunsModel: ObservableObject {
             switch result {
             case let .failure(error):
                 if case .transport = error {
-                    self.actionNotice = "Outcome unknown for \(ASLRefusal.methodLabel(params.method)) on run \(params.runID). Retry Receipt checks the same operation; it does not create a second request."
-                } else { self.pending = nil; self.actionNotice = ASLRefusal.text(error) }
+                    self.actionFeedback = self.receiptFeedback(params, "Outcome unknown for \(ASLRefusal.methodLabel(params.method)) on run \(params.runID). Retry Receipt checks the same operation; it does not create a second request.")
+                } else { self.pending = nil; self.actionFeedback = WorkspaceFeedback(target: params.planDir + " · " + params.runID, message: ASLRefusal.text(error), nextStep: "Refresh to check the run before trying a control again.") }
             case let .success(receipt):
                 guard receipt.operationID == params.operationID, receipt.method == params.method else {
-                    self.actionNotice = "The receipt did not match this operation. Its outcome is unknown; use Retry Receipt."; return
+                    self.actionFeedback = self.receiptFeedback(params, "The receipt did not match this operation. Its outcome is unknown; use Retry Receipt."); return
                 }
                 if ["accepted", "consumed", "rejected", "expired", "superseded"].contains(receipt.status) {
                     self.pending = nil
-                    self.actionNotice = "\(ASLRefusal.methodLabel(params.method).capitalized): \(receipt.status)."
-                } else { self.actionNotice = "The operation has no final receipt. Use Retry Receipt." }
+                    self.actionFeedback = WorkspaceFeedback(target: params.planDir + " · " + params.runID,
+                        message: "\(ASLRefusal.methodLabel(params.method).capitalized): \(receipt.status).",
+                        kind: ["accepted", "consumed"].contains(receipt.status) ? .success : .warning,
+                        nextStep: "Refresh to inspect the run's current state.")
+                } else { self.actionFeedback = self.receiptFeedback(params, "The operation has no final receipt. Use Retry Receipt.") }
             }
             if self.timer != nil { self.refresh() }
         }

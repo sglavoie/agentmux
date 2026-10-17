@@ -5,28 +5,21 @@ struct WorkspaceRunsView: View {
     @ObservedObject var model: WorkspaceRunsModel
     @ObservedObject var plan: WorkspaceRunPlanModel
     private struct Confirmation { let method: String; let row: ASLRow }
+    @FocusState private var listFocused: Bool
     @State private var confirmation: Confirmation?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("ASL Runs").font(.title2)
-                Spacer()
+                Text("ASL Runs").font(.title2).fixedSize()
+                WorkspaceStatus(loading: model.loading, title: "Refreshing runs…", retained: !model.rows.isEmpty,
+                                feedback: runFeedback, recover: { model.refresh() })
 
-                Button("Refresh") { model.refresh() }.disabled(model.loading)
+                Button("Refresh") { model.refresh() }.disabled(model.loading).help("Refresh runs (⌘R)")
                 Button("Run a Plan…") { plan.isPresented = true }
             }
-            if model.loading { WorkspaceLoading(title: "Refreshing runs…", retained: !model.rows.isEmpty) }
-            if let error = model.error {
-                WorkspaceNotice(message: error + (error.hasSuffix(".") ? "" : ".") + (model.rows.isEmpty ? "" : " Showing the previous run list."), kind: .error,
-                                action: { model.refresh() })
-            }
-            if model.truncated { WorkspaceNotice(message: "ASL truncated this run list. Some runs are not shown.", kind: .warning) }
-            ForEach(model.warnings, id: \.self) { WorkspaceNotice(message: $0, kind: .warning) }
-            if let notice = model.actionNotice { Text(notice).textSelection(.enabled) }
-            if model.pending != nil {
-                Button("Retry Receipt") { model.retryReceipt() }.disabled(model.acting)
-            }
+            WorkspaceStatus(loading: model.acting, title: "Checking operation…", showTarget: true, feedback: model.actionFeedback,
+                            recover: { if model.actionFeedback?.recovery == .receipt { model.retryReceipt() } else { model.refresh() } })
             HSplitView {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.rows, id: \.rowID) { row in
@@ -39,12 +32,12 @@ struct WorkspaceRunsView: View {
                             }
                         }.tag(row.rowID)
                     }
-                }.frame(minWidth: 190, idealWidth: 260, maxWidth: 300)
+                }.focused($listFocused).frame(minWidth: 190, idealWidth: 260, maxWidth: 300)
                 ScrollView {
                     if let row = model.selected {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(row.displayLabel).font(.title2)
-                            Text(row.planDir).font(.caption).textSelection(.enabled)
+                            WorkspacePath(path: row.planDir).font(.caption)
                             Text("\(row.harness) · \(WorkspaceWording.status(row.phase)) · \(WorkspaceWording.status(row.activityLabel))")
                             Text("Run \(row.runID)").font(.caption).textSelection(.enabled)
                             if !row.sessionID.isEmpty { Text("Current session: \(row.sessionID)") }
@@ -54,7 +47,7 @@ struct WorkspaceRunsView: View {
                             if !row.pauseReason.isEmpty { Text("Blocked: \(WorkspaceWording.status(row.pauseReason))").foregroundStyle(.orange) }
                             ForEach(row.warnings, id: \.self) { Text($0).foregroundStyle(.orange) }
                             HStack {
-                                Button("Focus Session") { model.onFocus?(row) }
+                                Button("Focus Session") { model.onFocus?(row) }.help("Focus session (⌘Return)")
                                 Button("Show Plan") { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: row.planDir) }
                                 if model.hasQuestion { Button("Answer…") { model.answer() }.disabled(model.stale || model.acting) }
                             }
@@ -63,10 +56,9 @@ struct WorkspaceRunsView: View {
                                 control("Stop After Current…", ASLMethod.runStopAfterCurrent)
                                 control("Abort…", ASLMethod.runAbort)
                             }
-                            if let error = model.detailError {
-                                WorkspaceNotice(message: error + (error.hasSuffix(".") ? "" : ".") + (model.detail == nil ? "" : " Showing the previous progress."), kind: .error)
-                            }
-                            if model.reading { WorkspaceLoading(title: "Reading plan progress…", retained: model.detail != nil) }
+                            WorkspaceStatus(loading: model.reading, title: "Reading plan progress…", retained: model.detail != nil,
+                                            feedback: model.detailError.map { WorkspaceFeedback(target: row.displayLabel + " · " + row.runID, message: $0,
+                                                nextStep: "Refresh to check the current run and reload its progress.") }, recover: { model.refresh() })
                             if let detail = model.detail {
                                 Divider()
                                 Text("Plan progress").font(.headline)
@@ -103,7 +95,9 @@ struct WorkspaceRunsView: View {
                 }.frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
             }
         }.padding(12)
-            .sheet(isPresented: $plan.isPresented) { WorkspaceRunPlanView(model: plan) }
+            .onAppear { listFocused = true }
+            .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
+            .sheet(isPresented: $plan.isPresented) { WorkspaceRunPlanView(model: plan, onShowRuns: { plan.isPresented = false; model.refresh() }) }
             .alert(confirmation?.method == ASLMethod.runAbort ? "Abort this run?" : "Stop after the current session?",
                    isPresented: Binding(get: { confirmation != nil }, set: { if !$0 { confirmation = nil } })) {
                 Button("Cancel", role: .cancel) { confirmation = nil }
@@ -114,6 +108,25 @@ struct WorkspaceRunsView: View {
             } message: {
                 Text("\(confirmation?.row.displayLabel ?? "Run") · \(confirmation?.row.runID ?? "")\n" + (confirmation?.method == ASLMethod.runAbort ? "Request that ASL stop the active run." : "ASL will finish the current session before stopping."))
             }
+    }
+
+    private var runFeedback: WorkspaceFeedback? {
+        if let error = model.error { return WorkspaceFeedback(target: "ASL runs", message: error,
+            nextStep: "Previous runs remain visible. Refresh to recheck the connection; this does not repeat a control operation.") }
+        let warnings = model.warnings + (model.truncated ? ["ASL truncated this run list. Some runs are not shown."] : [])
+        return warnings.isEmpty ? nil : WorkspaceFeedback(target: "ASL runs", message: warnings.joined(separator: "\n"), kind: .warning)
+    }
+    private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        guard !plan.isPresented && confirmation == nil else { return false }
+        if modifiers == .command {
+            switch key {
+            case "r": model.refresh()
+            case "\r": if let row = model.selected { model.onFocus?(row) }
+            default: return false
+            }
+        } else if modifiers == [.command, .shift], key == "f" { listFocused = true }
+        else { return false }
+        return true
     }
 
     private func control(_ title: String, _ method: String) -> some View {
@@ -129,6 +142,7 @@ struct WorkspaceRunsView: View {
 
 struct WorkspaceRunPlanView: View {
     @ObservedObject var model: WorkspaceRunPlanModel
+    var onShowRuns: (() -> Void)?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -177,13 +191,14 @@ struct WorkspaceRunPlanView: View {
                 }
                 HStack {
                     Button("Check Readiness") { model.check() }.disabled(model.checking || model.launching || model.selector.isEmpty || model.projectProblem != nil || model.profileProblem != nil)
-                    if model.checking || model.launching { ProgressView().controlSize(.small) }
                     Spacer()
                     Button("Start Supervised Run") { model.start() }.disabled(!model.canStart)
                 }
                 if model.optionsChanged { Text("Options changed. Check readiness again.").foregroundStyle(.orange) }
                 if model.submitted.contains(model.selector) { Text("A launch for this plan was submitted. Check Runs and the workspace for its supervising session.").foregroundStyle(.secondary) }
-                if let notice = model.notice { Text(notice).textSelection(.enabled) }
+                WorkspaceStatus(loading: model.checking || model.launching,
+                                title: model.launching ? "Starting supervised run…" : "Checking readiness…", showTarget: true, feedback: model.feedback,
+                                recover: { if model.feedback?.recovery == .runs { onShowRuns?() } else { model.check() } })
                 if let preview = model.preview {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(WorkspaceWording.status(preview.readiness.state)) · \(preview.readiness.complete) complete · \(preview.readiness.pending) pending").font(.headline)
@@ -221,7 +236,9 @@ final class WorkspaceRunsWindow: NSObject, NSWindowDelegate {
             window.title = "ASL Runs"
             window.minSize = NSSize(width: 780, height: 500)
             window.isReleasedWhenClosed = false; window.delegate = self
-            window.contentView = NSHostingView(rootView: WorkspaceRunsView(model: model, plan: plan))
+            let host = WorkspaceReviewHost(rootView: WorkspaceRunsView(model: model, plan: plan))
+            host.closesWindow = true
+            window.contentView = host
             window.setFrameAutosaveName("WorkspaceRuns"); window.center()
             self.window = window
         }

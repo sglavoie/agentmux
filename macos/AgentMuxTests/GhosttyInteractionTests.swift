@@ -82,6 +82,23 @@ final class GhosttyInteractionTests: XCTestCase {
         ghosttyWait("the recorder to start") { FileManager.default.fileExists(atPath: self.out.path + ".ready") }
     }
 
+    @MainActor
+    func testFindMenuNamesTerminalScopeAndOffersConversationSearch() throws {
+        let item = NSMenuItem(title: "Find…", action: #selector(Ghostty.SurfaceView.find(_:)), keyEquivalent: "f")
+        XCTAssertTrue(view.validateMenuItem(item))
+        XCTAssertEqual(item.title, "Find in Terminal History…")
+        try record(scrollback: .server)
+        XCTAssertTrue(view.validateMenuItem(item))
+        XCTAssertEqual(item.title, "Find in Terminal…")
+        XCTAssertTrue(item.toolTip?.contains("visible screen only") == true)
+        let delegate = AppDelegate()
+        let menu = WorkspaceMenu.make(target: delegate)
+        let edit = try XCTUnwrap(menu.items.first { $0.title == "Edit" }?.submenu)
+        let search = try XCTUnwrap(edit.items.first { $0.action == #selector(AppDelegate.searchConversation(_:)) })
+        XCTAssertEqual(search.title, "Search Conversation…")
+        XCTAssertFalse(delegate.validateMenuItem(search), "conversation search requires the focused workspace's session")
+    }
+
     override func tearDownWithError() throws {
         window.contentView = nil
         view = nil

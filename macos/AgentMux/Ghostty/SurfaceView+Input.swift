@@ -537,6 +537,12 @@ extension Ghostty.SurfaceView: NSMenuItemValidation {
             guard let surface else { return false }
             return ghostty_surface_has_selection(surface)
         case #selector(find(_:)), #selector(findNext(_:)), #selector(findPrevious(_:)):
+            if item.action == #selector(find(_:)) {
+                item.title = scrollback == .server ? "Find in Terminal…" : "Find in Terminal History…"
+                item.toolTip = scrollback == .server
+                    ? "Full-screen agents: visible screen only. Use Search Conversation for recorded messages. The search prompt names the current scope."
+                    : "Search this terminal’s output and scrollback."
+            }
             return surface != nil && Ghostty.HistoryRequest.find.bindingAction(for: scrollback) != nil
         case #selector(undo(_:)), #selector(redo(_:)):
             return false

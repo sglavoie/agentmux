@@ -18,6 +18,26 @@ enum WorkspaceWording {
         return first.uppercased() + words.dropFirst()
     }
 
+    /// The shortest trailing path that distinguishes a file from its siblings.
+    /// Full paths remain in tooltips, accessibility, and copyable details.
+    static func uniqueSuffixes(_ paths: [String]) -> [String: String] {
+        let unique = Set(paths)
+        var counts: [String: Int] = [:]
+        func suffixes(_ path: String) -> [String] {
+            var suffix = ""
+            return path.split(separator: "/").reversed().map { part in
+                suffix = suffix.isEmpty ? String(part) : String(part) + "/" + suffix
+                return suffix
+            }
+        }
+        for path in unique {
+            for suffix in suffixes(path) { counts[suffix, default: 0] += 1 }
+        }
+        return Dictionary(uniqueKeysWithValues: unique.map { path in
+            (path, suffixes(path).first { counts[$0] == 1 } ?? path)
+        })
+    }
+
     static func relativeTime(_ raw: String, now: Date) -> String {
         guard let date = WorkspaceActivityEntry.date(raw) else { return "Time unavailable" }
         let formatter = RelativeDateTimeFormatter()

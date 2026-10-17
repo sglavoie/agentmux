@@ -101,7 +101,10 @@ final class WorkspaceReviewRefinementTests: XCTestCase {
         text.setSelectedRange(selected)
         let pasteboard = NSPasteboard.withUniqueName()
         defer { pasteboard.releaseGlobally() }
+        var acknowledgement: WorkspaceCopyFeedback?
+        text.onCopy = { acknowledgement = $0 }
         text.copySource(to: pasteboard)
+        XCTAssertEqual(acknowledgement?.message, "Copied")
         XCTAssertEqual(pasteboard.string(forType: .string), "new 🦊 café\ncontext")
         let partial = (text.string as NSString).range(of: "🦊 café")
         XCTAssertEqual(text.sourceText(in: partial), "🦊 café")

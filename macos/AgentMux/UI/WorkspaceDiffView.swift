@@ -11,6 +11,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
     var reviewState: WorkspaceReviewState? = nil
     var fontSize: CGFloat = 12
     var wrapLines = false
+    var onCopy: ((WorkspaceCopyFeedback) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> WorkspaceDiffContainer {
@@ -40,6 +41,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
     func updateNSView(_ container: WorkspaceDiffContainer, context: Context) {
         let scroll = container.scroll
         guard let text = scroll.documentView as? WorkspaceDiffTextView else { return }
+        text.onCopy = onCopy
         let state = context.coordinator
         guard !loading else { return }
         if state.identity != identity || state.diff != diff || state.fontSize != fontSize || state.wrapLines != wrapLines {
@@ -145,6 +147,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
 final class WorkspaceDiffTextView: NSTextView {
     var diff = WorkspaceDiff("")
     var lineRanges: [NSRange] = []
+    var onCopy: ((WorkspaceCopyFeedback) -> Void)?
 
     struct Anchor {
         let line: WorkspaceDiff.Line
@@ -211,15 +214,17 @@ final class WorkspaceDiffTextView: NSTextView {
     func copySource(to pasteboard: NSPasteboard) {
         let value = sourceText(in: selectedRange())
         guard !value.isEmpty else { return }
-        pasteboard.clearContents()
-        pasteboard.setString(value, forType: .string)
+        var feedback = WorkspaceCopyFeedback()
+        feedback.copy(value, to: pasteboard)
+        onCopy?(feedback)
     }
 
     @objc func copyUnifiedDiff(_ sender: Any?) {
         let range = selectedRange()
         let value = range.length > 0 ? (string as NSString).substring(with: range) : diff.patch
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(value, forType: .string)
+        var feedback = WorkspaceCopyFeedback()
+        feedback.copy(value)
+        onCopy?(feedback)
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {

@@ -15,7 +15,9 @@ final class WorkspaceActivityWindow: NSObject, NSWindowDelegate {
             window.minSize = NSSize(width: 760, height: 480)
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.contentView = NSHostingView(rootView: WorkspaceActivityView(model: model))
+            let host = WorkspaceReviewHost(rootView: WorkspaceActivityView(model: model))
+            host.closesWindow = true
+            window.contentView = host
             window.setFrameAutosaveName("WorkspaceActivity")
             window.center()
             self.window = window
@@ -30,9 +32,14 @@ final class WorkspaceActivityWindow: NSObject, NSWindowDelegate {
 
 struct WorkspaceActivityView: View {
     @ObservedObject var model: WorkspaceActivityModel
+    @FocusState private var listFocused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Since Last Looked").font(.title2)
+            HStack {
+                Text("Since Last Looked").font(.title2).fixedSize()
+                WorkspaceStatus(loading: model.loading, title: "Loading activity…", retained: model.report != nil,
+                                feedback: activityFeedback, recover: { model.refresh() })
+            }
             HStack {
                 Toggle("Unread only", isOn: $model.unreadOnly).onChange(of: model.unreadOnly) { _, _ in model.filterChanged() }
                 Picker("Look back", selection: $model.days) {
@@ -40,24 +47,15 @@ struct WorkspaceActivityView: View {
                 }.frame(width: 180).onChange(of: model.days) { _, _ in model.refresh() }
                 Spacer()
 
-                Button("Refresh") { model.refresh() }.disabled(model.loading)
+                Button("Refresh") { model.refresh() }.disabled(model.loading).help("Refresh activity (⌘R)")
                 Button("Mark shown read") { model.markVisibleRead() }.disabled(model.visible.isEmpty || model.loading || model.error != nil)
             }
             Text("Recorded state changes, process exits, and ASL events. Opening this view does not mark events read.")
                 .font(.caption).foregroundStyle(.secondary)
-            if let date = model.readState.lastMarkedAt { Text("Last marked read: \(date.formatted())").font(.caption).foregroundStyle(.secondary) }
-            if model.loading { WorkspaceLoading(title: "Loading activity…", retained: model.report != nil) }
-            if let error = model.error {
-                WorkspaceNotice(message: error + (model.report == nil ? "" : " Showing the previous activity."), kind: .error,
-                                action: { model.refresh() })
-            }
-            if let error = model.readError { WorkspaceNotice(message: error, kind: .error) }
-            if let report = model.report {
-                Text("\(model.visible.count) shown · \(report.entries.count) loaded · Retained history starts \(WorkspaceActivityEntry.date(report.earliestAvailable)?.formatted() ?? "at an unknown time")")
-                    .font(.caption).foregroundStyle(.secondary)
-                if report.truncated { Text("Showing the newest 1,000 of \(report.matched) matching events. Older events remain unread.").font(.caption) }
-                if report.corruptLines > 0 { Text("\(report.corruptLines) unreadable journal records were skipped; history may be incomplete.").font(.caption) }
-            }
+            Text(model.readState.lastMarkedAt.map { "Last marked read: " + $0.formatted() } ?? "No events marked read yet")
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1).frame(height: 16)
+            Text(model.report.map { "\(model.visible.count) shown · \($0.entries.count) loaded · Retained history starts \(WorkspaceActivityEntry.date($0.earliestAvailable)?.formatted() ?? "at an unknown time")" } ?? "Recorded activity")
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1).frame(height: 16)
             HSplitView {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.visible) { entry in
@@ -71,7 +69,7 @@ struct WorkspaceActivityView: View {
                             Text(entry.detail).font(.caption).lineLimit(2)
                         }.padding(.vertical, 3).tag(entry.id)
                     }
-                }.frame(minWidth: 220, idealWidth: 280, maxWidth: 340)
+                }.focused($listFocused).frame(minWidth: 220, idealWidth: 280, maxWidth: 340)
                     .overlay { if model.visible.isEmpty && !model.loading && model.error == nil {
                         WorkspaceEmpty(title: model.unreadOnly ? "All caught up" : "No activity found",
                                        detail: "No \(model.unreadOnly ? "unread" : "recorded") events in this period. Try a longer look-back period.")
@@ -84,19 +82,21 @@ struct WorkspaceActivityView: View {
                             Text(entry.detail).textSelection(.enabled)
                             HStack {
                                 if entry.conversation != nil || !entry.runtimeSessionID.isEmpty {
-                                    Button("Focus live session") { model.onFocus?(entry) }
+                                    Button("Focus live session") { model.onFocus?(entry) }.help("Focus live session (⌘Return)")
                                 }
-                                if let identity = entry.conversation { Button("Open conversation") { model.onConversation?(identity) } }
+                                if let identity = entry.conversation { Button("Open conversation") { model.onConversation?(identity) }.help("Open conversation (⌘⇧Return)") }
                             }
                             Divider()
-                            Text("Supporting output").font(.headline)
-                            if model.reading { WorkspaceLoading(title: "Reading conversation…") }
-                            if let error = model.transcriptError {
-                                WorkspaceNotice(message: error, kind: .error, action: { model.loadTranscript() })
+                            HStack {
+                                Text("Supporting output").font(.headline).fixedSize()
+                                WorkspaceStatus(loading: model.reading, title: "Reading conversation…", retained: model.excerpt != nil,
+                                                feedback: model.transcriptError.map { WorkspaceFeedback(target: entry.title, message: $0,
+                                                    nextStep: "Reload the supporting conversation.", recovery: .transcript) },
+                                                recover: { model.loadTranscript() })
                             }
                             if let excerpt = model.excerpt {
                                 Text("Last recorded assistant message at or before this event · \(excerpt.timestamp ?? "")").font(.caption).foregroundStyle(.secondary)
-                                Text(excerpt.text.reveal()).textSelection(.enabled)
+                                WorkspaceTranscriptText(text: excerpt.text.reveal(), terms: [])
                             } else if !model.reading {
                                 Text(entry.conversation == nil ? "This event has no recorded conversation identity." : "No timestamped assistant output at or before this event is available in the loaded messages.").foregroundStyle(.secondary)
                             }
@@ -110,5 +110,35 @@ struct WorkspaceActivityView: View {
                 }.frame(minWidth: 360, maxWidth: .infinity)
             }
         }.padding(12)
+            .onAppear { listFocused = true }
+            .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
+    }
+    private var activityFeedback: WorkspaceFeedback? {
+        if let error = model.error { return WorkspaceFeedback(target: "Activity", message: error,
+            nextStep: "Previous events remain visible. Check Settings if amx is unavailable, then refresh.") }
+        if let error = model.readError { return WorkspaceFeedback(target: "Read markers", message: error,
+            nextStep: "Check that the activity read-marker file is writable, then use Mark shown read again.", recovery: nil) }
+        guard let report = model.report else { return nil }
+        var warnings: [String] = []
+        if report.truncated { warnings.append("Showing the newest 1,000 of \(report.matched) matching events. Older events remain unread.") }
+        if report.corruptLines > 0 { warnings.append("\(report.corruptLines) unreadable journal records were skipped; history may be incomplete.") }
+        return warnings.isEmpty ? nil : WorkspaceFeedback(target: "Activity history", message: warnings.joined(separator: "\n"), kind: .warning,
+            nextStep: "Choose a shorter look-back period to narrow the result, or refresh to read the journal again.")
+    }
+    private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
+        if modifiers == .command {
+            switch key {
+            case "r": model.refresh()
+            case "\r": if let entry = model.selected { model.onFocus?(entry) }
+            default: return false
+            }
+        } else if modifiers == [.command, .shift] {
+            switch key {
+            case "f": listFocused = true
+            case "\r": if let identity = model.selected?.conversation { model.onConversation?(identity) }
+            default: return false
+            }
+        } else { return false }
+        return true
     }
 }

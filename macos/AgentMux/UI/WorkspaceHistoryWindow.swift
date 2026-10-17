@@ -44,7 +44,13 @@ struct WorkspaceHistoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Conversation History").font(.title2)
+            HStack {
+                Text("Conversation History").font(.title2).fixedSize()
+                WorkspaceStatus(loading: model.loading, title: "Searching conversations…", retained: !model.entries.isEmpty,
+                                feedback: model.error.map { WorkspaceFeedback(target: "Conversation search", message: $0,
+                                    nextStep: model.entries.isEmpty ? "Check Settings if amx is unavailable, then refresh." : "Showing the previous results. Refresh to check again.") },
+                                recover: { model.search() })
+            }
             HStack {
                 TextField("Search full conversations", text: $model.query)
                     .focused($focus, equals: .search)
@@ -73,11 +79,6 @@ struct WorkspaceHistoryView: View {
             if model.scope == .conversation, let identity = model.currentConversation {
                 Text(identity.encoded).font(.caption).foregroundStyle(.secondary)
             }
-            if model.loading { WorkspaceLoading(title: "Searching conversations…", retained: !model.entries.isEmpty) }
-            if let error = model.error {
-                WorkspaceNotice(message: error + (model.entries.isEmpty ? "" : " Showing the previous results."), kind: .error,
-                                action: { model.search() })
-            }
             HSplitView {
                 VStack(spacing: 6) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
@@ -89,8 +90,7 @@ struct WorkspaceHistoryView: View {
                             }
                             Text("\(entry.conversation.harness) · \(entry.conversation.profile)").font(.caption).foregroundStyle(.secondary)
                             if model.scope == .all && !entry.conversation.cwd.isEmpty {
-                                Text(entry.conversation.cwd)
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).help(entry.conversation.cwd)
+                                WorkspacePath(path: entry.conversation.cwd).font(.caption).foregroundStyle(.secondary)
                             }
                             if let lastAt = entry.conversation.lastAt {
                                 TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -126,28 +126,25 @@ struct WorkspaceHistoryView: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     if let selected = model.selected {
-                        Text(selected.conversation.displayName).font(.title2)
-                        Text(selected.conversation.cwd).font(.caption).textSelection(.enabled)
+                        Text(selected.conversation.displayName).font(.title2).lineLimit(1).help(selected.conversation.displayName)
+                        WorkspacePath(path: selected.conversation.cwd).font(.caption)
                         HStack {
                             Button(model.liveConversations.contains(selected.id) ? "Focus live session" : "Resume") { model.act(fork: false) }
                                 .buttonStyle(.borderedProminent)
-                                .help("Resume or focus the selected session (⌘Return)")
-                            Button("Fork") { model.act(fork: true) }.help("Fork the selected conversation (⌘⇧Return)")
+                                .help("Resume or focus the selected session (⌘Return)").disabled(!model.canAct)
+                            Button("Fork") { model.act(fork: true) }.help("Fork the selected conversation (⌘⇧Return)").disabled(!model.canAct)
                             if model.acting { ProgressView().controlSize(.small) }
                             Spacer()
                             Button { model.refreshTranscript() } label: { Image(systemName: "arrow.clockwise") }
                                 .help("Refresh conversation without moving your place (⌘R)")
-                                .accessibilityLabel("Refresh conversation").disabled(model.reading)
-                        }.disabled(!model.canAct)
-                        Text(model.liveConversations.contains(selected.id)
-                             ? "Return to the running conversation, or fork a separate conversation."
-                             : "Continue this conversation in the workspace, or fork a separate one.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if let notice = model.actionNotice { Text(notice).font(.callout).textSelection(.enabled) }
-                        if let error = model.transcriptError {
-                            WorkspaceNotice(message: error, kind: .error, action: { model.loadTranscript() })
+                                .accessibilityLabel("Refresh conversation").disabled(!model.canRefreshTranscript)
                         }
-                        if model.reading { WorkspaceLoading(title: "Loading transcript…", retained: model.transcript != nil) }
+                        WorkspaceStatus(loading: model.reading || model.acting,
+                                        title: model.acting ? "Opening conversation…" : "Loading transcript…", retained: model.transcript != nil,
+                                        showTarget: model.transcriptError == nil && model.actionFeedback != nil,
+                                        feedback: model.transcriptError.map { WorkspaceFeedback(target: selected.conversation.displayName,
+                                            message: $0, nextStep: "Reload the transcript to check again. Existing text remains readable.", recovery: .transcript) } ?? model.actionFeedback,
+                                        recover: { if model.transcriptError != nil { model.refreshTranscript() } else { model.search() } })
                         if let transcript = model.transcript {
                             HStack {
                                 Text(transcript.total == 0 ? "No messages" : "Messages \(transcript.start + 1)–\(transcript.end) of \(transcript.total)")
@@ -171,7 +168,7 @@ struct WorkspaceHistoryView: View {
                                 if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier(anchor: visibleMessage) } }
                                 Spacer()
                                 if model.canLoadLater { Button("Load later messages") { model.loadLater(anchor: visibleMessage) } }
-                            }
+                            }.frame(height: 24)
                             ScrollViewReader { proxy in
                                 ScrollView {
                                     LazyVStack(alignment: .leading, spacing: 16) {

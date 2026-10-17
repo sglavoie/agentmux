@@ -145,7 +145,7 @@ bind-key -n User0 if-shell -F '#{pane_in_mode}' { send-keys -X page-up } { if-sh
 bind-key -n User1 if-shell -F '#{pane_in_mode}' { send-keys -X page-down } { if-shell -F '#{alternate_on}' { send-keys NPage } }
 bind-key -n User2 if-shell -F '#{||:#{pane_in_mode},#{!:#{alternate_on}}}' { copy-mode -e ; send-keys -X history-top }
 bind-key -n User3 if-shell -F '#{pane_in_mode}' { send-keys -X cancel }
-bind-key -n User4 { copy-mode -e ; command-prompt -i -T search -p "find:" { send-keys -X search-backward-incremental -- "%%" } }
+bind-key -n User4 if-shell -F '#{alternate_on}' { copy-mode -e ; command-prompt -i -T search -p "Find on visible screen:" { send-keys -X search-backward-incremental -- "%%" } } { copy-mode -e ; command-prompt -i -T search -p "Find in terminal history:" { send-keys -X search-backward-incremental -- "%%" } }
 bind-key -n User5 if-shell -F '#{pane_in_mode}' { send-keys -X search-again }
 bind-key -n User6 if-shell -F '#{pane_in_mode}' { send-keys -X search-reverse }
 # Marks what went wrong: every error, failure, warning, and deprecation in the

@@ -17,10 +17,11 @@ import (
 // pseudo-terminal: what an embedded terminal is to the server. Bytes written
 // to it arrive as that terminal's keyboard input.
 type viewer struct {
-	t     *testing.T
-	f     *fixture
-	pane  backend.Ref
-	stdin io.WriteCloser
+	t      *testing.T
+	f      *fixture
+	pane   backend.Ref
+	stdin  io.WriteCloser
+	output string
 }
 
 func attachViewer(t *testing.T, f *fixture, pane backend.Ref) *viewer {
@@ -32,7 +33,12 @@ func attachViewer(t *testing.T, f *fixture, pane backend.Ref) *viewer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := exec.Command("script", append([]string{"-q", "/dev/null", client.Path}, client.Args[1:]...)...)
+	recording, err := os.CreateTemp(f.dir, "viewer-*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = recording.Close()
+	script := exec.Command("script", append([]string{"-q", "-F", recording.Name(), client.Path}, client.Args[1:]...)...)
 	script.Env = append(client.Env, "TERM=xterm-256color")
 	stdin, err := script.StdinPipe()
 	if err != nil {
@@ -46,7 +52,7 @@ func attachViewer(t *testing.T, f *fixture, pane backend.Ref) *viewer {
 		_ = script.Process.Kill()
 		_ = script.Wait()
 	})
-	v := &viewer{t: t, f: f, pane: pane, stdin: stdin}
+	v := &viewer{t: t, f: f, pane: pane, stdin: stdin, output: recording.Name()}
 	v.wait("a client to attach", func() bool {
 		return f.tmux(t, "list-clients", "-t", pane.ID, "-F", "#{client_tty}") != ""
 	})
@@ -144,6 +150,41 @@ func TestViewerKeysReachHistoryHeldByTheServer(t *testing.T) {
 	v2.send("\x1b")
 	v2.wait("Escape to leave history", func() bool { return !v2.inHistory() })
 	t.Logf("observed: page up/down, find, find next/previous, top and bottom moved through %s lines of tmux history; a replacement viewer found line 1", size)
+}
+
+// The scope is shown by the server that knows the actual alternate-screen
+// state, not guessed from which harness was launched or a stale app snapshot.
+func TestViewerFindNamesItsActualScope(t *testing.T) {
+	for _, fullscreen := range []bool{false, true} {
+		t.Run(map[bool]string{false: "history", true: "visible-screen"}[fullscreen], func(t *testing.T) {
+			f := newFixture(t, Options{})
+			program := `printf 'history-only\n'; `
+			label := "Find in terminal history:"
+			if fullscreen {
+				program += `printf '\033[?1049h\033[2J'; `
+				label = "Find on visible screen:"
+			}
+			program += `printf 'visible-needle\n'; stty raw -echo; exec cat >/dev/null`
+			l := f.launch(t, "search", []string{"/bin/sh", "-c", program}, nil)
+			v := attachViewer(t, f, l.Pane)
+			defer func() {
+				if t.Failed() {
+					data, _ := os.ReadFile(v.output)
+					t.Logf("viewer output: %q", data)
+				}
+			}()
+			v.wait("fixture output", func() bool {
+				return strings.Contains(f.tmux(t, "capture-pane", "-p", "-t", l.Pane.ID), "visible-needle")
+			})
+			v.ask(ViewerFind)
+			v.wait("the scope label", func() bool {
+				output, _ := os.ReadFile(v.output)
+				return strings.Contains(string(output), label)
+			})
+			v.send("visible-needle\r")
+			v.wait("find to reach the visible match", func() bool { return strings.Contains(v.format("#{copy_cursor_line}"), "visible-needle") })
+		})
+	}
 }
 
 // TestViewerMarkersFindWhatWentWrong: the marker key opens history on the

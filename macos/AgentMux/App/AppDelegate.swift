@@ -825,6 +825,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         controller.onVisibilityChanged = { [weak self] visible in
             self?.changesVisible = visible
             self?.syncActivationPolicy()
+            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
         }
         controller.model.onOpenFile = { [weak self] path in
             self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
@@ -855,6 +856,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         controller.onVisibilityChanged = { [weak self] visible in
             self?.runsVisible = visible
             self?.syncActivationPolicy()
+            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
         }
         controller.model.onAnswer = { [weak self] target in self?.answer(target) }
         controller.model.onFocus = { [weak self] row in
@@ -877,6 +879,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         controller.onVisibilityChanged = { [weak self] visible in
             self?.activityVisible = visible
             self?.syncActivationPolicy()
+            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
         }
         controller.model.onConversation = { [weak self] identity in self?.openHistory(conversation: identity) }
         controller.model.onFocus = { [weak self] entry in
@@ -893,6 +896,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     @objc func showHistory(_ sender: Any?) { openHistory(conversation: nil) }
 
+    @objc func searchConversation(_ sender: Any?) {
+        guard workspaceIsKey, let identity = workspace?.shownSessionRow?.conversation else { return }
+        openHistory(conversation: identity)
+    }
+
     private func openHistory(conversation: ConversationIdentity?) {
         let workspace = workspaceController()
         workspace.show()
@@ -900,6 +908,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         controller.onVisibilityChanged = { [weak self] visible in
             self?.historyVisible = visible
             self?.syncActivationPolicy()
+            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
         }
         controller.model.onAction = { [weak self] conversation, fork, completion in
             self?.openHistoryConversation(conversation, fork: fork, completion: completion)
@@ -2809,7 +2818,7 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(toggleRecentPlace(_:)),
         #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)),
         #selector(newSessionTerminal(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
-        #selector(endWorkspaceSession(_:)),
+        #selector(endWorkspaceSession(_:)), #selector(searchConversation(_:)),
         #selector(focusNextSession(_:)), #selector(focusPreviousSession(_:)),
         #selector(pickSessionIcon(_:)), #selector(pickSessionColor(_:)),
         #selector(clearSessionState(_:)), #selector(toggleSessionMute(_:)), #selector(markSessionActive(_:)),
@@ -2829,6 +2838,9 @@ extension AppDelegate: NSMenuItemValidation {
 
     private func validateWorkspaceItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(searchConversation(_:)):
+            item.toolTip = "Search the selected agent's recorded conversation, including messages outside the visible terminal screen."
+            return workspace?.shownSessionRow?.conversation != nil
         case #selector(endWorkspaceSession(_:)):
             return workspace?.shownSessionRow?.embeddedRuntimeSessionID != nil
         case #selector(closeWorkspaceView(_:)):

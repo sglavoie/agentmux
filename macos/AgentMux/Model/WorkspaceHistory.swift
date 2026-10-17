@@ -118,7 +118,8 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var acting = false
     @Published private(set) var error: String?
     @Published private(set) var transcriptError: String?
-    @Published private(set) var actionNotice: String?
+    @Published private(set) var actionFeedback: WorkspaceFeedback?
+    var actionNotice: String? { actionFeedback?.message }
     @Published var liveConversations: Set<String> = []
     @Published private(set) var project = ""
     @Published private(set) var currentConversation: ConversationIdentity?
@@ -169,6 +170,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     var selected: WorkspaceHistoryEntry? { entries.first { $0.id == selection } }
+    var canRefreshTranscript: Bool { selected != nil && !reading }
     var canAct: Bool { selected != nil && !acting && !loading && error == nil }
     var canLoadEarlier: Bool { (transcript?.start ?? 0) > 0 && !reading }
     var canLoadLater: Bool { guard let transcript else { return false }; return transcript.end < transcript.total && !reading }
@@ -317,7 +319,6 @@ final class WorkspaceHistoryModel: ObservableObject {
         transcript = nil
         newMessages = 0
         transcriptError = nil
-        actionNotice = nil
         matchIndex = 0
         scrollRequest = nil
         saveReview()
@@ -383,10 +384,14 @@ final class WorkspaceHistoryModel: ObservableObject {
     func act(fork: Bool) {
         guard canAct, let selected, let onAction else { return }
         acting = true
-        actionNotice = nil
+        actionFeedback = nil
         onAction(selected.conversation, fork) { [weak self] problem in
             self?.acting = false
-            self?.actionNotice = problem ?? (fork ? "Fork opened in the workspace." : "Conversation opened.")
+            self?.actionFeedback = WorkspaceFeedback(target: "\(selected.conversation.displayName) · \(selected.id)",
+                message: problem ?? (fork ? "Fork opened in the workspace." : "Conversation opened."),
+                kind: problem == nil ? .success : .error,
+                nextStep: problem == nil ? "" : "Refresh to check whether the conversation is already live before trying again.",
+                recovery: problem == nil ? nil : .refresh)
         }
     }
 

@@ -53,10 +53,15 @@ struct WorkspaceLandResult: Decodable {
 @MainActor
 final class WorkspaceChangesModel: ObservableObject {
     @Published var base = "HEAD"
-    @Published var diffFontSize: Double = 12 { didSet { saveAppearance() } }
-    @Published var wrapDiffLines = false { didSet { saveAppearance() } }
-    private func saveAppearance() {
-        reviewState.diffAppearance = .init(fontSize: diffFontSize, wrapLines: wrapDiffLines)
+    let readingPreferences: WorkspaceReadingPreferences
+    private var appearanceSubscription: AnyCancellable?
+    var diffFontSize: Double {
+        get { readingPreferences.effectiveFontSize }
+        set { readingPreferences.fontSize = newValue }
+    }
+    var wrapDiffLines: Bool {
+        get { readingPreferences.wrapLines }
+        set { readingPreferences.wrapLines = newValue }
     }
     @Published private(set) var changes: WorkspaceChanges?
     @Published private(set) var selectedFile: String?
@@ -67,10 +72,12 @@ final class WorkspaceChangesModel: ObservableObject {
     @Published private(set) var loading = false
     @Published private(set) var reading = false
     @Published private(set) var landing = false
+    @Published private(set) var reviewing = false
     @Published private(set) var error: String?
     @Published private(set) var patchError: String?
     @Published private(set) var worktreeError: String?
-    @Published private(set) var landNotice: String?
+    @Published private(set) var landFeedback: WorkspaceFeedback?
+    var landNotice: String? { landFeedback?.message }
     @Published private(set) var worktree: WorkspaceWorktreeReview.Review?
     var onOpenFile: ((String) -> Void)?
     private let command: () -> AMXCommand?
@@ -85,18 +92,24 @@ final class WorkspaceChangesModel: ObservableObject {
         self.command = command
         self.runner = runner
         reviewState = WorkspaceReviewState(defaults: defaults)
-        let appearance = reviewState.diffAppearance
-        diffFontSize = appearance.fontSize
-        wrapDiffLines = appearance.wrapLines
+        readingPreferences = defaults === UserDefaults.standard ? .shared : WorkspaceReadingPreferences(defaults: defaults)
+        appearanceSubscription = readingPreferences.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
 
     var landingReason: String? {
         guard let worktree else { return "No managed worktree review is available." }
-        if loading || landing { return "Wait for the current operation to finish." }
+        if loading || reviewing || landing { return "Wait for the current operation to finish." }
         if let error { return error }
+        if let worktreeError { return worktreeError }
         if worktree.dirty { return "Commit or discard the worktree’s uncommitted changes before landing." }
         if worktree.lands != "fast_forward" { return "Landing requires a fast-forward; current result: \(worktree.lands)." }
         return nil
+    }
+    var worktreeSummary: String {
+        guard let worktree else { return "Worktree details" }
+        let conflicts = worktree.conflicts?.count ?? 0, warnings = worktree.warnings?.count ?? 0
+        if conflicts + warnings > 0 { return "\(conflicts) conflicts · \(warnings) warnings…" }
+        return WorkspaceWording.status(worktree.lands) + "…"
     }
     var canLand: Bool { landingReason == nil }
     var diffIdentity: String { [changes?.root ?? "", changes?.base ?? "", selectedFile ?? ""].joined(separator: "\u{0}") }
@@ -105,6 +118,8 @@ final class WorkspaceChangesModel: ObservableObject {
         guard !landing else { return }
         target = ["--runtime-session", runtimeSessionID]
         changes = nil
+        worktree = nil
+        landFeedback = nil
         restoreComparison()
         refresh()
     }
@@ -113,6 +128,8 @@ final class WorkspaceChangesModel: ObservableObject {
         guard !landing else { return }
         target = ["--directory", directory]
         changes = nil
+        worktree = nil
+        landFeedback = nil
         restoreComparison()
         refresh()
     }
@@ -139,16 +156,16 @@ final class WorkspaceChangesModel: ObservableObject {
         reading = false
         patch = SecretText()
         error = nil
-        worktree = nil
+        reviewing = true
         worktreeError = nil
-        guard let command = command(), !target.isEmpty else { error = "Select a checkout and check that amx is available."; return }
+        guard let command = command(), !target.isEmpty else { reviewing = false; error = "Select a checkout and check that amx is available."; return }
         loading = true
         let args = ["session", "changes", "--json", "--base", base] + target
         runner.run({ command.json(WorkspaceChanges.self, args, timeout: 30) }) { [weak self] result in
             guard let self, self.generation == generation else { return }
             self.loading = false
             switch result {
-            case let .failure(error): self.error = error.message
+            case let .failure(error): self.reviewing = false; self.error = error.message
             case let .success(value), let .partial(value, _):
                 self.changes = value
                 // Keep the visible review anchored to this checkout even if
@@ -197,6 +214,7 @@ final class WorkspaceChangesModel: ObservableObject {
             }
         }) { [weak self] result in
             guard let self, self.generation == generation else { return }
+            self.reviewing = false
             switch result {
             case let .failure(error): self.worktreeError = error.message
             case let .success(value): self.worktree = value?.review
@@ -214,19 +232,23 @@ final class WorkspaceChangesModel: ObservableObject {
     /// clean/inactive/fast-forward conditions again at execution time.
     func land(target: WorkspaceWorktreeReview.Review? = nil) {
         if let target, target != worktree {
-            landNotice = "The worktree review changed. Review it again before confirming a landing."
+            landFeedback = WorkspaceFeedback(target: target.path, message: "The worktree review changed. Review it again before confirming a landing.", kind: .warning)
             return
         }
         guard canLand, let worktree, let command = command() else { return }
         landing = true
-        landNotice = nil
+        landFeedback = nil
         runner.run({ command.json(WorkspaceLandResult.self, ["worktree", "land", "--json", "--yes", "--", worktree.id], timeout: 60, mutates: true) }) { [weak self] result in
             guard let self else { return }
             self.landing = false
             switch result {
-            case let .failure(error): self.landNotice = error.message
-            case let .success(value): self.landNotice = value.message ?? (value.changed ? "Worktree landed." : "No branch change was needed.")
-            case let .partial(value, _): self.landNotice = (value.message ?? "The branch may have moved.") + " Check the checkout before retrying."
+            case let .failure(error): self.landFeedback = WorkspaceFeedback(target: worktree.path, message: error.message,
+                nextStep: "Refresh and inspect the source branch before trying to land again.")
+            case let .success(value): self.landFeedback = WorkspaceFeedback(target: worktree.path,
+                message: value.message ?? (value.changed ? "Worktree landed." : "No branch change was needed."), kind: .success, recovery: nil)
+            case let .partial(value, _): self.landFeedback = WorkspaceFeedback(target: worktree.path,
+                message: (value.message ?? "The branch may have moved.") + " Check the checkout before retrying.", kind: .warning,
+                nextStep: "Refresh only reads the checkout; it does not repeat the landing.")
             }
             self.refresh()
         }
@@ -248,6 +270,7 @@ final class WorkspaceChangesModel: ObservableObject {
         patchGeneration += 1
         loading = false
         reading = false
+        reviewing = false
         patch = SecretText()
         diff = WorkspaceDiff("")
     }

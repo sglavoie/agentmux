@@ -38,13 +38,13 @@ final class WorkspaceFindBar: NSView, NSSearchFieldDelegate {
         layer?.cornerRadius = 6
         layer?.borderWidth = 1
 
-        field.placeholderString = "Find"
+        field.placeholderString = "Find in terminal history"
         field.delegate = self
         field.sendsSearchStringImmediately = true
         field.sendsWholeSearchString = false
         field.target = self
         field.action = #selector(fieldChanged(_:))
-        field.setAccessibilityLabel("Find in terminal")
+        field.setAccessibilityLabel("Find in terminal history")
         field.translatesAutoresizingMaskIntoConstraints = false
 
         countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)

@@ -49,7 +49,8 @@ final class WorkspaceRunPlanModel: ObservableObject {
     @Published private(set) var checking = false
     @Published private(set) var launching = false
     @Published private(set) var preview: WorkspacePlanRunResult?
-    @Published private(set) var notice: String?
+    @Published private(set) var feedback: WorkspaceFeedback?
+    var notice: String? { feedback?.message }
     @Published private(set) var checkedArguments: [String]?
     @Published private(set) var submitted: Set<String> = []
     @Published private(set) var projects: [ProjectEntry] = []
@@ -130,9 +131,9 @@ final class WorkspaceRunPlanModel: ObservableObject {
 
     func check() {
         guard !checking, !launching, !selector.isEmpty, projectProblem == nil, profileProblem == nil else { return }
-        guard let command = command() else { notice = "amx is not available."; return }
+        guard let command = command() else { feedback = WorkspaceFeedback(target: selector, message: "amx is not available.", nextStep: "Check Settings, then check readiness again.", recovery: .readiness); return }
         let args = arguments
-        checking = true; notice = nil; preview = nil; checkedArguments = nil
+        checking = true; feedback = nil; preview = nil; checkedArguments = nil
         var checkArgs = args
         checkArgs.insert("--check", at: 2)
         runner.run({ command.json(WorkspacePlanRunResult.self, checkArgs, timeout: 120) }) { [weak self] result in
@@ -142,12 +143,12 @@ final class WorkspaceRunPlanModel: ObservableObject {
             switch result {
             case let .success(value):
                 self.preview = value; self.checkedArguments = value.started ? nil : args
-                self.notice = value.message
+                self.feedback = value.message.map { WorkspaceFeedback(target: self.selector, message: $0, kind: value.readiness.state == "ready" ? .information : .warning, recovery: .readiness) }
             case let .partial(value, _):
                 self.preview = value
                 self.checkedArguments = value.readiness.state == "ready" ? nil : args
-                self.notice = value.message ?? "The readiness check did not finish successfully."
-            case let .failure(error): self.notice = error.message
+                self.feedback = WorkspaceFeedback(target: self.selector, message: value.message ?? "The readiness check did not finish successfully.", kind: .warning, nextStep: "Address the findings, then check readiness again.", recovery: .readiness)
+            case let .failure(error): self.feedback = WorkspaceFeedback(target: self.selector, message: error.message, nextStep: "Check the plan directory and Settings, then check readiness again.", recovery: .readiness)
             }
         }
     }
@@ -156,7 +157,7 @@ final class WorkspaceRunPlanModel: ObservableObject {
         guard canStart, let command = command() else { return }
         let args = arguments
         let plan = selector
-        launching = true; notice = nil
+        launching = true; feedback = nil
         // A slow or ambiguous launch cannot be repeated from this form. The
         // managed supervisor may exist before ASL has acquired the plan lock.
         submitted.insert(plan)
@@ -167,14 +168,14 @@ final class WorkspaceRunPlanModel: ObservableObject {
             case let .success(value), let .partial(value, _):
                 self.preview = value
                 if value.started {
-                    self.notice = "Supervising session started. The run will appear after ASL initializes."
+                    self.feedback = WorkspaceFeedback(target: plan, message: "Supervising session started. The run will appear after ASL initializes.", kind: .success, recovery: .runs)
                     if let id = value.runtimeSessionID, WorkspaceUtilityView.isRuntimeSessionID(id) { self.onStarted?(id) }
                 } else {
                     self.submitted.remove(plan)
-                    self.notice = value.message ?? "The plan was not started: \(value.readiness.state)."
+                    self.feedback = WorkspaceFeedback(target: plan, message: value.message ?? "The plan was not started: \(value.readiness.state).", kind: .warning, nextStep: "Address the readiness findings before starting again.", recovery: .readiness)
                 }
             case let .failure(error):
-                self.notice = error.message + " Check the workspace and Runs before attempting another launch of this plan."
+                self.feedback = WorkspaceFeedback(target: plan, message: error.message + " Check the workspace and Runs before attempting another launch of this plan.", kind: .warning, nextStep: "Opening Runs does not repeat the launch.", recovery: .runs)
             }
         }
     }
