@@ -4,6 +4,7 @@ import os
 import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, WorkspaceDelegate {
+    private let reviewFeedbackHistory = WorkspaceFeedbackHistory()
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "app")
 
     /// How often the daemon line is refreshed while the companion feed is
@@ -420,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             controller.onLayoutChanged = { WorkspaceRestoration.saveLayout($0) }
             controller.makeRestoredReview = { [weak self] directory in
                 guard let self else { return nil }
-                let model = WorkspaceChangesModel(command: { [weak self] in self?.command }, defaults: .standard)
+                let model = self.makeChangesModel()
                 model.onOpenFile = { [weak self] path in
                     self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
                 }
@@ -810,7 +811,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             return refuse("Select an embedded session to review its checkout alongside it.")
         }
         guard paneChanges?.landing != true else { return refuse("Wait for the worktree landing to finish.") }
-        let model = WorkspaceChangesModel(command: { [weak self] in self?.command }, defaults: .standard)
+        let model = makeChangesModel()
         model.onOpenFile = { [weak self] path in
             self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
         }
@@ -821,10 +822,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         model.open(runtimeSessionID: id)
     }
 
+    private func makeChangesModel() -> WorkspaceChangesModel {
+        let model = WorkspaceChangesModel(command: { [weak self] in self?.command }, defaults: .standard, feedbackHistory: reviewFeedbackHistory)
+        model.onFeedbackRecovery = { [weak self] directory in self?.inspectFeedbackCheckout(directory) }
+        return model
+    }
+
+    private func inspectFeedbackCheckout(_ directory: String) {
+        let controller = changesWindow ?? WorkspaceChangesWindow(model: makeChangesModel())
+        guard !controller.model.landing else { controller.show(); return }
+        controller.onVisibilityChanged = { [weak self] visible in
+            self?.changesVisible = visible
+            self?.syncActivationPolicy()
+        }
+        controller.model.onOpenFile = { [weak self] path in
+            self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
+        }
+        changesWindow = controller
+        controller.model.open(directory: directory)
+        controller.show()
+    }
+
     @objc func showChanges(_ sender: Any?) {
         let workspace = workspaceController()
         workspace.show()
-        let controller = changesWindow ?? WorkspaceChangesWindow(model: WorkspaceChangesModel(command: { [weak self] in self?.command }, defaults: .standard))
+        let controller = changesWindow ?? WorkspaceChangesWindow(model: makeChangesModel())
         guard !controller.model.landing else { controller.show(); return }
         controller.onVisibilityChanged = { [weak self] visible in
             self?.changesVisible = visible
@@ -855,8 +877,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     private func openRuns(launch: Bool) {
         let controller = runsWindow ?? WorkspaceRunsWindow(
-            model: WorkspaceRunsModel(command: { [weak self] in self?.command }),
-            plan: WorkspaceRunPlanModel(command: { [weak self] in self?.command }))
+            model: WorkspaceRunsModel(command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory),
+            plan: WorkspaceRunPlanModel(command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory))
         controller.onVisibilityChanged = { [weak self] visible in
             self?.runsVisible = visible
             self?.syncActivationPolicy()
@@ -908,7 +930,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private func openHistory(conversation: ConversationIdentity?) {
         let workspace = workspaceController()
         workspace.show()
-        let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }, defaults: .standard))
+        let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }, defaults: .standard, feedbackHistory: reviewFeedbackHistory))
         controller.onVisibilityChanged = { [weak self] visible in
             self?.historyVisible = visible
             self?.syncActivationPolicy()

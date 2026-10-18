@@ -299,7 +299,7 @@ enum WorkspaceSidebar {
         if !session.harness.isEmpty, session.harness != label { detail.append(session.harness) }
         if !session.branch.isEmpty { detail.append("\(session.branch)\(session.dirty ? "*" : "")") }
         if let changed = session.changedAt { detail.append(MenuBuilder.age(since: changed, now: now)) }
-        if session.attention, !session.reason.isEmpty { detail.append(session.reason) }
+        if session.attention, !session.reason.isEmpty { detail.append(WorkspaceWording.status(session.reason)) }
         if embedded == nil { detail.append(kittyBadge) }
 
         var tip = [MenuBuilder.place(of: session)]

@@ -7,7 +7,15 @@ final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
     private(set) var window: NSWindow?
     var onVisibilityChanged: (Bool) -> Void = { _ in }
 
-    init(model: WorkspaceHistoryModel) { self.model = model }
+    init(model: WorkspaceHistoryModel) {
+        self.model = model
+        super.init()
+        model.revealFeedback = { [weak self] in
+            self?.onVisibilityChanged(true)
+            self?.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+        }
+    }
 
     func show(project: String, conversation: ConversationIdentity?) {
         if window == nil {
@@ -40,15 +48,19 @@ struct WorkspaceHistoryView: View {
     @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
     @ObservedObject var model: WorkspaceHistoryModel
     @State private var visibleMessage: Int?
-    private enum Focus: Hashable { case search, results }
+    private enum Focus: Hashable { case search, results, transcript }
     @FocusState private var focus: Focus?
+    @State private var dragStart: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
+                Button(action: toggleResults) { Image(systemName: "sidebar.left") }
+                    .help("Show or hide conversation results (⌘⌥S)")
+                    .accessibilityLabel(model.layout.collapsed ? "Show conversation results" : "Hide conversation results")
                 TextField("Search full conversations", text: $model.query)
                     .focused($focus, equals: .search)
-                    .onKeyPress(.downArrow) { focus = .results; return .handled }
+                    .onKeyPress(.downArrow) { model.layout.collapsed = false; focus = .results; return .handled }
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { model.search() }
                     .onChange(of: model.query) { _, _ in model.scheduleSearch() }
@@ -71,12 +83,14 @@ struct WorkspaceHistoryView: View {
 
                 Text("\(model.entries.count) of \(model.totalResults) \(model.totalResults == 1 ? "conversation" : "conversations")").foregroundStyle(.secondary)
             }
-            HSplitView {
+            GeometryReader { geometry in
+            HStack(spacing: 0) {
+                if !model.layout.collapsed {
                 VStack(spacing: 6) {
-                WorkspaceStatus(loading: model.loading, title: "Searching…", retained: !model.entries.isEmpty,
+                WorkspaceStatus(loading: model.loading, title: "Searching…", retained: !model.entries.isEmpty, refreshedAt: model.resultsRefreshedAt,
                                 feedback: model.error.map { WorkspaceFeedback(target: "Conversation search", message: $0,
                                     nextStep: "Check Settings if amx is unavailable, then search again.") },
-                                recover: { model.search() })
+                                recover: { model.search() }, history: model.feedbackHistory, compactFeedback: true)
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.entries) { entry in
                         VStack(alignment: .leading, spacing: 4) {
@@ -102,7 +116,7 @@ struct WorkspaceHistoryView: View {
                         }.padding(.vertical, 3).tag(entry.id)
                     }
                 }.focused($focus, equals: .results)
-                    .frame(minWidth: 200, idealWidth: 300, maxWidth: .infinity)
+                    .frame(maxWidth: .infinity)
                     .overlay {
                         if model.entries.isEmpty && !model.loading && model.error == nil {
                             VStack(spacing: 10) {
@@ -110,7 +124,11 @@ struct WorkspaceHistoryView: View {
                                 if !model.resultsQuery.isEmpty { Button("Clear search") { model.query = "" } }
                                 if model.scope != .all { Button("Search all history") { model.scope = .all } }
                                 if !model.includeAutomated {
-                                    Button(model.hiddenAutomated > 0 ? "Include \(model.hiddenAutomated) automated matches" : "Include automated sessions") { model.includeAutomated = true }
+                                    if model.hiddenAutomated > 0 {
+                                        Text("\(model.hiddenAutomated) automated matches hidden").font(.caption)
+                                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Button("Include automated sessions") { model.includeAutomated = true }.font(.callout)
                                 }
                             }.padding(12)
                         }
@@ -121,6 +139,20 @@ struct WorkspaceHistoryView: View {
                     }
                     if !model.entries.isEmpty && model.hiddenAutomated > 0 {
                         Button("Include \(model.hiddenAutomated) automated matches") { model.includeAutomated = true }.font(.caption)
+                    }
+                }.frame(width: model.layout.width(in: geometry.size.width))
+                    .accessibilityIdentifier("history-results")
+                Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 1).frame(width: 6)
+                    .background(WorkspaceHistoryResizeCursor())
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture().onChanged { value in
+                        if dragStart == nil { dragStart = model.layout.width(in: geometry.size.width) }
+                        model.layout.resultsWidth = min(max(200, (dragStart ?? 200) + value.translation.width), max(200, geometry.size.width - 380))
+                    }.onEnded { _ in dragStart = nil })
+                    .accessibilityLabel("Conversation results width")
+                    .accessibilityValue("\(Int(model.layout.width(in: geometry.size.width))) points")
+                    .accessibilityAdjustableAction { direction in
+                        model.layout.resultsWidth = model.layout.width(in: geometry.size.width) + (direction == .increment ? 20 : -20)
                     }
                 }
                 VStack(alignment: .leading, spacing: 4) {
@@ -137,11 +169,11 @@ struct WorkspaceHistoryView: View {
                                 .accessibilityLabel("Refresh conversation").disabled(!model.canRefreshTranscript)
                         }
                         WorkspaceStatus(loading: model.reading || model.acting,
-                                        title: model.acting ? "Opening conversation…" : "Loading transcript…", retained: model.transcript != nil,
+                                        title: model.acting ? "Opening conversation…" : "Loading transcript…", retained: model.transcript != nil, refreshedAt: model.transcriptRefreshedAt,
                                         showTarget: model.transcriptError == nil && model.actionFeedback != nil,
                                         feedback: model.transcriptError.map { WorkspaceFeedback(target: selected.conversation.displayName,
                                             message: $0, nextStep: "Reload the transcript to check again. Existing text remains readable.", recovery: .transcript) } ?? model.actionFeedback,
-                                        recover: { if model.transcriptError != nil { model.refreshTranscript() } else { model.search() } })
+                                        recover: { if model.transcriptError != nil { model.refreshTranscript() } else { model.recoverActionFeedback() } })
                         if let transcript = model.transcript {
                             HStack(spacing: 4) {
                                 Menu {
@@ -186,6 +218,7 @@ struct WorkspaceHistoryView: View {
                                     }.scrollTargetLayout().padding(8)
                                 }
                                 .accessibilityIdentifier("history-transcript")
+                                .focusable().focused($focus, equals: .transcript)
                                 .scrollPosition(id: $visibleMessage, anchor: .top)
                                 .onChange(of: visibleMessage) { _, message in model.rememberVisibleMessage(message) }
                                 .onChange(of: model.scrollRequest) { _, request in
@@ -198,9 +231,14 @@ struct WorkspaceHistoryView: View {
                     Spacer(minLength: 0)
                 }.padding(.horizontal, 8).padding(.vertical, 4).frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
             }
+            }
         }.padding(.horizontal, 12).padding(.vertical, 8)
             .onAppear { focus = .search }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
+    }
+    private func toggleResults() {
+        model.layout.collapsed.toggle()
+        focus = model.layout.collapsed ? .transcript : .results
     }
     private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
         if modifiers == .command {
@@ -217,7 +255,18 @@ struct WorkspaceHistoryView: View {
             case "\r": model.act(fork: true)
             default: return false
             }
-        } else { return false }
+        } else if modifiers == [.command, .option], key == "s" { toggleResults() }
+        else { return false }
         return true
     }
+}
+
+/// The divider has a generous hit area but the same thin rule as native splits.
+private struct WorkspaceHistoryResizeCursor: NSViewRepresentable {
+    final class CursorView: NSView {
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .resizeLeftRight) }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+    func makeNSView(context: Context) -> CursorView { CursorView() }
+    func updateNSView(_ view: CursorView, context: Context) {}
 }

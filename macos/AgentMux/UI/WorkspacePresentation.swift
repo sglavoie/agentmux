@@ -25,9 +25,12 @@ struct WorkspaceStatus: View {
     var loading = false
     var title = "Refreshing…"
     var retained = false
+    var refreshedAt: Date?
     var showTarget = false
     var feedback: WorkspaceFeedback?
     var recover: (() -> Void)?
+    var history: WorkspaceFeedbackHistory?
+    var compactFeedback = false
     @State private var showProgress = false
     @State private var showDetails = false
 
@@ -50,14 +53,15 @@ struct WorkspaceStatus: View {
     var body: some View {
         HStack(spacing: 6) {
             if retained && (loading || feedback?.kind == .error) {
-                Text("Previous results").font(.callout).foregroundStyle(.secondary).fixedSize()
+                if let refreshedAt { WorkspaceFreshness(at: refreshedAt, retained: true) }
+                else { Text("Previous results").font(.callout).foregroundStyle(.secondary).fixedSize() }
             }
             if let feedback {
                 Button { showDetails = true } label: {
                     HStack(spacing: 4) {
                         Image(systemName: symbol)
                         if showTarget { Text(feedback.target).fontWeight(.semibold).lineLimit(1).truncationMode(.middle).frame(maxWidth: 140) }
-                        Text(feedback.message).lineLimit(1).truncationMode(.tail)
+                        if !compactFeedback { Text(feedback.message).lineLimit(1).truncationMode(.tail) }
                     }.foregroundStyle(color)
                 }
                 .buttonStyle(.plain)
@@ -75,7 +79,7 @@ struct WorkspaceStatus: View {
                         }.textSelection(.enabled).padding(16).frame(maxWidth: .infinity, alignment: .leading)
                     }.frame(width: 380, height: 220)
                 }
-                if let recovery = feedback.recovery, let recover {
+                if !compactFeedback, let recovery = feedback.recovery, let recover {
                     Button(recovery.title, action: recover).disabled(loading).fixedSize()
                 }
             } else if loading && showProgress {
@@ -83,6 +87,10 @@ struct WorkspaceStatus: View {
                 Text(title).lineLimit(1).foregroundStyle(.secondary)
                     .help(retained ? "\(title) Showing the previous results." : title)
                     .accessibilityLabel(retained ? "\(title) Showing the previous results." : title)
+            }
+            if let history { WorkspaceFeedbackHistoryButton(history: history) }
+            if let refreshedAt, !(retained && (loading || feedback?.kind == .error)) {
+                WorkspaceFreshness(at: refreshedAt, retained: retained && (loading || feedback?.kind == .error), compact: feedback != nil || loading)
             }
             Spacer(minLength: 0)
         }
@@ -198,5 +206,92 @@ struct WorkspaceTimestamp: View {
                 .font(.caption).foregroundStyle(.secondary).help(value)
                 .accessibilityLabel("\(title): \(value)")
         }
+    }
+}
+
+/// Observation time is separate from the agent's activity time. Failed reads
+/// never advance it. Exact local time and timezone are available without hover.
+struct WorkspaceFreshness: View {
+    let at: Date
+    var retained = false
+    var compact = false
+    @State private var showing = false
+    static func text(at: Date, now: Date, retained: Bool) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(at)))
+        let age = seconds < 60 ? "just now" : seconds < 3600 ? "\(seconds / 60)m ago" : "\(seconds / 3600)h ago"
+        return retained ? "Showing results from \(age)" : "Refreshed \(age)"
+    }
+    static func age(at: Date, now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(at)))
+        return seconds < 60 ? "now" : seconds < 3600 ? "\(seconds / 60)m" : "\(seconds / 3600)h"
+    }
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let title = Self.text(at: at, now: context.date, retained: retained)
+            Button { showing = true } label: {
+                if compact { Image(systemName: "clock") }
+                else { Text(retained ? "Previous results · " + Self.age(at: at, now: context.date) : title).lineLimit(1).truncationMode(.tail) }
+            }.buttonStyle(.plain).foregroundStyle(.secondary)
+                .help(title + "\nLast refreshed: " + at.formatted(.dateTime.year().month().day().hour().minute().second().timeZone()))
+                .accessibilityLabel(title + ". Show refresh time")
+                .popover(isPresented: $showing) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(title)
+                        Text("Last refreshed: " + at.formatted(.dateTime.year().month().day().hour().minute().second().timeZone()))
+                        Text("This is when the displayed content was read, not the agent’s last activity.").foregroundStyle(.secondary)
+                    }.font(.callout).textSelection(.enabled).padding(16).frame(width: 300)
+                }
+        }
+    }
+}
+
+struct WorkspaceFeedbackHistoryButton: View {
+    @ObservedObject var history: WorkspaceFeedbackHistory
+    @State private var showing = false
+    var body: some View {
+        Button { showing = true } label: { Image(systemName: "clock.arrow.circlepath") }
+            .buttonStyle(.plain).disabled(history.entries.isEmpty)
+            .help("Action feedback (\(history.entries.count) retained)")
+            .accessibilityLabel("Action feedback, \(history.entries.count) retained outcomes")
+            .popover(isPresented: $showing) {
+                WorkspaceFeedbackHistoryView(history: history)
+            }
+    }
+}
+
+struct WorkspaceFeedbackHistoryView: View {
+    @ObservedObject var history: WorkspaceFeedbackHistory
+    @State private var copied: UUID?
+    @State private var copyError: String?
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Action feedback").font(.headline)
+                if history.entries.isEmpty { Text("No retained action notices.") }
+                ForEach(history.entries) { entry in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(entry.feedback.target).fontWeight(.semibold)
+                        Text(entry.occurred.formatted(.dateTime.month().day().hour().minute().second().timeZone())).font(.caption).foregroundStyle(.secondary)
+                        Text(entry.feedback.message)
+                        if !entry.feedback.nextStep.isEmpty { Text(entry.feedback.nextStep).foregroundStyle(.secondary) }
+                        HStack {
+                            if let recovery = entry.feedback.recovery {
+                                Button(recovery.title) { entry.recover() }.disabled(!entry.available())
+                            }
+                            Button(copied == entry.id ? "Copied" : "Copy") {
+                                var feedback = WorkspaceCopyFeedback()
+                                feedback.copy(entry.feedback.target + "\n" + entry.occurred.formatted() + "\n" + entry.feedback.message + "\n" + entry.feedback.nextStep)
+                                copied = feedback.succeeded ? entry.id : nil
+                                copyError = feedback.succeeded ? nil : feedback.message
+                            }
+                            Button("Dismiss") { history.dismiss(entry.id) }
+                        }
+                    }.textSelection(.enabled)
+                    Divider()
+                }
+                if let copyError { Text(copyError).foregroundStyle(.red) }
+                Text("Dismissing a notice does not cancel an operation. Recovery never repeats the original action.").font(.caption).foregroundStyle(.secondary)
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(width: 420, height: 360)
     }
 }

@@ -1,0 +1,141 @@
+{
+  "date": "2026-10-17",
+  "fixture_source": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+  "fixture_sha256": "6e0d7ffb05c1ca4262e900333b5924762d29807d145ca742f9beb09145e162b6",
+  "capture": "ScreenCaptureKit current-process fixture windows; light/dark; 24-point History prose; no live conversations or agents",
+  "full_test_command": "macos/scripts/test-app.sh",
+  "full_test_result": "884 tests passed; zero failures or skips",
+  "additional_checks": [
+    "env -u AMX_RUNTIME_SESSION_ID go test . ./cmd/dashboard: passed",
+    "git diff --check: passed"
+  ],
+  "review_criteria": [
+    "History prioritizes transcript width and preserves reachable controls at 720x450 with 24-point prose.",
+    "Collapsed results give the transcript the full content width.",
+    "Runs exposes progress, blockers and controls before expandable details at 780x500.",
+    "Multiple feedback outcomes retain readable original targets, times, messages, and recovery controls.",
+    "Retained content visibly reports its age, distinct from agent activity."
+  ],
+  "artifacts": [
+    {
+      "path": "feedback-dark.png",
+      "sha256": "d4fa32dc69498615bde739afcc3c43eb9e69defff3c9d860e7cf7109303c1fce",
+      "logical_window_size": [
+        420,
+        392
+      ],
+      "pixel_size": [
+        840,
+        784
+      ]
+    },
+    {
+      "path": "feedback-light.png",
+      "sha256": "839d2c010d38f1665c1310d1b44931210fdf96972f7ee2310146bab258ce2787",
+      "logical_window_size": [
+        420,
+        392
+      ],
+      "pixel_size": [
+        840,
+        784
+      ]
+    },
+    {
+      "path": "history-collapsed-dark.png",
+      "sha256": "c37bc2cc38f1ecbdf1623bbaf31b6a349f4a3d7f43eb9876200124daa47833c5",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        1440,
+        900
+      ]
+    },
+    {
+      "path": "history-collapsed-light.png",
+      "sha256": "01f2abcb3cf3f0e7d2297497374c9eeb06fcbcd031893cc8a120c2fde98f7db1",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        1440,
+        900
+      ]
+    },
+    {
+      "path": "history-dark.png",
+      "sha256": "90deb3dadacc5f9baf2188456c2be546026995df82ed2a127442887a619e51d1",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        1440,
+        900
+      ]
+    },
+    {
+      "path": "history-light.png",
+      "sha256": "ea18a948497c75d54cbfefab34b003fb0af660a0a9c2feb946db729dd481a16d",
+      "logical_window_size": [
+        720,
+        450
+      ],
+      "pixel_size": [
+        1440,
+        900
+      ]
+    },
+    {
+      "path": "runs-dark.png",
+      "sha256": "efc01227a6626bc726427fea5b11624e44d65962a72bd254c48a91769c8f6178",
+      "logical_window_size": [
+        780,
+        500
+      ],
+      "pixel_size": [
+        1560,
+        1000
+      ]
+    },
+    {
+      "path": "runs-light.png",
+      "sha256": "6dd973e63ce17a934536f45171187f816dc9bb24d351fc955fa048cc88bd55dd",
+      "logical_window_size": [
+        780,
+        500
+      ],
+      "pixel_size": [
+        1560,
+        1000
+      ]
+    },
+    {
+      "path": "stale-dark.png",
+      "sha256": "fc792137d4b2b4d1ea16ccd35089ff542a57525586e2a266f591c453df1f644b",
+      "logical_window_size": [
+        720,
+        160
+      ],
+      "pixel_size": [
+        1440,
+        320
+      ]
+    },
+    {
+      "path": "stale-light.png",
+      "sha256": "f77e0803317d6bef17bab8c92497e8bc728893c8c1d31d7b704d35b2b9b1a063",
+      "logical_window_size": [
+        720,
+        160
+      ],
+      "pixel_size": [
+        1440,
+        320
+      ]
+    }
+  ]
+}

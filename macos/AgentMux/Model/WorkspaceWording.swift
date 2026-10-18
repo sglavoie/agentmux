@@ -7,6 +7,12 @@ enum WorkspaceWording {
             "fast_forward": "Ready to land", "nothing_to_land": "Nothing to land",
             "diverged_clean": "Branches diverged; merge required", "conflicts": "Merge conflicts",
             "unknown": "Not yet known", "not_ready": "Not ready", "ready": "Ready to run",
+            "permission": "Needs permission", "key": "Needs permission",
+            "command_approval": "Needs permission", "permission_grant": "Needs permission",
+            "edit_approval": "Needs edit approval", "edit": "Needs edit approval", "trust": "Needs trust approval",
+            "elicitation": "Waiting for your answer", "question": "Waiting for your answer",
+            "request_user_input": "Waiting for your answer", "unanswered_confirmation": "Waiting for your answer",
+            "done": "Turn complete", "stop": "Turn complete", "completed": "Turn complete",
             "running": "Running", "complete": "Complete", "paused": "Paused",
             "pending": "Pending", "empty": "Not started", "verification-failed": "Verification failed",
             "waiting_for_input": "Waiting for your answer", "waiting-for-input": "Waiting for your answer"

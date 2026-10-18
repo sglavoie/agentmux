@@ -39,7 +39,7 @@ final class WorkspaceInspectorTests: XCTestCase {
     func testWaitingListsTheSessionsThatWaitInSidebarOrder() {
         let waiting = WorkspaceInspector.waiting(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
         XCTAssertEqual(waiting.map(\.title), ["api — personal", "web — work"], "not the one that waited longest first")
-        XCTAssertEqual(waiting.map(\.detail), ["stopped · 5m", "needs permission · 9m · Kitty"])
+        XCTAssertEqual(waiting.map(\.detail), ["Turn complete · 5m", "Needs permission · 9m · Kitty"])
         XCTAssertEqual(waiting.map(\.glyph), ["🛑", "🔑"])
         XCTAssertEqual(waiting.map(\.key), [
             .embedded(F.runtimeID(2)), AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4),
@@ -52,7 +52,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         session.name = "migrations"
         let waiting = WorkspaceInspector.waiting([session], now: now, glyphs: .fallback)
         XCTAssertEqual(waiting.map(\.title), ["migrations"])
-        XCTAssertEqual(waiting.map(\.detail), ["permission · 5m"])
+        XCTAssertEqual(waiting.map(\.detail), ["Needs permission · 5m"])
         XCTAssertTrue(waiting[0].toolTip.hasPrefix("api — personal"), "the name does not hide where the session is")
     }
 
@@ -477,7 +477,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         changed[1].reason = "permission"
         app.store.apply(snapshot: F.snapshot(changed))
         XCTAssertTrue(workspace.inspector.lines.contains { $0 === line })
-        XCTAssertEqual(line.detailLabel.stringValue, "permission · 5m")
+        XCTAssertEqual(line.detailLabel.stringValue, "Needs permission · 5m")
         XCTAssertEqual(line.fillColor, WorkspaceWaitingRowView.hoveredFill)
         line.press()
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))

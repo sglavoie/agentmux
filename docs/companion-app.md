@@ -411,8 +411,8 @@ is committed.
   a time; **Load more conversations** extends the list without changing the open
   preview. Empty results offer **Clear search**, **Search all history**, and
   **Include automated sessions** as applicable, with an actual hidden-match count.
-  **⌘R** refreshes the search and selected transcript; the preview's refresh button
-  refreshes just that conversation. Both keep the reading position and update
+  **⌘R** and the preview's refresh button refresh just that conversation; Search
+  or Return in the search field refreshes results. Both keep the reading position and update
   existing messages. A **new messages** button offers navigation to newly appended
   messages. Nothing scrolls to them until you choose it. Superseded searches and
   transcript reads are cancelled, including their running read subprocesses.
@@ -658,8 +658,11 @@ during a drag, or while its context menu is open. Attention badges still update;
 promotions and new rows appear when the interaction ends. Ended sessions held
 in place cannot be acted on.
 
-Conversation History’s results pane can be widened by dragging its divider.
-Rows show relative activity times (with exact times in tooltips), and all-history
+Conversation History gives the transcript most of a narrow window. Drag its
+results divider to choose a width; the preference survives reopening and app
+restarts. The sidebar button or **⌘⌥S** hides results while reading and restores
+them with keyboard focus on the selected result. Selection and reading position
+stay in place. Down from search also reveals the results. Rows show relative activity times (with exact times in tooltips), and all-history
 results include checkout paths alongside their existing project headings.
 Transcripts render tables, blockquotes, and nested list indentation. Code blocks
 offer **Wrap lines** while **Copy code** continues to copy the original text.
@@ -671,6 +674,25 @@ Action feedback names the conversation, checkout, plan, or run it acted on,
 including when you have since selected something else. Refreshing only reads
 state; **Retry Receipt** checks the original run operation. A failed history
 search does not disable the selected transcript's refresh button.
+
+The feedback-history button in the same status area retains the newest 30 native
+action outcomes for this app session, shared by History, Changes, Runs, and the
+plan launch form. Each records its original target, timestamp, message, and
+recovery action. Copy or dismiss individual notices. Recovery opens the original
+conversation or checkout, checks the original plan options, or checks the exact
+pending receipt; it never repeats a resume, fork, landing, launch, or run control.
+An old receipt cannot retry a newer operation.
+
+Refresh ages describe when the displayed content was read, separately for search
+results, transcripts, comparisons, diffs, run lists, and plan details. Failed reads
+keep the old age. Click an age or its clock icon for the exact timestamp and
+timezone. **Last activity** continues to describe the agent's activity.
+
+Runs keeps current progress, blockers, and controls above the scrolling session
+list. **Run details** expands paths, identifiers, and timestamps; **Recorded
+verification** expands the check evidence. Confirmation buttons name the requested
+action. Sidebar, Waiting, and menu-bar reasons use the same readable labels;
+raw protocol reasons remain available in the session inspector.
 
 Activity and Runs support **⌘R** to refresh, **⌘⇧F** to focus their lists, and
 **⌘Return** to focus the selected live session. Activity also supports

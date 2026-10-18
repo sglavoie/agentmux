@@ -72,6 +72,9 @@ struct WorkspaceRunDetail: Decodable {
 /// operation ID for an explicit receipt retry. No action is retried by polling.
 @MainActor
 final class WorkspaceRunsModel: ObservableObject {
+    let feedbackHistory: WorkspaceFeedbackHistory
+    @Published private(set) var listRefreshedAt: Date?
+    @Published private(set) var detailRefreshedAt: Date?
     @Published private(set) var rows: [ASLRow] = []
     @Published private(set) var selection: String?
     @Published private(set) var detail: WorkspaceRunDetail?
@@ -81,11 +84,31 @@ final class WorkspaceRunsModel: ObservableObject {
     @Published private(set) var stale = true
     @Published private(set) var error: String?
     @Published private(set) var detailError: String?
-    @Published private(set) var actionFeedback: WorkspaceFeedback?
+    @Published private(set) var actionFeedback: WorkspaceFeedback? {
+        didSet {
+            guard let actionFeedback else { return }
+            let operation = pending?.operationID
+            let target = actionTarget
+            feedbackHistory.record(actionFeedback, available: { [weak self] in
+                guard let self, !self.acting else { return false }
+                return actionFeedback.recovery != .receipt || (operation != nil && self.pending?.operationID == operation)
+            }) { [weak self] in
+                guard let self else { return }
+                if actionFeedback.recovery == .receipt {
+                    if operation != nil && self.pending?.operationID == operation { self.retryReceipt() }
+                } else {
+                    self.feedbackSelection = target
+                    self.refresh()
+                }
+                self.revealFeedback?()
+            }
+        }
+    }
     var actionNotice: String? { actionFeedback?.message }
     @Published private(set) var pending: ASLRequestParams?
     @Published private(set) var warnings: [String] = []
     @Published private(set) var truncated = false
+    var revealFeedback: (() -> Void)?
     var onAnswer: ((ASLAnswerTarget) -> Void)?
     var onFocus: ((ASLRow) -> Void)?
     private let service: ASLService
@@ -95,8 +118,12 @@ final class WorkspaceRunsModel: ObservableObject {
     private var generation = 0
     private var detailGeneration = 0
     private var timer: Timer?
+    private struct FeedbackTarget { let rowID: String; let runID: String }
+    private var actionTarget: FeedbackTarget?
+    private var feedbackSelection: FeedbackTarget?
 
-    init(service: ASLService = DaemonClient(), command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent()) {
+    init(service: ASLService = DaemonClient(), command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), feedbackHistory: WorkspaceFeedbackHistory? = nil) {
+        self.feedbackHistory = feedbackHistory ?? WorkspaceFeedbackHistory()
         self.service = service; self.command = command; self.runner = runner
     }
 
@@ -116,6 +143,7 @@ final class WorkspaceRunsModel: ObservableObject {
         timer?.invalidate(); timer = nil
         generation += 1; detailGeneration += 1
         loading = false; reading = false; stale = true
+        detailRefreshedAt = nil
         detail = nil
     }
 
@@ -135,11 +163,21 @@ final class WorkspaceRunsModel: ObservableObject {
                 let previous = self.selected?.runID
                 self.status = result.status
                 self.stale = result.status.snapshotStale || ASLView.of(status: result.status, meta: result.meta, hasRows: result.snapshot?.rows.isEmpty == false) != .live
-                self.rows = result.snapshot?.rows ?? []
+                if !self.stale { self.listRefreshedAt = Date() }
+                // A stale projection is not a fresh read. Keep the last known
+                // rows and their observation time until a live snapshot arrives.
+                if !self.stale || self.rows.isEmpty {
+                    self.rows = result.snapshot?.rows ?? []
+                }
                 self.warnings = result.snapshot?.warnings ?? []
                 self.truncated = result.snapshot?.truncated ?? false
                 self.error = self.stale ? "ASL is unavailable or the snapshot is stale. Controls are read-only." : nil
-                if self.selected == nil { self.select(self.rows.first?.rowID) }
+                if let target = self.feedbackSelection, !self.stale {
+                    self.feedbackSelection = nil
+                    let found = self.rows.first { $0.rowID == target.rowID && $0.runID == target.runID }
+                    self.select(found?.rowID)
+                    if found == nil { self.error = "The original run \(target.runID) is no longer listed. Its outcome remains in Action feedback." }
+                } else if self.selected == nil { self.select(self.rows.first?.rowID) }
                 else if previous != self.selected?.runID { self.select(self.selection) }
                 else if !self.reading && !self.stale { self.readDetail() }
             }
@@ -149,6 +187,7 @@ final class WorkspaceRunsModel: ObservableObject {
     func select(_ id: String?) {
         selection = id
         detailGeneration += 1
+        detailRefreshedAt = nil
         detail = nil; detailError = nil; reading = false
         if !stale { readDetail() }
     }
@@ -166,8 +205,9 @@ final class WorkspaceRunsModel: ObservableObject {
             case let .success(detail):
                 guard detail.runner.runID == row.runID,
                       ASLResponse.canonicalDir(detail.planDir) == ASLResponse.canonicalDir(row.planDir) else {
-                    self.detail = nil; self.detailError = "This plan now reports a different run. Refresh the run list."; return
+                    self.detailRefreshedAt = nil; self.detail = nil; self.detailError = "This plan now reports a different run. Refresh the run list."; return
                 }
+                self.detailRefreshedAt = Date()
                 self.detail = detail
             case let .failure(error): self.detailError = error.message
             case .partial: self.detailError = "ASL returned an incomplete status report. Refresh to try again."
@@ -190,11 +230,13 @@ final class WorkspaceRunsModel: ObservableObject {
 
     func perform(_ method: String, target: ASLRow? = nil) {
         if let target, (selected?.rowID != target.rowID || selected?.runID != target.runID) {
+            actionTarget = FeedbackTarget(rowID: target.rowID, runID: target.runID)
             actionFeedback = WorkspaceFeedback(target: target.displayLabel + " · " + target.runID, message: "The selected run changed. Select it again before using this control.", kind: .warning)
             return
         }
         guard [ASLMethod.runResume, ASLMethod.runStopAfterCurrent, ASLMethod.runAbort].contains(method),
               disabledReason(method) == nil, let row = selected else { return }
+        actionTarget = FeedbackTarget(rowID: row.rowID, runID: row.runID)
         acting = true; actionFeedback = nil
         let service = self.service
         runner.run({ service.snapshot() }) { [weak self] result in
@@ -229,6 +271,7 @@ final class WorkspaceRunsModel: ObservableObject {
 
     private func submit(_ params: ASLRequestParams) {
         pending = params
+        actionTarget = FeedbackTarget(rowID: params.rowID, runID: params.runID)
         let service = self.service
         runner.run({ service.act(params) }) { [weak self] result in
             guard let self else { return }

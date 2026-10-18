@@ -159,3 +159,26 @@ extension WorkspaceRunPlanTests {
         XCTAssertNotNil(model.choicesError)
     }
 }
+
+
+extension WorkspaceRunPlanTests {
+    func testArchivedPlanFeedbackRestoresOriginalOptionsWithoutLaunching() throws {
+        let runner = PlanWorkRunner()
+        var calls: [[String]] = []
+        let amx = command { args in
+            calls.append(args)
+            return .finished(.init(status: 1, stdout: Data(), stderr: Data("Check failed".utf8)))
+        }
+        let model = WorkspaceRunPlanModel(command: { amx }, runner: runner)
+        model.plan = "/one"; model.profile = "original"; model.harness = "codex"
+        model.check(); runner.release()
+        let notice = try XCTUnwrap(model.feedbackHistory.entries.first)
+        model.plan = "/two"; model.profile = "other"; model.harness = "claude"
+        notice.recover(); runner.release()
+        XCTAssertEqual(model.plan, "/one")
+        XCTAssertEqual(model.profile, "original")
+        XCTAssertEqual(model.harness, "codex")
+        XCTAssertTrue(calls.allSatisfy { $0.contains("--check") })
+        XCTAssertTrue(model.isPresented)
+    }
+}

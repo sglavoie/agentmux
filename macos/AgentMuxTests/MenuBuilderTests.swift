@@ -28,7 +28,7 @@ final class MenuBuilderTests: XCTestCase {
         var s = session(1, "key", attention: true, project: "api", changedSecondsAgo: 245)
         s.reason = "permission"
         let row = MenuBuilder.row(s, showReason: true, input: input([s]))
-        XCTAssertEqual(row.title, "🔑 api · claude · 4m · permission")
+        XCTAssertEqual(row.title, "🔑 api · claude · 4m · Needs permission")
         XCTAssertEqual(row.windowID, 1)
 
         s.muted = true

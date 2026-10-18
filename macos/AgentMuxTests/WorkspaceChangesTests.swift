@@ -95,4 +95,42 @@ final class WorkspaceChangesTests: XCTestCase {
         model.openFile()
         XCTAssertFalse(opened)
     }
+    func testFeedbackRetainsOriginalCheckoutAndRecoveryNeverLands() throws {
+        let runner = ChangesRunner()
+        var calls: [[String]] = []
+        let amx = command { [changes] args in
+            calls.append(args)
+            if args[0] == "worktree" { return #"{"worktrees":[]}"# }
+            return changes
+        }
+        let model = WorkspaceChangesModel(command: { amx }, runner: runner)
+        let target = try JSONDecoder().decode(WorkspaceWorktreeReview.self, from: Data(#"{"review":{"id":"wt-old","path":"/old","source_branch":"main","merge_base":"parent","ahead":1,"behind":0,"dirty":false,"lands":"fast_forward"}}"#.utf8)).review
+        model.land(target: target)
+        let notice = try XCTUnwrap(model.feedbackHistory.entries.first)
+        model.open(directory: "/new")
+        XCTAssertNil(model.landFeedback)
+        XCTAssertEqual(model.feedbackHistory.entries.count, 1)
+        notice.recover()
+        while !runner.pending.isEmpty { runner.release() }
+        XCTAssertTrue(calls.contains { $0.contains("--directory") && $0.last == "/old" })
+        XCTAssertFalse(calls.contains { $0.contains("land") })
+    }
+
+    func testComparisonAndDiffFreshnessRetainFailedReadsAndResetOnTargetChange() throws {
+        let runner = ChangesRunner()
+        var available = true
+        let amx = command { [changes] args in args[0] == "worktree" ? #"{"worktrees":[]}"# : changes }
+        let model = WorkspaceChangesModel(command: { available ? amx : nil }, runner: runner)
+        model.open(directory: "/checkout")
+        while !runner.pending.isEmpty { runner.release() }
+        let comparison = try XCTUnwrap(model.comparisonRefreshedAt)
+        let diff = try XCTUnwrap(model.diffRefreshedAt)
+        available = false; model.refresh()
+        XCTAssertEqual(model.comparisonRefreshedAt, comparison)
+        XCTAssertEqual(model.diffRefreshedAt, diff)
+        model.open(directory: "/other")
+        XCTAssertNil(model.comparisonRefreshedAt)
+        XCTAssertNil(model.diffRefreshedAt)
+    }
+
 }

@@ -354,3 +354,50 @@ extension WorkspaceWorkflowPreviewTests {
                          expected: ["requestedLimit", "includeArchived", "return page"])
     }
 }
+
+
+extension WorkspaceWorkflowPreviewTests {
+    func testClarityHistoryRunsAndFeedbackCaptures() async throws {
+        let amx = command { args in
+            if args[0] == "plans" {
+                return #"{"plan_dir":"/plans/api","plan_title":"API deployment review","counts":{"complete":8,"pending":2},"sessions":[{"id":"9","status":"pending","path":"/plans/api/session-9.md"}],"runner_state":{"run_id":"run-one","paused":true,"reason":"verification-failed","run_started_at":"2026-10-17T12:00:00Z","run_finished_at":""},"verification":[{"event":"verification_finished","at":"2026-10-17T12:05:00Z","session_id":"8","passed":false,"check_count":3,"passed_count":2}],"verification_truncated":false}"#
+            }
+            if args[1] == "show" {
+                return #"{"session":{"id":"one","harness":"claude","project":"API deployment review","cwd":"/Projects/api"},"messages_total":2,"messages_start":0,"messages":[{"role":"user","text":"Review the existing workflow."},{"role":"assistant","text":"Keep reading positions stable. Make each action clear and easy to reach.\n\n- Preserve selection.\n- Keep the answer controls visible."}]}"#
+            }
+            return #"{"sessions":[{"id":"one","harness":"claude","project":"API deployment review","profile":"production-primary","cwd":"/Projects/api","snippet":"Review the existing workflow."}]}"#
+        }
+        let history = WorkspaceHistoryModel(command: { amx }, runner: PreviewRunner())
+        let preferences = WorkspaceReadingPreferences(); preferences.proseSize = 24
+        history.search()
+        let service = PreviewASL()
+        var row = ASLRow()
+        row.rowID = "one"; row.runID = "run-one"; row.planDir = "/plans/api"
+        row.primaryState = "paused"; row.pauseReason = "verification-failed"; row.sessionID = "9"
+        row.actions = [ASLMethod.runResume, ASLMethod.runAbort, ASLMethod.runStopAfterCurrent]
+        row.actionToken = "fixture-only"
+        service.result.snapshot = ASLSnapshot(rows: [row])
+        let runs = WorkspaceRunsModel(service: service, command: { amx }, runner: PreviewRunner())
+        let plan = WorkspaceRunPlanModel(command: { amx }, runner: PreviewRunner())
+        runs.refresh()
+        let feedback = WorkspaceFeedbackHistory()
+        feedback.record(.init(target: "API · claude:deployment-review", message: "Resume outcome unconfirmed.", nextStep: "Inspect the original conversation before trying again."))
+        feedback.record(.init(target: "/Projects/platform-services/worktrees/deployment-review", message: "Landing was refused because the checkout changed.", nextStep: "Refresh the original checkout and review its changes."))
+        for dark in [false, true] {
+            try await render(WorkspaceFeedbackHistoryView(history: feedback), name: "clarity-feedback-\(dark)", width: 420, height: 392, dark: dark,
+                             expected: ["Action feedback", "Landing was refused", "Refresh", "Dismiss"])
+            history.layout.collapsed = false
+            try await render(WorkspaceHistoryView(preferences: preferences, model: history), name: "clarity-history-\(dark)", width: 720, height: 450, dark: dark,
+                             expected: ["Resume", "Fork", "Keep reading positions stable"])
+            history.layout.collapsed = true
+            try await render(WorkspaceHistoryView(preferences: preferences, model: history), name: "clarity-history-collapsed-\(dark)", width: 720, height: 450, dark: dark,
+                             expected: ["Resume", "Fork", "Keep reading positions stable"])
+            try await render(WorkspaceRunsView(model: runs, plan: plan), name: "clarity-runs-\(dark)", width: 780, height: 500, dark: dark,
+                             expected: ["8 complete", "Verification failed", "Resume", "Abort", "Run details", "Recorded verification"])
+            try await render(WorkspaceStatus(loading: true, retained: true, refreshedAt: Date().addingTimeInterval(-125),
+                                            feedback: WorkspaceFeedback(target: "API deployment review", message: "Read failed. Previous content is still available."),
+                                            recover: {}).padding(16).frame(maxHeight: .infinity, alignment: .top), name: "clarity-stale-\(dark)", width: 720, height: 160, dark: dark,
+                             expected: ["Previous results", "2m", "Refresh"])
+        }
+    }
+}

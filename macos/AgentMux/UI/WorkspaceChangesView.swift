@@ -22,11 +22,11 @@ struct WorkspaceChangesView: View {
                         .truncationMode(.middle).textSelection(.enabled)
                         .help(changes.root + "\nIncludes changes from every session using this checkout.")
                 }
-                WorkspaceStatus(loading: model.loading, title: "Comparing checkout…", retained: model.changes != nil,
+                WorkspaceStatus(loading: model.loading, title: "Comparing checkout…", retained: model.changes != nil, refreshedAt: model.comparisonRefreshedAt,
                                 showTarget: model.error == nil && model.landFeedback != nil,
                                 feedback: model.error.map { WorkspaceFeedback(target: model.changes?.root ?? "Checkout comparison", message: $0,
                                     nextStep: "Showing the previous comparison when available. Check the base and refresh.") } ?? model.landFeedback,
-                                recover: { model.refresh() }).frame(maxWidth: 280)
+                                recover: { model.refresh() }, history: model.feedbackHistory).frame(maxWidth: 280)
             }.frame(height: 24)
             HStack {
                 TextField("Comparison base", text: $model.base).focused($focus, equals: .base).textFieldStyle(.roundedBorder).onSubmit { model.refresh() }
@@ -84,6 +84,7 @@ struct WorkspaceChangesView: View {
                                 Text(model.selectedFile.map { fileLabels[$0] ?? $0 } ?? "Select a changed file").font(.headline).lineLimit(1).truncationMode(.head)
                                     .help(model.selectedFile ?? "")
                                 WorkspaceStatus(loading: model.reading, title: "Loading diff…", retained: model.patchIdentity == model.diffIdentity,
+                                                refreshedAt: model.patchIdentity == model.diffIdentity ? model.diffRefreshedAt : nil,
                                                 feedback: diffFeedback, recover: { model.select(model.selectedFile) })
                                     .frame(maxWidth: 160)
                                 Button { moveHunk(-1) } label: { Image(systemName: "chevron.up") }

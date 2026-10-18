@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import XCTest
 @testable import AgentMux
 
@@ -201,4 +203,86 @@ final class WorkspaceRunsTests: XCTestCase {
         model.readDetail(); model.close(); runner.release()
         XCTAssertNil(model.detail)
     }
+    func testListAndDetailFreshnessFailIndependentlyAndRejectStaleSnapshots() throws {
+        let service = service([row()])
+        var available = true
+        let amx = command { _ in self.detail(plan: "/one", run: "run-one") }
+        let model = WorkspaceRunsModel(service: service, command: { available ? amx : nil }, runner: RunsWorkRunner())
+        model.refresh()
+        let listTime = try XCTUnwrap(model.listRefreshedAt)
+        let detailTime = try XCTUnwrap(model.detailRefreshedAt)
+        available = false
+        model.readDetail()
+        XCTAssertEqual(model.detailRefreshedAt, detailTime)
+        XCTAssertEqual(model.listRefreshedAt, listTime)
+        service.result.status.snapshotStale = true
+        service.result.snapshot = ASLSnapshot(rows: [])
+        model.refresh()
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(model.listRefreshedAt, listTime)
+        XCTAssertEqual(model.detailRefreshedAt, detailTime)
+        model.select(nil)
+        XCTAssertNil(model.detailRefreshedAt)
+    }
+
+    func testArchivedReceiptCannotRetryANewerOperation() throws {
+        let service = service([row()])
+        let model = WorkspaceRunsModel(service: service, command: { nil }, runner: RunsWorkRunner())
+        model.refresh()
+        service.actionError = .transport("lost reply")
+        model.perform(ASLMethod.runAbort)
+        let old = try XCTUnwrap(model.feedbackHistory.entries.first)
+        XCTAssertTrue(old.available())
+        service.actionError = nil
+        old.recover()
+        XCTAssertEqual(service.requests.count, 2)
+        XCTAssertFalse(old.available())
+        service.actionError = .transport("lost again")
+        model.perform(ASLMethod.runResume)
+        XCTAssertEqual(service.requests.count, 3)
+        old.recover()
+        XCTAssertEqual(service.requests.count, 3, "an archived receipt cannot send the new pending operation")
+    }
+
+    func testLongProgressScrollKeepsThePinnedControlAreaAtMinimumSize() async throws {
+        let service = service([row()])
+        let amx = command { _ in
+            let sessions = (1...50).map { "{\"id\":\"\($0)\",\"status\":\"pending\",\"path\":\"/one/\($0).md\"}" }.joined(separator: ",")
+            return self.detail(plan: "/one", run: "run-one").replacingOccurrences(of: "{\"id\":\"2.1\",\"status\":\"pending\",\"path\":\"/one/session.md\"}", with: sessions)
+        }
+        let model = WorkspaceRunsModel(service: service, command: { amx }, runner: RunsWorkRunner())
+        model.refresh()
+        let host = NSHostingView(rootView: WorkspaceRunsView(model: model, plan: WorkspaceRunPlanModel(command: { nil })))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 468), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = host; window.orderFront(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(200))
+        func views(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
+        let scroll = try XCTUnwrap(views(host).compactMap { $0 as? NSScrollView }.max { $0.convert(.zero, to: host).x < $1.convert(.zero, to: host).x })
+        XCTAssertGreaterThan(scroll.documentView?.bounds.height ?? 0, scroll.contentSize.height)
+        let before = scroll.convert(scroll.bounds, to: host)
+        let headerHeight = host.isFlipped ? before.minY : host.bounds.maxY - before.maxY
+        XCTAssertGreaterThan(headerHeight, 180, "progress scrolls below the pinned summary and action area")
+        XCTAssertGreaterThan(scroll.contentSize.height, 100, "the controls must also leave room for evidence")
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 500)); scroll.reflectScrolledClipView(scroll.contentView)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(scroll.convert(scroll.bounds, to: host), before)
+        XCTAssertGreaterThan(scroll.contentView.bounds.minY, 100, "the long progress list actually scrolled")
+    }
+
+    func testArchivedOutcomeRefreshSelectsItsOriginalRun() throws {
+        let service = service([row(), row("two")])
+        let model = WorkspaceRunsModel(service: service, command: { nil }, runner: RunsWorkRunner())
+        model.refresh(); model.perform(ASLMethod.runResume)
+        let entry = try XCTUnwrap(model.feedbackHistory.entries.first)
+        model.select("two"); entry.recover()
+        XCTAssertEqual(model.selected?.runID, "run-one")
+        XCTAssertEqual(service.requests.count, 1)
+        service.result.snapshot?.rows.removeFirst()
+        entry.recover()
+        XCTAssertNil(model.selected)
+        XCTAssertTrue(model.error?.contains("no longer listed") == true)
+        XCTAssertEqual(service.requests.count, 1)
+    }
+
 }

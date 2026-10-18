@@ -96,6 +96,10 @@ struct WorkspaceTranscript: Decodable, Equatable {
 /// prevent a late search or transcript from replacing a newer selection.
 @MainActor
 final class WorkspaceHistoryModel: ObservableObject {
+    let feedbackHistory: WorkspaceFeedbackHistory
+    @Published var layout: WorkspaceReviewState.HistoryLayout { didSet { reviewState.historyLayout = layout } }
+    @Published private(set) var resultsRefreshedAt: Date?
+    @Published private(set) var transcriptRefreshedAt: Date?
     @Published var query = ""
     @Published var scope = WorkspaceHistoryScope.all
     @Published var includeAutomated = false
@@ -123,6 +127,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published var liveConversations: Set<String> = []
     @Published private(set) var project = ""
     @Published private(set) var currentConversation: ConversationIdentity?
+    var revealFeedback: (() -> Void)?
     var onAction: ((RecentConversation, Bool, @escaping (String?) -> Void) -> Void)?
 
     private let command: () -> AMXCommand?
@@ -139,10 +144,12 @@ final class WorkspaceHistoryModel: ObservableObject {
     private let reviewState: WorkspaceReviewState
     private(set) var visibleMessage: Int?
 
-    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), defaults: UserDefaults? = nil) {
+    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), defaults: UserDefaults? = nil, feedbackHistory: WorkspaceFeedbackHistory? = nil) {
+        self.feedbackHistory = feedbackHistory ?? WorkspaceFeedbackHistory()
         self.command = command
         self.runner = runner
         reviewState = WorkspaceReviewState(defaults: defaults)
+        layout = reviewState.historyLayout
         if let saved = reviewState.history {
             query = saved.query
             scope = WorkspaceHistoryScope(rawValue: saved.scope) ?? .all
@@ -275,6 +282,7 @@ final class WorkspaceHistoryModel: ObservableObject {
             switch result {
             case let .failure(error): self.error = error.message
             case let .success(page):
+                if !append { self.resultsRefreshedAt = Date() }
                 self.resultsQuery = query
                 self.loadedSearch = signature
                 self.restoredResultCount = 50
@@ -317,6 +325,7 @@ final class WorkspaceHistoryModel: ObservableObject {
         visibleMessage = anchor
         loadedQuery = resultsQuery
         transcript = nil
+        transcriptRefreshedAt = nil
         newMessages = 0
         transcriptError = nil
         matchIndex = 0
@@ -365,6 +374,7 @@ final class WorkspaceHistoryModel: ObservableObject {
             switch result {
             case let .failure(error): self.transcriptError = error.message
             case let .success(value), let .partial(value, _):
+                if retaining == nil { self.transcriptRefreshedAt = Date() }
                 if acknowledgeNew { self.newMessages = 0 }
                 if refreshing, let previousTotal { self.newMessages += max(0, value.total - previousTotal) }
                 if let retaining, value.end == retaining.start || retaining.end == value.start {
@@ -386,13 +396,31 @@ final class WorkspaceHistoryModel: ObservableObject {
         acting = true
         actionFeedback = nil
         onAction(selected.conversation, fork) { [weak self] problem in
-            self?.acting = false
-            self?.actionFeedback = WorkspaceFeedback(target: "\(selected.conversation.displayName) · \(selected.id)",
+            guard let self else { return }
+            self.acting = false
+            let feedback = WorkspaceFeedback(target: "\(selected.conversation.displayName) · \(selected.id)",
                 message: problem ?? (fork ? "Fork opened in the workspace." : "Conversation opened."),
                 kind: problem == nil ? .success : .error,
                 nextStep: problem == nil ? "" : "Refresh to check whether the conversation is already live before trying again.",
                 recovery: problem == nil ? nil : .refresh)
+            self.actionFeedback = feedback
+            let identity = selected.conversation.identity
+            self.feedbackHistory.record(feedback, available: { [weak self] in self != nil && self?.acting == false }) { [weak self] in
+                guard let self else { return }
+                self.currentConversation = identity
+                self.scope = .conversation
+                self.includeAutomated = true
+                self.query = ""
+                self.search()
+                self.revealFeedback?()
+            }
         }
+    }
+
+    func recoverActionFeedback() {
+        guard let feedback = actionFeedback,
+              let entry = feedbackHistory.entries.first(where: { $0.feedback == feedback }), entry.available() else { return }
+        entry.recover()
     }
 
     func close() {

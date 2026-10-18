@@ -209,7 +209,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let work = built[0].rows[0]
         XCTAssertEqual(work.target, .kitty(socket: "", windowID: 4))
         XCTAssertEqual(work.key, AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
-        XCTAssertEqual(work.detail, "claude · 4m · permission · Kitty", "a Kitty row says where it opens")
+        XCTAssertEqual(work.detail, "claude · 4m · Needs permission · Kitty", "a Kitty row says where it opens")
         XCTAssertTrue(work.muted)
         XCTAssertEqual(work.toolTip, "window 4")
 

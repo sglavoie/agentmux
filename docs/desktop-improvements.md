@@ -375,3 +375,64 @@ Validation:
   hashes and fixture provenance were verified. `git diff --check` passed.
 
 No installation or release was performed; captures contain fixture data only.
+
+## Review clarity polish on 2026-10-17
+
+This pass refines five existing workflows:
+
+- [x] History gives transcripts most of a narrow window. Its draggable divider
+  remembers the preferred width, clamped to the current window without overwriting
+  that preference. The sidebar button and ⌘⌥S collapse results and restore keyboard
+  focus to the selected result on reopening. Selection and reading position remain
+  intact; Down from search also reveals the results. Empty-search actions remain
+  readable in the narrower column.
+- [x] Runs keeps progress, blockers, and controls above the scrolling evidence.
+  Resume and Answer have primary emphasis when applicable. Paths, identifiers,
+  timestamps, and verification records live in expandable sections. Confirmation
+  buttons say Abort Run or Stop After Current Session and retain the existing
+  target and authorization checks.
+- [x] Native feedback retains the newest 30 outcomes in memory for the app session,
+  shared by History, Changes (including embedded reviews), Runs, and the plan form.
+  Every entry keeps its target, time, message, and recovery action, with Copy and
+  Dismiss. Recovery reads the original conversation, checkout, or plan options,
+  selects the original run when still listed, or explicitly reports its absence.
+  Receipt recovery can only check the same pending operation, never a later one.
+- [x] Search, transcript, comparison, diff, run-list, and plan-detail refresh times
+  are independent. Failed or superseded reads do not advance them. Retained content
+  shows its age; clicking the time reveals the exact timestamp and timezone.
+  Agent activity timestamps keep their separate meaning.
+- [x] Sidebar, Waiting, and menu-bar reasons share readable permission, question,
+  completion, and prompt-kind labels. The session inspector preserves raw reason
+  codes for diagnostics. Unknown states remain visible with readable separators.
+
+New coverage lives in `WorkspaceClarityPolishTests` and the existing Changes,
+Runs, RunPlan, sidebar, and menu tests. The preview suite exercises large History
+text, collapsed results, minimum-size Runs, multiple retained failures, and aged
+content in both appearances. All captures use fixture data; this pass does not
+install the app or claim completion of the operator's daily-driver trial.
+
+Validation:
+
+- `macos/scripts/test-app.sh`: final run passed all 884 hosted tests, with zero
+  failures or skips. It builds the Debug app and exercises the existing lifecycle,
+  authorization, receipt, keyboard, and restoration suites alongside the new tests.
+- `env -u AMX_RUNTIME_SESSION_ID go test . ./cmd/dashboard`: passed.
+- Ten new fixture captures were reviewed in light and dark appearances. The
+  final geometry check verifies that a long Runs session list scrolls below the
+  pinned action area while leaving useful evidence space at minimum size.
+- `git diff --check`: passed. No source changes followed the final hosted run.
+
+During validation an existing Ghostty wheel-input test failed once, and a later
+run was terminated externally before completion. The final complete run passed
+both. A screenshot OCR assertion also missed a visibly rendered Copy button;
+the capture was inspected and that brittle label assertion removed while keeping
+the feedback layout, target, message, and recovery assertions.
+
+Reviewed references:
+
+- [History with 24-point prose](acceptance/workspace-clarity-polish/history-dark.png)
+- [Collapsed History results](acceptance/workspace-clarity-polish/history-collapsed-light.png)
+- [Runs at minimum size](acceptance/workspace-clarity-polish/runs-dark.png)
+- [Retained action outcomes](acceptance/workspace-clarity-polish/feedback-light.png)
+- [Retained-content age](acceptance/workspace-clarity-polish/stale-dark.png)
+- [Capture provenance and hashes](acceptance/workspace-clarity-polish/manifest.json)

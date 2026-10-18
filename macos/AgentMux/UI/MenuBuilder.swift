@@ -293,7 +293,7 @@ enum MenuBuilder {
         var parts: [String] = [name(of: session)]
         if !session.harness.isEmpty { parts.append(session.harness) }
         if let changed = session.changedAt { parts.append(age(since: changed, now: input.now)) }
-        if showReason, !session.reason.isEmpty { parts.append(session.reason) }
+        if showReason, !session.reason.isEmpty { parts.append(WorkspaceWording.status(session.reason)) }
         var title = parts.joined(separator: " · ")
         let glyph = input.glyphs.glyph(for: session.iconState)
         if !glyph.isEmpty { title = "\(glyph) \(title)" }

@@ -122,8 +122,8 @@ enum WorkspaceInspectorAction: CaseIterable, Equatable {
 enum WorkspaceInspector {
     /// A state in words, for the states the palette draws as glyphs.
     static let stateWords = [
-        "bolt": "working", "stop": "stopped", "key": "needs permission", "warning": "warning",
-        "error": "error", "subagent": "running a subagent", "compact": "compacting", "question": "asked a question",
+        "bolt": "working", "stop": "Turn complete", "key": "Needs permission", "warning": "warning",
+        "error": "error", "subagent": "running a subagent", "compact": "compacting", "question": "Waiting for your answer",
     ]
     static let idle = "idle"
 
@@ -155,7 +155,7 @@ enum WorkspaceInspector {
             } else if let id = row.embeddedRuntimeSessionID, promptStates.contains(session.iconState) {
                 answer = .prompt(runtimeSessionID: id)
             }
-            var detail = [session.reason.isEmpty ? word(for: session.iconState) : session.reason]
+            var detail = [session.reason.isEmpty ? word(for: session.iconState) : WorkspaceWording.status(session.reason)]
             if let changed = session.changedAt { detail.append(MenuBuilder.age(since: changed, now: now)) }
             if row.embeddedRuntimeSessionID == nil { detail.append(WorkspaceSidebar.kittyBadge) }
             return WorkspaceWaitingRow(

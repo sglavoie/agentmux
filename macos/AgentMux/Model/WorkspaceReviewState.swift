@@ -14,6 +14,18 @@ final class WorkspaceReviewState {
         var resultsQuery: String? = nil
         var loadedResults: Int? = nil
     }
+    struct HistoryLayout: Codable {
+        var resultsWidth: Double? = nil
+        var collapsed = false
+        func width(in available: Double) -> Double {
+            let preferred = resultsWidth.flatMap { $0.isFinite ? $0 : nil } ?? min(260, available * 0.30)
+            return min(max(200, preferred), max(200, available - 380))
+        }
+    }
+    var historyLayout: HistoryLayout {
+        get { read("historyLayout") ?? .init() }
+        set { write(newValue, key: "historyLayout") }
+    }
     struct Comparison: Codable { var base: String; var file: String? }
     struct DiffAppearance: Codable {
         var fontSize: Double = 12

@@ -39,6 +39,9 @@ struct LaunchProfileChoice: Decodable, Equatable {
 
 @MainActor
 final class WorkspaceRunPlanModel: ObservableObject {
+    let feedbackHistory: WorkspaceFeedbackHistory
+    var onFeedbackRuns: (() -> Void)?
+    var revealFeedback: (() -> Void)?
     @Published var isPresented = false
     @Published var plan = ""
     @Published var project = ""
@@ -49,7 +52,25 @@ final class WorkspaceRunPlanModel: ObservableObject {
     @Published private(set) var checking = false
     @Published private(set) var launching = false
     @Published private(set) var preview: WorkspacePlanRunResult?
-    @Published private(set) var feedback: WorkspaceFeedback?
+    @Published private(set) var feedback: WorkspaceFeedback? {
+        didSet {
+            guard let feedback else { return }
+            let saved = (feedback.target, project, profile, harness, reviewHarness, commitMode)
+            feedbackHistory.record(feedback, available: { [weak self] in
+                guard let self else { return false }
+                return !self.launching && !self.checking
+            }) { [weak self] in
+                guard let self, !self.launching, !self.checking else { return }
+                if feedback.recovery == .runs { self.onFeedbackRuns?() }
+                else {
+                    (self.plan, self.project, self.profile, self.harness, self.reviewHarness, self.commitMode) = saved
+                    self.revealFeedback?()
+                    self.isPresented = true
+                    self.check()
+                }
+            }
+        }
+    }
     var notice: String? { feedback?.message }
     @Published private(set) var checkedArguments: [String]?
     @Published private(set) var submitted: Set<String> = []
@@ -62,7 +83,8 @@ final class WorkspaceRunPlanModel: ObservableObject {
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner
 
-    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent()) {
+    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), feedbackHistory: WorkspaceFeedbackHistory? = nil) {
+        self.feedbackHistory = feedbackHistory ?? WorkspaceFeedbackHistory()
         self.command = command; self.runner = runner
     }
 

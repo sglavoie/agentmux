@@ -52,6 +52,9 @@ struct WorkspaceLandResult: Decodable {
 
 @MainActor
 final class WorkspaceChangesModel: ObservableObject {
+    let feedbackHistory: WorkspaceFeedbackHistory
+    @Published private(set) var comparisonRefreshedAt: Date?
+    @Published private(set) var diffRefreshedAt: Date?
     @Published var base = "HEAD"
     let readingPreferences: WorkspaceReadingPreferences
     private var appearanceSubscription: AnyCancellable?
@@ -76,9 +79,19 @@ final class WorkspaceChangesModel: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var patchError: String?
     @Published private(set) var worktreeError: String?
-    @Published private(set) var landFeedback: WorkspaceFeedback?
+    @Published private(set) var landFeedback: WorkspaceFeedback? {
+        didSet {
+            guard let landFeedback else { return }
+            let reveal = onFeedbackRecovery
+            feedbackHistory.record(landFeedback, available: { [weak self] in reveal != nil || (self != nil && self?.landing == false) }) { [weak self] in
+                if let reveal { reveal(landFeedback.target) }
+                else { self?.open(directory: landFeedback.target) }
+            }
+        }
+    }
     var landNotice: String? { landFeedback?.message }
     @Published private(set) var worktree: WorkspaceWorktreeReview.Review?
+    var onFeedbackRecovery: ((String) -> Void)?
     var onOpenFile: ((String) -> Void)?
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner
@@ -88,7 +101,8 @@ final class WorkspaceChangesModel: ObservableObject {
     let reviewState: WorkspaceReviewState
     private var originalTarget: [String] = []
 
-    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), defaults: UserDefaults? = nil) {
+    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), defaults: UserDefaults? = nil, feedbackHistory: WorkspaceFeedbackHistory? = nil) {
+        self.feedbackHistory = feedbackHistory ?? WorkspaceFeedbackHistory()
         self.command = command
         self.runner = runner
         reviewState = WorkspaceReviewState(defaults: defaults)
@@ -118,6 +132,9 @@ final class WorkspaceChangesModel: ObservableObject {
         guard !landing else { return }
         target = ["--runtime-session", runtimeSessionID]
         changes = nil
+        comparisonRefreshedAt = nil
+        diffRefreshedAt = nil
+        patchIdentity = nil
         worktree = nil
         landFeedback = nil
         restoreComparison()
@@ -128,6 +145,9 @@ final class WorkspaceChangesModel: ObservableObject {
         guard !landing else { return }
         target = ["--directory", directory]
         changes = nil
+        comparisonRefreshedAt = nil
+        diffRefreshedAt = nil
+        patchIdentity = nil
         worktree = nil
         landFeedback = nil
         restoreComparison()
@@ -167,6 +187,7 @@ final class WorkspaceChangesModel: ObservableObject {
             switch result {
             case let .failure(error): self.reviewing = false; self.error = error.message
             case let .success(value), let .partial(value, _):
+                self.comparisonRefreshedAt = Date()
                 self.changes = value
                 // Keep the visible review anchored to this checkout even if
                 // the agent changes its working directory later.
@@ -180,6 +201,7 @@ final class WorkspaceChangesModel: ObservableObject {
     func select(_ file: String?) {
         patchGeneration += 1
         let sequence = patchGeneration
+        if selectedFile != file { diffRefreshedAt = nil }
         selectedFile = file
         saveComparison()
         patch = SecretText()
@@ -195,6 +217,7 @@ final class WorkspaceChangesModel: ObservableObject {
             switch result {
             case let .failure(error): self.patchError = error.message
             case let .success(value), let .partial(value, _):
+                self.diffRefreshedAt = Date()
                 self.patch = SecretText(value.patch ?? "No text diff is available.")
                 self.diff = WorkspaceDiff(self.patch.reveal())
                 self.patchIdentity = self.diffIdentity
