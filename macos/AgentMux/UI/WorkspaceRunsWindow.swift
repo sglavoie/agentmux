@@ -63,7 +63,7 @@ struct WorkspaceRunsView: View {
                                     ForEach(detail.sessions) { session in
                                         HStack {
                                             Text("Session \(session.id)")
-                                            Text(WorkspaceWording.status(session.status)).foregroundStyle(.secondary)
+                                            Text(model.sessionStatus(session)).foregroundStyle(.secondary)
                                             Spacer()
                                             Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.path)]) }
                                         }
@@ -125,7 +125,7 @@ struct WorkspaceRunsView: View {
                 Text("Blocked: " + WorkspaceWording.status(row.pauseReason)).foregroundStyle(.orange)
                     .lineLimit(2).help(WorkspaceWording.status(row.pauseReason))
             }
-            if row.pauseReason.replacingOccurrences(of: "_", with: "-").contains("verification"), let detail = model.detail {
+            if model.verificationBlocked, let detail = model.detail {
                 let evidence = detail.blockingVerification(sessionID: row.sessionID)
                 if let first = evidence.first {
                     Text(first.summary + (evidence.count > 1 ? " · \(evidence.count - 1) more failed checks" : ""))
@@ -138,9 +138,14 @@ struct WorkspaceRunsView: View {
             }
             HStack {
                 if model.hasQuestion {
-                    Button("Answer…") { model.answer() }.buttonStyle(.borderedProminent).disabled(model.stale || model.acting)
+                    Button("Answer…") { model.answer() }.buttonStyle(.borderedProminent).fontWeight(.semibold).disabled(model.stale || model.acting)
                 }
-                Button("Focus Session") { model.onFocus?(row) }.help("Focus session (⌘Return)")
+                if model.nextAction == .inspect || model.nextAction == .focus {
+                    Button(model.nextAction == .inspect ? "Inspect Failed Check" : "Focus Session") { model.onFocus?(row) }
+                        .buttonStyle(.borderedProminent).fontWeight(.semibold).help("Focus session (⌘Return)")
+                } else {
+                    Button("Focus Session") { model.onFocus?(row) }.help("Focus session (⌘Return)")
+                }
             }
             HStack(alignment: .top) {
                 control("Resume", ASLMethod.runResume)
@@ -172,8 +177,13 @@ struct WorkspaceRunsView: View {
     private func control(_ title: String, _ method: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             if method == ASLMethod.runResume {
-                Button(title) { model.perform(method) }.buttonStyle(.borderedProminent)
-                    .disabled(model.disabledReason(method) != nil)
+                if model.nextAction == .resume {
+                    Button(title) { model.perform(method) }.buttonStyle(.borderedProminent)
+                        .fontWeight(.semibold)
+                        .disabled(model.disabledReason(method) != nil)
+                } else {
+                    Button(title) { model.perform(method) }.disabled(model.disabledReason(method) != nil)
+                }
             } else {
                 Button(title) { if let row = model.selected { confirmation = Confirmation(method: method, row: row) } }
                     .disabled(model.disabledReason(method) != nil)
@@ -269,10 +279,16 @@ final class WorkspaceRunsWindow: NSObject, NSWindowDelegate {
     let model: WorkspaceRunsModel
     let plan: WorkspaceRunPlanModel
     private(set) var window: NSWindow?
+    private var activityObservers: [NSObjectProtocol] = []
     var onVisibilityChanged: (Bool) -> Void = { _ in }
     init(model: WorkspaceRunsModel, plan: WorkspaceRunPlanModel) {
         self.model = model; self.plan = plan
         super.init()
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
+            activityObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateAutomaticRefresh() }
+            })
+        }
         model.revealFeedback = { [weak self] in self?.show() }
         plan.revealFeedback = { [weak self] in self?.show() }
         plan.onFeedbackRuns = { [weak self] in self?.plan.isPresented = false; self?.show() }
@@ -295,7 +311,13 @@ final class WorkspaceRunsWindow: NSObject, NSWindowDelegate {
         if launch { plan.isPresented = true }
         onVisibilityChanged(true)
         window?.makeKeyAndOrderFront(nil); NSApp.activate()
+        updateAutomaticRefresh()
     }
+    private func updateAutomaticRefresh() {
+        model.setAutomaticRefreshEnabled(NSApp.isActive && window?.occlusionState.contains(.visible) == true)
+    }
+    func windowDidChangeOcclusionState(_ notification: Notification) { updateAutomaticRefresh() }
+    deinit { activityObservers.forEach(NotificationCenter.default.removeObserver) }
     func windowShouldClose(_ sender: NSWindow) -> Bool { !model.acting && !plan.launching }
     func windowWillClose(_ notification: Notification) { model.close(); onVisibilityChanged(false) }
 }

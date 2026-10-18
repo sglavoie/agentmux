@@ -101,7 +101,7 @@ isolation recipe, and the record of the last run, are in
 
 Cover, on disposable managed tabs: focus; open a shell and open the configured
 editor in a session's directory; a profile replacement end to end; a close and
-its five-second undo; a restart whose relaunch is refused; and closing or
+its 30-second recovery (Resume for an exact conversation, otherwise Relaunch); a restart whose relaunch is refused; and closing or
 restarting the tab the surface is itself running in. Record the Kitty version,
 the artifact's revision and hash, the isolated roots, and the observed result
 per check. An item the environment cannot safely provide is recorded as pending,

@@ -421,7 +421,12 @@ is committed.
   in the configured editor. Managed worktrees include source-branch comparison and
   confirmed fast-forward landing, with the CLI’s existing clean/inactive checks.
   The diff has old/new line numbers, addition/deletion shading, and previous/next
-  hunk controls. Switching files restores each file's scroll position for the
+  hunk controls with the visible hunk number. Changed words receive stronger shading
+  within paired replacement lines. Redundant file headers are hidden; **… → Show
+  patch headers** reveals them. Mode changes and no-newline markers remain visible,
+  and copying the unified patch always includes the original headers. Large or
+  unpaired replacement blocks retain whole-line shading.
+  Switching files restores each file's scroll position for the
   current checkout and comparison base. Refreshing a changed diff follows the
   same nearby source text where possible, falling back to a nearby source line.
   The compact toolbar leaves at least 240 points for the diff in the ordinary
@@ -668,7 +673,9 @@ Transcripts render tables, blockquotes, and nested list indentation. Code blocks
 offer **Wrap lines** while **Copy code** continues to copy the original text.
 
 Review-window progress and failures stay in fixed toolbar slots. Brief reads do
-not flash a spinner; slower reads label retained content **Previous results**.
+not flash a spinner; slower reads say **Refreshing…**, and failures say
+**Refresh failed** even when previous results remain visible. The status popover
+identifies which read failed and whether its previous content is still displayed.
 Click a status message for its full, selectable details and recovery guidance.
 Action feedback names the conversation, checkout, plan, or run it acted on,
 including when you have since selected something else. Refreshing only reads
@@ -691,7 +698,20 @@ timezone. **Last activity** continues to describe the agent's activity.
 Runs keeps current progress, blockers, and controls above the scrolling session
 list. **Run details** expands paths, identifiers, and timestamps; **Recorded
 verification** expands the check evidence. Confirmation buttons name the requested
-action. Sidebar, Waiting, and menu-bar reasons use the same readable labels;
+action. **Answer…** is emphasized for an open question; **Inspect Failed Check**
+opens the session when verification is blocked. **Resume** is emphasized for
+other resumable pauses. An affected pending plan session is labeled
+**Incomplete · verification failed** to distinguish its unfinished plan status
+from the run's pause reason.
+
+Runs polls the summary every five seconds while the app is active and the window
+is visible. Unchanged selected-plan details are reread every thirty seconds;
+changed summary fields trigger a read on the next poll. Explicit refresh and
+returning to the active, visible window read immediately. Hidden or inactive
+windows suspend automatic polling. Authorization still uses a fresh snapshot
+for every control operation.
+
+Sidebar, Waiting, and menu-bar reasons use the same readable labels;
 raw protocol reasons remain available in the session inspector.
 
 Activity and Runs support **⌘R** to refresh, **⌘⇧F** to focus their lists, and

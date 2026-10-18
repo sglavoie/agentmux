@@ -1,0 +1,17 @@
+{
+  "build_command": "just mac-app Release",
+  "result": "passed; signed bundle verified by build script",
+  "git_head": "845ba9aede74bc0e629ed20cf604027ffb8ca757",
+  "worktree_changes": true,
+  "installed": false,
+  "artifacts": [
+    {
+      "path": "macos/build/Agent Mux.app/Contents/MacOS/Agent Mux",
+      "sha256": "440333e4252b2be98e9668a59e934264629390c4db64e635bc4ec48d575f4255"
+    },
+    {
+      "path": "macos/build/Agent Mux.app/Contents/Resources/bin/amx",
+      "sha256": "7298d0d3fbe8023729c0c6ef0e5141881cb471bc5288b15166913edabcf833d6"
+    }
+  ]
+}

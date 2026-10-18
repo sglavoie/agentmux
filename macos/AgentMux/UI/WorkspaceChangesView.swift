@@ -7,6 +7,8 @@ struct WorkspaceChangesView: View {
     private enum Focus: Hashable { case base, files }
     @FocusState private var focus: Focus?
     @State private var hunk: Int?
+    @State private var visibleHunk: Int?
+    @State private var showPatchHeaders = false
     @State private var jumpSequence = 0
     @State private var copyFeedback = WorkspaceCopyFeedback()
     @State private var showWorktreeDetails = false
@@ -89,6 +91,10 @@ struct WorkspaceChangesView: View {
                                 Text(model.selectedFile.map { fileLabels[$0] ?? $0 } ?? "Select a changed file").font(.headline).lineLimit(1).truncationMode(.head)
                                     .help(model.selectedFile ?? "")
                                 Spacer(minLength: 0)
+                                if !model.diff.hunks.isEmpty {
+                                    Text("Hunk \(min((visibleHunk ?? 0) + 1, model.diff.hunks.count)) of \(model.diff.hunks.count)")
+                                        .font(.caption).foregroundStyle(.secondary).fixedSize()
+                                }
                                 Button { moveHunk(-1) } label: { Image(systemName: "chevron.up") }
                                     .help("Previous hunk (⌘⇧G)").accessibilityLabel("Previous hunk")
                                     .disabled(model.reading || model.patchError != nil || model.diff.hunks.isEmpty)
@@ -99,6 +105,7 @@ struct WorkspaceChangesView: View {
                                     .help("Open in editor (⌘E)").accessibilityLabel("Open in editor").disabled(model.selectedFile == nil)
                                 Menu {
                                     Toggle("Wrap lines", isOn: $model.wrapDiffLines)
+                                    Toggle("Show patch headers", isOn: $showPatchHeaders)
                                     Button("Larger text") { model.diffFontSize = min(24, model.diffFontSize + 1) }.disabled(model.diffFontSize >= 24)
                                     Button("Smaller text") { model.diffFontSize = max(10, model.diffFontSize - 1) }.disabled(model.diffFontSize <= 10)
                                     Button("Reset text size") { model.diffFontSize = 12 }
@@ -116,10 +123,11 @@ struct WorkspaceChangesView: View {
                                               loading: model.reading || model.patchIdentity != model.diffIdentity,
                                               jump: hunk, jumpSequence: jumpSequence, reviewState: model.reviewState,
                                               fontSize: model.diffFontSize, wrapLines: model.wrapDiffLines,
+                                              compactMetadata: !showPatchHeaders, onVisibleHunk: { visibleHunk = $0 },
                                               onCopy: { copyFeedback = $0 })
                                 .opacity(model.patchIdentity == model.diffIdentity ? 1 : 0)
-                                .onChange(of: model.diffIdentity) { _, _ in hunk = nil; copyFeedback = WorkspaceCopyFeedback() }
-                                .onChange(of: model.diff) { _, _ in hunk = nil; copyFeedback = WorkspaceCopyFeedback() }
+                                .onChange(of: model.diffIdentity) { _, _ in hunk = nil; visibleHunk = nil; copyFeedback = WorkspaceCopyFeedback() }
+                                .onChange(of: model.diff) { _, _ in hunk = nil; visibleHunk = nil; copyFeedback = WorkspaceCopyFeedback() }
                         }.padding(4).frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }

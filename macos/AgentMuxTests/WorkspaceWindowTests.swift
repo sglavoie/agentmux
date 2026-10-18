@@ -43,6 +43,28 @@ final class WorkspaceWindowTests: XCTestCase {
         })
     }
 
+    func testSidebarFontsSurviveSourceListStyling() async throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.window.orderFront(nil)
+        workspace.window.contentView?.layoutSubtreeIfNeeded()
+        workspace.window.displayIfNeeded()
+        try await Task.sleep(for: .milliseconds(200))
+        for (index, item) in workspace.items.enumerated() {
+            switch item {
+            case .section, .group:
+                let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceGroupCellView)
+                XCTAssertEqual(cell.nameLabel.font?.pointSize, 16, "Heading: \(cell.nameLabel.stringValue)")
+                let drawnFont = cell.nameLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+                XCTAssertEqual(drawnFont?.pointSize, 16, "Rendered heading: \(cell.nameLabel.stringValue)")
+            case .row:
+                let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceRowCellView)
+                let drawnFont = cell.titleLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+                XCTAssertEqual(drawnFont?.pointSize, 12, "Rendered session: \(cell.titleLabel.stringValue)")
+            case .view: break
+            }
+        }
+    }
+
     func testSidebarHoldsTargetsDuringHoverAndMenuWhileUpdatingAttention() throws {
         var live = sessions
         app.store.apply(snapshot: F.snapshot(live))

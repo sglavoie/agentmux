@@ -3037,7 +3037,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         switch items[row] {
-        case .section, .group: return 24
+        case .section, .group: return 34
         case let .row(row) where !row.name.isEmpty: return 54
         case .view, .row: return 38
         }
@@ -4058,11 +4058,15 @@ final class WorkspaceGroupCellView: NSTableCellView {
         identifier = Self.identifier
         disclosureLabel.textColor = .secondaryLabelColor
         disclosureLabel.isHidden = true
+        nameLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        nameLabel.textColor = .secondaryLabelColor
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
         countLabel.textColor = .systemOrange
-        textField = nameLabel
+        // Source-list group rows replace textField's attributed text with
+        // an 11-point heading style. Keep this custom-sized label independent
+        // of that outlet; the cell exposes its own accessibility label below.
         let stack = NSStackView(views: [nameLabel, NSView(), countLabel, disclosureLabel])
         stack.orientation = .horizontal
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -4151,7 +4155,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         super.init(frame: .zero)
         identifier = Self.identifier
         glyphLabel.alignment = .center
-        nameLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .bold)
+        nameLabel.font = .systemFont(ofSize: 12, weight: .bold)
         nameLabel.textColor = Self.nameColor
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isHidden = true
@@ -4296,7 +4300,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
-        titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: row.attention ? .semibold : .regular)
+        titleLabel.font = .systemFont(ofSize: 12, weight: row.attention ? .semibold : .regular)
         detailLabel.stringValue = closing ? Self.closingDetail : row.detail
         toolTip = row.toolTip
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""

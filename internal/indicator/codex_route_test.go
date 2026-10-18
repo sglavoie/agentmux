@@ -64,11 +64,15 @@ func TestSharedCodexHooksRouteToConversationOwner(t *testing.T) {
 	discoverHarnessProcessForDelivery = func(string) HarnessProcessDiscovery {
 		return HarnessProcessDiscovery{Harness: "codex", PID: 8166, StartToken: "Sat Oct 17 21:23:36 2026", Trackable: true}
 	}
-	client = &fakeDaemonClient{resp: protocol.Response{OK: true}}
-	result = deliverFromStdinWithDeps("Stop", 0, "codex", "/tmp/amx", DeliveryOptions{},
-		hookPayloadFile(t, `{"session_id":"fresh-isolated-conversation"}`), client)
-	if !result.Successful() || client.reqs[0].RuntimeSessionID != testRuntimeSession {
-		t.Fatalf("isolated client's fresh conversation = %+v", result)
+	for _, conversation := range []string{"resumed-conversation", "fresh-after-new", "another-after-new", "resumed-conversation"} {
+		for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"} {
+			client = &fakeDaemonClient{resp: protocol.Response{OK: true}}
+			result = deliverFromStdinWithDeps(event, 0, "codex", "/tmp/amx", DeliveryOptions{},
+				hookPayloadFile(t, `{"session_id":"`+conversation+`"}`), client)
+			if !result.Successful() || client.calls != 1 || client.reqs[0].RuntimeSessionID != testRuntimeSession {
+				t.Fatalf("isolated client %s/%s = %+v", conversation, event, result)
+			}
+		}
 	}
 }
 

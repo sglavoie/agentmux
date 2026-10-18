@@ -2,10 +2,11 @@ package screenstate
 
 import (
 	"strings"
+	"unicode"
 )
 
 // ClassifyCodexClearScreen reports whether Kitty text extents look like Codex's
-// idle UI immediately after `/clear`.
+// idle UI immediately after `/clear` or `/new`.
 //
 // False negatives are acceptable here: this probe only exists because Codex
 // does not emit an immediate hook for an idle `/clear`. The classifier requires
@@ -13,17 +14,18 @@ import (
 // so a stopped session transcript cannot clear its own stop icon by mentioning
 // `/clear` or showing a stale composer prompt.
 //
-// It needs none of the hardening the two turn classifiers got: `Context …0%`
-// plus a transcript-free scrollback is a conjunction a working screen cannot
-// satisfy, whatever Codex renames its spinner to. It also never reaches the
-// stabilization sample gate — it feeds the clear probe, not the stop probe — so
-// it grades no tier.
+// A narrow footer may truncate `Context 0% used`. In that case both reads must
+// match the stricter fresh-session layout, including an empty transcript body;
+// a bare composer or a Ready footer on its own is never a reset signal.
 func ClassifyCodexClearScreen(screen, allText string) bool {
 	clauses := codexClausesFor(codexPatterns())
 	if !clauses.screenLooksCleared(screen) {
 		return false
 	}
-	return clauses.scrollbackLooksCleared(allText)
+	if clauses.textHasContextZero(screen) {
+		return clauses.scrollbackLooksCleared(allText)
+	}
+	return clauses.freshSessionLayout(allText)
 }
 
 // CodexScreenLooksCleared reports whether the CURRENT screen alone looks
@@ -50,13 +52,69 @@ func (c codexClauses) screenLooksCleared(screen string) bool {
 	if !c.screenHasComposerLine(screen) {
 		return false
 	}
-	if !c.textHasContextZero(screen) {
+	if !c.textHasContextZero(screen) && !c.freshSessionLayout(screen) {
 		return false
 	}
 	if _, ok := classifyCodexPrompt(c.set, screen, strings.ToLower(screen)); ok {
 		return false
 	}
 	return !c.textHasTranscriptMarkers(screen)
+}
+
+// freshSessionLayout accepts only Codex's empty startup frame: header,
+// directory, optional braille logo, empty composer, Ready footer and optional
+// shortcut hint. Validate the entire history with the same grammar so old
+// answers (including unlabelled prose) cannot be hidden above the viewport.
+// Unknown body text fails closed; the absence of a context counter alone says
+// nothing about whether a conversation was reset.
+func (c codexClauses) freshSessionLayout(text string) bool {
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) < 4 || !matchesLine(c.bannerRE, lines[0]) {
+		return false
+	}
+	if !strings.HasPrefix(lines[1], "/") && !strings.HasPrefix(lines[1], "~/") && lines[1] != "~" {
+		return false
+	}
+	i := 2
+	for i < len(lines) && codexEmptyStateArt(lines[i]) {
+		i++
+	}
+	if i >= len(lines) || !c.composerLine(lines[i]) {
+		return false
+	}
+	i++
+	if i >= len(lines) || !matchesLine(c.freshReadyRE, lines[i]) || c.liveWork(lines[i]) ||
+		c.set.Match(codexClauseBackgroundFooter, lines[i], strings.ToLower(lines[i])) {
+		return false
+	}
+	// If a counter is visible it must still positively say zero. This also
+	// refuses a partially rendered counter rather than guessing its value.
+	if strings.Contains(strings.ToLower(lines[i]), "context") && !matchesLine(c.contextZeroRE, lines[i]) {
+		return false
+	}
+	i++
+	if i < len(lines) && matchesLine(c.freshShortcutsRE, lines[i]) {
+		i++
+	}
+	return i == len(lines)
+}
+
+func codexEmptyStateArt(line string) bool {
+	// Codex's fresh-session logo uses Unicode braille cells, not arbitrary
+	// decorative text. Accepting arbitrary non-transcript lines here would
+	// let plain assistant prose masquerade as an empty conversation.
+	for _, r := range line {
+		if !unicode.IsSpace(r) && (r < '\u2800' || r > '\u28ff') {
+			return false
+		}
+	}
+	return line != ""
 }
 
 func (c codexClauses) scrollbackLooksCleared(allText string) bool {

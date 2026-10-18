@@ -35,8 +35,9 @@ import (
 //     contract in codexRequirements.
 //   - worked_for_line, completed_marker_line, interrupted_line missing: no
 //     positive terminal marker, so nothing settles. Withholds settling.
-//   - context_zero_line missing: CodexScreenLooksCleared cannot find its
-//     positive evidence and returns false. Withholds the clear transition.
+//   - context_zero_line missing: withholds the context-based clear transition.
+//     fresh_ready_footer / fresh_shortcuts_line missing: withholds the strict
+//     empty-layout fallback used when a narrow footer hides the context count.
 //   - banner_line missing: the bare header of a cleared session reads as a
 //     transcript line, so CodexScreenLooksCleared returns false. Withholds the
 //     clear transition.
@@ -58,6 +59,8 @@ const (
 	codexClauseContextZeroLine     = "context_zero_line"
 	codexClauseLabeledTranscript   = "labeled_transcript_line"
 	codexClauseBannerLine          = "banner_line"
+	codexClauseFreshReadyFooter    = "fresh_ready_footer"
+	codexClauseFreshShortcuts      = "fresh_shortcuts_line"
 	codexClauseWorkedForLine       = "worked_for_line"
 	codexClauseCompletedMarker     = "completed_marker_line"
 	codexClauseWorkingStatusLine   = "working_status_line"
@@ -78,7 +81,8 @@ const (
 //
 // The clauses left OUT are the positive-evidence ones — worked_for_line,
 // completed_marker_line, interrupted_line, context_zero_line, banner_line,
-// composer_placeholder. Codex settles only on a positive marker, so losing one
+// fresh_ready_footer, fresh_shortcuts_line, composer_placeholder.
+// Codex settles only on a positive marker, so losing one
 // costs a settle it would otherwise have made; that is the safe direction and
 // an override that predates a new marker shape must keep working.
 var codexRequirements = append(patternset.Requirements{
@@ -135,6 +139,8 @@ type codexClauses struct {
 	contextZeroRE     *regexp.Regexp
 	labeledRE         *regexp.Regexp
 	bannerRE          *regexp.Regexp
+	freshReadyRE      *regexp.Regexp
+	freshShortcutsRE  *regexp.Regexp
 	workedForRE       *regexp.Regexp
 	completedMarkerRE *regexp.Regexp
 	workingRE         *regexp.Regexp
@@ -151,6 +157,8 @@ func codexClausesFor(patterns Patterns) codexClauses {
 		contextZeroRE:     patterns.Regexp(codexClauseContextZeroLine),
 		labeledRE:         patterns.Regexp(codexClauseLabeledTranscript),
 		bannerRE:          patterns.Regexp(codexClauseBannerLine),
+		freshReadyRE:      patterns.Regexp(codexClauseFreshReadyFooter),
+		freshShortcutsRE:  patterns.Regexp(codexClauseFreshShortcuts),
 		workedForRE:       patterns.Regexp(codexClauseWorkedForLine),
 		completedMarkerRE: patterns.Regexp(codexClauseCompletedMarker),
 		workingRE:         patterns.Regexp(codexClauseWorkingStatusLine),

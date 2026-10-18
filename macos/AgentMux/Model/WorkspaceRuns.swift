@@ -140,36 +140,82 @@ final class WorkspaceRunsModel: ObservableObject {
     private var generation = 0
     private var detailGeneration = 0
     private var timer: Timer?
+    private var started = false
+    private var automaticRefreshEnabled = true
+    private let now: () -> Date
+    private var detailRow: ASLRow?
+    // Summary projections need not change when plan files or verification logs do.
+    // Bound that blind spot while avoiding a CLI process on every unchanged tick.
+    static let detailRefreshInterval: TimeInterval = 30
     private struct FeedbackTarget { let rowID: String; let runID: String }
     private var actionTarget: FeedbackTarget?
     private var feedbackSelection: FeedbackTarget?
 
-    init(service: ASLService = DaemonClient(), command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), feedbackHistory: WorkspaceFeedbackHistory? = nil) {
+    init(service: ASLService = DaemonClient(), command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), feedbackHistory: WorkspaceFeedbackHistory? = nil, now: @escaping () -> Date = Date.init) {
         self.feedbackHistory = feedbackHistory ?? WorkspaceFeedbackHistory()
         self.service = service; self.command = command; self.runner = runner
+        self.now = now
     }
 
     var selected: ASLRow? { rows.first { $0.rowID == selection } }
     var hasQuestion: Bool { !(selected?.question?.questionID ?? "").isEmpty }
+    var verificationBlocked: Bool {
+        selected?.pauseReason.replacingOccurrences(of: "_", with: "-") == "verification-failed"
+    }
+    enum NextAction { case answer, inspect, resume, focus }
+    var nextAction: NextAction {
+        if hasQuestion { return .answer }
+        if verificationBlocked { return .inspect }
+        if disabledReason(ASLMethod.runResume) == nil { return .resume }
+        return .focus
+    }
+    func sessionStatus(_ session: WorkspaceRunDetail.Session) -> String {
+        if verificationBlocked, session.id == selected?.sessionID, session.status == "pending" {
+            return "Incomplete · verification failed"
+        }
+        return WorkspaceWording.status(session.status)
+    }
     var pendingWork: Bool { acting || pending != nil }
 
     func start() {
+        started = true
         refresh()
-        guard timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+        scheduleRefresh()
+    }
+
+    func setAutomaticRefreshEnabled(_ enabled: Bool) {
+        guard automaticRefreshEnabled != enabled else { return }
+        automaticRefreshEnabled = enabled
+        timer?.invalidate(); timer = nil
+        if enabled && started {
+            refresh()
+            scheduleRefresh()
         }
     }
 
+    private func scheduleRefresh() {
+        guard started, automaticRefreshEnabled, timer == nil else { return }
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.automaticRefresh() }
+        }
+    }
+
+    func automaticRefresh() {
+        guard started, automaticRefreshEnabled else { return }
+        refresh(forceDetail: false)
+    }
+
     func close() {
+        started = false
         timer?.invalidate(); timer = nil
         generation += 1; detailGeneration += 1
         loading = false; reading = false; stale = true
         detailRefreshedAt = nil
         detail = nil
+        detailRow = nil
     }
 
-    func refresh() {
+    func refresh(forceDetail: Bool = true) {
         guard !loading else { return }
         loading = true
         generation += 1
@@ -185,7 +231,7 @@ final class WorkspaceRunsModel: ObservableObject {
                 let previous = self.selected?.runID
                 self.status = result.status
                 self.stale = result.status.snapshotStale || ASLView.of(status: result.status, meta: result.meta, hasRows: result.snapshot?.rows.isEmpty == false) != .live
-                if !self.stale { self.listRefreshedAt = Date() }
+                if !self.stale { self.listRefreshedAt = self.now() }
                 // A stale projection is not a fresh read. Keep the last known
                 // rows and their observation time until a live snapshot arrives.
                 if !self.stale || self.rows.isEmpty {
@@ -201,15 +247,24 @@ final class WorkspaceRunsModel: ObservableObject {
                     if found == nil { self.error = "The original run \(target.runID) is no longer listed. Its outcome remains in Action feedback." }
                 } else if self.selected == nil { self.select(self.rows.first?.rowID) }
                 else if previous != self.selected?.runID { self.select(self.selection) }
-                else if !self.reading && !self.stale { self.readDetail() }
+                else if !self.reading && !self.stale && (forceDetail || self.detailNeedsRefresh) { self.readDetail() }
             }
         }
+    }
+
+    private var detailNeedsRefresh: Bool {
+        guard var current = selected, var previous = detailRow, let at = detailRefreshedAt,
+              detail != nil, detailError == nil else { return true }
+        // Authorization tokens can rotate without changing displayed evidence.
+        current.actionToken = ""; previous.actionToken = ""
+        return current != previous || now().timeIntervalSince(at) >= Self.detailRefreshInterval
     }
 
     func select(_ id: String?) {
         selection = id
         detailGeneration += 1
         detailRefreshedAt = nil
+        detailRow = nil
         detail = nil; detailError = nil; reading = false
         if !stale { readDetail() }
     }
@@ -229,7 +284,8 @@ final class WorkspaceRunsModel: ObservableObject {
                       ASLResponse.canonicalDir(detail.planDir) == ASLResponse.canonicalDir(row.planDir) else {
                     self.detailRefreshedAt = nil; self.detail = nil; self.detailError = "This plan now reports a different run. Refresh the run list."; return
                 }
-                self.detailRefreshedAt = Date()
+                self.detailRefreshedAt = self.now()
+                self.detailRow = row
                 self.detail = detail
             case let .failure(error): self.detailError = error.message
             case .partial: self.detailError = "ASL returned an incomplete status report. Refresh to try again."

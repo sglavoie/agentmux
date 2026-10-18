@@ -69,7 +69,7 @@ func dashboardBindings() commands.BindingSet {
 		// recoverable and dead — with "nothing to undo" beside it — the rest of
 		// the time. It is the one key here whose availability changes on a timer
 		// rather than with the cursor.
-		{Keys: []string{keyUndoClose}, Display: keyUndoClose, Hint: "undo close", Command: commands.UndoClose},
+		{Keys: []string{keyUndoClose}, Display: keyUndoClose, Hint: "recover closed", Command: commands.UndoClose},
 		{Keys: []string{keyQuestion}, Display: keyQuestion, Hint: "help", Command: commands.ShowKeyboardHelp},
 		{Keys: []string{keyQ, keyCtrlC}, Display: keyQ + " / " + keyCtrlC, Hint: "quit", Command: commands.Quit},
 	}

@@ -491,3 +491,107 @@ Validation and evidence:
   [capture provenance and hashes](acceptance/workspace-navigation-polish/manifest.json).
 
 Changes are prepared in the repository; no installation or release was performed.
+
+## Status, review, and refresh polish on 2026-10-18
+
+This pass implements the six follow-up recommendations against the existing
+workflows. Real-use confirmation of the Codex interruption remains a separate,
+uncompleted acceptance item.
+
+- [x] Shared review status gives failures precedence over retained results and
+  says **Refresh failed**. Slow reads say **Refreshing…** after the existing
+  delay; the popover retains previous-content explanations and independent read
+  times. The fixed toolbar slot and recovery actions are preserved.
+- [x] Runs emphasizes Answer for questions, Inspect Failed Check for verification
+  pauses, and Resume for other resumable pauses. The affected pending plan row
+  says **Incomplete · verification failed**. Fresh authorization, confirmations,
+  and exact operation receipts remain unchanged.
+- [x] Diffs highlight changed words in paired replacement lines, omit redundant
+  file headers by default, and show the visible hunk number beside navigation.
+  **Show patch headers** restores the headers; full-patch copying is unchanged.
+  Mode changes, binary evidence, and no-newline markers remain visible. Unicode
+  selections, line numbers, reading anchors, and keyboard navigation are covered.
+  Intraline work is bounded; large or unpaired blocks keep whole-line shading.
+- [x] Runs still polls visible, active summaries every five seconds, but reads
+  unchanged plan details every thirty seconds. Changed summaries, explicit
+  refresh, and returning to an active visible window trigger fresh reads.
+  Hidden/inactive windows suspend the timer. Failed reads retry, skipped reads
+  keep their original timestamp, and polling never performs mutations.
+- [x] Current documentation and generated TUI help agree on close recovery:
+  thirty seconds, Resume for an exact conversation, otherwise Relaunch. The
+  binding declaration supplies the shared **recover closed** hint. Historical
+  acceptance records retain the behavior they originally observed. The companion
+  guide documents the new status, diff, action, and refresh behavior; separate
+  app/CLI launch preferences and the migration's compatibility default remain
+  explicit.
+- [x] The completion-indicator fix is exercised through shell launch selection,
+  isolated hook delivery for resumed and new conversations, production reducer
+  and screen probes on both backends, an eight-hour simulated observation gap,
+  and daemon checkpoint restoration after a conversation change. Codex CLI
+  0.163.0 on this Mac advertises `--no-daemon`. Shared-server hooks still refuse
+  ambiguous/unbound owners instead of borrowing another terminal's identity.
+- [ ] F-001 still needs an installed-build observation across `/new`, resume,
+  app reopening, and physical sleep/wake. Tests do not count as operator use;
+  the five-workday trial remains pending. No live session was relaunched.
+
+### Validation
+
+- `macos/scripts/test-app.sh`: 901 hosted tests passed, zero failures or skips.
+  The first runs exposed outdated screenshot wording expectations and a hunk
+  navigation regression; both were corrected before this successful full run.
+- `env -u AMX_RUNTIME_SESSION_ID just check`: passed Go tests, core race checks,
+  vet, 188 TUI scenarios, and lint with zero issues. The first gate found a
+  timestamp-comparison lint issue in configuration polling; it now uses
+  `time.Time.Equal`.
+- Final focused hosted run: 28 tests passed, zero failures or skips. This covers
+  Runs controls, refresh/cancellation, navigation, and the final safeguard that
+  unknown verification reasons are not relabeled as failures. An unhosted SwiftUI
+  state assertion was removed; hosted loading screenshots retain that coverage.
+- `just mac-app Release`: built and signed `macos/build/Agent Mux.app`, bundling
+  this checkout's CLI. [Candidate hashes](acceptance/workspace-finishing-polish/candidate.json)
+  identify the prepared executables. No installation or release was performed.
+- `git diff --check`: passed.
+- Six minimum-window captures were inspected in both appearances:
+  [diff light](acceptance/workspace-finishing-polish/diff-light.png),
+  [diff dark](acceptance/workspace-finishing-polish/diff-dark.png),
+  [Runs light](acceptance/workspace-finishing-polish/runs-light.png),
+  [Runs dark](acceptance/workspace-finishing-polish/runs-dark.png),
+  [refresh failure light](acceptance/workspace-finishing-polish/refresh-failed-light.png),
+  [refresh failure dark](acceptance/workspace-finishing-polish/refresh-failed-dark.png).
+  [Provenance and hashes](acceptance/workspace-finishing-polish/manifest.json)
+  identify the fixture source and full test result.
+The new focused coverage is in `WorkspaceFinishingPolishTests`,
+`codex_completion_lifecycle_test.go`, and the expanded isolated-hook tests.
+
+The real-subprocess fixture issued two status processes for twelve unchanged
+snapshots (initial plus thirty-second fallback), instead of twelve. A changed
+summary's read took 10.17 ms locally, in addition to the normal polling delay of
+up to five seconds. With automatic refresh suspended, no snapshot or subprocess
+was requested during 5.2 seconds; whole-XCTest-host CPU time was 18.28 ms during
+that interval. These fixture measurements are not installed-app CPU or latency
+claims. The injected-clock test separately covers five minutes of suspended
+polls, immediate reactivation, rotating authorization tokens, and explicit reads.
+
+### Remaining installed-build check for F-001
+
+After installing this candidate and relaunching a managed Codex client, complete
+one response in each of these paths: resume an existing conversation; `/new` in
+that same terminal; close and reopen the app; sleep and wake the Mac. Record the
+installed CLI/app build, whether the completed indicator remains visible before
+acknowledgement or the next prompt, and any failure's runtime/conversation IDs.
+Use `amx debug bundle` for a recurrence. Do not reinterpret a deliberate
+acknowledgement or a new prompt as a lost completion.
+
+The `/new` reset itself has a separate expectation: the previous 🛑 must clear
+before another prompt is sent. A Codex 0.163.0 capture reproduced a missed reset
+when a narrow footer hid `Context 0% used`. The follow-up recognizes the strict
+empty startup layout in both the screen and history, retains the receipt checks
+against concurrent activity, and tests reset/recompletion on Kitty and tmux.
+Unknown layouts and retained transcript content still withhold the clear.
+The prepared candidate hashes above predate this reset fix; `just update`
+rebuilds and installs the current checkout.
+
+The automated tests establish shell selection, ownership, reducer persistence,
+and simulated observation gaps. They do not establish physical sleep behavior
+or recurrence in real use. F-001 and the separate five-workday trial therefore
+remain open until the operator supplies those observations.

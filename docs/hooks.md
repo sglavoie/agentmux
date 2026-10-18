@@ -241,6 +241,16 @@ without surfacing a stop icon or stop notification. If runtime behavior still
 diverges, inspect `amx daemon export-events --current-window --last 50` from
 the live tab before changing the delay heuristic.
 
+For an idle Codex `/new` or `/clear`, Agent Mux also checks the resulting
+screen and terminal history. A confirmed fresh conversation removes the old
+🛑 without waiting for another prompt or sending a completion notification.
+When a narrow terminal hides `Context 0% used`, the check requires the complete
+empty startup layout: Codex header, directory, empty body (or startup logo),
+empty composer, and Ready footer. Old transcript content, unreadable history,
+or a newer hook arriving during the check prevents the clear. Merely typing
+`/new`, reopening a viewer, or seeing a Ready footer does not establish a reset.
+Unrecognized layouts retain the status rather than guessing.
+
 If the managed hook binary is newer than the running daemon, the next hook event
 from that binary automatically restarts the daemon so new indicator/daemon logic
 takes effect without a manual restart. Use `amx daemon restart` when you want to

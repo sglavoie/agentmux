@@ -44,7 +44,7 @@ fails there.
 | `S` | All-project Past Sessions, newest activity first; clears previous history filters |
 | `t` | Send to the selected tmux session: answer its prompt or type its next one, without attaching |
 | `:` | Command palette |
-| `u` | Undo the last close (five-second window) |
+| `u` | Recover the last closed session (30-second window) |
 | `?` | Help |
 | `q`, `Ctrl+C` | Quit dashboard |
 | `Esc` | Close overlay, then leave full-screen/inspector focus, then clear filters |
@@ -56,8 +56,9 @@ to pane switching, and `Enter` keeps focusing but no longer shares the job with
 
 ## Command-backed bindings
 
-Each surviving row is one entry in `dashboardBindings()`, which is twelve entries
-long. "Successor" names the surface that reaches the capability now. A palette
+Each surviving row is one entry in `dashboardBindings()`, shared by dispatch,
+footer hints, palette shortcuts, and generated help. "Successor" names the surface
+that reaches the capability now. A palette
 entry exists for every command in this table — the catalog is the complete list
 — so "palette" never means "gone"; where something more direct exists, it is
 named first.
@@ -93,7 +94,7 @@ named first.
 | `b` | `ToggleRail` | Toggle the project rail | **Retired.** The rail, its command, and its key are gone; every scope it could apply is reachable from the switcher, which keeps `rail` as a palette alias so the old word still finds it | project switcher `p`; palette |
 | `v` | `ToggleListView` | Urgency ↔ Projects view | **Retired** | palette (the contract keeps Projects view palette-accessible) |
 | `R` | `ResortTabs` | Resort Kitty tabs | **Retired** | palette |
-| `u` | `UndoClose` | Undo the last close | Survives (restored) | `u`; palette. It came back because what it undoes expires: the recovery window is five seconds, and a capability that has to be reached by name before it lapses is not reachable. The recovery toast names `u` again, and the palette command is unchanged |
+| `u` | `UndoClose` | Resume the last closed conversation, or relaunch when no exact conversation is known | Survives (restored) | `u`; palette. It came back because what it undoes expires: the recovery window is 30 seconds, and a capability that has to be reached by name before it lapses is not reachable. The recovery toast names `u` again, and the palette command is unchanged |
 | `?` | `ShowKeyboardHelp` | Keyboard help | Survives | `?` |
 | `q` / `ctrl+c` | `Quit` | Quit the dashboard | Survives | `q`, `Ctrl+C` |
 

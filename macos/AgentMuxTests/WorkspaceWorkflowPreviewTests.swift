@@ -282,7 +282,7 @@ extension WorkspaceWorkflowPreviewTests {
                     available = false; service.failed = true
                     history.search(); changes.refresh(); activity.refresh(); runs.refresh()
                 }
-                let notice = state == "loading" || state == "failed" ? ["Previous results"] : []
+                let notice = state == "failed" ? ["Refresh failed"] : state == "loading" ? ["Refreshing"] : []
                 // Native disabled button text is deliberately faint; use retained
                 // content for OCR in those states and assert authorization directly.
                 if !notice.isEmpty { XCTAssertFalse(history.canAct) }
@@ -295,7 +295,7 @@ extension WorkspaceWorkflowPreviewTests {
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
                                  expected: ["Since Last Looked", "Mark read"] + notice + (state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,
-                                 expected: ["ASL Runs", "Run a Plan"] + notice + (state == "empty" ? ["No active runs"] : state == "failed" ? ["Focus Session"] : ["Resume", "Abort"]))
+                                 expected: ["ASL Runs", "Run a Plan"] + notice + (state == "empty" ? ["No active runs"] : state == "failed" ? ["Inspect Failed Check"] : ["Resume", "Abort"]))
             }
         }
     }
@@ -323,6 +323,20 @@ extension WorkspaceWorkflowPreviewTests {
 }
 
 extension WorkspaceWorkflowPreviewTests {
+    func testChangedWordsAndCompactHeadersInBothAppearances() async throws {
+        let amx = command { args in
+            if args.first == "worktree" { return #"{"worktrees":[]}"# }
+            return #"{"root":"/Projects/api","base":"HEAD","files":[{"path":"pagination.swift","added":2,"deleted":2,"binary":false,"untracked":false}],"patch":"diff --git a/pagination.swift b/pagination.swift\nindex 123..456 100644\n--- a/pagination.swift\n+++ b/pagination.swift\n@@ -1 +1 @@\n-let page = readEvents(limit: 20, archived: true)\n+let page = readEvents(limit: 50, archived: false)\n@@ -12 +12 @@\n-return page.previousCursor\n+return page.nextCursor\n","truncated":false}"#
+        }
+        let changes = WorkspaceChangesModel(command: { amx }, runner: PreviewRunner())
+        changes.open(directory: "/Projects/api")
+        changes.wrapDiffLines = true
+        for dark in [false, true] {
+            try await render(WorkspaceChangesView(model: changes), name: "finishing-diff-\(dark)", width: 720, height: 450, dark: dark,
+                             expected: ["Hunk 1 of 2", "readEvents", "previousCursor", "nextCursor"])
+        }
+    }
+
     func testRefinedHistoryAndWrappedDiff() async throws {
         var total = 3
         let historyCommand = command { args in
@@ -397,7 +411,7 @@ extension WorkspaceWorkflowPreviewTests {
             try await render(WorkspaceHistoryView(preferences: preferences, model: history), name: "clarity-history-collapsed-\(dark)", width: 720, height: 450, dark: dark,
                              expected: ["Resume", "Fork", "Keep reading positions stable"])
             try await render(WorkspaceRunsView(model: runs, plan: plan), name: "clarity-runs-\(dark)", width: 780, height: 500, dark: dark,
-                             expected: ["8 of 10 sessions complete", "Unit tests: failed", "Verification failed", "Resume", "Abort", "Run details", "Recorded verification"])
+                             expected: ["8 of 10 sessions complete", "Unit tests: failed", "Verification failed", "Inspect Failed Check", "Incomplete", "Resume", "Abort", "Run details", "Recorded verification"])
             try await render(WorkspaceStatus(loading: true, retained: true, refreshedAt: Date().addingTimeInterval(-125),
                                             feedback: WorkspaceFeedback(target: "API deployment review", message: "Read failed. Previous content is still available."),
                                             recover: {}).padding(16).frame(maxHeight: .infinity, alignment: .top), name: "clarity-stale-\(dark)", width: 720, height: 160, dark: dark,

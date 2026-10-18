@@ -11,6 +11,8 @@ struct WorkspaceDiffView: NSViewRepresentable {
     var reviewState: WorkspaceReviewState? = nil
     var fontSize: CGFloat = 12
     var wrapLines = false
+    var compactMetadata = true
+    var onVisibleHunk: ((Int?) -> Void)?
     var onCopy: ((WorkspaceCopyFeedback) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -43,8 +45,9 @@ struct WorkspaceDiffView: NSViewRepresentable {
         guard let text = scroll.documentView as? WorkspaceDiffTextView else { return }
         text.onCopy = onCopy
         let state = context.coordinator
+        state.onVisibleHunk = onVisibleHunk
         guard !loading else { return }
-        if state.identity != identity || state.diff != diff || state.fontSize != fontSize || state.wrapLines != wrapLines {
+        if state.identity != identity || state.diff != diff || state.fontSize != fontSize || state.wrapLines != wrapLines || state.compactMetadata != compactMetadata {
             if let previous = state.identity {
                 state.positions[previous] = scroll.contentView.bounds.origin
                 state.anchors[previous] = text.readingAnchor()
@@ -55,7 +58,9 @@ struct WorkspaceDiffView: NSViewRepresentable {
             state.diff = diff
             state.fontSize = fontSize
             state.wrapLines = wrapLines
-            let rendered = Self.render(diff, fontSize: fontSize)
+            state.compactMetadata = compactMetadata
+            state.hasReportedHunk = false
+            let rendered = Self.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
             state.hunkRanges = rendered.hunks
             text.diff = diff
             text.lineRanges = rendered.lines
@@ -88,12 +93,17 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 text.showFindIndicator(for: range)
             }
         }
+        state.reportVisibleHunk(scroll)
     }
 
-    static func render(_ diff: WorkspaceDiff, fontSize: CGFloat = 12) -> (text: NSAttributedString, hunks: [NSRange], lines: [NSRange]) {
+    static func render(_ diff: WorkspaceDiff, fontSize: CGFloat = 12, compactMetadata: Bool = false) -> (text: NSAttributedString, hunks: [NSRange], lines: [NSRange]) {
         let result = NSMutableAttributedString()
         var hunks: [NSRange] = [], ranges: [NSRange] = []
         for (index, line) in diff.lines.enumerated() {
+            if compactMetadata && diff.redundantHeader(index) {
+                ranges.append(NSRange(location: result.length, length: 0))
+                continue
+            }
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
                 .foregroundColor: NSColor.labelColor
@@ -110,7 +120,11 @@ struct WorkspaceDiffView: NSViewRepresentable {
             }
             let row = line.text + (index + 1 < diff.lines.count ? "\n" : "")
             ranges.append(NSRange(location: result.length, length: row.utf16.count))
-            result.append(NSAttributedString(string: row, attributes: attributes))
+            let styled = NSMutableAttributedString(string: row, attributes: attributes)
+            for range in diff.changedWords[index] ?? [] {
+                styled.addAttribute(.backgroundColor, value: (line.kind == .added ? NSColor.systemGreen : NSColor.systemRed).withAlphaComponent(0.34), range: range)
+            }
+            result.append(styled)
         }
         return (result, hunks, ranges)
     }
@@ -119,6 +133,28 @@ struct WorkspaceDiffView: NSViewRepresentable {
         weak var gutter: WorkspaceDiffGutter?
         private var observer: NSObjectProtocol?
         private var store: WorkspaceReviewState?
+        var onVisibleHunk: ((Int?) -> Void)?
+        private var reportedHunk: Int?
+        var hasReportedHunk = false
+        func reportVisibleHunk(_ scroll: NSScrollView) {
+            guard let text = scroll.documentView as? WorkspaceDiffTextView else { return }
+            let line = text.readingAnchor()?.index ?? 0
+            var hunk = text.diff.hunks.isEmpty ? nil : (text.diff.hunks.lastIndex { $0 <= line } ?? 0)
+            // A jump near the end cannot put its heading at the top. Prefer the
+            // heading actually visible in the viewport over preceding context.
+            if let upcoming = text.diff.hunks.firstIndex(where: { $0 >= line }),
+               let rect = text.lineRect(text.diff.hunks[upcoming]), rect.intersects(scroll.documentVisibleRect) {
+                hunk = upcoming
+            }
+            guard !hasReportedHunk || reportedHunk != hunk else { return }
+            hasReportedHunk = true
+            reportedHunk = hunk
+            let currentIdentity = identity
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.identity == currentIdentity, self.reportedHunk == hunk else { return }
+                self.onVisibleHunk?(hunk)
+            }
+        }
         func observe(_ scroll: NSScrollView, store: WorkspaceReviewState?) {
             self.store = store
             scroll.contentView.postsBoundsChangedNotifications = true
@@ -129,6 +165,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 self.positions[id] = point
                 self.store?.savePosition(point, id: id)
                 self.gutter?.needsDisplay = true
+                self.reportVisibleHunk(scroll)
             }
         }
         deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
@@ -141,6 +178,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
         var jumpSequence = 0
         var fontSize: CGFloat = 0
         var wrapLines = false
+        var compactMetadata = true
     }
 }
 

@@ -33,7 +33,7 @@ func (m *Model) refreshConfig() tea.Cmd {
 		if err != nil {
 			return configReloadMsg{err: err}
 		}
-		if previous != nil && os.SameFile(previous, info) && previous.Size() == info.Size() && previous.ModTime() == info.ModTime() {
+		if previous != nil && os.SameFile(previous, info) && previous.Size() == info.Size() && previous.ModTime().Equal(info.ModTime()) {
 			return configReloadMsg{info: info}
 		}
 		cfg, err := config.Load(path)

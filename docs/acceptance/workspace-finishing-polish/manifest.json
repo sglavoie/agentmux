@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-18",
+  "fixture_source": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+  "fixture_sha256": "60557f123ab55647aef08749ca5ea3d41fd50dc7c2246ddae67376be9ba397e6",
+  "capture": "ScreenCaptureKit current-process fixture windows; no live conversations; 2x pixel scale",
+  "full_test_command": "macos/scripts/test-app.sh",
+  "full_test_result": "901 tests passed; zero failures or skips",
+  "test_result_bundle": "Test-AgentMux-2026.10.18_08-10-54--0600.xcresult",
+  "review_criteria": [
+    "Refresh failures are explicit while retained transcript content stays readable.",
+    "Runs emphasizes Inspect Failed Check and explains the incomplete plan session at minimum size.",
+    "Changed words are visibly emphasized in both appearances; redundant headers are hidden while hunk navigation remains visible."
+  ],
+  "artifacts": [
+    {
+      "path": "diff-light.png",
+      "sha256": "6404acba79ec9b74305e304946041764a1f12236723b7193866f338000d8c683",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
+    },
+    {
+      "path": "diff-dark.png",
+      "sha256": "8daa323ee789792e47fa34cb6148cf9c17803ce433777fe72c04ac1518d9ccea",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
+    },
+    {
+      "path": "runs-light.png",
+      "sha256": "d5320cbfff43461b10e4e3d557323bc48a730650d437ea789f5134095f5fbab8",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
+    },
+    {
+      "path": "runs-dark.png",
+      "sha256": "da1b5721c3e802305dad17950dbb19c91cc4d9f4f8fff2177296cad3d91ed169",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
+    },
+    {
+      "path": "refresh-failed-light.png",
+      "sha256": "25ba441445f804d6992797a80cd1db1e3c09c680e867fd6939bcb84c8011a013",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
+    },
+    {
+      "path": "refresh-failed-dark.png",
+      "sha256": "25a3f90a99240bb6cb97f97946390c6680a45d8a99d94610c4e0b347a4d1f337",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
+    }
+  ],
+  "final_focused_test_command": "xcodebuild test -only-testing:AgentMuxTests/WorkspaceFinishingPolishTests -only-testing:AgentMuxTests/WorkspaceRunsTests -only-testing:AgentMuxTests/WorkspaceNavigationPolishTests (same project, Debug signing, destination and DerivedData as test-app.sh)",
+  "final_focused_test_result": "28 tests passed; zero failures or skips",
+  "go_gate": "env -u AMX_RUNTIME_SESSION_ID just check: passed; 188 TUI scenarios; zero lint issues",
+  "installed_completion_indicator_acceptance": "pending operator observations; not inferred from fixtures"
+}

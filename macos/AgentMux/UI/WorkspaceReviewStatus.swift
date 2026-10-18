@@ -27,9 +27,8 @@ struct WorkspaceReviewStatus: View {
     private var failed: Bool { reads.contains { $0.feedback?.kind == .error } }
     private var success: WorkspaceFeedback? { reads.compactMap(\.feedback).first { $0.kind == .success } }
     private var warning: Bool { reads.contains { $0.feedback?.kind == .warning } }
-    private var label: String {
-        if reads.contains(where: { $0.showingPrevious }) { return "Previous results" }
-        if failed { return "Read failed" }
+    var label: String {
+        if failed { return "Refresh failed" }
         if warning { return "Read warning" }
         if !loading, let success { return success.message }
         return loading && showProgress ? "Refreshing…" : "Read status"

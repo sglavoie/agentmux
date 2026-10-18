@@ -34,7 +34,7 @@ composer_line = '^\s*(?:\x{203a}|>)\s*(.*)$'
 
 # context_zero_line matches Codex's footer reporting an empty context window
 # ("Context 0% used"), the positive half of the cleared-screen evidence.
-context_zero_line = '(?i)\bcontext\b.*(?:^|[^0-9])0\s*%'
+context_zero_line = '(?i)\bcontext\s+(?:window\s+)?0\s*%'
 
 # labeled_transcript_line matches an explicitly labelled transcript turn
 # ("user:", "codex:"). It is one of the negative tests that keeps a stopped
@@ -49,6 +49,12 @@ labeled_transcript_line = '(?i)^\s*(?:user|codex|assistant|system)\s*:'
 # negative test, so keep it anchored on the whole product name: see
 # testdata/tmux/codex_cleared.txt.
 banner_line = '^\s*>_ OpenAI Codex(?:\s|$)'
+
+# Positive evidence for the strict fresh-session layout when a narrow terminal
+# truncates the context counter. Go additionally requires the header, directory,
+# empty body and composer in that order, on both the screen and full history.
+fresh_ready_footer = '^\s*[^\r\n]+ · Ready(?: ·[^\r\n]*|\s*)$'
+fresh_shortcuts_line = '^\s*(?:← for agents · )?\? for shortcuts\s*$'
 
 # worked_for_line matches Codex's completed-turn status line ("Worked for
 # 1m 30s"). The trailing digit requirement anchors on a real duration so
