@@ -7,7 +7,38 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/projectresolve"
 )
+
+// displayProject follows config renames without rewriting the launch metadata
+// used by session actions. Directory matching also handles linked worktrees.
+// Preserve an existing alias; otherwise prefer the session's profile, and
+// decline to choose when the remaining projects disagree about the title.
+func (ctx projectMatchContext) displayProject(rs RunningSession) string {
+	matches := ctx.resolver.Matches(rs.Directory)
+	for _, match := range matches {
+		if match.Title == rs.EffectiveProject() {
+			return match.Title
+		}
+	}
+	var profileMatches []projectresolve.Match
+	for _, match := range matches {
+		if strings.EqualFold(match.Profile, rs.EffectiveProfile()) {
+			profileMatches = append(profileMatches, match)
+		}
+	}
+	if len(profileMatches) > 0 {
+		matches = profileMatches
+	}
+	title := ""
+	for i, match := range matches {
+		if i > 0 && match.Title != title {
+			return ""
+		}
+		title = match.Title
+	}
+	return title
+}
 
 func cwdFallbackMatches(ctx projectMatchContext, cwd string) []titleFallbackMatch {
 	if ctx.cfg == nil {

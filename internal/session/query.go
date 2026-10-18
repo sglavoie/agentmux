@@ -47,6 +47,7 @@ type RunningSession struct {
 	FamilyIsRepository bool     // the family is a Git repository rather than a lone configured project
 	FamilyPrimaryRoot  string   // main checkout root, or the configured directory for a non-repository
 	Project            string   // configured project title
+	DisplayProject     string   // current config title; presentation only, never a launch identity
 	Profile            string   // from amx_profile / legacy cc_account user vars
 	Account            string   // compatibility alias for Profile
 	Harness            string   // from amx_harness or inferred from legacy vars
@@ -156,14 +157,15 @@ func newProjectMatchContext(cfg *config.Config) projectMatchContext {
 	return ctx
 }
 
-// stampFamily attaches repository-family identity to a session that discovery
-// has already settled. It reads the resolver ghost recovery was going to build
-// anyway, so no second Git probe pass runs, and it leaves every family field
-// empty when the resolver declines to name a family.
+// stampFamily attaches current project presentation and repository-family
+// identity to a session that discovery has already settled. It reuses the
+// resolver built for ghost recovery, so no second Git probe pass runs. Family
+// fields stay empty when the resolver declines to name a family.
 func (ctx projectMatchContext) stampFamily(rs RunningSession) RunningSession {
 	if ctx.cfg == nil {
 		return rs
 	}
+	rs.DisplayProject = ctx.displayProject(rs)
 	family, ok := ctx.resolver.ResolveFamily(rs.Directory)
 	if !ok {
 		return rs

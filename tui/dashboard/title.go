@@ -11,9 +11,12 @@ import (
 // SessionDisplayTitle is the name a running session shows under in every
 // dashboard-derived surface: the row title column, the filter's substring
 // match, the detail and preview headers, and the action confirmations that
-// name a session back to the user. It prefers the session's effective
-// project title and falls back to its Kitty base name.
+// name a session back to the user. It prefers the current config title,
+// then the launch project title, and finally its Kitty base name.
 func SessionDisplayTitle(sess session.RunningSession) string {
+	if sess.DisplayProject != "" {
+		return sess.DisplayProject
+	}
 	if title := sess.EffectiveProject(); title != "" {
 		return title
 	}
@@ -22,13 +25,13 @@ func SessionDisplayTitle(sess session.RunningSession) string {
 
 // ProjectLabel is the one project identity used by filtering, completion, and
 // the project switcher. FamilyLabel names a discovered repository family across
-// configured projects and profiles; EffectiveProject is the compatibility
+// configured projects and profiles; SessionDisplayTitle is the compatibility
 // fallback for sessions without family metadata.
 func ProjectLabel(sess session.RunningSession) string {
 	if sess.FamilyLabel != "" {
 		return sess.FamilyLabel
 	}
-	return sess.EffectiveProject()
+	return SessionDisplayTitle(sess)
 }
 
 // CanonicalProjectLabels returns one case-insensitive aggregate per non-empty
