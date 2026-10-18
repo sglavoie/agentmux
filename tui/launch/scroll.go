@@ -1,5 +1,7 @@
 package launch
 
+import "github.com/sglavoie/agentmux/tui/dashboard"
+
 // minVisibleRows floors the launcher's row-line budget so a degenerate
 // terminal never yields a zero or negative window. It duplicates the root
 // list's floor rather than importing it: both are the same number for the same
@@ -13,6 +15,9 @@ const minVisibleRows = 3
 // directory prompt takes the same line.
 func (in PickerInput) internalChrome() int {
 	if in.SearchMode || in.Filter != "" || in.DirMode {
+		if !in.DirMode && dashboard.FilterHint(in.Filter) != "" {
+			return 4
+		}
 		return 3
 	}
 	return 2

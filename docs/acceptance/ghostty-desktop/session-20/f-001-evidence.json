@@ -1,0 +1,68 @@
+{
+  "friction_id": "F-001",
+  "scope": "Sanitized read-only evidence for the reported tt missing completion indicator; not trial acceptance.",
+  "redactions": "Terminal/transcript contents, local paths, unrelated sessions and diagnostic payloads omitted.",
+  "snapshot": {
+    "exported_at": "2026-10-18T00:25:16+00:00",
+    "source_sha256": "d39ac1d086d333bb369fd9e5fb92e6db307a0886b99e5882363d293781e9e0ee",
+    "cli_build": {
+      "version": "0.8.0",
+      "revision": "47f7e166053ae51376ce8f518d4655607c60666e",
+      "dirty": true,
+      "build_time": "2026-10-17T21:34:55Z",
+      "go_version": "go1.27.1",
+      "binary_hash": "2374dfe4a7a0731542aee8fbb11d3cbfec51d6588eab15777c9cad8811e31890"
+    },
+    "runtime_session_id": "rs-ba7bfdbf9ba295c6d6c67b60399043e8",
+    "backend": "tmux",
+    "durable": {
+      "session_title": "",
+      "profile": "",
+      "harness": "",
+      "pipe_mode": false,
+      "activity_at": 0,
+      "last_action": "",
+      "last_active_event": "",
+      "subagent_count": 0
+    },
+    "shadow": {
+      "effective_icon": "",
+      "effective_looping": false,
+      "effective_gen": 0,
+      "mismatch_count": 0
+    },
+    "retained_event_count": 0
+  },
+  "registry_recheck": {
+    "observed_at": "2026-10-18T00:36:32.654334+00:00",
+    "state": "live",
+    "conversation": {
+      "harness": "codex",
+      "session_id": "01a14b23-2e12-7da0-ba96-ceac0aff9532"
+    },
+    "runtime_session_id": "rs-ba7bfdbf9ba295c6d6c67b60399043e8"
+  },
+  "new_conversation_completion": [
+    {
+      "observed_at": "2026-10-18T00:07:30.348034Z",
+      "stage": "hook.runtime_session",
+      "outcome": "rejected",
+      "reason": "codex_conversation_unbound",
+      "session_id": "01a14c31-f561-7ac2-ac9a-0a418c51f035",
+      "event": "Stop"
+    },
+    {
+      "observed_at": "2026-10-18T00:07:30.358169Z",
+      "stage": "hook.delivery",
+      "outcome": "permanent_failure",
+      "reason": "codex_conversation_unbound",
+      "session_id": "01a14c31-f561-7ac2-ac9a-0a418c51f035",
+      "event": "Stop"
+    }
+  ],
+  "conclusion": "The newer conversation Stop was rejected as unbound; the named runtime snapshot has no effective icon or retained event. The registry still names the older conversation.",
+  "limitations": [
+    "The bolt removal transition and its duration were not captured.",
+    "No installed-fix or post-fix real-use observation is recorded."
+  ]
+}

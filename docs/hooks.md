@@ -49,10 +49,16 @@ ambiguous, delivery records `codex_conversation_unbound` or
 `codex_conversation_ambiguous` and does not update another terminal. Resume a
 known conversation through Agent Mux to establish its binding; a fresh shared
 server conversation without one cannot be routed from directory or focus alone.
-For Codex versions offering `--no-daemon`, add that flag to the Agent Mux
-profile's `args` to keep newly launched clients and their hooks scoped to their
-own terminal, including fresh conversations. Existing shared-server clients
-continue using conversation-based routing until relaunched.
+Agent Mux now adds `--no-daemon` to managed interactive launches when the CLI's
+`--help` advertises it. The check runs in the launch shell, using the selected
+profile and that shell's executable path. This keeps hooks scoped to their own
+terminal, including fresh conversations and `/new` after a resume. Older CLIs
+launch without the flag. An explicit `--remote` or `--no-daemon` in profile/project
+arguments is preserved without a capability check.
+Existing shared-server clients continue using conversation-based routing until
+relaunched. Changing conversations inside such a client can leave its new hooks
+unbound and its indicator blank. Reopen the current conversation through Agent
+Mux after installing the fix; retain the current conversation ID for resuming.
 Hook delivery records include the native conversation ID and resolved runtime
 ID so `amx debug tail --session <id>` can follow these deliveries.
 

@@ -8,6 +8,7 @@ package tui
 
 import (
 	"fmt"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"strings"
 	"time"
 
@@ -168,7 +169,7 @@ func selectedWorktreePath(m Model) string {
 // tui/filter.go.
 func renderSearch(m Model) string {
 	prompt := styleSearch.Render("/") + m.filterText + "█"
-	out := prompt + "\n"
+	out := prompt + "\n" + dashboard.RenderFilterHint(m.filterText, m.width)
 	if popup := renderCompletion(m); popup != "" {
 		out += popup
 	}

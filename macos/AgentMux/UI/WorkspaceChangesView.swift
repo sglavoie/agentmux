@@ -22,11 +22,16 @@ struct WorkspaceChangesView: View {
                         .truncationMode(.middle).textSelection(.enabled)
                         .help(changes.root + "\nIncludes changes from every session using this checkout.")
                 }
-                WorkspaceStatus(loading: model.loading, title: "Comparing checkout…", retained: model.changes != nil, refreshedAt: model.comparisonRefreshedAt,
-                                showTarget: model.error == nil && model.landFeedback != nil,
-                                feedback: model.error.map { WorkspaceFeedback(target: model.changes?.root ?? "Checkout comparison", message: $0,
-                                    nextStep: "Showing the previous comparison when available. Check the base and refresh.") } ?? model.landFeedback,
-                                recover: { model.refresh() }, history: model.feedbackHistory).frame(maxWidth: 280)
+                Spacer(minLength: 0)
+                WorkspaceReviewStatus(reads: [
+                    .init(title: "Comparison", loading: model.loading, retained: model.changes != nil, refreshedAt: model.comparisonRefreshedAt,
+                          feedback: model.error.map { WorkspaceFeedback(target: "Comparison", message: $0) }, retry: { model.refresh() }),
+                    .init(title: "Diff", loading: model.reading, retained: model.patchIdentity == model.diffIdentity,
+                          refreshedAt: model.patchIdentity == model.diffIdentity ? model.diffRefreshedAt : nil,
+                          feedback: diffFeedback, retry: { model.select(model.selectedFile) })
+                ])
+                WorkspaceStatus(feedback: model.landFeedback, recover: { model.refresh() }, compactFeedback: true).frame(width: 24)
+                WorkspaceFeedbackHistoryButton(history: model.feedbackHistory)
             }.frame(height: 24)
             HStack {
                 TextField("Comparison base", text: $model.base).focused($focus, equals: .base).textFieldStyle(.roundedBorder).onSubmit { model.refresh() }
@@ -83,10 +88,7 @@ struct WorkspaceChangesView: View {
                             HStack(spacing: 6) {
                                 Text(model.selectedFile.map { fileLabels[$0] ?? $0 } ?? "Select a changed file").font(.headline).lineLimit(1).truncationMode(.head)
                                     .help(model.selectedFile ?? "")
-                                WorkspaceStatus(loading: model.reading, title: "Loading diff…", retained: model.patchIdentity == model.diffIdentity,
-                                                refreshedAt: model.patchIdentity == model.diffIdentity ? model.diffRefreshedAt : nil,
-                                                feedback: diffFeedback, recover: { model.select(model.selectedFile) })
-                                    .frame(maxWidth: 160)
+                                Spacer(minLength: 0)
                                 Button { moveHunk(-1) } label: { Image(systemName: "chevron.up") }
                                     .help("Previous hunk (⌘⇧G)").accessibilityLabel("Previous hunk")
                                     .disabled(model.reading || model.patchError != nil || model.diff.hunks.isEmpty)

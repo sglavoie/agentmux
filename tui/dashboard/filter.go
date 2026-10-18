@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -330,4 +332,44 @@ func ApplyFilter(sessions []session.RunningSession, f Filter, lastActivity map[i
 		}
 	}
 	return out
+}
+
+// FilterHint explains tokens that currently do nothing without rejecting live
+// edits or changing matching. Escaped sigils remain ordinary search text.
+func FilterHint(input string) string {
+	for _, tok := range filterTokens(input) {
+		if tok.unterminated {
+			return "Project filter incomplete — close the quote to apply it"
+		}
+		if !tok.valid {
+			return "Project filter not applied — separate it with a space"
+		}
+		raw := input[tok.start:tok.end]
+		if len(raw) <= 1 || raw[0] != '!' {
+			continue
+		}
+		state := strings.ToLower(raw[1:])
+		if slices.Contains(completionStateNames, state) {
+			continue
+		}
+		suggestion := ""
+		for _, name := range completionStateNames {
+			// Abbreviations such as attn are subsequences, not prefixes.
+			remainder := state
+			for _, r := range name {
+				if len(remainder) > 0 && rune(remainder[0]) == r {
+					remainder = remainder[1:]
+				}
+			}
+			if remainder == "" && len(state) >= 2 {
+				suggestion = name
+				break
+			}
+		}
+		if suggestion != "" {
+			return fmt.Sprintf("Unknown state %q — try !%s (not applied)", raw[1:], suggestion)
+		}
+		return fmt.Sprintf("Unknown state %q — not applied; type ! for choices", raw[1:])
+	}
+	return ""
 }

@@ -172,6 +172,10 @@ func (in PickerInput) RenderList(height int) string {
 		sb.WriteByte('\n')
 	}
 
+	if !in.DirMode {
+		sb.WriteString(dashboard.RenderFilterHint(in.Filter, in.Width))
+	}
+
 	if len(in.Sessions) == 0 {
 		sb.WriteString(styleDim.Render(layout.ClampLine("  (no projects configured — add [[projects]] with `amx config edit`)", in.Width)) + "\n")
 		return sb.String()

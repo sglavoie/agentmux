@@ -70,6 +70,8 @@ struct WorkspaceActivityReadStore {
 final class WorkspaceActivityModel: ObservableObject {
     @Published var unreadOnly = true
     @Published var days = 7
+    @Published private(set) var reportRefreshedAt: Date?
+    @Published private(set) var transcriptRefreshedAt: Date?
     @Published private(set) var report: WorkspaceActivityReport?
     @Published private(set) var readState = WorkspaceActivityReadState()
     @Published private(set) var selection: String?
@@ -79,7 +81,11 @@ final class WorkspaceActivityModel: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var readError: String?
     @Published private(set) var transcriptError: String?
-    var onConversation: ((ConversationIdentity) -> Void)?
+    var onConversation: ((ConversationIdentity, String) -> Void)?
+    func openConversation() {
+        guard let entry = selected, let identity = entry.conversation else { return }
+        onConversation?(identity, entry.at)
+    }
     var onFocus: ((WorkspaceActivityEntry) -> Void)?
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner
@@ -131,6 +137,7 @@ final class WorkspaceActivityModel: ObservableObject {
             switch result {
             case let .failure(error): self.error = error.message
             case let .success(report), let .partial(report, _):
+                self.reportRefreshedAt = Date()
                 self.report = report
                 if !self.visible.contains(where: { $0.id == self.selection }) { self.select(self.visible.first?.id) }
             }
@@ -184,6 +191,7 @@ final class WorkspaceActivityModel: ObservableObject {
     func select(_ id: String?) {
         selection = id
         transcript = nil
+        transcriptRefreshedAt = nil
         transcriptError = nil
         messageLimit = 50
         loadTranscript()
@@ -206,6 +214,7 @@ final class WorkspaceActivityModel: ObservableObject {
             case let .failure(error): self.transcriptError = error.message
             case let .success(value), let .partial(value, _):
                 guard value.session.identity == identity else { self.transcriptError = "The transcript identity did not match this event."; return }
+                self.transcriptRefreshedAt = Date()
                 self.transcript = value
             }
         }
@@ -217,6 +226,7 @@ final class WorkspaceActivityModel: ObservableObject {
         loading = false
         reading = false
         transcript = nil
+        transcriptRefreshedAt = nil
         selection = nil
     }
 }

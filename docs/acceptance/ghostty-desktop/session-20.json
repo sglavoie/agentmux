@@ -5,10 +5,10 @@
   "operator_confirmed": false,
   "workdays": [],
   "unresolved_blockers": [
-    "The five-workday operator trial has not been performed: Session 19 completed at 2026-10-11T02:57Z and this record was prepared within the same hour. No day of real use on the desktop workflow exists yet.",
-    "The operator has not confirmed anything about daily use."
+    "Five completed operator workdays and the required case evidence have not been recorded. The 2026-10-17 tt completion-indicator report is an interruption observation, not a completed trial workday.",
+    "The operator has not explicitly confirmed trial completion; the F-001 fix has not been installed or verified in subsequent real use."
   ],
-  "why_pending": "Every trial case needs the operator's own work over at least five distinct workdays and the operator's explicit confirmation. Neither can be produced by a test run. What exists is the candidate build, the operator's guide (docs/daily-driver-trial.md), an empty log (session-20/trial-log.md), and a rehearsal of the transition and rollback instructions with stand-in agents in a disposable world on the MacBook Pro. The rehearsal is recorded under `rehearsal` and is deliberately not counted as any case.",
+  "why_pending": "Every trial case needs the operator's own work over at least five distinct workdays and explicit completion confirmation. Tests cannot supply either. The log now contains F-001, the operator's tt missing-completion report and its bounded diagnostic investigation (session-20/f-001-evidence.json); no workday is counted. The implementation, log template, friction register, and transition/rollback rehearsal are available. The rehearsal and fixture checks do not count as trial cases.",
   "cases": {
     "multiple-profiles": {
       "status": "pending",

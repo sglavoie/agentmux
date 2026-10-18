@@ -1,0 +1,27 @@
+{
+  "name": "filter-hint-narrow",
+  "fixture": "basic",
+  "size": {
+    "width": 60,
+    "height": 24
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "/"
+    },
+    {
+      "type": "text",
+      "text": "!attn"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "contains_text",
+      "text": "Unknown state"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

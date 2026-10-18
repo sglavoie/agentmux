@@ -17,7 +17,7 @@ final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
         }
     }
 
-    func show(project: String, conversation: ConversationIdentity?) {
+    func show(project: String, conversation: ConversationIdentity?, eventTime: String? = nil) {
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 680),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -33,7 +33,7 @@ final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
             self.window = window
         }
         onVisibilityChanged(true)
-        model.open(project: project, conversation: conversation)
+        model.open(project: project, conversation: conversation, eventTime: eventTime)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
@@ -66,6 +66,15 @@ struct WorkspaceHistoryView: View {
                     .onChange(of: model.query) { _, _ in model.scheduleSearch() }
                 Button("Search") { model.search() }
                     .help("Search conversations. ⌘F focuses the search field.")
+                WorkspaceReviewStatus(reads: [
+                    .init(title: "Search", loading: model.loading || model.loadingMore, retained: !model.entries.isEmpty, refreshedAt: model.resultsRefreshedAt,
+                          feedback: model.error.map { WorkspaceFeedback(target: "Conversation search", message: $0) }, retry: { model.search() }),
+                    .init(title: "Transcript", loading: model.reading, retained: model.transcript != nil, refreshedAt: model.transcriptRefreshedAt,
+                          feedback: model.transcriptError.map { WorkspaceFeedback(target: "Transcript", message: $0) }, retry: { model.refreshTranscript() })
+                ])
+                WorkspaceStatus(loading: model.acting, title: "Opening conversation…", feedback: model.actionFeedback,
+                                recover: { model.recoverActionFeedback() }, compactFeedback: true).frame(width: 24)
+                WorkspaceFeedbackHistoryButton(history: model.feedbackHistory)
                 WorkspaceReadingMenu(preferences: preferences)
             }
             HStack {
@@ -87,10 +96,6 @@ struct WorkspaceHistoryView: View {
             HStack(spacing: 0) {
                 if !model.layout.collapsed {
                 VStack(spacing: 6) {
-                WorkspaceStatus(loading: model.loading, title: "Searching…", retained: !model.entries.isEmpty, refreshedAt: model.resultsRefreshedAt,
-                                feedback: model.error.map { WorkspaceFeedback(target: "Conversation search", message: $0,
-                                    nextStep: "Check Settings if amx is unavailable, then search again.") },
-                                recover: { model.search() }, history: model.feedbackHistory, compactFeedback: true)
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.entries) { entry in
                         VStack(alignment: .leading, spacing: 4) {
@@ -168,12 +173,9 @@ struct WorkspaceHistoryView: View {
                                 .help("Refresh conversation without moving your place (⌘R)")
                                 .accessibilityLabel("Refresh conversation").disabled(!model.canRefreshTranscript)
                         }
-                        WorkspaceStatus(loading: model.reading || model.acting,
-                                        title: model.acting ? "Opening conversation…" : "Loading transcript…", retained: model.transcript != nil, refreshedAt: model.transcriptRefreshedAt,
-                                        showTarget: model.transcriptError == nil && model.actionFeedback != nil,
-                                        feedback: model.transcriptError.map { WorkspaceFeedback(target: selected.conversation.displayName,
-                                            message: $0, nextStep: "Reload the transcript to check again. Existing text remains readable.", recovery: .transcript) } ?? model.actionFeedback,
-                                        recover: { if model.transcriptError != nil { model.refreshTranscript() } else { model.recoverActionFeedback() } })
+                        if let notice = model.locationNotice {
+                            Text(notice).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
                         if let transcript = model.transcript {
                             HStack(spacing: 4) {
                                 Menu {
@@ -213,7 +215,9 @@ struct WorkspaceHistoryView: View {
                                                     }
                                                 }
                                                 WorkspaceTranscriptText(text: message.text.reveal(), terms: transcript.matchTerms, preferences: preferences)
-                                            }.id(index)
+                                            }.padding(4)
+                                                .background(model.highlightedMessage == index ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                                                .id(index)
                                         }
                                     }.scrollTargetLayout().padding(8)
                                 }

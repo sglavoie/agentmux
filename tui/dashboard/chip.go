@@ -105,7 +105,7 @@ func RenderChips(f Filter, acctColor map[string]string, width int) string {
 // rectangles from the same layout loop.
 func RenderChipsWithHits(f Filter, acctColor map[string]string, width int) ChipRender {
 	if f.IsEmpty() {
-		return ChipRender{}
+		return ChipRender{Text: RenderFilterHint(f.Raw, width)}
 	}
 	comps := f.Components()
 
@@ -148,7 +148,7 @@ func RenderChipsWithHits(f Filter, acctColor map[string]string, width int) ChipR
 	if line.Len() > 0 {
 		lines = append(lines, line.String())
 	}
-	return ChipRender{Text: strings.Join(lines, "\n") + "\n", Hits: hits}
+	return ChipRender{Text: strings.Join(lines, "\n") + "\n" + RenderFilterHint(f.Raw, width), Hits: hits}
 }
 
 // renderChip renders a single chip body. The leading ▌ glyph and trailing
@@ -180,4 +180,14 @@ func chipStyle(c Chip, acctColor map[string]string) lipgloss.Style {
 		base = styleChip
 	}
 	return base
+}
+
+// RenderFilterHint reserves one bounded row beneath the filter. Chip hit
+// rectangles remain unchanged because this row has no action of its own.
+func RenderFilterHint(input string, width int) string {
+	hint := FilterHint(input)
+	if hint == "" {
+		return ""
+	}
+	return styleStateWarning.Render(layout.ClampLine(hint, width)) + "\n"
 }

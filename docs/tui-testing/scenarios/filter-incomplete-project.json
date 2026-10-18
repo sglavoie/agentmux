@@ -1,0 +1,27 @@
+{
+  "name": "filter-incomplete-project",
+  "fixture": "basic",
+  "size": {
+    "width": 80,
+    "height": 24
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "/"
+    },
+    {
+      "type": "text",
+      "text": "#\"unfinished"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "contains_text",
+      "text": "Project filter incomplete"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

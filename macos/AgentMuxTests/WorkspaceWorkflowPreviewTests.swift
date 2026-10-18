@@ -144,6 +144,10 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let model = PreferencesModel(defaults: defaults)
+        var backend = BackendStatus()
+        backend.launchBackend = "kitty"
+        backend.launchBackendSource = "compatibility default"
+        model.snapshot.backend = .status(backend)
         let view = PreferencesView(model: model, dashboardRecorder: HotKeyRecorder(),
                                    attentionRecorder: HotKeyRecorder(), workspaceRecorder: HotKeyRecorder())
             .task {
@@ -151,7 +155,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
                 model.launchSettingsRequest += 1
             }
         try await render(view, name: "launch-settings", width: 560, height: 450,
-                         expected: ["Launch projects in", "Workspace"])
+                         expected: ["Launch projects in", "Workspace", "CLI launches", "compatibility default", "Follow CLI"])
     }
 
     func testTranscriptTablesQuotesAndNestedListsAtMinimumSize() async throws {
@@ -360,7 +364,7 @@ extension WorkspaceWorkflowPreviewTests {
     func testClarityHistoryRunsAndFeedbackCaptures() async throws {
         let amx = command { args in
             if args[0] == "plans" {
-                return #"{"plan_dir":"/plans/api","plan_title":"API deployment review","counts":{"complete":8,"pending":2},"sessions":[{"id":"9","status":"pending","path":"/plans/api/session-9.md"}],"runner_state":{"run_id":"run-one","paused":true,"reason":"verification-failed","run_started_at":"2026-10-17T12:00:00Z","run_finished_at":""},"verification":[{"event":"verification_finished","at":"2026-10-17T12:05:00Z","session_id":"8","passed":false,"check_count":3,"passed_count":2}],"verification_truncated":false}"#
+                return #"{"plan_dir":"/plans/api","plan_title":"API deployment review","counts":{"complete":8,"pending":2},"sessions":[{"id":"9","status":"pending","path":"/plans/api/session-9.md"}],"runner_state":{"run_id":"run-one","paused":true,"reason":"verification-failed","run_started_at":"2026-10-17T12:00:00Z","run_finished_at":""},"verification":[{"event":"verification_check_finished","at":"2026-10-17T12:04:59Z","session_id":"9","name":"Unit tests","status":"failed","returncode":1},{"event":"verification_finished","at":"2026-10-17T12:05:00Z","session_id":"9","passed":false,"check_count":3,"passed_count":2}],"verification_truncated":false}"#
             }
             if args[1] == "show" {
                 return #"{"session":{"id":"one","harness":"claude","project":"API deployment review","cwd":"/Projects/api"},"messages_total":2,"messages_start":0,"messages":[{"role":"user","text":"Review the existing workflow."},{"role":"assistant","text":"Keep reading positions stable. Make each action clear and easy to reach.\n\n- Preserve selection.\n- Keep the answer controls visible."}]}"#
@@ -393,11 +397,36 @@ extension WorkspaceWorkflowPreviewTests {
             try await render(WorkspaceHistoryView(preferences: preferences, model: history), name: "clarity-history-collapsed-\(dark)", width: 720, height: 450, dark: dark,
                              expected: ["Resume", "Fork", "Keep reading positions stable"])
             try await render(WorkspaceRunsView(model: runs, plan: plan), name: "clarity-runs-\(dark)", width: 780, height: 500, dark: dark,
-                             expected: ["8 complete", "Verification failed", "Resume", "Abort", "Run details", "Recorded verification"])
+                             expected: ["8 of 10 sessions complete", "Unit tests: failed", "Verification failed", "Resume", "Abort", "Run details", "Recorded verification"])
             try await render(WorkspaceStatus(loading: true, retained: true, refreshedAt: Date().addingTimeInterval(-125),
                                             feedback: WorkspaceFeedback(target: "API deployment review", message: "Read failed. Previous content is still available."),
                                             recover: {}).padding(16).frame(maxHeight: .infinity, alignment: .top), name: "clarity-stale-\(dark)", width: 720, height: 160, dark: dark,
                              expected: ["Previous results", "2m", "Refresh"])
+        }
+    }
+}
+
+
+extension WorkspaceWorkflowPreviewTests {
+    func testEventLocationAndIndependentReadDetails() async throws {
+        let amx = command { args in
+            if args[1] == "show" {
+                return #"{"session":{"id":"one","harness":"claude","project":"API event review"},"messages_total":400,"messages_start":10,"focus_message":12,"messages":[{"role":"user","text":"Earlier question"},{"role":"assistant","text":"Earlier response"},{"role":"assistant","text":"At the selected event: deployment checks failed. Inspect the unit tests before resuming.","timestamp":"2026-10-17T12:00:00Z"},{"role":"user","text":"Later discussion"}]}"#
+            }
+            return #"{"sessions":[{"id":"one","harness":"claude","project":"API event review","cwd":"/Projects/api"}]}"#
+        }
+        let history = WorkspaceHistoryModel(command: { amx }, runner: PreviewRunner())
+        let reads: [WorkspaceReadObservation] = [
+            .init(title: "Search", retained: true, refreshedAt: Date(timeIntervalSince1970: 1792238400),
+                  feedback: .init(target: "Search", message: "Archive read failed.", nextStep: "Check the source and refresh."), retry: {}),
+            .init(title: "Transcript", refreshedAt: Date(timeIntervalSince1970: 1792238460), retry: {})
+        ]
+        for dark in [false, true] {
+            history.open(project: "API", conversation: ConversationIdentity(encoded: "claude:one"), eventTime: "2026-10-17T12:00:00Z")
+            try await render(WorkspaceHistoryView(model: history), name: "event-location-\(dark)", width: 720, height: 450, dark: dark,
+                             expected: ["At the selected event", "Resume", "Read status"])
+            try await render(WorkspaceReadDetails(reads: reads), name: "read-details-\(dark)", width: 380, height: 332, dark: dark,
+                             expected: ["Search", "Transcript", "Previous results", "Archive read failed", "Refresh transcript"])
         }
     }
 }

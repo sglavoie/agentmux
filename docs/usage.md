@@ -35,12 +35,21 @@ cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
 amx session show 09467ec1 --last 4       # the same, then its last 4 user and assistant messages in full, oldest first
 amx session show 09467ec1 --find '"race condition"' --match 2 --count 50  # prose around the second matching message
 amx session show 09467ec1 --from 100 --count 50 --json  # a bounded message window, with zero-based message ordinals
+amx session show 09467ec1 --at 2026-10-17T12:00:00Z --count 50 --json # supporting assistant output at or before an event
 amx session continue codex <session-id>
 amx session continue --here   # the most recently active conversation started in this directory or below it, named on stderr before acting
 amx session fork claude <session-id>
 amx session fork-worktree codex <session-id> --yes
 amx session handoff claude:<session-id> --profile codex-work
 ```
+
+`session show --at` opens a bounded window around the latest timestamped assistant
+message at or before the given RFC3339 event time, including old messages outside
+the recent tail. It returns `focus_message` when one exists; otherwise it returns
+recent messages without attributing them to the event. It cannot be combined with
+`--last`, `--find`, or `--from`. Activity uses this same lookup when opening History,
+briefly highlights the located message, and returns focus to Activity when History
+closes. Opening a conversation does not mark the event read.
 
 `session show --find` uses the same terms and quoted phrases as search. It
 navigates user/assistant prose only; a match confined to tool output or hidden
@@ -1524,4 +1533,6 @@ form.
 
 Tokens are whitespace-separated and combine with AND. Lone `@`, `!`, `%`, and `#`
 markers and unrecognized `!state` names are ignored rather than rejected — a
-typo like `!attn` leaves the list unfiltered instead of emptying it.
+typo like `!attn` leaves the list unfiltered instead of emptying it. An inline
+hint explains that the state was not applied and suggests `!attention`. Unclosed
+project quotes also remain unapplied and explain how to finish them.

@@ -138,6 +138,7 @@ func TestSessionShowLastPrintsTheClosingMessages(t *testing.T) {
 		_ = sessionShowCmd.Flags().Set("match", "1")
 		_ = sessionShowCmd.Flags().Set("from", "-1")
 		_ = sessionShowCmd.Flags().Set("count", "50")
+		_ = sessionShowCmd.Flags().Set("at", "")
 	})
 	base, indexPath := sessionCommandMeta(t, harness.Codex)
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
@@ -247,6 +248,48 @@ func TestSessionShowLastPrintsTheClosingMessages(t *testing.T) {
 	if *envelope.Data.MessagesStart != 50 || len(envelope.Data.Messages) != 50 {
 		t.Fatalf("page: %s", out)
 	}
+	_ = sessionShowCmd.Flags().Set("find", "")
+	_ = sessionShowCmd.Flags().Set("from", "-1")
+	_ = sessionShowCmd.Flags().Set("at", now.Format(time.RFC3339Nano))
+	out, err = run(true, "0")
+	envelope.Data = sessionShowData{}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.FocusMessage == nil || *envelope.Data.FocusMessage != 1 || len(envelope.Data.Messages) != 50 {
+		t.Fatalf("event location: %s", out)
+	}
+	for _, flag := range []string{"find", "from", "last"} {
+		value := "needle"
+		if flag != "find" {
+			value = "1"
+		}
+		_ = sessionShowCmd.Flags().Set(flag, value)
+		last := "0"
+		if flag == "last" {
+			last = "1"
+		}
+		out, err = run(true, last)
+		if err == nil || !strings.Contains(out, "invalid_arguments") {
+			t.Fatalf("--at with --%s: %v %s", flag, err, out)
+		}
+		reset := ""
+		if flag == "from" {
+			reset = "-1"
+		}
+		if flag == "last" {
+			reset = "0"
+		}
+		_ = sessionShowCmd.Flags().Set(flag, reset)
+	}
+	_ = sessionShowCmd.Flags().Set("at", "not-a-time")
+	if out, err = run(true, "0"); err == nil || !strings.Contains(out, "invalid_arguments") {
+		t.Fatalf("invalid event time: %v %s", err, out)
+	}
+
 }
 
 func TestConversationMatchWindowsKeepProseIdentityAndBoundaries(t *testing.T) {
@@ -267,5 +310,31 @@ func TestConversationMatchWindowsKeepProseIdentityAndBoundaries(t *testing.T) {
 	end := conversationMessageWindow(messages, "needle", 99, 100, 50)
 	if end.Start != 3 || len(end.Messages) != 0 || *end.Focus != 2 {
 		t.Fatalf("end = %+v", end)
+	}
+}
+
+func TestConversationEventWindowLocatesOldSupportingOutput(t *testing.T) {
+	at := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	messages := []transcript.Message{
+		{Role: "assistant", Text: "older", Timestamp: at.Add(-time.Hour)},
+		{Role: "assistant", Text: "nearest", Timestamp: at},
+		{Role: "user", Text: "not supporting assistant output", Timestamp: at},
+		{Role: "assistant", Text: "no timestamp"},
+	}
+	for range 200 {
+		messages = append(messages, transcript.Message{Role: "assistant", Text: "later", Timestamp: at.Add(time.Hour)})
+	}
+	window := conversationMessageAt(messages, at, 50)
+	if window.Focus == nil || *window.Focus != 1 || window.Start != 0 || len(window.Messages) != 50 || window.Total != 204 {
+		t.Fatalf("event window: %+v", window)
+	}
+	missing := conversationMessageAt(messages, at.Add(-2*time.Hour), 50)
+	if missing.Focus != nil || len(missing.Messages) != 50 {
+		t.Fatalf("must not attribute newer or untimestamped prose to an event: %+v", missing)
+	}
+	// Capture ordering does not always equal event time ordering.
+	messages = append(messages, transcript.Message{Role: "assistant", Text: "late older record", Timestamp: at.Add(-time.Minute)})
+	if got := conversationMessageAt(messages, at, 2); got.Focus == nil || *got.Focus != 1 {
+		t.Fatalf("wrong chronological anchor: %+v", got)
 	}
 }

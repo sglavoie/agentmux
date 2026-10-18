@@ -1,0 +1,31 @@
+{
+  "name": "filter-hint-wide",
+  "fixture": "basic",
+  "size": {
+    "width": 120,
+    "height": 24
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "/"
+    },
+    {
+      "type": "text",
+      "text": "!attn"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "contains_text",
+      "text": "Unknown state"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

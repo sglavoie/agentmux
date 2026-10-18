@@ -436,3 +436,58 @@ Reviewed references:
 - [Retained action outcomes](acceptance/workspace-clarity-polish/feedback-light.png)
 - [Retained-content age](acceptance/workspace-clarity-polish/stale-dark.png)
 - [Capture provenance and hashes](acceptance/workspace-clarity-polish/manifest.json)
+
+## Event navigation and workflow polish on 2026-10-17
+
+- [x] Activity opens History at the last timestamped assistant output at or before
+  the selected event, including older messages outside the recent window. A short
+  highlight identifies the location; absent evidence is explained. Closing this
+  History window returns focus to Activity when it remains open. Failed reads can
+  retry the same event without losing the requested location.
+- [x] Runs shows progress as “8 of 10 sessions complete” and puts the failed check
+  above expandable evidence. The failure is scoped to the selected session's
+  latest completed verification attempt; a later success cannot expose an old
+  failure as current. Missing evidence remains explicit.
+- [x] History, Activity, Runs, and Changes share a compact read-status toolbar.
+  The popover retains independent read times, errors, retained-result labels, and
+  recovery actions. Delayed loading feedback avoids flashing text and moving the
+  reading area. Existing action-feedback history remains available.
+- [x] TUI filters explain ignored state tokens, suggest `!attention` for `!attn`,
+  and explain unfinished quoted project filters without changing their matching
+  semantics. Narrow/wide dashboard scenarios and launcher geometry cover hints.
+- [x] Preferences lists resolved destinations and sources for app launches, CLI
+  launches, and plans in the app. Follow CLI is offered when destinations differ.
+- [x] The daily-use log and friction register capture recurrence, recovery effort,
+  builds, evidence, and subsequent verification without inventing trial results.
+  The operator's `tt` completion-indicator report is recorded as F-001.
+- [ ] Five real workdays and post-fix recurrence evidence remain outstanding.
+
+The reported Codex issue exposed a separate launch problem: a shared server's
+new conversations have no exact runtime binding after `/new`, so their hooks
+are correctly rejected but the terminal loses completion visibility. Managed
+interactive Codex launches now select `--no-daemon` when the launched CLI
+advertises support, preserving the terminal's hook environment. Explicit remote
+transport choices and older CLIs retain their behavior. This prevention applies
+after installation and relaunch; no current client was stopped or rebound.
+
+Validation and evidence:
+
+- `macos/scripts/test-app.sh`: 892 tests passed, zero failures or skips. This
+  includes event navigation/retry/cancellation, retained reading positions,
+  verification-attempt scoping, launch summaries, and minimum-window screenshots.
+- Executed launch commands in `sh` and `zsh` with stand-in CLIs: supported/older
+  CLI, failed capability read, explicit local/remote transport, profile home,
+  runtime ownership, resume arguments, and literal shell-sensitive prompts pass.
+- `just check`: passed the full Go suite, core race checks, vet, TUI scenarios,
+  formatting, and lint (zero issues). The gate ran detached from the supervising
+  Codex server so process-discovery acceptance fixtures had their intended
+  ancestry; `AMX_RUNTIME_SESSION_ID` was unset for this test process only.
+- `git diff --check`: passed. Screenshot and fixture-source hashes were verified.
+- Nine fixture screenshots were visually reviewed. They are fixture evidence,
+  not daily-use acceptance: [event location](acceptance/workspace-navigation-polish/event-location-dark.png),
+  [independent reads](acceptance/workspace-navigation-polish/read-details-light.png),
+  [failed check](acceptance/workspace-navigation-polish/runs-dark.png),
+  [destinations](acceptance/workspace-navigation-polish/launch-settings.png), and
+  [capture provenance and hashes](acceptance/workspace-navigation-polish/manifest.json).
+
+Changes are prepared in the repository; no installation or release was performed.

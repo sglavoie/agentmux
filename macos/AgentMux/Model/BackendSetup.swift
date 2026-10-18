@@ -41,6 +41,25 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
         self == .followCLI ? (cliSource.flatMap { $0.isEmpty ? nil : $0 } ?? "CLI configuration") : "app preference"
     }
 
+    struct DestinationRow: Equatable {
+        let action: String
+        let destination: String
+        let source: String
+    }
+    func destinationRows(cliBackend: String?, cliSource: String?) -> [DestinationRow] {
+        let cli = Self.followCLI.resolved(cliBackend: cliBackend)?.label ?? "Unknown — check backend status"
+        let source = cliSource.flatMap { $0.isEmpty ? nil : $0 } ?? "CLI configuration"
+        return [
+            .init(action: "App launches", destination: resolved(cliBackend: cliBackend)?.label ?? "Checking CLI destination", source: self == .followCLI ? source : "App preference"),
+            .init(action: "CLI launches", destination: cli, source: source + "; --backend overrides"),
+            .init(action: "Plans in app", destination: "Workspace (tmux)", source: "Plan launcher")
+        ]
+    }
+    func differsFromCLI(_ cliBackend: String?) -> Bool {
+        guard self != .followCLI, let cli = Self.followCLI.resolved(cliBackend: cliBackend) else { return false }
+        return self != cli
+    }
+
     func explanation(cliBackend: String?) -> String {
         if self == .followCLI {
             return "Launch Project and Recent conversation resumes follow config.toml: \(destination(cliBackend: cliBackend)). The destination is checked again before launching. Run a Plan always uses the workspace."

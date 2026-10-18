@@ -38,8 +38,13 @@ struct WorkspaceActivityView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Since Last Looked").font(.title2).fixedSize()
-                WorkspaceStatus(loading: model.loading, title: "Loading activity…", retained: model.report != nil,
-                                feedback: activityFeedback, recover: { model.refresh() })
+                Spacer(minLength: 0)
+                WorkspaceReviewStatus(reads: [
+                    .init(title: "Activity", loading: model.loading, retained: model.report != nil, refreshedAt: model.reportRefreshedAt,
+                          feedback: activityFeedback, retry: { model.refresh() }),
+                    .init(title: "Supporting output", loading: model.reading, retained: model.transcript != nil, refreshedAt: model.transcriptRefreshedAt,
+                          feedback: model.transcriptError.map { WorkspaceFeedback(target: "Supporting output", message: $0) }, retry: { model.loadTranscript() })
+                ])
                 WorkspaceReadingMenu(preferences: preferences)
             }
             HStack {
@@ -57,12 +62,16 @@ struct WorkspaceActivityView: View {
                 }.fixedSize()
                 Button("Undo") { model.undoMarkRead() }.disabled(!model.canUndoRead).help("Undo the last activity read acknowledgement")
             }
-            Text("Recorded state changes, process exits, and ASL events. Opening this view does not mark events read.")
-                .font(.caption).foregroundStyle(.secondary)
-            Text(model.readState.lastMarkedAt.map { "Last marked read: " + $0.formatted() } ?? "No events marked read yet")
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1).frame(height: 16)
-            Text(model.report.map { "\(model.visible.count) shown · \($0.entries.count) loaded · Retained history starts \(WorkspaceActivityEntry.date($0.earliestAvailable)?.formatted() ?? "at an unknown time")" } ?? "Recorded activity")
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1).frame(height: 16)
+            HStack {
+                Text(model.report.map { "\(model.visible.count) shown · \($0.entries.count) loaded" } ?? "Recorded activity")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Menu("About this activity") {
+                    Text("Opening this view does not mark events read.")
+                    Text(model.readState.lastMarkedAt.map { "Last marked read: " + $0.formatted() } ?? "No events marked read yet")
+                    Text("Retained history starts " + (model.report.flatMap { WorkspaceActivityEntry.date($0.earliestAvailable) }?.formatted() ?? "at an unknown time"))
+                }.menuStyle(.borderlessButton).fixedSize().font(.caption)
+            }.frame(height: 20)
             HSplitView {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.visible) { entry in
@@ -91,15 +100,12 @@ struct WorkspaceActivityView: View {
                                 if entry.conversation != nil || !entry.runtimeSessionID.isEmpty {
                                     Button("Focus live session") { model.onFocus?(entry) }.help("Focus live session (⌘Return)")
                                 }
-                                if let identity = entry.conversation { Button("Open conversation") { model.onConversation?(identity) }.help("Open conversation (⌘⇧Return)") }
+                                if entry.conversation != nil { Button("Open conversation") { model.openConversation() }.help("Open conversation (⌘⇧Return)") }
                             }
                             Divider()
                             HStack {
                                 Text("Supporting output").font(.headline).fixedSize()
-                                WorkspaceStatus(loading: model.reading, title: "Reading conversation…", retained: model.excerpt != nil,
-                                                feedback: model.transcriptError.map { WorkspaceFeedback(target: entry.title, message: $0,
-                                                    nextStep: "Reload the supporting conversation.", recovery: .transcript) },
-                                                recover: { model.loadTranscript() })
+
                             }
                             if let excerpt = model.excerpt {
                                 Text("Last recorded assistant message at or before this event · \(excerpt.timestamp ?? "")").font(.caption).foregroundStyle(.secondary)
@@ -142,7 +148,7 @@ struct WorkspaceActivityView: View {
         } else if modifiers == [.command, .shift] {
             switch key {
             case "f": listFocused = true
-            case "\r": if let identity = model.selected?.conversation { model.onConversation?(identity) }
+            case "\r": model.openConversation()
             default: return false
             }
         } else { return false }

@@ -6,6 +6,38 @@ and how the trial closes. Nothing here is filled in by a test run.
 
 No day has been recorded yet.
 
+## Reported interruption: 2026-10-17
+
+This is an operator report and bounded diagnostic investigation, not a completed
+trial workday.
+
+- F-001: operator initially reported lingering Codex bolts, then clarified that
+  the bolt eventually disappears without a stop icon, specifically in `tt`.
+- Installed CLI/daemon: 0.8.0, revision `47f7e166053a-dirty`, built
+  `2026-10-17T21:34:55Z`. App build was not recorded for this observation.
+- Read-only inspection found a completed response and Ready composer in `tt`.
+  The runtime registry retained the original resumed conversation, whereas the
+  displayed response was in a newer native conversation. Journal records for
+  the newer conversation reported `codex_conversation_unbound`; its runtime
+  slot had no completion event or effective icon.
+- This explains the missing completion state. The original bolt's delay was not
+  timed, and its exact clearing transition was not retained in this snapshot.
+- [Sanitized diagnostic evidence](f-001-evidence.json) retains the blank runtime
+  state, the newer conversation's rejected Stop, and the registry binding,
+  without terminal contents or unrelated sessions.
+- Fix prepared: supported managed Codex launches use `--no-daemon`, preserving
+  terminal ownership across conversation changes. Existing clients require a
+  relaunch after installation. No live client was stopped during investigation.
+- Recurrence, recovery duration, installed fix build, and subsequent operator
+  confirmation remain unrecorded.
+
+## Workday template
+
+Use a stable friction ID (`F-001`, `F-002`, …) when the same interruption recurs.
+Record each occurrence below, then update [the friction register](friction.md).
+Record zero-friction days too; do not reconstruct dates or elapsed time from
+memory as measured evidence.
+
 <!--
 ## YYYY-MM-DD
 
@@ -13,7 +45,16 @@ No day has been recorded yet.
 - Profiles and harnesses used:
 - Cases touched (multiple-profiles, all-harnesses, permission-prompts,
   long-running-jobs, asl, overview, conversation-continuity, kitty-fallback):
-- Friction (task; hesitation; repeated navigation; extra steps/time):
+- Friction occurrences:
+
+  | ID | Task and entry point | Expected / observed | Occurrences today | Extra steps | Recovery time (measured or estimated) | Evidence |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | | | | | | | |
+
+- Context lost (conversation message, selected event, file/hunk, pane focus):
+- Launch destination: expected / actual / was the source clear?
+- Keyboard review: task and any pointer-only detour:
+- Recovery: was the original failure still readable and the next step clear?
 - Polish observations (destination clarity; retained failures; keyboard review):
 - Failures (what was on screen; bundle or export saved as):
 - Fixes installed today (commit; checks run again):

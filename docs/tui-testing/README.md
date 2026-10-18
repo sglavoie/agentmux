@@ -566,6 +566,9 @@ file. The exact inventory is:
 | [`run-timer-drop-order.json`](scenarios/run-timer-drop-order.json) | `run_timers` | narrowing to 27 cells drops Time before Status and Status before the name: every timer is gone while every row still says what it is doing |
 | [`run-timer-narrow-fit.json`](scenarios/run-timer-narrow-fit.json) | `run_timers` | at 57 cells all three columns still fit, so every row keeps its aligned timer and only the `⏳` warning is missing — it belongs to the inspector, which 57 cells does not pay for |
 | [`run-timer-wide.json`](scenarios/run-timer-wide.json) | `run_timers` | run timers survive refresh ticks, the Time column stays right-aligned across four magnitude bands, and the `⏳` watchdog warning rides the inspector's `Watch` line rather than the row |
+| [`filter-hint-narrow.json`](scenarios/filter-hint-narrow.json) | `basic` | Unknown state hint fits while editing at 60 columns |
+| [`filter-hint-wide.json`](scenarios/filter-hint-wide.json) | `basic` | Committed unknown state stays explained at 120 columns |
+| [`filter-incomplete-project.json`](scenarios/filter-incomplete-project.json) | `basic` | Unclosed project quote is visibly not applied |
 | [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | live-list filter rows truncate at a sub-floor terminal after `/` |
 | [`session-fork-continuity.json`](scenarios/session-fork-continuity.json) | `basic` | Past Sessions dispatches a native fork through the shared action registry |
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after Past Sessions is opened by name |

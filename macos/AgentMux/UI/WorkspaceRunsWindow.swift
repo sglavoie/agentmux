@@ -12,14 +12,20 @@ struct WorkspaceRunsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("ASL Runs").font(.title2).fixedSize()
-                WorkspaceStatus(loading: model.loading, title: "Refreshing runs…", retained: !model.rows.isEmpty, refreshedAt: model.listRefreshedAt,
-                                feedback: runFeedback, recover: { model.refresh() })
-
+                Spacer(minLength: 0)
+                WorkspaceReviewStatus(reads: [
+                    .init(title: "Run list", loading: model.loading, retained: !model.rows.isEmpty, refreshedAt: model.listRefreshedAt,
+                          feedback: runFeedback, retry: { model.refresh() }),
+                    .init(title: "Plan progress", loading: model.reading, retained: model.detail != nil, refreshedAt: model.detailRefreshedAt,
+                          feedback: model.detailError.map { WorkspaceFeedback(target: model.selected?.displayLabel ?? "Plan", message: $0) }, retry: { model.refresh() })
+                ])
+                WorkspaceStatus(loading: model.acting, title: "Checking operation…", feedback: model.actionFeedback,
+                                recover: { if model.actionFeedback?.recovery == .receipt { model.retryReceipt() } else { model.refresh() } }, compactFeedback: true)
+                    .frame(width: 24)
+                WorkspaceFeedbackHistoryButton(history: model.feedbackHistory)
                 Button("Refresh") { model.refresh() }.disabled(model.loading).help("Refresh runs (⌘R)")
                 Button("Run a Plan…") { plan.isPresented = true }
             }
-            WorkspaceStatus(loading: model.acting, title: "Checking operation…", showTarget: true, feedback: model.actionFeedback,
-                            recover: { if model.actionFeedback?.recovery == .receipt { model.retryReceipt() } else { model.refresh() } }, history: model.feedbackHistory)
             HSplitView {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.rows, id: \.rowID) { row in
@@ -111,14 +117,24 @@ struct WorkspaceRunsView: View {
             Text(WorkspaceWording.status(row.primaryState) + (row.sessionID.isEmpty ? "" : " · Session " + row.sessionID))
                 .font(.callout).lineLimit(1)
             if let detail = model.detail {
-                Text("\(detail.counts["complete", default: 0]) complete · \(detail.counts["pending", default: 0]) pending · \(detail.counts["empty", default: 0]) not started · \(detail.counts["unknown", default: 0]) unknown")
-                    .font(.caption).lineLimit(2)
+                Text(detail.progressSummary).font(.caption).lineLimit(2)
             }
             if model.hasQuestion {
                 Text("Waiting for your answer").foregroundStyle(.orange)
             } else if !row.pauseReason.isEmpty {
                 Text("Blocked: " + WorkspaceWording.status(row.pauseReason)).foregroundStyle(.orange)
                     .lineLimit(2).help(WorkspaceWording.status(row.pauseReason))
+            }
+            if row.pauseReason.replacingOccurrences(of: "_", with: "-").contains("verification"), let detail = model.detail {
+                let evidence = detail.blockingVerification(sessionID: row.sessionID)
+                if let first = evidence.first {
+                    Text(first.summary + (evidence.count > 1 ? " · \(evidence.count - 1) more failed checks" : ""))
+                        .font(.callout).lineLimit(2).textSelection(.enabled)
+                        .help(evidence.map(\.summary).joined(separator: "\n"))
+                    Text("Inspect the failed check in the session before resuming.").font(.caption).foregroundStyle(.secondary)
+                } else if !model.reading {
+                    Text("No matching failed check is available in the recorded evidence.").font(.caption).foregroundStyle(.secondary)
+                }
             }
             HStack {
                 if model.hasQuestion {
@@ -131,10 +147,6 @@ struct WorkspaceRunsView: View {
                 control("Stop After Current…", ASLMethod.runStopAfterCurrent)
                 control("Abort…", ASLMethod.runAbort)
             }
-            WorkspaceStatus(loading: model.reading, title: "Reading plan progress…", retained: model.detail != nil,
-                            refreshedAt: model.detailRefreshedAt,
-                            feedback: model.detailError.map { WorkspaceFeedback(target: row.displayLabel + " · " + row.runID, message: $0,
-                                nextStep: "Refresh to check the current run and reload its progress.") }, recover: { model.refresh() })
         }.accessibilityIdentifier("runs-controls")
     }
 

@@ -907,7 +907,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             self?.syncActivationPolicy()
             if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
         }
-        controller.model.onConversation = { [weak self] identity in self?.openHistory(conversation: identity) }
+        controller.model.onConversation = { [weak self] identity, at in self?.openHistory(conversation: identity, eventTime: at) }
         controller.model.onFocus = { [weak self] entry in
             guard let self else { return }
             guard self.store.feed == .live else { return self.refuse("Waiting for a live session list.") }
@@ -927,14 +927,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         openHistory(conversation: identity)
     }
 
-    private func openHistory(conversation: ConversationIdentity?) {
+    private func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil) {
         let workspace = workspaceController()
         workspace.show()
         let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }, defaults: .standard, feedbackHistory: reviewFeedbackHistory))
         controller.onVisibilityChanged = { [weak self] visible in
             self?.historyVisible = visible
             self?.syncActivationPolicy()
-            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
+            if !visible, let self {
+                if eventTime != nil, let activity = self.activityWindow?.window, activity.isVisible {
+                    activity.makeKeyAndOrderFront(nil)
+                } else if self.workspaceVisible { self.workspace?.window.makeKeyAndOrderFront(nil) }
+            }
         }
         controller.model.onAction = { [weak self] conversation, fork, completion in
             self?.openHistoryConversation(conversation, fork: fork, completion: completion)
@@ -946,7 +950,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             controller.model.scope = .conversation
             controller.model.includeAutomated = true
         }
-        controller.show(project: workspace.shownSessionRow?.project ?? "", conversation: conversation ?? workspace.shownSessionRow?.conversation)
+        controller.show(project: workspace.shownSessionRow?.project ?? "", conversation: conversation ?? workspace.shownSessionRow?.conversation, eventTime: eventTime)
     }
 
     private func openHistoryConversation(_ conversation: RecentConversation, fork: Bool, completion: @escaping (String?) -> Void) {

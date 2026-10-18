@@ -32,7 +32,16 @@ var sessionShowCmd = &cobra.Command{
 		match, _ := cmd.Flags().GetInt("match")
 		from, _ := cmd.Flags().GetInt("from")
 		count, _ := cmd.Flags().GetInt("count")
-		windowed := query != "" || from >= 0
+		atText, _ := cmd.Flags().GetString("at")
+		var at time.Time
+		if atText != "" {
+			var err error
+			at, err = time.Parse(time.RFC3339Nano, atText)
+			if err != nil || query != "" || from >= 0 || last != 0 {
+				return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--at requires an RFC3339 timestamp and cannot be combined with --find, --from, or --last"))
+			}
+		}
+		windowed := query != "" || from >= 0 || atText != ""
 		if from < -1 || count < 1 || count > 500 || match < 1 || (last != 0 && windowed) || (match != 1 && query == "") {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("use --last alone, or --find/--from with --count 1–500 and a positive --match (requires --find)"))
 		}
@@ -65,7 +74,9 @@ var sessionShowCmd = &cobra.Command{
 			if err != nil {
 				return cli.CommandFailure(cmd, jsonOutput, "command_failed", fmt.Errorf("reading %s: %w", meta.Path, err))
 			}
-			if windowed {
+			if atText != "" {
+				tail = conversationMessageAt(messages, at, count)
+			} else if windowed {
 				tail = conversationMessageWindow(messages, query, match, from, count)
 			} else {
 				tail = lastConversationMessages(messages, last)
@@ -92,7 +103,7 @@ var sessionShowCmd = &cobra.Command{
 
 type sessionShowData struct {
 	Session sessionView `json:"session"`
-	// Message fields are present only under --last, --find, or --from: visible
+	// Message fields are present only under --last, --find, --from, or --at: visible
 	// user/assistant prose in chronological order, its total, and window start.
 	Messages      []sessionMessage `json:"messages,omitempty"`
 	MessagesTotal *int             `json:"messages_total,omitempty"`
@@ -163,6 +174,28 @@ func conversationMessageWindow(messages []transcript.Message, query string, matc
 		}
 	}
 	all.Start = min(from, all.Total)
+	all.Messages = all.Messages[all.Start:min(all.Start+count, all.Total)]
+	return all
+}
+
+// conversationMessageAt locates supporting assistant prose at or before an
+// event. Missing timestamps and newer output cannot become evidence for it.
+// Return a bounded window even when no timestamped message can be located;
+// absence of focus_message tells clients to explain that limitation.
+func conversationMessageAt(messages []transcript.Message, at time.Time, count int) *sessionMessageTail {
+	all := lastConversationMessages(messages, len(messages))
+	var latest time.Time
+	for i, message := range all.Messages {
+		if message.Role == "assistant" && !message.Timestamp.IsZero() && !message.Timestamp.After(at) && !message.Timestamp.Before(latest) {
+			latest = message.Timestamp
+			focus := i
+			all.Focus = &focus
+		}
+	}
+	all.Start = max(0, all.Total-count)
+	if all.Focus != nil {
+		all.Start = max(0, *all.Focus-count/2)
+	}
 	all.Messages = all.Messages[all.Start:min(all.Start+count, all.Total)]
 	return all
 }

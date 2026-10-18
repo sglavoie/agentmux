@@ -83,10 +83,12 @@ struct WorkspaceStatus: View {
                     Button(recovery.title, action: recover).disabled(loading).fixedSize()
                 }
             } else if loading && showProgress {
-                ProgressView().controlSize(.small)
-                Text(title).lineLimit(1).foregroundStyle(.secondary)
-                    .help(retained ? "\(title) Showing the previous results." : title)
-                    .accessibilityLabel(retained ? "\(title) Showing the previous results." : title)
+                ProgressView().controlSize(.small).help(title).accessibilityLabel(title)
+                if !compactFeedback {
+                    Text(title).lineLimit(1).foregroundStyle(.secondary)
+                        .help(retained ? "\(title) Showing the previous results." : title)
+                        .accessibilityLabel(retained ? "\(title) Showing the previous results." : title)
+                }
             }
             if let history { WorkspaceFeedbackHistoryButton(history: history) }
             if let refreshedAt, !(retained && (loading || feedback?.kind == .error)) {

@@ -108,6 +108,12 @@ destination was clear, whether failures remained readable, and whether History
 and Changes could be used by keyboard. Rank recurring friction above isolated
 cosmetic preferences; these observations do not replace the required trial cases.
 
+Use the [daily-log template](acceptance/ghostty-desktop/session-20/trial-log.md)
+and [friction register](acceptance/ghostty-desktop/session-20/friction.md) to
+track recurrence, extra navigation, recovery effort, and whether a fix holds in
+later use. Rank observed interruptions after each workday; keep estimates labeled
+and unobserved outcomes pending.
+
 One entry per workday in
 `docs/acceptance/ghostty-desktop/session-20/trial-log.md`, written that day:
 the date, what was used, and every point of friction or failure, with what was

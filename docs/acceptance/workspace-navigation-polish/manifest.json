@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-17",
+  "fixture_source": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+  "fixture_sha256": "9a84a22361cc4f0a1b31aaf427ad85e929a5647b238b94a35b0dbecc5a853290",
+  "capture": "ScreenCaptureKit current-process fixture windows; fixture conversations only; 2x pixel scale",
+  "full_test_command": "macos/scripts/test-app.sh",
+  "full_test_result": "892 tests passed; zero failures or skips",
+  "test_result_bundle": "Test-AgentMux-2026.10.17_18-28-19--0600.xcresult",
+  "review_criteria": [
+    "Selected event highlights the corresponding older assistant message in History.",
+    "Search failure retains previous results independently of a successful transcript read; each has its own recovery and exact timestamp.",
+    "Runs shows the failed unit test before expandable verification evidence at minimum size.",
+    "Preferences names app, CLI and plan destinations and offers Follow CLI when they differ.",
+    "Activity and Changes retain usable reading space and consolidated read status."
+  ],
+  "artifacts": [
+    {
+      "path": "event-location-light.png",
+      "sha256": "b35b21545f76088e43d33aa68e5100ffc8b850a179012749532f7564b064abaf",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
+    },
+    {
+      "path": "event-location-dark.png",
+      "sha256": "9aac90a3d870ca5214dc5d926731b30bbcb52e4ea22da44651c4302d64b93ad4",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
+    },
+    {
+      "path": "read-details-light.png",
+      "sha256": "69b4ffb9cd0cc061d08d498a6b9774d61654655f87897218086989990aff337d",
+      "pixel_size": [
+        760,
+        664
+      ],
+      "logical_window_size": [
+        380.0,
+        332.0
+      ]
+    },
+    {
+      "path": "read-details-dark.png",
+      "sha256": "e1859d7404dd32b477c192011836c2b02ab38c49ad706d550342226129be2eb5",
+      "pixel_size": [
+        760,
+        664
+      ],
+      "logical_window_size": [
+        380.0,
+        332.0
+      ]
+    },
+    {
+      "path": "runs-light.png",
+      "sha256": "3ddbfe614bf947e80bc5826002e6911266f60c8638c690d5191871b4549b854c",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
+    },
+    {
+      "path": "runs-dark.png",
+      "sha256": "77cd9530aecc5116ae57f81d80aa5afb729329a0e442c268007251c9949ae11d",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
+    },
+    {
+      "path": "launch-settings.png",
+      "sha256": "d237dc42024a836c243725b8614f18705470550b147b00705efcfb38aa86e914",
+      "pixel_size": [
+        1120,
+        900
+      ],
+      "logical_window_size": [
+        560.0,
+        450.0
+      ]
+    },
+    {
+      "path": "activity-dark.png",
+      "sha256": "bdb004f892a9b39e935ab011cf00e68b670a697b860595bc5515fb1b287a22ac",
+      "pixel_size": [
+        1520,
+        960
+      ],
+      "logical_window_size": [
+        760.0,
+        480.0
+      ]
+    },
+    {
+      "path": "changes-light.png",
+      "sha256": "9b8db18aac3037b09fa6498b0299a9d801f41743b1b182244094e888dd96569b",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
+    }
+  ],
+  "additional_checks": [
+    "just check: passed; detached from supervising Codex ancestry with AMX_RUNTIME_SESSION_ID unset",
+    "git diff --check: passed",
+    "Fixture source and all nine screenshot hashes verified"
+  ]
+}

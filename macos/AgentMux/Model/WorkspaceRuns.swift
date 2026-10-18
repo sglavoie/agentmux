@@ -65,6 +65,28 @@ struct WorkspaceRunDetail: Decodable {
         case planDir = "plan_dir", title = "plan_title", runner = "runner_state"
         case verificationTruncated = "verification_truncated", verificationError = "verification_error"
     }
+    var progressSummary: String {
+        let total = counts.values.reduce(0) { $0 + max(0, $1) }
+        var text = "\(counts["complete", default: 0]) of \(total) sessions complete"
+        let unknown = counts["unknown", default: 0]
+        if unknown > 0 { text += " · \(unknown) unknown" }
+        return text
+    }
+
+    /// Scope evidence to the selected session and its latest completed attempt.
+    /// A later passing attempt must never surface a historical failure as current.
+    func blockingVerification(sessionID: String) -> [Verification] {
+        let records = verification.filter { $0.sessionID == sessionID }
+        guard runner.activeVerification == nil else { return [] }
+        guard let finish = records.lastIndex(where: { $0.event == "verification_finished" }), finish == records.count - 1, records[finish].passed == false else { return [] }
+        let previous = records[..<finish].lastIndex { $0.event == "verification_finished" }
+        let start = previous.map { $0 + 1 } ?? 0
+        let failed = records[start..<finish].filter {
+            $0.event == "verification_check_finished" && ($0.status == "failed" || $0.passed == false || ($0.returncode ?? 0) != 0)
+        }
+        return failed.isEmpty ? [records[finish]] : Array(failed)
+    }
+
 }
 
 /// Lists the full ASL projection, including pauses with no question. Run controls

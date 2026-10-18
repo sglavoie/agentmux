@@ -138,6 +138,10 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var matchIndex = 0
     @Published private(set) var scrollRequest: ScrollRequest?
     struct ScrollRequest: Equatable { let sequence: Int; let message: Int }
+    @Published private(set) var highlightedMessage: Int?
+    @Published private(set) var locationNotice: String?
+    private var eventLocation: (conversation: String, at: String)?
+    private var highlightTask: Task<Void, Never>?
     private var scrollSequence = 0
     private var loadedQuery = ""
     private var pendingSearch: DispatchWorkItem?
@@ -196,7 +200,17 @@ final class WorkspaceHistoryModel: ObservableObject {
         scrollRequest = ScrollRequest(sequence: scrollSequence, message: message)
     }
 
-    func open(project: String, conversation: ConversationIdentity?) {
+    func open(project: String, conversation: ConversationIdentity?, eventTime: String? = nil) {
+        highlightTask?.cancel()
+        highlightedMessage = nil
+        locationNotice = nil
+        eventLocation = nil
+        if let conversation, let eventTime {
+            eventLocation = (conversation.encoded, eventTime)
+            query = ""
+            scope = .conversation
+            includeAutomated = true
+        }
         if !project.isEmpty { self.project = project }
         if let conversation { currentConversation = conversation }
         if scope == .project && self.project.isEmpty || scope == .conversation && currentConversation == nil { scope = .all }
@@ -263,6 +277,11 @@ final class WorkspaceHistoryModel: ObservableObject {
             return
         }
         let wanted = scope == .conversation ? currentConversation : nil
+        if let location = eventLocation, wanted?.encoded != location.conversation || !query.isEmpty {
+            eventLocation = nil
+            highlightedMessage = nil
+            locationNotice = nil
+        }
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let signature = Self.arguments(query: query, project: scope == .project ? project : nil,
                                        includeAutomated: includeAutomated, conversation: wanted?.encoded)
@@ -298,7 +317,18 @@ final class WorkspaceHistoryModel: ObservableObject {
                 } else {
                     self.entries = entries
                     let keep = self.selection.flatMap { id in entries.contains { $0.id == id } ? id : nil }
-                    if let keep, keep == self.selection, self.loadedQuery == query, self.transcript != nil {
+                    if let location = self.eventLocation, entries.contains(where: { $0.id == location.conversation }) {
+                        if self.selection != location.conversation {
+                            self.transcript = nil
+                            self.transcriptRefreshedAt = nil
+                        }
+                        self.visibleMessage = nil
+                        self.scrollRequest = nil
+                        self.newMessages = 0
+                        self.selection = location.conversation
+                        self.loadedQuery = query
+                        self.readWindow()
+                    } else if let keep, keep == self.selection, self.loadedQuery == query, self.transcript != nil {
                         self.refreshTranscript()
                     } else { self.select(keep ?? entries.first?.id) }
                 }
@@ -307,7 +337,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     func refreshTranscript() {
-        guard let transcript else { loadTranscript(); return }
+        guard eventLocation == nil, let transcript else { loadTranscript(); return }
         let anchor = visibleMessage ?? scrollRequest?.message ?? transcript.start
         readWindow(from: transcript.start, count: max(50, transcript.messages.count), anchor: anchor, refreshing: true)
     }
@@ -321,6 +351,10 @@ final class WorkspaceHistoryModel: ObservableObject {
     func select(_ id: String?) {
         if selection == id, loadedQuery == resultsQuery, transcript != nil { return }
         let anchor = selection == id && loadedQuery == resultsQuery ? visibleMessage : nil
+        if eventLocation?.conversation != id { eventLocation = nil }
+        highlightTask?.cancel()
+        highlightedMessage = nil
+        locationNotice = nil
         selection = id
         visibleMessage = anchor
         loadedQuery = resultsQuery
@@ -361,9 +395,11 @@ final class WorkspaceHistoryModel: ObservableObject {
         reading = true
         transcriptError = nil
         var args = ["session", "show", "--json"]
-        if !loadedQuery.isEmpty { args += ["--find", loadedQuery, "--match", String(matchIndex + 1)] }
-        if let from { args += ["--from", String(from), "--count", String(count)] }
-        else if loadedQuery.isEmpty { args += ["--last", "50"] }
+        let location = eventLocation?.conversation == selected.id ? eventLocation : nil
+        if let location { args += ["--at", location.at, "--count", String(count)] }
+        else if !loadedQuery.isEmpty { args += ["--find", loadedQuery, "--match", String(matchIndex + 1)] }
+        if location == nil, let from { args += ["--from", String(from), "--count", String(count)] }
+        else if location == nil && loadedQuery.isEmpty { args += ["--last", "50"] }
         args += ["--", selected.id]
         let cancellation = ProcessCancellation()
         transcriptCancellation = cancellation
@@ -374,6 +410,20 @@ final class WorkspaceHistoryModel: ObservableObject {
             switch result {
             case let .failure(error): self.transcriptError = error.message
             case let .success(value), let .partial(value, _):
+                guard value.session.selector == selected.id else {
+                    self.transcriptError = "The transcript identity did not match the selected conversation."
+                    return
+                }
+                if location != nil {
+                    self.eventLocation = nil
+                    self.highlightedMessage = value.focusMessage
+                    self.locationNotice = value.focusMessage == nil ? "No timestamped assistant output at or before this event was found. Showing recent messages." : nil
+                    self.highlightTask?.cancel()
+                    self.highlightTask = Task { [weak self] in
+                        do { try await Task.sleep(for: .seconds(4)) } catch { return }
+                        self?.highlightedMessage = nil
+                    }
+                }
                 if retaining == nil { self.transcriptRefreshedAt = Date() }
                 if acknowledgeNew { self.newMessages = 0 }
                 if refreshing, let previousTotal { self.newMessages += max(0, value.total - previousTotal) }
@@ -424,6 +474,10 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     func close() {
+        highlightTask?.cancel()
+        highlightedMessage = nil
+        eventLocation = nil
+        locationNotice = nil
         saveReview()
         pendingSearch?.cancel()
         searchCancellation?.cancel()
