@@ -59,43 +59,123 @@
   "artifacts": [
     {
       "path": "diff-light.png",
-      "sha256": "6cf5ea0c49b98aae674bb95c9fcb60bda6a73b5b8490c11e374c47a4c57ffb4c"
+      "sha256": "6cf5ea0c49b98aae674bb95c9fcb60bda6a73b5b8490c11e374c47a4c57ffb4c",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
     },
     {
       "path": "diff-dark.png",
-      "sha256": "71303dd1567160e9bd54976f050e2721b17c03f95327c9f650dba5c10f1e2876"
+      "sha256": "71303dd1567160e9bd54976f050e2721b17c03f95327c9f650dba5c10f1e2876",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
     },
     {
       "path": "diff-collapsed-light.png",
-      "sha256": "124ad76fa526d757b52a98d2dbe9581fdd2774970398c2399819b0493ac71586"
+      "sha256": "124ad76fa526d757b52a98d2dbe9581fdd2774970398c2399819b0493ac71586",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
     },
     {
       "path": "diff-collapsed-dark.png",
-      "sha256": "2c1a7e9a772e536675421b368a3cc3a7339d9e7fed827cd2d95526fe00406ade"
+      "sha256": "2c1a7e9a772e536675421b368a3cc3a7339d9e7fed827cd2d95526fe00406ade",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
     },
     {
       "path": "runs-light.png",
-      "sha256": "7c3cc37ac28b75e15bbe85db1ba8e9a3552e22f6f2feca9932d196b17a272cc3"
+      "sha256": "7c3cc37ac28b75e15bbe85db1ba8e9a3552e22f6f2feca9932d196b17a272cc3",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
     },
     {
       "path": "runs-dark.png",
-      "sha256": "8288b1114dc515b2df6e2df37d48f06b0f2a078845d54fd99007dfa776db1a44"
+      "sha256": "8288b1114dc515b2df6e2df37d48f06b0f2a078845d54fd99007dfa776db1a44",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
     },
     {
       "path": "inspected-check-light.png",
-      "sha256": "8e10152a3d40988ada85d0724f67c248b45f3c9efe8ca6f1f58d5785c5a36e07"
+      "sha256": "8e10152a3d40988ada85d0724f67c248b45f3c9efe8ca6f1f58d5785c5a36e07",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
     },
     {
       "path": "inspected-check-dark.png",
-      "sha256": "efeb9f2b3815a9f6cc50cb29a211ed7cfdf33208fcfa29cd6e33c27329112326"
+      "sha256": "efeb9f2b3815a9f6cc50cb29a211ed7cfdf33208fcfa29cd6e33c27329112326",
+      "pixel_size": [
+        1560,
+        1000
+      ],
+      "logical_window_size": [
+        780.0,
+        500.0
+      ]
     },
     {
       "path": "code-light.png",
-      "sha256": "4bb48eda71138936a1e9c8f4f8f483b7906b3a3f73a898e40e22d811feea2c90"
+      "sha256": "4bb48eda71138936a1e9c8f4f8f483b7906b3a3f73a898e40e22d811feea2c90",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
     },
     {
       "path": "code-dark.png",
-      "sha256": "31defc0d0dc88c3ebf8f30ff0cd62962aaaac80309931cd56f81334f393c8818"
+      "sha256": "31defc0d0dc88c3ebf8f30ff0cd62962aaaac80309931cd56f81334f393c8818",
+      "pixel_size": [
+        1440,
+        900
+      ],
+      "logical_window_size": [
+        720.0,
+        450.0
+      ]
     }
   ],
   "installed_completion_indicator_acceptance": "pending operator observations, including physical sleep/wake; not inferred from fixtures"

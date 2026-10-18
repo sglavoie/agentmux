@@ -1,0 +1,52 @@
+{
+  "recorded_at": "2026-10-18T17:11:58.069433+00:00",
+  "source_commit": "c774c7d0f8f9de223426f230a7b145d819bfd858",
+  "command": "macos/scripts/install-app.sh && just restart-verify",
+  "build_result": "Release build passed; signed bundle verified by build script",
+  "installation_result": "After operator authorization to quit, installed the verified signed Release bundle and relaunched the app. Restarted the daemon and passed strict doctor. The session server generation and all six agents were preserved.",
+  "cli_installed": true,
+  "app_installed": true,
+  "cli_version": "amx version 0.8.0 (revision 03c46ca196d1-dirty, built 2026-10-18T16:46:10Z, go1.27.1, sha256:a1a025c2fbba)",
+  "bundled_cli_version": "amx version 0.8.0 (revision 03c46ca196d1-dirty, built 2026-10-18T16:46:10Z, go1.27.1, sha256:21a7a9395493)",
+  "doctor_result": "exit 0; overall ok, 2 warnings (Kitty unreachable from this environment; stale/newer Claude hook-contract evidence)",
+  "server_before": {
+    "generation": "4085-1792330813",
+    "agents": 6
+  },
+  "server_after": {
+    "generation": "4085-1792330813",
+    "agents": 6,
+    "sessions": 6
+  },
+  "artifacts": [
+    {
+      "path": "macos/build/Agent Mux.app/Contents/MacOS/Agent Mux",
+      "sha256": "a2438f7a905029b48c37009a939260863b0af6e90df8fd183b70f971ff16eed6"
+    },
+    {
+      "path": "macos/build/Agent Mux.app/Contents/Resources/bin/amx",
+      "sha256": "21a7a939549316e34b6bb3b31dba47d811e210db096904102a8fc918dd2c463d"
+    },
+    {
+      "path": "/Users/sglavoie/.local/bin/amx",
+      "sha256": "a1a025c2fbba976ad9f3c86a9cf57e8e32bbfd655a72fdc2219a6bbf737d3c0e"
+    },
+    {
+      "path": "/Applications/Agent Mux.app/Contents/MacOS/Agent Mux",
+      "sha256": "a2438f7a905029b48c37009a939260863b0af6e90df8fd183b70f971ff16eed6"
+    }
+  ],
+  "pending": [
+    "On a newly launched managed Codex client: operator observations of completion after resume, /new followed by a completed response, app reopening, and physical sleep/wake; /new should clear prior completion before the next prompt."
+  ],
+  "previous_installation_attempt": {
+    "recorded_at": "2026-10-18T17:06:45.097994+00:00",
+    "command": "just update",
+    "installation_result": "CLI updated and hooks already current; app installation stopped at the running app quit confirmation. Six utility-view programs were running and the quit request was canceled.",
+    "doctor_result": "exit 0; overall ok, 3 warnings"
+  },
+  "installed_app_matches_verified_candidate": true,
+  "daemon_ready": true,
+  "asl_ready": true,
+  "companion_connected": true
+}

@@ -655,3 +655,18 @@ Validation:
   [Provenance and hashes](acceptance/workspace-review-usability/manifest.json)
   identify the fixture sources and final focused test result.
 - Local guide links and `git diff --check` passed.
+
+Installation: `just update` built and signed the Release candidate, updated the
+CLI, and found the hooks already current. Its first app installation attempt
+stopped at the quit confirmation for six utility-view programs. After the operator
+authorized quitting and continuing, `macos/scripts/install-app.sh` installed the
+verified candidate and relaunched the app; `just restart-verify` passed. The
+installed app executable matches the verified candidate hash. The agent server
+retained generation `4085-1792330813` and all six agents in six sessions. The daemon
+and ASL bridge report ready, with the companion connected. Strict doctor returned
+exit 0, overall OK with two warnings: Kitty is unreachable from this environment,
+and the Claude hook evidence is stale against the newer CLI contract.
+[Candidate and installed-artifact hashes](acceptance/workspace-review-usability/candidate.json)
+record the completed installation and the earlier interrupted attempt. F-001's
+real-use observations remain pending; installation and automated verification do
+not establish completion visibility across physical sleep/wake.
