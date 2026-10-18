@@ -6,6 +6,7 @@ struct WorkspaceChangesView: View {
     @ObservedObject var model: WorkspaceChangesModel
     private enum Focus: Hashable { case base, files }
     @FocusState private var focus: Focus?
+    @State private var diffFocusRequest: UUID?
     @State private var hunk: Int?
     @State private var visibleHunk: Int?
     @State private var showPatchHeaders = false
@@ -18,6 +19,9 @@ struct WorkspaceChangesView: View {
         let fileLabels = WorkspaceWording.uniqueSuffixes(model.changes?.files.map(\.path) ?? [])
         VStack(alignment: .leading, spacing: 6) {
             HStack {
+                Button(action: toggleFiles) { Image(systemName: "sidebar.left") }
+                    .help("Show or hide changed files (⌘⌥S)")
+                    .accessibilityLabel(model.layout.collapsed ? "Show changed files" : "Hide changed files")
                 Text("Checkout Changes").font(.headline).fixedSize()
                 if let changes = model.changes {
                     Text(changes.root).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -47,6 +51,7 @@ struct WorkspaceChangesView: View {
                 }
                 Spacer(minLength: 0)
             }
+            if model.worktree != nil || model.worktreeError != nil {
             HStack(spacing: 8) {
                 if let tree = model.worktree {
                     Text("\(tree.branch ?? "Worktree") → \(tree.sourceBranch)").font(.caption).lineLimit(1).truncationMode(.middle)
@@ -73,9 +78,10 @@ struct WorkspaceChangesView: View {
                         nextStep: "Refresh the comparison to reload the worktree review."), recover: { model.refresh() })
                 }
             }.frame(height: 24)
+            }
             if let changes = model.changes {
                 if !changes.files.isEmpty {
-                    HSplitView {
+                    WorkspaceReviewSplit(layout: $model.layout, title: "Changed files") {
                         List(selection: Binding(get: { model.selectedFile }, set: { model.select($0) })) {
                             ForEach(changes.files) { file in
                                 VStack(alignment: .leading, spacing: 3) {
@@ -84,8 +90,9 @@ struct WorkspaceChangesView: View {
                                         .font(.caption).foregroundStyle(.secondary)
                                 }.tag(file.path)
                             }
-                        }.focused($focus, equals: .files).frame(minWidth: 150, idealWidth: 220, maxWidth: 240)
+                        }.focused($focus, equals: .files)
                             .help("Changed files (⌘⇧F)")
+                    } detail: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Text(model.selectedFile.map { fileLabels[$0] ?? $0 } ?? "Select a changed file").font(.headline).lineLimit(1).truncationMode(.head)
@@ -123,7 +130,7 @@ struct WorkspaceChangesView: View {
                                               loading: model.reading || model.patchIdentity != model.diffIdentity,
                                               jump: hunk, jumpSequence: jumpSequence, reviewState: model.reviewState,
                                               fontSize: model.diffFontSize, wrapLines: model.wrapDiffLines,
-                                              compactMetadata: !showPatchHeaders, onVisibleHunk: { visibleHunk = $0 },
+                                              compactMetadata: !showPatchHeaders, focusRequest: diffFocusRequest, onVisibleHunk: { visibleHunk = $0 },
                                               onCopy: { copyFeedback = $0 })
                                 .opacity(model.patchIdentity == model.diffIdentity ? 1 : 0)
                                 .onChange(of: model.diffIdentity) { _, _ in hunk = nil; visibleHunk = nil; copyFeedback = WorkspaceCopyFeedback() }
@@ -137,7 +144,17 @@ struct WorkspaceChangesView: View {
             }
             Spacer(minLength: 0)
         }.padding(12)
-            .onAppear { focus = .files }
+            .onAppear {
+                if model.layout.collapsed { diffFocusRequest = UUID() }
+                else { focus = .files }
+            }
+            .onChange(of: focus) { _, value in if value != nil { diffFocusRequest = nil } }
+            .task(id: copyFeedback.revision) {
+                guard copyFeedback.succeeded else { return }
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                guard !Task.isCancelled else { return }
+                copyFeedback = WorkspaceCopyFeedback()
+            }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
             .alert("Land onto \(confirmedTree?.sourceBranch ?? "the source branch")?",
                    isPresented: Binding(get: { confirmedTree != nil }, set: { if !$0 { confirmedTree = nil } })) {
@@ -162,6 +179,11 @@ struct WorkspaceChangesView: View {
         return nil
     }
     private func copy(_ text: String) { copyFeedback.copy(text) }
+    private func toggleFiles() {
+        model.layout.collapsed.toggle()
+        if model.layout.collapsed { focus = nil; diffFocusRequest = UUID() }
+        else { diffFocusRequest = nil; focus = .files }
+    }
 
     private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
         if modifiers == .command {
@@ -174,11 +196,12 @@ struct WorkspaceChangesView: View {
         } else if modifiers == [.command, .shift] {
             switch key {
             case "g": if !model.reading && model.patchError == nil { moveHunk(-1) }
-            case "f": focus = .files
+            case "f": model.layout.collapsed = false; focus = .files
             case "e": focus = .base
             default: return false
             }
-        } else { return false }
+        } else if modifiers == [.command, .option], key == "s" { toggleFiles() }
+        else { return false }
         return true
     }
 

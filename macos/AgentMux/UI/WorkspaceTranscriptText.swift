@@ -197,6 +197,7 @@ struct WorkspaceTranscriptCode: View {
     let text: String
     let terms: [String]
     @ObservedObject var preferences: WorkspaceReadingPreferences
+    var pasteboard: NSPasteboard = .general
     @State private var feedback = WorkspaceCopyFeedback()
 
     var body: some View {
@@ -204,18 +205,11 @@ struct WorkspaceTranscriptCode: View {
             HStack {
                 Text(language.isEmpty ? "Code" : language).font(.caption.weight(.medium))
                 Spacer()
-                Toggle("Wrap lines", isOn: $preferences.wrapLines).toggleStyle(.checkbox).font(.caption)
-                    .help("Remember wrapping for code blocks and checkout diffs")
-                Menu {
-                    Button("Larger text") { preferences.fontSize = min(24, preferences.effectiveFontSize + 1) }.disabled(preferences.effectiveFontSize >= 24)
-                    Button("Smaller text") { preferences.fontSize = max(10, preferences.effectiveFontSize - 1) }.disabled(preferences.effectiveFontSize <= 10)
-                    Button("Reset text size") { preferences.fontSize = 12 }
-                } label: { Image(systemName: "textformat.size") }
-                    .menuStyle(.borderlessButton).fixedSize().help("Code and diff text size").accessibilityLabel("Code and diff text size")
                 Button {
-                    feedback.copy(text)
+                    feedback.copy(text, to: pasteboard)
                 } label: { Label(feedback.message ?? "Copy code", systemImage: feedback.succeeded ? "checkmark" : "doc.on.doc") }
                     .buttonStyle(.borderless).help("Copy this code block without Markdown fences")
+                    .accessibilityLabel(feedback.message ?? "Copy code")
             }.padding(8)
             Divider()
             if preferences.wrapLines {
@@ -229,6 +223,12 @@ struct WorkspaceTranscriptCode: View {
         }.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15)))
             .onChange(of: text) { _, _ in feedback = WorkspaceCopyFeedback() }
+            .task(id: feedback.revision) {
+                guard feedback.succeeded else { return }
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                guard !Task.isCancelled else { return }
+                feedback = WorkspaceCopyFeedback()
+            }
     }
     private var codeText: some View {
         Text(WorkspaceHighlight.applying(to: AttributedString(text), terms: terms))

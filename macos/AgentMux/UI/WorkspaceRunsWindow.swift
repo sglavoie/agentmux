@@ -5,12 +5,17 @@ struct WorkspaceRunsView: View {
     @ObservedObject var model: WorkspaceRunsModel
     @ObservedObject var plan: WorkspaceRunPlanModel
     private struct Confirmation { let method: String; let row: ASLRow }
-    @FocusState private var listFocused: Bool
+    private enum Focus: Hashable { case list, details }
+    @FocusState private var focus: Focus?
+    @State private var evidenceExpanded = false
     @State private var confirmation: Confirmation?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
+                Button(action: toggleRuns) { Image(systemName: "sidebar.left") }
+                    .help("Show or hide runs (⌘⌥S)")
+                    .accessibilityLabel(model.layout.collapsed ? "Show runs" : "Hide runs")
                 Text("ASL Runs").font(.title2).fixedSize()
                 Spacer(minLength: 0)
                 WorkspaceReviewStatus(reads: [
@@ -26,26 +31,31 @@ struct WorkspaceRunsView: View {
                 Button("Refresh") { model.refresh() }.disabled(model.loading).help("Refresh runs (⌘R)")
                 Button("Run a Plan…") { plan.isPresented = true }
             }
-            HSplitView {
+            WorkspaceReviewSplit(layout: $model.layout, title: "Runs", minimum: 190, detailMinimum: 430) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.rows, id: \.rowID) { row in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(row.displayLabel).font(.headline)
                             Text(WorkspaceWording.status(row.primaryState) + (row.sessionID.isEmpty ? "" : " · session \(row.sessionID)")).font(.caption)
-                            if !row.pauseReason.isEmpty { Text(WorkspaceWording.status(row.pauseReason)).font(.caption).foregroundStyle(.orange) }
+                            if !row.pauseReason.isEmpty {
+                                Label(WorkspaceWording.status(row.pauseReason), systemImage: "exclamationmark.circle")
+                                    .font(.caption).foregroundStyle(WorkspaceReviewColors.warning)
+                            }
                             if let question = row.question, question.unansweredCount > 0 {
                                 Text("\(question.unansweredCount) unanswered").font(.caption)
                             }
                         }.tag(row.rowID)
                     }
-                }.focused($listFocused).frame(minWidth: 190, idealWidth: 260, maxWidth: 300)
+                }.focused($focus, equals: .list)
+            } detail: {
                 VStack(alignment: .leading, spacing: 8) {
                     if let row = model.selected {
                         runHeader(row)
                         Divider()
+                        ScrollViewReader { proxy in
                         ScrollView {
                             VStack(alignment: .leading, spacing: 12) {
-                                ForEach(row.warnings, id: \.self) { Text($0).foregroundStyle(.orange) }
+                                ForEach(row.warnings, id: \.self) { Text($0).foregroundStyle(WorkspaceReviewColors.warning) }
                                 DisclosureGroup("Run details") {
                                     VStack(alignment: .leading, spacing: 8) {
                                         WorkspacePath(path: row.planDir)
@@ -54,7 +64,6 @@ struct WorkspaceRunsView: View {
                                         if !row.runStartedAt.isEmpty { WorkspaceTimestamp(title: "Started", value: row.runStartedAt) }
                                         if !row.runFinishedAt.isEmpty { WorkspaceTimestamp(title: "Finished", value: row.runFinishedAt) }
                                         if !row.lastActivityAt.isEmpty { WorkspaceTimestamp(title: "Last activity", value: row.lastActivityAt) }
-                                        if !row.pauseReason.isEmpty { Text("Blocked: " + WorkspaceWording.status(row.pauseReason)) }
                                         Button("Show Plan") { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: row.planDir) }
                                     }.font(.callout).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
                                 }
@@ -63,7 +72,7 @@ struct WorkspaceRunsView: View {
                                     ForEach(detail.sessions) { session in
                                         HStack {
                                             Text("Session \(session.id)")
-                                            Text(model.sessionStatus(session)).foregroundStyle(.secondary)
+                                            Text(model.verificationBlocked && session.id == row.sessionID && session.status == "pending" ? "Incomplete" : model.sessionStatus(session)).foregroundStyle(.secondary)
                                             Spacer()
                                             Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.path)]) }
                                         }
@@ -72,22 +81,43 @@ struct WorkspaceRunsView: View {
                                         Text("Checking \(active.currentCheckName) · session \(active.sessionID) · \(active.checkCount) checks")
                                     }
                                     if let error = detail.verificationError { Text(error).foregroundStyle(.red) }
-                                    DisclosureGroup("Recorded verification") {
+                                    DisclosureGroup("Recorded verification", isExpanded: $evidenceExpanded) {
                                         VStack(alignment: .leading, spacing: 8) {
                                             if let seconds = detail.runner.durationSeconds { Text("Recorded duration: \(seconds.formatted(.number.precision(.fractionLength(0)))) seconds") }
-                                            if detail.verificationTruncated { Text("Showing bounded recent evidence; earlier results may be omitted.").foregroundStyle(.orange) }
+                                            if detail.verificationTruncated { Text("Showing bounded recent evidence; earlier results may be omitted.").foregroundStyle(WorkspaceReviewColors.warning) }
+                                            Text("Recorded outcomes only. Open the session to investigate command output.").font(.caption).foregroundStyle(.secondary)
+                                            if model.inspectedVerification?.event == "verification_finished" {
+                                                Text("Only the attempt summary is available; individual failed checks were not retained.").font(.caption).foregroundStyle(.secondary)
+                                            }
                                             if detail.verification.isEmpty { Text("No verification results recorded in the available evidence for this run.").foregroundStyle(.secondary) }
-                                            ForEach(Array(detail.verification.enumerated()), id: \.offset) { _, record in
+                                            ForEach(Array(detail.verification.enumerated()), id: \.offset) { index, record in
                                                 VStack(alignment: .leading) {
                                                     Text(record.summary)
                                                     WorkspaceTimestamp(title: "Session \(record.sessionID)", value: record.at)
+                                                    if let seconds = record.durationSeconds { Text("Duration: \(seconds.formatted(.number.precision(.fractionLength(1)))) seconds").font(.caption) }
                                                 }
+                                                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(8)
+                                                .background(model.inspectedVerificationIndex == index ? WorkspaceReviewColors.warning.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                                                .overlay(alignment: .leading) {
+                                                    if model.inspectedVerificationIndex == index { Rectangle().fill(WorkspaceReviewColors.warning).frame(width: 3) }
+                                                }
+                                                .accessibilityLabel((model.inspectedVerificationIndex == index ? "Selected failed check. " : "") + record.summary)
+                                                .id(index)
                                             }
                                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
                                     }
                                 }
                             }.padding(4).frame(maxWidth: .infinity, alignment: .leading)
-                        }.accessibilityIdentifier("runs-details")
+                        }.accessibilityIdentifier("runs-details").focusable().focused($focus, equals: .details)
+                            .task(id: model.inspectionRequest) {
+                                guard model.inspectionRequest != nil else { return }
+                                evidenceExpanded = true
+                                await Task.yield()
+                                guard !Task.isCancelled else { return }
+                                if let index = model.inspectedVerificationIndex { proxy.scrollTo(index, anchor: .center) }
+                                focus = .details
+                            }
+                        }
                     } else if !model.loading && model.error == nil {
                         WorkspaceEmpty(title: model.rows.isEmpty ? "No active runs" : "Run progress",
                                        detail: model.rows.isEmpty ? "Start a plan to follow its progress here." : "Select a run to inspect its progress and controls.", symbol: "list.bullet.rectangle")
@@ -96,7 +126,8 @@ struct WorkspaceRunsView: View {
 
             }
         }.padding(12)
-            .onAppear { listFocused = true }
+            .onAppear { focus = model.layout.collapsed ? .details : .list }
+            .onChange(of: model.selection) { _, _ in evidenceExpanded = false }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
             .sheet(isPresented: $plan.isPresented) { WorkspaceRunPlanView(model: plan, onShowRuns: { plan.isPresented = false; model.refresh() }) }
             .alert(confirmation?.method == ASLMethod.runAbort ? "Abort this run?" : "Stop after the current session?",
@@ -120,18 +151,18 @@ struct WorkspaceRunsView: View {
                 Text(detail.progressSummary).font(.caption).lineLimit(2)
             }
             if model.hasQuestion {
-                Text("Waiting for your answer").foregroundStyle(.orange)
-            } else if !row.pauseReason.isEmpty {
-                Text("Blocked: " + WorkspaceWording.status(row.pauseReason)).foregroundStyle(.orange)
+                Label("Waiting for your answer", systemImage: "questionmark.circle").foregroundStyle(WorkspaceReviewColors.warning)
+            } else if !row.pauseReason.isEmpty && !model.verificationBlocked {
+                Label(WorkspaceWording.status(row.pauseReason), systemImage: "exclamationmark.circle").foregroundStyle(WorkspaceReviewColors.warning)
                     .lineLimit(2).help(WorkspaceWording.status(row.pauseReason))
             }
             if model.verificationBlocked, let detail = model.detail {
                 let evidence = detail.blockingVerification(sessionID: row.sessionID)
                 if let first = evidence.first {
-                    Text(first.summary + (evidence.count > 1 ? " · \(evidence.count - 1) more failed checks" : ""))
-                        .font(.callout).lineLimit(2).textSelection(.enabled)
+                    Label(first.summary + (evidence.count > 1 ? " · \(evidence.count - 1) more failed checks" : ""), systemImage: "exclamationmark.circle.fill")
+                        .foregroundStyle(WorkspaceReviewColors.warning).font(.callout.weight(.semibold)).lineLimit(2).textSelection(.enabled)
                         .help(evidence.map(\.summary).joined(separator: "\n"))
-                    Text("Inspect the failed check in the session before resuming.").font(.caption).foregroundStyle(.secondary)
+                    Text("Review the recorded failure before resuming.").font(.caption).foregroundStyle(.secondary)
                 } else if !model.reading {
                     Text("No matching failed check is available in the recorded evidence.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -140,8 +171,14 @@ struct WorkspaceRunsView: View {
                 if model.hasQuestion {
                     Button("Answer…") { model.answer() }.buttonStyle(.borderedProminent).fontWeight(.semibold).disabled(model.stale || model.acting)
                 }
-                if model.nextAction == .inspect || model.nextAction == .focus {
-                    Button(model.nextAction == .inspect ? "Inspect Failed Check" : "Focus Session") { model.onFocus?(row) }
+                if model.nextAction == .inspect {
+                    Button(model.inspectionTitle) { model.inspectFailedCheck() }
+                        .buttonStyle(.borderedProminent).fontWeight(.semibold)
+                        .disabled(model.inspectionUnavailable != nil)
+                        .help(model.inspectionUnavailable ?? "Show the failed check in recorded verification (⌘⇧I)")
+                    Button("Open Session") { model.onFocus?(row) }.buttonStyle(.link).help("Open session (⌘Return)")
+                } else if model.nextAction == .focus {
+                    Button("Focus Session") { model.onFocus?(row) }
                         .buttonStyle(.borderedProminent).fontWeight(.semibold).help("Focus session (⌘Return)")
                 } else {
                     Button("Focus Session") { model.onFocus?(row) }.help("Focus session (⌘Return)")
@@ -169,9 +206,16 @@ struct WorkspaceRunsView: View {
             case "\r": if let row = model.selected { model.onFocus?(row) }
             default: return false
             }
-        } else if modifiers == [.command, .shift], key == "f" { listFocused = true }
+        } else if modifiers == [.command, .shift], key == "f" { model.layout.collapsed = false; focus = .list }
+        else if modifiers == [.command, .shift], key == "i" { model.inspectFailedCheck() }
+        else if modifiers == [.command, .option], key == "s" { toggleRuns() }
         else { return false }
         return true
+    }
+
+    private func toggleRuns() {
+        model.layout.collapsed.toggle()
+        focus = model.layout.collapsed ? .details : .list
     }
 
     private func control(_ title: String, _ method: String) -> some View {
@@ -186,6 +230,7 @@ struct WorkspaceRunsView: View {
                 }
             } else {
                 Button(title) { if let row = model.selected { confirmation = Confirmation(method: method, row: row) } }
+                    .buttonStyle(.borderless).controlSize(.small)
                     .disabled(model.disabledReason(method) != nil)
             }
             if let reason = model.disabledReason(method) { Text(reason).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }

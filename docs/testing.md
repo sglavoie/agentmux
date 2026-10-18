@@ -51,6 +51,16 @@ Its release gate is `just mac-release-gate`, which records its own evidence and
 reports a machine with no Xcode as pending rather than passed; see
 [Desktop releases](desktop-releases.md).
 
+`WorkspaceReviewUsabilityTests` covers remembered Changes/Runs sidebars, native
+diff keyboard focus after collapse, evidence inspection below a long plan, and
+copy-feedback expiry through real window clicks and an isolated pasteboard.
+`WorkspaceWorkflowPreviewTests` captures the expanded/collapsed layouts, selected
+failed check, and simplified code blocks in light and dark appearances. Captures
+use only fixture windows; own-window capture requires macOS 14.4 or newer.
+The Codex completion lifecycle fixtures do not replace the installed-build and
+physical sleep/wake observations recorded for
+[F-001](desktop-improvements.md#remaining-installed-build-check-for-f-001).
+
 `just asl-integration` is separate and opt-in. Every other recipe is hermetic
 and needs no `agent-session-loop` installed; this one launches the real bridge
 against a throwaway plan and state root and checks the handshake, capabilities,

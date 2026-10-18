@@ -878,7 +878,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     private func openRuns(launch: Bool) {
         let controller = runsWindow ?? WorkspaceRunsWindow(
-            model: WorkspaceRunsModel(command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory),
+            model: WorkspaceRunsModel(command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory, defaults: .standard),
             plan: WorkspaceRunPlanModel(command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory))
         controller.onVisibilityChanged = { [weak self] visible in
             self?.runsVisible = visible

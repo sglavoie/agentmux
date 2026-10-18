@@ -12,6 +12,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
     var fontSize: CGFloat = 12
     var wrapLines = false
     var compactMetadata = true
+    var focusRequest: UUID?
     var onVisibleHunk: ((Int?) -> Void)?
     var onCopy: ((WorkspaceCopyFeedback) -> Void)?
 
@@ -94,6 +95,15 @@ struct WorkspaceDiffView: NSViewRepresentable {
             }
         }
         state.reportVisibleHunk(scroll)
+        if state.focusRequest != focusRequest {
+            state.focusRequest = focusRequest
+            if let focusRequest {
+                DispatchQueue.main.async { [weak container, weak text, weak state] in
+                    guard let container, let text, state?.focusRequest == focusRequest else { return }
+                    container.window?.makeFirstResponder(text)
+                }
+            }
+        }
     }
 
     static func render(_ diff: WorkspaceDiff, fontSize: CGFloat = 12, compactMetadata: Bool = false) -> (text: NSAttributedString, hunks: [NSRange], lines: [NSRange]) {
@@ -130,6 +140,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
     }
 
     final class Coordinator {
+        var focusRequest: UUID?
         weak var gutter: WorkspaceDiffGutter?
         private var observer: NSObjectProtocol?
         private var store: WorkspaceReviewState?

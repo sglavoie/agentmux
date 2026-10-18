@@ -595,3 +595,63 @@ The automated tests establish shell selection, ownership, reducer persistence,
 and simulated observation gaps. They do not establish physical sleep behavior
 or recurrence in real use. F-001 and the separate five-workday trial therefore
 remain open until the operator supplies those observations.
+
+## Review usability on 2026-10-18
+
+This pass implements the five interface/documentation refinements and prepares
+an updated build for the remaining completion-visibility check:
+
+- Changes and Runs have draggable, remembered sidebars and **⌘⌥S** toggles.
+  Reopening restores focus to the selected row; **⌘⇧F** reveals a hidden list.
+  Narrow windows clamp widths without overwriting the wider preference. Changes
+  omits its empty worktree toolbar. Collapsing files focuses the native diff text
+  view, so Page Down works immediately without changing the file or reading anchor.
+- **Inspect Failed Check** and **⌘⇧I** expand recorded verification and scroll to
+  the selected session's current failed attempt, visibly highlighting its evidence.
+  **Open Session** remains separate. Missing evidence is explained; summary-only
+  evidence uses **Inspect Verification**. A refreshed successful attempt clears the
+  old selection. Inspection never focuses another session or runs a control/check.
+- Runs names the failed check once in its primary summary, with readable brown/amber
+  warning colors and a symbol. The plan row says **Incomplete**; secondary stop and
+  abort controls have less visual weight while retaining their confirmations.
+- Code blocks retain language and Copy beside their text. Shared text sizing and
+  **Wrap code and diff lines** live in the reader menu. Successful copy feedback
+  clears after two seconds; another copy restarts that interval, and failures remain
+  visible. Literal Unicode and newlines reach the clipboard unchanged.
+- The companion guide now organizes current behavior by workflow, with one shortcut
+  table. Its Codex limitation explains supported managed-launch isolation, explicit
+  remote/older CLI behavior, and the remaining installed-build observation. Earlier
+  acceptance records remain historical evidence.
+
+The focused interaction coverage is `WorkspaceReviewUsabilityTests`; the preview
+suite captures expanded/collapsed sidebars, selected verification evidence, and
+multiple code blocks in both appearances. A hosted keyboard check caught and fixed
+an initial SwiftUI-wrapper focus bug. Copy timing is verified through real fixture
+window clicks, an isolated pasteboard, and own-window capture; SwiftUI's virtual
+button was not exposed through the original in-process accessibility-tree lookup.
+
+F-001 remains open until the operator confirms completion visibility on the updated
+installation across resume, `/new`, app reopening, and physical sleep/wake. The
+separate five-workday migration trial is unchanged. Automated checks and fixture
+screenshots do not supply those observations.
+
+Validation:
+
+- `env -u AMX_RUNTIME_SESSION_ID just check`: passed the full Go suite, core race
+  checks, vet, 188 TUI scenarios, and lint with zero issues.
+- `macos/scripts/test-app.sh`: 908 hosted tests passed, zero failures or skips.
+  The final focused run passed 34 tests with zero failures or skips, including
+  summary-only evidence handling, native diff keyboard focus, clipboard timing,
+  Runs authorization/receipt regressions, and all 14 workflow preview tests.
+- Focused Codex checks in `internal/harness`, `internal/indicator`,
+  `internal/screenstate`, `internal/daemon`, and `internal/session` passed with
+  `-run Codex -count=1` and the inherited runtime-session variable removed.
+- Ten new fixture captures were inspected in both appearances. Representative
+  references: [expanded Changes](acceptance/workspace-review-usability/diff-light.png),
+  [collapsed Changes](acceptance/workspace-review-usability/diff-collapsed-dark.png),
+  [Runs](acceptance/workspace-review-usability/runs-light.png),
+  [selected failed check](acceptance/workspace-review-usability/inspected-check-dark.png),
+  and [code blocks](acceptance/workspace-review-usability/code-light.png).
+  [Provenance and hashes](acceptance/workspace-review-usability/manifest.json)
+  identify the fixture sources and final focused test result.
+- Local guide links and `git diff --check` passed.

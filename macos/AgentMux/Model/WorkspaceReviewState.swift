@@ -26,6 +26,22 @@ final class WorkspaceReviewState {
         get { read("historyLayout") ?? .init() }
         set { write(newValue, key: "historyLayout") }
     }
+    struct SidebarLayout: Codable {
+        var preferredWidth: Double? = nil
+        var collapsed = false
+        func width(in available: Double, minimum: Double, detailMinimum: Double) -> Double {
+            let preferred = preferredWidth.flatMap { $0.isFinite ? $0 : nil } ?? min(240, available * 0.27)
+            return min(max(minimum, preferred), max(minimum, available - detailMinimum - 6))
+        }
+    }
+    var changesLayout: SidebarLayout {
+        get { read("changesLayout") ?? .init() }
+        set { write(newValue, key: "changesLayout") }
+    }
+    var runsLayout: SidebarLayout {
+        get { read("runsLayout") ?? .init() }
+        set { write(newValue, key: "runsLayout") }
+    }
     struct Comparison: Codable { var base: String; var file: String? }
     struct DiffAppearance: Codable {
         var fontSize: Double = 12

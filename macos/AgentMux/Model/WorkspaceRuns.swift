@@ -3,7 +3,7 @@ import Combine
 
 struct WorkspaceRunDetail: Decodable {
     struct Session: Decodable, Identifiable { let id: String; let status: String; let path: String }
-    struct Verification: Decodable {
+    struct Verification: Decodable, Equatable {
         let event: String
         let at: String
         let sessionID: String
@@ -94,6 +94,10 @@ struct WorkspaceRunDetail: Decodable {
 /// operation ID for an explicit receipt retry. No action is retried by polling.
 @MainActor
 final class WorkspaceRunsModel: ObservableObject {
+    private let reviewState: WorkspaceReviewState
+    @Published var layout: WorkspaceReviewState.SidebarLayout { didSet { reviewState.runsLayout = layout } }
+    @Published private(set) var inspectedVerification: WorkspaceRunDetail.Verification?
+    @Published private(set) var inspectionRequest: UUID?
     let feedbackHistory: WorkspaceFeedbackHistory
     @Published private(set) var listRefreshedAt: Date?
     @Published private(set) var detailRefreshedAt: Date?
@@ -151,7 +155,9 @@ final class WorkspaceRunsModel: ObservableObject {
     private var actionTarget: FeedbackTarget?
     private var feedbackSelection: FeedbackTarget?
 
-    init(service: ASLService = DaemonClient(), command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), feedbackHistory: WorkspaceFeedbackHistory? = nil, now: @escaping () -> Date = Date.init) {
+    init(service: ASLService = DaemonClient(), command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), feedbackHistory: WorkspaceFeedbackHistory? = nil, defaults: UserDefaults? = nil, now: @escaping () -> Date = Date.init) {
+        reviewState = WorkspaceReviewState(defaults: defaults)
+        layout = reviewState.runsLayout
         self.feedbackHistory = feedbackHistory ?? WorkspaceFeedbackHistory()
         self.service = service; self.command = command; self.runner = runner
         self.now = now
@@ -161,6 +167,29 @@ final class WorkspaceRunsModel: ObservableObject {
     var hasQuestion: Bool { !(selected?.question?.questionID ?? "").isEmpty }
     var verificationBlocked: Bool {
         selected?.pauseReason.replacingOccurrences(of: "_", with: "-") == "verification-failed"
+    }
+    var failedChecks: [WorkspaceRunDetail.Verification] {
+        guard verificationBlocked, let selected, let detail, detail.runner.runID == selected.runID else { return [] }
+        return detail.blockingVerification(sessionID: selected.sessionID)
+    }
+    var inspectionUnavailable: String? {
+        if reading { return "Wait for the verification evidence to finish loading." }
+        if let detailError { return detailError }
+        if failedChecks.isEmpty { return "No matching failed check is available in the recorded evidence." }
+        return nil
+    }
+    var inspectedVerificationIndex: Int? {
+        guard let inspectedVerification else { return nil }
+        return detail?.verification.lastIndex(of: inspectedVerification)
+    }
+    var inspectionTitle: String {
+        failedChecks.first?.event == "verification_finished" ? "Inspect Verification" : "Inspect Failed Check"
+    }
+    /// Inspect the recorded attempt only; never focus a terminal or repeat a check.
+    func inspectFailedCheck() {
+        guard inspectionUnavailable == nil, let record = failedChecks.first else { return }
+        inspectedVerification = record
+        inspectionRequest = UUID()
     }
     enum NextAction { case answer, inspect, resume, focus }
     var nextAction: NextAction {
@@ -206,6 +235,7 @@ final class WorkspaceRunsModel: ObservableObject {
     }
 
     func close() {
+        inspectedVerification = nil; inspectionRequest = nil
         started = false
         timer?.invalidate(); timer = nil
         generation += 1; detailGeneration += 1
@@ -261,6 +291,7 @@ final class WorkspaceRunsModel: ObservableObject {
     }
 
     func select(_ id: String?) {
+        inspectedVerification = nil; inspectionRequest = nil
         selection = id
         detailGeneration += 1
         detailRefreshedAt = nil
@@ -287,6 +318,9 @@ final class WorkspaceRunsModel: ObservableObject {
                 self.detailRefreshedAt = self.now()
                 self.detailRow = row
                 self.detail = detail
+                if let inspected = self.inspectedVerification, !self.failedChecks.contains(inspected) {
+                    self.inspectedVerification = nil; self.inspectionRequest = nil
+                }
             case let .failure(error): self.detailError = error.message
             case .partial: self.detailError = "ASL returned an incomplete status report. Refresh to try again."
             }

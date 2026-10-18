@@ -52,6 +52,7 @@ struct WorkspaceLandResult: Decodable {
 
 @MainActor
 final class WorkspaceChangesModel: ObservableObject {
+    @Published var layout: WorkspaceReviewState.SidebarLayout { didSet { reviewState.changesLayout = layout } }
     let feedbackHistory: WorkspaceFeedbackHistory
     @Published private(set) var comparisonRefreshedAt: Date?
     @Published private(set) var diffRefreshedAt: Date?
@@ -106,6 +107,7 @@ final class WorkspaceChangesModel: ObservableObject {
         self.command = command
         self.runner = runner
         reviewState = WorkspaceReviewState(defaults: defaults)
+        layout = reviewState.changesLayout
         readingPreferences = defaults === UserDefaults.standard ? .shared : WorkspaceReadingPreferences(defaults: defaults)
         appearanceSubscription = readingPreferences.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }

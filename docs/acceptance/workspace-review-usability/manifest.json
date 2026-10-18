@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-18",
+  "capture": "ScreenCaptureKit current-process fixture windows; no live conversations; native pixel scale",
+  "full_test_command": "macos/scripts/test-app.sh",
+  "full_test_result": "908 tests passed; zero failures or skips",
+  "final_focused_test_command": "xcodebuild test -only-testing:AgentMuxTests/WorkspaceReviewUsabilityTests -only-testing:AgentMuxTests/WorkspaceRunsTests -only-testing:AgentMuxTests/WorkspaceWorkflowPreviewTests (Debug, same project, signing, destination and DerivedData as test-app.sh)",
+  "final_focused_test_result": "34 tests passed; zero failures or skips",
+  "final_test_result_bundle": "Test-AgentMux-2026.10.18_11-01-40--0600.xcresult",
+  "go_gate": "env -u AMX_RUNTIME_SESSION_ID just check: passed, including 188 TUI scenarios and zero lint issues",
+  "focused_codex_checks": "env -u AMX_RUNTIME_SESSION_ID go test ./internal/harness ./internal/indicator ./internal/screenstate ./internal/daemon -run Codex -count=1; same check for ./internal/session: passed",
+  "review_criteria": [
+    "Changes recovers empty worktree-toolbar space and sidebar collapse gives native keyboard focus to the diff.",
+    "Runs keeps actions above evidence and inspection expands, highlights and scrolls to the current failed attempt.",
+    "Light/dark warnings remain legible with text and symbols; repeated failure wording and secondary-button weight are reduced.",
+    "Code blocks retain only language and Copy; wrapping and text sizing remain in the shared reader menu."
+  ],
+  "sources": [
+    {
+      "path": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+      "sha256": "310c5422d313f3d5f8f8a2f0a591a9f24a0fd12fb1df002d7a4b97f8864a7075"
+    },
+    {
+      "path": "macos/AgentMuxTests/WorkspaceReviewUsabilityTests.swift",
+      "sha256": "ca5795c8142e62dc79a82e7dda533c7d0f89ac77ca3b8cdd7333f85c05ae999b"
+    },
+    {
+      "path": "macos/AgentMux/Model/WorkspaceChanges.swift",
+      "sha256": "48553e7f6e62dd90a2f379b935449ac43f1f2bd5863411aa6db478238bec022d"
+    },
+    {
+      "path": "macos/AgentMux/Model/WorkspaceReviewState.swift",
+      "sha256": "bed775407b98a3e02ac659cd08c41a5ef785911c3ee499a608b715cb4f1a40ec"
+    },
+    {
+      "path": "macos/AgentMux/Model/WorkspaceRuns.swift",
+      "sha256": "0c075f7daca951d0fbbcb35cf2262b4a7cecc7d27729b9559eef197da41b677d"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspaceChangesView.swift",
+      "sha256": "a7a5f36e388cdddf87a3ea6029f9475982f865b955c3f1143a3c20519c8faf4e"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspaceDiffView.swift",
+      "sha256": "a55ea15ff1c0047beadf9fdd1462321a620c68bb870da9960b51309cd4f896b4"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspacePresentation.swift",
+      "sha256": "b4199d925a8a29aef498920ca04381013e1675df41190769d2760007c947e558"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspaceRunsWindow.swift",
+      "sha256": "a733a98a876a58e9aebd99c08262a9e05a32380c6c793022aebae39866fdebdb"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspaceTranscriptText.swift",
+      "sha256": "510fabf2c45a26faa8efc0224f9f2f06457b63fa2f28b127e8626f416c0320c1"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "diff-light.png",
+      "sha256": "6cf5ea0c49b98aae674bb95c9fcb60bda6a73b5b8490c11e374c47a4c57ffb4c"
+    },
+    {
+      "path": "diff-dark.png",
+      "sha256": "71303dd1567160e9bd54976f050e2721b17c03f95327c9f650dba5c10f1e2876"
+    },
+    {
+      "path": "diff-collapsed-light.png",
+      "sha256": "124ad76fa526d757b52a98d2dbe9581fdd2774970398c2399819b0493ac71586"
+    },
+    {
+      "path": "diff-collapsed-dark.png",
+      "sha256": "2c1a7e9a772e536675421b368a3cc3a7339d9e7fed827cd2d95526fe00406ade"
+    },
+    {
+      "path": "runs-light.png",
+      "sha256": "7c3cc37ac28b75e15bbe85db1ba8e9a3552e22f6f2feca9932d196b17a272cc3"
+    },
+    {
+      "path": "runs-dark.png",
+      "sha256": "8288b1114dc515b2df6e2df37d48f06b0f2a078845d54fd99007dfa776db1a44"
+    },
+    {
+      "path": "inspected-check-light.png",
+      "sha256": "8e10152a3d40988ada85d0724f67c248b45f3c9efe8ca6f1f58d5785c5a36e07"
+    },
+    {
+      "path": "inspected-check-dark.png",
+      "sha256": "efeb9f2b3815a9f6cc50cb29a211ed7cfdf33208fcfa29cd6e33c27329112326"
+    },
+    {
+      "path": "code-light.png",
+      "sha256": "4bb48eda71138936a1e9c8f4f8f483b7906b3a3f73a898e40e22d811feea2c90"
+    },
+    {
+      "path": "code-dark.png",
+      "sha256": "31defc0d0dc88c3ebf8f30ff0cd62962aaaac80309931cd56f81334f393c8818"
+    }
+  ],
+  "installed_completion_indicator_acceptance": "pending operator observations, including physical sleep/wake; not inferred from fixtures"
+}

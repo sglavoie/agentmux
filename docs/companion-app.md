@@ -388,101 +388,235 @@ is committed.
 
 ## Native workflow views
 
-- **⌘⇧P** opens the command palette. In **⌘P**, type `>` to search actions.
-  Match abbreviations such as `swcc` for Split with Checkout Changes, or aliases
-  such as `diff`, `preferences`, and `terminal`. Exact names rank first, followed
-  by available actions relevant to the current pane; matching title characters
-  are highlighted. It offers configured-project launches, recent-conversation resume/focus, shells,
-  history, checkout review, and workspace navigation. Unavailable actions explain why.
-- **Waiting** in the inspector supports category filters, oldest-first sorting,
-  expandable question/output context, and **Next waiting**. The **All** filter groups decisions
-  before other attention and completed turns, with a count for each group. While
-  the pointer or an expanded context holds the list, updates wait behind
-  **Update list** so targets stay put; changed prompts are disabled immediately.
-  Answering still uses
-  the existing prompt or supervisor panel.
-- **View › Conversation History…** searches full transcripts, scoped to all history,
-  the selected session’s project, or its conversation. Preview, load earlier messages,
-  focus an existing session, resume, or fork into the workspace. Search opens
-  around its first matching prose message, even when it predates the latest 50
-  messages. Highlighted terms and previous/next matching-message buttons navigate
-  the conversation; loading earlier/later messages preserves the reading anchor.
-  Result snippets highlight the same terms and quoted phrases. Results load 50 at
-  a time; **Load more conversations** extends the list without changing the open
-  preview. Empty results offer **Clear search**, **Search all history**, and
-  **Include automated sessions** as applicable, with an actual hidden-match count.
-  **⌘R** and the preview's refresh button refresh just that conversation; Search
-  or Return in the search field refreshes results. Both keep the reading position and update
-  existing messages. A **new messages** button offers navigation to newly appended
-  messages. Nothing scrolls to them until you choose it. Superseded searches and
-  transcript reads are cancelled, including their running read subprocesses.
-- **View › Review Checkout Changes…** (also **Changes…** in the Session inspector)
-  shows checkout-wide files, line counts, and diffs against a chosen base. Open files
-  in the configured editor. Managed worktrees include source-branch comparison and
-  confirmed fast-forward landing, with the CLI’s existing clean/inactive checks.
-  The diff has old/new line numbers, addition/deletion shading, and previous/next
-  hunk controls with the visible hunk number. Changed words receive stronger shading
-  within paired replacement lines. Redundant file headers are hidden; **… → Show
-  patch headers** reveals them. Mode changes and no-newline markers remain visible,
-  and copying the unified patch always includes the original headers. Large or
-  unpaired replacement blocks retain whole-line shading.
-  Switching files restores each file's scroll position for the
-  current checkout and comparison base. Refreshing a changed diff follows the
-  same nearby source text where possible, falling back to a nearby source line.
-  The compact toolbar leaves at least 240 points for the diff in the ordinary
-  populated 720×450 window. The pencil button opens the file in your editor.
-  The **…** menu offers remembered **Wrap lines** and text-size preferences, plus
-  **Copy unified patch** and **Copy changed source lines** (added and context lines
-  from the displayed hunks). Selecting text and copying strips line numbers and
-  diff markers; **Copy Unified Diff** in the context menu keeps patch syntax.
-- **View › Since Last Looked…** shows recorded state transitions, process exits,
-  and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days,
-  select an event for its details and the last timestamped assistant output at or
-  before it, and open its conversation or focus the matching live session.
-  **Load earlier messages** searches further back for supporting output.
-  **Mark read** offers the selected event or all loaded results, with an exact
-  count and an Undo action. Opening the view does not mark anything read, and
-  late-arriving events stay unread. Turn off
-  **Unread only** to revisit read events. Refresh reads newly recorded events.
-  The view reports unavailable transcripts, retention limits, truncation, and
-  unreadable journal records rather than reconstructing missing history.
-- **View › ASL Runs…** lists ASL's full active/actionable run projection, including
-  pauses with no unanswered question. Select a run for its current session, phase,
-  timestamps, blockers, plan session counts, and recorded verification results.
-  Verification is scoped to that run; bounded or unavailable evidence is labeled.
-  **Answer…** uses the existing supervisor question panel. **Resume**, **Stop After
-  Current…**, and **Abort…** are enabled only when ASL permits them and recheck that
-  permission on submission. An uncertain response offers **Retry Receipt** for the
-  same operation ID; polling never repeats a control operation.
-- **View › Run a Plan…** opens the native launch form, also available from Runs and
-  the command palette. Choose a plan directory or configured plan name, optionally
-  select the supervising project/profile and worker/review harnesses, then **Check
-  Readiness**. The preview shows the actual command and any preflight findings.
-  **Start Supervised Run** uses `amx plans run --backend tmux` and focuses the managed
-  supervising session. Changed options require another check. A submitted or
-  uncertain launch is not repeated by the form.
+### Command palette and launch
 
-**View › Split with Shell** keeps the current agent alongside a shell in its
-working directory. **Split with Checkout Changes** opens native review alongside
-it. To compare two agents, use **⌘⇧P** and choose **Split with <session name>**.
-To assign keys to the new commands, open **Settings › Workspace shortcuts**,
-choose a command, click **Record Shortcut**, and press the combination. Bindings
-apply immediately and persist across launches. **Clear** removes a binding;
-**Restore Default** restores the command's original binding (⌘⇧P for Command
-Palette, unassigned for the other new commands). These keys work while Agent Mux
-is active. The recorder checks conflicts with existing menu commands and the two
-global shortcuts; Escape cancels recording.
+**⌘⇧P** opens the command palette. In **⌘P**, type `>` to search actions.
+Abbreviations such as `swcc` match Split with Checkout Changes; aliases include
+`diff`, `preferences`, and `terminal`. Exact names rank first, then available
+actions relevant to the current pane. Matching title characters are highlighted,
+and unavailable actions explain why.
 
-Click either pane or its heading to focus it; the filled dot identifies the active
-pane. **Focus Checkout Review** in the palette returns to an opened review after
-navigating elsewhere. Sidebar selections and session actions apply to that pane. **Focus Other
-Pane**, **Swap Panes**, and **Hide Other Pane** are in View and the command palette.
-Hiding a pane preserves its agent or shell; closing a session still asks before
-ending it. Closing the workspace detaches both agents, preserves utility programs,
-and returns to a single pane when reopened.
+The palette offers configured-project launches, recent-conversation resume/focus,
+shells, History, checkout review, Runs, and workspace navigation. The Launch
+Project menu names both the destination and its source. **Launch Settings…**
+opens **Launch projects in**. Following CLI configuration distinguishes an explicit
+`config.toml` choice from its compatibility default. Preferences lists resolved
+app, CLI, and plan destinations; **Follow CLI** aligns the app with CLI configuration.
 
-History and Changes also have separate resizable native windows. Their commands are
-available from the palette. The app and `amx` must both be rebuilt for checkout review.
+An empty workspace offers **Launch Project…**, **Conversation History**, and
+**Open Dashboard**, and names the effective launch destination. With no configured
+projects it explains how to add a profile and project using `amx config edit`.
+Pending configuration reads, failed reads, and daemon recovery remain distinct.
+
+### Waiting
+
+Waiting in the inspector supports category filters, oldest-first sorting,
+expandable question/output context, and **Next waiting**. **All** groups decisions
+before other attention and completed turns, with counts. While the pointer or an
+expanded context holds the list, updates wait behind **Update list** so targets
+stay put; changed prompts are disabled immediately. Answer opens the existing
+prompt or supervisor panel and never submits an answer itself.
+
+**Window › Waiting** (⌘⇧I) focuses the reader. Up/Down read items, Return opens
+the answer panel, N advances, Space toggles context, and Page Up/Page Down scroll
+context. Escape restores the previous workspace focus without attaching a session.
+Closing an answer panel returns to the reader when the workspace still owns focus.
+Context uses available inspector height, proportional text for supervisor
+questions, and monospace text for terminal output.
+
+Sidebar targets also keep their positions during pointer interaction, dragging,
+or an open context menu. Attention badges still update; ended sessions held in
+place cannot be acted on. Sidebar, Waiting, and menu-bar reasons share readable
+labels; raw protocol reasons remain in the session inspector.
+
+### Conversation History
+
+**View › Conversation History…** searches full transcripts, scoped to all history,
+the selected session's project, or its conversation. Resume, fork, or focus a live
+session from the preview. Search opens around its first matching prose message,
+even outside the latest 50 messages. Highlighted terms and previous/next match
+buttons navigate the conversation. Earlier/later paging preserves the reading
+anchor; the message navigation menu also reports the loaded message range.
+
+Result snippets highlight the same terms and quoted phrases. Results load 50 at
+a time; **Load more conversations** extends the list without changing the preview.
+Empty results offer **Clear search**, **Search all history**, and **Include
+automated sessions** as applicable, with an actual hidden-match count. Rows show
+relative activity times with exact tooltips; all-history rows include checkout
+paths. The conversation heading's tooltip also includes its checkout.
+
+**⌘R** and the preview refresh button read only the selected conversation. Search
+or Return in the search field refreshes results. Updated messages keep their
+reading position; a **new messages** button offers navigation to appended messages
+without scrolling automatically. Superseded searches and transcript reads cancel
+their running read subprocesses. A failed search does not disable transcript refresh.
+
+History remembers query, scope, selected conversation, loaded results, and reading
+position across restarts. Its draggable results divider remembers width without
+losing the wider preference when the window shrinks. The sidebar button or **⌘⌥S**
+hides results and restores focus to the selected result on reopening. Down from
+search also reveals results. Selection and reading position remain intact.
+
+**Edit › Search Conversation…** opens the selected session's recorded conversation
+in History once its identity is known. **Edit › Find in Terminal…** uses the
+terminal find bar: **Find on visible screen** for a full-screen agent, **Find in
+terminal history** otherwise. Utility terminals search terminal history.
+
+### Checkout Changes
+
+**View › Review Checkout Changes…**, or **Changes…** in the Session inspector,
+shows checkout-wide files, line counts, and diffs against a chosen branch or commit.
+Changes includes every session using that checkout. The app and `amx` must both
+be rebuilt for checkout review.
+
+Drag the file-list divider to choose its width; the preference and collapsed state
+survive reopening and app restarts, including embedded reviews. The sidebar button
+or **⌘⌥S** hides files to give the diff more room. Reopening restores keyboard focus
+to the selected file; **⌘⇧F** reveals and focuses the list. Resizing clamps the
+visible width without replacing the saved preference. The worktree toolbar occupies
+space only when there is a review or error to display.
+
+Diffs show old/new line numbers, addition/deletion shading, and previous/next hunk
+controls with the visible hunk number. Changed words receive stronger shading in
+paired replacement lines; large or unpaired blocks retain whole-line shading.
+Redundant file headers are hidden; **… → Show patch headers** restores them.
+Mode changes and no-newline markers remain visible. The pencil button opens the
+selected file in the configured editor.
+
+The comparison base and selected file are remembered per checkout, with separate
+scroll positions per checkout/base/file. Refresh follows matching nearby source
+text where possible, falling back to a nearby source line. File labels use the
+shortest unique trailing path; tooltips and accessibility retain the full path.
+
+The **…** menu contains remembered **Wrap lines** and text-size preferences, plus
+**Copy unified patch** and **Copy changed source lines** (added and context lines
+from displayed hunks). Copying selected text strips line numbers and diff markers;
+**Copy Unified Diff** in the context menu keeps patch syntax. Unified-patch copying
+always includes the original headers. Truncated diffs are labeled.
+
+Managed worktrees offer source-branch comparison and confirmed fast-forward landing
+with the CLI's clean/inactive checks. A details button expands warnings and
+conflicts without pushing the diff or landing controls out of view. A retained
+review cannot authorize landing while its replacement is being read.
+
+### Since Last Looked
+
+**View › Since Last Looked…** shows recorded state transitions, process exits,
+and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days.
+Select an event for details and the last timestamped assistant output at or before
+it; **Load earlier messages** searches further back for supporting output.
+Opening its conversation goes to that recorded location, briefly highlights it,
+and returns focus to Activity when closed. Missing evidence is explained; a failed
+read can retry the same event. You can also focus the matching live session.
+
+**Mark read** offers **Mark selected read** and **Mark all N results read**, including
+loaded rows below the viewport but excluding records omitted by the query limit.
+**Undo** restores the last successful acknowledgement and prior selection when
+still in scope. Failed saves and Undo retain current markers and report the failure.
+Opening or refreshing never marks anything read, and late arrivals stay unread.
+Turn off **Unread only** to revisit read events. Retention limits, unavailable
+transcripts, truncation, and unreadable journal records remain explicit.
+
+### ASL Runs and Run a Plan
+
+**View › ASL Runs…** lists the full active/actionable run projection, including
+pauses without an unanswered question. Select a run for progress, blockers, and
+permitted controls above the scrolling plan sessions. **Run details** expands
+paths, identifiers, and timestamps; **Recorded verification** expands check evidence.
+The sidebar button or **⌘⌥S** hides the run list and restores focus to it on reopening;
+**⌘⇧F** reveals and focuses it. Divider width and collapsed state are remembered.
+
+**Answer…** is primary for an open question. For verification failures, the detail
+heading names the failed check; **Inspect Failed Check** (⌘⇧I) expands recorded
+verification and scrolls to the highlighted failure in the selected session's
+latest completed attempt. This is recorded outcome evidence, not command output;
+**Open Session** remains a separate action for investigation. Missing or unreadable
+evidence disables inspection and explains why. A later successful attempt cannot
+present an old failure as current. When only the attempt summary was retained,
+the action says **Inspect Verification** and explains the missing individual checks.
+An affected pending plan row says **Incomplete**.
+
+**Resume** is primary for other resumable pauses. **Resume**, **Stop After Current…**,
+and **Abort…** recheck ASL permission on submission; confirmation buttons name the
+requested action. An uncertain response offers **Retry Receipt** for the same
+operation ID. Polling and evidence inspection never repeat a control operation.
+
+Runs polls summaries every five seconds while the app is active and the window
+visible. Unchanged selected-plan details are reread every thirty seconds; changed
+summaries trigger a read on the next poll. Explicit refresh and reactivation read
+immediately. Hidden/inactive windows suspend polling. Evidence is run-scoped and
+bounded; unavailable or truncated results are labeled.
+
+**View › Run a Plan…**, also in Runs and the palette, opens the native launch form.
+Choose a directory or configured plan name, optionally choose a supervising
+project/profile and worker/review harnesses, then **Check Readiness**. Searchable
+project and supervisor choices support arrows, Return, and Escape; unavailable
+directories explain why. **Infer from plan workspace** and **Use project default**
+keep inference explicit. Ambiguous inference requires a choice.
+
+Readiness shows the actual command, resolved project/supervisor, and preflight
+findings. Changed options require another check. **Start Supervised Run** uses
+`amx plans run --backend tmux` and focuses the supervising session. All native plan
+runs use the workspace. Submitted or uncertain launches are not repeated by the form.
+
+### Reading, status, and feedback
+
+History, Activity, and Waiting share a **Reading text size** menu. Prose size is
+remembered independently from code, diff, and terminal-preview size. The same menu
+contains **Wrap code and diff lines**; open readers update immediately. Transcripts
+render headings, lists, nested indentation, tables, blockquotes, inline formatting,
+and fenced code while preserving search highlights. Each code block keeps just its
+language and **Copy code**, which copies original text without Markdown fences.
+Diffs also expose shared monospace preferences in **…**. Successful **Copied**
+feedback clears after two seconds without moving the reader; failures stay visible.
+
+Progress and failures use fixed toolbar slots. Brief reads do not flash a spinner;
+slower reads say **Refreshing…**, and failures say **Refresh failed** even with
+retained content. The status popover identifies each read, its last success, retained
+results, and selectable recovery guidance. Independent ages cover search, transcript,
+comparison, diff, run list, and plan details. Failed reads keep their old age. Click
+an age for the exact timestamp and timezone; **Last activity** describes agent activity.
+
+The feedback-history button retains the newest 30 native action outcomes for this
+app session, shared by History, Changes, Runs, and the plan form. Notices keep their
+original target, time, message, and recovery action and can be copied or dismissed.
+Recovery opens the original conversation/checkout, checks original plan options, or
+checks the exact pending receipt. It never repeats a resume, fork, landing, launch,
+or run control, and an old receipt cannot retry a newer operation.
+
+### Panes and restoration
+
+**View › Split with Shell** keeps an agent beside a shell in its working directory;
+**Split with Checkout Changes** opens native review alongside it. In **⌘⇧P**, choose
+**Split with <session name>** to compare agents. Click a pane or its heading to focus
+it; a filled dot marks the active pane. Sidebar selections and session actions apply
+to that pane. **Focus Checkout Review** returns to an opened review after navigation.
+**Focus Other Pane**, **Swap Panes**, and **Hide Other Pane** are in View and the palette.
+
+Hiding preserves agents and shells; ending a session asks for confirmation. Closing
+the workspace detaches both agents, preserves utility programs, and returns to one
+pane when reopened. App-restart restoration remembers both panes, their arrangement,
+divider, active side, and embedded review checkout. Attachments are checked; sessions
+attached elsewhere stay detached. Restored utility programs require explicit Reopen.
+
+Assign keys in **Settings › Workspace shortcuts** with **Record Shortcut**. Bindings
+apply immediately and persist. **Clear** removes a binding; **Restore Default**
+restores its original key (⌘⇧P for Command Palette, unassigned for other new commands).
+The recorder checks menu/global conflicts; Escape cancels. These keys work while
+the app is active. History and Changes also have separate resizable native windows.
+
+## Review-window shortcuts
+
+| View | Keys |
+| --- | --- |
+| History | ⌘F search; Down from search reveals results; ⌘G / ⌘⇧G next/previous match; ⌘R refresh transcript; ⌘Return resume/focus; ⌘⇧Return fork; ⌘⌥S toggle results |
+| Changes | ⌘G / ⌘⇧G next/previous hunk; ⌘R refresh comparison; ⌘E open file; ⌘⇧F reveal/focus files; ⌘⇧E edit base; ⌘⌥S toggle files |
+| Runs | ⌘R refresh; ⌘⇧F reveal/focus runs; ⌘Return open session; ⌘⇧I inspect failed check; ⌘⌥S toggle runs |
+| Activity | ⌘R refresh; ⌘⇧F focus events; ⌘Return focus live session; ⌘⇧Return open recorded conversation |
+
+**⌘W** closes a standalone review window and returns to the workspace when open.
+In a split workspace, review shortcuts belong to the focused review pane.
+Refreshes retain selection and focus; toggling a sidebar retains reading position.
 
 ## Global shortcuts
 
@@ -616,158 +750,11 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
   instance stops reporting the window or that Kitty exits, never because a
   listing of another instance could not see it. Window IDs are still bare, so
   two instances' sessions that share a window number share one daemon state.
-- **Codex hooks run in a shared process.** Codex 0.160 runs hooks inside its
-  managed `app-server`, which carries the Kitty window of the pane that started
-  it, so every Codex session's hooks are attributed to that one window.
-
-## Review-window shortcuts
-
-History remembers its search, scope, selected conversation, and reading position
-across app restarts. Messages format headings, lists, inline code, and fenced code
-blocks; **Copy code** copies only that block. Search highlights remain visible in
-formatted prose and code. Changes remembers the comparison base and selected file
-for each checkout, with separate scroll positions for each checkout/base/file.
-
-Workspace restoration also keeps both panes, their physical arrangement, divider
-position, and which pane was active. Each agent attachment is checked before it
-is restored; a session attached elsewhere stays detached. Utility programs return
-as ended views with an explicit Reopen action. An embedded Changes review returns
-to its checkout without running a terminal program.
-
-Conversation History opens with search focused. `⌘F` returns to search; Down
-from search moves to the results. `⌘G` and `⌘⇧G` move between matching messages.
-`⌘Return` resumes or focuses the selected conversation; `⌘⇧Return` forks it.
-
-In Checkout Changes, `⌘G` and `⌘⇧G` move between hunks, `⌘R` refreshes the
-comparison, and `⌘E` opens the selected file in the editor. **Focus Files**
-(`⌘⇧F`) and **Edit Base** (`⌘⇧E`) move keyboard focus without changing selection.
-Closing a standalone review window with `⌘W` returns to the workspace. In a
-split workspace, review shortcuts belong to the focused review pane.
-Refreshes keep the current search, selection, and focus; relative run timestamps
-show their exact source values in tooltips.
-
-Run a Plan offers searchable project and supervisor choices. Search matches
-names and project directories; arrows select and Return applies a choice.
-Projects with unavailable directories explain why they cannot be chosen.
-**Infer from plan workspace** and **Use project default** keep inference
-explicit; **Check Readiness** displays the resolved project and supervisor.
-If inference is ambiguous, choose a project before starting. An option change
-requires another check. Every native plan run launches in the workspace.
-
-The Launch Project menu names both the destination and its source. **Launch
-Settings…** opens Settings at **Launch projects in**. Following CLI configuration
-also distinguishes an explicit `config.toml` choice from its compatibility default.
-
-Sidebar targets keep their positions while the pointer is inside the list,
-during a drag, or while its context menu is open. Attention badges still update;
-promotions and new rows appear when the interaction ends. Ended sessions held
-in place cannot be acted on.
-
-Conversation History gives the transcript most of a narrow window. Drag its
-results divider to choose a width; the preference survives reopening and app
-restarts. The sidebar button or **⌘⌥S** hides results while reading and restores
-them with keyboard focus on the selected result. Selection and reading position
-stay in place. Down from search also reveals the results. Rows show relative activity times (with exact times in tooltips), and all-history
-results include checkout paths alongside their existing project headings.
-Transcripts render tables, blockquotes, and nested list indentation. Code blocks
-offer **Wrap lines** while **Copy code** continues to copy the original text.
-
-Review-window progress and failures stay in fixed toolbar slots. Brief reads do
-not flash a spinner; slower reads say **Refreshing…**, and failures say
-**Refresh failed** even when previous results remain visible. The status popover
-identifies which read failed and whether its previous content is still displayed.
-Click a status message for its full, selectable details and recovery guidance.
-Action feedback names the conversation, checkout, plan, or run it acted on,
-including when you have since selected something else. Refreshing only reads
-state; **Retry Receipt** checks the original run operation. A failed history
-search does not disable the selected transcript's refresh button.
-
-The feedback-history button in the same status area retains the newest 30 native
-action outcomes for this app session, shared by History, Changes, Runs, and the
-plan launch form. Each records its original target, timestamp, message, and
-recovery action. Copy or dismiss individual notices. Recovery opens the original
-conversation or checkout, checks the original plan options, or checks the exact
-pending receipt; it never repeats a resume, fork, landing, launch, or run control.
-An old receipt cannot retry a newer operation.
-
-Refresh ages describe when the displayed content was read, separately for search
-results, transcripts, comparisons, diffs, run lists, and plan details. Failed reads
-keep the old age. Click an age or its clock icon for the exact timestamp and
-timezone. **Last activity** continues to describe the agent's activity.
-
-Runs keeps current progress, blockers, and controls above the scrolling session
-list. **Run details** expands paths, identifiers, and timestamps; **Recorded
-verification** expands the check evidence. Confirmation buttons name the requested
-action. **Answer…** is emphasized for an open question; **Inspect Failed Check**
-opens the session when verification is blocked. **Resume** is emphasized for
-other resumable pauses. An affected pending plan session is labeled
-**Incomplete · verification failed** to distinguish its unfinished plan status
-from the run's pause reason.
-
-Runs polls the summary every five seconds while the app is active and the window
-is visible. Unchanged selected-plan details are reread every thirty seconds;
-changed summary fields trigger a read on the next poll. Explicit refresh and
-returning to the active, visible window read immediately. Hidden or inactive
-windows suspend automatic polling. Authorization still uses a fresh snapshot
-for every control operation.
-
-Sidebar, Waiting, and menu-bar reasons use the same readable labels;
-raw protocol reasons remain available in the session inspector.
-
-Activity and Runs support **⌘R** to refresh, **⌘⇧F** to focus their lists, and
-**⌘Return** to focus the selected live session. Activity also supports
-**⌘⇧Return** to open the recorded conversation. **⌘W** closes either window and
-returns to the workspace when it is open. Activity's supporting output uses the
-same headings, lists, tables, and code blocks as Conversation History.
-
-Checkout Changes summarizes worktree warnings and conflicts in a details button.
-The scrollable details keep long reports from pushing the diff or landing controls
-out of view. File labels use the shortest unique trailing path; tooltips and
-accessibility retain the full path. A retained worktree review cannot authorize
-landing while its replacement is being read.
-
-Code blocks and diffs share remembered **Wrap lines** and text size. Code blocks
-expose text size beside **Copy code**; diffs keep those controls in **…**. Copying
-code, a diff selection, or a patch acknowledges **Copied** without moving the
-reading area. A failed clipboard write reports the failure.
-
-**Edit › Find in Terminal…** searches terminal output, with the tmux prompt naming
-its actual scope: **Find on visible screen** for a full-screen agent, or **Find in
-terminal history** otherwise. Utility terminals name terminal history in their
-find bar. **Edit › Search Conversation…** opens the selected session's recorded
-conversation in History, scoped to that conversation, so searching can reach
-messages outside the terminal screen. It is available once the selected session
-has a recorded conversation identity.
-
-### Daily workflow polish
-
-An empty workspace offers **Launch Project…**, **Conversation History**, and
-**Open Dashboard** directly. Launch uses the same project menu and destination
-rules as the status menu; the empty pane names the effective destination and its
-source. With no configured projects it explains how to add a profile and project
-using `amx config edit`. Connection failures retain their existing recovery actions.
-
-**Window › Waiting** (⌘⇧I) focuses the inspector reader. Up/Down read the previous
-or next item, Return opens its existing answer panel, N reads the next waiting
-item, Space toggles context, and Page Up/Page Down scroll the context. Escape
-returns keyboard focus to the previous workspace control without attaching a session. Closing an answer panel returns to the reader
-when the workspace still owns focus. Changed questions remain disabled until
-refreshed; the reader never submits an answer itself. Context uses the inspector's
-available height, proportional text for supervisor questions, and monospace for
-terminal output.
-
-History, Activity and Waiting offer the same **Reading text size** menu. Prose
-size is remembered separately from code, diff and terminal-preview size. Both
-preferences update open readers immediately. History combines its heading and
-actions, compacts result metadata, and keeps progress and navigation in fixed
-slots. Its message navigation menu contains earlier/later paging and the loaded
-message range. The conversation heading's tooltip includes its checkout path.
-**⌘R** refreshes the selected transcript directly, just like its refresh button;
-search refresh uses Search or Return in the search field.
-
-Activity's **Mark read** menu offers **Mark selected read** and **Mark all N
-results read**. The latter includes loaded results below the viewport, and never
-includes records omitted by the query limit. **Undo** reverses the last successful
-acknowledgement, including the prior selection when it is still in scope. A failed
-save or Undo keeps the current markers and reports the failure. Opening or
-refreshing Activity continues to leave unread markers unchanged.
+- **Codex completion visibility.** Managed interactive launches select `--no-daemon`
+  when the launched CLI advertises support, preserving the terminal's hook environment
+  across resume and `/new`. Explicit remote transport choices and older CLIs retain
+  their behavior. Shared-server hooks with ambiguous or unbound owners are rejected;
+  they are not borrowed from another terminal. The mitigation requires an updated
+  installation and a newly launched managed client. Existing clients are not rebound.
+  The installed-build resume, `/new`, app-reopen, and physical sleep/wake check remains
+  pending; see [F-001 validation](desktop-improvements.md#remaining-installed-build-check-for-f-001).

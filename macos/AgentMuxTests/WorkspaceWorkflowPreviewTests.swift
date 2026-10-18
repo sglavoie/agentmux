@@ -163,7 +163,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         for dark in [false, true] {
             try await render(ScrollView { WorkspaceTranscriptText(text: text, terms: ["Routing"]).padding(16) },
                 name: "transcript-structure-\(dark)", width: 720, height: 450, dark: dark,
-                expected: ["Routing", "Passed", "Review note", "Nested detail", "Wrap lines"])
+                expected: ["Routing", "Passed", "Review note", "Nested detail", "Copy code"])
         }
     }
 
@@ -334,6 +334,10 @@ extension WorkspaceWorkflowPreviewTests {
         for dark in [false, true] {
             try await render(WorkspaceChangesView(model: changes), name: "finishing-diff-\(dark)", width: 720, height: 450, dark: dark,
                              expected: ["Hunk 1 of 2", "readEvents", "previousCursor", "nextCursor"])
+            changes.layout.collapsed = true
+            try await render(WorkspaceChangesView(model: changes), name: "usability-diff-collapsed-\(dark)", width: 720, height: 450, dark: dark,
+                             expected: ["Hunk 1 of 2", "readEvents", "previousCursor", "nextCursor"])
+            changes.layout.collapsed = false
         }
     }
 
@@ -412,10 +416,31 @@ extension WorkspaceWorkflowPreviewTests {
                              expected: ["Resume", "Fork", "Keep reading positions stable"])
             try await render(WorkspaceRunsView(model: runs, plan: plan), name: "clarity-runs-\(dark)", width: 780, height: 500, dark: dark,
                              expected: ["8 of 10 sessions complete", "Unit tests: failed", "Verification failed", "Inspect Failed Check", "Incomplete", "Resume", "Abort", "Run details", "Recorded verification"])
+            runs.inspectFailedCheck()
+            runs.layout.collapsed = true
+            try await render(WorkspaceRunsView(model: runs, plan: plan), name: "usability-inspected-check-\(dark)", width: 780, height: 500, dark: dark,
+                             expected: ["Recorded outcomes only", "Unit tests: failed", "Session 9", "Open Session"])
+            runs.layout.collapsed = false
+            runs.select(runs.selection)
             try await render(WorkspaceStatus(loading: true, retained: true, refreshedAt: Date().addingTimeInterval(-125),
                                             feedback: WorkspaceFeedback(target: "API deployment review", message: "Read failed. Previous content is still available."),
                                             recover: {}).padding(16).frame(maxHeight: .infinity, alignment: .top), name: "clarity-stale-\(dark)", width: 720, height: 160, dark: dark,
                              expected: ["Previous results", "2m", "Refresh"])
+        }
+    }
+}
+
+extension WorkspaceWorkflowPreviewTests {
+    func testCodeBlocksKeepCopyBesideCodeAndPreferencesInReaderToolbar() async throws {
+        let preferences = WorkspaceReadingPreferences()
+        preferences.wrapLines = true
+        let text = "## Validate a page\n```swift\nlet page = readEvents(limit: 50)\n```\nThen check the response.\n```sh\ncurl -s localhost:8080/events\n```\nRecord the result.\n```json\n{\"count\": 50, \"next_cursor\": \"next-page\"}\n```"
+        for dark in [false, true] {
+            try await render(VStack(alignment: .leading, spacing: 8) {
+                HStack { Text("Conversation History").font(.headline); Spacer(); WorkspaceReadingMenu(preferences: preferences) }
+                ScrollView { WorkspaceTranscriptText(text: text, terms: [], preferences: preferences).padding(8) }
+            }.padding(12), name: "usability-code-\(dark)", width: 720, height: 450, dark: dark,
+                expected: ["Validate a page", "Copy code", "readEvents", "Record the result", "next_cursor"])
         }
     }
 }

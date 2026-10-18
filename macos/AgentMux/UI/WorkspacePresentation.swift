@@ -1,5 +1,57 @@
 import SwiftUI
 
+/// A remembered preference is clamped for drawing, never overwritten by resize.
+struct WorkspaceReviewSplit<Sidebar: View, Detail: View>: View {
+    @Binding var layout: WorkspaceReviewState.SidebarLayout
+    let title: String
+    var minimum: Double = 180
+    var detailMinimum: Double = 360
+    @ViewBuilder var sidebar: () -> Sidebar
+    @ViewBuilder var detail: () -> Detail
+    @State private var dragStart: Double?
+
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                if !layout.collapsed {
+                    sidebar().frame(width: layout.width(in: geometry.size.width, minimum: minimum, detailMinimum: detailMinimum))
+                    Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 1).frame(width: 6)
+                        .background(WorkspaceReviewResizeCursor()).contentShape(Rectangle())
+                        .gesture(DragGesture().onChanged { value in
+                            if dragStart == nil { dragStart = layout.width(in: geometry.size.width, minimum: minimum, detailMinimum: detailMinimum) }
+                            layout.preferredWidth = min(max(minimum, (dragStart ?? minimum) + value.translation.width), max(minimum, geometry.size.width - detailMinimum - 6))
+                        }.onEnded { _ in dragStart = nil })
+                        .accessibilityLabel(title + " width")
+                        .accessibilityValue("\(Int(layout.width(in: geometry.size.width, minimum: minimum, detailMinimum: detailMinimum))) points")
+                        .accessibilityAdjustableAction { direction in
+                            let width = layout.width(in: geometry.size.width, minimum: minimum, detailMinimum: detailMinimum)
+                            layout.preferredWidth = min(max(minimum, width + (direction == .increment ? 20 : -20)), max(minimum, geometry.size.width - detailMinimum - 6))
+                        }
+                }
+                detail().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+}
+
+private struct WorkspaceReviewResizeCursor: NSViewRepresentable {
+    final class CursorView: NSView {
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .resizeLeftRight) }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+    func makeNSView(context: Context) -> CursorView { CursorView() }
+    func updateNSView(_ view: CursorView, context: Context) {}
+}
+
+enum WorkspaceReviewColors {
+    /// Brown on light backgrounds, amber on dark; state text also names the reason.
+    static let warning = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 1, green: 0.72, blue: 0.32, alpha: 1)
+            : NSColor(srgbRed: 0.55, green: 0.28, blue: 0.02, alpha: 1)
+    })
+}
+
 /// Prose is shared by History, Activity and Waiting; terminal/code sizing stays independent.
 struct WorkspaceReadingMenu: View {
     @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
@@ -14,6 +66,7 @@ struct WorkspaceReadingMenu: View {
             Button("Larger monospace text") { preferences.fontSize = min(24, preferences.effectiveFontSize + 1) }.disabled(preferences.effectiveFontSize >= 24)
             Button("Smaller monospace text") { preferences.fontSize = max(10, preferences.effectiveFontSize - 1) }.disabled(preferences.effectiveFontSize <= 10)
             Button("Reset monospace text size") { preferences.fontSize = 12 }
+            Toggle("Wrap code and diff lines", isOn: $preferences.wrapLines)
         } label: { Image(systemName: "textformat.size") }
             .menuStyle(.borderlessButton).fixedSize().help("Reading text size").accessibilityLabel("Reading text size")
     }
@@ -120,9 +173,11 @@ struct WorkspacePath: View {
 
 /// The same acknowledgement for code and diff copies; failures are visible too.
 struct WorkspaceCopyFeedback: Equatable {
+    private(set) var revision = UUID()
     var message: String?
     var succeeded = false
     mutating func copy(_ text: String, to pasteboard: NSPasteboard = .general) {
+        revision = UUID()
         pasteboard.clearContents()
         succeeded = pasteboard.setString(text, forType: .string)
         message = succeeded ? "Copied" : "Copy failed. Try again."
