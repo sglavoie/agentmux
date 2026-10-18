@@ -350,8 +350,6 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let view = PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder, workspaceRecorder: workspaceRecorder)
-        // The grouped form's ideal height is all of its content.
-        let contentHeight = NSHostingView(rootView: view.fixedSize(horizontal: false, vertical: true)).fittingSize.height
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = "Settings"
         window.styleMask = [.titled, .closable, .resizable]
@@ -360,11 +358,11 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         dashboardRecorder.window = window
         attentionRecorder.window = window
         workspaceRecorder.window = window
-        // Open as tall as the content wants, within the screen less a margin;
-        // the form scrolls whatever does not fit.
+        // Keep a consistent size across tabs; each pane scrolls on smaller screens.
+        window.setContentSize(NSSize(width: 560, height: 620))
         if let visible = NSScreen.main?.visibleFrame {
             let chrome = window.frame.height - window.contentLayoutRect.height
-            let height = min(contentHeight + chrome, visible.height - Self.screenMargin)
+            let height = min(620 + chrome, visible.height - Self.screenMargin)
             var frame = window.frame
             frame.size.height = max(height, window.minSize.height)
             window.setFrame(frame, display: false)
@@ -411,8 +409,111 @@ struct PreferencesView: View {
     @FocusState private var binaryFieldFocused: Bool
     @FocusState private var environmentFieldFocused: String?
 
+    private enum Tab: String, CaseIterable {
+        case general = "General"
+        case shortcuts = "Shortcuts"
+        case appearance = "Appearance"
+        case workspace = "Workspace"
+        case advanced = "Advanced"
+    }
+
+    @State private var selectedTab = Tab.general
+
     var body: some View {
-        ScrollViewReader { proxy in
+        VStack(spacing: 0) {
+            Picker("Settings tab", selection: $selectedTab) {
+                ForEach(Tab.allCases, id: \.self) { tab in
+                    Text(tab.rawValue).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(16)
+
+            Divider()
+
+            Group {
+                switch selectedTab {
+                case .general: generalSettings
+                case .shortcuts: shortcutSettings
+                case .appearance: appearanceSettings
+                case .workspace: workspaceSettings
+                case .advanced: advancedSettings
+                }
+            }
+            .frame(minHeight: 0, maxHeight: .infinity)
+        }
+        .frame(width: 560)
+        .frame(minHeight: 320)
+        .onChange(of: selectedTab) { _, _ in
+            model.commitBinaryPath()
+            model.commitEnvironment()
+            dashboardRecorder.stop()
+            attentionRecorder.stop()
+            workspaceRecorder.stop()
+        }
+        .onChange(of: model.launchSettingsRequest, initial: true) { _, request in
+            if request > 0 { selectedTab = .workspace }
+        }
+    }
+
+    private var generalSettings: some View {
+        Form {
+            Section("General") {
+                Toggle("Open at Login", isOn: Binding(
+                    get: { model.launchAtLogin },
+                    set: { model.setLaunchAtLogin($0) }
+                ))
+                if let loginNote = model.launchAtLoginNote {
+                    if loginNote == LoginItem.approvalNote {
+                        HStack {
+                            note(loginNote, warning: true)
+                            Spacer()
+                            Button("Open Login Items") { LoginItem.openSettings() }
+                        }
+                    } else {
+                        note(loginNote, warning: true)
+                    }
+                }
+                Toggle("Use app notifications", isOn: $model.preferences.useAppNotifications)
+                note("Delivers the daemon's notifications through Agent Mux; off leaves them to Alerter.")
+                if let denied = PreferencesModel.notificationPermissionNote(model.notificationAuthorization) {
+                    HStack {
+                        note(denied, warning: true)
+                        Spacer()
+                        Button("Open System Settings") { NSWorkspace.shared.open(PreferencesModel.notificationSettingsURL) }
+                    }
+                }
+                LabeledContent("Snooze") {
+                    HStack {
+                        Text(model.snoozeDescription).foregroundStyle(.secondary)
+                        Button(SnoozeChoice.resume.title(now: Date())) { model.resumeSnooze() }
+                            .disabled(!model.isSnoozed)
+                            .help(model.isSnoozed ? "" : SnoozeChoice.notSnoozed)
+                    }
+                }
+            }
+
+            Section("Menu bar") {
+                Picker("Status", selection: $model.preferences.statusStyle) {
+                    ForEach(StatusTitleStyle.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                Toggle("Show the working count", isOn: $model.preferences.showWorkingCount)
+                    .disabled(model.preferences.statusStyle != .glyphs)
+                    .help(PreferencesModel.workingCountNote(model.preferences.statusStyle) ?? "")
+                if let reason = PreferencesModel.workingCountNote(model.preferences.statusStyle) {
+                    note(reason)
+                }
+                Stepper(PreferencesModel.recentDaysLabel(model.preferences.recentDays),
+                        value: $model.preferences.recentDays, in: AppPreferences.recentDaysRange)
+                Stepper(PreferencesModel.recentLimitLabel(model.preferences.recentLimit),
+                        value: $model.preferences.recentLimit, in: AppPreferences.recentLimitRange)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var shortcutSettings: some View {
         Form {
             Section("Shortcuts") {
                 LabeledContent(HotKeyPreference.dashboard.label) {
@@ -453,62 +554,13 @@ struct PreferencesView: View {
                 }
                 note("Choose a command, click Record Shortcut, and press its keys. Changes apply immediately while Agent Mux is active. Esc cancels recording; Clear removes a binding.")
             }
+        }
+        .formStyle(.grouped)
+    }
 
-            Section("Menu bar") {
-                Picker("Status", selection: $model.preferences.statusStyle) {
-                    ForEach(StatusTitleStyle.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                Toggle("Show the working count", isOn: $model.preferences.showWorkingCount)
-                    .disabled(model.preferences.statusStyle != .glyphs)
-                    .help(PreferencesModel.workingCountNote(model.preferences.statusStyle) ?? "")
-                if let reason = PreferencesModel.workingCountNote(model.preferences.statusStyle) {
-                    note(reason)
-                }
-                Stepper(PreferencesModel.recentDaysLabel(model.preferences.recentDays),
-                        value: $model.preferences.recentDays, in: AppPreferences.recentDaysRange)
-                Stepper(PreferencesModel.recentLimitLabel(model.preferences.recentLimit),
-                        value: $model.preferences.recentLimit, in: AppPreferences.recentLimitRange)
-            }
-
-            Section("General") {
-                Toggle("Open at Login", isOn: Binding(
-                    get: { model.launchAtLogin },
-                    set: { model.setLaunchAtLogin($0) }
-                ))
-                if let loginNote = model.launchAtLoginNote {
-                    if loginNote == LoginItem.approvalNote {
-                        HStack {
-                            note(loginNote, warning: true)
-                            Spacer()
-                            Button("Open Login Items") { LoginItem.openSettings() }
-                        }
-                    } else {
-                        note(loginNote, warning: true)
-                    }
-                }
-                Toggle("Use app notifications", isOn: $model.preferences.useAppNotifications)
-                note("Delivers the daemon's notifications through Agent Mux; off leaves them to Alerter.")
-                if let denied = PreferencesModel.notificationPermissionNote(model.notificationAuthorization) {
-                    HStack {
-                        note(denied, warning: true)
-                        Spacer()
-                        Button("Open System Settings") { NSWorkspace.shared.open(PreferencesModel.notificationSettingsURL) }
-                    }
-                }
-                LabeledContent("Snooze") {
-                    HStack {
-                        Text(model.snoozeDescription).foregroundStyle(.secondary)
-                        Button(SnoozeChoice.resume.title(now: Date())) { model.resumeSnooze() }
-                            .disabled(!model.isSnoozed)
-                            .help(model.isSnoozed ? "" : SnoozeChoice.notSnoozed)
-                    }
-                }
-            }
-
-            Section("Workspace") {
-                Toggle("Confirm before closing views or ending sessions", isOn: $model.preferences.confirmBeforeClosing)
-                note("When off, Close View (⌘W) ends its program and End Session (⌘⇧W) stops the agent immediately. "
-                    + "This also applies to the same actions in menus and the sidebar.")
+    private var appearanceSettings: some View {
+        Form {
+            Section("Terminal appearance") {
                 LabeledContent("Default zoom") {
                     HStack {
                         if model.preferences.defaultFontSize != nil {
@@ -545,39 +597,65 @@ struct PreferencesView: View {
                     ? "Uses the Ghostty config's theme. "
                     : "Overrides the Ghostty config's theme; colors it sets one by one still apply. ")
                     + "Changing this recolors all open terminals.")
-                Picker("Launch projects in", selection: $model.preferences.launchBackend) {
-                    ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
-                }.id("launch-destination").focused($launchFieldFocused)
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(model.preferences.launchBackend.destinationRows(cliBackend: model.snapshot.backend.cliLaunchBackend,
-                                                                            cliSource: model.snapshot.backend.cliLaunchBackendSource), id: \.action) { row in
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(row.action).frame(width: 110, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(row.destination)
-                                Text(row.source).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var workspaceSettings: some View {
+        ScrollViewReader { proxy in
+            Form {
+                Section("Workspace") {
+                    Toggle("Confirm before closing views or ending sessions", isOn: $model.preferences.confirmBeforeClosing)
+                    note("When off, Close View (⌘W) ends its program and End Session (⌘⇧W) stops the agent immediately. "
+                        + "This also applies to the same actions in menus and the sidebar.")
+                    Picker("Launch projects in", selection: $model.preferences.launchBackend) {
+                        ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }.id("launch-destination").focused($launchFieldFocused)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(model.preferences.launchBackend.destinationRows(cliBackend: model.snapshot.backend.cliLaunchBackend,
+                                                                                cliSource: model.snapshot.backend.cliLaunchBackendSource), id: \.action) { row in
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(row.action).frame(width: 110, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(row.destination)
+                                    Text(row.source).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
                             }
-                            Spacer(minLength: 0)
                         }
-                    }
-                    if model.preferences.launchBackend.differsFromCLI(model.snapshot.backend.cliLaunchBackend) {
-                        HStack {
-                            Text("App and CLI launches use different destinations.").font(.caption)
-                            Button("Follow CLI") { model.preferences.launchBackend = .followCLI }
+                        if model.preferences.launchBackend.differsFromCLI(model.snapshot.backend.cliLaunchBackend) {
+                            HStack {
+                                Text("App and CLI launches use different destinations.").font(.caption)
+                                Button("Follow CLI") { model.preferences.launchBackend = .followCLI }
+                            }
                         }
+                    }.padding(.vertical, 4)
+                    note("Agents launched in the workspace run on Agent Mux's own tmux server: they keep running "
+                        + "when the window closes, when the app quits, and across app updates.")
+                    Toggle("Open the workspace at launch", isOn: $model.preferences.openWorkspaceAtLaunch)
+                    ForEach(model.snapshot.backend.lines, id: \.0) { row in
+                        LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
                     }
-                }.padding(.vertical, 4)
-                note("Agents launched in the workspace run on Agent Mux's own tmux server: they keep running "
-                    + "when the window closes, when the app quits, and across app updates.")
-                Toggle("Open the workspace at launch", isOn: $model.preferences.openWorkspaceAtLaunch)
-                ForEach(model.snapshot.backend.lines, id: \.0) { row in
-                    LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
-                }
-                ForEach(model.snapshot.backend.notes, id: \.text) { item in
-                    note(item.text, warning: item.warning)
+                    ForEach(model.snapshot.backend.notes, id: \.text) { item in
+                        note(item.text, warning: item.warning)
+                    }
                 }
             }
+            .formStyle(.grouped)
+            .task(id: selectedTab == .workspace ? model.launchSettingsRequest : nil) {
+                guard selectedTab == .workspace, model.launchSettingsRequest > 0 else { return }
+                // Let the selected pane lay out before revealing the launch field.
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                proxy.scrollTo("launch-destination", anchor: .center)
+                launchFieldFocused = true
+            }
+        }
+    }
 
+    private var advancedSettings: some View {
+        Form {
             Section("Command Line Tool") {
                 LabeledContent("amx binary") {
                     HStack {
@@ -635,16 +713,6 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        // The grouped form scrolls, so the window can stay shorter than its
-        // content rather than run off a small screen.
-        .frame(width: 560)
-        .frame(minHeight: 320)
-        .onChange(of: model.launchSettingsRequest, initial: true) { _, request in
-            guard request > 0 else { return }
-            proxy.scrollTo("launch-destination", anchor: .center)
-            launchFieldFocused = true
-        }
-        }
     }
 
     @ViewBuilder

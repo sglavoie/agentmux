@@ -1081,7 +1081,7 @@ sessions, key names, and refusal codes, never screen text.
 
 ## Workspace shortcuts
 
-Settings › Workspace shortcuts records keys for the new View commands and Command
+Settings › Shortcuts › Workspace shortcuts records keys for the new View commands and Command
 Palette. `WorkspaceShortcut` owns stable IDs, default bindings, and action
 selectors. Changes update existing menu items immediately; launch restores them
 from `AppPreferences`. These are local menu equivalents and are never registered
@@ -1147,6 +1147,10 @@ saves each change as it is made, in the `io.github.sglavoie.agentmux` defaults
 domain. The amx binary path is saved when its field is submitted or left (or
 the window closes), not per keystroke, so a half-typed path never replaces the
 amx the app runs.
+Settings are organized into General, Shortcuts, Appearance, Workspace, and
+Advanced tabs. The tabs stay visible while each pane scrolls independently.
+Launch Settings opens the Workspace tab at the launch destination. Switching
+tabs commits edited binary/environment fields and ends shortcut recording.
 An absent, mistyped, or out-of-range value reads as its default.
 
 | Key | Default | Meaning |
