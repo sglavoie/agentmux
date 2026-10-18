@@ -156,7 +156,7 @@ func TestOpenCommandPaletteSelectsFirstAvailableOrDisabledResult(t *testing.T) {
 
 	m = testModelWithSessions()
 	m.openCommandPalette()
-	updated, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "confirm relaunching"}))
+	updated, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "relaunch selected preference"}))
 	m = updated.(Model)
 	if len(m.commandResults) != 1 || m.commandResults[0].ID != commands.RestartSession {
 		t.Fatalf("restart-specific results = %v, want restart only", commandResultIDs(m.commandResults))
@@ -272,7 +272,7 @@ func TestCommandPaletteEnterDisabledOrEmptyIsNoOp(t *testing.T) {
 		name  string
 		query string
 	}{
-		{name: "disabled", query: "confirm relaunching"},
+		{name: "disabled", query: "relaunch selected preference"},
 		{name: "no result", query: "no-command-can-match-this"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -321,7 +321,7 @@ func TestCommandPaletteExecutionUsesCapturedTargetAndClearsBeforeTransition(t *t
 	// way it always did from the per-row menu.
 	m.cfg.Defaults.ConfirmDestructive = true
 	m.openCommandPalette()
-	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "confirm relaunching"}))
+	updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'r', Text: "relaunch selected preference"}))
 	m = updated.(Model)
 
 	// The refresh adds a row and lands the cursor on it. The captured row is

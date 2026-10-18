@@ -74,7 +74,7 @@ func TestCloseReportsWhetherTheTabWasObservedToClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if !CloseConfirmed(result) || result.Message != "closed session" {
+	if !CloseConfirmed(result) || result.Message != "ended session" {
 		t.Fatalf("observed close result = %+v, want a confirmed close", result)
 	}
 
@@ -91,7 +91,7 @@ func TestCloseReportsWhetherTheTabWasObservedToClose(t *testing.T) {
 	if !result.Changed {
 		t.Fatalf("unobserved close result = %+v, want the accepted request reported as a change", result)
 	}
-	if result.Message == "closed session" {
+	if result.Message == "ended session" {
 		t.Fatalf("unobserved close claimed %q", result.Message)
 	}
 }

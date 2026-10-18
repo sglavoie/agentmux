@@ -123,9 +123,9 @@ func (m model) recoveryOffer() string {
 	case 0:
 		return ""
 	case 1:
-		return fmt.Sprintf("closed %s · u %s (%s)", active[0].Label, active[0].Verb(), remaining)
+		return fmt.Sprintf("ended session %s · u %s (%s)", active[0].Label, active[0].Verb(), remaining)
 	default:
-		return fmt.Sprintf("closed %d sessions · u %s last (%s)", len(active), active[len(active)-1].Verb(), remaining)
+		return fmt.Sprintf("ended %d sessions · u %s last (%s)", len(active), active[len(active)-1].Verb(), remaining)
 	}
 }
 

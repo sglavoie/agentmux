@@ -34,7 +34,7 @@ func testMenu(width, height int) ActionsInput[menuModel] {
 			testAction("clear", "State", "Clear status", "x"),
 			testAction("lock", "State", "Lock/Unlock", "l"),
 			testAction("restart", "Lifecycle", "Restart", "r"),
-			testAction("close", "Lifecycle", "Close", "X"),
+			testAction("close", "Lifecycle", "End Session", "X"),
 		},
 		Title:      "alpha",
 		Context:    "codex · claude · main · ~/projects/alpha",

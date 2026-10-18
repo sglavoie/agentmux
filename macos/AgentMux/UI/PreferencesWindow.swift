@@ -608,7 +608,7 @@ struct PreferencesView: View {
                 Section("Workspace") {
                     Toggle("Confirm before closing views or ending sessions", isOn: $model.preferences.confirmBeforeClosing)
                     note("When off, Close View (⌘W) ends its program and End Session (⌘⇧W) stops the agent immediately. "
-                        + "This also applies to the same actions in menus and the sidebar.")
+                        + "This applies to native menus and the sidebar. Detach Terminal leaves the agent running. The embedded Dashboard and Overview follow config.toml’s confirm_destructive setting.")
                     Picker("Launch projects in", selection: $model.preferences.launchBackend) {
                         ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
                     }.id("launch-destination").focused($launchFieldFocused)

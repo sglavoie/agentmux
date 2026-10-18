@@ -392,7 +392,7 @@ func assertHeaderTitleIcon(t *testing.T, label, header, prefix string, tc struct
 
 // assertContainsRenderedTitle checks overlay/detail-style strings that
 // embed the title somewhere inside a longer template (e.g.
-// `Actions for <title>`, `Close "<title>"?`). Icons that need padding must
+// `Actions for <title>`, `End Session "<title>"?`). Icons that need padding must
 // appear as "<glyph> <body>"; otherwise the raw title must appear unchanged.
 func assertContainsRenderedTitle(t *testing.T, label, out string, tc struct {
 	title        string

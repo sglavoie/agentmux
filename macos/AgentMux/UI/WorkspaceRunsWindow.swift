@@ -74,7 +74,7 @@ struct WorkspaceRunsView: View {
                                             Text("Session \(session.id)")
                                             Text(model.verificationBlocked && session.id == row.sessionID && session.status == "pending" ? "Incomplete" : model.sessionStatus(session)).foregroundStyle(.secondary)
                                             Spacer()
-                                            Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.path)]) }
+                                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.path)]) }
                                         }
                                     }
                                     if let active = detail.runner.activeVerification {
@@ -186,7 +186,7 @@ struct WorkspaceRunsView: View {
             }
             HStack(alignment: .top) {
                 control("Resume", ASLMethod.runResume)
-                control("Stop After Current…", ASLMethod.runStopAfterCurrent)
+                control("Stop After Session…", ASLMethod.runStopAfterCurrent)
                 control("Abort…", ASLMethod.runAbort)
             }
         }.accessibilityIdentifier("runs-controls")

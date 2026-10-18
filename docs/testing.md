@@ -57,6 +57,16 @@ copy-feedback expiry through real window clicks and an isolated pasteboard.
 `WorkspaceWorkflowPreviewTests` captures the expanded/collapsed layouts, selected
 failed check, and simplified code blocks in light and dark appearances. Captures
 use only fixture windows; own-window capture requires macOS 14.4 or newer.
+`WorkspaceLifecyclePolishTests` exercises compact Waiting controls at 220, 300,
+and 420 points; reading focus, changed-question refusal, accessibility actions,
+return to the original terminal, and independent update ages. Increased-contrast
+captures use 24-point prose and 20-point code in both appearances. The Copy
+accessibility test reports a skip if SwiftUI's virtual nodes are unavailable to
+the hosted lookup and the test host lacks system Accessibility access. That skip
+is an unverified workflow, not an accessibility pass. The operator waived the
+manual VoiceOver check for this pass; [workflow observations](acceptance/workspace-consistency/observations.json)
+record the waiver separately from verified behavior.
+
 The Codex completion lifecycle fixtures do not replace the installed-build and
 physical sleep/wake observations recorded for
 [F-001](desktop-improvements.md#remaining-installed-build-check-for-f-001).

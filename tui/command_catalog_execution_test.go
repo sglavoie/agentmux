@@ -193,7 +193,7 @@ func TestCommandRowTransitions(t *testing.T) {
 			check: func(t *testing.T, got Model, cmd tea.Cmd) {
 				// The recovery is reserved, not offered: nothing is undoable
 				// until the close reports that the tab was observed to go.
-				if got.mode != ModeList || cmd == nil || len(got.activeUndoEntries()) != 0 || len(got.toasts) != 1 || !strings.Contains(got.toasts[0].Text, "closing") {
+				if got.mode != ModeList || cmd == nil || len(got.activeUndoEntries()) != 0 || len(got.toasts) != 1 || !strings.Contains(got.toasts[0].Text, "ending session") {
 					t.Fatalf("close result: mode=%v cmd=%v undo=%d toasts=%v", got.mode, cmd != nil, len(got.activeUndoEntries()), got.toasts)
 				}
 			},

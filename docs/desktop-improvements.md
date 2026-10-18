@@ -1,5 +1,10 @@
 # Desktop workflow improvements
 
+Current completion-visibility status: **F-001 resolved by operator confirmation
+on 2026-10-18**. See [the recorded build and observations](acceptance/workspace-consistency/observations.json).
+Earlier pending statements below describe the evidence available during those
+passes. The separate five-workday migration trial remains pending.
+
 Implementation checklist for the seven improvements requested together. A checked
 item requires working UI, appropriate failure handling, and verification; adding
 a model or routing to a placeholder is not completion.
@@ -670,3 +675,75 @@ and the Claude hook evidence is stale against the newer CLI contract.
 record the completed installation and the earlier interrupted attempt. F-001's
 real-use observations remain pending; installation and automated verification do
 not establish completion visibility across physical sleep/wake.
+
+## Lifecycle, Waiting, and setup consistency on 2026-10-18
+
+This pass implements the six review recommendations against existing workflows:
+
+- Completion visibility: the installed app hash and CLI version match the recorded
+  F-001 fix. The operator confirmed **“Tested all paths; they work”** for resume,
+  `/new` reset before a prompt, recompletion, app reopening, and physical sleep/wake.
+  The friction register and trial log record resolution; no trial workday is added.
+- Lifecycle language: Dashboard and Overview menus, palettes, confirmation headings,
+  status footers, pending/success/failure notices, and recovery offers use End Session.
+  The native app distinguishes End Session, Detach Terminal, and Close View. Existing
+  command identifiers, `amx close`, aliases, preferences, and authorization stay intact.
+  Preferences and guides explain the native/TUI confirmation scopes.
+- Waiting: category and ordering share a row; next-item navigation and pending updates
+  share another. Update list is hidden when there is nothing to apply. Reader hints
+  follow actual keyboard focus. Holding an item while reading still disables changed
+  questions immediately. The native Context button's cell now has its own accessible
+  label, matching the Answer button.
+- Review status: the fixed toolbar slot displays the oldest successful content update
+  as seconds/minutes/hours/days, so a fresh list cannot disguise older detail. Failures,
+  warnings and delayed progress retain priority; the popover keeps separate timestamps
+  and retries. Runs says Show in Finder and Stop After Session.
+- Setup: README supplies a complete minimal configuration, verified with `config
+  validate` in an isolated directory. The shipped template puts the minimal profile
+  and project first. ASL entry points and configuration reload guidance now match the
+  implementation. The valid `a`, then `O` editor shortcut stays documented.
+- Accessibility: hosted checks cover native accessible Waiting actions, question
+  reading, answer routing, keyboard return to the original terminal, changed-question
+  refusal, and narrow layouts. Code blocks form named accessibility groups with an
+  identified Copy action; the action uses control-sized, primary-colored text.
+  Increased-contrast fixtures cover large prose/code in both appearances. The operator
+  waived the manual VoiceOver walk-through with **“skip voiceover check”**. The hosted SwiftUI Copy lookup does not
+  expose its virtual controls in this test host, and system Accessibility access is
+  unavailable. Its explicit test skip is not recorded as a pass.
+
+The current [observation record](acceptance/workspace-consistency/observations.json)
+separates confirmed completion-state behavior from the waived accessibility check.
+
+For an optional future check on the prepared build, use VoiceOver to find a waiting agent,
+read its question, open the answer panel and submit an intended answer, inspect a
+failed run's check, copy a transcript code block, and return to the original terminal.
+Repeat navigation with large reading text and Increase Contrast; confirm the selected
+question/action is announced correctly, focus is visible, controls remain reachable,
+and copying preserves literal Unicode/newlines. Record the build, date, paths tested,
+and any failure in the observation record. Do not change system privacy permissions
+or count fixture screenshots as this observation.
+
+Validation for this pass:
+
+- `env -u AMX_RUNTIME_SESSION_ID just check` passed the full Go suite, core race
+  checks, vet, all 188 TUI scenarios, and lint with zero issues. The final help
+  wording also passed `go test ./tui ./internal/config` with that variable removed.
+- `macos/scripts/test-app.sh` executed 914 tests: 913 passed, one accessibility
+  lookup skipped as described above, zero failures. Copy feedback, literal Unicode
+  clipboard contents, repeated-copy timing, and expiry passed. The screenshot
+  assertion accepts Vision's known Cyrillic look-alike spelling of the fixed Copy
+  label; clipboard comparisons remain exact.
+- The minimal README configuration passed validation in an isolated directory.
+  Local documentation links and `git diff --check` passed.
+- Four fixture captures were inspected: [Waiting light](acceptance/workspace-consistency/waiting-contrast-light.png),
+  [Waiting dark](acceptance/workspace-consistency/waiting-contrast-dark.png),
+  [Reading light](acceptance/workspace-consistency/reading-contrast-light.png), and
+  [Reading dark](acceptance/workspace-consistency/reading-contrast-dark.png).
+  [Provenance and validation](acceptance/workspace-consistency/manifest.json)
+  record source hashes and the final test result bundle.
+
+`just mac-app Release` built and signed `macos/build/Agent Mux.app`; bundle
+verification passed. This pass did not install it. The
+[candidate record](acceptance/workspace-consistency/candidate.json) identifies the
+app and bundled CLI hashes. All requested implementation work is complete; the
+manual VoiceOver check is waived, with no claim that it passed.

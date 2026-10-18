@@ -11,7 +11,7 @@ import (
 // the pairing Confirm already made rather than a second spelling of it: a host
 // with a pending prompt and a subject restates neither.
 func TestPromptForCarriesTheDecidedSentences(t *testing.T) {
-	prompt := ConfirmPrompt{Verb: "Close", Consequence: "Ends the harness process running in this tab."}
+	prompt := ConfirmPrompt{Verb: "End Session", Consequence: "Ends the harness process running in this tab."}
 	in := PromptFor(prompt, "api", 100)
 	if in.Verb != prompt.Verb {
 		t.Errorf("verb = %q, want %q", in.Verb, prompt.Verb)
@@ -51,7 +51,7 @@ func TestPromptBoxWidthLeavesTwoCellsOnEitherSide(t *testing.T) {
 // the operator answers y or n to whichever sentence they read.
 func TestRenderPromptWrapsTheConsequence(t *testing.T) {
 	consequence := "Ends the harness process running in this tab and closes the Kitty window; unsaved work in the pane is lost."
-	in := PromptInput{Verb: "Close", Subject: "api", Consequence: consequence, Width: 60}
+	in := PromptInput{Verb: "End Session", Subject: "api", Consequence: consequence, Width: 60}
 	out := RenderPrompt(in)
 	lines := strings.Split(out, "\n")
 	if len(lines) < 3 {
@@ -70,14 +70,14 @@ func TestRenderPromptWrapsTheConsequence(t *testing.T) {
 // clipped warning.
 func TestRenderPromptNeverExceedsTheContentWidth(t *testing.T) {
 	inputs := []PromptInput{
-		{Verb: "Close", Subject: "api", Consequence: "Ends the harness process running in this tab."},
+		{Verb: "End Session", Subject: "api", Consequence: "Ends the harness process running in this tab."},
 		{
 			Verb:        "Restart under a different profile",
 			Subject:     "monorepo-services-authentication-gateway",
 			Consequence: strings.Repeat("a long consequence sentence ", 8),
 		},
-		{Verb: "Close", Subject: "日本語のセッション", Consequence: "セッションを終了します。"},
-		{Verb: "Close", Subject: "", Consequence: ""},
+		{Verb: "End Session", Subject: "日本語のセッション", Consequence: "セッションを終了します。"},
+		{Verb: "End Session", Subject: "", Consequence: ""},
 	}
 	for _, width := range []int{80, 100, 120, 160, 40, 10} {
 		for _, in := range inputs {
@@ -100,9 +100,9 @@ func TestRenderPromptNeverExceedsTheContentWidth(t *testing.T) {
 // TestRenderPromptStatesVerbAndSubject keeps the question itself readable: the
 // first line has to say what is about to happen and to what.
 func TestRenderPromptStatesVerbAndSubject(t *testing.T) {
-	in := PromptInput{Verb: "Close", Subject: "api", Consequence: "Ends the process.", Width: 100}
+	in := PromptInput{Verb: "End Session", Subject: "api", Consequence: "Ends the process.", Width: 100}
 	first := strings.Split(RenderPrompt(in), "\n")[0]
-	if !strings.Contains(first, "Close") || !strings.Contains(first, "api") {
+	if !strings.Contains(first, "End Session") || !strings.Contains(first, "api") {
 		t.Errorf("first line %q does not name both the verb and the subject", first)
 	}
 }

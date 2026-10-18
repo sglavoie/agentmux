@@ -103,7 +103,7 @@ func TestShortcutRowConcatenatesToExactWidth(t *testing.T) {
 		{"Restart with another profile", "P"},
 		{"a session whose label is far wider than the row it is drawn in", "x"},
 		{"日本語ラベル", "m"},
-		{"Close", ""},
+		{"End Session", ""},
 	}
 	for _, width := range []int{4, 10, 30, 68} {
 		for _, tc := range cases {

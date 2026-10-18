@@ -419,7 +419,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceRowCellView.accessibilityLabel(row, sessionKey: "2"),
                        "api, work, needs attention, claude · 4m, Command 2")
         XCTAssertEqual(WorkspaceRowCellView.accessibilityLabel(row, closing: true),
-                       "api, work, needs attention, closing", "a closing session is said to be closing, not its detail")
+                       "api, work, needs attention, ending session", "a closing session is said to be closing, not its detail")
         row = WorkspaceRow(key: row.key, target: row.target, project: "api", label: "work",
                            detail: "", glyph: "", attention: false, working: true, muted: true, toolTip: "")
         row.pinned = true

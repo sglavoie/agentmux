@@ -150,7 +150,7 @@ func TestReviewLifecycleDispatchSingleFlight(t *testing.T) {
 		if got := r.actionIDs(); len(got) != 1 {
 			t.Fatalf("dispatched %v, want one close", got)
 		}
-		if offer := m.feedback(); !strings.Contains(offer, "closed ") {
+		if offer := m.feedback(); !strings.Contains(offer, "ended session ") {
 			t.Fatalf("the feedback row says %q, want the undo offer for the one close", offer)
 		}
 	})
@@ -419,7 +419,7 @@ func TestReviewLifecycleGuardSurvivesCorrelationPressure(t *testing.T) {
 		if got := m.acts.recovery.Available(m.deps.now()); len(got) != 1 {
 			t.Fatalf("recovery entries = %d, want exactly one for the one closed session", len(got))
 		}
-		if offer := m.feedback(); !strings.Contains(offer, "closed ") {
+		if offer := m.feedback(); !strings.Contains(offer, "ended session ") {
 			t.Fatalf("the feedback row says %q, want the undo offer for the held close", offer)
 		}
 		// And the tile is usable again, which is the same fact from the

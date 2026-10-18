@@ -235,8 +235,8 @@ func defaultDefinitions() []Definition {
 			},
 		},
 		{
-			ID: Close, Label: "close", Description: "close the live session", Requires: sessionRequirement,
-			Confirmation: Confirmation{Required: true, Prompt: "close the session?"},
+			ID: Close, Label: "End Session", Description: "end the live agent; preserve its transcript", Requires: sessionRequirement,
+			Confirmation: Confirmation{Required: true, Prompt: "end the session?"},
 			available: func(_ Dependencies, request Request) Availability {
 				if request.Session.Locked {
 					return Availability{Reason: "session is locked"}
@@ -258,7 +258,7 @@ func defaultDefinitions() []Definition {
 				// which is what lets a caller offer close recovery only for the
 				// closes it can show happened.
 				if !observation.Confirmed() {
-					return Result{Changed: true, Message: "requested session close; the tab was not observed to close", Data: map[string]any{DataCloseConfirmed: false}}, nil
+					return Result{Changed: true, Message: "requested session end; the terminal was not observed to exit", Data: map[string]any{DataCloseConfirmed: false}}, nil
 				}
 				// A confirmed close ends the runtime session the launch
 				// registered; the registry is otherwise left to retirement.
@@ -267,7 +267,7 @@ func defaultDefinitions() []Definition {
 						_ = session.EndRuntimeSession(rt, request.Session.RuntimeSessionID)
 					}
 				}
-				return Result{Changed: true, Message: "closed session", Data: map[string]any{DataCloseConfirmed: true}}, nil
+				return Result{Changed: true, Message: "ended session", Data: map[string]any{DataCloseConfirmed: true}}, nil
 			},
 		},
 		{

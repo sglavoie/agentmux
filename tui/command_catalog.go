@@ -294,11 +294,11 @@ func applicationCommandDeclarations() []commands.Command[Model] {
 			ID: commands.UndoClose, Group: commands.GroupApplication,
 			Title: func(m Model, _ commands.Context) string {
 				if snapshot, ok := m.recovery.Latest(modelNow(m)); ok && snapshot.Verb() == "resume" {
-					return "Resume Last Closed Conversation"
+					return "Resume Last Ended Conversation"
 				}
-				return "Relaunch Last Closed Session"
+				return "Relaunch Last Ended Session"
 			},
-			Description:  "Resume the exact conversation when known; otherwise relaunch its project. Available for 30 seconds after closing.",
+			Description:  "Resume the exact conversation when known; otherwise relaunch its project. Available for 30 seconds after ending a session.",
 			Aliases:      []string{"restore", "reopen", "undo last close"},
 			Availability: undoCommandAvailability,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {

@@ -26,17 +26,33 @@ amx config edit
 
 Installation puts `amx` in `~/.local/bin` and creates a starter configuration
 at `~/.config/agent-mux/config.toml` if none exists. Ensure `~/.local/bin` is on
-your `PATH`. In the configuration, set the launch destination:
+your `PATH`. For a minimal Claude setup, use the following configuration,
+replacing the project path with an existing checkout. This uses your usual Claude home;
+install and authenticate the CLI first.
 
 ```toml
 [defaults]
 launch_backend = "tmux"
+
+[harness_emojis]
+claude = "🦊"
+
+[[profiles]]
+name = "claude-local"
+harness = "claude"
+home_dir = "~/.claude"
+color = "yellow"
+
+[[projects]]
+title = "My project"
+directory = "~/projects/my-project"
+profile = "claude-local"
 ```
 
-Adapt a starter `[[profiles]]` entry to an agent you have installed and
-authenticated, then point a `[[projects]]` entry at your checkout and that
-profile. [Profile setup](docs/operations.md#harness-profiles) explains isolated
-homes and authentication.
+For Codex, Copilot, or an isolated profile home, follow
+[Profile setup](docs/operations.md#harness-profiles). A new isolated home needs
+its own authentication. The starter file documents optional settings; add them
+as needed without duplicating TOML table headers.
 
 ```sh
 amx config validate

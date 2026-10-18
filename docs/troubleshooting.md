@@ -1,5 +1,9 @@
 # Troubleshooting
 
+For first setup, start with the [minimal configuration](../README.md#first-session).
+For lifecycle behavior and confirmation preferences, see
+[Session lifecycle](usage.md#session-lifecycle).
+
 - **Icons, hooks, or cached transcript data look wrong**: run `amx debug status`
   first, then `amx debug explain` with the trace/request/source-event ID from
   `amx debug tail`. `amx doctor` adds live checks for daemon reachability and

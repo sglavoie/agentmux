@@ -38,7 +38,7 @@
     },
     {
       "type": "excludes_text",
-      "text": "Close \"alpha\"?"
+      "text": "End Session \"alpha\"?"
     },
     {
       "type": "contains_text",

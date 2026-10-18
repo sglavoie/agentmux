@@ -336,7 +336,7 @@ const (
 	// ended or replaced. Unlike the three above it is not a way the world moved
 	// under the operator: it is what the operator themselves started a keystroke
 	// ago and the reason the row is about to change.
-	ReasonLifecycleInFlight = "a close or restart is already running for this session"
+	ReasonLifecycleInFlight = "an end-session or restart request is already running for this session"
 )
 
 // ConfirmPrompt is the wording a destructive action's confirmation shows: the

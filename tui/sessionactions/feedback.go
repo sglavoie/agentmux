@@ -41,10 +41,10 @@ func FeedbackFor(action commands.ID, label, profile string) (Feedback, bool) {
 	switch action {
 	case commands.CloseSession:
 		return Feedback{
-			Pending:     fmt.Sprintf("closing %s…", label),
-			Succeeded:   fmt.Sprintf("closed %s", label),
-			Unconfirmed: fmt.Sprintf("close requested for %s · not confirmed", label),
-			Failed:      fmt.Sprintf("close failed for %s", label),
+			Pending:     fmt.Sprintf("ending session %s…", label),
+			Succeeded:   fmt.Sprintf("ended session %s", label),
+			Unconfirmed: fmt.Sprintf("end requested for session %s · not confirmed", label),
+			Failed:      fmt.Sprintf("could not end session %s", label),
 		}, true
 	case commands.RestartSession:
 		return Feedback{

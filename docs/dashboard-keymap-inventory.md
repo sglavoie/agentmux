@@ -44,7 +44,7 @@ fails there.
 | `S` | All-project Past Sessions, newest activity first; clears previous history filters |
 | `t` | Send to the selected tmux session: answer its prompt or type its next one, without attaching |
 | `:` | Command palette |
-| `u` | Recover the last closed session (30-second window) |
+| `u` | Recover the last ended session (30-second window) |
 | `?` | Help |
 | `q`, `Ctrl+C` | Quit dashboard |
 | `Esc` | Close overlay, then leave full-screen/inspector focus, then clear filters |
@@ -71,7 +71,7 @@ named first.
 | `c` | `OverrideProfile` | Relaunch under a different profile | **Retired** | actions `a`; palette |
 | `C` | `LaunchAnother` | Launch another session in the same project | **Retired** | actions `a`; palette |
 | `x` | `ClearStatusIcon` | Acknowledge the status icon | **Retired** | actions `a`; palette |
-| `X` | `CloseSession` | Close the session (undoable) | **Retired** | actions `a`; palette |
+| `X` | `CloseSession` | End the session (30-second Resume/Relaunch recovery) | **Retired** | actions `a` → End Session; palette |
 | `o` | `OpenDirectoryID` | Open a shell in the session's directory | **Retired** | actions `a`; palette |
 | `O` | `OpenEditorID` | Open the configured editor there | **Retired** | actions `a`; palette |
 | `y` | `CopyTitleID` | Copy the tab title | **Retired** | actions `a`; palette |

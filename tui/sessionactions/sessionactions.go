@@ -285,9 +285,9 @@ func Definitions() []Definition {
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "r", Key: "r"},
 			MenuLabel:          "Restart",
-			MenuDescription:    "close and relaunch the session",
+			MenuDescription:    "end and relaunch the session",
 			PaletteTitle:       static("Restart Session"),
-			PaletteDescription: "Confirm before closing and relaunching the selected session.",
+			PaletteDescription: "End and relaunch the selected session; follows the confirmation preference.",
 			PaletteAliases:     []string{"relaunch"},
 			Availability:       requiresUnlocked,
 		},
@@ -339,11 +339,11 @@ func Definitions() []Definition {
 			ID:                 commands.CloseSession,
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "X", Key: "X"},
-			MenuLabel:          "Close",
+			MenuLabel:          "End Session",
 			MenuDescription:    "exit the harness process; transcript persists",
-			PaletteTitle:       static("Close Session"),
+			PaletteTitle:       static("End Session"),
 			PaletteDescription: "Exit the harness process while preserving its transcript.",
-			PaletteAliases:     []string{"exit", "kill"},
+			PaletteAliases:     []string{"close", "exit", "kill"},
 			Availability:       requiresUnlocked,
 		},
 		{
@@ -384,15 +384,15 @@ func Definitions() []Definition {
 			MenuGroup:       MenuGroupStatus,
 			Mnemonic:        Mnemonic{Display: "L", Key: "L"},
 			MenuLabel:       "Lock/Unlock",
-			MenuDescription: "toggle session lock (prevents close/restart/override)",
+			MenuDescription: "toggle session lock (prevents end/restart/override)",
 			PaletteTitle: func(target Target) string {
 				if target.HasSession && target.Session.Locked {
 					return "Unlock Session"
 				}
 				return "Lock Session"
 			},
-			PaletteDescription: "Toggle protection from close, restart, and profile override.",
-			PaletteAliases:     []string{"protect", "unlock"},
+			PaletteDescription: "Toggle protection from ending, restart, and profile override.",
+			PaletteAliases:     []string{"protect", "unlock", "close"},
 			Availability:       requiresSession,
 		},
 		{

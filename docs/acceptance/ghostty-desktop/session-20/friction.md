@@ -8,7 +8,7 @@ when they describe the same interruption; keep build changes visible.
 
 | ID | Workflow and interruption | Workdays affected / observed | Occurrences | Recovery time | Severity | Evidence | Fix / verification / recurrence after fix |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| F-001 | Codex completes but the indicator eventually becomes blank; operator misses completion (`tt`) | Unknown | One named example; broader recurrence reported, not counted | Unknown | Completion visibility | [Observation](trial-log.md#reported-interruption-2026-10-17) | Managed Codex launches select supported `--no-daemon`; shell execution tests cover compatibility and explicit remote choices. Additional [lifecycle coverage](../../../desktop-improvements.md#status-review-and-refresh-polish-on-2026-10-18) verifies new/resumed conversations, simulated observation gaps, and checkpoint restoration. Not yet verified on an installed candidate in real use. |
+| F-001 | Codex completes but the indicator eventually becomes blank; operator misses completion (`tt`) | Unknown | One named example; broader recurrence reported, not counted | Unknown | Completion visibility | [Observation](trial-log.md#reported-interruption-2026-10-17) | Managed Codex launches select supported `--no-daemon`; shell execution tests cover compatibility and explicit remote choices. Additional [lifecycle coverage](../../../desktop-improvements.md#status-review-and-refresh-polish-on-2026-10-18) verifies new/resumed conversations, simulated observation gaps, and checkpoint restoration. Resolved on 2026-10-18: operator confirmed resume, /new reset and recompletion, app reopening, and physical sleep/wake on the installed fix. [Build and confirmation](../../workspace-consistency/observations.json). |
 
 ## Ranking at the end of each workday
 
@@ -27,7 +27,7 @@ when they describe the same interruption; keep build changes visible.
 | Rank | Friction ID | Evidence and reason | Next action | Outcome |
 | --- | --- | --- | --- | --- |
 
-F-001 is the first concrete fix candidate; no comparative frequency ranking is
+F-001 is the first operator-confirmed fix; no comparative frequency ranking is
 available from one report. The implemented event navigation,
 Runs evidence, status toolbar, filter hints, and launch summaries are candidates
 for real-use evaluation, not recorded trial successes.

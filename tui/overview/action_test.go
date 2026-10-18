@@ -782,7 +782,7 @@ func TestAConfirmedCloseIsOfferedAnUndoAndRelaunches(t *testing.T) {
 		t.Fatal("a confirmed close left nothing to undo")
 	}
 	offer := m.feedback()
-	if !strings.HasPrefix(offer, "closed ") || !strings.Contains(offer, "u relaunch (30s)") {
+	if !strings.HasPrefix(offer, "ended session ") || !strings.Contains(offer, "u relaunch (30s)") {
 		t.Fatalf("the feedback row says %q, want the undo offer", offer)
 	}
 	// The offer is on the FEEDBACK row and nowhere else. A close is undoable for

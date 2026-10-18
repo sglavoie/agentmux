@@ -1582,7 +1582,7 @@ func TestAcceptanceAClosedSessionLeavesTheTreeAndIsRestoredByUndo(t *testing.T) 
 	// none of its own — says how to answer it.
 	frame := s.frame()
 	for _, want := range []string{
-		`Close "svc02"?`,
+		`End Session "svc02"?`,
 		"The harness process exits; its transcript is preserved.",
 		"y confirm",
 		"cancel",
@@ -1930,7 +1930,7 @@ func TestAcceptanceWithConfirmationOffACloseRunsAtOnceAndStillOffersTheUndo(t *t
 	if s.pending(jobAction) != 1 {
 		t.Fatalf("the prompt-free close parked %d actions, want 1", s.pending(jobAction))
 	}
-	if frame := s.frame(); !strings.Contains(frame, "closing "+acceptanceProject(1)) {
+	if frame := s.frame(); !strings.Contains(frame, "ending session "+acceptanceProject(1)) {
 		t.Fatalf("the close reports nothing while it runs:\n%s", frame)
 	}
 	s.deliver(jobAction)
@@ -1992,7 +1992,7 @@ func TestAcceptanceClosingTheHostingTabWarnsAndOffersNoUndo(t *testing.T) {
 	// whole or it does not arrive.
 	said := s.prose()
 	for _, want := range []string{
-		`Close "` + acceptanceProject(1) + `"?`,
+		`End Session "` + acceptanceProject(1) + `"?`,
 		"The harness process exits; its transcript is preserved.",
 		hostTabConsequence,
 	} {
@@ -2015,7 +2015,7 @@ func TestAcceptanceClosingTheHostingTabWarnsAndOffersNoUndo(t *testing.T) {
 	if frame := s.frame(); strings.Contains(frame, "u relaunch") {
 		t.Fatalf("the frame offers an undo for the hosting tab:\n%s", frame)
 	}
-	if frame := s.frame(); !strings.Contains(frame, "closed "+acceptanceProject(1)) {
+	if frame := s.frame(); !strings.Contains(frame, "ended session "+acceptanceProject(1)) {
 		t.Fatalf("the close is not reported:\n%s", frame)
 	}
 }

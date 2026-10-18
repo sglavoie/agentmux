@@ -139,6 +139,13 @@ has.
 
 ## Workspace
 
+Lifecycle labels match the TUI: **Detach Terminal** leaves the agent running,
+**End Session** stops it, and **Close View** ends a utility program. Native
+menus/sidebar use **Confirm before closing views or ending sessions** in
+Preferences. The embedded Dashboard and Overview use `confirm_destructive`
+in `config.toml`; those preferences retain their separate scopes.
+
+
 **Open Workspace** in the menu shows a window with every live session in a
 sidebar, grouped by project and labeled by profile, with the same state glyphs
 the tab titles use and a count of waiting sessions beside each project.
@@ -536,7 +543,7 @@ present an old failure as current. When only the attempt summary was retained,
 the action says **Inspect Verification** and explains the missing individual checks.
 An affected pending plan row says **Incomplete**.
 
-**Resume** is primary for other resumable pauses. **Resume**, **Stop After Current…**,
+**Resume** is primary for other resumable pauses. **Resume**, **Stop After Session…**,
 and **Abort…** recheck ASL permission on submission; confirmation buttons name the
 requested action. An uncertain response offers **Retry Receipt** for the same
 operation ID. Polling and evidence inspection never repeat a control operation.
@@ -756,5 +763,21 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
   their behavior. Shared-server hooks with ambiguous or unbound owners are rejected;
   they are not borrowed from another terminal. The mitigation requires an updated
   installation and a newly launched managed client. Existing clients are not rebound.
-  The installed-build resume, `/new`, app-reopen, and physical sleep/wake check remains
-  pending; see [F-001 validation](desktop-improvements.md#remaining-installed-build-check-for-f-001).
+  The operator confirmed the installed-build resume, `/new`, app-reopen, and physical
+  sleep/wake checks on 2026-10-18; see the [F-001 observation record](acceptance/workspace-consistency/observations.json).
+
+### Waiting controls and update times
+
+Waiting keeps category and Oldest first on one row. Next waiting stays available;
+Update list appears only when changes are held while you read. The keyboard hint
+appears while the Waiting reader has focus and disappears when focus leaves.
+Changed questions immediately lose their answer actions, even before you apply
+an updated list.
+
+Review toolbars show **Updated 12s ago** (then minutes, hours, or days), using
+the oldest successful read of the displayed content. Refresh failures and
+warnings take priority; slower reads show Refreshing. Click the status for each
+read's exact timestamp, missing reads, and retry actions. Updating a run list
+alone cannot make older plan details appear new. **Show in Finder** reveals the
+selected plan session file; **Stop After Session…** requests a stop after the
+current session finishes.

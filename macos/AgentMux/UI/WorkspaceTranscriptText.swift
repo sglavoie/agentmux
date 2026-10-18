@@ -209,7 +209,9 @@ struct WorkspaceTranscriptCode: View {
                     feedback.copy(text, to: pasteboard)
                 } label: { Label(feedback.message ?? "Copy code", systemImage: feedback.succeeded ? "checkmark" : "doc.on.doc") }
                     .buttonStyle(.borderless).help("Copy this code block without Markdown fences")
+                    .font(.callout).foregroundStyle(.primary)
                     .accessibilityLabel(feedback.message ?? "Copy code")
+                    .accessibilityIdentifier("transcript-copy-code")
             }.padding(8)
             Divider()
             if preferences.wrapLines {
@@ -222,6 +224,8 @@ struct WorkspaceTranscriptCode: View {
             }
         }.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15)))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(language.isEmpty ? "Code block" : "\(language) code block")
             .onChange(of: text) { _, _ in feedback = WorkspaceCopyFeedback() }
             .task(id: feedback.revision) {
                 guard feedback.succeeded else { return }

@@ -20,7 +20,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
     }
 
     private func render<V: View>(_ view: V, name: String, width: CGFloat = 1000, height: CGFloat = 680,
-                                 dark: Bool = false, expected: [String] = []) async throws {
+                                 dark: Bool = false, highContrast: Bool = false, expected: [String] = []) async throws {
         guard #available(macOS 14.4, *) else { throw XCTSkip("Own-window capture requires macOS 14.4") }
         let host = NSHostingView(rootView: view)
         let style: NSWindow.StyleMask = [.titled, .resizable]
@@ -29,7 +29,9 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         let window = NSWindow(contentRect: contentRect, styleMask: style, backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host
-        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        window.appearance = NSAppearance(named: highContrast
+            ? (dark ? .accessibilityHighContrastDarkAqua : .accessibilityHighContrastAqua)
+            : (dark ? .darkAqua : .aqua))
         host.wantsLayer = true
         window.orderFront(nil)
         defer { window.close() }
@@ -69,6 +71,31 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         add(attachment)
         XCTAssertEqual(CGFloat(rep.pixelsWide), width * CGFloat(filter.pointPixelScale), accuracy: 1)
         XCTAssertEqual(CGFloat(rep.pixelsHigh), height * CGFloat(filter.pointPixelScale), accuracy: 1)
+    }
+
+    func testConsistencyAtLargeTextAndIncreasedContrast() async throws {
+        let suite = "amx-contrast-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = WorkspaceReadingPreferences(defaults: defaults)
+        preferences.proseSize = 24; preferences.fontSize = 20
+        for dark in [false, true] {
+            let inspector = WorkspaceInspectorView(preferences: preferences)
+            let row = WorkspaceWaitingRow(key: .embedded("fixture"), title: "API — deployment review", detail: "Waiting for your answer", glyph: "?", toolTip: "",
+                answer: .asl(.init(runID: "fixture-run", planDir: "/plans/api")), category: .question)
+            inspector.onContext = { _, receive in receive(SecretText("Which deployment should proceed?\n\nReview the staging results before choosing production.")) }
+            inspector.show(.init(waiting: [row])); inspector.toggleContext(row)
+            try await render(PreviewNativeView(view: inspector), name: "consistency-waiting-contrast-\(dark)", width: 320, height: 600,
+                dark: dark, highContrast: true, expected: ["Which deployment", "Next waiting", "Oldest first", "Answer"])
+            let transcript = WorkspaceTranscriptText(text: "# Deployment review\n\nInspect the failed check before resuming.\n\n```swift\nlet café = \"🦊\"\n```", terms: [], preferences: preferences)
+            let read = WorkspaceReadObservation(title: "Transcript", refreshedAt: Date().addingTimeInterval(-125))
+            try await render(VStack(alignment: .leading, spacing: 16) {
+                WorkspaceReviewStatus(reads: [read])
+                transcript
+            }.padding().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading),
+                name: "consistency-reading-contrast-\(dark)", width: 720, height: 450, dark: dark, highContrast: true,
+                expected: ["Updated 2m ago", "Deployment review", "Copy code"])
+        }
     }
 
     func testHistoryPreview() async throws {
@@ -115,7 +142,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             inspector.onContext = { _, done in done(SecretText("Which deployment should proceed?\n\nThe endpoint checks passed. Review the staging results before choosing production.\n\n" + String(repeating: "Keep the current deployment available until verification completes.\n\n", count: 10))) }
             inspector.show(.init(waiting: [row])); inspector.focusReader()
             try await render(PreviewNativeView(view: inspector), name: "daily-waiting-large-\(dark)", width: 320, height: 600, dark: dark,
-                             expected: ["Answer", "Which deployment", "Return answer"])
+                             expected: ["Answer", "Which deployment", "Next waiting"])
             let app = FakeWorkspaceApp()
             app.store.apply(snapshot: WorkspaceFixture.snapshot([]))
             let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
@@ -463,7 +490,7 @@ extension WorkspaceWorkflowPreviewTests {
         for dark in [false, true] {
             history.open(project: "API", conversation: ConversationIdentity(encoded: "claude:one"), eventTime: "2026-10-17T12:00:00Z")
             try await render(WorkspaceHistoryView(model: history), name: "event-location-\(dark)", width: 720, height: 450, dark: dark,
-                             expected: ["At the selected event", "Resume", "Read status"])
+                             expected: ["At the selected event", "Resume", "Updated"])
             try await render(WorkspaceReadDetails(reads: reads), name: "read-details-\(dark)", width: 380, height: 332, dark: dark,
                              expected: ["Search", "Transcript", "Previous results", "Archive read failed", "Refresh transcript"])
         }

@@ -2018,9 +2018,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func askToCloseView(_ title: String, _ answer: @escaping @MainActor (Bool) -> Void) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "A process is still running in \(title). Close it?"
+        alert.messageText = "Close the view \(title)?"
         alert.informativeText = "Closing the view ends that process. No session is affected."
-        alert.addButton(withTitle: "Close").hasDestructiveAction = true
+        alert.addButton(withTitle: "Close View").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { response in
             MainActor.assumeIsolated { answer(response == .alertFirstButtonReturn) }
@@ -4283,8 +4283,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         setAccessibilityLabel(spoken.joined(separator: ", "))
         keyLabel.stringValue = ""
         closeButton.isHidden = view.isPermanent
-        closeButton.toolTip = "Close \(view.title)"
-        closeButton.setAccessibilityLabel("Close \(view.title)")
+        closeButton.toolTip = "Close View: \(view.title) — ends its program"
+        closeButton.setAccessibilityLabel("Close View: \(view.title). Ends its program.")
         syncTrailingRoom()
     }
 
@@ -4334,7 +4334,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         if row.muted { spoken.append("muted") }
         if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
         if bell { spoken.append("bell") }
-        if closing { spoken.append("closing") } else if !row.detail.isEmpty { spoken.append(row.detail) }
+        if closing { spoken.append("ending session") } else if !row.detail.isEmpty { spoken.append(row.detail) }
         if let sessionKey { spoken.append("Command \(sessionKey)") }
         return spoken.joined(separator: ", ")
     }

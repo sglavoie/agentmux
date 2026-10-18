@@ -59,3 +59,13 @@ memory as measured evidence.
 - Failures (what was on screen; bundle or export saved as):
 - Fixes installed today (commit; checks run again):
 -->
+
+## F-001 confirmation, 2026-10-18
+
+The operator answered **“Tested all paths; they work”** when asked specifically
+about completion after resume, app reopening, physical sleep/wake, clearing the
+previous completion on `/new` before another prompt, and completion after the
+new response. The installed CLI and app were checked against the previously
+recorded fix before asking. [Build identity and confirmation](../../workspace-consistency/observations.json)
+close F-001. This is a defect-verification observation, not a completed trial
+workday or confirmation of the five-workday migration trial.

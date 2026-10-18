@@ -72,7 +72,7 @@ type PromptInput struct {
 func ConfirmVerbText(verb string) (string, bool) {
 	switch verb {
 	case ConfirmClose:
-		return "Close", true
+		return "End Session", true
 	case ConfirmRestart:
 		return "Restart", true
 	case ConfirmReplaceProfile:

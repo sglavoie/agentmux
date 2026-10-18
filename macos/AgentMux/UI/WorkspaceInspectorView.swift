@@ -156,7 +156,17 @@ final class WorkspaceInspectorView: NSView {
         inboxControls.orientation = .vertical
         inboxControls.alignment = .leading
         inboxControls.spacing = 4
-        [filterPicker, oldestButton, nextButton, updatesButton].forEach { inboxControls.addArrangedSubview($0) }
+        let filters = NSStackView(views: [filterPicker, oldestButton])
+        filters.spacing = 6
+        filterPicker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let navigation = NSStackView(views: [nextButton, updatesButton])
+        navigation.spacing = 6
+        updatesButton.lineBreakMode = .byTruncatingTail
+        updatesButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        for row in [filters, navigation] {
+            inboxControls.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: inboxControls.widthAnchor).isActive = true
+        }
         let readingMenu = NSHostingView(rootView: WorkspaceReadingMenu(preferences: preferences))
         readingMenu.translatesAutoresizingMaskIntoConstraints = false
         readingMenu.widthAnchor.constraint(equalToConstant: 28).isActive = true
@@ -177,6 +187,7 @@ final class WorkspaceInspectorView: NSView {
             header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
             header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
             tabRow.widthAnchor.constraint(equalTo: header.widthAnchor),
+            inboxControls.widthAnchor.constraint(equalTo: header.widthAnchor),
             scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -225,9 +236,11 @@ final class WorkspaceInspectorView: NSView {
             if tab == model.tab { tabs.selectedSegment = index }
         }
         inboxControls.isHidden = model.tab != .waiting
-        if model.tab != .waiting { readerHint.isHidden = true }
+        readerHint.isHidden = model.tab != .waiting || window?.firstResponder !== self
         updatesButton.isEnabled = heldWaiting != nil
-        updatesButton.title = heldWaiting == nil ? "List up to date" : "Update list (\(model.waiting.count) waiting)"
+        updatesButton.isHidden = heldWaiting == nil
+        updatesButton.title = "Update list (\(model.waiting.count))"
+        updatesButton.toolTip = "Apply the updated waiting list. Items stay in place while you read."
         nextButton.isEnabled = model.current && !visibleWaiting.isEmpty
         let wanted = displayedLines
         if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {
@@ -417,7 +430,6 @@ final class WorkspaceInspectorView: NSView {
     /// Explicit keyboard entry; ordinary inspector clicks still preserve terminal focus.
     func focusReader() {
         guard model.tab == .waiting else { return }
-        readerHint.isHidden = false
         window?.makeFirstResponder(self)
         if let key = readingKey, let row = visibleWaiting.first(where: { $0.key == key }), rowIsCurrent(row) {
             if expanded?.sameContext(as: row) != true { toggleContext(row) }
@@ -425,6 +437,19 @@ final class WorkspaceInspectorView: NSView {
     }
 
     override var acceptsFirstResponder: Bool { true }
+    override func becomeFirstResponder() -> Bool {
+        guard super.becomeFirstResponder() else { return false }
+        readerHint.isHidden = model.tab != .waiting
+        updateReadingLayout()
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        guard super.resignFirstResponder() else { return false }
+        readerHint.isHidden = true
+        updateReadingLayout()
+        return true
+    }
     override func keyDown(with event: NSEvent) {
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { super.keyDown(with: event); return }
         switch event.keyCode {
@@ -689,6 +714,7 @@ final class WorkspaceWaitingRowView: NSBox {
         contextLabel.stringValue = text ?? ""
         contextButton.title = text == nil ? "Context" : "Hide context"
         contextButton.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
+        contextButton.cell?.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
     }
 
     @objc private func contextPressed(_ sender: Any?) { onContext?() }
@@ -703,6 +729,7 @@ final class WorkspaceWaitingRowView: NSBox {
         answerButton?.setAccessibilityLabel("Answer \(row.title)")
         answerButton?.cell?.setAccessibilityLabel("Answer \(row.title)")
         contextButton.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
+        contextButton.cell?.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
         toolTip = row.toolTip
         setAccessibilityLabel("\(row.title), \(row.detail)")
     }

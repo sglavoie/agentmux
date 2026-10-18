@@ -12,7 +12,7 @@
     { "type": "contains_text", "text": "work · claude · ~/projects/web" },
     { "type": "contains_text", "text": "▸ Open session" },
     { "type": "contains_text", "text": "attach to it here if it runs in" },
-    { "type": "contains_text", "text": "Close" },
+    { "type": "contains_text", "text": "End Session" },
     { "type": "no_layout_issues" }
   ]
 }

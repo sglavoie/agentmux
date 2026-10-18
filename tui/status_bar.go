@@ -13,6 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 type statusSeverity int
@@ -322,6 +323,9 @@ func fallbackStatusText(m Model) string {
 		}
 		return "Filter sessions"
 	case ModeConfirm:
+		if verb, ok := sessionactions.ConfirmVerbText(m.confirmAction); ok {
+			return "Confirm " + verb
+		}
 		if strings.TrimSpace(m.confirmAction) != "" {
 			return "Confirm " + m.confirmAction
 		}

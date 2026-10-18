@@ -12,7 +12,7 @@
   "assertions": [
     { "type": "mode_equals", "mode": "confirm" },
     { "type": "no_layout_issues" },
-    { "type": "contains_text", "text": "Close \"ρυθμός-δοκιμή\"?" },
+    { "type": "contains_text", "text": "End Session \"ρυθμός-δοκιμή\"?" },
     { "type": "contains_text", "text": "The harness process exits; its transcript is preserved." },
     { "type": "kitty_calls", "op": "CloseTab", "count": 0 }
   ]

@@ -114,7 +114,7 @@ func TestRenderConfirmBox(t *testing.T) {
 		t.Errorf("expected rounded top-left glyph in box output; got %q", raw)
 	}
 	plain := stripAnsi(raw)
-	if !strings.Contains(plain, "Close") {
+	if !strings.Contains(plain, "End Session") {
 		t.Errorf("expected Close verb in box output; got %q", plain)
 	}
 	if !strings.Contains(plain, "transcript is preserved") {
@@ -329,7 +329,7 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 		status string
 	}{
 		{name: "actions", m: actions, popup: "Actions for", status: "Session actions"},
-		{name: "confirm", m: confirm, popup: "Close", status: "Confirm close"},
+		{name: "confirm", m: confirm, popup: "End Session", status: "Confirm End Session"},
 		{name: "config picker", m: configPicker, popup: "Restart with profile", status: "Choose profile"},
 		{name: "help", m: help, popup: "Keyboard Shortcuts", status: "Help"},
 		{name: "detail", m: detail, popup: "api", status: "Session details: window 42"},

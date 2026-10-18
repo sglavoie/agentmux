@@ -64,5 +64,13 @@
   "limitations": [
     "The bolt removal transition and its duration were not captured.",
     "No installed-fix or post-fix real-use observation is recorded."
-  ]
+  ],
+  "follow_up": {
+    "status": "resolved_operator_confirmed",
+    "at": "2026-10-18T17:39:58.991858+00:00",
+    "evidence": "docs/acceptance/workspace-consistency/observations.json",
+    "confirmation": "Tested all paths; they work",
+    "scope": "Completion remains visible after resume, app reopening, and physical sleep/wake. /new clears previous completion before a prompt and completion appears again after the response.",
+    "trial_workdays_added": 0
+  }
 }

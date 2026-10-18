@@ -101,7 +101,7 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		// The per-row commands moved behind `a`, and help says so in the
 		// spelling the operator actually types: "a, then <letter>".
 		"a, then x clear session icon",
-		"a, then X close session (confirm)",
+		"a, then X end session (follows confirmation preference)",
 		"a, then C launch another session in the same project",
 		"a, then e peek scrollback (active rows only)",
 		// The launcher kept its own direct keymap; only the dashboard's shrank.
@@ -121,10 +121,10 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		// titled "Toggle List View" for `:` to find.
 		"cycle profile (dashboard live",
 		"Toggle List View",
-		"X         close session (confirm)",
+		"X         end session (follows confirmation preference)",
 		"C         launch new session with profile selection",
 		"e         peek scrollback (active rows only)",
-		"x         close session (confirm)",
+		"x         end session (follows confirmation preference)",
 		"C         clear session icon",
 		"F         run an agent-session-loop plan",
 		"t         tail active agent-session-loop run",

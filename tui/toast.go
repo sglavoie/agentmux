@@ -458,9 +458,9 @@ func (m *Model) undoToastText() string {
 	case 0:
 		return ""
 	case 1:
-		return fmt.Sprintf("closed %s · %s %s (%s)", active[0].Label, keyUndoClose, active[0].Verb(), remaining)
+		return fmt.Sprintf("ended session %s · %s %s (%s)", active[0].Label, keyUndoClose, active[0].Verb(), remaining)
 	default:
-		return fmt.Sprintf("closed %d sessions · %s %s last (%s)", len(active), keyUndoClose, active[len(active)-1].Verb(), remaining)
+		return fmt.Sprintf("ended %d sessions · %s %s last (%s)", len(active), keyUndoClose, active[len(active)-1].Verb(), remaining)
 	}
 }
 

@@ -142,7 +142,7 @@ func TestCloseIsAnnouncedBeforeItIsRecoverable(t *testing.T) {
 	if got := dispatched.activeUndoEntries(); len(got) != 0 {
 		t.Fatalf("a close was recoverable before it was confirmed: %v", got)
 	}
-	if len(dispatched.toasts) != 1 || !strings.Contains(dispatched.toasts[0].Text, "closing "+label) {
+	if len(dispatched.toasts) != 1 || !strings.Contains(dispatched.toasts[0].Text, "ending session "+label) {
 		t.Fatalf("in-flight toast = %v, want a pending close", dispatched.toasts)
 	}
 	if strings.Contains(dispatched.toasts[0].Text, "undo") {
@@ -154,7 +154,7 @@ func TestCloseIsAnnouncedBeforeItIsRecoverable(t *testing.T) {
 		t.Fatalf("recoverable closes after confirmation = %v, want %s", got, label)
 	}
 	text := toastByID(confirmed, undoCloseToastID)
-	if !strings.Contains(text, "closed "+label) || !strings.Contains(text, keyUndoClose+" relaunch") {
+	if !strings.Contains(text, "ended session "+label) || !strings.Contains(text, keyUndoClose+" relaunch") {
 		t.Fatalf("recovery toast = %q, want the close and the undo key", text)
 	}
 	assertStatusBarContains(t, confirmed, keyUndoClose+" relaunch")
@@ -182,7 +182,7 @@ func TestUnconfirmedCloseOffersNoRecovery(t *testing.T) {
 	if !strings.Contains(text, "not confirmed") {
 		t.Fatalf("outcome toast = %q, want it to say the close was not confirmed", text)
 	}
-	if strings.Contains(text, "closed api") {
+	if strings.Contains(text, "ended session api") {
 		t.Errorf("an unconfirmed close was reported in the past tense: %q", text)
 	}
 }
@@ -197,7 +197,7 @@ func TestFailedCloseOffersNoRecovery(t *testing.T) {
 		t.Fatalf("a failed close left a recovery behind: %v", got)
 	}
 	text := toastByID(m, actionFeedbackToastID(1))
-	if !strings.Contains(text, "close failed") || !strings.Contains(text, "no such tab") {
+	if !strings.Contains(text, "could not end session") || !strings.Contains(text, "no such tab") {
 		t.Fatalf("failure toast = %q, want the verb and the reason", text)
 	}
 }
@@ -503,7 +503,7 @@ func TestTransientCloseSkipsUndo(t *testing.T) {
 	if got := toastByID(closed, undoCloseToastID); got != "" {
 		t.Errorf("expected no recovery toast, got %q", got)
 	}
-	if text := toastByID(closed, actionFeedbackToastID(1)); !strings.Contains(text, "closed orphan") {
+	if text := toastByID(closed, actionFeedbackToastID(1)); !strings.Contains(text, "ended session orphan") {
 		t.Errorf("expected the close still reported, got %q", text)
 	}
 }
@@ -525,7 +525,7 @@ func TestClosingTheHostingTabOffersNoRecovery(t *testing.T) {
 	if got := closed.activeUndoEntries(); len(got) != 0 {
 		t.Fatalf("a recovery was published for the tab the dashboard exits with: %v", got)
 	}
-	if text := toastByID(closed, actionFeedbackToastID(1)); !strings.Contains(text, "closed "+label) {
+	if text := toastByID(closed, actionFeedbackToastID(1)); !strings.Contains(text, "ended session "+label) {
 		t.Errorf("expected the close still reported, got %q", text)
 	}
 }

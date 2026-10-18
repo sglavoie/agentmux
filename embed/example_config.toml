@@ -11,10 +11,33 @@
 # This starter config is intentionally safe for first launch: it does not add
 # any profiles or projects until you uncomment and customize the examples
 # below.
-# Restart the dashboard after editing this file; config changes are loaded on
-# startup.
+# The dashboard reloads valid edits automatically, after an open form or
+# confirmation finishes. Invalid edits keep the previous settings and show a
+# notice. Daemon settings still require `amx daemon restart`.
 #
 # Paths in this file (home_dir, directory) support `~` for $HOME.
+#
+# Minimum setup: uncomment and customize this profile/project pair, then
+# uncomment launch_backend = "tmux" in the existing [defaults] section below.
+# README.md#first-session has the complete minimal file; do not add a second
+# [defaults] section to this template.
+#
+# [[profiles]]
+# name = "claude-local"
+# harness = "claude"
+# home_dir = "~/.claude"
+# color = "yellow"
+#
+# [[projects]]
+# title = "My project"
+# directory = "~/projects/my-project"
+# profile = "claude-local"
+#
+# Use an installed, authenticated CLI and an existing project directory.
+# This example uses Claude's usual home. Isolated homes need their own login;
+# see docs/operations.md#harness-profiles for all three harnesses.
+# Then: amx config validate; amx config hooks-sync; amx backend status --check.
+# Run amx and press l to launch. The remaining sections are optional settings.
 
 [defaults]
 
@@ -40,7 +63,7 @@ idle_threshold = 300
 #   project args → profile args → defaults.args
 args = []
 
-# Whether the three actions that end or replace a live harness process — close,
+# Whether the three actions that end or replace a live harness process — End Session,
 # restart, and restart under another profile — stop for a y/n confirmation
 # naming what they destroy. When false (default) they run immediately and report
 # themselves on the feedback row or a toast. The answer is read once and applies
@@ -48,6 +71,9 @@ args = []
 # F2 overview all honor it, because a restart reached by name and a restart
 # reached by mnemonic are the same act. Launching another session is not covered:
 # it asks for a profile like a replacement does, but it ends nothing.
+# This governs the TUI, including its embedded Dashboard and Overview. Native
+# app menus/sidebar use Preferences > Confirm before closing views or ending
+# sessions. Detach Terminal leaves the agent running under either preference.
 confirm_destructive = false
 
 # Per-directory Git probe. The daemon asks each live session's directory for
@@ -115,9 +141,11 @@ confirm_destructive = false
 # older bridge is reported as unavailable rather than driven at a protocol it
 # does not speak.
 #
-# The integration powers the `A` runs view: answering questions, resuming,
-# stopping, and aborting runs that are already in flight. It never starts or
-# tails a loop, and it never records question or reply text. See docs/usage.md.
+# The integration powers Runs (dashboard `:`, then "Show Runs", or the app's
+# Runs window): answer questions, resume, stop after a session, or abort.
+# Start a prepared plan from Plans (`R`), `amx plans run`, or Run a Plan in the
+# app. Starting launches a managed supervisor through the existing ASL contract;
+# Agent Mux does not execute plan sessions itself. See docs/usage.md.
 [defaults.asl]
 # enabled = true
 # command = "asl"

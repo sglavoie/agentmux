@@ -13,6 +13,12 @@ This is the operator index. Each area below has its own guide.
 
 ## Config commands
 
+Start with the [minimum profile/project configuration](../README.md#first-session).
+The dashboard reloads valid configuration edits automatically, deferring changes
+while a form or confirmation is open. Invalid edits retain the last valid settings.
+Daemon-owned settings need `amx daemon restart`; `amx doctor` reports when its
+configuration is older than the file.
+
 | Command | Description |
 | --- | --- |
 | `amx config init` | create the example config |

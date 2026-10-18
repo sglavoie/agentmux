@@ -47,11 +47,11 @@ func TestDefinitionsInventory(t *testing.T) {
 		{commands.LaunchAnother, MenuGroupOpen, Mnemonic{"C", "C"}, "Launch another session", "Launch Another Session", []string{"duplicate", "new"}},
 		{commands.ClearStatusIcon, MenuGroupStatus, Mnemonic{"x", "x"}, "Clear status", "Clear Status Icon", []string{"attention", "badge", "icon"}},
 		{commands.MarkActiveIcon, MenuGroupStatus, Mnemonic{"b", "b"}, "Mark active", "Mark Session Active", []string{"bolt", "busy", "working"}},
-		{commands.CloseSession, MenuGroupLifecycle, Mnemonic{"X", "X"}, "Close", "Close Session", []string{"exit", "kill"}},
+		{commands.CloseSession, MenuGroupLifecycle, Mnemonic{"X", "X"}, "End Session", "End Session", []string{"close", "exit", "kill"}},
 		{commands.OpenDirectoryID, MenuGroupOpen, Mnemonic{"o", "o"}, "Open shell", "Open Directory in Shell", []string{"directory", "shell", "terminal"}},
 		{commands.OpenEditorID, MenuGroupOpen, Mnemonic{"O", "O"}, "Open editor", "Open in Editor", []string{"directory", "edit"}},
 		{commands.CopyTitleID, MenuGroupOpen, Mnemonic{"y", "y"}, "Copy title", "Copy Session Title", []string{"clipboard", "yank"}},
-		{commands.ToggleLockID, MenuGroupStatus, Mnemonic{"L", "L"}, "Lock/Unlock", "Lock Session", []string{"protect", "unlock"}},
+		{commands.ToggleLockID, MenuGroupStatus, Mnemonic{"L", "L"}, "Lock/Unlock", "Lock Session", []string{"protect", "unlock", "close"}},
 		{commands.ToggleMuteID, MenuGroupStatus, Mnemonic{"m", "m"}, "Mute/Unmute", "Mute Session", []string{"notifications", "unmute"}},
 		{commands.SendToSession, MenuGroupNone, Mnemonic{}, "", "Send to Session", []string{"answer", "keys", "prompt", "reply", "type"}},
 		{commands.SearchProject, MenuGroupNone, Mnemonic{}, "", "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}},
@@ -227,7 +227,7 @@ func TestLookup(t *testing.T) {
 	if !ok {
 		t.Fatal("close session is not in the vocabulary")
 	}
-	if definition.MenuLabel != "Close" {
+	if definition.MenuLabel != "End Session" {
 		t.Fatalf("close session label = %q", definition.MenuLabel)
 	}
 	if _, ok := Lookup(commands.Quit); ok {

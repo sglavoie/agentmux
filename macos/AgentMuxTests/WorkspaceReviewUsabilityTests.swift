@@ -193,6 +193,7 @@ final class WorkspaceReviewUsabilityTests: XCTestCase {
             let capture = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
             let recognition = VNRecognizeTextRequest()
             recognition.recognitionLevel = .accurate
+            recognition.recognitionLanguages = ["en-US"]
             try VNImageRequestHandler(cgImage: capture).perform([recognition])
             return (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         }
@@ -208,7 +209,10 @@ final class WorkspaceReviewUsabilityTests: XCTestCase {
         XCTAssertTrue(repeated.contains("Copied"), "The first timer must not clear the second acknowledgement: " + repeated)
         try await Task.sleep(for: .milliseconds(1100))
         let expired = try await visibleText()
-        XCTAssertTrue(expired.contains("Copy code"), expired)
+        // Vision's Latin/Cyrillic model can return the visually identical Cyrillic
+        // “Сору” even with English selected. This assertion checks rendered UI;
+        // the separate pasteboard assertions compare the original Unicode exactly.
+        XCTAssertTrue(expired.contains("Copy code") || expired.contains("Сору code"), expired)
         XCTAssertFalse(expired.contains("Copied"), expired)
         XCTAssertEqual(board.string(forType: .string), code)
     }

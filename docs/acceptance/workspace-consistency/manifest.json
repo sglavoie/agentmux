@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-18",
+  "source_commit": "88dbd35747f6203cadac3f034e5b2ec34e30f368",
+  "working_tree_changes": true,
+  "capture": "ScreenCaptureKit current-process fixture windows, native pixel scale; no live conversations. Increased-contrast Aqua and Dark Aqua appearances, 24-point prose and 20-point code.",
+  "fixture_test": "WorkspaceWorkflowPreviewTests.testConsistencyAtLargeTextAndIncreasedContrast",
+  "visual_review": "Inspected all four captures: controls and code-copy action remain visible; question text wraps within the reader. These fixtures do not establish VoiceOver usability.",
+  "sources": [
+    {
+      "path": "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift",
+      "sha256": "fac21bf49264372f0484d16308209ce7da549e9c859de67ad61918ccc87ae66a"
+    },
+    {
+      "path": "macos/AgentMuxTests/WorkspaceLifecyclePolishTests.swift",
+      "sha256": "02f4f7baac72d7c572120f8298bf67f6f1d3d19bd6144f53273cea6eb3864ff2"
+    },
+    {
+      "path": "macos/AgentMuxTests/WorkspaceReviewUsabilityTests.swift",
+      "sha256": "37f7c57a6d8463315d0f6966f0fe98b0ac309d225301bad53a8a201f62cf98a4"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspaceInspectorView.swift",
+      "sha256": "f8cfa3fc982c830a8426a3c18f3f7900c118300465c366a46a68bcc8883d6868"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspaceReviewStatus.swift",
+      "sha256": "5bbffa119bb39cbc813d09dd6d71a985eb71ac487bc356f554cae91a0270c372"
+    },
+    {
+      "path": "macos/AgentMux/UI/WorkspaceTranscriptText.swift",
+      "sha256": "566cb2339b87e412006eb94c497d7857a5e7596a2fc04b5038fa7b70de8e09bf"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/acceptance/workspace-consistency/reading-contrast-dark.png",
+      "sha256": "481089d80f5d55285b8a38aada32ec0a48621bd0c3b329701833f5c2703d8f41"
+    },
+    {
+      "path": "docs/acceptance/workspace-consistency/reading-contrast-light.png",
+      "sha256": "e6aefd172de072615cea06456e18ba271e202b08c5edd3203118475bea99fb15"
+    },
+    {
+      "path": "docs/acceptance/workspace-consistency/waiting-contrast-dark.png",
+      "sha256": "413d187beb8f4a67f0873ce8fb644f77efc194bd1d0283f18fed68e24377c41d"
+    },
+    {
+      "path": "docs/acceptance/workspace-consistency/waiting-contrast-light.png",
+      "sha256": "80cf372262ca55c7fb9a25416d35d40e9335fa7b2dc66ac1a5cf3dd5dce2a691"
+    }
+  ],
+  "validation": {
+    "go_gate": "env -u AMX_RUNTIME_SESSION_ID just check: passed; full Go suite, core race checks, vet, 188 TUI scenarios, zero lint issues.",
+    "final_go_followup": "env -u AMX_RUNTIME_SESSION_ID go test ./tui ./internal/config: passed after final help wording.",
+    "native_command": "macos/scripts/test-app.sh",
+    "native_result": "914 tests executed; 913 passed, 1 skipped, 0 failures.",
+    "native_result_bundle": "Test-AgentMux-2026.10.18_11-44-18--0600.xcresult",
+    "skipped_test": "WorkspaceLifecyclePolishTests.testCodeCopyIsExposedThroughAccessibilityAndCopiesLiteralText: virtual SwiftUI nodes unavailable to hosted lookup; no system Accessibility access. Manual VoiceOver verification subsequently waived by operator; no accessibility pass is claimed.",
+    "readme_minimal_config": "config validate passed with temporary existing project/profile paths.",
+    "focused_completion_checks": "TestCodexCompletionSurvivesConversationChangesAndObservationGaps and TestCodexCompletionAfterNewSurvivesDaemonRestart passed.",
+    "documents": "Local file links and git diff --check passed."
+  }
+}

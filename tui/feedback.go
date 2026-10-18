@@ -31,7 +31,7 @@ func feedbackText(m Model) string {
 				next = "enter: inspect this session"
 			}
 			if t.id == undoCloseToastID {
-				next = "u: recover last closed session"
+				next = "u: recover last ended session"
 			}
 			if t.Pending || t.Unconfirmed {
 				lines = append(lines, "What remains uncertain", "The operation has no confirmed outcome. Check the session before repeating it.")

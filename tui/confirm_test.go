@@ -17,7 +17,7 @@ func TestRenderConfirmClose(t *testing.T) {
 		targetSession:      session.RunningSession{Base: "api"},
 	}
 	out := stripAnsi(renderConfirm(m))
-	want1 := `Close "api"?`
+	want1 := `End Session "api"?`
 	want2 := wantCloseConsequence
 	if !strings.Contains(out, want1) {
 		t.Errorf("expected line 1 %q in output; got %q", want1, out)

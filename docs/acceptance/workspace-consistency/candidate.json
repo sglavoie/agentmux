@@ -1,0 +1,23 @@
+{
+  "recorded_at": "2026-10-18T17:48:29.185543+00:00",
+  "source_commit": "88dbd35747f6203cadac3f034e5b2ec34e30f368",
+  "working_tree_changes": true,
+  "command": "just mac-app Release",
+  "build_result": "Passed; signed bundle verified by build script.",
+  "app_installed": false,
+  "cli_installed": false,
+  "bundled_cli_version": "amx version 0.8.0 (revision 88dbd35747f6-dirty, built 2026-10-18T17:12:44Z, go1.27.1, sha256:29fa5b40ccc5)",
+  "artifacts": [
+    {
+      "path": "macos/build/Agent Mux.app/Contents/MacOS/Agent Mux",
+      "sha256": "e7e579a8005940dd42d3bd77005faf61a24e77b58f821a60d800765909ff5141"
+    },
+    {
+      "path": "macos/build/Agent Mux.app/Contents/Resources/bin/amx",
+      "sha256": "29fa5b40ccc5222142945923cb04622a4a94d602652befbba0ca7a4c66cfb280"
+    }
+  ],
+  "pending": [],
+  "completion_visibility_note": "F-001 was confirmed on the previously installed build; its hash and all confirmed paths are recorded separately in observations.json.",
+  "voiceover_verification": "Waived by operator request: \"skip voiceover check\". No VoiceOver pass is claimed; see observations.json."
+}

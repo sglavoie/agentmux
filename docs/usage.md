@@ -92,11 +92,28 @@ confirmed.
 
 The launcher header names its actual destination and its source (`--backend`,
 `config.toml`, the workspace host, or the terminal/compatibility default).
-In the launcher, `Ctrl+e` opens configuration; restart the dashboard after changing
-`launch_backend`. The status line names the
+In the launcher, `Ctrl+e` opens configuration. The dashboard reloads valid edits
+automatically, including `launch_backend`; an open form or confirmation keeps its
+captured settings until it finishes. Invalid edits retain the previous configuration
+and show a notice. Daemon settings still require `amx daemon restart`. The status line names the
 highlighted project's effective profile, including a one-time override. App
 Settings also reports the CLI backend so an override is visible. The app's
 Launch Project menu repeats the destination above the profile groups.
+
+## Session lifecycle
+
+**End Session** stops the agent; its saved conversation remains available.
+**Detach Terminal** leaves the agent running. **Close View** ends a utility
+program such as a shell or editor. These names have the same meaning in the
+native app, Dashboard, and Overview. `amx close` keeps its command name and
+requires `--yes`; it performs End Session.
+
+The TUI's `confirm_destructive` setting controls End Session, restart, and
+restart under another profile, including in the app's embedded Dashboard and
+Overview. Native menus and sidebar actions use the separate **Confirm before
+closing views or ending sessions** preference. Neither setting turns detaching
+into ending a session. Recovery after End Session offers Resume or Relaunch
+for 30 seconds; it does not restore the terminated process or unsaved work.
 
 ## Action feedback
 
@@ -110,19 +127,19 @@ first occurrence time and, when known, the session it concerns. `Tab` and
 `Shift+Tab` select notices; `j`/`k`, page keys, and `g`/`G` scroll long messages.
 Press `y` to copy the selected message or `Y` to copy all notices; `d` dismisses
 the selected notice and `D` dismisses all completed notices. Active operations
-and available close recovery remain visible.
+and available session recovery remain visible.
 
 `Enter` inspects the notice's session without attaching or repeating the action;
 notices without a session open health details. `h` opens health, `c` opens the
 configuration in the configured editor, and `Esc` returns to the dashboard.
-`u` recovers the most recently closed session while its countdown is visible.
+`u` recovers the most recently ended session while its countdown is visible.
 
 A lifecycle operation still awaiting its result after ten seconds says **Still
 waiting**. This is not a timeout verdict or permission to repeat it: inspect
 the live session and connection health first. A late result replaces that
 operation's notice. Dismissing a notice does not cancel the operation.
 Successful feedback clears after four seconds, except a send whose form was
-closed: its outcome remains until dismissed. Close recovery keeps
+closed: its outcome remains until dismissed. End Session recovery keeps
 its separate 30-second deadline. Notices live for this dashboard process.
 Recovery resumes the exact conversation when its identity is known, validating
 its transcript first. Otherwise it explicitly offers a project relaunch. A failed
@@ -170,7 +187,7 @@ below for where each key went.
 - `Tab`/`Shift+Tab`: switch the focused pane. Its heading is highlighted and marked `focused`; the inactive pane's selection loses its reverse highlight.
 - `a`: open the actions menu for the selected row — focus, peek at the
   scrollback, restart, restart under another profile, launch another session in
-  the project, clear the status icon, mark it active, close, open a shell or the
+  the project, clear the status icon, mark it active, end the session, open a shell or the
   configured editor in its directory, copy the title, lock, mute. It is a menu
   you move through, not a sheet of letters: `j`/`k` or `↑`/`↓` move the selection,
   `PgUp`/`PgDn`, `Ctrl+f`/`Ctrl+b`, `Ctrl+d`/`Ctrl+u`, and `g`/`G` move it
@@ -236,7 +253,7 @@ supports less-style `Ctrl+d/u/f/b` paging, and `y` copies the selected raw
 line), **Manage Worktrees**, **Show Runs** (the `agent-session-loop`
 intervention cockpit), **Show Projects View** / **Show Urgency View**, **Cycle
 Profile Filter**, **Show Session Details** and **Show Session Timeline** (the
-per-session hook event log), **Resort Tabs**, and **Resume Last Closed Conversation** or **Relaunch Last Closed Session**.
+per-session hook event log), **Resort Tabs**, and **Resume Last Ended Conversation** or **Relaunch Last Ended Session**.
 
 The dashboard profile cycle is an `@profile` filter: it follows
 case-insensitive alphabetical profile order, preserves any active word,
@@ -263,7 +280,7 @@ nothing at all, so nothing you remember can now mean something else.
 | --- | --- |
 | `space` (focus) | `Enter` |
 | `e` peek, `r` restart, `c` profile override, `C` launch another, `x` clear icon, `X` close, `o` shell, `O` editor, `y` copy title, `L` lock, `m` mute | `a`, then the same letter. The menu's mnemonics are unchanged; you can also move to the entry and press `Enter` |
-| `u` undo close | `u` — it came back. What it undoes expires after 30 seconds, and a capability that has to be found by name before it lapses is not reachable. `:` → **Resume Last Closed Conversation** or **Relaunch Last Closed Session** still works |
+| `u` undo close | `u` — it came back. What it undoes expires after 30 seconds, and a capability that has to be found by name before it lapses is not reachable. `:` → **Resume Last Ended Conversation** or **Relaunch Last Ended Session** still works |
 | `s` / `S` past sessions | `s` / `S` — both came back for browsing. `:` → **Search This Project's Past Sessions** / **Search All Past Sessions** still works |
 | `P` plans, `W` worktrees, `A` runs | `:` → **Search Plans** / **Manage Worktrees** / **Show Runs** |
 | `d` session detail, `T` timeline | `i` for the inspector, or `:` → **Show Session Details** / **Show Session Timeline** |

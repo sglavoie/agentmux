@@ -67,7 +67,7 @@ type tmuxCloser interface {
 
 func runClose(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-		return cli.MissingParameter(cmd, closeJSON, "runtime-session-id", "the runtime session to close (rs-...)")
+		return cli.MissingParameter(cmd, closeJSON, "runtime-session-id", "the runtime session to end (rs-...)")
 	}
 	id, err := runtimesession.ParseID(strings.TrimSpace(args[0]))
 	if err != nil {
@@ -144,12 +144,12 @@ func runClose(cmd *cobra.Command, args []string) error {
 	if closeJSON {
 		return cli.WriteJSON(cmd, data)
 	}
-	message := fmt.Sprintf("Closed %s.", record.Project)
+	message := fmt.Sprintf("Ended session %s.", record.Project)
 	switch {
 	case !data.Closed:
-		message = fmt.Sprintf("%s was not running; there was nothing to close.", record.Project)
+		message = fmt.Sprintf("%s was not running; there was nothing to end.", record.Project)
 	case !data.Confirmed:
-		message = fmt.Sprintf("Asked tmux to close %s; it was not seen to go.", record.Project)
+		message = fmt.Sprintf("Asked tmux to end session %s; its exit was not confirmed.", record.Project)
 	}
 	_, err = fmt.Fprintln(cmd.OutOrStdout(), message)
 	return err
