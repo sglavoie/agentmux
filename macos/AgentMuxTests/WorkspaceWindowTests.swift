@@ -66,6 +66,19 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(group.needsAttention, "Promotion should apply when interaction ends")
     }
 
+    func testNewSessionsAppearWhilePointerRemainsInSidebar() throws {
+        app.store.apply(snapshot: F.snapshot([]))
+        let entered = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: workspace.window.windowNumber,
+            context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+        workspace.sidebar.mouseEntered(with: entered)
+        app.store.apply(snapshot: F.snapshot([sessions[0]]))
+        _ = try index(of: .embedded(F.runtimeID(1)))
+        app.store.apply(snapshot: F.snapshot(sessions))
+        _ = try index(of: .embedded(F.runtimeID(2)))
+        XCTAssertTrue(workspace.sidebar.pointerInside)
+    }
+
     func testEndedHeldSessionCannotBeOpenedOrActedOn() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let key = AttentionCycler.Key.embedded(F.runtimeID(2))

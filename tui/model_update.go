@@ -120,6 +120,12 @@ func (m Model) Init() tea.Cmd {
 // Update handles incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := m.dispatch(msg)
+	if next, ok := updated.(Model); ok {
+		if refresh := next.applyPendingConfig(); refresh != nil {
+			cmd = tea.Batch(cmd, refresh)
+		}
+		updated = next
+	}
 	// A history view has no session list: whatever would settle on it — a
 	// closed palette, a dismissed prompt, a finished action — settles on Past
 	// Sessions instead. Leaving Past Sessions itself quits (exitSessionSearch).
@@ -143,6 +149,8 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commands.TickMsg:
 		return m.handleTick(msg)
+	case configReloadMsg:
+		return m.handleConfigReload(msg)
 
 	case commands.HealthMsg:
 		return m.handleHealth(msg)
@@ -366,6 +374,7 @@ func (m Model) handleTick(msg commands.TickMsg) (tea.Model, tea.Cmd) {
 	m.activeLoopRefreshSeq++
 	cmds := []tea.Cmd{
 		m.requestTopologyRefresh(),
+		m.refreshConfig(),
 		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		commands.Tick(m.interval),
 	}

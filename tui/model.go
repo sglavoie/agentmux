@@ -6,6 +6,7 @@
 package tui
 
 import (
+	"os"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -37,8 +38,15 @@ import (
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
 	// deps
-	client             kitty.KittyClient
-	cfg                *config.Config
+	client kitty.KittyClient
+	cfg    *config.Config
+	// Production watches the config off the update loop. Constructors remain
+	// usable with an in-memory config by leaving configPath empty.
+	configPath         string
+	configInfo         os.FileInfo
+	configInFlight     bool
+	configError        string
+	pendingConfig      *config.Config
 	interval           time.Duration
 	sortMode           string
 	backgroundCommands modelBackgroundCommands

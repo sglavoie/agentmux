@@ -743,6 +743,15 @@ too old, install or upgrade `agent-session-loop` first, then restart the daemon.
 The launcher reads configured `projects`, shows their default profile/harness,
 and lets you multi-select launches.
 
+The dashboard checks its configuration file on each refresh tick (normally
+every two seconds). Valid edits update projects and profiles, including an open
+launcher, while preserving the selected project and explicit launch overrides.
+An open form or confirmation keeps its settings until it closes. Invalid edits
+show a notice and keep the last valid configuration until the file is fixed.
+Running agents keep their existing working directory; a changed project path
+applies to new launches. Changing `launch_backend` still requires restarting
+the dashboard to select a different terminal backend.
+
 Launcher rows likewise show the project title only; profile information stays in
 its own badge/metadata columns.
 

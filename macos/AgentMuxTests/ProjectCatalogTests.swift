@@ -59,15 +59,15 @@ final class ProjectCatalogTests: XCTestCase {
 
     // MARK: Cache
 
-    func testCatalogRefreshesOnlyWhenOlderThanAMinute() {
+    func testCatalogRefreshesAfterTenSeconds() {
         var catalog = ProjectCatalog()
         XCTAssertTrue(catalog.needsRefresh(now: t0), "an empty catalog loads")
         XCTAssertTrue(catalog.state.begin())
         XCTAssertFalse(catalog.state.begin(), "one fetch at a time")
         XCTAssertFalse(catalog.needsRefresh(now: t0), "not while one is running")
         catalog.state.finish(.success([ProjectEntry(profile: "work", title: "API")]), at: t0)
-        XCTAssertFalse(catalog.needsRefresh(now: t0.addingTimeInterval(59)))
-        XCTAssertTrue(catalog.needsRefresh(now: t0.addingTimeInterval(60)))
+        XCTAssertFalse(catalog.needsRefresh(now: t0.addingTimeInterval(9)))
+        XCTAssertTrue(catalog.needsRefresh(now: t0.addingTimeInterval(10)))
     }
 
     func testFailedRefreshKeepsTheCachedList() {

@@ -131,9 +131,9 @@ struct ProjectLaunchResult: Decodable, Equatable {
 }
 
 /// The configured projects the Launch Project submenu offers, cached from
-/// `amx project list --json` and refreshed when the menu opens on a list
-/// older than a minute. Configuration changes rarely, and listing it is a
-/// process launch, so the menu never waits for it.
+/// `amx project list --json`. The app refreshes it in the background every
+/// ten seconds and when a menu opens on an older list, so config edits reach
+/// an already-open workspace without relaunching it.
 struct ProjectCatalog: Equatable {
     static func guidance(_ state: FetchState<[ProjectEntry]>, unavailable: String?) -> String {
         if let unavailable { return unavailable }
@@ -143,7 +143,7 @@ struct ProjectCatalog: Equatable {
         return "Choose a configured project to start, or return to a past conversation."
     }
 
-    static let maxAge: TimeInterval = 60
+    static let maxAge: TimeInterval = 10
     static let listArguments = ["project", "list"]
 
     var state = FetchState<[ProjectEntry]>()

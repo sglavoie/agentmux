@@ -175,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let timer = Timer(timeInterval: Self.healthInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshDaemonStatus()
+                self?.refreshProjects(force: true)
                 self?.notifications?.refreshAuthorization()
             }
         }
@@ -2308,9 +2309,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         refreshRecent()
     }
 
-    private func refreshProjects() {
+    private func refreshProjects(force: Bool = false) {
         guard let command, gate.unavailableReason(.project) == nil,
-              projects.needsRefresh(now: Date()), projects.state.begin() else { return }
+              (force || projects.needsRefresh(now: Date())), projects.state.begin() else { return }
         listQueue.async { [weak self] in
             let result = ProjectCatalog.fetch(command)
             // Surveyed before it is shown, so a fresh list never offers a

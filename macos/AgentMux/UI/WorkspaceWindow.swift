@@ -211,6 +211,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         old.map { previous in latest.first { previous.isSameLine(as: $0) } ?? previous }
     }
 
+    /// Hover holds attention reordering, but must not hide newly opened
+    /// sessions or views for as long as the pointer rests in the sidebar.
+    static func hasNewSidebarTargets(_ latest: [Item], comparedTo old: [Item]) -> Bool {
+        latest.contains { item in
+            switch item {
+            case let .row(row):
+                return !old.contains { if case let .row(previous) = $0 { return previous.key == row.key }; return false }
+            case let .view(view):
+                return !old.contains { if case let .view(previous) = $0 { return previous.id == view.id }; return false }
+            case .section, .group: return false
+            }
+        }
+    }
+
     /// The heading the utility views are listed under.
     static let viewsSection = "Workspace"
     /// How long a just-launched session is waited for before the request to
@@ -2917,7 +2931,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                     [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
                 }
             }
-        if !allowReorder, !items.isEmpty, sidebar.pointerInside || sidebarMenuOpen || dragged != nil {
+        let holdingHover = sidebar.pointerInside && !Self.hasNewSidebarTargets(wanted, comparedTo: items)
+        if !allowReorder, !items.isEmpty, holdingHover || sidebarMenuOpen || dragged != nil {
             wanted = Self.holdingSidebar(items, latest: wanted)
         }
         let dimmed: CGFloat = state.current ? 1 : 0.5

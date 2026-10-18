@@ -17,6 +17,7 @@ func Run(cfg *config.Config, client kitty.KittyClient) error {
 // session in the Kitty tab containing sourceWindowID when one exists.
 func RunFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) error {
 	m := NewModelFromWindow(cfg, client, sourceWindowID)
+	m.configPath = config.DefaultConfigPath()
 	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err
@@ -26,7 +27,9 @@ func RunFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID 
 // selected once it is listed. It has no session list to return to: leaving
 // Past Sessions quits.
 func RunHistory(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity) error {
-	p := tea.NewProgram(NewHistoryModel(cfg, client, wanted))
+	m := NewHistoryModel(cfg, client, wanted)
+	m.configPath = config.DefaultConfigPath()
+	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err
 }
