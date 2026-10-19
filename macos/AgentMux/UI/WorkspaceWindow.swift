@@ -3089,6 +3089,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let view: WorkspaceRowView
         if case let .view(utility) = items[row], utility.kind == .terminal {
             view = WorkspaceTerminalRowView()
+        } else if case let .row(session) = items[row] {
+            let sessionView = WorkspaceSessionRowView()
+            sessionView.hasStateGlyph = !session.glyph.isEmpty
+            view = sessionView
         } else {
             view = WorkspaceRowView()
         }
@@ -3861,7 +3865,9 @@ class WorkspaceRowView: NSTableRowView {
     /// Tells the line's cell what it is drawn on, so its text stays legible.
     func syncCell() {
         guard numberOfColumns > 0 else { return }
-        (view(atColumn: 0) as? WorkspaceRowCellView)?.setTabText(showsTabColor ? Self.tabText : nil)
+        guard let cell = view(atColumn: 0) as? WorkspaceRowCellView else { return }
+        cell.setTabText(showsTabColor ? Self.tabText : nil)
+        cell.setStateGlyphOutsidePill(isSelected && (self as? WorkspaceSessionRowView)?.hasStateGlyph == true)
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
@@ -3889,31 +3895,60 @@ class WorkspaceRowView: NSTableRowView {
 
     /// The selected line keeps its session's color as a border around the
     /// pill, falling back to the accent color for uncolored rows.
-    /// It is a view over the line, not something drawn here: a source list
-    /// paints its selection without asking the row view to.
+    /// It is a view over the line so background drawing cannot cover it.
     let selectionBorder = WorkspaceSelectionBorderView()
 
-    static let selectionBorderWidth: CGFloat = 2
+    static let selectionBorderWidth: CGFloat = 3
     /// How far the list's selection is inset from the row's sides, and how
     /// round its corners are.
     static let selectionInset: CGFloat = 10
     static let selectionRadius: CGFloat = 10
+    var pillLeadingInset: CGFloat { Self.selectionInset }
 
     override func layout() {
         super.layout()
         if subviews.last !== selectionBorder {
             addSubview(selectionBorder, positioned: .above, relativeTo: nil)
         }
-        selectionBorder.frame = bounds.insetBy(dx: Self.selectionInset, dy: 0)
+        selectionBorder.frame = pillRect(verticalInset: 0)
         selectionBorder.isHidden = !isSelected
     }
 
     /// The shape a line's color follows: the selection's, a point shorter so
     /// two colored lines do not run together.
     private func outline() -> NSBezierPath {
-        NSBezierPath(roundedRect: bounds.insetBy(dx: Self.selectionInset, dy: 1),
+        NSBezierPath(roundedRect: pillRect(verticalInset: 1),
                      xRadius: Self.selectionRadius, yRadius: Self.selectionRadius)
     }
+
+    private func pillRect(verticalInset: CGFloat) -> NSRect {
+        let left = bounds.minX + pillLeadingInset
+        return NSRect(x: left, y: bounds.minY + verticalInset,
+                      width: max(0, bounds.maxX - Self.selectionInset - left),
+                      height: max(0, bounds.height - 2 * verticalInset))
+    }
+}
+
+/// When selected, a session's state emoji sits on the contrast background to
+/// the left of its pill. The session text and border stay in the pill.
+@MainActor
+final class WorkspaceSessionRowView: WorkspaceRowView {
+    var hasStateGlyph = false {
+        didSet {
+            needsDisplay = true
+            needsLayout = true
+            syncCell()
+        }
+    }
+
+    override var pillLeadingInset: CGFloat { isSelected && hasStateGlyph ? 40 : Self.selectionInset }
+
+    override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
+        get { .none }
+        set { super.selectionHighlightStyle = .none }
+    }
+
+    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
 }
 
 /// An attached terminal uses only the session-colored border for selection.
@@ -4163,6 +4198,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// is there: a hidden one leaves the title the whole line.
     private var clearOfClose: NSLayoutConstraint!
     private var clearOfKey: NSLayoutConstraint!
+    private let contentStack = NSStackView()
 
     init() {
         super.init(frame: .zero)
@@ -4181,11 +4217,12 @@ final class WorkspaceRowCellView: NSTableCellView {
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 1
-        let stack = NSStackView(views: [glyphLabel, text])
-        stack.orientation = .horizontal
-        stack.spacing = 6
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        contentStack.addArrangedSubview(glyphLabel)
+        contentStack.addArrangedSubview(text)
+        contentStack.orientation = .horizontal
+        contentStack.spacing = 6
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentStack)
         closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .bold))
         closeButton.imagePosition = .imageOnly
@@ -4203,24 +4240,28 @@ final class WorkspaceRowCellView: NSTableCellView {
         addSubview(keyLabel)
         NSLayoutConstraint.activate([
             glyphLabel.widthAnchor.constraint(equalToConstant: 20),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6),
+            contentStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            contentStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6),
             keyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
             keyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            contentStack.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 1),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
             closeButton.widthAnchor.constraint(equalToConstant: Self.closeTarget),
             closeButton.heightAnchor.constraint(equalToConstant: Self.closeTarget),
         ])
-        clearOfClose = stack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2)
-        clearOfKey = stack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4)
+        clearOfClose = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2)
+        clearOfKey = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4)
         closeButton.alphaValue = 0
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
     }
 
     @objc private func closePressed(_ sender: Any?) { onClose?() }
+
+    func setStateGlyphOutsidePill(_ outside: Bool) {
+        contentStack.spacing = outside ? 10 : 6
+    }
 
     /// Whether the title may run under the × or the key label: only where
     /// that one is not there.
@@ -4242,6 +4283,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     override func prepareForReuse() {
         super.prepareForReuse()
         isHovered = false
+        setStateGlyphOutsidePill(false)
     }
 
     /// After the title of a line whose terminal rang the bell unseen.
