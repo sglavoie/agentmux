@@ -3831,9 +3831,8 @@ final class WorkspaceSidebarView: NSTableView {
     }
 }
 
-/// A line of the session list, drawn on its session's color: the color
-/// while the line is not the selected one, and the list's own selection
-/// while it is.
+/// A line of the session list, drawn on its session's color when unselected.
+/// Selection contrasts the space around its rounded pill in either theme.
 @MainActor
 class WorkspaceRowView: NSTableRowView {
     /// The text on a session's color. The daemon publishes colors bright
@@ -3866,6 +3865,15 @@ class WorkspaceRowView: NSTableRowView {
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
+        if isSelected {
+            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            (dark ? NSColor.white : NSColor.black).setFill()
+            bounds.fill()
+
+            NSColor.windowBackgroundColor.setFill()
+            outline().fill()
+            return
+        }
         guard showsTabColor, let tabColor else {
             super.drawBackground(in: dirtyRect)
             return
@@ -3874,8 +3882,13 @@ class WorkspaceRowView: NSTableRowView {
         outline().fill()
     }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
     /// The selected line keeps its session's color as a border around the
-    /// list's selection, falling back to the accent color for uncolored rows.
+    /// pill, falling back to the accent color for uncolored rows.
     /// It is a view over the line, not something drawn here: a source list
     /// paints its selection without asking the row view to.
     let selectionBorder = WorkspaceSelectionBorderView()

@@ -156,29 +156,34 @@ final class GhosttyInteractionTests: XCTestCase {
     }
 
     @MainActor
-    func testProjectTabArrowShortcutsAreClaimedBeforeTerminalInput() throws {
+    func testNavigationArrowShortcutsAreClaimedBeforeTerminalInput() throws {
         let savedMenu = NSApp.mainMenu
         let savedWindowsMenu = NSApp.windowsMenu
         defer { NSApp.mainMenu = savedMenu; NSApp.windowsMenu = savedWindowsMenu }
         let menu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
         NSApp.mainMenu = menu
-        let receiver = ProjectTabShortcutReceiver()
-        for key in [TestKey.left.with(.command), .right.with(.command)] {
+        let receiver = NavigationShortcutReceiver()
+        let keys: [TestKey] = [
+            .right.with(.command), .left.with(.command),
+            .right.with([.command, .shift]), .left.with([.command, .shift]),
+        ]
+        for key in keys {
             let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()))
             item.target = receiver
         }
         for scrollback in [Ghostty.Scrollback.terminal, .server] {
             try record(scrollback: scrollback)
-            for key in [TestKey.right.with(.command), .left.with(.command)] {
+            for key in keys {
                 let event = key.event()
                 if !view.performKeyEquivalent(with: event), !menu.performKeyEquivalent(with: event) {
                     view.keyDown(with: event)
                 }
             }
             press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
-            expect("a", "project navigation sends no input to sessions or utility terminals")
+            expect("a", "navigation sends no input to sessions or utility terminals")
         }
-        XCTAssertEqual(receiver.steps, [1, -1, 1, -1])
+        XCTAssertEqual(receiver.steps, ["project next", "project previous", "session next", "session previous",
+                                        "project next", "project previous", "session next", "session previous"])
     }
 
     @MainActor
@@ -598,6 +603,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("[", keyCode: 33), "⌘["),
             (.left.with(.command), "Previous Tab in Project"),
             (.right.with(.command), "Next Tab in Project"),
+            (.left.with([.command, .shift]), "Select Previous Session"),
+            (.right.with([.command, .shift]), "Select Next Session"),
             (.command("]", keyCode: 30, shifted: "}"), "⌘}"),
             (.command("[", keyCode: 33, shifted: "{"), "⌘{"),
             (.command("l", keyCode: 37), "Back to Last Shown"),
@@ -672,6 +679,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("[", keyCode: 33), "Select Previous Session"),
             (.left.with(.command), "Previous Tab in Project"),
             (.right.with(.command), "Next Tab in Project"),
+            (.left.with([.command, .shift]), "Select Previous Session"),
+            (.right.with([.command, .shift]), "Select Next Session"),
             (.command("l", keyCode: 37), "Back to Last Shown"),
             (.function(NSF1FunctionKey, keyCode: 122), "Keybinding Reference"),
             (.function(NSF2FunctionKey, keyCode: 120), "Overview"),
@@ -1137,8 +1146,10 @@ private final class WorkspaceShortcutReceiver: NSObject {
 }
 
 @MainActor
-private final class ProjectTabShortcutReceiver: NSObject {
-    var steps: [Int] = []
-    @objc func selectNextProjectTab(_ sender: Any?) { steps.append(1) }
-    @objc func selectPreviousProjectTab(_ sender: Any?) { steps.append(-1) }
+private final class NavigationShortcutReceiver: NSObject {
+    var steps: [String] = []
+    @objc func selectNextProjectTab(_ sender: Any?) { steps.append("project next") }
+    @objc func selectPreviousProjectTab(_ sender: Any?) { steps.append("project previous") }
+    @objc func selectNextSession(_ sender: Any?) { steps.append("session next") }
+    @objc func selectPreviousSession(_ sender: Any?) { steps.append("session previous") }
 }

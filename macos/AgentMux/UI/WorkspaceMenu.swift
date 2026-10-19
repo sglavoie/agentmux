@@ -27,8 +27,9 @@ import AppKit
 /// in the workspace; with Shift, a session that lives in Kitty comes forward
 /// there, and the Show in Kitty submenu that lists those is shown only while
 /// one of the digits goes to a Kitty session (`updateKittyItems`). ⌘] and ⌘[
-/// stop at every session and every terminal under one; with Shift they go
-/// from session to session. ⌘L goes back to where the pane was
+/// stop at every session and every terminal under one; ⌘⇧→ and ⌘⇧← do the
+/// same. With Shift on the brackets, they go from session to session. ⌘L goes
+/// back to where the pane was
 /// before, and again returns. ⌘P lists every session and view to go to by
 /// name.
 enum WorkspaceMenu {
@@ -168,6 +169,16 @@ enum WorkspaceMenu {
         session.addItem(.separator())
         session.addItem(item("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
         session.addItem(item("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
+        // Keep the bracket keys in the menu and accept the arrow chords as aliases.
+        for (title, action, arrow) in [
+            ("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), NSRightArrowFunctionKey),
+            ("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), NSLeftArrowFunctionKey),
+        ] {
+            let alias = item(title, action, key(arrow), mask: [.command, .shift], target: target)
+            alias.isHidden = true
+            alias.allowsKeyEquivalentWhenHidden = true
+            session.addItem(alias)
+        }
         session.addItem(item("Next Tab in Project", #selector(AppDelegate.selectNextProjectTab(_:)), key(NSRightArrowFunctionKey), target: target))
         session.addItem(item("Previous Tab in Project", #selector(AppDelegate.selectPreviousProjectTab(_:)), key(NSLeftArrowFunctionKey), target: target))
         // From session to session, passing over the terminals under one; a

@@ -207,9 +207,10 @@ terminals of their own beside the agents, and none of them needs Kitty.
   session has no ×; manage its terminal in Kitty.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you
   are on is working and lists it right under that session; pressed again, it
-  adds another. Click one to go back to it, or step to it: ⌘] and ⌘[ stop
-  at every session and every terminal under one, in sidebar order; ⌘⇧] and
-  ⌘⇧[ go from session to session, passing over the terminals. The digits
+  adds another. Click one to go back to it, or step to it: ⌘] and ⌘[
+  (also ⌘⇧→ and ⌘⇧←) stop at every session and every terminal under one,
+  in sidebar order; ⌘⇧] and ⌘⇧[ go from session to session, passing over
+  the terminals. The digits
   (⌘1 to ⌘0) count sessions only. It applies to sessions whose terminal
   is in the workspace, not to Kitty sessions; with no such session shown
   the item is greyed out. If the session ends first, the
@@ -268,7 +269,8 @@ Whatever has the keyboard decides where a key goes.
   Their items in the Session menu name the session each goes to, and are
   greyed out past the last one.
   Shells and other opened views are not counted. **⌘]** and **⌘[** step to
-  the next and the previous session or terminal under one, wrapping; **⌘⇧]**
+  the next and the previous session or terminal under one, wrapping. **⌘⇧→**
+  and **⌘⇧←** do the same; **⌘⇧]**
   and **⌘⇧[** step to the next and the previous session, skipping the
   terminals. From a terminal, the previous session is the one it is under.
 - Without Shift those keys never leave the app: a session that lives in
