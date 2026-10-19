@@ -114,6 +114,14 @@ enum WorkspaceMenu {
         // ⌘0 and ⌘⇧0 are the tenth session's.
         view.addItem(item("Actual Size", #selector(Ghostty.SurfaceView.resetZoom(_:)), "_"))
         view.addItem(.separator())
+        view.addItem(item("Bigger Sidebars", #selector(AppDelegate.biggerWorkspaceSidebars(_:)), "+", mask: .option, target: target))
+        let biggerSidebars = item("Bigger Sidebars", #selector(AppDelegate.biggerWorkspaceSidebars(_:)), "=", mask: .option, target: target)
+        biggerSidebars.isHidden = true
+        biggerSidebars.allowsKeyEquivalentWhenHidden = true
+        view.addItem(biggerSidebars)
+        view.addItem(item("Smaller Sidebars", #selector(AppDelegate.smallerWorkspaceSidebars(_:)), "-", mask: .option, target: target))
+        view.addItem(item("Actual Sidebar Size", #selector(AppDelegate.resetWorkspaceSidebars(_:)), "0", mask: .option, target: target))
+        view.addItem(.separator())
         view.addItem(item("Page Up", #selector(NSResponder.scrollPageUp(_:)), key(NSPageUpFunctionKey), mask: .shift))
         view.addItem(item("Page Down", #selector(NSResponder.scrollPageDown(_:)), key(NSPageDownFunctionKey), mask: .shift))
         // ⌘Page Up and ⌘Page Down page too, as in Ghostty and Terminal: in a

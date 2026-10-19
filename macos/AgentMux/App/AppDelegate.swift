@@ -783,6 +783,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
     @objc func toggleWorkspaceInspector(_ sender: Any?) { workspace?.toggleInspector() }
+    @objc func biggerWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.bigger) }
+    @objc func smallerWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.smaller) }
+    @objc func resetWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.reset) }
     @objc func toggleRecentPlace(_ sender: Any?) {
         if workspace?.toggleRecentPlace() != true { NSSound.beep() }
     }
@@ -2889,6 +2892,7 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(showNextSessionInKitty(_:)), #selector(showPreviousSessionInKitty(_:)),
         #selector(toggleRecentPlace(_:)),
         #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)),
+        #selector(biggerWorkspaceSidebars(_:)), #selector(smallerWorkspaceSidebars(_:)), #selector(resetWorkspaceSidebars(_:)),
         #selector(newSessionTerminal(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
         #selector(endWorkspaceSession(_:)), #selector(searchConversation(_:)),
         #selector(focusNextSession(_:)), #selector(focusPreviousSession(_:)),

@@ -226,6 +226,29 @@ final class GhosttyInteractionTests: XCTestCase {
         expect("a", "zoom keys send nothing to the program")
     }
 
+    @MainActor
+    func testOptionSidebarZoomIsConsumedBeforeTerminalInput() throws {
+        let zoomWindow = WorkspaceZoomWindow(contentRect: NSRect(x: -2000, y: -2000, width: 600, height: 400),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        zoomWindow.isReleasedWhenClosed = false
+        defer { zoomWindow.close() }
+        zoomWindow.contentView = view
+        zoomWindow.makeFirstResponder(view)
+        var changes: [WorkspaceZoomWindow.Zoom] = []
+        zoomWindow.onSidebarZoom = { changes.append($0) }
+        let surface = try XCTUnwrap(view.surface)
+        let originalSize = ghostty_surface_size(surface).cell_width_px
+        for (code, text, flags) in [(UInt16(24), "≠", NSEvent.ModifierFlags.option),
+                                   (24, "±", [.option, .shift]), (27, "–", .option), (29, "º", .option)] {
+            zoomWindow.sendEvent(TestKey(keyCode: code, characters: text, unmodified: text, flags: flags).event())
+        }
+        XCTAssertEqual(changes, [.bigger, .bigger, .smaller, .reset])
+        XCTAssertTrue(zoomWindow.firstResponder === view)
+        XCTAssertEqual(ghostty_surface_size(surface).cell_width_px, originalSize)
+        press(TestKey(keyCode: 0, characters: "a", unmodified: "a"))
+        expect("a", "sidebar zoom sends no Option characters to the program")
+    }
+
     /// ⌘0 and ⌘⇧0 are the tenth session's. With fewer sessions that item
     /// is disabled, and Ghostty must not reset the zoom behind it.
     @MainActor
@@ -657,6 +680,10 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("=", keyCode: 24), "Bigger"),
             (.command("-", keyCode: 27), "Smaller"),
             (.command("-", keyCode: 27, shifted: "_"), "Actual Size"),
+            (TestKey(keyCode: 24, characters: "±", unmodified: "+", flags: [.option, .shift]), "Bigger Sidebars"),
+            (TestKey(keyCode: 24, characters: "≠", unmodified: "=", flags: .option), "Bigger Sidebars"),
+            (TestKey(keyCode: 27, characters: "–", unmodified: "-", flags: .option), "Smaller Sidebars"),
+            (TestKey(keyCode: 29, characters: "º", unmodified: "0", flags: .option), "Actual Sidebar Size"),
             (.pageUp.with(.shift), "Page Up"),
             (.pageDown.with(.shift), "Page Down"),
             (.pageUp.with(.command), "Page Up"),
@@ -734,7 +761,7 @@ final class WorkspaceShortcutTests: XCTestCase {
         XCTAssertEqual(listed, expected.count + 1, "a menu shortcut is missing from this test (Hide is the one not listed)")
     }
 
-    func testOnlyCommandThePagingKeysAndKittysFunctionKeysAreTheMenus() {
+    func testOnlyCommandSidebarZoomPagingAndKittysFunctionKeysAreTheMenus() {
         let functionKeys = Set(WorkspaceMenu.functionKeys.map(\.title))
         XCTAssertEqual(WorkspaceMenu.functionKeys.map(\.number).sorted(), Array(1...11), "F12 detaches and stays tmux's")
         func check(_ menu: NSMenu) {
@@ -747,6 +774,8 @@ final class WorkspaceShortcutTests: XCTestCase {
                 } else if mask.isEmpty {
                     XCTAssertTrue(functionKeys.contains(item.title), item.title)
                     XCTAssertEqual(item.menu?.title, "Function Keys", item.title)
+                } else if mask == .option {
+                    XCTAssertTrue(["Bigger Sidebars", "Smaller Sidebars", "Actual Sidebar Size"].contains(item.title), item.title)
                 } else {
                     XCTAssertEqual(mask, .shift, item.title)
                     XCTAssertTrue(["Page Up", "Page Down"].contains(item.title), item.title)

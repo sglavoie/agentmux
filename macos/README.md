@@ -289,6 +289,9 @@ runs without embedded terminals.
   its last one had (`WorkspaceWindowController.fontSizes`, read through
   `SurfaceView.fontSize`, which is why the overrides force
   `window-inherit-font-size = true`).
+  **⌥+** (or **⌥=**) and **⌥−** zoom both sidebars together, including their
+  text, controls, and spacing; **⌥0** restores their original size. Sidebar
+  zoom works while the terminal has focus and is independent of terminal zoom.
 - **Callbacks.** Runtime actions are sorted by `Ghostty.disposition(of:)`. The
   app answers quit (passed to `GhosttyAppDelegate`, which ignores it), open
   URL, and open and reload config. A surface-targeted title, working

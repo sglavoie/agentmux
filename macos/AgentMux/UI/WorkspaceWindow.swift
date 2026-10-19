@@ -113,6 +113,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private(set) var isOpen = false
 
     let sidebar = WorkspaceSidebarView()
+    private(set) var sidebarZoom: CGFloat = 1
+    private var sidebarZoomView: WorkspaceSidebarZoomView?
+    private var inspectorZoomView: WorkspaceSidebarZoomView?
+
+    func zoomSidebars(_ change: WorkspaceZoomWindow.Zoom) {
+        switch change {
+        case .bigger: sidebarZoom = min(2, sidebarZoom + 0.1)
+        case .smaller: sidebarZoom = max(0.7, sidebarZoom - 0.1)
+        case .reset: sidebarZoom = 1
+        }
+        sidebarZoomView?.zoom = sidebarZoom
+        inspectorZoomView?.zoom = sidebarZoom
+        window.contentView?.layoutSubtreeIfNeeded()
+    }
     /// Hides the sidebar and brings it back, from the title bar, so that
     /// neither the sidebar nor the pane gives up anything to it.
     let sidebarToggle = WorkspaceWindowChrome.makeSidebarToggle()
@@ -3308,6 +3322,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     private func makeWindow() -> NSWindow {
         let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, feedLabel: feedLabel, feedButton: feedButton)
+        let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)
+        sidebarZoomView.zoom = sidebarZoom
+        sidebarController.view = sidebarZoomView
+        self.sidebarZoomView = sidebarZoomView
         sidebar.dataSource = self
         sidebar.delegate = self
         sidebar.target = self
@@ -3382,7 +3400,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             self?.delegate?.workspaceContext(row, completion: completion)
         }
         let inspectorController = NSViewController()
-        inspectorController.view = inspector
+        let inspectorZoomView = WorkspaceSidebarZoomView(content: inspector)
+        inspectorZoomView.zoom = sidebarZoom
+        inspectorController.view = inspectorZoomView
+        self.inspectorZoomView = inspectorZoomView
         let inspectorItem = NSSplitViewItem(viewController: inspectorController)
         inspectorItem.minimumThickness = 220
         inspectorItem.maximumThickness = 420
@@ -3395,7 +3416,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         split.addSplitViewItem(paneItem)
         split.addSplitViewItem(inspectorItem)
 
-        let window = NSWindow(contentViewController: split)
+        let window = WorkspaceZoomWindow(contentViewController: split)
+        window.onSidebarZoom = { [weak self] change in self?.zoomSidebars(change) }
         window.title = "Agent Mux"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false

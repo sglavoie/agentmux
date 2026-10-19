@@ -36,6 +36,42 @@ final class WorkspaceWindowTests: XCTestCase {
         try XCTUnwrap(workspace.state.rows.first { $0.project == project && $0.label == label })
     }
 
+    func testOptionZoomScalesBothSidebarsAndResetsWithoutChangingFocusOrPaneWidth() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.setInspectorCollapsed(false, animated: false)
+        workspace.window.contentView?.layoutSubtreeIfNeeded()
+        workspace.window.makeFirstResponder(workspace.sidebar)
+        let responder = workspace.window.firstResponder
+        let originalWidth = workspace.inspector.convert(workspace.inspector.bounds, to: nil).width
+        let originalSize = workspace.sidebar.convert(NSSize(width: 10, height: 10), to: nil)
+        func key(_ code: UInt16, _ text: String, _ flags: NSEvent.ModifierFlags = .option) throws {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: workspace.window.windowNumber, context: nil, characters: text,
+                charactersIgnoringModifiers: text, isARepeat: false, keyCode: code))
+            XCTAssertTrue(workspace.window.performKeyEquivalent(with: event))
+        }
+        for (code, text, flags) in [(UInt16(24), "≠", NSEvent.ModifierFlags.option), (24, "±", [.option, .shift])] {
+            try key(code, text, flags)
+            XCTAssertGreaterThan(workspace.sidebarZoom, 1)
+            for view: NSView in [workspace.sidebar, workspace.inspector] {
+                XCTAssertEqual(view.convert(NSSize(width: 10, height: 10), to: nil).height,
+                               originalSize.height * workspace.sidebarZoom, accuracy: 0.01)
+            }
+            XCTAssertEqual(workspace.inspector.convert(workspace.inspector.bounds, to: nil).width, originalWidth, accuracy: 0.01)
+            XCTAssertTrue(workspace.window.firstResponder === responder)
+            try key(29, "º")
+            XCTAssertEqual(workspace.sidebarZoom, 1)
+        }
+        workspace.setInspectorCollapsed(true, animated: false)
+        try key(27, "–")
+        workspace.setInspectorCollapsed(false, animated: false)
+        workspace.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertEqual(workspace.sidebarZoom, 0.9, accuracy: 0.01)
+        XCTAssertEqual(workspace.inspector.convert(NSSize(width: 10, height: 10), to: nil).height, 9, accuracy: 0.01)
+        try key(29, "º")
+        XCTAssertEqual(workspace.sidebar.convert(NSSize(width: 10, height: 10), to: nil), originalSize)
+    }
+
     private func index(of key: AttentionCycler.Key) throws -> Int {
         try XCTUnwrap(workspace.items.firstIndex { item in
             if case let .row(row) = item { return row.key == key }
