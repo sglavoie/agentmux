@@ -97,7 +97,7 @@ class WorkspaceRowView: NSTableRowView {
         guard numberOfColumns > 0 else { return }
         guard let cell = view(atColumn: 0) as? WorkspaceRowCellView else { return }
         cell.setTabText(showsTabColor ? Self.tabText : nil)
-        cell.setStateGlyphOutsidePill(isSelected && (self as? WorkspaceSessionRowView)?.hasStateGlyph == true)
+        cell.setStateGlyphOutsidePill((self as? WorkspaceSessionRowView)?.hasStateGlyph == true)
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
@@ -159,8 +159,8 @@ class WorkspaceRowView: NSTableRowView {
     }
 }
 
-/// When selected, a session's state emoji sits on the contrast background to
-/// the left of its pill. The session text and border stay in the pill.
+/// A session's state emoji always sits to the left of its pill.
+/// The session text and border stay in the pill.
 @MainActor
 final class WorkspaceSessionRowView: WorkspaceRowView {
     var hasStateGlyph = false {
@@ -171,7 +171,7 @@ final class WorkspaceSessionRowView: WorkspaceRowView {
         }
     }
 
-    override var pillLeadingInset: CGFloat { isSelected && hasStateGlyph ? 40 : Self.selectionInset }
+    override var pillLeadingInset: CGFloat { hasStateGlyph ? 40 : Self.selectionInset }
 
     override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
         get { .none }
@@ -401,6 +401,7 @@ final class WorkspaceRowCellView: NSTableCellView {
 
     func setStateGlyphOutsidePill(_ outside: Bool) {
         contentStack.spacing = outside ? 10 : 6
+        if outside { glyphLabel.textColor = .labelColor }
     }
 
     /// Whether the title may run under the × or the key label: only where
