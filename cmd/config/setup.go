@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/sglavoie/agentmux/cmd/hooks"
 	"github.com/sglavoie/agentmux/internal/atomicfile"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/spf13/cobra"
@@ -29,11 +32,20 @@ var configSetupCmd = &cobra.Command{
 
 Existing comments and optional settings are preserved. Setup refuses a config
 that already has projects; use amx config edit to add more. The project directory
-must exist. After setup, sync the harness hooks and check the backend before
-launching from the dashboard. Keep leaves the launch destination unset: CLI
+must exist. Setup offers to sync this profile's hooks, checks launch requirements,
+and summarizes effective destinations. Keep leaves the launch destination unset: CLI
 launch commands retain their Kitty default, while the dashboard chooses Kitty
 inside Kitty and tmux in other terminals.`,
 	RunE: runConfigSetup,
+}
+
+var setupLookPath = exec.LookPath
+var setupBackendStatus = func(cfg *config.Config) cli.BackendStatus {
+	cli.ConfigureTmux(cfg)
+	return cli.CollectBackendStatus(cfg, nil, cli.BackendProbe{})
+}
+var setupSyncHooks = func(cmd *cobra.Command, profile string) error {
+	return hooks.SyncCommand().RunE(cmd, []string{profile})
 }
 
 func runConfigSetup(cmd *cobra.Command, _ []string) error {
@@ -167,6 +179,10 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 	if err := config.Validate(&candidate); err != nil {
 		return fmt.Errorf("setup would create invalid config: %w", err)
 	}
+	syncChoice, err := setupChoice(reader, out, "Sync Agent Mux hooks for "+profile+" now? (yes/no)", "no", "yes", "no")
+	if err != nil {
+		return err
+	}
 	if before, readErr := os.ReadFile(path); readErr == nil && !bytes.Equal(before, original) {
 		return fmt.Errorf("config changed during setup; rerun `amx config setup` against the current file")
 	} else if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
@@ -175,8 +191,87 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 	if err := atomicfile.Replace(path, updated, 0o644); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
-	_, err = fmt.Fprintf(out, "Configured %s with profile %s in %s\nNext: amx config hooks-sync; amx backend status; amx\nIf launching on tmux, run amx backend status --check first.\n", title, profile, path)
+	if _, err := fmt.Fprintf(out, "Configured %s with profile %s in %s\n", title, profile, path); err != nil {
+		return err
+	}
+	var syncErr error
+	if syncChoice == "yes" {
+		syncErr = setupSyncHooks(cmd, profile)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return fmt.Errorf("configuration saved, but readiness checks could not load it: %w", err)
+	}
+	if err := setupSummary(out, cfg, profile, syncChoice == "yes", syncErr); err != nil {
+		return err
+	}
+	if syncErr != nil {
+		return fmt.Errorf("configuration saved; hook setup failed: %w", syncErr)
+	}
+	return nil
+}
+
+func setupSummary(out io.Writer, cfg *config.Config, profile string, synced bool, syncErr error) error {
+	var summary strings.Builder
+	cliBackend := cfg.LaunchBackendOrDefault()
+	dashboardBackend := cfg.Defaults.LaunchBackend
+	source := "config.toml"
+	if dashboardBackend == "" {
+		source = "compatibility default"
+		dashboardBackend = config.LaunchBackendTmux
+		if cli.WindowIDFromEnv() > 0 || os.Getenv("KITTY_LISTEN_ON") != "" {
+			dashboardBackend = config.LaunchBackendKitty
+		}
+	}
+	fmt.Fprintf(&summary, "\nLaunch destinations\n  CLI: %s (%s; --backend overrides)\n  Dashboard in this terminal: %s\n", cliBackend, source, dashboardBackend)
+	if cfg.Defaults.LaunchBackend == "" {
+		summary.WriteString("  Dashboard elsewhere: Kitty inside Kitty; tmux in other terminals.\n")
+	}
+	summary.WriteString("  macOS app: its Launch Project preference applies; check Settings → Launch destination.\n\nLaunch checks\n  Configuration: valid; project directory exists.\n")
+	for _, account := range cfg.Profiles {
+		if account.Name != profile {
+			continue
+		}
+		executable := harness.Executable(account.EffectiveHarness())
+		if path, err := setupLookPath(executable); err == nil {
+			fmt.Fprintf(&summary, "  Agent CLI: %s\n", path)
+		} else {
+			fmt.Fprintf(&summary, "  Agent CLI missing: install %s and put it on PATH before launching.\n", executable)
+		}
+		fmt.Fprintf(&summary, "  Profile home: %s\n  Authentication: not checked; authenticate the agent CLI with this profile home before launching.\n", account.EffectiveHomeDir())
+	}
+	status := setupBackendStatus(cfg)
+	if status.Tmux.Available {
+		fmt.Fprintf(&summary, "  tmux: %s (%s)\n", status.Tmux.Version, status.Tmux.Path)
+	}
+	for _, problem := range status.Problems {
+		fmt.Fprintf(&summary, "  tmux %s: %s %s\n", problem.Severity, problem.Message, problem.Hint)
+	}
+	if dashboardBackend == config.LaunchBackendTmux && !status.Usable() {
+		summary.WriteString("  Dashboard launch blocked: resolve the tmux problems above before launching here.\n")
+	}
+	if cliBackend == config.LaunchBackendKitty || dashboardBackend == config.LaunchBackendKitty {
+		if path, err := setupLookPath("kitten"); err == nil {
+			fmt.Fprintf(&summary, "  Kitty client: %s; run inside a Kitty instance configured for remote control.\n", path)
+		} else {
+			summary.WriteString("  Kitty client missing: install/configure Kitty, or choose tmux with amx config edit.\n")
+		}
+	}
+	switch {
+	case syncErr != nil:
+		fmt.Fprintf(&summary, "  Hooks: failed — %v\n  Retry: %s\n", syncErr, setupHookCommand(profile))
+	case synced:
+		summary.WriteString("  Hooks: synced for this profile; event delivery still needs verification in a live session.\n")
+	default:
+		fmt.Fprintf(&summary, "  Hooks: not synced during setup. Next: %s\n", setupHookCommand(profile))
+	}
+	summary.WriteString("\nAfter resolving any missing requirements, run amx, press l, select your project, and press Enter.\nFor a full installation check: amx doctor --strict\n")
+	_, err := io.WriteString(out, summary.String())
 	return err
+}
+
+func setupHookCommand(profile string) string {
+	return "amx config hooks-sync -- '" + strings.ReplaceAll(profile, "'", "'\\''") + "'"
 }
 
 func setupPrompt(reader *bufio.Reader, out io.Writer, label, fallback string) (string, error) {

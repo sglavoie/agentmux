@@ -32,6 +32,10 @@ CLI launch commands retain their Kitty default, while the dashboard uses Kitty
 inside Kitty and tmux in other terminals. Choosing Kitty or tmux pins future
 launches to that backend. Setup adds the
 first project without removing starter comments or changing other settings.
+Setup also offers to sync hooks for the chosen profile, checks the agent CLI
+and backend, and reports where CLI and dashboard launches will open. Answer
+the hook prompt explicitly; choosing **no** leaves hook files unchanged and
+prints the command to finish later. Authentication is not checked by setup.
 For manual setup, run
 `amx config edit` and use the following minimal Claude configuration,
 replacing the project path with an existing checkout. This uses your usual Claude home;
@@ -67,6 +71,8 @@ amx config hooks-sync
 amx backend status
 amx
 ```
+
+Skip `hooks-sync` here if setup already synced the profile successfully.
 
 If launching on tmux, run `amx backend status --check` before `amx`.
 The `--check` flag tests tmux availability, including when your configured

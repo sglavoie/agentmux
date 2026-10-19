@@ -92,6 +92,8 @@ var helpSections = []struct {
 		"  pgup      page up",
 		"  home      go to top",
 		"  end       go to bottom",
+		"  g/G       aliases for home/end",
+		"  ctrl+d/u  half-page down/up in the focused pane",
 		"  n         next Needs you session (reveals it; opens nothing)",
 		"  N         previous Needs you session",
 		"  tab       switch between the queue and the inspector",

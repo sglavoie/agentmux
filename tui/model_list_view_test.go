@@ -469,8 +469,7 @@ func TestProjectsNavigationAtListBoundaries(t *testing.T) {
 				t.Fatalf("list holds %d lines (%v), want %d", got, itemLines(m), tc.length)
 			}
 
-			// Home and End, not `g`/`G`: the vi-style pair is retired on the
-			// dashboard and the two named keys are what reach the ends now.
+			// Named keys and familiar aliases navigate the same projected list.
 			m = pressKey(m, keyHome)
 			if m.cursor != 0 {
 				t.Errorf("home left the cursor at %d, want the first line", m.cursor)
@@ -489,11 +488,13 @@ func TestProjectsNavigationAtListBoundaries(t *testing.T) {
 				t.Errorf("j at the bottom ran off to %d, want %d", got, want)
 			}
 
-			// And the retired pair moves nothing at all.
-			for _, key := range []string{keyG, keyGG} {
-				if got := pressKey(m, key).cursor; got != m.cursor {
-					t.Errorf("retired key %q moved the cursor from %d to %d", key, m.cursor, got)
-				}
+			m = pressKey(m, keyG)
+			if m.cursor != 0 {
+				t.Fatalf("g did not reach the first line: %d", m.cursor)
+			}
+			m = pressKey(m, keyGG)
+			if m.cursor != tc.length-1 {
+				t.Fatalf("G did not reach the last line: %d", m.cursor)
 			}
 
 			// Every line is reachable, and every line the cursor stops on is a

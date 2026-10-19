@@ -112,7 +112,7 @@ extension WorkspaceWorkflowPolishTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("change.txt")
         try Data("fixture".utf8).write(to: file)
-        let patch = "@@ -1,80 +1,80 @@\n" + (0..<80).map { " context \($0)\n" }.joined()
+        let patch = "@@ -1 +1 @@\n-first\n+first changed\n@@ -10,80 +10,80 @@\n" + (0..<80).map { " context \($0)\n" }.joined()
             + "@@ -100,1 +100,1 @@\n-old\n+new\n"
         let payload: [String: Any] = ["root": directory.path, "base": "abc", "files": [["path": "change.txt", "added": 1, "deleted": 1, "binary": false, "untracked": false]], "patch": patch, "truncated": false]
         let data = try JSONSerialization.data(withJSONObject: ["schema_version": 1, "data": payload])
@@ -143,14 +143,25 @@ extension WorkspaceWorkflowPolishTests {
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
         let scroll = try XCTUnwrap(descendants(host).compactMap { $0 as? NSScrollView }.first { $0.documentView is NSTextView })
         XCTAssertTrue(host.ownsKeyboard)
-        XCTAssertTrue(key("g"))
-        try await Task.sleep(for: .milliseconds(100))
         let firstHunk = scroll.contentView.bounds.origin.y
         XCTAssertTrue(key("g"))
         try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(scroll.contentView.bounds.origin.y, firstHunk, accuracy: 1, "the second hunk is already visible")
+        XCTAssertTrue(key("g"))
+        try await Task.sleep(for: .milliseconds(100))
         XCTAssertGreaterThan(scroll.contentView.bounds.origin.y, firstHunk)
+        let lastHunk = scroll.contentView.bounds.origin.y
         XCTAssertTrue(key("G", flags: [.command, .shift]))
         try await Task.sleep(for: .milliseconds(100))
+        XCTAssertLessThan(scroll.contentView.bounds.origin.y, lastHunk)
+        // Scrolling manually must replace the last shortcut's navigation anchor.
+        let text = try XCTUnwrap(scroll.documentView as? WorkspaceDiffTextView)
+        let third = try XCTUnwrap(text.lineRect(model.diff.hunks[2])).minY
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: third))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertTrue(key("g")) // visible last hunk wraps to the first
+        try await Task.sleep(for: .milliseconds(150))
         XCTAssertEqual(scroll.contentView.bounds.origin.y, firstHunk, accuracy: 1)
         var opened: [String] = []
         model.onOpenFile = { opened.append($0) }

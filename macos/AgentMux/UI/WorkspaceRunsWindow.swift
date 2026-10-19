@@ -31,6 +31,8 @@ struct WorkspaceRunsView: View {
                 Button("Refresh") { model.refresh() }.disabled(model.loading).help("Refresh runs (⌘R)")
                 Button("Run a Plan…") { plan.isPresented = true }
             }
+            WorkspaceReadFailure(title: "Runs", error: model.error, retained: !model.rows.isEmpty,
+                                 loading: model.loading, retry: { model.refresh() })
             WorkspaceReviewSplit(layout: $model.layout, title: "Runs", minimum: 190, detailMinimum: 430) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.rows, id: \.rowID) { row in
@@ -51,6 +53,8 @@ struct WorkspaceRunsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if let row = model.selected {
                         runHeader(row)
+                        WorkspaceReadFailure(title: "Plan details", error: model.detailError, retained: model.detail != nil,
+                                             loading: model.reading, retry: { model.refresh() })
                         Divider()
                         ScrollViewReader { proxy in
                         ScrollView {
@@ -349,7 +353,7 @@ final class WorkspaceRunsWindow: NSObject, NSWindowDelegate {
             let host = WorkspaceReviewHost(rootView: WorkspaceRunsView(model: model, plan: plan))
             host.closesWindow = true
             window.contentView = host
-            window.setFrameAutosaveName("WorkspaceRuns"); window.center()
+            ReviewWindowPlacement.restore(window, name: "WorkspaceRuns")
             self.window = window
         }
         model.start()

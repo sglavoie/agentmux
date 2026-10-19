@@ -18,8 +18,7 @@ final class WorkspaceActivityWindow: NSObject, NSWindowDelegate {
             let host = WorkspaceReviewHost(rootView: WorkspaceActivityView(model: model))
             host.closesWindow = true
             window.contentView = host
-            window.setFrameAutosaveName("WorkspaceActivity")
-            window.center()
+            ReviewWindowPlacement.restore(window, name: "WorkspaceActivity")
             self.window = window
         }
         onVisibilityChanged(true)
@@ -72,6 +71,8 @@ struct WorkspaceActivityView: View {
                     Text("Retained history starts " + (model.report.flatMap { WorkspaceActivityEntry.date($0.earliestAvailable) }?.formatted() ?? "at an unknown time"))
                 }.menuStyle(.borderlessButton).fixedSize().font(.caption)
             }.frame(height: 20)
+            WorkspaceReadFailure(title: "Activity", error: model.error, retained: model.report != nil,
+                                 loading: model.loading, retry: { model.refresh() })
             HSplitView {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.visible) { entry in
@@ -107,10 +108,12 @@ struct WorkspaceActivityView: View {
                                 Text("Supporting output").font(.headline).fixedSize()
 
                             }
+                            WorkspaceReadFailure(title: "Supporting output", error: model.transcriptError, retained: model.transcript != nil,
+                                                 loading: model.reading, retry: { model.loadTranscript() })
                             if let excerpt = model.excerpt {
                                 Text("Last recorded assistant message at or before this event · \(excerpt.timestamp ?? "")").font(.caption).foregroundStyle(.secondary)
                                 WorkspaceTranscriptText(text: excerpt.text.reveal(), terms: [], preferences: preferences)
-                            } else if !model.reading {
+                            } else if !model.reading && model.transcriptError == nil {
                                 Text(entry.conversation == nil ? "This event has no recorded conversation identity." : "No timestamped assistant output at or before this event is available in the loaded messages.").foregroundStyle(.secondary)
                             }
                             if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier() } }

@@ -259,7 +259,7 @@ extension WorkspaceWorkflowPreviewTests {
     }
 
     func testMinimumWindowStatesInBothAppearances() async throws {
-        for state in ["populated", "empty", "loading", "failed"] {
+        for state in ["populated", "empty", "loading", "failed", "initial-failure"] {
             for dark in [false, true] {
                 let suffix = "\(state)-\(dark ? "dark" : "light")"
                 let runner = HeldPreviewRunner()
@@ -301,6 +301,7 @@ extension WorkspaceWorkflowPreviewTests {
                 }
                 let runs = WorkspaceRunsModel(service: service, command: getCommand, runner: runner)
                 let plan = WorkspaceRunPlanModel(command: getCommand, runner: runner)
+                if state == "initial-failure" { available = false; service.failed = true }
                 history.search(); changes.open(directory: "/Projects/api"); activity.refresh(); runs.refresh()
                 if state == "loading" {
                     runner.hold = true
@@ -309,20 +310,21 @@ extension WorkspaceWorkflowPreviewTests {
                     available = false; service.failed = true
                     history.search(); changes.refresh(); activity.refresh(); runs.refresh()
                 }
-                let notice = state == "failed" ? ["Refresh failed"] : state == "loading" ? ["Refreshing"] : []
+                let failed = state == "failed" || state == "initial-failure"
+                let notice = failed ? ["Refresh failed", "Retry"] : state == "loading" ? ["Refreshing"] : []
                 // Native disabled button text is deliberately faint; use retained
                 // content for OCR in those states and assert authorization directly.
                 if !notice.isEmpty { XCTAssertFalse(history.canAct) }
-                let historyContent = state == "empty" ? ["No conversations found"]
+                let historyContent = state == "initial-failure" ? ["Search results could not be loaded"] : state == "empty" ? ["No conversations found"]
                     : state == "populated" ? ["Resume", "Fork"] : ["Pagination is complete"]
                 try await render(WorkspaceHistoryView(model: history), name: "history-\(suffix)", width: 720, height: 450, dark: dark,
                                  expected: ["Search"] + notice + historyContent)
                 try await render(WorkspaceChangesView(model: changes), name: "changes-\(suffix)", width: 720, height: 450, dark: dark,
-                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "empty" ? ["No changes"] : ["pagination_controller_test.go"]))
+                                 expected: ["Checkout Changes", "Compare"] + notice + (state == "initial-failure" ? ["Comparison could not be loaded"] : state == "empty" ? ["No changes"] : ["pagination_controller_test.go"]))
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
-                                 expected: ["Since Last Looked", "Mark read"] + notice + (state == "empty" ? ["All caught up"] : ["Supporting output"]))
+                                 expected: ["Since Last Looked", "Mark read"] + notice + (state == "initial-failure" ? ["Activity could not be loaded"] : state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,
-                                 expected: ["ASL Runs", "Run a Plan"] + notice + (state == "empty" ? ["No active runs"] : state == "failed" ? ["Inspect Failed Check"] : ["Resume", "Abort"]))
+                                 expected: ["ASL Runs", "Run a Plan"] + notice + (state == "initial-failure" ? ["Runs could not be loaded"] : state == "empty" ? ["No active runs"] : state == "failed" ? ["Inspect Failed Check"] : ["Resume", "Abort"]))
             }
         }
     }

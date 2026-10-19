@@ -211,21 +211,53 @@ func TestNavOnEmptyListIsSafe(t *testing.T) {
 	if len(m.filtered) != 0 {
 		t.Fatalf("expected empty filtered, got %d", len(m.filtered))
 	}
-	for _, k := range []string{keyJ, keyK, keyHome, keyEnd, keyPgUp, keyPgDown, keyNeedsYouNext, keyNeedsYouPrev} {
+	for _, k := range []string{keyJ, keyK, keyHome, keyEnd, keyG, keyGG, keyCtrlD, keyCtrlU, keyPgUp, keyPgDown, keyNeedsYouNext, keyNeedsYouPrev} {
 		m = pressKey(m, k)
 		if m.cursor != 0 {
 			t.Errorf("after %q on empty list, cursor=%d (want 0)", k, m.cursor)
 		}
 	}
 
-	// The retired vi-style pair moves nothing either, on an empty list or a full
-	// one — `g`/`G` are Home/End now.
+	// Both spellings navigate identically on a populated list too.
 	full := loadSessions(testModel(), makeSessions())
 	full.cursor = 1
-	for _, k := range []string{keyG, keyGG} {
-		if got := pressKey(full, k).cursor; got != full.cursor {
-			t.Errorf("retired key %q moved the cursor from %d to %d", k, full.cursor, got)
+	for alias, named := range map[string]string{keyG: keyHome, keyGG: keyEnd} {
+		if got, want := pressKey(full, alias).cursor, pressKey(full, named).cursor; got != want {
+			t.Errorf("%q cursor = %d, want %d", alias, got, want)
 		}
+	}
+}
+
+func TestDashboardHalfPageAliasesRespectFocusedPane(t *testing.T) {
+	m := heldInspectorModel(t)
+	cursor := m.cursor
+	before := inspectorWindow(m)
+	m = pressKey(m, keyCtrlD)
+	if inspectorWindow(m) == before || m.cursor != cursor {
+		t.Fatal("half-page did not scroll only the inspector")
+	}
+	m = pressKey(m, keyCtrlU)
+	if inspectorWindow(m) != before {
+		t.Fatal("half-page up did not restore the inspector position")
+	}
+	m = pressKey(m, keyGG)
+	if m.inspectorViewport.Paused() {
+		t.Fatal("G must resume live output")
+	}
+	m = pressKey(m, keyG)
+	if inspectorWindow(m) != before {
+		t.Fatal("g must return to the top")
+	}
+	m = pressKey(m, keyTab)
+	m = pressKey(m, keyG)
+	m = pressKey(m, keyCtrlD)
+	want := min(max(1, listVisibleHeight(m)/2), m.listItemCount()-1)
+	if m.cursor != want {
+		t.Fatalf("queue half-page cursor %d, want %d", m.cursor, want)
+	}
+	m = pressKey(m, keyCtrlU)
+	if m.cursor != 0 {
+		t.Fatal("queue half-page up did not return to top")
 	}
 }
 

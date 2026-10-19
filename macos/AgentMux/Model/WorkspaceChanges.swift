@@ -99,6 +99,9 @@ final class WorkspaceChangesModel: ObservableObject {
     private var target: [String] = []
     private var generation = 0
     private var patchGeneration = 0
+    private var comparisonCancellation: ProcessCancellation?
+    private var patchCancellation: ProcessCancellation?
+    private var reviewCancellation: ProcessCancellation?
     let reviewState: WorkspaceReviewState
     private var originalTarget: [String] = []
 
@@ -171,6 +174,7 @@ final class WorkspaceChangesModel: ObservableObject {
 
     func refresh() {
         guard !landing else { return }
+        cancelReads()
         generation += 1
         patchGeneration += 1
         let generation = generation
@@ -180,10 +184,13 @@ final class WorkspaceChangesModel: ObservableObject {
         error = nil
         reviewing = true
         worktreeError = nil
-        guard let command = command(), !target.isEmpty else { reviewing = false; error = "Select a checkout and check that amx is available."; return }
+        guard !target.isEmpty else { reviewing = false; error = "Select a checkout to compare."; return }
+        guard let command = command() else { reviewing = false; error = "amx is not available. Check Settings and retry."; return }
         loading = true
+        let cancellation = ProcessCancellation()
+        comparisonCancellation = cancellation
         let args = ["session", "changes", "--json", "--base", base] + target
-        runner.run({ command.json(WorkspaceChanges.self, args, timeout: 30) }) { [weak self] result in
+        runner.run({ command.json(WorkspaceChanges.self, args, timeout: 30, cancellation: cancellation) }) { [weak self] result in
             guard let self, self.generation == generation else { return }
             self.loading = false
             switch result {
@@ -201,6 +208,7 @@ final class WorkspaceChangesModel: ObservableObject {
     }
 
     func select(_ file: String?) {
+        patchCancellation?.cancel()
         patchGeneration += 1
         let sequence = patchGeneration
         if selectedFile != file { diffRefreshedAt = nil }
@@ -210,18 +218,26 @@ final class WorkspaceChangesModel: ObservableObject {
         patchError = nil
         truncated = false
         reading = false
-        guard let file, let changes, let command = command() else { return }
+        guard let file, let changes else { return }
+        guard let command = command() else { patchError = "amx is not available. Check Settings and retry."; return }
         reading = true
+        let cancellation = ProcessCancellation()
+        patchCancellation = cancellation
         let args = ["session", "changes", "--json", "--directory", changes.root, "--base", changes.base, "--file", file]
-        runner.run({ command.json(WorkspaceChanges.self, args, timeout: 30) }) { [weak self] result in
+        // Parsing and word matching run with the read, off the UI thread.
+        runner.run({ () -> AMXCommandResult<(WorkspaceChanges, WorkspaceDiff)> in
+            let result = command.json(WorkspaceChanges.self, args, timeout: 30, cancellation: cancellation)
+            guard !cancellation.isCancelled else { return .failure(.cancelled) }
+            return result.map { ($0, WorkspaceDiff($0.patch ?? "No text diff is available.")) }
+        }) { [weak self] result in
             guard let self, self.patchGeneration == sequence else { return }
             self.reading = false
             switch result {
             case let .failure(error): self.patchError = error.message
-            case let .success(value), let .partial(value, _):
+            case let .success((value, diff)), let .partial((value, diff), _):
                 self.diffRefreshedAt = Date()
                 self.patch = SecretText(value.patch ?? "No text diff is available.")
-                self.diff = WorkspaceDiff(self.patch.reveal())
+                self.diff = diff
                 self.patchIdentity = self.diffIdentity
                 self.truncated = value.truncated
             }
@@ -229,13 +245,16 @@ final class WorkspaceChangesModel: ObservableObject {
     }
 
     private func loadManagedReview(root: String, command: AMXCommand, generation: Int) {
+        reviewCancellation?.cancel()
+        let cancellation = ProcessCancellation()
+        reviewCancellation = cancellation
         runner.run({ () -> Result<WorkspaceWorktreeReview?, AMXCommandError> in
-            switch command.json(WorkspaceManagedTrees.self, ["worktree", "list"], timeout: 20).result {
+            switch command.json(WorkspaceManagedTrees.self, ["worktree", "list"], timeout: 20, cancellation: cancellation).result {
             case let .failure(error): return .failure(error)
             case let .success(list):
                 let root = URL(fileURLWithPath: root).resolvingSymlinksInPath().standardizedFileURL.path
                 guard let tree = list.worktrees.first(where: { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().standardizedFileURL.path == root }) else { return .success(nil) }
-                return command.json(WorkspaceWorktreeReview.self, ["worktree", "diff", "--json", "--", tree.id], timeout: 30).result.map(Optional.some)
+                return command.json(WorkspaceWorktreeReview.self, ["worktree", "diff", "--json", "--", tree.id], timeout: 30, cancellation: cancellation).result.map(Optional.some)
             }
         }) { [weak self] result in
             guard let self, self.generation == generation else { return }
@@ -291,6 +310,7 @@ final class WorkspaceChangesModel: ObservableObject {
     }
 
     func close() {
+        cancelReads()
         generation += 1
         patchGeneration += 1
         loading = false
@@ -298,5 +318,11 @@ final class WorkspaceChangesModel: ObservableObject {
         reviewing = false
         patch = SecretText()
         diff = WorkspaceDiff("")
+    }
+
+    private func cancelReads() {
+        comparisonCancellation?.cancel()
+        patchCancellation?.cancel()
+        reviewCancellation?.cancel()
     }
 }

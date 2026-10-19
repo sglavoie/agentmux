@@ -17,6 +17,23 @@ private final class UsabilityService: ASLService {
 
 @MainActor
 final class WorkspaceReviewUsabilityTests: XCTestCase {
+    func testInlineReadRecoveryInvokesRetryWithoutOpeningStatusPopover() async throws {
+        var retries = 0
+        let (window, host) = window(WorkspaceReadFailure(title: "Transcript", error: "Fixture read failed", retained: true,
+            retry: { retries += 1 }).padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading))
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(200))
+        let point = host.convert(NSPoint(x: host.bounds.maxX - 45, y: host.isFlipped ? 30 : host.bounds.maxY - 30), to: nil)
+        let up = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0))
+        let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        NSApp.postEvent(up, atStart: true)
+        window.sendEvent(down)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(retries, 1)
+    }
     private func command(_ value: @escaping ([String]) -> String) -> AMXCommand {
         var command = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
         command.runner = { _, args, _, _ in

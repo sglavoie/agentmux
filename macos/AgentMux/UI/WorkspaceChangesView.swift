@@ -79,6 +79,8 @@ struct WorkspaceChangesView: View {
                 }
             }.frame(height: 24)
             }
+            WorkspaceReadFailure(title: "Comparison", error: model.error, retained: model.changes != nil,
+                                 loading: model.loading, retry: { model.refresh() })
             if let changes = model.changes {
                 if !changes.files.isEmpty {
                     WorkspaceReviewSplit(layout: $model.layout, title: "Changed files") {
@@ -126,11 +128,16 @@ struct WorkspaceChangesView: View {
                                     .menuStyle(.borderlessButton).fixedSize().help("Diff display and copy options")
                                     .accessibilityLabel("Diff display and copy options")
                             }
+                            WorkspaceReadFailure(title: "Diff", error: model.patchError, retained: model.patchIdentity == model.diffIdentity,
+                                                 loading: model.reading, retry: { model.select(model.selectedFile) })
                             WorkspaceDiffView(diff: model.diff, identity: model.diffIdentity,
                                               loading: model.reading || model.patchIdentity != model.diffIdentity,
                                               jump: hunk, jumpSequence: jumpSequence, reviewState: model.reviewState,
                                               fontSize: model.diffFontSize, wrapLines: model.wrapDiffLines,
-                                              compactMetadata: !showPatchHeaders, focusRequest: diffFocusRequest, onVisibleHunk: { visibleHunk = $0 },
+                                              compactMetadata: !showPatchHeaders, focusRequest: diffFocusRequest, onVisibleHunk: {
+                                                  visibleHunk = $0
+                                                  hunk = $0
+                                              },
                                               onCopy: { copyFeedback = $0 })
                                 .opacity(model.patchIdentity == model.diffIdentity ? 1 : 0)
                                 .onChange(of: model.diffIdentity) { _, _ in hunk = nil; visibleHunk = nil; copyFeedback = WorkspaceCopyFeedback() }
@@ -208,6 +215,8 @@ struct WorkspaceChangesView: View {
     private func moveHunk(_ delta: Int) {
         let count = model.diff.hunks.count
         guard count > 0 else { return }
+        // Viewport changes update hunk above. Keep explicit steps too: the next
+        // hunk may already fit on screen and therefore cause no scroll event.
         hunk = hunk.map { ($0 + delta + count) % count } ?? (delta > 0 ? 0 : count - 1)
         jumpSequence += 1
     }
@@ -231,8 +240,7 @@ final class WorkspaceChangesWindow: NSObject, NSWindowDelegate {
             let host = WorkspaceReviewHost(rootView: WorkspaceChangesView(model: model))
             host.closesWindow = true
             window.contentView = host
-            window.setFrameAutosaveName("WorkspaceChanges")
-            window.center()
+            ReviewWindowPlacement.restore(window, name: "WorkspaceChanges")
             self.window = window
         }
         onVisibilityChanged(true)

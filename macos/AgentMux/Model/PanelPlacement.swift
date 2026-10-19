@@ -1,5 +1,23 @@
-import CoreGraphics
+import AppKit
 import Foundation
+
+/// Restore the operator's review layout, fitting it to the displays available now.
+@MainActor
+enum ReviewWindowPlacement {
+    static func restore(_ window: NSWindow, name: String) {
+        window.setFrameAutosaveName(name)
+        let restored = window.setFrameUsingName(name)
+        let placement = PanelPlacement(screens: NSScreen.screens.map {
+            .init(frame: $0.frame, visibleFrame: $0.visibleFrame)
+        })
+        if let frame = placement.frame(size: window.frame.size, saved: restored ? window.frame : nil,
+                                       workspace: NSApp.mainWindow?.frame, pointer: NSEvent.mouseLocation) {
+            window.setFrame(frame, display: false)
+        } else if !restored {
+            window.center()
+        }
+    }
+}
 
 /// Where an answer panel opens, worked out from frames alone so that it can
 /// be tested without a window or a display. All rects are in global screen

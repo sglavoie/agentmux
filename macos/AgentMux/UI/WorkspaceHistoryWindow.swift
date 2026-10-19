@@ -28,8 +28,7 @@ final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
             let host = WorkspaceReviewHost(rootView: WorkspaceHistoryView(model: model))
             host.closesWindow = true
             window.contentView = host
-            window.setFrameAutosaveName("WorkspaceHistory")
-            window.center()
+            ReviewWindowPlacement.restore(window, name: "WorkspaceHistory")
             self.window = window
         }
         onVisibilityChanged(true)
@@ -93,6 +92,9 @@ struct WorkspaceHistoryView: View {
                 Text("\(model.entries.count) of \(model.totalResults) \(model.totalResults == 1 ? "conversation" : "conversations")").foregroundStyle(.secondary)
             }
             GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 6) {
+            WorkspaceReadFailure(title: "Search results", error: model.error, retained: !model.entries.isEmpty,
+                                 loading: model.loading, retry: { model.search() })
             HStack(spacing: 0) {
                 if !model.layout.collapsed {
                 VStack(spacing: 6) {
@@ -176,6 +178,8 @@ struct WorkspaceHistoryView: View {
                         if let notice = model.locationNotice {
                             Text(notice).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         }
+                        WorkspaceReadFailure(title: "Transcript", error: model.transcriptError, retained: model.transcript != nil,
+                                             loading: model.reading, retry: { model.refreshTranscript() })
                         if let transcript = model.transcript {
                             HStack(spacing: 4) {
                                 Menu {
@@ -234,6 +238,7 @@ struct WorkspaceHistoryView: View {
                     } else { WorkspaceEmpty(title: "Conversation preview", detail: "Select a conversation to read or resume it.", symbol: "text.bubble") }
                     Spacer(minLength: 0)
                 }.padding(.horizontal, 8).padding(.vertical, 4).frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+            }
             }
             }
         }.padding(.horizontal, 12).padding(.vertical, 8)

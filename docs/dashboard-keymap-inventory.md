@@ -112,8 +112,8 @@ successor named here or it had nowhere to go.
 | `Home`/`End` | Top/bottom | Added | same |
 | `n`/`N` | Next/previous Needs you row | Added | same |
 | `tab`/`shift+tab` | Switch the focused pane | Added | same |
-| `ctrl+d`/`ctrl+u` | Half-page the list | **Retired** | `PgUp`/`PgDn` |
-| `g`/`G` | Top/bottom | **Retired** | `Home`/`End`. Both spellings survive inside the project switcher, the health details overlay, and the detail timeline, which have their own handlers and their own scroll geometry |
+| `ctrl+d`/`ctrl+u` | Half-page the focused pane | Restored for consistency with History, Plans, and Worktrees | same; `PgUp`/`PgDn` remain full-page movement |
+| `g`/`G` | Top/bottom | Restored navigation aliases | `Home`/`End` remain the advertised primary keys; both pairs act on the focused queue or inspector |
 | `]`/`[` | Arm the chord, then jump to the next/previous row in a state | **Retired** | `n`/`N` over the Needs you set; `/` to filter by state. The chord state itself is gone, so there is no pending-key display left to render |
 | `]]`/`[[` | Jump to the next/previous attention row | **Retired** | `n`/`N` |
 | `}`/`{` | Jump to an attention row **and** focus its tab | **Retired** | `n`/`N`, then `Enter` — the new keymap never opens a terminal automatically |

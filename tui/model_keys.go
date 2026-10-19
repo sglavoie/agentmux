@@ -291,14 +291,14 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyNeedsYouPrev:
 		return m, m.moveToNeedsYou(-1)
 
-	case keyHome:
+	case keyHome, keyG:
 		m.cursor = 0
 		scrollListToCursor(&m)
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
 
-	case keyEnd:
+	case keyEnd, keyGG:
 		m.cursor = m.listItemCount() - 1
 		if m.cursor < 0 {
 			m.cursor = 0
@@ -307,6 +307,15 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if cmd := m.refreshPreviewForCursor(); cmd != nil {
 			return m, cmd
 		}
+
+	case keyCtrlD, keyCtrlU:
+		step := max(1, listVisibleHeight(m)/2)
+		if key == keyCtrlU {
+			step = -step
+		}
+		m.cursor = clamp(m.cursor+step, 0, m.listItemCount()-1)
+		scrollListToCursor(&m)
+		return m, m.refreshPreviewForCursor()
 
 	case keyPgDown:
 		step := listVisibleHeight(m) - 1

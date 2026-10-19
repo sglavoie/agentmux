@@ -163,22 +163,22 @@ func TestNavEndGoesToBottom(t *testing.T) {
 	}
 }
 
-func TestNavGAndCapitalGAreRetiredAtTheList(t *testing.T) {
+func TestNavGAndCapitalGReachListEnds(t *testing.T) {
 	for _, key := range []string{keyG, keyGG} {
 		t.Run(key, func(t *testing.T) {
 			m := loadSessions(testModel(), makeSessions())
 			m = pressKey(m, "j")
-			before := m.cursor
-			updated, cmd := m.Update(keyPress(key))
+			want := 0
+			if key == keyGG {
+				want = m.listItemCount() - 1
+			}
+			updated, _ := m.Update(keyPress(key))
 			got := updated.(Model)
-			if got.cursor != before {
-				t.Errorf("%q moved the cursor %d->%d", key, before, got.cursor)
+			if got.cursor != want {
+				t.Errorf("%q cursor %d, want %d", key, got.cursor, want)
 			}
 			if got.mode != ModeList {
 				t.Errorf("%q left ModeList for %q", key, uitestModeName(got.mode))
-			}
-			if cmd != nil {
-				t.Errorf("%q dispatched a command", key)
 			}
 		})
 	}

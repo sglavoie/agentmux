@@ -74,29 +74,27 @@ func TestHandleListKey_KFollowsCursorBackUp(t *testing.T) {
 	}
 }
 
-// TestHandleListKey_CtrlDAndCtrlUAreRetiredAtTheList replaces the pair of
-// half-page tests. The dashboard's two paging steps are pgup and pgdn now; the
-// half-page chords were a third way to say the same thing, and they are unbound
-// rather than rebound. They remain live in the project switcher and the health
-// overlay, which have their own handlers and their own scroll geometry.
-func TestHandleListKey_CtrlDAndCtrlUAreRetiredAtTheList(t *testing.T) {
+func TestHandleListKey_CtrlDAndCtrlUMoveHalfAPage(t *testing.T) {
 	for _, code := range []rune{'d', 'u'} {
 		t.Run(string(code), func(t *testing.T) {
 			m := scrollFixtureModel(t, 40, 15)
 			// Park the cursor mid-list so a move in either direction would show.
 			m.cursor = listVisibleHeight(m)
 			scrollListToCursor(&m)
-			before, beforeOffset := m.cursor, m.listOffset
+			before := m.cursor
+			step := max(1, listVisibleHeight(m)/2)
+			if code == 'u' {
+				step = -step
+			}
 
-			updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: code, Mod: tea.ModCtrl}))
+			updated, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: code, Mod: tea.ModCtrl}))
 			m = updated.(Model)
 
-			if m.cursor != before || m.listOffset != beforeOffset {
-				t.Errorf("ctrl+%s moved the list: cursor %d->%d offset %d->%d",
-					string(code), before, m.cursor, beforeOffset, m.listOffset)
+			if m.cursor != before+step {
+				t.Errorf("ctrl+%s cursor %d, want %d", string(code), m.cursor, before+step)
 			}
-			if cmd != nil {
-				t.Errorf("ctrl+%s dispatched a command", string(code))
+			if !listCursorFitsWindow(&m, m.listOffset, listVisibleHeight(m), listShowsGroupHeadings(&m)) {
+				t.Fatal("half-page left the cursor offscreen")
 			}
 		})
 	}

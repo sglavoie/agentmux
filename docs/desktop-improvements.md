@@ -747,3 +747,45 @@ verification passed. This pass did not install it. The
 [candidate record](acceptance/workspace-consistency/candidate.json) identifies the
 app and bundled CLI hashes. All requested implementation work is complete; the
 manual VoiceOver check is waived, with no claim that it passed.
+
+## Navigation, recovery, and setup polish on 2026-10-19
+
+- Diff Previous/Next follows the visible hunk after manual scrolling, while
+  repeated shortcuts still advance when adjacent hunks already fit on screen.
+- History, Changes, Activity, and Runs restore native saved window placement.
+  The shared placement policy fits restored frames to connected displays.
+- Changes cancels obsolete comparison, diff, and managed-review reads. Diff
+  parsing and word matching run with the background read. Landing retains its
+  existing mutation lifecycle and confirmation checks.
+- Read failures expose an inline explanation and Retry beside the affected
+  content, including initial failures. Retained results are explicitly labeled;
+  the toolbar still supplies independent timestamps and full diagnostics.
+- Dashboard queue and inspector accept g/G and Ctrl+D/U, matching the navigation
+  vocabulary in History, Plans, and Worktrees without expanding the footer.
+- Setup offers profile-specific hook syncing and summarizes CLI/dashboard
+  destinations, executable availability, backend health, and remaining steps.
+  An unanswered hook prompt does not save configuration. Hook failures preserve
+  the saved config and print a retry command; authentication is not inferred.
+
+Verification:
+
+- Hosted macOS suite: 923 tests, zero failures, one existing accessibility lookup
+  skip. Result: `Test-AgentMux-2026.10.19_16-12-36--0600.xcresult`.
+- Follow-up Changes suite: nine tests passed, including actual termination of a
+  superseded child process, queued cancellation, and thirty file selections over
+  a roughly 1.8 MB patch. The background read assertion and final selected diff
+  passed. Result: `Test-AgentMux-2026.10.19_16-16-16--0600.xcresult`.
+- Follow-up navigation and finishing-polish suites: eleven tests passed,
+  including adjacent visible hunks, manual scrolling, wrapping navigation, and
+  existing diff/read-status checks. Result:
+  `Test-AgentMux-2026.10.19_16-17-36--0600.xcresult`.
+- Minimum-window captures cover populated, empty, loading, retained failures,
+  and initial failures in both appearances. Forty captures passed geometry and
+  text checks; representative History, Changes, Runs, and Activity failures were
+  visually inspected. Capture attachments remain in the hosted test result.
+- `env -u AMX_RUNTIME_SESSION_ID just check` passed: the full Go suite, core race
+  checks, vet, all 188 TUI scenarios, and lint with zero issues. Final setup-only
+  tests also passed after refining the destination-specific readiness wording
+  and quoting retry commands. `git diff --check` passed.
+
+No installation or release was performed.

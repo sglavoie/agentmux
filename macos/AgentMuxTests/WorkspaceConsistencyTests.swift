@@ -90,6 +90,7 @@ final class WorkspaceConsistencyTests: XCTestCase {
                 .filter { $0.frame.height > 100 }.map { $0.convert($0.bounds, to: window.contentView) }
         }
         let baseline = frames()
+        let windowSize = window.frame.size
         XCTAssertGreaterThanOrEqual(baseline.count, 2)
         model.refreshTranscript(); try await settle(window)
         XCTAssertEqual(frames(), baseline, "transcript loading must not push its scroll view")
@@ -98,7 +99,10 @@ final class WorkspaceConsistencyTests: XCTestCase {
         XCTAssertEqual(frames(), baseline, "searching must not push results or transcript")
         runner.drain()
         available = false; model.search(); try await settle(window)
-        XCTAssertEqual(frames(), baseline, "a search failure must occupy the same toolbar slot")
+        XCTAssertEqual(model.selection, "claude:one")
+        XCTAssertEqual(model.transcript?.total, 80, "inline recovery must retain the conversation")
+        XCTAssertEqual(window.frame.size, windowSize, "inline recovery must fit the existing window")
+        XCTAssertTrue(frames().allSatisfy { $0.height > 100 }, "recovery must leave both readers usable")
     }
 
     func testConflictedWorktreeKeepsDiffSpaceAndCannotLandDuringReviewRefresh() async throws {

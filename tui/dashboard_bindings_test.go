@@ -623,8 +623,8 @@ func TestFooterKeysAreTheKeysThatDispatch(t *testing.T) {
 //
 // The list is the union of both inventory tables: the command-backed keys whose
 // capability moved to the actions overlay or the palette, and the
-// cursor/structure keys whose capability moved to another key. `g`/`G` are here
-// and `home`/`end` are not, which is the whole substitution.
+// cursor/structure keys whose capability moved to another key. Navigation
+// aliases g/G and Ctrl+D/U have since returned across the focused panes.
 var retiredDashboardKeys = []string{
 	// Session actions, now entries in the `a` overlay.
 	"e", "r", "c", "C", "x", "X", "o", "O", "y", "L", "m",
@@ -634,7 +634,7 @@ var retiredDashboardKeys = []string{
 	// palette entry too — the key is the fast route, not the only one.
 	"P", "W", "A", "T", "d", "v", "R", "f", "b",
 	// Cursor and structure keys with a successor spelling.
-	"g", "G", "ctrl+d", "ctrl+u", "left", "right",
+	"left", "right",
 	// The bracket chords and their focus-on-arrival variants.
 	"]", "[", "}", "{",
 	// Chip focus and removal, now editing inside `/`.

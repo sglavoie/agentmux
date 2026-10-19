@@ -2,16 +2,25 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/spf13/cobra"
 )
 
 func runSetupWithInput(t *testing.T, input string) (string, error) {
 	t.Helper()
+	oldLook, oldStatus := setupLookPath, setupBackendStatus
+	setupLookPath = func(name string) (string, error) { return "/fixture/bin/" + name, nil }
+	setupBackendStatus = func(*config.Config) cli.BackendStatus {
+		return cli.BackendStatus{Tmux: cli.TmuxStatus{Available: true, Version: "3.5", Path: "/fixture/tmux"}}
+	}
+	t.Cleanup(func() { setupLookPath, setupBackendStatus = oldLook, oldStatus })
 	oldIn, oldOut := configSetupCmd.InOrStdin(), configSetupCmd.OutOrStdout()
 	t.Cleanup(func() { configSetupCmd.SetIn(oldIn); configSetupCmd.SetOut(oldOut) })
 	var out bytes.Buffer
@@ -21,16 +30,98 @@ func runSetupWithInput(t *testing.T, input string) (string, error) {
 	return out.String(), err
 }
 
+func TestSetupSyncsOnlyChosenProfileAfterSavingAndReportsFailure(t *testing.T) {
+	for _, fails := range []bool{false, true} {
+		t.Run(map[bool]string{false: "success", true: "failure"}[fails], func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			t.Setenv("amx_CONFIG", path)
+			old := setupSyncHooks
+			t.Cleanup(func() { setupSyncHooks = old })
+			calls := 0
+			setupSyncHooks = func(_ *cobra.Command, profile string) error {
+				calls++
+				cfg, err := config.Load(path)
+				if err != nil || len(cfg.Projects) != 1 || profile != "codex-local" {
+					t.Fatalf("sync before saving or wrong profile: %s %v", profile, err)
+				}
+				if fails {
+					return errors.New("fixture hook write failed")
+				}
+				return nil
+			}
+			out, err := runSetupWithInput(t, "codex\n\n\n"+t.TempDir()+"\n\ntmux\nyes\n")
+			if calls != 1 || (err != nil) != fails {
+				t.Fatalf("calls=%d, err=%v", calls, err)
+			}
+			want := "Hooks: synced for this profile"
+			if fails {
+				want = "Retry: amx config hooks-sync -- 'codex-local'"
+			}
+			if !strings.Contains(out, want) || !strings.Contains(out, "Dashboard in this terminal: tmux") {
+				t.Fatalf("missing outcome: %s", out)
+			}
+		})
+	}
+}
+
+func TestSetupUnansweredHookChoiceDoesNotSaveOrSync(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	t.Setenv("amx_CONFIG", path)
+	_, err := runSetupWithInput(t, "codex\n\n\n"+t.TempDir()+"\n\ntmux\n")
+	if err == nil || !strings.Contains(err.Error(), "Sync Agent Mux hooks") {
+		t.Fatalf("unanswered choice: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("saved before answer: %v", err)
+	}
+}
+
+func TestSetupSummaryNamesMissingRequirementsAndActualDestinations(t *testing.T) {
+	oldLook, oldStatus := setupLookPath, setupBackendStatus
+	t.Cleanup(func() { setupLookPath, setupBackendStatus = oldLook, oldStatus })
+	setupLookPath = func(string) (string, error) { return "", errors.New("not installed") }
+	setupBackendStatus = func(*config.Config) cli.BackendStatus {
+		return cli.BackendStatus{Problems: []cli.BackendProblem{{Severity: "warning", Message: "tmux unavailable", Hint: "Install tmux 3.5+."}}}
+	}
+	for _, kitty := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plain terminal", true: "Kitty socket"}[kitty], func(t *testing.T) {
+			t.Setenv("KITTY_WINDOW_ID", "")
+			t.Setenv("KITTY_LISTEN_ON", "")
+			if kitty {
+				t.Setenv("KITTY_LISTEN_ON", "unix:/fixture")
+			}
+			cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: "codex", HomeDir: "/isolated/codex"}}}
+			var out bytes.Buffer
+			if err := setupSummary(&out, cfg, "work", false, nil); err != nil {
+				t.Fatal(err)
+			}
+			destination := "tmux"
+			if kitty {
+				destination = "kitty"
+			}
+			if strings.Contains(out.String(), "Dashboard launch blocked") == kitty {
+				t.Fatalf("readiness does not match this terminal's destination: %s", out.String())
+			}
+			for _, want := range []string{"CLI: kitty (compatibility default", "Dashboard in this terminal: " + destination,
+				"Agent CLI missing", "Kitty client missing", "Install tmux 3.5+", "Authentication: not checked", "/isolated/codex", "Hooks: not synced"} {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("missing %q in %s", want, out.String())
+				}
+			}
+		})
+	}
+}
+
 func TestSetupCreatesFirstProfileAndProjectWithoutLosingStarter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv("amx_CONFIG", path)
 	project := t.TempDir()
-	out, err := runSetupWithInput(t, "codex\n\n\n"+project+"\nMy project\n\n")
+	out, err := runSetupWithInput(t, "codex\n\n\n"+project+"\nMy project\n\nno\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "Next: amx config hooks-sync; amx backend status; amx") ||
-		!strings.Contains(out, "If launching on tmux, run amx backend status --check first.") {
+	if !strings.Contains(out, "Next: amx config hooks-sync -- 'codex-local'") ||
+		!strings.Contains(out, "CLI: kitty (compatibility default") || !strings.Contains(out, "Launch checks") {
 		t.Fatalf("next step missing: %q", out)
 	}
 	data, err := os.ReadFile(path)
@@ -65,7 +156,7 @@ func TestSetupUsesExistingProfileAndPreservesFileMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
-	if _, err := runSetupWithInput(t, project+"\n\n\n"); err != nil {
+	if _, err := runSetupWithInput(t, project+"\n\n\nno\n"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
@@ -101,7 +192,7 @@ func TestSetupLetsOperatorCorrectProjectDirectory(t *testing.T) {
 	t.Setenv("amx_CONFIG", path)
 	missing := filepath.Join(t.TempDir(), "missing")
 	project := t.TempDir()
-	out, err := runSetupWithInput(t, "\n\n\n"+missing+"\n"+project+"\n\n\n")
+	out, err := runSetupWithInput(t, "\n\n\n"+missing+"\n"+project+"\n\n\nno\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +218,7 @@ func TestSetupLetsOperatorCorrectExistingProfileName(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
-	out, err := runSetupWithInput(t, "unknown\nSECOND\n"+project+"\n\n\n")
+	out, err := runSetupWithInput(t, "unknown\nSECOND\n"+project+"\n\n\nno\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +241,7 @@ func TestSetupAddsRequiredMarkerToMinimalConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
-	if _, err := runSetupWithInput(t, "\n\n\n"+project+"\n\n\n"); err != nil {
+	if _, err := runSetupWithInput(t, "\n\n\n"+project+"\n\n\nno\n"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
@@ -178,7 +269,7 @@ func TestSetupUpdatesEmptyBackendAndTablesWithHeaderComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
-	if _, err := runSetupWithInput(t, "codex\n\n\n"+project+"\n\ntmux\n"); err != nil {
+	if _, err := runSetupWithInput(t, "codex\n\n\n"+project+"\n\ntmux\nno\n"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
@@ -211,7 +302,7 @@ func TestSetupAcceptsExplicitKittyDestination(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv("amx_CONFIG", path)
 	project := t.TempDir()
-	if _, err := runSetupWithInput(t, "\n\n\n"+project+"\n\nkitty\n"); err != nil {
+	if _, err := runSetupWithInput(t, "\n\n\n"+project+"\n\nkitty\nno\n"); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := config.Load(path)
@@ -227,7 +318,7 @@ func TestSetupAcceptsExplicitTmuxDestination(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv("amx_CONFIG", path)
 	project := t.TempDir()
-	if _, err := runSetupWithInput(t, "\n\n\n"+project+"\n\ntmux\n"); err != nil {
+	if _, err := runSetupWithInput(t, "\n\n\n"+project+"\n\ntmux\nno\n"); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := config.Load(path)
@@ -243,7 +334,7 @@ func TestSetupAllowsCorrectingAChoice(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv("amx_CONFIG", path)
 	project := t.TempDir()
-	out, err := runSetupWithInput(t, "wrong\nCODEX\n\n\n"+project+"\n\ninvalid\nTMUX\n")
+	out, err := runSetupWithInput(t, "wrong\nCODEX\n\n\n"+project+"\n\ninvalid\nTMUX\nno\n")
 	if err != nil {
 		t.Fatal(err)
 	}

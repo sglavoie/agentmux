@@ -179,6 +179,7 @@ below for where each key went.
 
 - `j`/`k` or `↑`/`↓`: move the cursor, or scroll the inspector when it has focus
 - `PgUp`/`PgDn`, `Home`/`End`: page, or jump to the ends of the focused pane
+- `g`/`G`: aliases for `Home`/`End`; `Ctrl+D`/`Ctrl+U`: half-page down/up in the focused pane
 - `Enter`: open the selected session (attach on tmux, focus its tab on Kitty); on a family summary, fold or
   unfold the family instead
 - `n`/`N`: move to the next/previous **Needs you** session. A target inside a
@@ -289,8 +290,8 @@ nothing at all, so nothing you remember can now mean something else.
 | `R` resort tabs | `:` → **Resort Tabs** |
 | `p` preview | `i` — the inspector absorbed it. `p` is the project switcher now, which is the one key whose meaning changed rather than disappearing |
 | `b` project rail | `p` — the rail is gone; the switcher applies the same scopes |
-| `g` / `G` | `Home` / `End`. Both still work inside the project switcher, the health details overlay, and the detail timeline |
-| `Ctrl+d` / `Ctrl+u` | `PgUp` / `PgDn` |
+| `g` / `G` | Restored as aliases for `Home` / `End`, including the dashboard's focused queue or inspector |
+| `Ctrl+d` / `Ctrl+u` | Restored half-page movement in the focused pane; `PgUp` / `PgDn` move a full page |
 | `]`/`[`, `]]`/`[[`, `}`/`{` attention jumps | `n`/`N`. The chord is gone, and so is the variant that focused the terminal on arrival: press `Enter` when you want that |
 | `Tab` chip cycling, `1`–`9` chip removal, `Backspace` on a focused chip | `/`, which now opens on the filter already applied; `Backspace` removes the last component. `Tab` switches panes instead |
 | `←`/`→` to fold a family | `Enter` on the family summary |

@@ -90,3 +90,31 @@ struct WorkspaceReadDetails: View {
         }.frame(width: 380, height: 300)
     }
 }
+
+/// Recovery stays beside the content it reloads. Full diagnostics and read times
+/// remain available in the toolbar; long errors cannot push the reader offscreen.
+struct WorkspaceReadFailure: View {
+    let title: String
+    let error: String?
+    var retained = false
+    var loading = false
+    let retry: () -> Void
+
+    var body: some View {
+        if let error {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.circle").foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title + (retained ? " refresh failed" : " could not be loaded")).fontWeight(.semibold)
+                    Text(error).lineLimit(2).help(error).textSelection(.enabled)
+                    if retained { Text("Showing previously loaded \(title.lowercased()).").foregroundStyle(.secondary) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Button(loading ? "Retrying…" : "Retry", action: retry)
+                    .disabled(loading).accessibilityLabel("Retry \(title.lowercased())")
+            }.font(.callout).padding(8)
+                .background(Color.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("read-failure-" + title)
+        }
+    }
+}

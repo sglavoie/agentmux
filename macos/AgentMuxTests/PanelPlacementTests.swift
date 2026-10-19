@@ -1,8 +1,30 @@
+import AppKit
 import XCTest
 @testable import AgentMux
 
 /// Where the answer panels open, as frames in and a frame out.
 final class PanelPlacementTests: XCTestCase {
+    @MainActor
+    func testReviewWindowRestoresSavedPlacementInsteadOfCentering() throws {
+        let screen = try XCTUnwrap(NSScreen.main).visibleFrame
+        let name = "ReviewPlacementTest-" + UUID().uuidString
+        defer { NSWindow.removeFrame(usingName: name) }
+        func window() -> NSWindow {
+            let result = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+                                  styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+            result.isReleasedWhenClosed = false
+            return result
+        }
+        let first = window()
+        let saved = NSRect(x: screen.minX + 30, y: screen.minY + 40, width: 560, height: 340)
+        first.setFrame(saved, display: false)
+        first.saveFrame(usingName: name)
+        first.close()
+        let reopened = window()
+        defer { reopened.close() }
+        ReviewWindowPlacement.restore(reopened, name: name)
+        XCTAssertEqual(reopened.frame, saved)
+    }
     /// A laptop with an external display to its right, menu bar on the left.
     private let left = PanelPlacement.Screen(
         frame: CGRect(x: 0, y: 0, width: 1440, height: 900),

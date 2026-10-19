@@ -486,7 +486,8 @@ visible width without replacing the saved preference. The worktree toolbar occup
 space only when there is a review or error to display.
 
 Diffs show old/new line numbers, addition/deletion shading, and previous/next hunk
-controls with the visible hunk number. Changed words receive stronger shading in
+controls with the visible hunk number. Previous/Next starts from the visible hunk,
+including after manual scrolling, and wraps at the ends. Changed words receive stronger shading in
 paired replacement lines; large or unpaired blocks retain whole-line shading.
 Redundant file headers are hidden; **… → Show patch headers** restores them.
 Mode changes and no-newline markers remain visible. The pencil button opens the
@@ -496,6 +497,7 @@ The comparison base and selected file are remembered per checkout, with separate
 scroll positions per checkout/base/file. Refresh follows matching nearby source
 text where possible, falling back to a nearby source line. File labels use the
 shortest unique trailing path; tooltips and accessibility retain the full path.
+Switching files cancels obsolete diff reads; diff parsing runs off the UI thread.
 
 The **…** menu contains remembered **Wrap lines** and text-size preferences, plus
 **Copy unified patch** and **Copy changed source lines** (added and context lines
@@ -579,12 +581,20 @@ language and **Copy code**, which copies original text without Markdown fences.
 Diffs also expose shared monospace preferences in **…**. Successful **Copied**
 feedback clears after two seconds without moving the reader; failures stay visible.
 
-Progress and failures use fixed toolbar slots. Brief reads do not flash a spinner;
+Read status uses a fixed toolbar slot. Brief reads do not flash a spinner;
 slower reads say **Refreshing…**, and failures say **Refresh failed** even with
 retained content. The status popover identifies each read, its last success, retained
 results, and selectable recovery guidance. Independent ages cover search, transcript,
 comparison, diff, run list, and plan details. Failed reads keep their old age. Click
 an age for the exact timestamp and timezone; **Last activity** describes agent activity.
+Failures also show their explanation and **Retry** beside the affected content.
+Initial failures say which content could not be loaded; refresh failures label
+the previously loaded content that remains visible. These read retries do not
+repeat a worktree landing or an ASL operation.
+
+History, Changes, Activity, and Runs restore their saved window position and size.
+When a display is disconnected, the restored window is fitted onto an available
+display; a window without saved placement opens centered.
 
 The feedback-history button retains the newest 30 native action outcomes for this
 app session, shared by History, Changes, Runs, and the plan form. Notices keep their

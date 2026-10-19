@@ -324,9 +324,8 @@ func (m Model) inspectorFocused() bool {
 // operator reading output who wants the next waiting session in front of them.
 //
 // The set is exactly the set the queue answers, which is the whole point of
-// there being a focused pane at all: one vocabulary, aimed by Tab. The
-// half-page keys (`ctrl+d`/`ctrl+u`) and the vi ends (`g`/`G`) are gone from
-// both halves together — `PgUp`/`PgDn` and `Home`/`End` are what remain.
+// there being a focused pane at all: one vocabulary, aimed by Tab, including
+// the navigation aliases used in History, Plans, and Worktrees.
 func (m Model) handleInspectorKey(key string) (tea.Model, tea.Cmd, bool) {
 	rows := m.inspectorOutputRows()
 	latest := dashboard.SplitOutput(m.previewText)
@@ -339,9 +338,13 @@ func (m Model) handleInspectorKey(key string) (tea.Model, tea.Cmd, bool) {
 		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, fullPageStep(rows))
 	case keyPgUp:
 		m.inspectorViewport = m.inspectorViewport.ScrollUp(latest, rows, fullPageStep(rows))
-	case keyHome:
+	case keyCtrlD:
+		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, max(1, rows/2))
+	case keyCtrlU:
+		m.inspectorViewport = m.inspectorViewport.ScrollUp(latest, rows, max(1, rows/2))
+	case keyHome, keyG:
 		m.inspectorViewport = m.inspectorViewport.Top(latest, rows)
-	case keyEnd:
+	case keyEnd, keyGG:
 		m.inspectorViewport = m.inspectorViewport.Resume()
 	default:
 		return m, nil, false
