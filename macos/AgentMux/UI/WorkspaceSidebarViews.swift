@@ -161,6 +161,7 @@ class WorkspaceRowView: NSTableRowView {
 
 /// A session's state emoji always sits to the left of its pill.
 /// The session text and border stay in the pill.
+/// Sessions without a state emoji keep a border in either theme.
 @MainActor
 final class WorkspaceSessionRowView: WorkspaceRowView {
     var hasStateGlyph = false {
@@ -172,6 +173,12 @@ final class WorkspaceSessionRowView: WorkspaceRowView {
     }
 
     override var pillLeadingInset: CGFloat { hasStateGlyph ? 40 : Self.selectionInset }
+
+    override func layout() {
+        super.layout()
+        selectionBorder.usesAppearanceColor = !hasStateGlyph
+        selectionBorder.isHidden = hasStateGlyph && !isSelected
+    }
 
     override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
         get { .none }
@@ -194,10 +201,15 @@ final class WorkspaceTerminalRowView: WorkspaceRowView {
     override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
 }
 
-/// The border of the selected line. It takes no clicks.
+/// The border of a selected line or a session without a state emoji.
+/// It takes no clicks.
 @MainActor
 final class WorkspaceSelectionBorderView: NSView {
     var color: NSColor = .controlAccentColor {
+        didSet { needsDisplay = true }
+    }
+
+    var usesAppearanceColor = false {
         didSet { needsDisplay = true }
     }
 
@@ -217,7 +229,8 @@ final class WorkspaceSelectionBorderView: NSView {
 
     /// Runs again when the appearance or the accent color changes.
     override func updateLayer() {
-        layer?.borderColor = color.cgColor
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        layer?.borderColor = (usesAppearanceColor ? (dark ? NSColor.white : .black) : color).cgColor
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }

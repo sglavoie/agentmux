@@ -2034,6 +2034,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         applying = false
         for index in indexes {
             guard let rowView = sidebar.rowView(atRow: index, makeIfNecessary: false) as? WorkspaceRowView else { continue }
+            if let sessionView = rowView as? WorkspaceSessionRowView, case let .row(session) = items[index] {
+                sessionView.hasStateGlyph = !session.glyph.isEmpty
+            }
             rowView.tabColor = Self.tabColor(of: items[index])
             rowView.selectionBorder.color = selectionColor(of: items[index]) ?? .controlAccentColor
         }
