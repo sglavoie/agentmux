@@ -2,8 +2,11 @@ package debug
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 func TestDoctorConfigFreshness(t *testing.T) {
@@ -37,5 +40,35 @@ func TestDoctorConfigFreshness(t *testing.T) {
 				t.Fatalf("findings = %v, want warning=%v", checks, tc.want)
 			}
 		})
+	}
+}
+
+func TestDoctorDaemonSettingsUsesEffectiveComparisonInsteadOfFileAge(t *testing.T) {
+	resetDoctorTestState(t)
+	cfg := &config.Config{}
+	running := cfg.DaemonSettings()
+	doctorLoadConfig = func() (*config.Config, error) { return cfg, nil }
+	doctorConfigModTime = func() (time.Time, error) {
+		t.Fatal("known settings must not consult file age")
+		return time.Time{}, nil
+	}
+	var messages []string
+	add := func(severity, check, format string, args ...any) {
+		messages = append(messages, check+": "+fmt.Sprintf(format, args...))
+	}
+	cfg.Projects = []config.Session{{Title: "New project", Directory: "/elsewhere"}}
+	checkDoctorDaemonSettings(running, time.Hour, add)
+	if len(messages) != 0 {
+		t.Fatalf("project edit warned: %v", messages)
+	}
+	cfg.Defaults.Notifications.Stop = true
+	checkDoctorDaemonSettings(running, time.Hour, add)
+	if len(messages) != 1 || !strings.Contains(messages[0], "Notifications") || !strings.Contains(messages[0], "daemon-status") {
+		t.Fatalf("warning = %v", messages)
+	}
+	messages = nil
+	checkDoctorDaemonSettings(cfg.DaemonSettings(), time.Second, add)
+	if len(messages) != 0 {
+		t.Fatalf("applied settings warned: %v", messages)
 	}
 }

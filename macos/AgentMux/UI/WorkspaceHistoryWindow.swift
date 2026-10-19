@@ -53,6 +53,9 @@ struct WorkspaceHistoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let note = model.searchEntryNote {
+                Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(note)
+            }
             HStack {
                 Button(action: toggleResults) { Image(systemName: "sidebar.left") }
                     .help("Show or hide conversation results (⌘⌥S)")

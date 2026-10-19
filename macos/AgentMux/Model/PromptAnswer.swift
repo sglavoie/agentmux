@@ -11,13 +11,18 @@ import Foundation
 
 /// The payload of `amx send RUNTIME_SESSION_ID --look --json`.
 struct PromptLook: Decodable, Equatable {
+    struct Search: Decodable, Equatable {
+        var scope: String
+        var query: SecretText
+    }
+    var search: Search?
     var project = ""
     /// What the screen says: blocked, working, idle, or unknown.
     var screen = ""
     /// The last rows of the session's screen.
     var lines: [String] = []
 
-    enum CodingKeys: String, CodingKey { case project, screen, lines }
+    enum CodingKeys: String, CodingKey { case project, screen, lines, search }
 
     init(project: String = "", screen: String = "", lines: [String] = []) {
         self.project = project
@@ -30,6 +35,7 @@ struct PromptLook: Decodable, Equatable {
         project = try c.decodeIfPresent(String.self, forKey: .project) ?? ""
         screen = try c.decodeIfPresent(String.self, forKey: .screen) ?? ""
         lines = try c.decodeIfPresent([String].self, forKey: .lines) ?? []
+        search = try c.decodeIfPresent(Search.self, forKey: .search)
     }
 
     /// The screen is asking something, so a key has a prompt to answer.

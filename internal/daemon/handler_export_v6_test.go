@@ -18,6 +18,7 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 	build := buildinfo.Info{Version: "9.9.9", Revision: "abc", BinaryHash: "hash-x"}
 	h.SetBuildInfo(build)
+	h.daemonSettings = map[string]string{"Notifications": "v1:fixture"}
 	h.SetMetricsSource(func() protocol.MetricsSnapshot {
 		return protocol.MetricsSnapshot{Accepted: 5, QueueFull: 1, QueueLastWaitNs: 250}
 	})
@@ -25,6 +26,13 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.OK {
 		t.Fatalf("health response not OK: %+v", resp)
+	}
+	if resp.DaemonSettings["Notifications"] != "v1:fixture" {
+		t.Fatalf("startup settings missing: %+v", resp.DaemonSettings)
+	}
+	resp.DaemonSettings["Notifications"] = "changed by caller"
+	if h.daemonSettings["Notifications"] != "v1:fixture" {
+		t.Fatal("health exposed mutable startup settings")
 	}
 	if resp.Build == nil || resp.Build.BinaryHash != "hash-x" || resp.Build.Version != "9.9.9" {
 		t.Fatalf("resp.Build = %+v; want the stamped identity", resp.Build)

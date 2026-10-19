@@ -547,6 +547,21 @@ func writeDoctorSocketStatus(out io.Writer, daemonBuild *buildinfo.Info, reportI
 // `config asl-sync` does) and the new daemon recording its start.
 const configFreshnessSlack = 2 * time.Second
 
+func checkDoctorDaemonSettings(running map[string]string, uptime time.Duration, addFinding func(severity, check, format string, args ...any)) {
+	cfg, err := doctorLoadConfig()
+	if err != nil {
+		return
+	} // reported by the config check
+	if changed, known := config.ChangedDaemonSettings(running, cfg.DaemonSettings()); known {
+		if len(changed) > 0 {
+			addFinding(severityWarning, "config_changed_since_daemon_start",
+				"%s settings differ from the running daemon; run `amx daemon restart`, then `amx config daemon-status` to verify they were applied", strings.Join(changed, ", "))
+		}
+		return
+	}
+	checkDoctorConfigFreshness(uptime, addFinding)
+}
+
 // checkDoctorConfigFreshness warns when config.toml changed after the running
 // daemon started. The daemon reads its configuration once, at startup, so an
 // edit made since — a notification toggle, a stop-confirm delay, a pattern
@@ -565,7 +580,7 @@ func checkDoctorConfigFreshness(uptime time.Duration, addFinding func(severity, 
 	started := doctorNow().Add(-uptime)
 	if modTime.After(started.Add(configFreshnessSlack)) {
 		addFinding(severityWarning, "config_changed_since_daemon_start",
-			"config.toml changed %s after the daemon started, and the daemon reads it only at startup; run `amx daemon restart` to apply daemon-side settings",
+			"config.toml changed %s after the daemon started; this daemon cannot compare effective settings, so daemon-side changes may need `amx daemon restart`",
 			modTime.Sub(started).Round(time.Second))
 	}
 }

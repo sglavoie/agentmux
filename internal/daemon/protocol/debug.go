@@ -11,16 +11,24 @@ type AgentTurnSnapshot struct {
 	FinishedAt int64  `json:"finished_at,omitempty"`
 }
 
+// StatusEvidence describes the winning recorded fact, not the latest event
+// from an unrelated producer. No source identifiers or terminal text escape.
+type StatusEvidence struct {
+	Kind string `json:"kind"`
+	At   int64  `json:"at,omitempty"`
+}
+
 // WindowStateSnapshot is the daemon-owned state needed by dashboard clients.
 // It is deliberately a value copy: callers must never observe or mutate the
 // handler's live WindowState entries.
 type WindowStateSnapshot struct {
-	IconState   string             `json:"icon_state"`
-	Looping     bool               `json:"looping"`
-	LastAction  string             `json:"last_action"`
-	LastEventAt int64              `json:"last_event_at"`
-	GuardAction string             `json:"guard_action"`
-	AgentTurn   *AgentTurnSnapshot `json:"agent_turn,omitempty"`
+	StatusEvidence *StatusEvidence    `json:"status_evidence,omitempty"`
+	IconState      string             `json:"icon_state"`
+	Looping        bool               `json:"looping"`
+	LastAction     string             `json:"last_action"`
+	LastEventAt    int64              `json:"last_event_at"`
+	GuardAction    string             `json:"guard_action"`
+	AgentTurn      *AgentTurnSnapshot `json:"agent_turn,omitempty"`
 	// ASLPhases contains the distinct phases of runs retaining a live lease.
 	ASLPhases []string `json:"asl_phases,omitempty"`
 	// ASLRunIDs names those runs. A Kitty window also carries its run in a

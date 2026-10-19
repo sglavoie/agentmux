@@ -56,7 +56,9 @@ extension Ghostty.SurfaceView {
     @discardableResult
     func perform(_ request: Ghostty.HistoryRequest) -> Bool {
         guard let action = request.bindingAction(for: scrollback) else { return false }
-        return performBindingAction(action)
+        let performed = performBindingAction(action)
+        if performed, scrollback == .server, request == .find { delegate?.surfaceRequestedServerFind(self) }
+        return performed
     }
 
     override func scrollPageUp(_ sender: Any?) { perform(.pageUp) }

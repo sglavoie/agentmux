@@ -258,7 +258,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		if err := writeDoctorCompanion(textOut, health.Companion, health.Build, addFinding); err != nil {
 			return err
 		}
-		checkDoctorConfigFreshness(health.Uptime, addFinding)
+		checkDoctorDaemonSettings(health.DaemonSettings, health.Uptime, addFinding)
 	}
 	writeDoctorRunningBinary(func(format string, args ...any) {
 		addFinding(severityInfo, "uninstalled_binary", format, args...)

@@ -41,7 +41,7 @@ final class WorkspaceLifecyclePolishTests: XCTestCase {
         let row = WorkspaceWaitingRow(key: .embedded("fixture"), title: "API — deployment review", detail: "Waiting for your answer", glyph: "?", toolTip: "",
             answer: .prompt(runtimeSessionID: "fixture"), category: .question, contextVersion: "first")
         var answers: [WorkspaceWaitingAnswer] = []
-        inspector.onContext = { _, receive in receive(SecretText("Which deployment should proceed?\n\nReview staging before choosing production.")) }
+        inspector.onContext = { _, receive in receive(.loaded(SecretText("Which deployment should proceed?\n\nReview staging before choosing production."))) }
         inspector.onAnswer = { answers.append($0) }
         inspector.show(.init(waiting: [row]))
         window.makeFirstResponder(nil)
@@ -92,7 +92,7 @@ final class WorkspaceLifecyclePolishTests: XCTestCase {
         app.store.apply(snapshot: WorkspaceFixture.snapshot([first, waiting]))
         workspace.focus(runtimeSessionID: WorkspaceFixture.runtimeID(1))
         let terminal = try XCTUnwrap(workspace.terminalView(for: WorkspaceFixture.runtimeID(1)))
-        workspace.inspector.onContext = { _, receive in receive(SecretText("Approve deployment to staging?")) }
+        workspace.inspector.onContext = { _, receive in receive(.loaded(SecretText("Approve deployment to staging?"))) }
         workspace.focusWaiting()
         let card = try XCTUnwrap(workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first)
         let children = try XCTUnwrap(card.accessibilityChildren()).compactMap { $0 as? NSAccessibilityProtocol }

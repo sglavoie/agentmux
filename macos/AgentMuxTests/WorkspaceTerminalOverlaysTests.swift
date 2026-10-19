@@ -37,6 +37,24 @@ final class WorkspaceTerminalOverlaysTests: XCTestCase {
 
     private var dashboard: String { WorkspaceUtilityView.dashboard.id }
 
+    func testServerFindOffersConversationSearchOnlyForItsOriginalSession() throws {
+        app.store.apply(snapshot: F.snapshot([F.tmux(1, project: "api", conversation: "one"), F.tmux(2, project: "web", conversation: "two")]))
+        workspace.activate(try XCTUnwrap(workspace.state.rows.first))
+        let original = try XCTUnwrap(workspace.shownTerminalView)
+        workspace.window.makeFirstResponder(original)
+        workspace.showConversationSearchHint(for: original)
+        XCTAssertFalse(workspace.conversationSearchButton.isHidden)
+        workspace.conversationSearchButton.performClick(nil)
+        XCTAssertEqual(app.conversationSearchRequests, 1)
+        XCTAssertTrue(workspace.window.firstResponder === original)
+        workspace.activate(try XCTUnwrap(workspace.state.rows.last))
+        XCTAssertTrue(workspace.conversationSearchButton.isHidden)
+        workspace.conversationSearchButton.performClick(nil)
+        XCTAssertEqual(app.conversationSearchRequests, 1, "an old hint cannot search a different session")
+        workspace.showConversationSearchHint(for: original)
+        XCTAssertTrue(workspace.conversationSearchButton.isHidden)
+    }
+
     private func viewCell(_ id: String) throws -> WorkspaceRowCellView {
         let index = try XCTUnwrap(workspace.items.firstIndex { item in
             if case let .view(view) = item { return view.id == id }

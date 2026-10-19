@@ -84,6 +84,8 @@ final class FocusableView: NSView {
 final class FakeWorkspaceApp: WorkspaceDelegate {
     let store = SessionStore()
     var launchMenuRequests = 0
+    var conversationSearchRequests = 0
+    func workspaceSearchConversation() { conversationSearchRequests += 1 }
     var performedCommands: [WorkspaceCommand] = []
     func workspaceLaunchProjects(from view: NSView) { launchMenuRequests += 1 }
     func workspacePerform(_ command: WorkspaceCommand) { performedCommands.append(command) }

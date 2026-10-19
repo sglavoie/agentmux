@@ -89,7 +89,8 @@ protocol WorkspaceDelegate: AnyObject {
     var workspaceProjectGuidance: String { get }
     func workspaceLaunchProjects(from view: NSView)
     func workspacePerform(_ command: WorkspaceCommand)
-    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void)
+    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void)
+    func workspaceSearchConversation()
 }
 
 extension WorkspaceDelegate {
@@ -98,8 +99,9 @@ extension WorkspaceDelegate {
     var workspaceProjectGuidance: String { "Choose a configured project to start, or return to a past conversation." }
     func workspaceLaunchProjects(from view: NSView) {}
     func workspacePerform(_ command: WorkspaceCommand) {}
-    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void) {
-        completion(SecretText("Context is unavailable."))
+    func workspaceSearchConversation() {}
+    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void) {
+        completion(.unavailable(SecretText("Context is unavailable.")))
     }
 }
 

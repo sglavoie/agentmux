@@ -781,6 +781,27 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
 
 ### Waiting controls and update times
 
+Waiting context distinguishes loading, failed reads, and unavailable questions.
+**Refresh** keeps the current content and scroll position; **Retry** retries only
+the read. Failed refreshes retain the previous content and its original read
+time. ASL questions use the same Markdown reader as History, including code-copy
+controls; terminal captures remain monospace. A replaced question clears its
+context immediately and cannot be answered through the old card.
+
+The Session inspector describes prompt reasons in ordinary language and shows
+the recorded evidence supporting the displayed state: screen or transcript
+inference, harness/process lifecycle, subagent, or ASL. **Observed** is that
+fact's timestamp, independent of the latest event from another source. Missing
+or older-daemon evidence stays explicitly unavailable; it is not proof of idle.
+
+While using Find in an embedded agent, **Search full conversation…** opens
+History on that exact conversation and carries the active terminal query.
+Terminal Find still labels whether it covers the visible screen or terminal
+history. History searches saved prose using words and quoted phrases, not
+terminal regular expressions. An unavailable query read is explained. Closing
+History returns focus to the original visible terminal. Utility views keep
+their own terminal Find; they have no conversation to search.
+
 Waiting keeps category and Oldest first on one row. Next waiting stays available;
 Update list appears only when changes are held while you read. The keyboard hint
 appears while the Waiting reader has focus and disappears when focus leaves.

@@ -62,7 +62,7 @@ final class WorkspaceInspectorView: NSView {
     var onWaiting: ((AttentionCycler.Key) -> Void)?
     var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
     var onAction: ((WorkspaceInspectorAction) -> Void)?
-    var onContext: ((WorkspaceWaitingRow, @escaping (SecretText) -> Void) -> Void)?
+    var onContext: ((WorkspaceWaitingRow, @escaping (WorkspaceWaitingContext.Result) -> Void) -> Void)?
     let filterPicker = NSPopUpButton()
     let oldestButton = NSButton(checkboxWithTitle: "Oldest first", target: nil, action: nil)
     let nextButton = NSButton(title: "Next waiting", target: nil, action: nil)
@@ -71,7 +71,7 @@ final class WorkspaceInspectorView: NSView {
     private(set) var waitingFilter = WorkspaceWaitingFilter.all
     private(set) var oldestFirst = false
     private var expanded: WorkspaceWaitingRow?
-    private var preview = SecretText()
+    private var preview = WorkspaceWaitingContext.Reading()
     private var contextSequence = 0
     private var lastWaiting: AttentionCycler.Key?
     private var heldWaiting: [WorkspaceWaitingRow]?
@@ -258,7 +258,9 @@ final class WorkspaceInspectorView: NSView {
         }
         for case let row as WorkspaceWaitingRowView in lines {
             row.contextButton.isEnabled = rowIsCurrent(row.row)
-            row.showContext(expanded?.key == row.row.key ? preview.reveal() : nil)
+            row.configureReading(preferences: readingPreferences, height: row.readingHeight)
+            row.showContext(expanded?.key == row.row.key ? preview : nil)
+            row.refreshContextButton.isEnabled = rowIsCurrent(row.row) && !preview.loading
         }
         holdWhileNotCurrent()
         updateReadingLayout()
@@ -306,6 +308,9 @@ final class WorkspaceInspectorView: NSView {
                 guard let self, let view, self.rowIsCurrent(view.row) else { return }
                 self.lastWaiting = view.row.key
                 self.onAnswer?(answer)
+            }
+            view.onRefreshContext = { [weak self, weak view] in
+                if let row = view?.row { self?.refreshContext(row) }
             }
             view.onContext = { [weak self, weak view] in
                 if let row = view?.row { self?.toggleContext(row) }
@@ -531,7 +536,7 @@ final class WorkspaceInspectorView: NSView {
     private func clearContext() {
         contextSequence += 1
         expanded = nil
-        preview = SecretText()
+        preview = WorkspaceWaitingContext.Reading()
     }
 
     func toggleContext(_ row: WorkspaceWaitingRow) {
@@ -540,15 +545,27 @@ final class WorkspaceInspectorView: NSView {
         clearContext()
         if closing { rebuild(); return }
         expanded = row
-        preview = SecretText("Loading context…")
+        readContext(row)
+    }
+
+    func refreshContext(_ row: WorkspaceWaitingRow) {
+        guard rowIsCurrent(row), expanded?.sameContext(as: row) == true, !preview.loading else { return }
+        readContext(row)
+    }
+
+    private func readContext(_ row: WorkspaceWaitingRow) {
+        contextSequence += 1
+        preview.begin()
         let sequence = contextSequence
-        rebuild()
-        guard let onContext else { return }
+        rebuild(keeping: displayedLines)
+        guard let onContext else {
+            preview.finish(.unavailable(SecretText("Context is unavailable."))); rebuild(keeping: displayedLines); return
+        }
         onContext(row) { [weak self] text in
             guard let self, self.contextSequence == sequence, self.model.current,
                   self.expanded?.sameContext(as: row) == true else { return }
-            self.preview = text
-            self.rebuild()
+            self.preview.finish(text)
+            self.rebuild(keeping: self.displayedLines)
         }
     }
 
@@ -583,7 +600,14 @@ final class WorkspaceWaitingRowView: NSBox {
     var onPress: (() -> Void)?
     var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
     var onContext: (() -> Void)?
+    var onRefreshContext: (() -> Void)?
     let contextButton = NSButton(title: "Context", target: nil, action: nil)
+    let refreshContextButton = NSButton(title: "Refresh", target: nil, action: nil)
+    let contextStatus = NSTextField(wrappingLabelWithString: "")
+    private let contextHeader = NSStackView()
+    private var proseView: NSHostingView<WorkspaceTranscriptText>?
+    private var readingPreferences = WorkspaceReadingPreferences.shared
+    private var shownReading: WorkspaceWaitingContext.Reading?
     let contextLabel = NSTextField(wrappingLabelWithString: "")
     let contextScroll = NSScrollView()
     private var contextHeight: NSLayoutConstraint!
@@ -670,7 +694,22 @@ final class WorkspaceWaitingRowView: NSBox {
         contextScroll.drawsBackground = false
         contextScroll.isHidden = true
         actions.addArrangedSubview(contextButton)
-        let column = NSStackView(views: [stack, actions, contextScroll])
+        refreshContextButton.target = self
+        refreshContextButton.action = #selector(refreshContextPressed(_:))
+        refreshContextButton.controlSize = .small
+        refreshContextButton.bezelStyle = .rounded
+        refreshContextButton.refusesFirstResponder = true
+        refreshContextButton.setAccessibilityLabel("Refresh context for \(row.title)")
+        contextStatus.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        contextStatus.isSelectable = true
+        contextStatus.maximumNumberOfLines = 3
+        contextStatus.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        contextHeader.addArrangedSubview(contextStatus)
+        contextHeader.addArrangedSubview(refreshContextButton)
+        contextHeader.alignment = .top
+        contextHeader.spacing = 4
+        contextHeader.isHidden = true
+        let column = NSStackView(views: [stack, actions, contextHeader, contextScroll])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 4
@@ -681,6 +720,7 @@ final class WorkspaceWaitingRowView: NSBox {
         contextHeight = contextScroll.heightAnchor.constraint(equalToConstant: 160)
         NSLayoutConstraint.activate([
             stack.widthAnchor.constraint(equalTo: column.widthAnchor),
+            contextHeader.widthAnchor.constraint(equalTo: column.widthAnchor),
             contextScroll.widthAnchor.constraint(equalTo: column.widthAnchor),
             contextHeight,
             contextLabel.widthAnchor.constraint(equalTo: contextScroll.contentView.widthAnchor),
@@ -703,21 +743,62 @@ final class WorkspaceWaitingRowView: NSBox {
     var readingHeight: CGFloat { contextHeight.constant }
 
     func configureReading(preferences: WorkspaceReadingPreferences, height: CGFloat) {
+        readingPreferences = preferences
         let isProse: Bool
         if case .asl? = row.answer { isProse = true } else { isProse = row.key.runtimeSessionID.isEmpty }
         contextLabel.font = isProse ? .systemFont(ofSize: preferences.effectiveProseSize) : .monospacedSystemFont(ofSize: preferences.effectiveFontSize, weight: .regular)
         if contextHeight.constant != height { contextHeight.constant = height }
     }
 
-    func showContext(_ text: String?) {
-        contextScroll.isHidden = text == nil
-        contextLabel.stringValue = text ?? ""
-        contextButton.title = text == nil ? "Context" : "Hide context"
+    func showContext(_ reading: WorkspaceWaitingContext.Reading?) {
+        contextHeader.isHidden = reading == nil
+        contextScroll.isHidden = reading == nil
+        contextButton.title = reading == nil ? "Context" : "Hide context"
         contextButton.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
         contextButton.cell?.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
+        defer { shownReading = reading }
+        guard let reading else {
+            contextLabel.stringValue = ""
+            proseView = nil; contextScroll.documentView = contextLabel
+            return
+        }
+        let age = reading.refreshedAt.map { "Read " + $0.formatted(date: .omitted, time: .standard) }
+        var status = reading.loading ? (reading.content == nil ? "Loading context…" : "Refreshing context…")
+            : reading.unavailable ? "Context unavailable" : reading.failed ? "Context read failed" : reading.problem != nil ? "Partial context" : age ?? "Not read yet"
+        if let problem = reading.problem { status += ": " + problem.reveal() }
+        if reading.content != nil && (reading.loading || reading.failed) {
+            status += " · Previous context remains visible" + (age.map { " · " + $0 } ?? "")
+        }
+        contextStatus.stringValue = status
+        contextStatus.toolTip = status + (reading.refreshedAt.map { "\n" + $0.formatted(.dateTime.year().month().day().hour().minute().second().timeZone()) } ?? "")
+        contextStatus.textColor = reading.problem == nil ? .secondaryLabelColor : .systemOrange
+        refreshContextButton.title = reading.loading ? "Reading…" : reading.problem == nil ? "Refresh" : "Retry"
+        refreshContextButton.isEnabled = !reading.loading
+        guard reading.content != shownReading?.content else { return }
+        let text = reading.content?.reveal() ?? ""
+        let origin = contextScroll.contentView.bounds.origin
+        contextLabel.stringValue = text
+        if case .asl? = row.answer, reading.content != nil {
+            let body = WorkspaceTranscriptText(text: text, terms: [], preferences: readingPreferences)
+            if let proseView { proseView.rootView = body }
+            else {
+                let host = NSHostingView(rootView: body)
+                host.translatesAutoresizingMaskIntoConstraints = false
+                contextScroll.documentView = host
+                host.widthAnchor.constraint(equalTo: contextScroll.contentView.widthAnchor).isActive = true
+                proseView = host
+            }
+        } else {
+            proseView = nil
+            contextScroll.documentView = contextLabel
+        }
+        contextScroll.layoutSubtreeIfNeeded()
+        contextScroll.contentView.scroll(to: origin)
+        contextScroll.reflectScrolledClipView(contextScroll.contentView)
     }
 
     @objc private func contextPressed(_ sender: Any?) { onContext?() }
+    @objc private func refreshContextPressed(_ sender: Any?) { onRefreshContext?() }
 
     /// Shows `row` on this line: the same session, said anew. Whether it has
     /// an Answer… button is the line's own and does not change.
@@ -779,7 +860,7 @@ final class WorkspaceWaitingRowView: NSBox {
     override func accessibilityChildren() -> [Any]? {
         var children: [NSView] = answerButton.map { [$0] } ?? []
         children.append(contextButton)
-        if !contextScroll.isHidden { children.append(contextScroll) }
+        if !contextScroll.isHidden { children.append(contentsOf: [contextHeader, contextScroll]) }
         return NSAccessibility.unignoredChildren(from: children)
     }
 }
@@ -809,6 +890,12 @@ final class WorkspaceInspectorFieldView: NSView {
             ? .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
             : .systemFont(ofSize: NSFont.smallSystemFontSize)
         valueLabel.lineBreakMode = .byTruncatingMiddle
+        if ["Reason", "Evidence", "Observed"].contains(field.label) {
+            valueLabel.lineBreakMode = .byWordWrapping
+            valueLabel.usesSingleLineMode = false
+            valueLabel.cell?.wraps = true
+            valueLabel.maximumNumberOfLines = 0
+        }
         valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         for label in [nameLabel, valueLabel] {
             label.translatesAutoresizingMaskIntoConstraints = false

@@ -1,0 +1,26 @@
+{
+  "captured_at": "2026-10-19",
+  "method": "Hosted XCTest, current-process window capture, 320\u00d7600 points, 2\u00d7 pixels",
+  "test": "WorkspaceWorkflowPreviewTests.testWaitingReadStatesAndFormattedQuestionAtNarrowWidth",
+  "native_result": "Test-AgentMux-2026.10.19_17-33-02--0600.xcresult",
+  "source_revision": "92021b172728c356cc58ead956b58774d44de3a1",
+  "source_worktree": "modified, uncommitted",
+  "operator_observations": "daily-use observations pending",
+  "captures": {
+    "waiting-failed-dark.png": "94762df621297363716902569da451d528b40734318ffb0364754687747f5961",
+    "waiting-failed-light.png": "84f20ae05adeae5d88488f65428fec1d3f1f81caac01205d3b9ce18d509f1dfa",
+    "waiting-loaded-dark.png": "78c404b65c97f539ee0f75cfe99a65f43aad3550b08cf63f870e4ef7489a6cd6",
+    "waiting-loaded-light.png": "e4014350c3203051d273df931c1a8ea9755a33093f38823933f2a0675c162684",
+    "waiting-loading-dark.png": "9ad5bf112dd1ca723e732dca51d85bf7e1c14b6539c3605683005611935e0924",
+    "waiting-loading-light.png": "624a845e008e3a66a985006f980515ed2b8d2cb28c0d3df08a38e6a62aed37db"
+  },
+  "source_sha256": {
+    "macos/AgentMux/UI/WorkspaceInspectorView.swift": "6bdaf73d0cee8878310c4a66bf259ef9e77a8ab32360c69f1fdc6da69f5e6e27",
+    "macos/AgentMux/Model/WorkspaceWaitingContext.swift": "1af600c7718c0694ba9ac0b186b0e0e305153738e1224c0aa362da5c37dbb752",
+    "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift": "5c1c068f315796bac1efd5e5e156593851a2b6738be91ff2366d92b3eb1056f2"
+  },
+  "voiceover_acceptance": {
+    "status": "waived",
+    "reason": "Explicit user instruction: forget about VoiceOver."
+  }
+}

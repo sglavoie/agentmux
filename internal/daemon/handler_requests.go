@@ -129,6 +129,12 @@ func (h *Handler) handleHealth() protocol.Response {
 	}
 	ready, degraded := h.Readiness()
 	resp := protocol.Response{OK: true, PID: os.Getpid(), UptimeSeconds: uptime, Ready: ready, DegradedReason: degraded}
+	if h.daemonSettings != nil {
+		resp.DaemonSettings = make(map[string]string, len(h.daemonSettings))
+		for key, value := range h.daemonSettings {
+			resp.DaemonSettings[key] = value
+		}
+	}
 	if h.buildInfo != nil {
 		build := *h.buildInfo
 		resp.Build = &build

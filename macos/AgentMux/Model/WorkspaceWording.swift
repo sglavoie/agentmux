@@ -2,6 +2,20 @@ import Foundation
 
 /// Presentation only: protocol strings remain intact in models and decisions.
 enum WorkspaceWording {
+    static func evidence(_ evidence: CompanionStatusEvidence?) -> String {
+        guard let evidence else { return "No supporting observation available" }
+        switch evidence.kind {
+        case "screen": return "Inferred from terminal screen"
+        case "transcript": return "Inferred from conversation transcript"
+        case "harness": return "Reported by harness or its process lifecycle"
+        case "subagent": return "Reported by subagent"
+        case "asl": return "Reported by ASL run"
+        case "probe": return "Recorded by daemon observation or user action"
+        case "legacy": return "Reported by a legacy event source"
+        default: return "Observation source not recognized"
+        }
+    }
+
     static func status(_ value: String) -> String {
         let labels = [
             "fast_forward": "Ready to land", "nothing_to_land": "Nothing to land",

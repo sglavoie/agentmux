@@ -60,6 +60,7 @@ struct PreferencesSnapshot: Equatable {
 /// app runs or the environment it runs in.
 @MainActor
 final class PreferencesModel: ObservableObject {
+    let daemonSettings = DaemonSettingsModel()
     @Published var launchSettingsRequest = 0
     let defaults: UserDefaults
 
@@ -147,6 +148,7 @@ final class PreferencesModel: ObservableObject {
         refreshLoginItem()
         onRefreshAuthorization?()
         onRefreshBackend?()
+        daemonSettings.refresh()
     }
 
     func refreshLoginItem() {
@@ -640,6 +642,7 @@ struct PreferencesView: View {
                     ForEach(model.snapshot.backend.notes, id: \.text) { item in
                         note(item.text, warning: item.warning)
                     }
+                    DaemonSettingsView(model: model.daemonSettings)
                 }
             }
             .formStyle(.grouped)
@@ -747,6 +750,26 @@ struct PreferencesView: View {
         panel.message = "Choose the amx binary Agent Mux runs."
         if panel.runModal() == .OK, let url = panel.url {
             model.preferences.binaryPath = url.path
+        }
+    }
+}
+
+private struct DaemonSettingsView: View {
+    @ObservedObject var model: DaemonSettingsModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Applied daemon settings").font(.headline)
+            Text(model.status?.message ?? "Check whether saved settings are applied.")
+                .textSelection(.enabled)
+            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            HStack {
+                Button(model.busy ? "Checking…" : "Check settings") { model.refresh() }.disabled(model.busy)
+                if model.status?.changed.isEmpty == false {
+                    Button("Restart daemon to apply") { model.apply() }.disabled(!model.canRestart)
+                }
+            }
+            Text("Restarting the daemon leaves agent processes running. The app checks the applied settings again afterward.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 }

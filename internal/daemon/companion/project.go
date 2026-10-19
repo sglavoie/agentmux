@@ -529,6 +529,10 @@ func tabColor(name string) string {
 // applyState lays the daemon's state over a session. The daemon's icon wins
 // over the title's: the title is painted from it and may simply lag.
 func applyState(s *protocol.CompanionSession, st protocol.WindowStateSnapshot) {
+	if st.StatusEvidence != nil {
+		evidence := *st.StatusEvidence
+		s.StatusEvidence = &evidence
+	}
 	s.IconState = display(st.IconState)
 	s.Reason = display(st.Reason)
 	s.Unseen = st.Unseen

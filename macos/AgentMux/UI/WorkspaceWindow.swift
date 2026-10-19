@@ -247,6 +247,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// view id, shown on its line. It is never attention.
     private(set) var progresses: [String: Ghostty.Progress] = [:]
     let findBar = WorkspaceFindBar()
+    let conversationSearchButton = NSButton(title: "Search full conversation…", target: nil, action: nil)
+    private var searchHintSessionID: String?
     let scrollbarView = WorkspaceScrollbarView()
     /// Runs a Ghostty binding action in a terminal, replaced in tests.
     var performTerminalAction: (NSView, String) -> Bool = { view, action in
@@ -2136,6 +2138,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Shows the find bar and the scrollbar of the utility view the pane is
     /// on, and neither for anything else.
     private func syncOverlays() {
+        conversationSearchButton.isHidden = searchHintSessionID == nil || searchHintSessionID != shownSessionRow?.key.runtimeSessionID || shownSessionRow?.conversation == nil
         let shown = shownUtility
         let search = shown.flatMap { searches[$0.id] }
         findBar.context = shown.flatMap { shown in
@@ -2185,6 +2188,17 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func findBarNavigate(next: Bool) {
         guard let shown = shownUtility, searches[shown.id] != nil else { return }
         _ = performTerminalAction(shown.view, next ? "navigate_search:next" : "navigate_search:previous")
+    }
+
+    func showConversationSearchHint(for view: NSView) {
+        guard view === shownTerminalView, let row = shownSessionRow, row.conversation != nil else { return }
+        searchHintSessionID = row.key.runtimeSessionID
+        syncOverlays()
+    }
+
+    @objc private func searchFullConversation(_ sender: Any?) {
+        guard searchHintSessionID == shownSessionRow?.key.runtimeSessionID else { return }
+        delegate?.workspaceSearchConversation()
     }
 
     /// Closes the find bar and ends the search; the terminal takes the
@@ -3363,6 +3377,20 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             in: pane, placeholder: placeholder, linkLabel: linkLabel,
             scrollbar: scrollbarView, findBar: findBar, switcher: switcher
         )
+        conversationSearchButton.target = self
+        conversationSearchButton.action = #selector(searchFullConversation(_:))
+        conversationSearchButton.bezelStyle = .rounded
+        conversationSearchButton.controlSize = .small
+        conversationSearchButton.refusesFirstResponder = true
+        conversationSearchButton.toolTip = "Search saved conversation prose, including messages outside terminal Find’s scope. Carries the active terminal query into History."
+        conversationSearchButton.isHidden = true
+        conversationSearchButton.translatesAutoresizingMaskIntoConstraints = false
+        pane.addSubview(conversationSearchButton)
+        NSLayoutConstraint.activate([
+            conversationSearchButton.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
+            conversationSearchButton.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -12),
+            conversationSearchButton.leadingAnchor.constraint(greaterThanOrEqualTo: pane.leadingAnchor, constant: 8),
+        ])
         let paneController = NSViewController()
         otherPlaceholder.frame = otherPane.bounds
         otherPlaceholder.autoresizingMask = [.width, .height]
@@ -3464,6 +3492,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 }
 
 extension WorkspaceWindowController: GhosttySurfaceDelegate {
+    nonisolated func surfaceRequestedServerFind(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated { showConversationSearchHint(for: surface) }
+    }
     nonisolated func surfaceChildDidExit(_ surface: Ghostty.SurfaceView) {
         MainActor.assumeIsolated { terminalEnded(surface) }
     }

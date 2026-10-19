@@ -26,18 +26,20 @@ import (
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
 var (
-	sendJSON        bool
-	sendStdin       bool
-	sendKeys        []string
-	sendNoEnter     bool
-	sendAnyScreen   bool
-	sendYes         bool
-	sendOperationID string
-	sendWait        time.Duration
-	sendLook        bool
+	sendJSON          bool
+	sendStdin         bool
+	sendKeys          []string
+	sendNoEnter       bool
+	sendAnyScreen     bool
+	sendYes           bool
+	sendOperationID   string
+	sendWait          time.Duration
+	sendLook          bool
+	sendSearchContext bool
 )
 
 // The seams the tests replace: the screen classifier, and the pause between
@@ -103,6 +105,7 @@ func init() {
 	sendCmd.Flags().StringVar(&sendOperationID, "operation-id", "", "name this send, so a repeat of it writes nothing twice")
 	sendCmd.Flags().DurationVar(&sendWait, "wait", 0, "how long to watch for the agent taking the input")
 	sendCmd.Flags().BoolVar(&sendLook, "look", false, "send nothing; show what the agent's screen shows")
+	sendCmd.Flags().BoolVar(&sendSearchContext, "search-context", false, "with --look, include the active terminal search for conversation search")
 }
 
 // SendCommand returns the top-level `amx send` command.
@@ -132,9 +135,10 @@ type sendData struct {
 
 // sendLookData is the `send --look --json` payload.
 type sendLookData struct {
-	RuntimeSessionID string `json:"runtime_session_id"`
-	Backend          string `json:"backend"`
-	Project          string `json:"project"`
+	Search           *tmux.SearchContext `json:"search,omitempty"`
+	RuntimeSessionID string              `json:"runtime_session_id"`
+	Backend          string              `json:"backend"`
+	Project          string              `json:"project"`
 	// Screen is blocked, working, idle, or unknown.
 	Screen string   `json:"screen"`
 	Lines  []string `json:"lines"`
@@ -147,6 +151,9 @@ type sendTerminal interface {
 }
 
 func runSend(cmd *cobra.Command, args []string) error {
+	if sendSearchContext && !sendLook {
+		return cli.CommandFailure(cmd, sendJSON, "invalid_arguments", errors.New("--search-context requires --look"))
+	}
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return cli.MissingParameter(cmd, sendJSON, "runtime-session-id", "the runtime session to send to (rs-...)")
 	}
@@ -268,7 +275,20 @@ func runSendLook(cmd *cobra.Command, term sendTerminal, record runtimesession.Re
 		return cli.CommandFailure(cmd, sendJSON, "send_failed", fmt.Errorf("reading the screen of %s: %w", record.Project, err))
 	}
 	if sendJSON {
+		var search *tmux.SearchContext
+		if sendSearchContext {
+			if reader, ok := term.(interface {
+				ReadSearchContext(runtimesession.Record) (tmux.SearchContext, error)
+			}); ok {
+				value, err := reader.ReadSearchContext(record)
+				if err != nil {
+					return cli.CommandFailure(cmd, sendJSON, "search_unavailable", err)
+				}
+				search = &value
+			}
+		}
 		return cli.WriteJSON(cmd, sendLookData{
+			Search:           search,
 			RuntimeSessionID: string(record.ID), Backend: string(record.Target.Instance.Kind), Project: record.Project,
 			Screen: look.Screen, Lines: look.Lines,
 		})

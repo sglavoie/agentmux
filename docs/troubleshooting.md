@@ -87,9 +87,14 @@ For lifecycle behavior and confirmation preferences, see
 - **No projects appear**: run `amx config validate` and confirm the config is
   at `~/.config/agent-mux/config.toml`.
 - **A config change has no effect** (a notification toggle, a cooldown, a
-  stop-confirm delay): the daemon reads `config.toml` only when it starts, and
-  `amx doctor` warns `config_changed_since_daemon_start` when the file is newer
-  than the running daemon. Run `amx daemon restart`.
+  stop-confirm delay): run `amx config daemon-status`. It compares saved daemon
+  settings with the settings captured at startup and names the changed groups.
+  Project edits, launch arguments, and reader preferences do not require a
+  daemon restart. Run `amx daemon restart`, then check again; **Saved daemon
+  settings are applied** confirms the comparison. Settings › Workspace offers
+  the same check and restart, with verification afterward. Older daemons report
+  that comparison is unavailable; Doctor retains a qualified timestamp warning
+  for them. The stable finding remains `config_changed_since_daemon_start`.
 - **Hooks are missing**: run `amx config hooks-status`, then
   `amx config hooks-sync`.
 - **Doctor reports `owner_mismatch_prompt`, `owner_mismatch_burst`, or

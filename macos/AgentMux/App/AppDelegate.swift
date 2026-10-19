@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private var aslPanel: ASLQuestionPanelController?
     private var promptPanel: PromptAnswerPanelController?
     private var historyWindow: WorkspaceHistoryWindow?
+    private var conversationSearchSequence = 0
     private var activityWindow: WorkspaceActivityWindow?
     private var runsWindow: WorkspaceRunsWindow?
     private var changesWindow: WorkspaceChangesWindow?
@@ -927,21 +928,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     @objc func showHistory(_ sender: Any?) { openHistory(conversation: nil) }
 
     @objc func searchConversation(_ sender: Any?) {
-        guard workspaceIsKey, let identity = workspace?.shownSessionRow?.conversation else { return }
-        openHistory(conversation: identity)
+        guard workspaceIsKey, let row = workspace?.shownSessionRow, let identity = row.conversation else { return }
+        conversationSearchSequence += 1
+        let request = conversationSearchSequence
+        guard !row.key.runtimeSessionID.isEmpty, let command else { openHistory(conversation: identity); return }
+        QueueWorkRunner.concurrent().run({
+            command.json(PromptLook.self, PromptLook.arguments(runtimeSessionID: row.key.runtimeSessionID) + ["--search-context"])
+        }, then: { [weak self] result in
+            guard let self, self.conversationSearchSequence == request, self.workspaceIsKey,
+                  self.workspace?.shownSessionRow?.key == row.key,
+                  self.workspace?.shownSessionRow?.conversation == identity else { return }
+            let query = result.value?.search?.query.reveal() ?? ""
+            let note: String
+            if case .failure = result {
+                note = "Terminal search could not be read. Search this saved conversation by typing a query."
+            } else {
+                note = "Searching saved conversation prose, including older messages. Words and quoted phrases are supported; terminal regular expressions are not used here."
+            }
+            self.openHistory(conversation: identity, query: query, searchNote: note)
+        })
     }
 
-    private func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil) {
+    func workspaceSearchConversation() { searchConversation(nil) }
+
+    private func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil, query: String = "", searchNote: String? = nil) {
+        conversationSearchSequence += 1
         let workspace = workspaceController()
+        let returnResponder: NSResponder? = searchNote == nil ? workspace.window.firstResponder : workspace.shownTerminalView
         workspace.show()
         let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }, defaults: .standard, feedbackHistory: reviewFeedbackHistory))
-        controller.onVisibilityChanged = { [weak self] visible in
+        controller.onVisibilityChanged = { [weak self, weak returnResponder] visible in
             self?.historyVisible = visible
             self?.syncActivationPolicy()
             if !visible, let self {
                 if eventTime != nil, let activity = self.activityWindow?.window, activity.isVisible {
                     activity.makeKeyAndOrderFront(nil)
-                } else if self.workspaceVisible { self.workspace?.window.makeKeyAndOrderFront(nil) }
+                } else if self.workspaceVisible {
+                    self.workspace?.window.makeKeyAndOrderFront(nil)
+                    if let view = returnResponder as? NSView, view.window === self.workspace?.window,
+                       !view.isHiddenOrHasHiddenAncestor { self.workspace?.window.makeFirstResponder(view) }
+                }
             }
         }
         controller.model.onAction = { [weak self] conversation, fork, completion in
@@ -949,8 +975,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
         controller.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
         historyWindow = controller
+        controller.model.searchEntryNote = searchNote
         if conversation != nil {
-            controller.model.query = ""
+            controller.model.query = query
             controller.model.scope = .conversation
             controller.model.includeAutomated = true
         }
@@ -1056,8 +1083,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         perform(box.action)
     }
 
-    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void) {
-        guard store.feed == .live else { completion(SecretText("Waiting for a live session list.")); return }
+    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void) {
+        guard store.feed == .live else { completion(.unavailable(SecretText("Waiting for a live session list."))); return }
         let command = self.command
         QueueWorkRunner.concurrent().run({
             WorkspaceWaitingContext.read(row, asl: DaemonClient()) { id in
@@ -1572,11 +1599,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Restart Daemon, offered when the daemon is too old for this app:
     /// `amx daemon restart`, which returns once the new daemon answers, so
     /// the feed dials it at once.
-    private func restartDaemon() {
+    private func restartDaemon(completion: ((Bool) -> Void)? = nil) {
         guard let command else {
+            completion?(false)
             return report(preferences.binaryMenuProblem ?? "amx is still being resolved; try again in a moment.")
         }
-        if let busy = daemonBusy { return report(busy) }
+        if let busy = daemonBusy { completion?(false); return report(busy) }
         daemonRestartRunning = true
         let change = beginChange("restarting the daemon")
         store.show(notice: DaemonStart.restartingNotice)
@@ -1588,6 +1616,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                     self.endChange(change)
                     self.daemonRestartRunning = false
                     self.finishRestart(result)
+                    if case let .success(output) = result { completion?(output.status == 0) }
+                    else { completion?(false) }
                     self.statusItem?.refresh()
                 }
             }
@@ -1908,6 +1938,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         model.onResumeSnooze = { [weak self] in self?.snooze(.resume) }
         model.onRefreshAuthorization = { [weak self] in self?.notifications?.refreshAuthorization() }
         model.onRefreshBackend = { [weak self] in self?.refreshBackendStatus() }
+        model.daemonSettings.command = { [weak self] in self?.command }
+        model.daemonSettings.restart = { [weak self] done in
+            guard let self else { done(false); return }
+            self.restartDaemon(completion: done)
+        }
         model.onRecordingChange = { [weak self] recording in
             guard let self else { return }
             self.isRecordingHotKey = recording

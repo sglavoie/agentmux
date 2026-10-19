@@ -184,7 +184,12 @@ enum WorkspaceInspector {
         let row = WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
 
         var status = [Field(label: "State", value: word(for: session.iconState))]
-        status.append(Field(label: "Reason", value: session.reason))
+        if !session.reason.isEmpty { status.append(Field(label: "Reason", value: WorkspaceWording.status(session.reason))) }
+        status.append(Field(label: "Evidence", value: WorkspaceWording.evidence(session.statusEvidence)))
+        if let at = session.statusEvidence?.at, at > 0 {
+            status.append(Field(label: "Observed", value: Date(timeIntervalSince1970: TimeInterval(at))
+                .formatted(.dateTime.year().month().day().hour().minute().second().timeZone())))
+        }
         if let changed = session.changedAt {
             status.append(Field(label: "Since", value: MenuBuilder.age(since: changed, now: now)))
         }

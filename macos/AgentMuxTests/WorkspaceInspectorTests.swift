@@ -105,21 +105,21 @@ final class WorkspaceInspectorTests: XCTestCase {
     func testLateContextIsDiscardedWhenThePromptChangesOrFeedIsLost() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let inspector = workspace.inspector
-        var finish: ((SecretText) -> Void)?
+        var finish: ((WorkspaceWaitingContext.Result) -> Void)?
         inspector.onContext = { _, completion in finish = completion }
         inspector.toggleContext(try XCTUnwrap(inspector.model.waiting.first))
-        XCTAssertEqual(inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first { $0.row.key == inspector.model.waiting.first?.key }?.contextLabel.stringValue, "Loading context…")
+        XCTAssertEqual(inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first { $0.row.key == inspector.model.waiting.first?.key }?.contextStatus.stringValue, "Loading context…")
         var changed = sessions
         changed[1].iconState = "question"
         app.store.apply(snapshot: F.snapshot(changed))
-        finish?(SecretText("old prompt"))
+        finish?(.loaded(SecretText("old prompt")))
         XCTAssertFalse(inspector.lines.compactMap { ($0 as? WorkspaceWaitingRowView)?.contextLabel.stringValue }.contains("old prompt"))
         inspector.toggleContext(try XCTUnwrap(inspector.model.waiting.first))
         var stale = inspector.model
         stale.current = false
         stale.feedNotice = "Reconnecting…"
         inspector.show(stale)
-        finish?(SecretText("late response"))
+        finish?(.loaded(SecretText("late response")))
         XCTAssertFalse(inspector.lines.compactMap { ($0 as? WorkspaceWaitingRowView)?.contextLabel.stringValue }.contains("late response"))
     }
 
@@ -157,7 +157,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual(idle.title, "api — work")
         XCTAssertTrue(idle.embedded)
         XCTAssertEqual(idle.sections.map(\.title), ["Status", "Identity"], "a session with no branch has no Git section")
-        XCTAssertEqual(idle.sections[0].fields, [.init(label: "State", value: "idle")])
+        XCTAssertEqual(idle.sections[0].fields, [.init(label: "State", value: "idle"), .init(label: "Evidence", value: "No supporting observation available")])
         XCTAssertEqual(idle.sections[1].fields, [
             .init(label: "Project", value: "api"),
             .init(label: "Profile", value: "work"),
@@ -183,7 +183,8 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertTrue(inspection.muted)
         XCTAssertEqual(inspection.sections[0].fields, [
             .init(label: "State", value: "working"),
-            .init(label: "Reason", value: "tool"),
+            .init(label: "Reason", value: "Tool"),
+            .init(label: "Evidence", value: "No supporting observation available"),
             .init(label: "Since", value: "5m"),
             .init(label: "Working for", value: "2m"),
             .init(label: "Last event", value: "<1m"),
@@ -460,7 +461,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertTrue(zip(before, after).allSatisfy { $0 === $1 }, "the same lines, updated where they are")
         XCTAssertEqual(runtime.valueLabel.stringValue, WorkspaceInspectorFieldView.copied)
         let reason = try XCTUnwrap(fields.first { $0.field.label == "Reason" })
-        XCTAssertEqual(reason.valueLabel.stringValue, "done")
+        XCTAssertEqual(reason.valueLabel.stringValue, "Turn complete")
 
         // A line that comes or goes builds the lines again.
         changed[1].branch = "main"

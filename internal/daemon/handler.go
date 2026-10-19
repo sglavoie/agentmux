@@ -65,6 +65,8 @@ type Handler struct {
 	// and reported from TypeHealth so clients can detect a CLI/daemon build
 	// mismatch. Nil in unit tests that never set it.
 	buildInfo *buildinfo.Info
+	// Immutable, captured from effective startup configuration before serving.
+	daemonSettings map[string]string
 
 	// metricsFn returns the owning server's request-outcome counters (queue
 	// saturation, queue latency) for TypeHealth and export surfaces. Installed

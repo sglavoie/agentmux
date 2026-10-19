@@ -11,6 +11,23 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testWaitingReadStatesAndFormattedQuestionAtNarrowWidth() async throws {
+        for dark in [false, true] {
+            let inspector = WorkspaceInspectorView()
+            let row = WorkspaceWaitingRow(key: .embedded("fixture"), title: "API review", detail: "Waiting for your answer", glyph: "?", toolTip: "",
+                answer: .asl(.init(runID: "fixture-run", planDir: "/plans/api")), category: .question)
+            var receive: ((WorkspaceWaitingContext.Result) -> Void)?
+            inspector.onContext = { _, done in receive = done }
+            inspector.show(.init(waiting: [row])); inspector.toggleContext(row)
+            try await render(PreviewNativeView(view: inspector), name: "seams-waiting-loading-\(dark)", width: 320, height: 600, dark: dark, expected: ["Loading context", "Answer"])
+            receive?(.loaded(SecretText("# Deployment review\n\n- Check staging\n- Keep rollback available\n\n```sh\nmake check\n```")))
+            try await render(PreviewNativeView(view: inspector), name: "seams-waiting-loaded-\(dark)", width: 320, height: 600, dark: dark, expected: ["Deployment review", "Copy code", "Refresh"])
+            inspector.refreshContext(row)
+            receive?(.failed(SecretText("Connection lost. Try again.")))
+            try await render(PreviewNativeView(view: inspector), name: "seams-waiting-failed-\(dark)", width: 320, height: 600, dark: dark, expected: ["Context read failed", "Retry", "Deployment review"])
+        }
+    }
+
     private func command(_ data: @escaping ([String]) -> String) -> AMXCommand {
         var amx = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
         amx.runner = { _, args, _, _ in
@@ -83,7 +100,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             let inspector = WorkspaceInspectorView(preferences: preferences)
             let row = WorkspaceWaitingRow(key: .embedded("fixture"), title: "API — deployment review", detail: "Waiting for your answer", glyph: "?", toolTip: "",
                 answer: .asl(.init(runID: "fixture-run", planDir: "/plans/api")), category: .question)
-            inspector.onContext = { _, receive in receive(SecretText("Which deployment should proceed?\n\nReview the staging results before choosing production.")) }
+            inspector.onContext = { _, receive in receive(.loaded(SecretText("Which deployment should proceed?\n\nReview the staging results before choosing production."))) }
             inspector.show(.init(waiting: [row])); inspector.toggleContext(row)
             try await render(PreviewNativeView(view: inspector), name: "consistency-waiting-contrast-\(dark)", width: 320, height: 600,
                 dark: dark, highContrast: true, expected: ["Which deployment", "Next waiting", "Oldest first", "Answer"])
@@ -139,7 +156,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             let inspector = WorkspaceInspectorView(preferences: preferences)
             let row = WorkspaceWaitingRow(key: .embedded("one"), title: "API · deployment review", detail: "Question · 2m", glyph: "?", toolTip: "",
                 answer: .asl(.init(runID: "run-one", planDir: "/plans/api")), category: .question)
-            inspector.onContext = { _, done in done(SecretText("Which deployment should proceed?\n\nThe endpoint checks passed. Review the staging results before choosing production.\n\n" + String(repeating: "Keep the current deployment available until verification completes.\n\n", count: 10))) }
+            inspector.onContext = { _, done in done(.loaded(SecretText("Which deployment should proceed?\n\nThe endpoint checks passed. Review the staging results before choosing production.\n\n" + String(repeating: "Keep the current deployment available until verification completes.\n\n", count: 10)))) }
             inspector.show(.init(waiting: [row])); inspector.focusReader()
             try await render(PreviewNativeView(view: inspector), name: "daily-waiting-large-\(dark)", width: 320, height: 600, dark: dark,
                              expected: ["Answer", "Which deployment", "Next waiting"])
@@ -227,7 +244,7 @@ extension WorkspaceWorkflowPreviewTests {
             let completed = WorkspaceWaitingRow(key: .embedded("completed"),
                 title: "Desktop · conversation history", detail: "Turn finished · 2m", glyph: "✓", toolTip: "", category: .completed)
             inspector.show(.init(waiting: [completed, question]))
-            inspector.onContext = { _, done in done(SecretText("Should the endpoint keep the existing cursor format?")) }
+            inspector.onContext = { _, done in done(.loaded(SecretText("Should the endpoint keep the existing cursor format?"))) }
             inspector.toggleContext(question)
             try await render(PreviewNativeView(view: inspector).padding(12), name: "waiting-action-\(dark ? "dark" : "light")",
                              width: 340, height: 560, dark: dark,

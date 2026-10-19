@@ -165,13 +165,14 @@ func TestClientHealthIncludesDaemonDiagnostics(t *testing.T) {
 		_ = json.NewEncoder(conn).Encode(protocol.Response{
 			OK: true, PID: 42, UptimeSeconds: 7, Ready: false,
 			DegradedReason: "initial snapshot timed out",
+			DaemonSettings: map[string]string{"Notifications": "v1:fixture"},
 			Metrics:        &protocol.MetricsSnapshot{Accepted: 6, QueueFull: 1},
 		})
 	}()
 	health := NewClientWithSocket(sockPath).Health()
 	if !health.Alive || health.PID != 42 || health.Uptime != 7*time.Second || health.Ready ||
 		health.DegradedReason != "initial snapshot timed out" || health.Metrics == nil ||
-		health.Metrics.Accepted != 6 || health.Metrics.QueueFull != 1 {
+		health.Metrics.Accepted != 6 || health.Metrics.QueueFull != 1 || health.DaemonSettings["Notifications"] != "v1:fixture" {
 		t.Fatalf("health = %+v", health)
 	}
 }

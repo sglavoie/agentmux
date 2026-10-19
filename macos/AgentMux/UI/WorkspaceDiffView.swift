@@ -42,17 +42,31 @@ struct WorkspaceDiffView: NSViewRepresentable {
     }
 
     func updateNSView(_ container: WorkspaceDiffContainer, context: Context) {
+        update(container, state: context.coordinator)
+    }
+
+    private func update(_ container: WorkspaceDiffContainer, state: Coordinator) {
+        guard container.bounds.width > 0, container.bounds.height > 0 else {
+            container.onReady = { [weak container, weak state] in
+                guard let container, let state else { return }
+                update(container, state: state)
+            }
+            return
+        }
+        container.onReady = nil
         let scroll = container.scroll
         guard let text = scroll.documentView as? WorkspaceDiffTextView else { return }
         text.onCopy = onCopy
-        let state = context.coordinator
         state.onVisibleHunk = onVisibleHunk
         guard !loading else { return }
-        if state.identity != identity || state.diff != diff || state.fontSize != fontSize || state.wrapLines != wrapLines || state.compactMetadata != compactMetadata {
+        let contentChanged = state.identity != identity || state.diff != diff || state.fontSize != fontSize || state.compactMetadata != compactMetadata
+        if contentChanged || state.wrapLines != wrapLines {
             if let previous = state.identity {
                 state.positions[previous] = scroll.contentView.bounds.origin
                 state.anchors[previous] = text.readingAnchor()
             }
+            state.updating = true
+            defer { state.updating = false }
             let position = state.positions[identity] ?? reviewState?.position(identity) ?? .zero
             let anchor = state.anchors[identity]
             state.identity = identity
@@ -61,11 +75,8 @@ struct WorkspaceDiffView: NSViewRepresentable {
             state.wrapLines = wrapLines
             state.compactMetadata = compactMetadata
             state.hasReportedHunk = false
-            let rendered = Self.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
-            state.hunkRanges = rendered.hunks
-            text.diff = diff
-            text.lineRanges = rendered.lines
-            text.textStorage?.setAttributedString(rendered.text)
+            let initialViewportOnly = diff.lines.count > 1000 && anchor == nil && position == .zero
+            text.layoutManager?.allowsNonContiguousLayout = initialViewportOnly
             let digits = max(3, String(diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
             container.gutter.digits = digits
             container.gutterWidth = CGFloat(digits * 2 + 3) * fontSize * 0.61
@@ -78,12 +89,35 @@ struct WorkspaceDiffView: NSViewRepresentable {
                                                        height: CGFloat.greatestFiniteMagnitude)
             if wrapLines { text.setFrameSize(NSSize(width: scroll.contentSize.width, height: text.frame.height)) }
             scroll.tile()
-            text.layoutManager?.ensureLayout(for: text.textContainer!)
+            if contentChanged {
+                let rendered = Self.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
+                state.hunkRanges = rendered.hunks
+                text.diff = diff
+                text.lineRanges = rendered.lines
+                text.textStorage?.setAttributedString(rendered.text)
+            }
+            // New large files only need the first viewport. Restoring a reading
+            // position needs final geometry: TextKit's estimated document size
+            // otherwise clamps or shifts the saved point during layout.
+            if let tc = text.textContainer {
+                if initialViewportOnly {
+                    text.layoutManager?.ensureLayout(forBoundingRect: scroll.documentVisibleRect, in: tc)
+                } else if let layout = text.layoutManager {
+                    layout.ensureLayout(forCharacterRange: NSRange(location: 0, length: text.textStorage?.length ?? 0))
+                    // NSTextView can still have its pre-wrap height here.
+                    // Resize before scrolling so NSClipView does not clamp a
+                    // deep saved position to that obsolete document boundary.
+                    let height = max(scroll.contentSize.height, layout.usedRect(for: tc).maxY + text.textContainerInset.height * 2)
+                    text.setFrameSize(NSSize(width: text.frame.width, height: height))
+                }
+            }
             var restored = position
             if let anchor, let y = text.position(for: anchor) { restored.y = y }
             if wrapLines { restored.x = 0 }
             scroll.contentView.scroll(to: restored)
             scroll.reflectScrolledClipView(scroll.contentView)
+            state.positions[identity] = scroll.contentView.bounds.origin
+            reviewState?.savePosition(scroll.contentView.bounds.origin, id: identity)
             state.gutter?.needsDisplay = true
         }
         if state.jumpSequence != jumpSequence {
@@ -108,6 +142,15 @@ struct WorkspaceDiffView: NSViewRepresentable {
 
     static func render(_ diff: WorkspaceDiff, fontSize: CGFloat = 12, compactMetadata: Bool = false) -> (text: NSAttributedString, hunks: [NSRange], lines: [NSRange]) {
         let result = NSMutableAttributedString()
+        result.beginEditing()
+        defer { result.endEditing() }
+        let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let headingFont = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold)
+        let added = NSColor.systemGreen.withAlphaComponent(0.14)
+        let removed = NSColor.systemRed.withAlphaComponent(0.14)
+        let heading = NSColor.controlAccentColor.withAlphaComponent(0.14)
+        let addedWord = NSColor.systemGreen.withAlphaComponent(0.34)
+        let removedWord = NSColor.systemRed.withAlphaComponent(0.34)
         var hunks: [NSRange] = [], ranges: [NSRange] = []
         for (index, line) in diff.lines.enumerated() {
             if compactMetadata && diff.redundantHeader(index) {
@@ -115,15 +158,15 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 continue
             }
             var attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
+                .font: font,
                 .foregroundColor: NSColor.labelColor
             ]
             switch line.kind {
-            case .added: attributes[.backgroundColor] = NSColor.systemGreen.withAlphaComponent(0.14)
-            case .removed: attributes[.backgroundColor] = NSColor.systemRed.withAlphaComponent(0.14)
+            case .added: attributes[.backgroundColor] = added
+            case .removed: attributes[.backgroundColor] = removed
             case .hunk:
-                attributes[.backgroundColor] = NSColor.controlAccentColor.withAlphaComponent(0.14)
-                attributes[.font] = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .semibold)
+                attributes[.backgroundColor] = heading
+                attributes[.font] = headingFont
                 hunks.append(NSRange(location: result.length, length: line.text.utf16.count))
             case .metadata: attributes[.foregroundColor] = NSColor.secondaryLabelColor
             case .context: break
@@ -132,7 +175,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
             ranges.append(NSRange(location: result.length, length: row.utf16.count))
             let styled = NSMutableAttributedString(string: row, attributes: attributes)
             for range in diff.changedWords[index] ?? [] {
-                styled.addAttribute(.backgroundColor, value: (line.kind == .added ? NSColor.systemGreen : NSColor.systemRed).withAlphaComponent(0.34), range: range)
+                styled.addAttribute(.backgroundColor, value: line.kind == .added ? addedWord : removedWord, range: range)
             }
             result.append(styled)
         }
@@ -171,7 +214,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
             scroll.contentView.postsBoundsChangedNotifications = true
             observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification,
                 object: scroll.contentView, queue: .main) { [weak self, weak scroll] _ in
-                guard let self, let scroll, let id = self.identity else { return }
+                guard let self, !self.updating, let scroll, let id = self.identity else { return }
                 let point = scroll.contentView.bounds.origin
                 self.positions[id] = point
                 self.store?.savePosition(point, id: id)
@@ -180,6 +223,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
             }
         }
         deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
+        var updating = false
         var identity: String?
         var diff: WorkspaceDiff?
         var positions: [String: NSPoint] = [:]
@@ -289,6 +333,7 @@ final class WorkspaceDiffContainer: NSView {
     let scroll = NSScrollView()
     let gutter = WorkspaceDiffGutter()
     var gutterWidth: CGFloat = 66
+    var onReady: (() -> Void)?
     override var isFlipped: Bool { true }
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -302,6 +347,14 @@ final class WorkspaceDiffContainer: NSView {
         gutter.frame = NSRect(x: 0, y: 0, width: gutterWidth, height: bounds.height)
         scroll.frame = NSRect(x: gutterWidth, y: 0, width: max(0, bounds.width - gutterWidth), height: bounds.height)
         gutter.needsDisplay = true
+        if bounds.width > 0, bounds.height > 0, onReady != nil {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.bounds.width > 0, self.bounds.height > 0,
+                      let ready = self.onReady else { return }
+                self.onReady = nil
+                ready()
+            }
+        }
     }
 }
 

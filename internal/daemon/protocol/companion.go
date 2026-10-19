@@ -396,6 +396,7 @@ type CompanionASLWaiting struct {
 // fields are set exactly when the session lives in Kitty; in a v2 snapshot a
 // session on another backend has only Runtime to be addressed by.
 type CompanionSession struct {
+	StatusEvidence          *StatusEvidence        `json:"status_evidence,omitempty"`
 	WindowID                int                    `json:"window_id,omitempty"`
 	TabID                   int                    `json:"tab_id,omitempty"`
 	OSWindowID              int                    `json:"os_window_id,omitempty"`

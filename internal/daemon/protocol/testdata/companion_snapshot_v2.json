@@ -67,6 +67,10 @@
   },
   "sessions": [
     {
+      "status_evidence": {
+        "kind": "asl",
+        "at": 1700000050
+      },
       "window_id": 101,
       "tab_id": 10,
       "os_window_id": 1,

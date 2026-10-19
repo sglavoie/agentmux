@@ -32,6 +32,7 @@ protocol GhosttySurfaceDelegate: AnyObject {
     /// again, ended, or was counted. Only a terminal holding its own
     /// history (`Scrollback.terminal`) reports one.
     func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate)
+    func surfaceRequestedServerFind(_ surface: Ghostty.SurfaceView)
     /// The viewport moved in the terminal's own buffer, or the buffer grew
     /// (`scrollbar`). Never reported when the config says `scrollbar = never`
     /// or the terminal's history is the server's.
@@ -56,6 +57,7 @@ extension GhosttySurfaceDelegate {
     func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) {}
     func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate) {}
+    func surfaceRequestedServerFind(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView) {}
     func surfaceDidWriteClipboard(_ surface: Ghostty.SurfaceView) {}

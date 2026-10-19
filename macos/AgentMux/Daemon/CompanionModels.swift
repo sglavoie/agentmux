@@ -359,7 +359,13 @@ struct CompanionRuntime: Decodable, Equatable {
 }
 
 /// `protocol.CompanionSession`: one live managed session.
+struct CompanionStatusEvidence: Decodable, Equatable {
+    var kind: String
+    var at: Int64?
+}
+
 struct CompanionSession: Decodable, Equatable {
+    var statusEvidence: CompanionStatusEvidence?
     var windowID = 0
     var tabID = 0
     var osWindowID = 0
@@ -413,6 +419,7 @@ struct CompanionSession: Decodable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, branch, dirty, name
+        case statusEvidence = "status_evidence"
         case runtime
         case windowID = "window_id"
         case tabID = "tab_id"
@@ -442,6 +449,7 @@ struct CompanionSession: Decodable, Equatable {
         aslRunID = c.lenient(.aslRunID, "")
         iconState = c.lenient(.iconState, "")
         reason = c.lenient(.reason, "")
+        statusEvidence = c.lenient(.statusEvidence)
         unseen = c.lenient(.unseen, false)
         attention = c.lenient(.attention, false)
         muted = c.lenient(.muted, false)

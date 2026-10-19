@@ -219,6 +219,7 @@ func (c *Client) sendBefore(req protocol.Request, deadline time.Time) (protocol.
 // Metrics are nil when the daemon predates them (or, for Metrics, when the
 // handler runs without a server).
 type Health struct {
+	DaemonSettings map[string]string
 	Alive          bool
 	PID            int
 	Uptime         time.Duration
@@ -275,6 +276,7 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		return Health{}
 	}
 	return Health{
+		DaemonSettings: resp.DaemonSettings,
 		Alive:          true,
 		PID:            resp.PID,
 		Uptime:         time.Duration(resp.UptimeSeconds) * time.Second,

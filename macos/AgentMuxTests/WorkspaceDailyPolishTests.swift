@@ -57,14 +57,14 @@ final class WorkspaceDailyPolishTests: XCTestCase {
                   answer: .prompt(runtimeSessionID: id), category: .question, contextVersion: "one")
         }
         let one = row("one"), two = row("two")
-        var contexts: [(WorkspaceWaitingRow, (SecretText) -> Void)] = []
+        var contexts: [(WorkspaceWaitingRow, (WorkspaceWaitingContext.Result) -> Void)] = []
         var answers: [WorkspaceWaitingAnswer] = []
         inspector.onContext = { contexts.append(($0, $1)) }
         inspector.onAnswer = { answers.append($0) }
         inspector.show(.init(waiting: [one, two])); inspector.focusReader()
         XCTAssertTrue(window.firstResponder === inspector)
         XCTAssertEqual(inspector.readingKey, one.key)
-        contexts[0].1(SecretText("terminal output\n" + String(repeating: "line\n", count: 80)))
+        contexts[0].1(.loaded(SecretText("terminal output\n" + String(repeating: "line\n", count: 80))))
         window.layoutIfNeeded()
         let first = try XCTUnwrap(inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first)
         XCTAssertGreaterThan(first.contextScroll.frame.height, 160)
@@ -87,7 +87,7 @@ final class WorkspaceDailyPolishTests: XCTestCase {
         inspector.show(.init(waiting: [changed, two]))
         inspector.keyDown(with: key("\r", code: 36, window: window))
         XCTAssertEqual(answers.count, 1, "a held item must not answer a replacement question")
-        contexts[0].1(SecretText("obsolete"))
+        contexts[0].1(.loaded(SecretText("obsolete")))
         XCTAssertFalse(first.contextLabel.stringValue.contains("obsolete"))
         inspector.keyDown(with: key("n", code: 45, window: window))
         XCTAssertEqual(inspector.readingKey, two.key)

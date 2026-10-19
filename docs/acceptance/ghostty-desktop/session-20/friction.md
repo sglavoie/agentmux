@@ -24,6 +24,12 @@ when they describe the same interruption; keep build changes visible.
 
 ## Next polish decisions
 
+The [workspace seams follow-up](../../workspace-seams-polish/README.md) adds
+specific observation tasks for Waiting recovery, applied settings, status
+evidence, terminal-to-History search, and large-diff responsiveness. VoiceOver
+acceptance was waived by the user. The real-work tasks remain candidate checks
+until the operator records actual use; they do not add occurrences or completed workdays to this register.
+
 | Rank | Friction ID | Evidence and reason | Next action | Outcome |
 | --- | --- | --- | --- | --- |
 

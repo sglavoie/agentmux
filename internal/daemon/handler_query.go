@@ -68,13 +68,14 @@ func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapsh
 	snapshot := make(map[int]int64, len(h.store))
 	for id, st := range h.store {
 		state := protocol.WindowStateSnapshot{
-			IconState:   rendering.DesiredIcon(st),
-			Looping:     st.Looping,
-			LastAction:  st.LastAction,
-			GuardAction: st.GuardAction,
-			AgentTurn:   st.Reducer.AgentTurn(now),
-			ASLPhases:   st.Reducer.ASLPhases(),
-			ASLRunIDs:   liveASLRunIDs(st.Reducer),
+			StatusEvidence: statusEvidence(st),
+			IconState:      rendering.DesiredIcon(st),
+			Looping:        st.Looping,
+			LastAction:     st.LastAction,
+			GuardAction:    st.GuardAction,
+			AgentTurn:      st.Reducer.AgentTurn(now),
+			ASLPhases:      st.Reducer.ASLPhases(),
+			ASLRunIDs:      liveASLRunIDs(st.Reducer),
 			// The durable bit is projected as-is rather than recomputed: the
 			// daemon's publish path and focus observation are its only writers,
 			// so a query that derived it again would be a second opinion.
@@ -115,6 +116,30 @@ func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapsh
 		states[id] = state
 	}
 	return states, snapshot
+}
+
+func statusEvidence(st *state.WindowState) *protocol.StatusEvidence {
+	// A masked/cleared icon cannot borrow the reducer's explanation for a
+	// different icon. Unknown provenance remains explicitly unknown in clients.
+	if st.Effective.Icon == "" || rendering.DesiredIcon(st) != st.Effective.Icon {
+		return nil
+	}
+	fact, ok := st.Reducer.Fact(st.Effective.Source)
+	if !ok {
+		return nil
+	}
+	kind := string(fact.Kind)
+	if fact.Kind == protocol.SourceProbe {
+		switch fact.Key {
+		case screenPromptProbeSource, claudeScreenStopProbeSource, claudeContextLimitFactSource:
+			kind = "screen"
+		case copilotTranscriptStopProbeSource:
+			kind = "transcript"
+		default:
+			kind = "probe"
+		}
+	}
+	return &protocol.StatusEvidence{Kind: kind, At: fact.At}
 }
 
 // handleSessionDetail returns the per-window event ring buffer for req.WindowID.

@@ -110,6 +110,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	guard := activity.NewStateGuard(guardDur)
 	notifier := notification.NewNotifier(&cfg.Defaults.Notifications)
 	handler := NewHandler(guard, notifier)
+	handler.daemonSettings = cfg.DaemonSettings()
 	if recorder != nil {
 		handler.setDecisionJournal(recorder.journal)
 	}

@@ -62,6 +62,7 @@ func (w *sendWorld) id() string { return string(w.launched.RuntimeSessionID) }
 func (w *sendWorld) run(t *testing.T, stdin string, args ...string) (string, error) {
 	t.Helper()
 	reset := func() {
+		sendSearchContext = false
 		sendJSON, sendStdin, sendKeys, sendNoEnter, sendAnyScreen, sendYes, sendOperationID, sendWait, sendLook = false, false, nil, false, false, false, "", 0, false
 	}
 	reset()
@@ -76,6 +77,7 @@ func (w *sendWorld) run(t *testing.T, stdin string, args ...string) (string, err
 	cmd.Flags().StringVar(&sendOperationID, "operation-id", "", "")
 	cmd.Flags().DurationVar(&sendWait, "wait", 0, "")
 	cmd.Flags().BoolVar(&sendLook, "look", false, "")
+	cmd.Flags().BoolVar(&sendSearchContext, "search-context", false, "")
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -366,5 +368,33 @@ func TestSendLookShowsTheScreenAndWritesNothing(t *testing.T) {
 		if err == nil || closeErrorCode(t, out) != "invalid_arguments" {
 			t.Errorf("%s: err=%v out=%s, want invalid_arguments", name, err, out)
 		}
+	}
+}
+
+func TestSendLookSearchContextIsReadOnlyAndCannotBeUsedWithInput(t *testing.T) {
+	w := newSendWorld(t)
+	before := w.operation(t)
+	out, err := w.run(t, "", w.id(), "--look", "--search-context", "--json")
+	if err != nil {
+		t.Fatalf("look: %s %v", out, err)
+	}
+	var envelope struct {
+		Data sendLookData `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Search == nil || envelope.Data.Search.Scope != "terminal_history" {
+		t.Fatalf("search = %+v", envelope.Data.Search)
+	}
+	if w.operation(t) != before {
+		t.Fatal("reading search wrote an input receipt")
+	}
+	out, err = w.run(t, "", w.id(), "never send this", "--search-context", "--json")
+	if err == nil || !strings.Contains(out, "invalid_arguments") {
+		t.Fatalf("input accepted: %s %v", out, err)
+	}
+	if w.operation(t) != before {
+		t.Fatal("refused input wrote a receipt")
 	}
 }

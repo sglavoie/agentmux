@@ -789,3 +789,30 @@ Verification:
   and quoting retry commands. `git diff --check` passed.
 
 No installation or release was performed.
+
+## Waiting, applied settings, and search polish on 2026-10-19
+
+Waiting context now has explicit loading, failed, unavailable, and loaded states,
+with Refresh/Retry, retained-content notices, and read times. ASL questions use the
+shared formatted prose reader; terminal captures retain their fixed-width text.
+
+Settings compares effective saved configuration with daemon startup fingerprints,
+reports changed groups, and verifies the result of its existing restart action.
+Project-only edits no longer imply that daemon settings need reapplying. Doctor
+uses the same comparison; older daemons report that verification is unavailable.
+
+The inspector translates prompt reasons and shows the winning state observation's
+source and time. Terminal Find offers Search full conversation, transferring the
+literal query into the selected conversation's History scope and restoring focus
+when History closes. Large-diff work measures styling and layout separately and
+checks reading-position preservation alongside selection latency.
+
+The [implementation and acceptance record](acceptance/workspace-seams-polish/README.md)
+contains validation, fixture captures, and the pending real-work observations.
+The user waived VoiceOver acceptance for this pass. Real-work observations are
+not supplied by automated tests.
+
+Validation: the full Go gate passed, including 188 TUI scenarios and zero lint
+issues. The final native suite executed 934 tests with zero failures and one
+existing accessibility lookup skip. The Release candidate built and passed
+strict signature verification; it has not been installed.

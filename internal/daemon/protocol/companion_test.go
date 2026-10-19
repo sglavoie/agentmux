@@ -49,7 +49,8 @@ func goldenCompanionSnapshot() CompanionSnapshot {
 			LatestQuestionID: "q-1", LatestQuestionCreatedAt: 1_700_000_100,
 		}}},
 		Sessions: []CompanionSession{{
-			WindowID: 101, TabID: 10, OSWindowID: 1, KittySocket: "unix:/tmp/kitty-100",
+			StatusEvidence: &StatusEvidence{Kind: "asl", At: 1_700_000_050},
+			WindowID:       101, TabID: 10, OSWindowID: 1, KittySocket: "unix:/tmp/kitty-100",
 			Harness: "claude", Profile: "work", Project: "API", BaseTitle: "W:api",
 			Conversation: &conversation.Identity{Harness: "claude", SessionID: "0b5c-session"},
 			ASLRunID:     "run-1", IconState: "question", Reason: "supervisor", Unseen: true, Attention: true,

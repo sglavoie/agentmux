@@ -412,6 +412,7 @@ type Response struct {
 	// recovered when a maintenance tick restored durable state from a
 	// successful snapshot and marked the daemon ready. DegradedReason explains
 	// why it started (or remains) degraded when Ready is false.
-	Ready          bool   `json:"ready"`
-	DegradedReason string `json:"degraded_reason,omitempty"`
+	Ready          bool              `json:"ready"`
+	DegradedReason string            `json:"degraded_reason,omitempty"`
+	DaemonSettings map[string]string `json:"daemon_settings,omitempty"`
 }

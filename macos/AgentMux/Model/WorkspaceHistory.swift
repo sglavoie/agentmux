@@ -101,6 +101,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var resultsRefreshedAt: Date?
     @Published private(set) var transcriptRefreshedAt: Date?
     @Published var query = ""
+    @Published var searchEntryNote: String?
     @Published var scope = WorkspaceHistoryScope.all
     @Published var includeAutomated = false
     @Published private(set) var entries: [WorkspaceHistoryEntry] = []
