@@ -240,10 +240,23 @@ final class WorkspaceGroupCellView: NSTableCellView {
     let disclosureLabel = NSTextField(labelWithString: "")
     /// Collapses or expands the project.
     var onToggle: (() -> Void)?
+    private var labelLeading: NSLayoutConstraint!
+
+    /// Keep the warning bright in both appearances, with dark text on it.
+    private func setWarning(_ enabled: Bool) {
+        layer?.backgroundColor = enabled
+            ? NSColor(srgbRed: 1, green: 0.9, blue: 0, alpha: 1).cgColor
+            : nil
+        nameLabel.textColor = enabled ? .black : .secondaryLabelColor
+        countLabel.textColor = enabled ? .black : .systemOrange
+        labelLeading.constant = enabled ? 8 : 2
+    }
 
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
+        wantsLayer = true
+        layer?.cornerRadius = 6
         disclosureLabel.textColor = .secondaryLabelColor
         disclosureLabel.isHidden = true
         nameLabel.font = .systemFont(ofSize: 16, weight: .semibold)
@@ -259,8 +272,9 @@ final class WorkspaceGroupCellView: NSTableCellView {
         stack.orientation = .horizontal
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        labelLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            labelLeading,
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
@@ -272,6 +286,7 @@ final class WorkspaceGroupCellView: NSTableCellView {
 
     /// A heading that is not a project: it counts nothing.
     func show(section title: String) {
+        setWarning(false)
         nameLabel.stringValue = title
         countLabel.stringValue = ""
         countLabel.toolTip = nil
@@ -285,11 +300,13 @@ final class WorkspaceGroupCellView: NSTableCellView {
     func show(_ group: WorkspaceGroup) {
         if group.needsAttention {
             show(section: group.project)
+            setWarning(true)
             countLabel.stringValue = String(group.rows.count)
             countLabel.toolTip = "\(group.rows.count) waiting on you"
             setAccessibilityLabel("\(group.project), \(group.rows.count) waiting")
             return
         }
+        setWarning(false)
         nameLabel.stringValue = group.project
         let waiting = group.attention
         countLabel.stringValue = waiting > 0 ? String(waiting) : ""
