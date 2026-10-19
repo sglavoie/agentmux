@@ -7,6 +7,32 @@ import XCTest
 final class WorkspaceViewsModelTests: XCTestCase {
     private typealias F = WorkspaceFixture
 
+    func testTerminalNamesPreserveIdentityDefaultsAndSavedLayouts() throws {
+        var views = WorkspaceViews()
+        let first = views.openTerminal(beside: F.runtimeID(1))
+        let second = views.openTerminal(beside: F.runtimeID(1))
+        views.name(second.id, "  build logs 🛠 \n")
+        let named = try XCTUnwrap(views.view(second.id))
+        XCTAssertEqual(named.displayName, "build logs 🛠")
+        XCTAssertEqual(named.id, second.id)
+        XCTAssertEqual(named.arguments, second.arguments)
+        XCTAssertEqual(views.view(first.id), first)
+        XCTAssertEqual(views.open(second), named, "opening an existing view preserves its name")
+
+        let layout = WorkspaceRestoration.Layout(active: .utility(named), other: nil, activeOnRight: false)
+        let saved = try JSONEncoder().encode(layout)
+        XCTAssertEqual(try JSONDecoder().decode(WorkspaceRestoration.Layout.self, from: saved), layout)
+        let legacy = Data(#"{"kind":"shell","target":"/work/api","title":"Shell 2","ordinal":2}"#.utf8)
+        let decoded = try JSONDecoder().decode(WorkspaceUtilityView.self, from: legacy)
+        XCTAssertNil(decoded.name)
+        XCTAssertEqual(decoded.displayName, "Shell 2")
+
+        views.name(second.id, " \n ")
+        XCTAssertEqual(views.view(second.id), second, "clearing restores the original numbered label")
+        views.name(WorkspaceUtilityView.dashboard.id, "hidden")
+        XCTAssertEqual(views.view(WorkspaceUtilityView.dashboard.id), .dashboard)
+    }
+
     func testDecodesAForwardedViewFrame() throws {
         let line = Data(#"{"v":1,"seq":9,"type":"workspace_view","data":{"kind":"session","runtime_session_id":"\#(F.runtimeID(3))","await":true}}"#.utf8)
         XCTAssertEqual(

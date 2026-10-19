@@ -771,9 +771,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard let workspace, let row = workspace.shownSessionRow, row.embeddedRuntimeSessionID != nil else { return refuse(Self.noSessionShown) }
         workspace.closeSession(row.key)
     }
-    /// ⌘R: names the session the workspace's pane is on.
+    /// ⌘R: names the session or terminal the workspace's pane is on.
     @objc func nameSession(_ sender: Any?) {
-        guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
+        guard let workspace else { return refuse(Self.noSessionShown) }
         if !workspace.nameShownSession() { refuse(WorkspaceWindowController.namingNeedsEmbedded) }
     }
     /// Pins the session the workspace's pane is on above every project, or
@@ -2910,6 +2910,9 @@ extension AppDelegate: NSMenuItemValidation {
 
     private func validateWorkspaceItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(nameSession(_:)):
+            item.title = workspace?.nameShownTitle ?? WorkspaceWindowController.nameSessionTitle
+            return workspace?.canNameShown == true
         case #selector(selectNextProjectTab(_:)), #selector(selectPreviousProjectTab(_:)):
             return workspace?.canSelectProjectTab == true
         case #selector(searchConversation(_:)):

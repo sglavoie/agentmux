@@ -74,12 +74,17 @@ struct WorkspaceUtilityView: Equatable, Codable {
     /// The directory, file, or runtime session the view is about; empty for
     /// the Dashboard and the Overview.
     let target: String
-    /// The sidebar label.
+    /// The default sidebar label, restored when the operator clears the name.
     let title: String
     /// Tells apart the terminals opened beside one session, from 1, and the
     /// shells New Shell opened in one directory after the first, from 2; 0
     /// for every other view.
     var ordinal = 0
+    /// Optional so layouts saved before terminal naming still decode.
+    var name: String? = nil
+
+    var canName: Bool { kind == .terminal || kind == .shell }
+    var displayName: String { name.flatMap { $0.isEmpty ? nil : $0 } ?? title }
 
     /// What tells one view from another: its kind and what it is about.
     var id: String {
@@ -293,6 +298,13 @@ struct WorkspaceViews: Equatable {
         if let listed = self.view(view.id) { return listed }
         opened.append(view)
         return view
+    }
+
+    /// Names only shells and terminals, preserving their identity and program.
+    mutating func name(_ id: String, _ answer: String) {
+        guard let index = opened.firstIndex(where: { $0.id == id && $0.canName }) else { return }
+        let name = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        opened[index].name = name.isEmpty ? nil : name
     }
 
     /// What New Shell opens in `directory`: the shell there when none is

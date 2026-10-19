@@ -213,9 +213,9 @@ final class WorkspacePolishTests: XCTestCase {
 
         workspace.open(WorkspaceViewRequest(kind: "shell", directory: "/work/api"))
         let items = workspace.contextMenuItems(forRow: try index(ofView: "shell:/work/api"))
-        XCTAssertEqual(items.map(\.title), ["Close"])
+        XCTAssertEqual(items.map(\.title), ["Name Terminal…", "Close"])
         workspace.confirmViewClose = { _, answer in answer(true) }
-        try perform(items[0])
+        try perform(items[1])
         XCTAssertNil(workspace.views.view("shell:/work/api"))
     }
 

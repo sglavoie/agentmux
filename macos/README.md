@@ -502,7 +502,7 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘R (name the session shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session attachment as its × does; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session, with confirmation enabled by default), ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘R (name the session or terminal shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session attachment as its × does; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session, with confirmation enabled by default), ⌘M,
   ⌘, and ⌘Q.
 - **Two panes.** View and the command palette can split with a session shell or
   native checkout review; the palette can also select another agent. Clicking a
@@ -559,11 +559,16 @@ ASL answer panel work the same either way.
   not named here: its item is listed and disabled. A session is called by
   its name, else "project — profile" (`WorkspaceRow.displayName`), in the
   window title, the inspector, and the end, name, and failure sheets.
+- **Terminal names.** ⌘R and **Name Terminal…** in the sidebar’s right-click
+  menu name terminals opened below sessions and standalone shells. The name
+  appears in the sidebar, window and pane titles, Go to… search, and close
+  prompts. Clearing it restores the original label. Naming keeps the same
+  running process; saved pane layouts retain the name when restored.
 - **Right-click menu.** A session's line offers **Name Session…** and **Pin
   to Top**/**Unpin**, and an embedded one also **New Terminal Below**, **Copy
   Runtime Session ID**, and **End Session…** (the same sheet as its ×). An
   opened view, or the Dashboard or Overview while its program runs, offers
-  **Close**. A line with nothing to offer, a heading among them, shows no
+  **Close**; shells and terminals also offer **Name Terminal…**. A line with nothing to offer, a heading among them, shows no
   menu (`WorkspaceSidebarView.hasMenu`).
 - **Function keys.** F1 to F11 are the menu's too, with no modifier
   (`WorkspaceMenu.functionKeys`, listed under **Session › Function Keys**):

@@ -69,7 +69,7 @@ enum WorkspaceSwitcher {
             )
         }
         let others = views.filter { !$0.isOverlay }.map { view in
-            Entry(place: .view(view.id), glyph: view.glyph, title: view.title,
+            Entry(place: .view(view.id), glyph: view.glyph, title: view.displayName,
                   detail: view.detail(session: view.aboutRuntimeSessionID.flatMap { names[$0] }))
         }
         var all = sessions + others

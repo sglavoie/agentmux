@@ -261,6 +261,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Stands in for the sheet that asks for a session's name, for tests.
     /// Answers on the main actor: the name, or nil when it was cancelled.
     var askName: ((_ row: WorkspaceRow, _ answer: @escaping @MainActor (String?) -> Void) -> Void)?
+    var askTerminalName: ((_ view: WorkspaceUtilityView, _ answer: @escaping @MainActor (String?) -> Void) -> Void)?
     /// Stands in for the sheet that says why a session could not be named.
     var reportNameProblem: ((_ name: String, _ message: String) -> Void)?
 
@@ -1043,7 +1044,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
         let terminal = viewTerminals[id]?.view
         Self.logger.notice("workspace: closing view \(id, privacy: .public) with its program running; asking")
-        (confirmViewClose ?? askToCloseView)(view.title) { [weak self] confirmed in
+        (confirmViewClose ?? askToCloseView)(view.displayName) { [weak self] confirmed in
             // Still the same terminal: it may have ended meanwhile.
             guard let self, confirmed, self.viewTerminals[id]?.view === terminal else { return }
             self.closeViewNow(id)
@@ -1060,7 +1061,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The titles of the views whose programs should be asked about before
     /// the app quits, in sidebar order.
     var viewsNeedingConfirmation: [String] {
-        views.all.filter { needsConfirmBeforeClosing($0.id) }.map(\.title)
+        views.all.filter { needsConfirmBeforeClosing($0.id) }.map(\.displayName)
     }
 
     /// Asks once, naming every view that needs it, before the app quits.
@@ -1232,12 +1233,24 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     // MARK: Naming
 
     static let nameSessionTitle = "Name Session…"
+    static let nameTerminalTitle = "Name Terminal…"
     static let namingNeedsEmbedded = "Only a session the workspace embeds can be named here; a Kitty session is named by its tab, in Kitty."
 
-    /// ⌘R: asks for a name for the embedded session the pane is on, and
-    /// reports whether there was one.
+    var nameShownTitle: String {
+        views.view(viewSelection)?.canName == true ? Self.nameTerminalTitle : Self.nameSessionTitle
+    }
+
+    var canNameShown: Bool {
+        views.view(viewSelection)?.canName == true || shownSessionRow?.embeddedRuntimeSessionID != nil
+    }
+
+    /// ⌘R: names the session, terminal, or shell the pane is on.
     @discardableResult
     func nameShownSession() -> Bool {
+        if let view = views.view(viewSelection), view.canName {
+            nameTerminal(view.id)
+            return true
+        }
         guard let row = shownSessionRow, row.embeddedRuntimeSessionID != nil else {
             Self.logger.notice("workspace: no embedded session is shown; nothing to name")
             return false
@@ -1273,12 +1286,38 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private func askForName(_ row: WorkspaceRow, _ answer: @escaping @MainActor (String?) -> Void) {
-        let field = NSTextField(string: row.name)
+        askForName(title: row.displayName, name: row.name,
+                   explanation: "The name is shown above the session in the sidebar. Leave it empty to remove it.", answer)
+    }
+
+    func nameTerminal(_ id: String) {
+        guard let view = views.view(id), view.canName else { return }
+        let terminal = viewTerminals[id]?.view
+        (askTerminalName ?? askForTerminalName)(view) { [weak self] answer in
+            guard let self, let answer, self.views.view(id) == view,
+                  self.viewTerminals[id]?.view === terminal else { return }
+            self.views.name(id, answer)
+            guard let named = self.views.view(id), named != view else { return }
+            (terminal as? Ghostty.SurfaceView)?.hostName = named.displayName
+            self.reloadSidebar()
+            self.window.title = self.windowTitle
+            self.paneLayout.titles(active: self.title(for: self.place), other: self.title(for: self.otherPlace))
+            self.reportLayout()
+        }
+    }
+
+    private func askForTerminalName(_ view: WorkspaceUtilityView, _ answer: @escaping @MainActor (String?) -> Void) {
+        askForName(title: view.displayName, name: view.name ?? "",
+                   explanation: "The name is shown in the sidebar. Leave it empty to restore the default name.", answer)
+    }
+
+    private func askForName(title: String, name: String, explanation: String, _ answer: @escaping @MainActor (String?) -> Void) {
+        let field = NSTextField(string: name)
         field.placeholderString = "No name"
         field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
         let alert = NSAlert()
-        alert.messageText = "Name \(row.displayName)"
-        alert.informativeText = "The name is shown above the session in the sidebar. Leave it empty to remove it."
+        alert.messageText = "Name \(title)"
+        alert.informativeText = explanation
         alert.accessoryView = field
         alert.addButton(withTitle: "Name")
         alert.addButton(withTitle: "Cancel")
@@ -1324,10 +1363,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             let close = NSMenuItem(title: Self.closeTitle, action: #selector(closeClickedView(_:)), keyEquivalent: "")
             close.representedObject = view.id
             close.target = self
+            if view.canName {
+                let name = NSMenuItem(title: Self.nameTerminalTitle, action: #selector(nameClickedTerminal(_:)), keyEquivalent: "")
+                name.representedObject = view.id
+                name.target = self
+                return [name, close]
+            }
             return [close]
         case let .group(group): return groupMenuItems(group)
         case .section: return []
         }
+    }
+
+    @objc private func nameClickedTerminal(_ sender: Any?) {
+        guard let id = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        nameTerminal(id)
     }
 
     /// The list's empty space: where to go, and what to open, as the main
@@ -1837,7 +1887,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             return
         }
         Self.logger.notice("workspace: view \(id, privacy: .public) asked to close with its program running; asking")
-        (confirmViewClose ?? askToCloseView)(utility.title) { [weak self] confirmed in
+        (confirmViewClose ?? askToCloseView)(utility.displayName) { [weak self] confirmed in
             // Still the same terminal: it may have ended meanwhile.
             guard let self, confirmed, self.viewTerminals[id]?.view === view else { return }
             self.utilityEnded(id)
@@ -2009,8 +2059,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var windowTitle: String {
         if reviewSelected { return "Checkout Changes — Agent Mux" }
         if let view = views.view(viewSelection) {
-            guard let program = programTitles[view.id], program != view.title else { return view.title }
-            return "\(view.title) — \(program)"
+            guard let program = programTitles[view.id], program != view.displayName else { return view.displayName }
+            return "\(view.displayName) — \(program)"
         }
         return state.selectedRow?.displayName ?? "Agent Mux"
     }
@@ -2176,7 +2226,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         if let id = sessionID(of: view) {
             notice = TerminalNotice(title: title, body: body, source: sessionNames[id] ?? id, origin: .session(runtimeSessionID: id))
         } else if let id = viewID(of: view), let utility = views.view(id) {
-            notice = TerminalNotice(title: title, body: body, source: utility.title, origin: .view(id: id))
+            notice = TerminalNotice(title: title, body: body, source: utility.displayName, origin: .view(id: id))
         } else {
             return
         }
@@ -2414,7 +2464,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func title(for place: Place?) -> String {
         switch place {
         case let .session(key)?: return state.row(key)?.displayName ?? "Session ended"
-        case let .view(id)?: return views.view(id)?.title ?? "View closed"
+        case let .view(id)?: return views.view(id)?.displayName ?? "View closed"
         case .review?: return "Checkout Changes"
         case nil: return "Workspace"
         }
@@ -2453,7 +2503,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         case let .success(terminal):
             Self.logger.notice("workspace: started view \(id, privacy: .public)")
             viewTerminals[id] = terminal
-            (terminal.view as? Ghostty.SurfaceView)?.hostName = view.title
+            (terminal.view as? Ghostty.SurfaceView)?.hostName = view.displayName
             terminal.view.frame = pane.bounds
             terminal.view.autoresizingMask = [.width, .height]
             terminal.view.isHidden = true
@@ -2604,7 +2654,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 button: "Open Dashboard"
             ) { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }
         case let .viewEnded(id):
-            let name = views.view(id)?.title ?? "This view"
+            let name = views.view(id)?.displayName ?? "This view"
             placeholder.show(
                 title: "\(name) closed",
                 message: "It is no longer running. No session was affected: the agents keep running.",
@@ -2615,7 +2665,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 self?.restartView(id)
             }
         case let .viewRendererFailed(id):
-            let name = views.view(id)?.title ?? "This view"
+            let name = views.view(id)?.displayName ?? "This view"
             placeholder.show(
                 title: "The terminal stopped drawing",
                 message: "\(name)'s renderer failed, so it can no longer be seen here. No session was affected; restarting ends its program and starts it in a new terminal.",
@@ -2847,7 +2897,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static func typeSelectString(_ item: Item) -> String? {
         switch item {
         case let .row(row): return row.displayName
-        case let .view(view): return view.title
+        case let .view(view): return view.displayName
         case .section, .group: return nil
         }
     }

@@ -464,22 +464,22 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.stringValue = ""
         nameLabel.isHidden = true
         glyphLabel.stringValue = view.glyph
-        titleLabel.stringValue = bell ? "\(view.title) \(Self.bellGlyph)" : view.title
+        titleLabel.stringValue = bell ? "\(view.displayName) \(Self.bellGlyph)" : view.displayName
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         let program = program.flatMap { $0.isEmpty ? nil : $0 }
         let detail = view.detail(session: session, program: program)
         let progressText = progress.map(Self.progressText)
         detailLabel.stringValue = progressText.map { "\($0) · \(detail)" } ?? detail
         toolTip = view.toolTip(session: session)
-        var spoken = ["\(view.title), \(view.kind.rawValue) view"]
+        var spoken = ["\(view.displayName), \(view.kind.rawValue) view"]
         if let program { spoken.append(program) }
         if let progressText { spoken.append(progressText) }
         if bell { spoken.append("bell") }
         setAccessibilityLabel(spoken.joined(separator: ", "))
         keyLabel.stringValue = ""
         closeButton.isHidden = view.isPermanent
-        closeButton.toolTip = "Close View: \(view.title) — ends its program"
-        closeButton.setAccessibilityLabel("Close View: \(view.title). Ends its program.")
+        closeButton.toolTip = "Close View: \(view.displayName) — ends its program"
+        closeButton.setAccessibilityLabel("Close View: \(view.displayName). Ends its program.")
         syncTrailingRoom()
     }
 

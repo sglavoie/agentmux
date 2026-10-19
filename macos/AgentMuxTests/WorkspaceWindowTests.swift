@@ -381,6 +381,79 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(asked.count, 5)
     }
 
+    func testNamingTerminalsFromMenuAndKeyboardPreservesTheRunningProgram() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        workspace.activate(work)
+        XCTAssertTrue(workspace.openTerminalBesideSession())
+        let terminal = try XCTUnwrap(workspace.views.terminals(beside: F.runtimeID(1)).first)
+        let surface = try XCTUnwrap(workspace.utilityTerminalView(for: terminal.id))
+        var asked: [(WorkspaceUtilityView, @MainActor (String?) -> Void)] = []
+        workspace.askTerminalName = { view, answer in asked.append((view, answer)) }
+        var layout: WorkspaceRestoration.Layout?
+        workspace.onLayoutChanged = { layout = $0 }
+
+        // A context menu names its own row even when a session is selected.
+        workspace.activate(work)
+        let index = try XCTUnwrap(workspace.items.firstIndex { $0 == .view(terminal) })
+        let items = workspace.contextMenuItems(forRow: index)
+        XCTAssertEqual(items.map(\.title), ["Name Terminal…", "Close"])
+        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        XCTAssertEqual(asked.first?.0, terminal)
+        asked[0].1("  build logs  ")
+        XCTAssertEqual(workspace.views.view(terminal.id)?.displayName, "build logs")
+        XCTAssertEqual(workspace.state.selection, work.key)
+        XCTAssertTrue(workspace.utilityTerminalView(for: terminal.id) === surface)
+        XCTAssertTrue(app.named.isEmpty, "a terminal name never writes to its agent session")
+
+        workspace.showView(terminal.id)
+        XCTAssertTrue(workspace.canNameShown)
+        XCTAssertEqual(workspace.nameShownTitle, "Name Terminal…")
+        XCTAssertEqual(workspace.window.title, "build logs")
+        XCTAssertTrue(workspace.nameShownSession())
+        XCTAssertEqual(asked.last?.0.name, "build logs")
+        asked[1].1(nil)
+        XCTAssertEqual(workspace.window.title, "build logs", "cancel leaves the name intact")
+        XCTAssertTrue(workspace.nameShownSession())
+        asked[2].1("deploy")
+        XCTAssertEqual(workspace.window.title, "deploy")
+        let named = try XCTUnwrap(workspace.views.view(terminal.id))
+        XCTAssertEqual(layout?.active, .utility(named))
+        let entries = WorkspaceSwitcher.entries(rows: workspace.state.rows, views: workspace.views.all)
+        XCTAssertEqual(WorkspaceSwitcher.matches("deploy", in: entries).map(\.place), [.view(terminal.id)])
+        let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertEqual(cell.titleLabel.stringValue, "deploy")
+        workspace.terminalTitleChanged(surface, title: "zsh")
+        XCTAssertEqual(workspace.window.title, "deploy — zsh")
+        XCTAssertTrue(workspace.nameShownSession())
+        asked[3].1(" \n ")
+        XCTAssertEqual(workspace.views.view(terminal.id), terminal)
+        XCTAssertEqual(workspace.window.title, "Terminal — zsh")
+        XCTAssertTrue(workspace.utilityTerminalView(for: terminal.id) === surface)
+
+        // Standalone shells have the same shortcut; permanent views do not.
+        workspace.openNewShell(in: "/work/api")
+        XCTAssertTrue(workspace.nameShownSession())
+        XCTAssertEqual(asked.last?.0.kind, .shell)
+        asked[4].1("server")
+        XCTAssertEqual(workspace.window.title, "server")
+        workspace.showView(WorkspaceUtilityView.dashboard.id)
+        XCTAssertFalse(workspace.canNameShown)
+        XCTAssertFalse(workspace.nameShownSession())
+    }
+
+    func testTerminalNamingAnswerCannotRenameAReplacementTerminal() throws {
+        workspace.openNewShell(in: "/work/api")
+        var answer: (@MainActor (String?) -> Void)?
+        workspace.askTerminalName = { _, reply in answer = reply }
+        XCTAssertTrue(workspace.nameShownSession())
+        workspace.confirmBeforeClosing = false
+        XCTAssertTrue(workspace.closeSelectedView())
+        workspace.openNewShell(in: "/work/api")
+        answer?("old terminal")
+        XCTAssertEqual(workspace.window.title, "Shell")
+    }
+
     func testPinningASessionListsItAboveEveryProject() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")
