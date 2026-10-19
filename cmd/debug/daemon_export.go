@@ -36,7 +36,7 @@ func ExportWindowIDs(snapshot protocol.EventsExport, requestedWindowID int) []in
 	return ids
 }
 
-func ExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExport, requestedWindowID int) map[int]protocol.WindowLiveMetadata {
+func ExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExport, requestedWindowID int, listedSocket ...string) map[int]protocol.WindowLiveMetadata {
 	ids := ExportWindowIDs(snapshot, requestedWindowID)
 	if len(ids) == 0 {
 		return map[int]protocol.WindowLiveMetadata{}
@@ -44,9 +44,21 @@ func ExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExpo
 
 	sessions := session.ListFromOSWindows(osWindows)
 	out := make(map[int]protocol.WindowLiveMetadata, len(ids))
+	socket := ""
+	if len(listedSocket) > 0 {
+		socket = listedSocket[0]
+	}
 	for _, id := range ids {
 		live := protocol.WindowLiveMetadata{}
-		osw, tab, win, ok := kitty.FindWindowLocationByID(osWindows, id)
+		remoteID := id
+		if key, mapped := snapshot.KittySlots[id]; mapped {
+			if (socket != "" && key.Socket != socket) || (socket == "" && key.WindowID != id) {
+				out[id] = live
+				continue
+			}
+			remoteID = key.WindowID
+		}
+		osw, tab, win, ok := kitty.FindWindowLocationByID(osWindows, remoteID)
 		if !ok {
 			out[id] = live
 			continue
@@ -57,7 +69,7 @@ func ExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExpo
 		live.OSWindowID = osw.ID
 		live.TabTitle = tab.Title
 		live.WindowTitle = win.Title
-		if rs, ok := session.FindByWindowID(sessions, id); ok {
+		if rs, ok := session.FindByWindowID(sessions, remoteID); ok {
 			live.BaseTitle = rs.Base
 			live.IconState = rs.State
 			live.Looping = rs.Looping

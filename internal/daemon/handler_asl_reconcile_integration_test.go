@@ -67,6 +67,25 @@ func TestReconcileSeedsDiscoveredRun(t *testing.T) {
 	}
 }
 
+func TestReconcileDoesNotSeedAnAmbiguousKittyWindowNumber(t *testing.T) {
+	h, windows, projectDir := reconcileTestFixture(t)
+	h.stateMu.Lock()
+	firstSlot := h.kittySlotLocked(kittyA, 42)
+	secondSlot := h.kittySlotLocked(kittyB, 42)
+	h.stateMu.Unlock()
+	if firstSlot == secondSlot {
+		t.Fatal("fixture: colliding windows share a slot")
+	}
+	candidate := loopCandidate(projectDir, "run-on-unknown-socket", agentloop.PhaseTurn)
+	candidate.WindowID = 42
+	stubDaemonLoopDiscover(t, []agentloop.Candidate{candidate}, nil)
+
+	h.reconcileASLLeasesFor(time.Now(), windows, kittyA)
+	if storeHas(h, firstSlot) || storeHas(h, secondSlot) {
+		t.Fatal("socketless discovery seeded a lease onto an ambiguous Kitty window")
+	}
+}
+
 // A historical paused run must not seed state onto a reused Kitty window ID.
 func TestReconcileDoesNotResurrectPausedRun(t *testing.T) {
 	h, windows, projectDir := reconcileTestFixture(t)

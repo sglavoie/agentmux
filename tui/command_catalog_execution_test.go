@@ -94,6 +94,7 @@ func TestCommandRowSideEffects(t *testing.T) {
 }
 
 func TestCommandCopyAndClearStatusEffects(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-test")
 	target := session.RunningSession{
 		TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work", State: "key",
 	}
@@ -125,7 +126,7 @@ func TestCommandCopyAndClearStatusEffects(t *testing.T) {
 		t.Fatal("clear status returned nil command")
 	}
 	drainMsgs(t, clearCmd)
-	if request.Action != "user_clear" || request.WindowID != 202 {
+	if request.Action != "user_clear" || request.WindowID != 202 || request.KittyListenOn != "unix:/kitty-test" {
 		t.Fatalf("clear-status request = %+v, want user_clear for window 202", request)
 	}
 }

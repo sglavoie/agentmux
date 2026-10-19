@@ -50,18 +50,19 @@ const (
 // ProbeClaudeScreenStop for callers (and tests) that want the full list+render
 // round-trip.
 func (h *Handler) ProbeCopilotTranscriptStop(now time.Time) {
-	if h.kittyClient == nil {
+	client, socket := h.kittyListTarget()
+	if client == nil {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := h.kittyClient.ListWindows()
+	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
+	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("copilot transcript probe: list windows failed", "err", err)
 		return
 	}
-	h.probeCopilotTranscriptStopWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
-		h.screenTextCacheFor())
-	h.renderSnapshot(windows)
+	h.probeCopilotTranscriptStopWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
+		h.screenTextCacheForSocket(socket))
+	h.renderSnapshotFor(windows, socket)
 }
 
 // probeCopilotTranscriptStopWithSnapshot runs the Copilot transcript stop probe
@@ -109,14 +110,22 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot probes.
 				if target.UserVars.EffectiveProfile() == "" && target.UserVars.EffectiveHarness() == "" {
 					continue
 				}
-				st, ok := h.windowStateLocked(target.ID)
+				targetSlot := h.runtimeRoutes.kittySlotOf(snapshot.Socket(), target.ID)
+				if h.windowOfOtherInstanceLocked(targetSlot, snapshot.Socket()) {
+					continue
+				}
+				st, ok := h.windowStateLocked(targetSlot)
 				if !ok || st == nil || st.Reducer == nil {
 					continue
 				}
-				identity, sourceWindowID, ok := st.Reducer.ProbeStopRecoveryRoute(
-					source, harness.Copilot, target.ID, now.Unix(),
+				identity, sourceSlot, ok := st.Reducer.ProbeStopRecoveryRoute(
+					source, harness.Copilot, targetSlot, now.Unix(),
 				)
 				if !ok {
+					continue
+				}
+				sourceWindowID, sameInstance := h.kittyRemoteWindowLocked(sourceSlot, snapshot.Socket())
+				if !sameInstance {
 					continue
 				}
 				binding, found := probes.NewBinding(snapshot, identity, sourceWindowID, target.ID)
@@ -125,6 +134,9 @@ func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot probes.
 				}
 				binding.RecoverySource = source
 				binding.RecoveryAt = now.Unix()
+				binding.SourceStateSlot = sourceSlot
+				binding.TargetStateSlot = targetSlot
+				binding.KittySocket = snapshot.Socket()
 				if h.screenProbeBindingCurrentLocked(binding) {
 					recovery = append(recovery, binding)
 				}
@@ -248,7 +260,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,
 ) {
-	windowID := binding.TargetWindowID
+	windowID := binding.TargetSlot()
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}
 	ref := activity.Ref{WindowID: windowID, Key: source.Key}
 
@@ -287,7 +299,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 			h.stateMu.Unlock()
 			return
 		}
-	} else if st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceWindowID, binding.TargetWindowID) {
+	} else if st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceSlot(), binding.TargetSlot()) {
 		sessionID = binding.Producer.SessionID
 	}
 	sessionTitle := titleParts.Base
@@ -309,7 +321,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 		return
 	}
 	probeTraceID := diagnostics.NewTraceID()
-	probeSourceEventID := fmt.Sprintf("copilot-transcript-probe:%d:%d:%d", binding.SourceWindowID, windowID, binding.TargetReceipt)
+	probeSourceEventID := fmt.Sprintf("copilot-transcript-probe:%d:%d:%d", binding.SourceSlot(), windowID, binding.TargetReceipt)
 	probeReq := protocol.Request{
 		TraceID: probeTraceID, SourceEventID: probeSourceEventID,
 		Harness: harness.Copilot, Account: account, WindowID: windowID,
@@ -533,7 +545,7 @@ func (h *Handler) recoverCopilotTranscriptStop(
 		return
 	}
 
-	windowID := binding.TargetWindowID
+	windowID := binding.TargetSlot()
 	h.stateMu.Lock()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok || st.Reducer == nil {
@@ -573,7 +585,7 @@ func (h *Handler) recoverCopilotTranscriptStop(
 	if resultAction == "" {
 		resultAction = "idle"
 	}
-	h.appendWatchdogEventLocked(windowID, binding.SourceWindowID, time.Unix(at, 0), copilotTranscriptStopProbeEvent, resultAction,
+	h.appendWatchdogEventLocked(windowID, binding.SourceSlot(), time.Unix(at, 0), copilotTranscriptStopProbeEvent, resultAction,
 		string(source.Kind)+":"+source.Key,
 		fmt.Sprintf("copilot transcript recovery superseded synthetic stop %q→%q after a post-stat active append",
 			before.Icon, effective.Icon))

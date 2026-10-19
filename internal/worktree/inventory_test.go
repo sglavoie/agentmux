@@ -342,14 +342,40 @@ func TestInventoryCancellationStopsWorkers(t *testing.T) {
 		t.Fatal(err)
 	}
 	inventory := testInventory(root)
+	started := make(chan struct{}, 1)
 	inventory.git = func(ctx context.Context, _ string, _ time.Duration, _ ...string) ([]byte, error) {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	entries, err := inventory.List(ctx)
-	if !errors.Is(err, context.DeadlineExceeded) || len(entries) != 1 || entries[0].Classification != ClassificationGitUnavailable {
+	type answer struct {
+		entries []Entry
+		err     error
+	}
+	finished := make(chan answer, 1)
+	go func() {
+		entries, err := inventory.List(ctx)
+		finished <- answer{entries: entries, err: err}
+	}()
+	select {
+	case <-started:
+		cancel()
+	case <-ctx.Done():
+		t.Fatal("inventory Git worker did not start")
+	}
+	var result answer
+	select {
+	case result = <-finished:
+	case <-time.After(10 * time.Second):
+		t.Fatal("inventory did not stop after cancellation")
+	}
+	entries, err := result.entries, result.err
+	if !errors.Is(err, context.Canceled) || len(entries) != 1 || entries[0].Classification != ClassificationGitUnavailable {
 		t.Fatalf("entries=%+v err=%v, want partial canceled entry", entries, err)
 	}
 }

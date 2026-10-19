@@ -757,8 +757,9 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
   last and, on the same cadence, each other instance that has a session, so
   those sessions are named from their own tabs. Each is kept until its own
   instance stops reporting the window or that Kitty exits, never because a
-  listing of another instance could not see it. Window IDs are still bare, so
-  two instances' sessions that share a window number share one daemon state.
+  listing of another instance could not see it. The daemon keys state by the
+  instance socket and window number, so reused numbers retain independent
+  attention and completion state.
 - **Codex completion visibility.** Managed interactive launches select `--no-daemon`
   when the launched CLI advertises support, preserving the terminal's hook environment
   across resume and `/new`. Explicit remote transport choices and older CLIs retain

@@ -17,15 +17,13 @@ import (
 //   - A managed hook names its AgentMux runtime session. The registry, not the
 //     terminal, says where that session runs, so its target decides the slot,
 //     and a session that is pending, stale, ended, or unknown routes nowhere.
-//   - A legacy hook names only a Kitty window and listen socket. It keeps its
-//     window ID as the slot, exactly as before runtime sessions existed, unless
-//     that slot is now held by a runtime session of another Kitty instance.
+//   - A legacy hook names a Kitty window and listen socket. The pair receives
+//     a distinct slot if another instance already uses that window number.
 //
-// Slots are the integer keys of Handler.store. A Kitty target's slot is its
-// window ID, so the renderer, the probes, and amx_state persistence keep
-// working on it unchanged. Every other backend target gets a slot at or above
-// runtimeSlotBase, far beyond any Kitty window ID; such a slot never appears in
-// a Kitty snapshot, so no render, probe, or prune path ever sends it to Kitty.
+// Slots are the integer keys of Handler.store. The first Kitty instance to
+// claim a number keeps it as a slot; another gets an alias below
+// runtimeSlotBase. The renderer maps that alias back to the real number and
+// socket. Other backends use slots at or above runtimeSlotBase.
 //
 // A slot belongs to at most one runtime session at a time. A delivery whose
 // slot is held by a different session that is still live is refused rather
@@ -38,6 +36,15 @@ import (
 
 // runtimeSlotBase is the first slot assigned to a non-Kitty backend target.
 const runtimeSlotBase = 1 << 40
+
+// Kitty collision slots remain below runtimeSlotBase so they retain Kitty
+// rendering and pruning behavior. The actual window number stays in the key.
+const kittyCollisionSlotBase = 1 << 32
+
+type kittySlotKey struct {
+	socket   string
+	windowID int
+}
 
 // RuntimeSessionDirectory resolves runtime-session IDs for hook routing.
 // *runtimesession.Reader is the production implementation.
@@ -67,12 +74,75 @@ type runtimeBinding struct {
 
 // runtimeRoutes is the slot table. Caller-locked: guarded by stateMu.
 type runtimeRoutes struct {
-	bySlot    map[int]runtimeBinding
-	byRuntime map[string]int
+	bySlot      map[int]runtimeBinding
+	byRuntime   map[string]int
+	kittyByKey  map[kittySlotKey]int
+	kittyBySlot map[int]kittySlotKey
+	nextKitty   int
 	// synthetic remembers the slot each non-Kitty target was given, so a
 	// target keeps its slot for as long as anything is bound to it.
 	synthetic     map[runtimeTarget]int
 	nextSynthetic int
+}
+
+// kittySlotLocked gives each socket/window pair a distinct reducer key. The
+// first claimant may keep the historical bare ID; colliding claimants receive
+// monotonically allocated keys that never masquerade as remote window IDs.
+// Callers hold stateMu and seed any preexisting bare-ID state before calling.
+func (h *Handler) kittySlotLocked(socket string, windowID int) int {
+	if socket == "" {
+		return windowID // legacy clients without a socket remain ambiguous
+	}
+	r := &h.runtimeRoutes
+	if slot := r.kittyByKey[kittySlotKey{socket, windowID}]; slot > 0 {
+		return slot
+	}
+	if r.kittyByKey == nil {
+		r.kittyByKey = make(map[kittySlotKey]int)
+		r.kittyBySlot = make(map[int]kittySlotKey)
+	}
+	if previousSocket := h.kittySockets[windowID]; previousSocket != "" && previousSocket != socket {
+		previous := kittySlotKey{previousSocket, windowID}
+		if r.kittyByKey[previous] == 0 {
+			r.kittyByKey[previous] = windowID
+			r.kittyBySlot[windowID] = previous
+		}
+	}
+	key := kittySlotKey{socket, windowID}
+	if _, occupied := r.kittyBySlot[windowID]; !occupied {
+		r.kittyByKey[key] = windowID
+		r.kittyBySlot[windowID] = key
+		return windowID
+	}
+	for {
+		slot := kittyCollisionSlotBase + r.nextKitty
+		r.nextKitty++
+		if _, used := r.kittyBySlot[slot]; used || slot == windowID || slot >= runtimeSlotBase {
+			continue
+		}
+		r.kittyByKey[key] = slot
+		r.kittyBySlot[slot] = key
+		return slot
+	}
+}
+
+func (r *runtimeRoutes) kittyWindow(slot int) (kittySlotKey, bool) {
+	key, ok := r.kittyBySlot[slot]
+	return key, ok
+}
+
+func (r *runtimeRoutes) kittySlotOf(socket string, windowID int) int {
+	if slot := r.kittyByKey[kittySlotKey{socket, windowID}]; slot > 0 {
+		return slot
+	}
+	return windowID
+}
+
+func (r *runtimeRoutes) releaseKittySlot(slot int) {
+	if key, ok := r.kittyBySlot[slot]; ok {
+		delete(r.kittyBySlot, slot)
+		delete(r.kittyByKey, key)
+	}
 }
 
 func (r *runtimeRoutes) binding(slot int) (runtimeBinding, bool) {
@@ -275,8 +345,8 @@ func kittyWindowSlot(ref string) (int, bool) {
 // stateMu.
 func (h *Handler) runtimeSlotForTargetLocked(target runtimeTarget) int {
 	if target.backend == string(runtimesession.BackendKitty) {
-		slot, _ := kittyWindowSlot(target.pane)
-		return slot
+		windowID, _ := kittyWindowSlot(target.pane)
+		return h.kittySlotLocked(target.instance, windowID)
 	}
 	return h.runtimeRoutes.syntheticSlot(target)
 }
@@ -323,9 +393,18 @@ func (h *Handler) claimRuntimeSlotLocked(
 	case current != "":
 		// The previous session is over. Close its slot so nothing it left —
 		// facts, subagents, notification timers, guard — leaks into this one.
+		kittyKey, mappedKitty := h.runtimeRoutes.kittyWindow(slot)
 		h.runtimeRoutes.release(slot)
 		closed = map[int]struct{}{slot: {}}
 		h.dropClosedWindowsLocked(time.Now(), closed)
+		if mappedKitty {
+			h.runtimeRoutes.kittyByKey[kittyKey] = slot
+			h.runtimeRoutes.kittyBySlot[slot] = kittyKey
+			if h.kittyRestored == nil {
+				h.kittyRestored = make(map[int]bool)
+			}
+			h.kittyRestored[slot] = true
+		}
 	default:
 		// An unclaimed Kitty slot may hold legacy state from another Kitty
 		// instance whose window happens to share this ID.
@@ -358,8 +437,7 @@ func (h *Handler) runtimeSessionLive(id string) bool {
 }
 
 // translateLegacyKittyOrigin validates a hook that carries only Kitty's window
-// environment. Its slot remains its window ID; the only new refusal is a slot
-// a runtime session of a different Kitty instance holds.
+// environment and maps its socket/window pair to one reducer slot.
 func (h *Handler) translateLegacyKittyOrigin(req protocol.Request) (protocol.Request, *originRejection) {
 	if req.WindowID <= 0 || isRuntimeSyntheticSlot(req.WindowID) {
 		// Windowless requests keep their historical handling (ignored, with a
@@ -370,14 +448,24 @@ func (h *Handler) translateLegacyKittyOrigin(req protocol.Request) (protocol.Req
 		return req, nil
 	}
 	socket := strings.TrimSpace(req.KittyListenOn)
+	windowID := req.WindowID
 	h.stateMu.Lock()
-	b, bound := h.runtimeRoutes.binding(req.WindowID)
+	slot := h.kittySlotLocked(socket, windowID)
+	b, bound := h.runtimeRoutes.binding(slot)
+	// Legacy hooks have no runtime registry to identify their owner. A second
+	// Kitty instance can reuse the same numeric window ID, so never let its
+	// event mutate state already attributed to another instance.
+	foreign := socket != "" && h.windowOfOtherInstanceLocked(slot, socket)
+	_, occupied := h.store[slot]
 	h.stateMu.Unlock()
+	if foreign && occupied {
+		return req, rejectOrigin(protocol.OriginReasonTargetConflict)
+	}
 	origin := &protocol.HookOrigin{
 		Backend:  string(runtimesession.BackendKitty),
 		Instance: socket,
-		Pane:     strconv.Itoa(req.WindowID),
-		Slot:     req.WindowID,
+		Pane:     strconv.Itoa(windowID),
+		Slot:     slot,
 		Legacy:   true,
 	}
 	if bound {
@@ -389,6 +477,7 @@ func (h *Handler) translateLegacyKittyOrigin(req protocol.Request) (protocol.Req
 		origin.RuntimeSessionID = b.runtime
 		origin.Generation = b.target.generation
 	}
+	req.WindowID = slot
 	req.Origin = origin
 	return req, nil
 }

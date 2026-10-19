@@ -105,7 +105,7 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 			} else {
 				var liveByID map[int]protocol.WindowLiveMetadata
 				if windows, kittyErr := newDoctorKitty().ListWindows(); kittyErr == nil {
-					liveByID = ExportLiveMetadata(windows, snapshot, 0)
+					liveByID = ExportLiveMetadata(windows, snapshot, 0, doctorGetenv("KITTY_LISTEN_ON"))
 				}
 				record(evaluateDaemonInvariants(snapshot, health, cliBuild, liveByID, now)...)
 			}

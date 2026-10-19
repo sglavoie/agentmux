@@ -380,6 +380,7 @@ func (e *CommandError) Is(target error) bool {
 
 func serverAbsent(stderr string) bool {
 	return strings.Contains(stderr, "no server running on") ||
+		strings.Contains(stderr, "server exited unexpectedly") ||
 		(strings.Contains(stderr, "error connecting to") &&
 			(strings.Contains(stderr, "No such file or directory") || strings.Contains(stderr, "Connection refused")))
 }

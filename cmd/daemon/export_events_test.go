@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -16,13 +17,22 @@ import (
 )
 
 type fakeDaemonExportClient struct {
-	health ipc.Health
-	calls  []int
-	export func(windowID int) (protocol.EventsExport, error)
+	health      ipc.Health
+	calls       []int
+	scopedCalls []string
+	export      func(windowID int) (protocol.EventsExport, error)
 }
 
 func (f *fakeDaemonExportClient) ExportEvents(windowID int) (protocol.EventsExport, error) {
 	f.calls = append(f.calls, windowID)
+	if f.export == nil {
+		return protocol.EventsExport{}, nil
+	}
+	return f.export(windowID)
+}
+
+func (f *fakeDaemonExportClient) ExportKittyWindowEvents(windowID int, socket string) (protocol.EventsExport, error) {
+	f.scopedCalls = append(f.scopedCalls, fmt.Sprintf("%s:%d", socket, windowID))
 	if f.export == nil {
 		return protocol.EventsExport{}, nil
 	}
@@ -140,6 +150,62 @@ func TestDaemonExportEventsCommand_CurrentWindowRequiresKittyWindowID(t *testing
 	}
 	if got := err.Error(); got != "--current-window requires AMX_RUNTIME_SESSION_ID or KITTY_WINDOW_ID to be set" {
 		t.Fatalf("RunE error = %q; want missing KITTY_WINDOW_ID error", got)
+	}
+}
+
+func TestDaemonExportEventsCurrentWindowRequiresKittySocket(t *testing.T) {
+	resetDaemonExportTestState(t)
+	t.Setenv("KITTY_WINDOW_ID", "7")
+	t.Setenv("KITTY_LISTEN_ON", "")
+	daemonExportEventsCurrentWindow = true
+	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err == nil ||
+		!strings.Contains(err.Error(), "requires a reusable KITTY_LISTEN_ON") {
+		t.Fatalf("missing socket error = %v", err)
+	}
+}
+
+func TestDaemonExportEventsCurrentWindowUsesSocketScopedSlot(t *testing.T) {
+	resetDaemonExportTestState(t)
+	t.Setenv("KITTY_WINDOW_ID", "7")
+	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-second")
+	const alias = 1 << 32
+	client := &fakeDaemonExportClient{
+		health: ipc.Health{Alive: true},
+		export: func(windowID int) (protocol.EventsExport, error) {
+			if windowID != 7 {
+				t.Fatalf("scoped export asked for raw window %d", windowID)
+			}
+			return protocol.EventsExport{
+				EventsByWindow: map[int][]protocol.SessionEvent{alias: {{Event: "PermissionRequest"}}},
+				KittySlots:     map[int]protocol.KittySlot{alias: {Socket: "unix:/kitty-second", WindowID: 7}},
+			}, nil
+		},
+	}
+	newDaemonExportClient = func() cli.DaemonExportClient { return client }
+	newDaemonExportKitty = func() cli.KittyWindowLister {
+		return fakeKittyWindowLister{windows: []kitty.OSWindow{{Tabs: []kitty.Tab{{
+			ID: 5, Title: "second", Windows: []kitty.Window{{ID: 7}},
+		}}}}}
+	}
+	daemonExportEventsCurrentWindow = true
+	daemonExportEventsSchema = protocol.EventsExportSchemaVersion
+	daemonExportEventsPretty = false
+	var out bytes.Buffer
+	daemonExportEventsCmd.SetOut(&out)
+	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.calls) != 0 || len(client.scopedCalls) != 1 || client.scopedCalls[0] != "unix:/kitty-second:7" {
+		t.Fatalf("export calls bare=%v scoped=%v", client.calls, client.scopedCalls)
+	}
+	var payload protocol.ExportEventsPayload
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Windows) != 1 || payload.Windows[0].WindowID != alias ||
+		len(payload.Windows[0].Events) != 1 || payload.Windows[0].Events[0].Event != "PermissionRequest" ||
+		!payload.Windows[0].Live.Found {
+		t.Fatalf("socket scoped export payload = %+v", payload.Windows)
 	}
 }
 

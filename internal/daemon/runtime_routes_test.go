@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -187,6 +189,95 @@ func requireRefused(t *testing.T, resp protocol.Response, reason string, retryab
 	}
 }
 
+func TestSocketStampedHookDoesNotBorrowSnapshotWithUnknownSocket(t *testing.T) {
+	h := newTestHandler()
+	h.SetKittyClient(&fakeKittyClient{windows: hookEventWindows("first", []kitty.Window{{
+		ID: 7, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+	}})})
+	req, rejection := h.translateLegacyKittyOrigin(protocol.Request{WindowID: 7, KittyListenOn: kittyB})
+	if rejection != nil {
+		t.Fatalf("hook origin rejected: %+v", rejection)
+	}
+	ctx := h.resolveHookEventContext(req)
+	if !ctx.lookupFailed || ctx.win != nil || len(ctx.windows) != 0 {
+		t.Fatalf("unknown-socket snapshot was trusted for %s: %+v", kittyB, ctx)
+	}
+}
+
+func TestSessionDetailSelectsTheKittySocketAndWindowPair(t *testing.T) {
+	h := newTestHandler()
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "PermissionRequest", hookevent.HookPayload{SessionID: "second"})))
+	for _, tc := range []struct {
+		socket string
+		event  string
+	}{
+		{kittyA, "UserPromptSubmit"},
+		{kittyB, "PermissionRequest"},
+	} {
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 7, KittyListenOn: tc.socket})
+		if !resp.OK || len(resp.Events) != 1 || resp.Events[0].Event != tc.event {
+			t.Fatalf("detail for %s = %+v; want only %s", tc.socket, resp.Events, tc.event)
+		}
+	}
+	unknown := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 7, KittyListenOn: "unix:/unknown"})
+	if !unknown.OK || len(unknown.Events) != 0 {
+		t.Fatalf("unknown Kitty socket received another instance's events: %+v", unknown.Events)
+	}
+	legacy := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 7})
+	if legacy.OK || legacy.Error != protocol.OriginReasonTargetConflict {
+		t.Fatalf("socketless detail read ambiguous Kitty events: %+v", legacy)
+	}
+	export := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 7})
+	if export.OK || export.Error != protocol.OriginReasonTargetConflict {
+		t.Fatalf("socketless export of ambiguous Kitty window = %+v", export)
+	}
+}
+
+func TestSessionDetailSelectsRuntimeSession(t *testing.T) {
+	h, directory := newRuntimeTestHandler(t)
+	first, second := newRuntimeID(t), newRuntimeID(t)
+	directory.put(first, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
+	directory.put(second, runtimesession.StateLive, runtimesession.BackendTmux, tmuxU, "tmux-u-1", "%7")
+	requireAccepted(t, h.Handle(runtimeHook(t, first, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
+	requireAccepted(t, h.Handle(runtimeHook(t, second, "PermissionRequest", hookevent.HookPayload{SessionID: "second"})))
+	for _, tc := range []struct {
+		runtime runtimesession.ID
+		event   string
+	}{
+		{first, "UserPromptSubmit"},
+		{second, "PermissionRequest"},
+	} {
+		resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, RuntimeSessionID: string(tc.runtime)})
+		if !resp.OK || len(resp.Events) != 1 || resp.Events[0].Event != tc.event {
+			t.Fatalf("detail for %s = %+v; want only %s", tc.runtime, resp.Events, tc.event)
+		}
+	}
+	unknown := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, RuntimeSessionID: string(newRuntimeID(t))})
+	if !unknown.OK || len(unknown.Events) != 0 {
+		t.Fatalf("unknown runtime received another session's events: %+v", unknown.Events)
+	}
+}
+
+func TestEventsExportSelectsTheKittySocketAndWindowPair(t *testing.T) {
+	h := newTestHandler()
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "PermissionRequest", hookevent.HookPayload{SessionID: "second"})))
+	h.stateMu.Lock()
+	secondSlot := h.runtimeRoutes.kittySlotOf(kittyB, 7)
+	h.stateMu.Unlock()
+	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 7, KittyListenOn: kittyB})
+	if !resp.OK || len(resp.EventsByWindow) != 1 || len(resp.EventsByWindow[secondSlot]) != 1 ||
+		resp.EventsByWindow[secondSlot][0].Event != "PermissionRequest" ||
+		resp.KittySlots[secondSlot] != (protocol.KittySlot{Socket: kittyB, WindowID: 7}) {
+		t.Fatalf("second Kitty export = %+v", resp)
+	}
+	unknown := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 7, KittyListenOn: "unix:/unknown"})
+	if unknown.OK || len(unknown.EventsByWindow) != 0 {
+		t.Fatalf("unknown socket exported another instance: %+v", unknown)
+	}
+}
+
 func TestManagedHooksRouteByRuntimeSessionAcrossMixedBackends(t *testing.T) {
 	h, directory := newRuntimeTestHandler(t)
 	onKittyA, onKittyB := newRuntimeID(t), newRuntimeID(t)
@@ -203,27 +294,25 @@ func TestManagedHooksRouteByRuntimeSessionAcrossMixedBackends(t *testing.T) {
 	} {
 		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "UserPromptSubmit", hookevent.HookPayload{SessionID: session})))
 	}
-	// Kitty B's window 7 collides with Kitty A's claimed slot: refused, never
-	// merged into A's state.
-	requireRefused(t, h.Handle(runtimeHook(t, onKittyB, "UserPromptSubmit", hookevent.HookPayload{SessionID: "session-kitty-b"})),
-		protocol.OriginReasonTargetConflict, false)
+	// Each Kitty instance owns a separate reducer slot for its window 7.
+	requireAccepted(t, h.Handle(runtimeHook(t, onKittyB, "UserPromptSubmit", hookevent.HookPayload{SessionID: "session-kitty-b"})))
 
 	if slot := slotOf(t, h, onKittyA); slot != 7 {
 		t.Fatalf("Kitty runtime slot = %d; want its window ID 7", slot)
 	}
 	slots := map[int]runtimesession.ID{}
-	for _, runtime := range []runtimesession.ID{onKittyA, onTmuxT, onTmuxU, onTmuxTRestarted} {
+	for _, runtime := range []runtimesession.ID{onKittyA, onKittyB, onTmuxT, onTmuxU, onTmuxTRestarted} {
 		slot := slotOf(t, h, runtime)
 		if other, dup := slots[slot]; dup {
 			t.Fatalf("runtimes %s and %s share slot %d", other, runtime, slot)
 		}
 		slots[slot] = runtime
-		if runtime != onKittyA && !isRuntimeSyntheticSlot(slot) {
+		if runtime != onKittyA && runtime != onKittyB && !isRuntimeSyntheticSlot(slot) {
 			t.Fatalf("tmux runtime %s got Kitty-range slot %d", runtime, slot)
 		}
 	}
 	expect := map[runtimesession.ID]string{
-		onKittyA: "claude:session-kitty-a", onTmuxT: "claude:session-tmux-t",
+		onKittyA: "claude:session-kitty-a", onKittyB: "claude:session-kitty-b", onTmuxT: "claude:session-tmux-t",
 		onTmuxU: "claude:session-tmux-u", onTmuxTRestarted: "claude:session-tmux-t2",
 	}
 	for runtime, key := range expect {
@@ -233,16 +322,14 @@ func TestManagedHooksRouteByRuntimeSessionAcrossMixedBackends(t *testing.T) {
 		}
 	}
 	if hasFact(slotFacts(h, 7), protocol.SourceHarness, "claude:session-kitty-b") {
-		t.Fatal("Kitty B's refused hook reached Kitty A's slot")
+		t.Fatal("Kitty B's hook reached Kitty A's slot")
 	}
 
-	// Legacy hooks: Kitty A's own window still reaches its slot (attributed to
-	// the session that claimed it); Kitty B's window 7 is refused.
+	// Legacy hooks for both instances reach their own claimed slots.
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "PreToolUse", hookevent.HookPayload{SessionID: "session-kitty-a"})))
-	requireRefused(t, h.Handle(legacyHook(t, 7, kittyB, "Stop", hookevent.HookPayload{SessionID: "session-kitty-b"})),
-		protocol.OriginReasonTargetConflict, false)
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "Stop", hookevent.HookPayload{SessionID: "session-kitty-b"})))
 
-	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 7})
+	detail := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 7, KittyListenOn: kittyA})
 	if len(detail.Events) != 2 {
 		t.Fatalf("slot 7 events = %+v; want the managed prompt and the legacy tool event", detail.Events)
 	}
@@ -257,6 +344,96 @@ func TestManagedHooksRouteByRuntimeSessionAcrossMixedBackends(t *testing.T) {
 	if len(tmuxDetail.Events) != 1 || tmuxDetail.Events[0].Origin == nil ||
 		tmuxDetail.Events[0].Origin.Backend != "tmux" || tmuxDetail.Events[0].Origin.Pane != "%7" {
 		t.Fatalf("tmux events = %+v", tmuxDetail.Events)
+	}
+}
+
+func TestLegacyKittyHooksFromAnotherInstanceUseIndependentWindowState(t *testing.T) {
+	h, _ := newRuntimeTestHandler(t)
+	first := legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})
+	requireAccepted(t, h.Handle(first))
+	second := legacyHook(t, 7, kittyB, "UserPromptSubmit", hookevent.HookPayload{SessionID: "second"})
+	secondResponse := h.Handle(second)
+	requireAccepted(t, secondResponse)
+	if secondResponse.Delivery.SourceWindowID != 7 || secondResponse.Delivery.TargetWindowID != 7 {
+		t.Fatalf("delivery leaked the daemon slot as a Kitty window: %+v", secondResponse.Delivery)
+	}
+	facts := slotFacts(h, 7)
+	if len(facts) != 1 || !hasFact(facts, protocol.SourceHarness, "claude:first") {
+		t.Fatalf("foreign legacy hook changed first instance's state: %+v", facts)
+	}
+	other := h.runtimeRoutes.kittySlotOf(kittyB, 7)
+	if other == 7 || !hasFact(slotFacts(h, other), protocol.SourceHarness, "claude:second") {
+		t.Fatalf("second instance did not get independent state in slot %d", other)
+	}
+	query := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
+	if query.KittySlots[7].Socket != kittyA || query.KittySlots[other].Socket != kittyB ||
+		query.KittySlots[other].WindowID != 7 || len(query.States) != 2 {
+		t.Fatalf("state query lost collision provenance: slots=%+v states=%+v", query.KittySlots, query.States)
+	}
+}
+
+func TestDirectStateUpdateRequiresInstanceWhenKittyNumbersCollide(t *testing.T) {
+	h, _ := newRuntimeTestHandler(t)
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "UserPromptSubmit", hookevent.HookPayload{SessionID: "second"})))
+	if resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "user_clear"}); resp.OK {
+		t.Fatal("ambiguous direct update was accepted")
+	}
+	if !hasFact(slotFacts(h, 7), protocol.SourceHarness, "claude:first") {
+		t.Fatal("ambiguous update changed the first instance")
+	}
+}
+
+func TestHookContextUsesTheSnapshotInstancesSlot(t *testing.T) {
+	h, _ := newRuntimeTestHandler(t)
+	h.stateMu.Lock()
+	h.kittySlotLocked(kittyA, 7)
+	second := h.kittySlotLocked(kittyB, 7)
+	h.stateMu.Unlock()
+	h.publishSnapshotFrom(probes.Publication{
+		Socket: kittyB, CapturedAt: time.Now(),
+		Windows: hookEventWindows("second", []kitty.Window{{ID: 7, IsActive: true,
+			UserVars: kitty.UserVars{Profile: "managed", Harness: "claude"}}}),
+	})
+	if ctx := h.resolveHookEventContext(protocol.Request{WindowID: second, KittyListenOn: kittyB}); ctx.win == nil || ctx.win.ID != second {
+		t.Fatalf("second instance context = %+v; want slot %d", ctx.win, second)
+	}
+	if ctx := h.resolveHookEventContext(protocol.Request{WindowID: 7, KittyListenOn: kittyA}); ctx.win != nil {
+		t.Fatalf("first instance matched second instance snapshot: %+v", ctx.win)
+	}
+}
+
+func TestNotificationTargetUsesTheRealKittyWindowNumber(t *testing.T) {
+	h := newTestHandler()
+	h.stateMu.Lock()
+	h.kittySlotLocked(kittyA, 7)
+	alias := h.kittySlotLocked(kittyB, 7)
+	h.rememberKittySocketLocked(alias, kittyB)
+	h.stateMu.Unlock()
+	target := h.notificationTarget(alias, "work")
+	if target.WindowID != 7 || target.KittyListenOn != kittyB {
+		t.Fatalf("notification target = %+v; want Kitty B window 7", target)
+	}
+}
+
+func TestScreenProbeBindingTargetsTheCollidingKittySlot(t *testing.T) {
+	h, _ := newRuntimeTestHandler(t)
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
+	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "UserPromptSubmit", hookevent.HookPayload{SessionID: "second"})))
+	alias := h.runtimeRoutes.kittySlotOf(kittyB, 7)
+	h.publishSnapshotFrom(probes.Publication{
+		Socket: kittyB, CapturedAt: time.Now(), ReducerReceipts: h.captureSnapshotReducerReceiptsFor(kittyB),
+		Windows: hookEventWindows("second", []kitty.Window{{ID: 7, IsActive: true,
+			UserVars: kitty.UserVars{Profile: "managed", Harness: "claude"}}}),
+	})
+	snapshot, ready := h.cachedScreenProbeSnapshot()
+	if !ready {
+		t.Fatal("probe snapshot is cold")
+	}
+	bindings := h.screenProbeBindings(snapshot, harness.Claude)
+	if len(bindings) != 1 || bindings[0].TargetWindowID != 7 || bindings[0].TargetSlot() != alias ||
+		bindings[0].SourceSlot() != alias || bindings[0].KittySocket != kittyB {
+		t.Fatalf("colliding probe bindings = %+v; want Kitty B window 7 in slot %d", bindings, alias)
 	}
 }
 

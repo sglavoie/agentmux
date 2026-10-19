@@ -74,8 +74,9 @@ func (h *Handler) runScreenProbes(ctx context.Context) {
 // the cached snapshot when there is one, then the sessions on other backends,
 // which need no Kitty at all. Both halves share the tick's screen cache.
 func (h *Handler) runScreenProbeTick(now time.Time) {
-	screens := h.screenTextCacheFor()
-	if snapshot, ready := h.cachedScreenProbeSnapshot(); ready {
+	snapshot, ready := h.cachedScreenProbeSnapshot()
+	screens := h.screenTextCacheForSocket(snapshot.Socket())
+	if ready {
 		h.runScreenProbesWithScreens(now, snapshot, screens)
 	}
 	h.probeRuntimeScreens(now, screens)
@@ -179,7 +180,7 @@ func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 	// durable fact is dated by the event it replays, not by how long the startup
 	// list took to answer.
 	h.publishCapture(capture)
-	h.restoreFromUserVars(windows, now)
+	h.restoreFromUserVarsFor(windows, now, capture.socket)
 	// ASL reconciliation deliberately does NOT run here. Restore rebuilds leases
 	// from Kitty user vars, which record what was true when the daemon stopped,
 	// so the first render can be stale by up to one maintenance tick — but a
@@ -190,7 +191,7 @@ func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 	// staleness: MarkReady never fires and the durable restore never lands. The
 	// first maintenance tick reconciles instead, within rendering.Interval of
 	// here.
-	h.renderSnapshot(windows)
+	h.renderSnapshotFor(windows, capture.socket)
 	return true, nil
 }
 
@@ -234,7 +235,7 @@ func (h *Handler) maintenanceTick(now time.Time) {
 		recovering = true
 	}
 	if recovering {
-		h.restoreFromUserVars(windows, now)
+		h.restoreFromUserVarsFor(windows, now, capture.socket)
 	}
 	h.runSnapshotTickWithCapture(now, capture)
 	if recovering {
@@ -282,7 +283,7 @@ func (h *Handler) runSnapshotTickWithCapture(now time.Time, capture kittySnapsho
 	// interval gate has never run when the daemon comes up, so the first tick
 	// always sweeps, and every aslReconcileInterval thereafter. Startup restore
 	// stays out of it so a large plan history cannot delay readiness.
-	h.maybeReconcileASLLeases(now, windows)
+	h.maybeReconcileASLLeasesFor(now, windows, capture.socket)
 	// Registered ASL runs expose a fixed-size, text-free supervisor projection.
 	// Refresh it every maintenance tick so a mailbox question and a supervisor
 	// Stop correlate within the existing two-second render cadence.
@@ -290,7 +291,7 @@ func (h *Handler) runSnapshotTickWithCapture(now time.Time, capture kittySnapsho
 	// Batched-persistence flush and drift convergence: hand every window with
 	// pending durable state, failed writes to retry, or a drifted title to the
 	// render worker. The maintenance loop itself never writes to Kitty.
-	h.enqueueSnapshotCandidates(windows)
+	h.enqueueSnapshotCandidatesFor(windows, capture.socket)
 }
 
 func (h *Handler) refreshMutedFromSnapshot(windows []kitty.OSWindow) {
@@ -302,12 +303,20 @@ func (h *Handler) refreshMutedFromSnapshot(windows []kitty.OSWindow) {
 // refreshMutedFromSnapshotLocked refreshes the window mute cache from one
 // immutable Kitty snapshot. Callers hold stateMu.
 func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
+	h.refreshMutedFromSnapshotForLocked(windows, h.lastKittyListenOn)
+}
+
+func (h *Handler) refreshMutedFromSnapshotForLocked(windows []kitty.OSWindow, socket string) {
 	for i := range windows {
 		for j := range windows[i].Tabs {
 			tabMuted := palette.ParseTitleParts(windows[i].Tabs[j].Title).Muted
 			for k := range windows[i].Tabs[j].Windows {
 				win := windows[i].Tabs[j].Windows[k]
-				if st, ok := h.windowStateLocked(win.ID); ok {
+				slot := h.runtimeRoutes.kittySlotOf(socket, win.ID)
+				if h.windowOfOtherInstanceLocked(slot, socket) {
+					continue
+				}
+				if st, ok := h.windowStateLocked(slot); ok {
 					muted := tabMuted || win.UserVars.Mute != ""
 					if st.Muted != muted {
 						h.companionDirty()
@@ -351,13 +360,20 @@ func (h *Handler) refreshMutedFromSnapshotLocked(windows []kitty.OSWindow) {
 // does not rewrite its amx_state twice a second for as long as you look at it.
 // Callers hold stateMu.
 func (h *Handler) refreshFocusFromSnapshotLocked(windows []kitty.OSWindow, observedAt time.Time) {
+	h.refreshFocusFromSnapshotForLocked(windows, h.lastKittyListenOn, observedAt)
+}
+
+func (h *Handler) refreshFocusFromSnapshotForLocked(windows []kitty.OSWindow, socket string, observedAt time.Time) {
 	for i := range windows {
 		for j := range windows[i].Tabs {
 			for k := range windows[i].Tabs[j].Windows {
 				if !snapshotPaneFocused(&windows[i], &windows[i].Tabs[j], &windows[i].Tabs[j].Windows[k]) {
 					continue
 				}
-				windowID := windows[i].Tabs[j].Windows[k].ID
+				windowID := h.runtimeRoutes.kittySlotOf(socket, windows[i].Tabs[j].Windows[k].ID)
+				if h.windowOfOtherInstanceLocked(windowID, socket) {
+					continue
+				}
 				st, ok := h.windowStateLocked(windowID)
 				if !ok || !st.Unseen {
 					continue
@@ -379,14 +395,23 @@ func snapshotPaneFocused(osWindow *kitty.OSWindow, tab *kitty.Tab, win *kitty.Wi
 	return osWindow.IsFocused && tab.IsActive && win.IsActive
 }
 
-// windowFocusedFromSnapshotLocked answers the same question for one window ID
-// from the last published snapshot, which is what the publish path has instead of
-// a tree. A cold or stale cache answers "not focused", and that is the safe
-// direction: the worst case is one row raised as unseen that the next snapshot's
-// focus observation clears within the render cadence. Callers hold stateMu.
+// windowFocusedFromSnapshotLocked answers the same question for one slot from
+// the tree of its Kitty instance. A missing tree answers "not focused"; the
+// next successful listing of that instance can clear an unseen mark. Callers
+// hold stateMu.
 func (h *Handler) windowFocusedFromSnapshotLocked(windowID int) bool {
-	windows, _, ready := h.snapshots.Load()
-	if !ready {
+	view := h.snapshots.View()
+	windows := view.Windows()
+	if key, mapped := h.runtimeRoutes.kittyWindow(windowID); mapped {
+		if key.socket != view.Socket() {
+			windows = h.otherKittyTrees[key.socket]
+		} else if !view.Ready() {
+			return false
+		}
+		windowID = key.windowID
+	} else if h.windowOfOtherInstanceLocked(windowID, view.Socket()) {
+		windows = h.otherKittyTrees[h.kittySockets[windowID]]
+	} else if !view.Ready() {
 		return false
 	}
 	osWindow, tab, win, ok := kitty.FindWindowLocationByID(windows, windowID)
@@ -415,36 +440,60 @@ func (h *Handler) setMutedFromSnapshot(windowID int, muted bool) {
 // restore, sweeps, probes, and tests use this; production hook flow goes
 // through the queue and worker instead.
 func (h *Handler) renderSnapshot(windows []kitty.OSWindow) {
-	h.enqueueSnapshotCandidates(windows)
-	h.drainRenderQueueWith(windows)
+	socket := h.snapshots.View().Socket()
+	if socket == "" {
+		socket = h.currentKittyListenOn()
+	}
+	h.renderSnapshotFor(windows, socket)
+}
+
+func (h *Handler) renderSnapshotFor(windows []kitty.OSWindow, socket string) {
+	h.enqueueSnapshotCandidatesFor(windows, socket)
+	h.drainRenderQueueWithSocket(windows, socket)
 }
 
 // enqueueSnapshotCandidates queues every window the given snapshot shows work
 // for: pending durable state (batched activity persistence), failed writes to
 // retry, and drifted tab titles to converge.
 func (h *Handler) enqueueSnapshotCandidates(windows []kitty.OSWindow) {
+	h.enqueueSnapshotCandidatesFor(windows, h.currentKittyListenOn())
+}
+
+func (h *Handler) enqueueSnapshotCandidatesFor(windows []kitty.OSWindow, socket string) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 
 	live := liveWindowIDs(windows)
-	for id, st := range h.store {
-		if (st.Dirty || st.RenderFailures > 0) && live[id] {
-			h.enqueueRenderLocked(id, st)
+	for slot, st := range h.store {
+		key, mapped := h.runtimeRoutes.kittyWindow(slot)
+		if mapped && key.socket != socket {
+			continue
+		}
+		if !mapped && h.windowOfOtherInstanceLocked(slot, socket) {
+			continue
+		}
+		windowID := slot
+		if mapped {
+			windowID = key.windowID
+		}
+		if (st.Dirty || st.RenderFailures > 0) && live[windowID] {
+			h.enqueueRenderLocked(slot, st)
 		}
 	}
 	for i := range windows {
 		for j := range windows[i].Tabs {
 			tab := &windows[i].Tabs[j]
-			owner, ok := h.renderTitleOwnerLocked(tab)
+			owner, ok := h.renderTitleOwnerLocked(tab, socket)
 			if !ok {
 				continue
 			}
-			st, ok := h.windowStateLocked(owner.ID)
+			slot := h.runtimeRoutes.kittySlotOf(socket, owner.ID)
+			st, ok := h.windowStateLocked(slot)
 			if !ok {
 				continue
 			}
 			if rendering.DesiredTabTitle(tab, st) != tab.Title {
-				h.enqueueRenderLocked(owner.ID, st)
+				h.enqueueRenderLocked(slot, st)
 			}
 		}
 	}
@@ -452,9 +501,13 @@ func (h *Handler) enqueueSnapshotCandidates(windows []kitty.OSWindow) {
 
 // renderTitleOwnerLocked resolves the tab's title owner against the windows
 // this daemon actually tracks. Callers hold stateMu.
-func (h *Handler) renderTitleOwnerLocked(tab *kitty.Tab) (*kitty.Window, bool) {
+func (h *Handler) renderTitleOwnerLocked(tab *kitty.Tab, socket string) (*kitty.Window, bool) {
 	return rendering.TitleOwner(tab, func(windowID int) bool {
-		_, ok := h.windowStateLocked(windowID)
+		slot := h.runtimeRoutes.kittySlotOf(socket, windowID)
+		if h.windowOfOtherInstanceLocked(slot, socket) {
+			return false
+		}
+		_, ok := h.windowStateLocked(slot)
 		return ok
 	})
 }

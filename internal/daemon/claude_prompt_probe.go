@@ -89,18 +89,19 @@ func claudeScreenIdleFields(
 // the cached snapshot; this wrapper mirrors ProbeClaudeContextLimit for callers
 // (and tests) that want the full list+render round-trip.
 func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
-	if h.kittyClient == nil {
+	client, socket := h.kittyListTarget()
+	if client == nil {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := h.kittyClient.ListWindows()
+	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
+	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("claude stop probe: list windows failed", "err", err)
 		return
 	}
-	h.probeClaudeScreenStopWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
-		h.screenTextCacheFor())
-	h.renderSnapshot(windows)
+	h.probeClaudeScreenStopWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
+		h.screenTextCacheForSocket(socket))
+	h.renderSnapshotFor(windows, socket)
 }
 
 // probeClaudeScreenStopWithSnapshot walks the Claude routes in one snapshot and
@@ -176,7 +177,7 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(
 // field) and does not yet reach the wire, so there is no durable or rendered
 // consequence to flush. Whatever projects it onto a row must revisit that.
 func (h *Handler) stampClaudePromptKind(binding probes.Binding, screens *activity.ScreenTextCache) {
-	targetWindowID := binding.TargetWindowID
+	targetWindowID := binding.TargetSlot()
 
 	h.stateMu.Lock()
 	if !h.screenProbeBindingEligibilityCurrentLocked(binding, "", promptKindBlockingIcon) {
@@ -235,7 +236,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	userVars kitty.UserVars,
 	sourceWindowTitle string,
 ) {
-	targetWindowID := binding.TargetWindowID
+	targetWindowID := binding.TargetSlot()
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeScreenStopProbeSource}
 
 	h.stateMu.Lock()
@@ -284,7 +285,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 		Seq:            nextSeq,
 		At:             now.Unix(),
 		Prompt:         true,
-		OriginWindowID: binding.SourceWindowID,
+		OriginWindowID: binding.SourceSlot(),
 	})
 	if decision != protocol.DecisionApplied {
 		return
@@ -336,7 +337,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	}
 	h.appendWatchdogEventLocked(
 		targetWindowID,
-		binding.SourceWindowID,
+		binding.SourceSlot(),
 		now,
 		screenActiveProbeEvent,
 		resultAction,

@@ -89,7 +89,7 @@ func (h *Handler) probeScreenIdle(
 	screens *activity.ScreenTextCache,
 ) {
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: spec.sourceKey}
-	targetWindowID := binding.TargetWindowID
+	targetWindowID := binding.TargetSlot()
 
 	// Revalidate the snapshot receipt before the off-lock read. A window with no
 	// reducer facts (an unmanaged/foreground-only bolt) has no stale interactive
@@ -149,7 +149,7 @@ func (h *Handler) probeScreenIdleWindow(
 	screen string,
 ) {
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: spec.sourceKey}
-	targetWindowID := binding.TargetWindowID
+	targetWindowID := binding.TargetSlot()
 
 	// One classification, read three times: whether the screen may settle at
 	// all, how strong the evidence was, and what fingerprint the stabilization
@@ -243,7 +243,7 @@ func (h *Handler) probeScreenIdleWindow(
 		PipeMode:     fields.pipeMode,
 		Muted:        fields.muted,
 		SourceEventID: fmt.Sprintf("%s:%d:%d:%d", spec.eventIDPrefix,
-			binding.SourceWindowID, targetWindowID, binding.TargetReceipt),
+			binding.SourceSlot(), targetWindowID, binding.TargetReceipt),
 		DiagnosticEvent: spec.event,
 	})
 	if settled {
@@ -294,9 +294,13 @@ func (h *Handler) userActiveRetirableByProbe(windowID int) bool {
 // A pane behind a runtime slot is read through the backend its session is
 // registered on (runtimeScreenRouter); every other pane goes to that observer.
 func (h *Handler) screenTextCacheFor() *activity.ScreenTextCache {
+	return h.screenTextCacheForSocket(h.snapshots.View().Socket())
+}
+
+func (h *Handler) screenTextCacheForSocket(socket string) *activity.ScreenTextCache {
 	base := h.screenObserver
 	if base == nil {
-		base = activity.KittyScreenObserver(h.kittyClient)
+		base = activity.KittyScreenObserver(scopedKittyClient(h.kittyClient, socket))
 	}
 	screens := activity.NewScreenObservationCache(runtimeScreenRouter{h: h, base: base})
 	// Every read through to a backend is tallied for health; a cached answer

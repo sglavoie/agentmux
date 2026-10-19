@@ -146,11 +146,26 @@ func TestRefreshWithoutKittyListsPortableSessionsWithTheirDaemonState(t *testing
 	if text, err := ReadScrollback(nil, apiRow.WindowID); err != nil || text != "scrollback of %0" {
 		t.Fatalf("ReadScrollback = %q, %v", text, err)
 	}
-	if req := SessionDetailRequest(apiRow.WindowID); req.WindowID != 0 || req.RuntimeSessionID != string(api) {
-		t.Fatalf("detail request = %+v, want it addressed by runtime session", req)
+	if req, err := SessionDetailRequest(apiRow.WindowID); err != nil || req.WindowID != 0 || req.RuntimeSessionID != string(api) {
+		t.Fatalf("detail request = %+v, %v; want it addressed by runtime session", req, err)
 	}
 	if live, ok := LivePortableConversation(identity); !ok || live.RuntimeSessionID != api {
 		t.Fatalf("LivePortableConversation = %v %v, want the api session", live.RuntimeSessionID, ok)
+	}
+}
+
+func TestKittySessionDetailRequestCarriesLocalSocket(t *testing.T) {
+	stubLocalKittySocket(t, "unix:/kitty-second")
+	req, err := SessionDetailRequest(7)
+	if err != nil || req.WindowID != 7 || req.RuntimeSessionID != "" || req.KittyListenOn != "unix:/kitty-second" {
+		t.Fatalf("Kitty detail request = %+v, %v", req, err)
+	}
+}
+
+func TestKittySessionDetailRequestWithoutSocketFailsClosed(t *testing.T) {
+	stubLocalKittySocket(t, "")
+	if req, err := SessionDetailRequest(7); err == nil || req.WindowID != 0 {
+		t.Fatalf("unattributed Kitty detail request = %+v, %v", req, err)
 	}
 }
 

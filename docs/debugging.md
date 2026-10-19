@@ -21,6 +21,10 @@ All four commands accept the same selectors: `--harness`, `--profile`,
 reports use schema v2; bundle manifests and causal-record wrappers also use
 schema v2. `probe`, `capture`, and `replay` remain schema v1. `tail --follow`
 follows only new persisted records and does not require a running daemon.
+For a Kitty target, `probe` uses the current `KITTY_LISTEN_ON` with its window
+number. Outside that Kitty instance, pass both `--window ID` and
+`--kitty-socket unix:/path/to/socket`; a window number alone is ambiguous
+across Kitty instances and is refused. Runtime-session probes use their ID.
 
 When the first report is inconclusive, capture the exact selector and preserve
 a redacted artifact:

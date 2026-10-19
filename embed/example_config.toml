@@ -3,6 +3,8 @@
 # Default location: ~/.config/agent-mux/config.toml
 # Useful commands:
 #   amx config init      Write this starter config to the default config path.
+#   amx config setup     Add the first profile and project interactively; choose
+#                        keep to leave the existing launch defaults in place.
 #   amx config path      Print the resolved config file path.
 #   amx config edit      Open the config in $EDITOR.
 #   amx config show      Print the config file as-is.
@@ -17,7 +19,7 @@
 #
 # Paths in this file (home_dir, directory) support `~` for $HOME.
 #
-# Minimum setup: uncomment and customize this profile/project pair, then
+# Minimum manual setup: uncomment and customize this profile/project pair, then
 # uncomment launch_backend = "tmux" in the existing [defaults] section below.
 # README.md#first-session has the complete minimal file; do not add a second
 # [defaults] section to this template.

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/gitstate"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -129,6 +130,54 @@ func TestGitStateRefreshStampsTrackedWindows(t *testing.T) {
 	dirty := windowGitState(t, h, 43)
 	if dirty.GitBranch != "amx/feature" || !dirty.GitDirty || dirty.GitDirectory != "/repo/two" {
 		t.Fatalf("window 43 = %+v, want amx/feature/dirty in /repo/two", dirty)
+	}
+}
+
+func TestGitStateRefreshKeepsCollidingKittyInstancesSeparate(t *testing.T) {
+	git := &scriptedGitState{branches: map[string]string{
+		"/repo/first": "first", "/repo/second": "second",
+	}}
+	h := newTestHandler()
+	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
+	const first, second = "unix:/kitty-first", "unix:/kitty-second"
+	h.stateMu.Lock()
+	firstSlot := h.kittySlotLocked(first, 7)
+	secondSlot := h.kittySlotLocked(second, 7)
+	h.ensureWindowStateLocked(firstSlot)
+	h.ensureWindowStateLocked(secondSlot)
+	h.rememberKittySocketLocked(firstSlot, first)
+	h.rememberKittySocketLocked(secondSlot, second)
+	h.stateMu.Unlock()
+	if firstSlot == secondSlot {
+		t.Fatal("colliding Kitty windows share a reducer slot")
+	}
+	firstWindows := gitStateWindows(map[int]string{7: "/repo/first"})
+	h.publishSnapshotFrom(probes.Publication{Windows: firstWindows, Socket: first, CapturedAt: time.Now()})
+	h.setOtherKittyTrees(map[string][]kitty.OSWindow{
+		second: gitStateWindows(map[int]string{7: "/repo/second"}),
+	}, nil)
+
+	h.runGitStateRefresh(firstWindows)
+	if got := windowGitState(t, h, firstSlot); got.GitBranch != "first" || got.GitDirectory != "/repo/first" {
+		t.Fatalf("first Kitty slot = %+v", got)
+	}
+	if got := windowGitState(t, h, secondSlot); got.GitBranch != "second" || got.GitDirectory != "/repo/second" {
+		t.Fatalf("second Kitty slot = %+v", got)
+	}
+
+	// A foreign tree can change while Git runs; the old branch cannot land on
+	// the new directory even though both windows still carry raw ID 7.
+	git.before = func(directory string) {
+		if directory == "/repo/second" {
+			h.setOtherKittyTrees(map[string][]kitty.OSWindow{
+				second: gitStateWindows(map[int]string{7: "/repo/moved"}),
+			}, nil)
+		}
+	}
+	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
+	h.runGitStateRefresh(firstWindows)
+	if got := windowGitState(t, h, secondSlot); got.GitDirectory != "" || got.GitBranch != "" {
+		t.Fatalf("foreign slot kept stale Git state after moving: %+v", got)
 	}
 }
 

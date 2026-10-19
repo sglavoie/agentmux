@@ -17,6 +17,7 @@ import (
 func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
 	resetDaemonExportTestState(t)
 	t.Setenv("KITTY_WINDOW_ID", "77")
+	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-current")
 
 	client := &fakeDaemonExportClient{
 		health: ipc.Health{Alive: true, PID: 7, Uptime: 7 * time.Second},
@@ -28,6 +29,7 @@ func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
 				EventsByWindow: map[int][]protocol.SessionEvent{
 					77: {{At: 7, Event: "Stop", Action: "stop", ResultIconState: "stop"}},
 				},
+				KittySlots: map[int]protocol.KittySlot{77: {Socket: "unix:/kitty-current", WindowID: 77}},
 			}, nil
 		},
 	}
@@ -48,8 +50,8 @@ func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
 		t.Fatalf("RunE: %v", err)
 	}
 
-	if len(client.calls) != 1 || client.calls[0] != 77 {
-		t.Fatalf("ExportEvents calls = %v; want [77]", client.calls)
+	if len(client.calls) != 0 || len(client.scopedCalls) != 1 || client.scopedCalls[0] != "unix:/kitty-current:77" {
+		t.Fatalf("ExportEvents calls bare=%v scoped=%v; want the current Kitty pair", client.calls, client.scopedCalls)
 	}
 
 	var payload protocol.ExportEventsPayload

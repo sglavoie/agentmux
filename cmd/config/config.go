@@ -296,6 +296,7 @@ func init() {
 	configValidateCmd.Flags().Bool("strict", false, "fail when a project directory is missing or not a directory")
 	configCmd.AddCommand(
 		configInitCmd,
+		configSetupCmd,
 		configEditCmd,
 		configShowCmd,
 		configPathCmd,

@@ -51,10 +51,18 @@ func (h *Handler) tryRouteActiveLoopSiblingHook(ctx hookEventContext, eventOrAct
 		return false
 	}
 
-	candidate, ok := exactActiveLoopCandidate(candidates, ctx.req.WindowID)
+	rawWindowID, sameInstance := h.kittyWindowForCandidate(ctx.req.WindowID, ctx.req.KittyListenOn)
+	if !sameInstance {
+		return false
+	}
+	candidate, ok := exactActiveLoopCandidate(candidates, rawWindowID)
 	if !ok {
 		return false
 	}
+	// The snapshot supplied to routing uses reducer slots. The candidate's
+	// projection carries Kitty's raw window number, so keep both identities
+	// in the same namespace for workspace matching.
+	candidate.WindowID = ctx.req.WindowID
 	ctx.req.RouteEvidence.ASLMatches = 1
 	ctx.req.RouteEvidence.SelectionReason = "asl"
 	// Exact ASL evidence may supply the producer for legacy unstamped hooks. It
@@ -275,13 +283,26 @@ func (h *Handler) invalidateActiveLoopCache() {
 // hasExactActiveLoopCandidate reports whether an active agent-session-loop run
 // exactly identifies windowID. Discovery failure fails closed, matching
 // tryRouteActiveLoopSiblingHook.
-func (h *Handler) hasExactActiveLoopCandidate(windowID int) bool {
+func (h *Handler) hasExactActiveLoopCandidate(windowID int, socket string) bool {
 	candidates, err := h.activeLoopCandidates()
 	if err != nil {
 		return false
 	}
-	_, ok := exactActiveLoopCandidate(candidates, windowID)
+	rawWindowID, sameInstance := h.kittyWindowForCandidate(windowID, socket)
+	if !sameInstance {
+		return false
+	}
+	_, ok := exactActiveLoopCandidate(candidates, rawWindowID)
 	return ok
+}
+
+// kittyWindowForCandidate turns a reducer slot back into the raw number ASL's
+// durable projection records. A slot from another socket cannot authorize a
+// hook in this instance. The route table is guarded by stateMu.
+func (h *Handler) kittyWindowForCandidate(slot int, socket string) (int, bool) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	return h.kittyRemoteWindowLocked(slot, socket)
 }
 
 // exactActiveLoopCandidate returns the unique discovered candidate whose

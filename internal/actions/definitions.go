@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -166,7 +167,11 @@ func defaultDefinitions() []Definition {
 				}
 				// This is intentionally best effort.  The daemon can be starting while
 				// the TUI issues this request, and a later refresh converges its state.
-				_, _ = requestFn(operatorStateUpdate("user_clear", *request.Session))
+				stateRequest, err := operatorStateUpdate("user_clear", *request.Session)
+				if err != nil {
+					return Result{}, err
+				}
+				_, _ = requestFn(stateRequest)
 				return Result{Changed: true, Message: "cleared session status"}, nil
 			},
 		},
@@ -178,7 +183,11 @@ func defaultDefinitions() []Definition {
 					requestFn = func(req protocol.Request) (protocol.Response, error) { return ipc.NewClient().Send(req) }
 				}
 				// Best effort, exactly like ClearStatus: a later refresh converges.
-				_, _ = requestFn(operatorStateUpdate("user_active", *request.Session))
+				stateRequest, err := operatorStateUpdate("user_active", *request.Session)
+				if err != nil {
+					return Result{}, err
+				}
+				_, _ = requestFn(stateRequest)
 				return Result{Changed: true, Message: "marked session active"}, nil
 			},
 		},
@@ -420,12 +429,19 @@ func dependencyError(id ID, dependency string) error {
 // operatorStateUpdate addresses an operator's icon action to a session. A
 // Kitty session is named by its window; any other by its runtime session,
 // because only the daemon knows that session's state slot.
-func operatorStateUpdate(action string, running session.RunningSession) protocol.Request {
+func operatorStateUpdate(action string, running session.RunningSession) (protocol.Request, error) {
 	req := protocol.Request{Type: protocol.TypeStateUpdate, Action: action, SessionTitle: running.Base}
-	if running.BackendKind() != runtimesession.BackendKitty {
+	if running.RuntimeSessionID != "" {
 		req.RuntimeSessionID = string(running.RuntimeSessionID)
-		return req
+		return req, nil
+	}
+	if running.BackendKind() != runtimesession.BackendKitty {
+		return protocol.Request{}, fmt.Errorf("runtime session ID unavailable for %s session", running.BackendKind())
+	}
+	req.KittyListenOn = kitty.NormalizedListenAddressFromEnv()
+	if req.KittyListenOn == "" || running.WindowID <= 0 {
+		return protocol.Request{}, fmt.Errorf("kitty socket and window ID are required to update this session's status")
 	}
 	req.WindowID = running.WindowID
-	return req
+	return req, nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -26,6 +27,9 @@ func TestHandler_HookEventEnrichesFromKittySnapshot(t *testing.T) {
 		}}),
 	}
 	h.SetKittyClient(fake)
+	h.publishSnapshotFrom(probes.Publication{
+		Windows: fake.windows, Socket: "unix:/tmp/kitty", CapturedAt: time.Now(),
+	})
 
 	resp := h.Handle(protocol.Request{
 		Type:          protocol.TypeHookEvent,

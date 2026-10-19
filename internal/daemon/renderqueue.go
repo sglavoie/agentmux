@@ -110,20 +110,24 @@ func (h *Handler) drainRenderQueue() {
 	// Freshen the shared snapshot too: the hook path routes against it, and a
 	// render-demand list is strictly newer than the last maintenance tick.
 	h.publishCapture(capture)
-	h.drainRenderQueueWith(capture.windows)
+	h.drainRenderQueueWithSocket(capture.windows, capture.socket)
 }
 
 // drainRenderQueueWith renders every queued window against the given snapshot.
 // Windows re-enqueued mid-drain (superseded generations) are picked up in the
 // same loop.
 func (h *Handler) drainRenderQueueWith(windows []kitty.OSWindow) {
+	h.drainRenderQueueWithSocket(windows, h.currentKittyListenOn())
+}
+
+func (h *Handler) drainRenderQueueWithSocket(windows []kitty.OSWindow, socket string) {
 	for {
 		windowID, queuedTrace, ok := h.renderQueue.Acquire()
 		if !ok {
 			return
 		}
 		h.recordRenderGenerationBounded(queuedTrace, windowID)
-		h.renderQueuedWindow(windowID, windows)
+		h.renderQueuedWindow(windowID, windows, socket)
 		h.renderQueue.Release(windowID)
 	}
 }
@@ -132,30 +136,52 @@ func (h *Handler) drainRenderQueueWith(windows []kitty.OSWindow) {
 // amx_state first, then publish the tab title (only when this window owns the
 // tab's title). The generation captured at candidate build is revalidated
 // immediately before each Kitty write.
-func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
-	tab, liveWindow, found := kitty.FindTabByWindowID(windows, windowID)
+func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow, snapshotSocket string) {
+	h.stateMu.Lock()
+	key, mapped := h.runtimeRoutes.kittyWindow(windowID)
+	if !mapped && h.kittySockets[windowID] != "" {
+		key = kittySlotKey{socket: h.kittySockets[windowID], windowID: windowID}
+		mapped = true
+	}
+	h.stateMu.Unlock()
+	remoteID := windowID
+	if mapped {
+		remoteID = key.windowID
+		if key.socket != "" && key.socket != snapshotSocket {
+			client := h.kittyClientForWindow(windowID)
+			if client == nil {
+				return
+			}
+			var err error
+			windows, err = client.ListWindows()
+			if err != nil {
+				return
+			}
+			snapshotSocket = key.socket
+		}
+	}
+	tab, liveWindow, found := kitty.FindTabByWindowID(windows, remoteID)
 	if !found {
 		tab = nil
 		liveWindow = nil
 	}
-	ready, degradedReason := h.Readiness()
-
 	h.stateMu.Lock()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok {
 		h.stateMu.Unlock()
 		return
 	}
-	// A hook accepted after a degraded startup can enqueue this render before
-	// maintenance performs the first successful durable restore. The fresh
-	// ListWindows snapshot used by this pass still carries the pre-startup
-	// amx_state, so fold its disjoint reducer facts into the accepted in-process
-	// state before building the payload. Same-source hook facts remain
-	// authoritative, while acknowledged cutoffs and live ASL leases survive the
-	// first write. mergePersistedFactsLocked advances Seq for a real merge, so
-	// the ordinary generation checks below protect the merged candidate too.
-	if !ready && degradedReason != "" && liveWindow != nil {
+	// The first render of a newly seen Kitty slot folds durable facts from
+	// that instance's amx_state before writing over it. This also covers a
+	// second Kitty instance discovered after startup and a hook received during
+	// degraded startup. Later renders must not replay stale persisted facts
+	// over an in-process clear or lease release.
+	if !h.kittyRestored[windowID] && liveWindow != nil {
 		h.mergePersistedFactsLocked(windowID, st, *liveWindow, time.Now())
+		if h.kittyRestored == nil {
+			h.kittyRestored = make(map[int]bool)
+		}
+		h.kittyRestored[windowID] = true
 	}
 	seq := st.Seq
 	if seq > st.AttemptedGen {
@@ -182,7 +208,7 @@ func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
 	}
 	nextTitle := ""
 	if tab != nil {
-		if owner, ownerOK := h.renderTitleOwnerLocked(tab); ownerOK && owner.ID == windowID {
+		if owner, ownerOK := h.renderTitleOwnerLocked(tab, snapshotSocket); ownerOK && owner.ID == remoteID {
 			if t := rendering.DesiredTabTitle(tab, st); t != tab.Title {
 				nextTitle = t
 			}
@@ -210,7 +236,7 @@ func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
 		if !h.renderGenerationCurrent(windowID, seq) {
 			return
 		}
-		err := client.SetUserVars(kitty.MatchWindowByID(windowID), map[string]string{
+		err := client.SetUserVars(kitty.MatchWindowByID(remoteID), map[string]string{
 			"amx_state": userVar,
 		})
 		if !h.finishPersist(windowID, seq, err) {
@@ -221,7 +247,7 @@ func (h *Handler) renderQueuedWindow(windowID int, windows []kitty.OSWindow) {
 		if !h.renderGenerationCurrent(windowID, seq) {
 			return
 		}
-		err := client.SetTabTitle(kitty.MatchTabByWindowID(windowID), nextTitle)
+		err := client.SetTabTitle(kitty.MatchTabByWindowID(remoteID), nextTitle)
 		h.finishTitle(windowID, seq, dirtySince, err)
 		return
 	}

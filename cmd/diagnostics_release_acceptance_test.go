@@ -22,6 +22,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/indicator"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/spf13/cobra"
 )
 
@@ -44,6 +45,9 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateBase)
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/agent-mux-acceptance-kitty")
 	t.Setenv("KITTY_WINDOW_ID", "42")
+	// This fixture is a legacy Kitty hook. An ambient managed-session ID from
+	// the terminal running the gate must not replace its Kitty identity.
+	t.Setenv(runtimesession.EnvVar, "")
 
 	cfg := &config.Config{Defaults: config.Defaults{
 		GuardDuration: 5,

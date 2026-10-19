@@ -596,6 +596,15 @@ func TestSubscribe_OversizeFrameIsDroppedAndCounted(t *testing.T) {
 		t.Fatalf("ack = %+v", ack)
 	}
 	sink := handler.nextSink(t)
+	// The stream keeps only the newest pending snapshot. Wait until the writer
+	// has inspected the oversized one before replacing it with the small one.
+	deadline := time.Now().Add(5 * time.Second)
+	for server.Metrics().StreamFramesOversize == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("oversized snapshot was not inspected by the stream writer")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	sink.SetSnapshot(json.RawMessage(`"small"`))
 	frame := client.readFrame(t)
 	if frame.Type != protocol.FrameSnapshot || string(frame.Data) != `"small"` || frame.Seq != 1 {

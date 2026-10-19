@@ -356,14 +356,22 @@ func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
 
 func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
 	client := &testProbeClient{}
-	report := Probe(client, ProbeOptions{WindowID: 43, Harness: "Claude", RequestID: "request-1", TraceID: "trace-1", AMXBin: "/tmp/amx"})
+	report := Probe(client, ProbeOptions{WindowID: 43, KittyListenOn: "unix:/kitty-a", Harness: "Claude", RequestID: "request-1", TraceID: "trace-1", AMXBin: "/tmp/amx"})
 	if !report.Success || len(report.Stages) != 2 || report.Stages[0].Stage != ipc.DeliveryStageIPCAttempt || report.Stages[1].Stage != "daemon_acknowledgement" {
 		t.Fatalf("probe report = %+v", report)
 	}
-	if client.request.Type != protocol.TypeDiagnosticProbe || client.request.WindowID != 43 || client.request.RequestID != "request-1" {
+	if client.request.Type != protocol.TypeDiagnosticProbe || client.request.WindowID != 43 || client.request.KittyListenOn != "unix:/kitty-a" || client.request.RequestID != "request-1" {
 		t.Fatalf("probe request = %+v", client.request)
 	}
 	if !strings.Contains(report.Scope, "does not prove") || !strings.Contains(report.Scope, "without changing reducer") {
 		t.Fatalf("scope = %q", report.Scope)
+	}
+}
+
+func TestProbeRefusesKittyWindowWithoutSocket(t *testing.T) {
+	client := &testProbeClient{}
+	report := Probe(client, ProbeOptions{WindowID: 43})
+	if report.Success || !strings.Contains(report.Error, "Kitty socket") || client.request.Type != "" {
+		t.Fatalf("unidentified Kitty probe = %+v, request = %+v", report, client.request)
 	}
 }

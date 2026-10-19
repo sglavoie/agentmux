@@ -14,6 +14,9 @@ type EventsExport struct {
 	// that has one. A session on a backend other than Kitty is exported
 	// under a slot only the daemon can name; this is what says whose it is.
 	RuntimeSlots map[int]RuntimeSlot
+	// KittySlots retains instance provenance when two Kitty windows reuse a
+	// number. It is omitted by older daemons.
+	KittySlots map[int]KittySlot
 }
 
 // EventsExportSchemaVersion is the current JSON schema version emitted by

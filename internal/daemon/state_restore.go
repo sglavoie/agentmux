@@ -96,6 +96,10 @@ func isReusableKittySocket(socket string) bool {
 }
 
 func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
+	h.restoreFromUserVarsFor(windows, now, "")
+}
+
+func (h *Handler) restoreFromUserVarsFor(windows []kitty.OSWindow, now time.Time, socket string) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 
@@ -104,7 +108,18 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 			tab := windows[i].Tabs[j]
 			for k := range windows[i].Tabs[j].Windows {
 				win := windows[i].Tabs[j].Windows[k]
-				if existing, live := h.store[win.ID]; live {
+				slot := h.kittySlotLocked(socket, win.ID)
+				if h.kittyRestored == nil {
+					h.kittyRestored = make(map[int]bool)
+				}
+				h.kittyRestored[slot] = true
+				if isReusableKittySocket(socket) {
+					if h.kittySockets == nil {
+						h.kittySockets = make(map[int]string)
+					}
+					h.kittySockets[slot] = socket
+				}
+				if existing, live := h.store[slot]; live {
 					// Restore is a one-shot startup seeding of durable state.
 					// A window that already holds in-process state was populated
 					// either by an earlier restore or, during a degraded startup,
@@ -120,7 +135,7 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 					// in without touching any same-source in-process fact; the
 					// merge is idempotent, so repeated maintenance ticks and a
 					// late startup completion cannot duplicate or regress it.
-					h.mergePersistedFactsLocked(win.ID, existing, win, now)
+					h.mergePersistedFactsLocked(slot, existing, win, now)
 					continue
 				}
 				if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
@@ -129,7 +144,7 @@ func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
 				if strings.TrimSpace(win.UserVars.AMXState) == "" {
 					continue
 				}
-				st, err := h.restoreWindowPayloadLocked(win.ID, win.UserVars.AMXState, now)
+				st, err := h.restoreWindowPayloadLocked(slot, win.UserVars.AMXState, now)
 				if err != nil {
 					slog.Warn("renderer: discarded invalid restored state", "window_id", win.ID, "err", err)
 					continue

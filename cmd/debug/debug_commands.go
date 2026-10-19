@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hooks"
+	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
 )
 
@@ -94,8 +95,12 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	bin, _ := debugExecutable()
+	socket := debugProbeKittySocket
+	if socket == "" {
+		socket = kitty.NormalizeListenAddress(debugGetenv("KITTY_LISTEN_ON"), debugGetenv("KITTY_PID"))
+	}
 	report := debugger.Probe(debugProbeClient(), debugger.ProbeOptions{
-		WindowID: windowID, RuntimeSessionID: runtimeSession, Harness: selector.Harness, TraceID: selector.TraceID, RequestID: selector.RequestID, AMXBin: bin,
+		WindowID: windowID, KittyListenOn: socket, RuntimeSessionID: runtimeSession, Harness: selector.Harness, TraceID: selector.TraceID, RequestID: selector.RequestID, AMXBin: bin,
 	})
 	if debugProbeJSON {
 		if err := writeIndentedJSON(cmd.OutOrStdout(), report); err != nil {

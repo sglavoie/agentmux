@@ -63,13 +63,28 @@ func liveConversations(request func(protocol.Request) (protocol.Response, error)
 	// Who claims each conversation: the portable sessions, and whether any
 	// Kitty window does.
 	type claim struct {
-		identity conversation.Identity
-		sessions []string
-		kitty    bool
+		identity     conversation.Identity
+		sessions     []string
+		kitty        bool
+		foreignKitty bool
 	}
 	claims := map[string]*claim{}
 	needKitty := false
+	localSocket := kitty.NormalizedListenAddressFromEnv()
+	localStates := make(map[int]protocol.WindowStateSnapshot, len(response.States))
 	for slot, state := range response.States {
+		foreignKitty := false
+		if key, mapped := response.KittySlots[slot]; mapped {
+			// Kitty numbers have meaning only inside the instance the caller
+			// can list. An unnamed caller cannot prove an aliased pane local.
+			if localSocket == "" || key.Socket != localSocket {
+				foreignKitty = true
+			} else {
+				localStates[key.WindowID] = state
+			}
+		} else {
+			localStates[slot] = state
+		}
 		if state.Conversation == nil {
 			continue
 		}
@@ -84,6 +99,8 @@ func liveConversations(request func(protocol.Request) (protocol.Response, error)
 		}
 		if bound, ok := portable(slot); ok {
 			c.sessions = append(c.sessions, bound.RuntimeSessionID)
+		} else if foreignKitty {
+			c.foreignKitty = true
 		} else {
 			c.kitty, needKitty = true, true
 		}
@@ -97,8 +114,11 @@ func liveConversations(request func(protocol.Request) (protocol.Response, error)
 	live := map[string]liveConversation{}
 	for key, c := range claims {
 		switch {
+		case c.foreignKitty:
+			// A conversation also open in another Kitty instance cannot be
+			// declared unique from this instance's listing.
 		case c.kitty && len(c.sessions) == 0:
-			running, status := session.ResolveLiveConversationStatus(c.identity, response.States, windows)
+			running, status := session.ResolveLiveConversationStatus(c.identity, localStates, windows)
 			if status == session.LiveConversationExact {
 				live[key] = liveConversation{WindowID: running.WindowID, TabID: running.TabID}
 			}

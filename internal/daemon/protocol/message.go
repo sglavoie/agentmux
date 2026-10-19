@@ -296,6 +296,11 @@ type RuntimeSlot struct {
 	Backend          string `json:"backend"`
 }
 
+type KittySlot struct {
+	Socket   string `json:"socket"`
+	WindowID int    `json:"window_id"`
+}
+
 type Response struct {
 	OverviewCompact *bool `json:"overview_compact,omitempty"`
 	// OverviewCompactExplicit reports whether OverviewCompact was set by an
@@ -320,6 +325,9 @@ type Response struct {
 	// runtime-session ID instead of by a Kitty window ID. Omitted when no slot
 	// is bound, which is also the shape older daemons answer with.
 	RuntimeSlots map[int]RuntimeSlot `json:"runtime_slots,omitempty"`
+	// KittySlots identifies a Kitty reducer slot by both its instance socket
+	// and the window number local to that instance. Older daemons omit it.
+	KittySlots map[int]KittySlot `json:"kitty_slots,omitempty"`
 	// Fields populated for TypeSessionDetail:
 	Events []SessionEvent `json:"events,omitempty"` // per-window hook event ring buffer (oldest first)
 	// Fields populated for TypeEventsExport. Mutually exclusive with Events:

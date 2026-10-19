@@ -49,8 +49,8 @@ var (
 	daemonExportNow = time.Now
 )
 
-func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, running []session.RunningSession, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
-	liveByID := debug.ExportLiveMetadata(osWindows, snapshot, requestedWindowID)
+func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, running []session.RunningSession, requestedWindowID int, last int, exportedAt time.Time, listedSocket ...string) protocol.ExportEventsPayload {
+	liveByID := debug.ExportLiveMetadata(osWindows, snapshot, requestedWindowID, listedSocket...)
 	debug.ExportRuntimeLiveMetadata(liveByID, running, snapshot)
 	ids := debug.ExportWindowIDs(snapshot, requestedWindowID)
 	windows := make([]protocol.ExportWindow, 0, len(ids))
@@ -98,6 +98,7 @@ func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health,
 type daemonExportTarget struct {
 	windowID int
 	runtime  string
+	socket   string
 }
 
 // runtimeSessionExporter is the part of the daemon client that exports by
@@ -132,7 +133,11 @@ func daemonExportCurrentTarget() (daemonExportTarget, error) {
 	if err != nil || id <= 0 {
 		return daemonExportTarget{}, fmt.Errorf("--current-window requires a valid KITTY_WINDOW_ID, got %q", s)
 	}
-	return daemonExportTarget{windowID: id}, nil
+	socket := kitty.NormalizedListenAddressFromEnv()
+	if socket == "" {
+		return daemonExportTarget{}, fmt.Errorf("--current-window requires a reusable KITTY_LISTEN_ON to identify its Kitty instance")
+	}
+	return daemonExportTarget{windowID: id, socket: socket}, nil
 }
 
 func resolveDaemonExportTarget(cmd *cobra.Command) (daemonExportTarget, error) {
@@ -161,6 +166,24 @@ func resolveDaemonExportTarget(cmd *cobra.Command) (daemonExportTarget, error) {
 // the daemon holds for the runtime session.
 func exportDaemonEvents(c cli.DaemonExportClient, target daemonExportTarget) (protocol.EventsExport, int, error) {
 	if target.runtime == "" {
+		if target.socket != "" {
+			exporter, ok := c.(interface {
+				ExportKittyWindowEvents(windowID int, socket string) (protocol.EventsExport, error)
+			})
+			if !ok {
+				return protocol.EventsExport{}, 0, fmt.Errorf("this daemon client cannot export by Kitty socket")
+			}
+			snapshot, err := exporter.ExportKittyWindowEvents(target.windowID, target.socket)
+			if err != nil {
+				return protocol.EventsExport{}, 0, err
+			}
+			for slot, key := range snapshot.KittySlots {
+				if key.Socket == target.socket && key.WindowID == target.windowID {
+					return snapshot, slot, nil
+				}
+			}
+			return protocol.EventsExport{}, 0, fmt.Errorf("daemon did not identify Kitty window %d on %s", target.windowID, target.socket)
+		}
 		snapshot, err := c.ExportEvents(target.windowID)
 		return snapshot, target.windowID, err
 	}
@@ -193,7 +216,9 @@ own slot for it, not a Kitty window.
 
 --current-window selects the session the command is typed in: the runtime
 session named by AMX_RUNTIME_SESSION_ID when there is one, else the Kitty
-window named by KITTY_WINDOW_ID. --runtime-session selects one by ID. Use --schema 12 for the pre-screen-decline
+window named by KITTY_WINDOW_ID and its reusable KITTY_LISTEN_ON socket.
+--window selects a daemon slot shown by an unrestricted export; --runtime-session
+selects one by ID. Use --schema 12 for the pre-screen-decline
 shape, --schema 11 for the pre-busy-anchor shape, --schema 10 for the pre-stop-hold shape, --schema 9 for the previous
 complete causal shape, or --schema 8 for pre-causal consumers.`,
 	Example: `  amx daemon export-events
@@ -255,7 +280,7 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 			}
 		}
 
-		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, running, requestedWindowID, daemonExportEventsLast, daemonExportNow())
+		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, running, requestedWindowID, daemonExportEventsLast, daemonExportNow(), target.socket)
 		projected, err := protocol.ProjectExportEventsPayload(payload, daemonExportEventsSchema)
 		if err != nil {
 			return err

@@ -146,6 +146,7 @@ type Handler struct {
 	afterDeferredStopClaimForTest func(windowID int, seq uint64)
 
 	kittySockets      map[int]string
+	kittyRestored     map[int]bool
 	lastKittyListenOn string
 	// kittyRestorePending is set by a daemon that started with no Kitty to
 	// read and cleared by the maintenance tick that restores from the first
@@ -215,9 +216,9 @@ type Handler struct {
 	runtimeCheckpointWritten bool
 	// otherKittyTrees holds the latest window tree of each Kitty instance
 	// other than the listed one that still has windows in the store, keyed by
-	// socket. pruneForeignWindows reads them and the companion projects other
-	// instances' sessions from them. Guarded by stateMu; a stored tree is never
-	// mutated, only replaced.
+	// socket. The companion, Git probe, and focus observations use each tree
+	// only for slots from that socket. Guarded by stateMu; a stored tree is
+	// never mutated, only replaced.
 	otherKittyTrees map[string][]kitty.OSWindow
 
 	// focusClient performs focus_window's list-verify-focus sequence. It is
@@ -461,6 +462,7 @@ func NewHandler(guard *activity.StateGuard, notifier *notification.Notifier) *Ha
 		renderQueue:                    rendering.NewQueue(),
 		processInspector:               probes.NewPSHarnessProcessInspector(),
 		kittySockets:                   make(map[int]string),
+		kittyRestored:                  make(map[int]bool),
 		claudeContextLimitProbeEnabled: true,
 		stopConfirmDelay:               defaultStopConfirmDelay,
 		stopConfirmTimeout:             defaultStopConfirmTimeout,

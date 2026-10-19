@@ -134,6 +134,55 @@ func TestProject_V2RuntimeBlockNeedsTheSameKittyInstance(t *testing.T) {
 	}
 }
 
+func TestProject_CollidingKittyWindowNumbersKeepIndependentState(t *testing.T) {
+	const otherSlot = 1 << 32
+	in := Input{
+		Kitty: tree(sockA, kitty.Tab{ID: 10, Title: "W:api", Windows: []kitty.Window{managed(7, "work", "claude")}}),
+		Others: map[string][]kitty.OSWindow{
+			sockB: tree(sockB, kitty.Tab{ID: 20, Title: "W:docs", Windows: []kitty.Window{managed(7, "work", "codex")}}).Windows,
+		},
+		States: map[int]protocol.WindowStateSnapshot{
+			7:         {IconState: "bolt"},
+			otherSlot: {IconState: "key"},
+		},
+		Sockets: map[int]string{7: sockA, otherSlot: sockB},
+		KittySlots: map[KittyWindowKey]int{
+			{Socket: sockA, WindowID: 7}: 7,
+			{Socket: sockB, WindowID: 7}: otherSlot,
+		},
+		Runtime: map[int]RuntimeSlot{
+			7:         {SessionID: kittyRS, Backend: "kitty", Instance: sockA, Pane: "7"},
+			otherSlot: {SessionID: tmuxRS, Backend: "kitty", Instance: sockB, Pane: "7"},
+		},
+		SnapshotVersion: protocol.CompanionSnapshotVersionRuntime,
+	}
+	snap := Project(in)
+	if len(snap.Sessions) != 2 {
+		t.Fatalf("sessions = %+v, want both Kitty instances", snap.Sessions)
+	}
+	a := sessionByWindow(t, snap, sockA, 7)
+	b := sessionByWindow(t, snap, sockB, 7)
+	if a.IconState != "bolt" || b.IconState != "key" ||
+		a.Runtime == nil || a.Runtime.SessionID != kittyRS ||
+		b.Runtime == nil || b.Runtime.SessionID != tmuxRS {
+		t.Fatalf("colliding states or runtime identities crossed: A=%+v B=%+v", a, b)
+	}
+}
+
+func TestProject_NewKittyInstanceDoesNotBorrowAnotherInstancesASLRun(t *testing.T) {
+	in := mixedInput(protocol.CompanionSnapshotVersionRuntime)
+	in.Kitty = tree(sockB, kitty.Tab{ID: 20, Title: "W:docs", Windows: []kitty.Window{managed(7, "work", "codex")}})
+	in.KittySlots = map[KittyWindowKey]int{{Socket: sockA, WindowID: 7}: 7}
+	in.ASLTargets = []asl.SupervisorTarget{
+		{WindowID: 7, Candidate: agentloop.Candidate{RunID: "run-a"}},
+		{WindowID: 0, Candidate: agentloop.Candidate{RunID: "run-unbound"}},
+	}
+	session := sessionByWindow(t, Project(in), sockB, 7)
+	if session.ASLRunID != "" || session.IconState != "" || session.Runtime != nil {
+		t.Fatalf("new Kitty instance borrowed window 7 from %s: %+v", sockA, session)
+	}
+}
+
 func contains(list []string, s string) bool {
 	for _, v := range list {
 		if v == s {

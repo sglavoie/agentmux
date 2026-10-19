@@ -48,21 +48,22 @@ const (
 // ticker driving runScreenProbes). The flag is cleared by an
 // "active"-class event re-entering the window (S3) or when the window closes.
 func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
-	if h.kittyClient == nil {
+	client, socket := h.kittyListTarget()
+	if client == nil {
 		return
 	}
 	if !h.claudeContextLimitProbeEnabled {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := h.kittyClient.ListWindows()
+	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
+	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("claude context-limit probe: list windows failed", "err", err)
 		return
 	}
-	h.probeClaudeContextLimitWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
-		h.screenTextCacheFor())
-	h.renderSnapshot(windows)
+	h.probeClaudeContextLimitWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
+		h.screenTextCacheForSocket(socket))
+	h.renderSnapshotFor(windows, socket)
 }
 
 func (h *Handler) probeClaudeContextLimitWithSnapshot(
@@ -98,7 +99,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,
 ) {
-	targetWindowID := binding.TargetWindowID
+	targetWindowID := binding.TargetSlot()
 	h.stateMu.Lock()
 	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
 		return claudeContextLimitProbeCanOverwrite(icon)
@@ -171,7 +172,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	}
 	before, effective, account := h.recordClaudeContextLimitProbeStateLocked(
 		now, targetWindowID, baseTitle, currentIconState, profile, userVars, binding.LegacyDirectManaged,
-		binding.SourceWindowID,
+		binding.SourceSlot(),
 	)
 	h.stateMu.Unlock()
 

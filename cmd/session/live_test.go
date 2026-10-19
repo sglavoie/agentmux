@@ -57,6 +57,29 @@ func TestLiveConversationsFollowContinuesRule(t *testing.T) {
 	}
 }
 
+func TestLiveConversationsKeepCollidingKittyInstancesSeparate(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-b")
+	first := conversation.Identity{Harness: "claude", SessionID: "first"}
+	second := conversation.Identity{Harness: "claude", SessionID: "second"}
+	const alias = 1 << 32
+	respond := func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{OK: true,
+			States:       map[int]protocol.WindowStateSnapshot{7: {Conversation: &first}, alias: {Conversation: &second}, 1 << 40: {Conversation: &first}},
+			RuntimeSlots: map[int]protocol.RuntimeSlot{1 << 40: {RuntimeSessionID: "rs-first", Backend: "tmux"}},
+			KittySlots: map[int]protocol.KittySlot{
+				7: {Socket: "unix:/kitty-a", WindowID: 7}, alias: {Socket: "unix:/kitty-b", WindowID: 7},
+			},
+		}, nil
+	}
+	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 10, Title: "W:second", Windows: []kitty.Window{{
+		ID: 7, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+	}}}}}}
+	live, known := liveConversations(respond, &sessionCommandKitty{windows: windows})
+	if !known || len(live) != 1 || live["claude:second"] != (liveConversation{WindowID: 7, TabID: 10}) {
+		t.Fatalf("colliding live conversations = %+v, known=%t", live, known)
+	}
+}
+
 // The LIVE column appears only when the lookup answered, so a table drawn
 // without a daemon does not claim that nothing is open.
 func TestSessionTableMarksLiveConversations(t *testing.T) {

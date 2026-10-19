@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/process"
@@ -177,8 +178,8 @@ func (c *Client) SendWithAutoStartObserved(req protocol.Request, amxBin string, 
 // ExportEvents returns the per-window hook-event ring buffers plus durable
 // metadata from the running daemon. When windowID is non-zero, the daemon
 // filters the snapshot to that single window; otherwise every exported window
-// is returned. Existing TypeSessionDetail callers build the request inline and
-// call Send directly (see tui/model_modes.go); ExportEvents is the typed helper
+// is returned. Session-detail callers build the request through the dashboard
+// command helper and call Send directly; ExportEvents is the typed helper
 // for the richer CLI export so the command does not have to know about the
 // message-type constant or response-shape details.
 func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
@@ -193,6 +194,30 @@ func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
 		EventsByWindow: resp.EventsByWindow,
 		WindowMetadata: resp.WindowMetadata,
 		RuntimeSlots:   resp.RuntimeSlots,
+		KittySlots:     resp.KittySlots,
+	}, nil
+}
+
+// ExportKittyWindowEvents resolves a Kitty window by its socket and raw number
+// before exporting. A bare number can refer to a different Kitty instance.
+func (c *Client) ExportKittyWindowEvents(windowID int, socket string) (protocol.EventsExport, error) {
+	if windowID <= 0 || strings.TrimSpace(socket) == "" {
+		return protocol.EventsExport{}, fmt.Errorf("kitty export requires a window ID and socket")
+	}
+	resp, err := c.sendWithDeadline(protocol.Request{
+		Type: protocol.TypeEventsExport, WindowID: windowID, KittyListenOn: socket,
+	}, exportDeadline)
+	if err != nil {
+		return protocol.EventsExport{}, err
+	}
+	if !resp.OK {
+		return protocol.EventsExport{}, fmt.Errorf("daemon error: %s", resp.Error)
+	}
+	return protocol.EventsExport{
+		EventsByWindow: resp.EventsByWindow,
+		WindowMetadata: resp.WindowMetadata,
+		RuntimeSlots:   resp.RuntimeSlots,
+		KittySlots:     resp.KittySlots,
 	}, nil
 }
 
@@ -212,6 +237,7 @@ func (c *Client) ExportRuntimeSessionEvents(runtimeSessionID string) (protocol.E
 		EventsByWindow: resp.EventsByWindow,
 		WindowMetadata: resp.WindowMetadata,
 		RuntimeSlots:   resp.RuntimeSlots,
+		KittySlots:     resp.KittySlots,
 	}, nil
 }
 

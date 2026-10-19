@@ -22,12 +22,15 @@ import (
 // owns outright; Project neither retains nor mutates any of it.
 type Input struct {
 	Daemon protocol.CompanionDaemon
-	// States is the daemon's per-window visible state, keyed by bare window ID,
-	// exactly as the state query publishes it.
+	// States is the daemon's visible state keyed by its reducer slot.
 	States map[int]protocol.WindowStateSnapshot
-	// Sockets records the Kitty socket each window's hooks named, keyed by the
-	// same bare window ID. It is what attributes a state to an instance.
+	// Sockets records the Kitty socket each window's hooks named, keyed by
+	// reducer slot. It attributes state to an instance.
 	Sockets map[int]string
+	// KittySlots maps a Kitty instance's real window ID to its distinct daemon
+	// state slot. It is empty for older single-instance state, where the slot
+	// and the real window ID are the same.
+	KittySlots map[KittyWindowKey]int
 	// Kitty is the daemon's cached window tree and the socket it was read
 	// through. A cold tree (Ready false) contributes no sessions.
 	Kitty KittyTree
@@ -59,6 +62,44 @@ type Input struct {
 	// never published, so it cannot make two projections of the same world
 	// differ except across a quiet-hours boundary.
 	Now time.Time
+}
+
+// KittyWindowKey is the identity Kitty itself uses: a window number within
+// one remote-control endpoint. The same number may exist in another instance.
+type KittyWindowKey struct {
+	Socket   string
+	WindowID int
+}
+
+// A negative slot cannot be assigned by the daemon. Slot zero can carry
+// unbound ASL bookkeeping, so it is not a safe sentinel here.
+const unknownKittySlot = -1
+
+func kittySlot(in Input, socket string, windowID int) int {
+	if slot := in.KittySlots[KittyWindowKey{Socket: socket, WindowID: windowID}]; slot > 0 {
+		return slot
+	}
+	// A freshly observed instance may appear in the cached tree before a hook
+	// has assigned it a slot. Its bare window number must not borrow the
+	// first instance's ASL run or state while the mapping catches up.
+	for key := range in.KittySlots {
+		if key.WindowID == windowID && key.Socket != socket {
+			return unknownKittySlot
+		}
+	}
+	if owner := in.Sockets[windowID]; owner != "" && owner != socket {
+		return unknownKittySlot
+	}
+	return windowID
+}
+
+func kittyWindowID(in Input, socket string, slot int) int {
+	for key, mapped := range in.KittySlots {
+		if mapped == slot && key.Socket == socket {
+			return key.WindowID
+		}
+	}
+	return slot
 }
 
 // RuntimeSlot is the runtime session holding one slot and its target.
@@ -278,12 +319,13 @@ func treeSessions(in Input, runs map[int]string) []candidate {
 				if socket == "" {
 					socket = in.Sockets[win.ID]
 				}
-				s := windowSession(osw, tab, parts, win, socket, runs)
-				if st, ok := in.States[win.ID]; ok && sameInstance(in.Sockets[win.ID], in.Kitty.Socket) {
+				slot := kittySlot(in, socket, win.ID)
+				s := windowSession(osw, tab, parts, win, socket, slot, runs)
+				if st, ok := in.States[slot]; ok && sameInstance(in.Sockets[slot], in.Kitty.Socket) {
 					applyState(&s, st)
 				}
 				if in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime {
-					s.Runtime = kittyRuntime(in.Runtime, win.ID, in.Kitty.Socket)
+					s.Runtime = kittyRuntime(in.Runtime, slot, in.Kitty.Socket)
 				}
 				s.Attention = protocol.AttentionStates[s.IconState] || tab.NeedsAttention
 				out = append(out, candidate{session: s, order: len(out), entry: orderEntry(vars.EffectiveProfile(), tab.Title)})
@@ -295,7 +337,7 @@ func treeSessions(in Input, runs map[int]string) []candidate {
 
 // windowSession is the session one tree window shows before any daemon state
 // is laid over it.
-func windowSession(osw kitty.OSWindow, tab kitty.Tab, parts palette.TitleParts, win kitty.Window, socket string, runs map[int]string) protocol.CompanionSession {
+func windowSession(osw kitty.OSWindow, tab kitty.Tab, parts palette.TitleParts, win kitty.Window, socket string, slot int, runs map[int]string) protocol.CompanionSession {
 	vars := win.UserVars
 	return protocol.CompanionSession{
 		WindowID:    win.ID,
@@ -310,7 +352,7 @@ func windowSession(osw kitty.OSWindow, tab kitty.Tab, parts palette.TitleParts, 
 		Muted:       parts.Muted || vars.Mute != "",
 		Locked:      parts.Locked || vars.Locked,
 		Looping:     parts.Looping,
-		ASLRunID:    identifier(runs[win.ID]),
+		ASLRunID:    identifier(runs[slot]),
 	}
 }
 
@@ -339,31 +381,33 @@ func foreignSessions(in Input, runs map[int]string, base int) []candidate {
 		return ids[i] < ids[j]
 	})
 	out := make([]candidate, 0, len(ids))
-	for _, id := range ids {
-		socket := identifier(in.Sockets[id])
+	for _, slot := range ids {
+		storedSocket := in.Sockets[slot]
+		socket := identifier(storedSocket)
 		if socket == "" {
 			// An over-long socket cannot be named, and a session no client can
 			// address is not worth listing.
 			continue
 		}
+		windowID := kittyWindowID(in, storedSocket, slot)
 		s := protocol.CompanionSession{
-			WindowID:    id,
+			WindowID:    windowID,
 			KittySocket: socket,
-			ASLRunID:    identifier(runs[id]),
+			ASLRunID:    identifier(runs[slot]),
 		}
 		needsAttention := false
 		var entry session.OrderEntry
-		if osw, tab, win, ok := kitty.FindWindowLocationByID(in.Others[in.Sockets[id]], id); ok {
-			s = windowSession(*osw, *tab, palette.ParseTitleParts(tab.Title), *win, in.Sockets[id], runs)
+		if osw, tab, win, ok := kitty.FindWindowLocationByID(in.Others[storedSocket], windowID); ok {
+			s = windowSession(*osw, *tab, palette.ParseTitleParts(tab.Title), *win, storedSocket, slot, runs)
 			needsAttention = tab.NeedsAttention
 			entry = orderEntry(win.UserVars.EffectiveProfile(), tab.Title)
 		}
-		applyState(&s, in.States[id])
+		applyState(&s, in.States[slot])
 		if s.Harness == "" && s.Conversation != nil {
 			s.Harness = display(s.Conversation.Harness)
 		}
 		if in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime {
-			s.Runtime = kittyRuntime(in.Runtime, id, in.Sockets[id])
+			s.Runtime = kittyRuntime(in.Runtime, slot, storedSocket)
 		}
 		s.Attention = protocol.AttentionStates[s.IconState] || needsAttention
 		out = append(out, candidate{session: s, order: base + len(out), entry: entry})

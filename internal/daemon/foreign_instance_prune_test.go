@@ -9,10 +9,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -23,6 +25,7 @@ type perSocketRunner struct {
 	answers map[string][]byte
 	failing map[string]bool
 	lists   map[string]int
+	writes  map[string][][]string
 }
 
 func (r *perSocketRunner) Run(_ string, args ...string) ([]byte, []byte, error) {
@@ -36,6 +39,20 @@ func (r *perSocketRunner) Run(_ string, args ...string) ([]byte, []byte, error) 
 	defer r.mu.Unlock()
 	if r.lists == nil {
 		r.lists = map[string]int{}
+	}
+	command := ""
+	for _, arg := range args {
+		if arg == "ls" || arg == "set-user-vars" || arg == "set-tab-title" {
+			command = arg
+			break
+		}
+	}
+	if command != "ls" {
+		if r.writes == nil {
+			r.writes = make(map[string][][]string)
+		}
+		r.writes[socket] = append(r.writes[socket], append([]string(nil), args...))
+		return nil, nil, nil
 	}
 	r.lists[socket]++
 	if r.failing[socket] {
@@ -93,6 +110,85 @@ func TestListingOfOneInstanceKeepsAnotherInstancesWindows(t *testing.T) {
 	}
 	if storeHas(h, 8) {
 		t.Fatal("window 8 of the listed instance survived a listing that no longer reports it")
+	}
+}
+
+func TestCollidingWindowNumbersPruneOnlyTheClosedInstance(t *testing.T) {
+	h, listed, foreign := twoInstanceHandler(t, &perSocketRunner{})
+	h.stateMu.Lock()
+	// The fixture's foreign window claimed bare 7 first; the listed
+	// instance therefore receives the alias for its own window 7.
+	alias := h.kittySlotLocked(listed, 7)
+	h.ensureWindowStateLocked(alias)
+	h.rememberKittySocketLocked(alias, listed)
+	h.stateMu.Unlock()
+	if alias == 7 {
+		t.Fatal("colliding window reused the same reducer slot")
+	}
+	h.pruneClosedWindowsFor(time.Now(), map[int]bool{7: true}, listed)
+	if !storeHas(h, alias) || !storeHas(h, 7) {
+		t.Fatalf("listing %s closed a live slot or foreign slot", listed)
+	}
+	h.pruneClosedWindowsFor(time.Now(), map[int]bool{}, listed)
+	if storeHas(h, alias) || !storeHas(h, 7) {
+		t.Fatalf("listing %s failed to retire its own slot or closed %s", listed, foreign)
+	}
+}
+
+func TestCollidingWindowRendererWritesTheOwningKitty(t *testing.T) {
+	runner := &perSocketRunner{answers: map[string][]byte{}}
+	h, listed, foreign := twoInstanceHandler(t, runner)
+	h.useKittyClient(kitty.NewClientWithSocket(runner, ""))
+	runner.answers[listed] = mustMarshalWindows(t, fakeOSWindowsWithTab(7, "W:listed"))
+	runner.answers[foreign] = mustMarshalWindows(t, fakeOSWindowsWithTab(7, "W:foreign"))
+	h.stateMu.Lock()
+	alias := h.kittySlotLocked(listed, 7)
+	st := h.ensureWindowStateLocked(alias)
+	st.DesiredIcon = "stop"
+	st.Dirty = true
+	st.Seq = 1
+	h.rememberKittySocketLocked(alias, listed)
+	h.stateMu.Unlock()
+	h.renderQueuedWindow(alias, fakeOSWindowsWithTab(7, "W:foreign"), foreign)
+	runner.mu.Lock()
+	writesToListed := append([][]string(nil), runner.writes[listed]...)
+	writesToForeign := append([][]string(nil), runner.writes[foreign]...)
+	runner.mu.Unlock()
+	if len(writesToListed) == 0 || len(writesToForeign) != 0 {
+		t.Fatalf("renderer writes to listed=%d foreign=%d; want only listed", len(writesToListed), len(writesToForeign))
+	}
+	if got := writesToListed[0]; !slices.Contains(got, "--match=id:7") {
+		t.Fatalf("renderer match = %v; want real Kitty window 7", got)
+	}
+}
+
+func TestForeignKittyRestoreKeepsSameNumberSeparate(t *testing.T) {
+	h := newTestHandler()
+	const first, second = "unix:/kitty-first", "unix:/kitty-second"
+	h.stateMu.Lock()
+	firstSlot := h.kittySlotLocked(first, 7)
+	h.ensureWindowStateLocked(firstSlot).DesiredIcon = "bolt"
+	h.rememberKittySocketLocked(firstSlot, first)
+	h.stateMu.Unlock()
+	seed := newTestHandler()
+	requireAccepted(t, seed.Handle(legacyHook(t, 7, second, "UserPromptSubmit", hookevent.HookPayload{SessionID: "restored"})))
+	seed.stateMu.Lock()
+	payload, err := seed.store[7].MarshalUserVar()
+	seed.stateMu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 2, Title: "W:second", Windows: []kitty.Window{{
+		ID: 7, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXState: payload},
+	}}}}}}
+	h.restoreFromUserVarsFor(windows, time.Now(), second)
+	h.stateMu.Lock()
+	secondSlot := h.runtimeRoutes.kittySlotOf(second, 7)
+	firstIcon := h.store[firstSlot].DesiredIcon
+	secondIcon := h.store[secondSlot].DesiredIcon
+	h.stateMu.Unlock()
+	if secondSlot == firstSlot || firstIcon != "bolt" || secondIcon != "bolt" {
+		t.Fatalf("restored colliding slots first=%d/%s second=%d/%s", firstSlot, firstIcon, secondSlot, secondIcon)
 	}
 }
 

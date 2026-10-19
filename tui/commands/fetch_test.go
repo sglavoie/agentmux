@@ -15,6 +15,26 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
+func TestDecodeDaemonStateMapsOnlyTheSnapshotKittyInstance(t *testing.T) {
+	resp := protocol.Response{
+		KittySnapshot: &protocol.KittySnapshot{Socket: "unix:/kitty-b"},
+		KittySlots: map[int]protocol.KittySlot{
+			7:          {Socket: "unix:/kitty-a", WindowID: 7},
+			4294967296: {Socket: "unix:/kitty-b", WindowID: 7},
+		},
+		States: map[int]protocol.WindowStateSnapshot{
+			7:          {IconState: "bolt"},
+			4294967296: {IconState: "stop"},
+		},
+		Activity: map[int]int64{7: 10, 4294967296: 20},
+	}
+	got := decodeDaemonState(resp)
+	if len(got.States) != 1 || got.States[7].IconState != "stop" ||
+		len(got.Activity) != 1 || got.Activity[7].Unix() != 20 {
+		t.Fatalf("projected second Kitty state = %+v", got)
+	}
+}
+
 // recordingKittyClient is a KittyClient that answers ListWindows from a fixed
 // tree and records the calls a refresh made, so a test can assert not only what
 // a refresh produced but what it touched. Every method a refresh does not use

@@ -290,9 +290,11 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	// a `kitten @ ls` that cannot find one says nothing about its health.
 	var kittyErr error
 	lister := newDoctorKitty()
-	kittyNamed := strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON")) != ""
+	listedSocket := strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON"))
+	kittyNamed := listedSocket != ""
 	if !kittyNamed && health.KittySnapshot != nil && kitty.IsReusableListenAddress(health.KittySnapshot.Socket) {
 		lister, kittyNamed = newDoctorKittyAt(health.KittySnapshot.Socket), true
+		listedSocket = health.KittySnapshot.Socket
 	}
 	windows, kittyErr = lister.ListWindows()
 	if kittyErr != nil && !kittyNamed && report.Backend.LaunchBackend != config.LaunchBackendTmux {
@@ -364,7 +366,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 
 	var liveByID map[int]protocol.WindowLiveMetadata
 	if kittyOK {
-		liveByID = ExportLiveMetadata(windows, snapshot, 0)
+		liveByID = ExportLiveMetadata(windows, snapshot, 0, listedSocket)
 	}
 	if err := writeDoctorRenderer(textOut, snapshot, liveByID, kittyOK, inUse || kittyOK, reportIssue("renderer_drift")); err != nil {
 		return err

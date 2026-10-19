@@ -64,19 +64,25 @@ func runtimeLoopTarget(origin protocol.HookOrigin, windows []kitty.OSWindow, pay
 // aslHookTargets resolves where one ASL hook lands. A managed hook has exactly
 // one target, its runtime session's slot; a legacy hook keeps the workspace
 // fan-out over managed Kitty title owners.
-func aslHookTargets(req protocol.Request, windows []kitty.OSWindow, payload hookevent.HookPayload) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
+func (h *Handler) aslHookTargets(req protocol.Request, windows []kitty.OSWindow, payload hookevent.HookPayload) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
 	if origin, managed := managedHookOrigin(req); managed {
 		_, openTargets := loopLifecycleWindowTargets(windows)
 		return []loopLifecycleTarget{runtimeLoopTarget(origin, windows, payload)}, openTargets
 	}
-	return loopLifecycleTargets(windows, payload)
+	target := loopPayloadWorkspaceTarget(payload)
+	if target.WindowID > 0 && req.KittyListenOn != "" {
+		h.stateMu.Lock()
+		target.WindowID = h.runtimeRoutes.kittySlotOf(req.KittyListenOn, target.WindowID)
+		h.stateMu.Unlock()
+	}
+	return loopLifecycleTargets(windows, target)
 }
 
 // aslHookOriginWindow names the pane a hook's facts originate from. A managed
-// hook originates from its own slot: a payload window ID is Kitty's, and for a
-// session on another backend it can only be an inherited leftover.
+// hook originates from its own slot; a Kitty payload ID is local to its socket
+// and may also belong to another instance with the same window number.
 func aslHookOriginWindow(req protocol.Request, payload hookevent.HookPayload) int {
-	if origin, managed := managedHookOrigin(req); managed && origin.Backend != string(runtimesession.BackendKitty) {
+	if origin, managed := managedHookOrigin(req); managed {
 		return origin.Slot
 	}
 	if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {

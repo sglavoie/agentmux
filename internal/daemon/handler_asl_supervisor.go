@@ -155,7 +155,7 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 	if !ok {
 		return
 	}
-	targets, _ := aslHookTargets(baseReq, windows, payload)
+	targets, _ := h.aslHookTargets(baseReq, windows, payload)
 	for _, routeTarget := range targets {
 		targetCtx := h.loopTargetContextFor(routeTarget)
 		profile := targetCtx.profile

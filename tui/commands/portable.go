@@ -537,13 +537,20 @@ func ReadScrollback(client kitty.KittyClient, windowID int) (string, error) {
 }
 
 // SessionDetailRequest is the event-log request for the session a window ID
-// names. A portable session is named to the daemon by its runtime session.
-func SessionDetailRequest(windowID int) protocol.Request {
+// names. A portable session is named by runtime session; a Kitty window needs
+// its socket as well as its number. Without that socket, the detail pane
+// reports an error instead of showing another instance's events.
+func SessionDetailRequest(windowID int) (protocol.Request, error) {
 	req := protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID}
 	if rs, ok := PortableSession(windowID); ok {
 		req.WindowID, req.RuntimeSessionID = 0, string(rs.RuntimeSessionID)
+		return req, nil
 	}
-	return req
+	req.KittyListenOn = LocalKittySocket()
+	if req.KittyListenOn == "" {
+		return protocol.Request{}, fmt.Errorf("kitty socket unavailable; cannot identify this window's event history")
+	}
+	return req, nil
 }
 
 // UtilityDoneMsg reports that a utility view run in this terminal ended.

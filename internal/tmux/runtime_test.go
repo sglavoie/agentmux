@@ -11,6 +11,13 @@ import (
 	"testing"
 )
 
+func TestTmuxUnexpectedServerExitIsReportedAsAbsent(t *testing.T) {
+	err := &CommandError{Stderr: "server exited unexpectedly"}
+	if !errors.Is(err, ErrServerNotRunning) {
+		t.Fatalf("tmux exited while accepting a client: %v, want ErrServerNotRunning", err)
+	}
+}
+
 // fakeBundle writes a bundled runtime: an executable, its VERSION, and
 // checksums over both the executable and a license file.
 func fakeBundle(t *testing.T, version, body string) string {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
@@ -57,6 +58,34 @@ func unseenTree(windowID int, focused bool) []kitty.OSWindow {
 			}},
 		}},
 	}}
+}
+
+func TestForeignKittyFocusClearsOnlyItsCollidingSlot(t *testing.T) {
+	h := newTestHandler()
+	const first, second = "unix:/kitty-first", "unix:/kitty-second"
+	h.stateMu.Lock()
+	firstSlot := h.kittySlotLocked(first, 7)
+	secondSlot := h.kittySlotLocked(second, 7)
+	h.rememberKittySocketLocked(firstSlot, first)
+	h.rememberKittySocketLocked(secondSlot, second)
+	h.stateMu.Unlock()
+	seedUnseen(h, firstSlot, true, false)
+	seedUnseen(h, secondSlot, true, false)
+	h.publishSnapshotFrom(probes.Publication{
+		Windows: unseenTree(7, false), Socket: first, CapturedAt: time.Now(),
+	})
+	h.setOtherKittyTrees(map[string][]kitty.OSWindow{second: unseenTree(7, true)}, nil)
+
+	if !unseen(t, h, firstSlot) || unseen(t, h, secondSlot) {
+		t.Fatalf("focus cleared wrong slot: first=%v second=%v", unseen(t, h, firstSlot), unseen(t, h, secondSlot))
+	}
+	h.stateMu.Lock()
+	firstFocused := h.windowFocusedFromSnapshotLocked(firstSlot)
+	secondFocused := h.windowFocusedFromSnapshotLocked(secondSlot)
+	h.stateMu.Unlock()
+	if firstFocused || !secondFocused {
+		t.Fatalf("focus checks crossed instances: first=%v second=%v", firstFocused, secondFocused)
+	}
 }
 
 // TestUnseenPublishTransitionTable walks every publish transition that can reach

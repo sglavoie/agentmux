@@ -229,7 +229,7 @@ func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
 	if ctx.req.PipeMode && ctx.win != nil &&
 		ctx.win.UserVars.EffectiveProfile() == "" && ctx.win.UserVars.EffectiveHarness() == "" &&
 		!events.IsAgentSessionLoopEvent(eventOrAction) &&
-		!h.hasExactActiveLoopCandidate(ctx.req.WindowID) {
+		!h.hasExactActiveLoopCandidate(ctx.req.WindowID, ctx.req.KittyListenOn) {
 		normalized := events.NormalizedFromHookRequest(eventOrAction, ctx.req, ctx.req.WindowID)
 		ctx.req.Normalized = &normalized
 		h.suppressUnmanagedPipeSource(ctx, eventOrAction, action)
@@ -485,6 +485,16 @@ func (h *Handler) ownerlessSourceHasClearableState(windowID int, liveIcon string
 }
 
 func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext {
+	return h.resolveHookEventContextWithSlots(req, true)
+}
+
+// A diagnostic probe inspects routing without claiming Kitty slots. Hooks
+// reserve managed title owners so a sibling source cannot take their number.
+func (h *Handler) resolveHookEventContextReadOnly(req protocol.Request) hookEventContext {
+	return h.resolveHookEventContextWithSlots(req, false)
+}
+
+func (h *Handler) resolveHookEventContextWithSlots(req protocol.Request, reserveOwners bool) hookEventContext {
 	producerProvided := strings.TrimSpace(req.Harness) != ""
 	req.Harness = harness.NormalizeKnown(req.Harness)
 	// With no managed snapshot target, a stamped producer is also the best
@@ -508,13 +518,14 @@ func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext
 	// yet — the daemon started degraded and has not reconciled) is treated like
 	// an unreadable tab so a user_clear falls back to the source pane rather
 	// than silently dropping.
-	windows, _, ready := h.cachedSnapshot()
-	if !ready {
+	view := h.snapshots.View()
+	if !view.Ready() || (isReusableKittySocket(req.KittyListenOn) && req.KittyListenOn != view.Socket()) {
 		slog.Debug("hook event snapshot cache cold; routing from request only", "window_id", ctx.req.WindowID)
 		ctx.lookupFailed = true
 		ctx.req.RouteEvidence.LookupOutcome = events.RouteLookupSnapshotUnavailable
 		return ctx
 	}
+	windows := h.slotMappedKittyWindows(view.Windows(), view.Socket(), reserveOwners)
 	ctx.req.RouteEvidence.SnapshotReady = true
 	ctx.windows = windows
 	tab, win, found := kitty.FindTabByWindowID(windows, ctx.req.WindowID)
@@ -561,6 +572,37 @@ func (h *Handler) resolveHookEventContext(req protocol.Request) hookEventContext
 	// The path that updates the source window records it via setMutedFromSnapshot.
 	ctx.muted = parts.Muted || win.UserVars.Mute != ""
 	return ctx
+}
+
+// slotMappedKittyWindows gives hook routing daemon slot IDs while retaining
+// the snapshot's title, focus, and user variables. The published tree remains
+// immutable and keeps Kitty's real numbers for remote-control operations.
+func (h *Handler) slotMappedKittyWindows(windows []kitty.OSWindow, socket string, reserveOwners bool) []kitty.OSWindow {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if len(h.runtimeRoutes.kittyByKey) == 0 || socket == "" {
+		return windows
+	}
+	copyWindows := make([]kitty.OSWindow, len(windows))
+	for i, osWindow := range windows {
+		copyWindows[i] = osWindow
+		copyWindows[i].Tabs = make([]kitty.Tab, len(osWindow.Tabs))
+		for j, tab := range osWindow.Tabs {
+			copyWindows[i].Tabs[j] = tab
+			copyWindows[i].Tabs[j].Windows = make([]kitty.Window, len(tab.Windows))
+			for k, win := range tab.Windows {
+				copyWindows[i].Tabs[j].Windows[k] = win
+				if reserveOwners && (win.UserVars.EffectiveProfile() != "" || win.UserVars.EffectiveHarness() != "") {
+					// A routed hook can reach this title owner before it sends any
+					// hook of its own. Reserve its socket-scoped slot now.
+					copyWindows[i].Tabs[j].Windows[k].ID = h.kittySlotLocked(socket, win.ID)
+				} else {
+					copyWindows[i].Tabs[j].Windows[k].ID = h.runtimeRoutes.kittySlotOf(socket, win.ID)
+				}
+			}
+		}
+	}
+	return copyWindows
 }
 
 func shouldResolveUnmanagedHookRoute(eventOrAction string, ctx hookEventContext) bool {

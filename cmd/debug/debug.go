@@ -106,6 +106,7 @@ var debugTailJSON bool
 var debugTailFollow bool
 var debugTailLimit int
 var debugProbeJSON bool
+var debugProbeKittySocket string
 var debugExplainJSON bool
 var debugExplainLast int
 var debugExplainGraphDepth int
@@ -176,6 +177,7 @@ func init() {
 	debugTailCmd.Flags().BoolVarP(&debugTailFollow, "follow", "f", false, "continue following new persisted records")
 	debugTailCmd.Flags().IntVarP(&debugTailLimit, "last", "n", 50, "show the last N matching records (0 means all)")
 	debugProbeCmd.Flags().BoolVar(&debugProbeJSON, "json", false, "write schema-versioned JSON")
+	debugProbeCmd.Flags().StringVar(&debugProbeKittySocket, "kitty-socket", "", "Kitty socket for --window (defaults to KITTY_LISTEN_ON)")
 	addDebugRuntimeSessionFlag(debugProbeCmd)
 	debugExplainCmd.Flags().BoolVar(&debugExplainJSON, "json", false, "write the complete schema-versioned evidence graph as JSON")
 	debugExplainCmd.Flags().IntVarP(&debugExplainLast, "last", "n", 10, "explain the last N matching causal histories")

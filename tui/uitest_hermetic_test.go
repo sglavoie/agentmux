@@ -87,7 +87,10 @@ func TestUITestDriverTickUsesDeterministicDaemonAndDiscoveryDependencies(t *test
 func TestUITestDriverActionDaemonFailsFast(t *testing.T) {
 	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
-	if err := d.drain(d.model.clearStatusCmd(makeSessions()[0])); err != nil {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-test")
+	row := makeSessions()[0]
+	row.WindowID = 42
+	if err := d.drain(d.model.clearStatusCmd(row)); err != nil {
 		t.Fatalf("clear status command: %v", err)
 	}
 	if err := d.Err(); err == nil || !strings.Contains(err.Error(), "live daemon access is disabled") {

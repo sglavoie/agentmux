@@ -1,117 +1,6 @@
 import AppKit
 import os
 
-/// One terminal the workspace embeds: the view, and how to let go of it.
-/// Closing only detaches; the session lives on in its backend.
-struct WorkspaceTerminal {
-    let view: NSView
-    let close: () -> Void
-    /// Whether closing it now would end a program that should be asked
-    /// about first (`ghostty_surface_needs_confirm_quit`).
-    var needsConfirm: () -> Bool = { false }
-    /// The font size it shows now, zoom included; nil when unknown.
-    var fontSize: () -> Float? = { nil }
-}
-
-/// Why a terminal could not be shown.
-struct WorkspaceTerminalProblem: Error, Equatable {
-    let message: String
-}
-
-/// What the workspace asks of the app.
-@MainActor
-protocol WorkspaceDelegate: AnyObject {
-    /// The live sessions and the feed that delivers them.
-    var store: SessionStore { get }
-    /// A terminal attached to a runtime session, at `fontSize` points when
-    /// one is given, else the app configuration's.
-    func makeTerminal(runtimeSessionID: String, fontSize: Float?) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem>
-    /// A terminal running a utility view: never an attachment, never a
-    /// session.
-    func makeUtilityTerminal(_ view: WorkspaceUtilityView) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem>
-    /// Focuses a session that is a window of another app and brings that app
-    /// forward.
-    func focusExternally(_ row: WorkspaceRow)
-    /// The window was shown or closed.
-    func workspaceVisibilityChanged(_ visible: Bool)
-    /// The pane moved to another session or view, or to none.
-    func workspacePlaceChanged(_ place: WorkspaceRestoration.Place?)
-    /// The conversation of the session the pane is on became known, changed,
-    /// or the pane left that session.
-    func workspaceConversationChanged(_ conversation: ConversationIdentity?)
-    /// The sidebar was hidden or shown.
-    func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
-    /// The open window entered or left full screen.
-    func workspaceFullScreenChanged(_ fullScreen: Bool)
-    /// The inspector was hidden or shown, or turned to another tab.
-    func workspaceInspectorChanged(collapsed: Bool, tab: WorkspaceInspectorTab)
-    /// The sidebar or the inspector was given another width. Each is nil
-    /// while it is hidden: hiding one keeps the width it had.
-    func workspaceLayoutChanged(sidebarWidth: CGFloat?, inspectorWidth: CGFloat?)
-    /// Does what one of the inspector's buttons asks for the session the
-    /// pane is on.
-    func workspaceInspectorAction(_ action: WorkspaceInspectorAction)
-    /// Mutes a listed session, or unmutes it: the right-click menu's Mute,
-    /// for a line that may not be the one the pane is on.
-    func workspaceToggleMute(_ row: WorkspaceRow)
-    /// Answer… on a waiting session of the inspector: opens the panel that
-    /// answers it. The pane stays where it is.
-    func workspaceAnswer(_ answer: WorkspaceWaitingAnswer)
-    /// A project's sessions were dragged into another order.
-    func workspaceOrderChanged(_ order: WorkspaceOrder)
-    /// Asks whether a session's agent is running and whether a terminal is
-    /// attached to it. It only asks: nothing is attached and nothing started.
-    /// The answer arrives on the main actor, possibly before this returns.
-    func sessionStatus(runtimeSessionID: String, completion: @escaping @MainActor (WorkspaceSessionStatus) -> Void)
-    /// Ends a session's agent and the tmux session that holds it. The answer
-    /// is nil once it is closed, or why it could not be, and arrives on the
-    /// main actor, possibly before this returns.
-    func closeSession(runtimeSessionID: String, completion: @escaping @MainActor (String?) -> Void)
-    /// Gives a session a name, or with an empty one removes the name it has.
-    /// The answer is nil once it is written, or why it could not be, and
-    /// arrives on the main actor, possibly before this returns.
-    func nameSession(runtimeSessionID: String, name: String, completion: @escaping @MainActor (String?) -> Void)
-    /// Runs `amx daemon start`, because the operator asked for it from the
-    /// pane or the sidebar. It starts no agent.
-    func workspaceStartDaemon()
-    /// Runs `amx daemon restart`, because the operator asked for it from the
-    /// pane or the sidebar while the daemon is too old for the app. It ends
-    /// no agent.
-    func workspaceRestartDaemon()
-    /// A program in one of the workspace's terminals asked for a desktop
-    /// notification (OSC 9 or 777). `onScreen` is set when the terminal it
-    /// came from is in the pane of the key window.
-    func workspaceTerminalNotification(_ notice: TerminalNotice, onScreen: Bool)
-    /// The pane shows the terminal of a session or view: it moved there, or
-    /// the window became key on it. Its terminal notices are now read.
-    func workspaceShowing(_ origin: TerminalNotice.Origin)
-    var workspaceCommands: [WorkspaceSwitcher.Entry] { get }
-    var workspaceLaunchDescription: String { get }
-    var workspaceProjectGuidance: String { get }
-    func workspaceLaunchProjects(from view: NSView)
-    func workspacePerform(_ command: WorkspaceCommand)
-    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void)
-}
-
-extension WorkspaceDelegate {
-    var workspaceCommands: [WorkspaceSwitcher.Entry] { [] }
-    var workspaceLaunchDescription: String { "Launch in Workspace (tmux)" }
-    var workspaceProjectGuidance: String { "Choose a configured project to start, or return to a past conversation." }
-    func workspaceLaunchProjects(from view: NSView) {}
-    func workspacePerform(_ command: WorkspaceCommand) {}
-    func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (SecretText) -> Void) {
-        completion(SecretText("Context is unavailable."))
-    }
-}
-
-extension WorkspaceDelegate where Self: AppDelegate {
-    /// The app restarts the daemon from the workspace as it does from the
-    /// menu bar's Restart Daemon, which is the same command and notices.
-    func workspaceRestartDaemon() {
-        perform(.restartDaemon)
-    }
-}
-
 /// The workspace window: a native sidebar of the live sessions, grouped by
 /// project, beside the terminal of the selected one.
 ///
@@ -174,55 +63,25 @@ extension WorkspaceDelegate where Self: AppDelegate {
 final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     private nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "workspace")
 
-    /// One line of the sidebar.
-    enum Item: Equatable {
-        /// The heading over the utility views.
-        case section(String)
-        case view(WorkspaceUtilityView)
-        case group(WorkspaceGroup)
-        case row(WorkspaceRow)
-
-        /// Whether `other` is the same line showing something else: the
-        /// same heading, view, project, or session, as tall as before. A
-        /// session given or relieved of a name takes another height.
-        func isSameLine(as other: Item) -> Bool {
-            switch (self, other) {
-            case let (.section(a), .section(b)): return a == b
-            case let (.view(a), .view(b)): return a.id == b.id
-            case let (.group(a), .group(b)):
-                return a.project == b.project && a.pinned == b.pinned && a.needsAttention == b.needsAttention
-            case let (.row(a), .row(b)): return a.key == b.key && a.name.isEmpty == b.name.isEmpty
-            default: return false
-            }
-        }
-    }
+    typealias Item = WorkspaceSidebarItem
 
     /// The lines of `new` that show something other than they did in
     /// `old`, when the two are the same lines in the same order; nil when
     /// they are not and the whole list is to be loaded again.
     static func changedLines(from old: [Item], to new: [Item]) -> IndexSet? {
-        guard old.count == new.count, zip(old, new).allSatisfy({ $0.isSameLine(as: $1) }) else { return nil }
-        return IndexSet(old.indices.filter { old[$0] != new[$0] })
+        Item.changedLines(from: old, to: new)
     }
 
     /// Retain physical targets during an interaction, refreshing their live
     /// values in place. New and reordered rows appear when the interaction ends.
     static func holdingSidebar(_ old: [Item], latest: [Item]) -> [Item] {
-        old.map { previous in latest.first { previous.isSameLine(as: $0) } ?? previous }
+        Item.holding(old, latest: latest)
     }
 
     /// Hover holds attention reordering, but must not hide newly opened
     /// sessions or views for as long as the pointer rests in the sidebar.
     static func hasNewSidebarTargets(_ latest: [Item], comparedTo old: [Item]) -> Bool {
-        latest.contains { item in
-            switch item {
-            case let .row(row):
-                return !old.contains { if case let .row(previous) = $0 { return previous.key == row.key }; return false }
-            case let .view(view):
-                return !old.contains { if case let .view(previous) = $0 { return previous.id == view.id }; return false }
-            case .section, .group: return false
-            }
-        }
+        Item.hasNewTargets(latest, comparedTo: old)
     }
 
     /// The heading the utility views are listed under.
@@ -231,37 +90,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// show it is forgotten.
     static let awaitLimit: TimeInterval = 60
 
-    /// What the pane beside the sidebar shows.
-    enum Content: Equatable {
-        /// Nothing is selected.
-        case empty
-        case review
-        case terminal(runtimeSessionID: String)
-        /// The selected session is a Kitty window.
-        case external(AttentionCycler.Key)
-        /// The selected session's terminal ended while its session is still
-        /// listed: it was attached elsewhere, or detached with F12.
-        case detached(runtimeSessionID: String)
-        case unavailable(runtimeSessionID: String, String)
-        /// The session's terminal reported that its renderer failed: it
-        /// draws nothing new until it is made again.
-        case rendererFailed(runtimeSessionID: String)
-        /// The session is being closed: its agent was asked to end.
-        case closing(runtimeSessionID: String)
-        /// The session the workspace is coming back to is not known to be
-        /// running yet: the daemon has not said, or amx is being asked.
-        case restoring(runtimeSessionID: String)
-        /// The session the pane was on is no longer running. The status says
-        /// whether its agent exited or was lost; nil while that is asked.
-        case gone(runtimeSessionID: String, WorkspaceSessionStatus?)
-        /// A utility view's terminal.
-        case view(id: String)
-        /// The Dashboard or the Overview after its program exited.
-        case viewEnded(id: String)
-        case viewUnavailable(id: String, String)
-        /// A utility view's terminal reported that its renderer failed.
-        case viewRendererFailed(id: String)
-    }
+    typealias Content = WorkspacePaneContent
 
     /// Something the pane can be on: a session or a utility view.
     private enum Place: Equatable {
@@ -286,7 +115,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     let sidebar = WorkspaceSidebarView()
     /// Hides the sidebar and brings it back, from the title bar, so that
     /// neither the sidebar nor the pane gives up anything to it.
-    let sidebarToggle = WorkspaceWindowController.makeSidebarToggle()
+    let sidebarToggle = WorkspaceWindowChrome.makeSidebarToggle()
     /// What the delegate was last told, so it hears of each change once.
     private var reportedCollapsed = false
     private var reportedShowing: TerminalNotice.Origin?
@@ -296,7 +125,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private var sidebarObservation: NSKeyValueObservation?
     let inspector = WorkspaceInspectorView()
     /// Hides the inspector and brings it back, from the title bar.
-    let inspectorToggle = WorkspaceWindowController.makeInspectorToggle()
+    let inspectorToggle = WorkspaceWindowChrome.makeInspectorToggle()
     /// The tab the inspector is turned to; the app keeps it across launches.
     private(set) var inspectorTab = WorkspaceInspectorTab.waiting
     private var reportedInspectorCollapsed = true
@@ -2592,24 +2421,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     private var otherExplanation: String {
-        switch otherContent {
-        case let .unavailable(_, reason), let .viewUnavailable(_, reason): return reason
-        case .detached: return "Detached. Focus this pane to reconnect explicitly."
-        case .rendererFailed, .viewRendererFailed: return "The terminal stopped drawing. Focus this pane for recovery options."
-        case .gone: return "This session is no longer running."
-        case .closing: return "Ending the session…"
-        case .viewEnded: return "This program closed. Focus this pane to reopen it."
-        default: return "Focus this pane to see its available actions."
-        }
+        otherContent.otherPaneExplanation
     }
 
     private var otherShowing: TerminalNotice.Origin? {
         guard isOpen, isSplit else { return nil }
-        switch otherContent {
-        case let .terminal(id): return .session(runtimeSessionID: id)
-        case let .view(id): return .view(id: id)
-        default: return nil
-        }
+        return otherContent.terminalNoticeOrigin
     }
 
     private func installPaneClickMonitor() {
@@ -3144,40 +2961,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// among the sessions of its project and a terminal among the ones
     /// beside its session; no other line moves.
     func dropSlots(forItemAt index: Int) -> [Int] {
-        guard items.indices.contains(index) else { return [] }
-        switch items[index] {
-        case .section, .group:
-            return []
-        case let .row(row):
-            // Attention is a temporary position, not a saved drag order.
-            guard !row.needsAttention else { return [] }
-            guard let group = items[..<index].lastIndex(where: { if case .group = $0 { return true } else { return false } })
-            else { return [] }
-            let end = items[(group + 1)...].firstIndex { item in
-                switch item {
-                case .section, .group: return true
-                case .view, .row: return false
-                }
-            } ?? items.count
-            return (group + 1 ..< end).filter { if case .row = items[$0] { return true } else { return false } } + [end]
-        case let .view(view):
-            guard view.besideRuntimeSessionID != nil,
-                  let session = items[..<index].lastIndex(where: { if case .view = $0 { return false } else { return true } }),
-                  case let .row(row) = items[session], row.embeddedRuntimeSessionID == view.besideRuntimeSessionID
-            else { return [] }
-            let end = items[(session + 1)...].firstIndex { if case .view = $0 { return false } else { return true } } ?? items.count
-            return Array(session + 1 ... end)
-        }
+        Item.dropSlots(forItemAt: index, in: items)
     }
 
     /// The slot a line dragged from `index` takes when it is let go over
     /// `proposed`: the first one at or below it. Nil outside the line's
     /// project or session, and where it would land back where it is.
     func dropSlot(forItemAt index: Int, proposed: Int) -> Int? {
-        let slots = dropSlots(forItemAt: index)
-        guard let first = slots.first, proposed >= first, let slot = slots.first(where: { $0 >= proposed }) else { return nil }
-        let after = slots.first { $0 > index }
-        return slot == index || slot == after ? nil : slot
+        Item.dropSlot(forItemAt: index, proposed: proposed, in: items)
     }
 
     /// Moves the line at `index` to above the line at `proposed`; false when
@@ -3332,43 +3123,6 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         window.makeFirstResponder(nil)
     }
 
-    private static func makeSidebarToggle() -> NSButton {
-        makeTitlebarToggle(symbol: "sidebar.left", title: "Toggle Sidebar", shortcut: "⌘B")
-    }
-
-    private static func makeInspectorToggle() -> NSButton {
-        makeTitlebarToggle(symbol: "sidebar.right", title: "Toggle Inspector", shortcut: "⌘⇧B")
-    }
-
-    private static func makeTitlebarToggle(symbol: String, title: String, shortcut: String) -> NSButton {
-        let button = NSButton(title: "", target: nil, action: nil)
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular))
-        button.imagePosition = .imageOnly
-        button.isBordered = false
-        button.contentTintColor = .secondaryLabelColor
-        button.refusesFirstResponder = true
-        button.toolTip = "\(title) (\(shortcut))"
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
-    }
-
-    /// A title bar accessory holding one of the toggles.
-    private static func titlebarAccessory(_ toggle: NSButton, at edge: NSLayoutConstraint.Attribute) -> NSTitlebarAccessoryViewController {
-        let holder = NSView(frame: NSRect(x: 0, y: 0, width: 32, height: 28))
-        holder.addSubview(toggle)
-        NSLayoutConstraint.activate([
-            toggle.centerXAnchor.constraint(equalTo: holder.centerXAnchor),
-            toggle.centerYAnchor.constraint(equalTo: holder.centerYAnchor),
-            toggle.widthAnchor.constraint(equalToConstant: 24),
-            toggle.heightAnchor.constraint(equalToConstant: 22),
-        ])
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.view = holder
-        accessory.layoutAttribute = edge
-        return accessory
-    }
-
     // MARK: Widths
 
     static let sidebarWidths: ClosedRange<CGFloat> = 180...420
@@ -3503,14 +3257,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static let minimumSize = NSSize(width: 640, height: 360)
 
     private func makeWindow() -> NSWindow {
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("session"))
-        column.resizingMask = .autoresizingMask
-        sidebar.addTableColumn(column)
-        sidebar.headerView = nil
-        sidebar.style = .sourceList
-        sidebar.floatsGroupRows = false
-        sidebar.allowsEmptySelection = true
-        sidebar.allowsMultipleSelection = false
+        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, feedLabel: feedLabel, feedButton: feedButton)
         sidebar.dataSource = self
         sidebar.delegate = self
         sidebar.target = self
@@ -3530,104 +3277,21 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         context.autoenablesItems = false
         context.delegate = self
         sidebar.menu = context
-        sidebar.setAccessibilityLabel("Sessions")
-
-        let scroll = NSScrollView()
-        scroll.documentView = sidebar
-        scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-
-        feedLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        feedLabel.textColor = .secondaryLabelColor
-        // Two lines, then an ellipsis; the whole notice is its tooltip.
-        feedLabel.usesSingleLineMode = false
-        feedLabel.cell?.wraps = true
-        feedLabel.maximumNumberOfLines = 2
-        feedLabel.lineBreakMode = .byWordWrapping
-        feedLabel.cell?.truncatesLastVisibleLine = true
-        feedLabel.isHidden = true
-        feedLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        feedButton.bezelStyle = .rounded
-        feedButton.controlSize = .small
-        feedButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         feedButton.target = self
         feedButton.action = #selector(daemonButtonPressed(_:))
-        feedButton.isHidden = true
-        feedButton.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [scroll, feedLabel, feedButton])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
-        stack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 6, right: 0)
-        let sidebarController = NSViewController()
-        sidebarController.view = stack
-        NSLayoutConstraint.activate([
-            scroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            feedLabel.leadingAnchor.constraint(equalTo: stack.leadingAnchor, constant: 10),
-            // As wide as the sidebar, so a long notice wraps there.
-            feedLabel.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: -10),
-            feedButton.leadingAnchor.constraint(equalTo: stack.leadingAnchor, constant: 10),
-        ])
-
-        placeholder.frame = pane.bounds
-        placeholder.autoresizingMask = [.width, .height]
-        pane.addSubview(placeholder)
-        // Above every terminal, below the Go to… list; never takes a click.
-        linkLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        linkLabel.textColor = .secondaryLabelColor
-        linkLabel.drawsBackground = true
-        linkLabel.backgroundColor = .windowBackgroundColor
-        linkLabel.lineBreakMode = .byTruncatingMiddle
-        linkLabel.wantsLayer = true
-        linkLabel.layer?.cornerRadius = 4
-        linkLabel.isHidden = true
-        linkLabel.refusesFirstResponder = true
-        linkLabel.translatesAutoresizingMaskIntoConstraints = false
-        pane.addSubview(linkLabel)
-        // The scrollbar and the find bar: above every terminal, below the
-        // Go to… list, shown only over a utility view.
-        scrollbarView.translatesAutoresizingMaskIntoConstraints = false
         scrollbarView.onScroll = { [weak self] row in self?.scrollbarMoved(toRow: row) }
-        pane.addSubview(scrollbarView)
-        NSLayoutConstraint.activate([
-            scrollbarView.topAnchor.constraint(equalTo: pane.topAnchor),
-            scrollbarView.bottomAnchor.constraint(equalTo: pane.bottomAnchor),
-            scrollbarView.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
-            scrollbarView.widthAnchor.constraint(equalToConstant: WorkspaceScrollbarView.width),
-        ])
-        findBar.isHidden = true
         findBar.onNeedle = { [weak self] needle in self?.findBarNeedleChanged(needle) }
         findBar.onNext = { [weak self] in self?.findBarNavigate(next: true) }
         findBar.onPrevious = { [weak self] in self?.findBarNavigate(next: false) }
         findBar.onClose = { [weak self] in self?.closeFindBar() }
-        pane.addSubview(findBar)
-        NSLayoutConstraint.activate([
-            findBar.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
-            findBar.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -8 - WorkspaceScrollbarView.width),
-            findBar.leadingAnchor.constraint(greaterThanOrEqualTo: pane.leadingAnchor, constant: 8),
-        ])
-        NSLayoutConstraint.activate([
-            linkLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 6),
-            linkLabel.bottomAnchor.constraint(equalTo: pane.bottomAnchor, constant: -6),
-            linkLabel.trailingAnchor.constraint(lessThanOrEqualTo: pane.trailingAnchor, constant: -6),
-        ])
-        // Above the placeholder, and so above every terminal.
-        pane.addSubview(switcher)
-        let switcherWidth = switcher.widthAnchor.constraint(equalToConstant: 520)
-        switcherWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            switcher.topAnchor.constraint(equalTo: pane.topAnchor, constant: 48),
-            switcher.centerXAnchor.constraint(equalTo: pane.centerXAnchor),
-            switcher.widthAnchor.constraint(lessThanOrEqualTo: pane.widthAnchor, constant: -32),
-            switcher.bottomAnchor.constraint(lessThanOrEqualTo: pane.bottomAnchor, constant: -16),
-            switcherWidth,
-        ])
         switcher.onChoose = { [weak self] entry in self?.go(to: entry) }
         switcher.onCancel = { [weak self] in self?.closeSwitcher(restoring: true) }
         switcher.onLeave = { [weak self] in self?.closeSwitcher(restoring: false) }
+        WorkspaceWindowChrome.installPaneOverlays(
+            in: pane, placeholder: placeholder, linkLabel: linkLabel,
+            scrollbar: scrollbarView, findBar: findBar, switcher: switcher
+        )
         let paneController = NSViewController()
         otherPlaceholder.frame = otherPane.bounds
         otherPlaceholder.autoresizingMask = [.width, .height]
@@ -3716,10 +3380,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
         sidebarToggle.target = self
         sidebarToggle.action = #selector(toggleSidebar(_:))
-        window.addTitlebarAccessoryViewController(Self.titlebarAccessory(sidebarToggle, at: .leading))
+        window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(sidebarToggle, at: .leading))
         inspectorToggle.target = self
         inspectorToggle.action = #selector(toggleInspector(_:))
-        window.addTitlebarAccessoryViewController(Self.titlebarAccessory(inspectorToggle, at: .trailing))
+        window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(inspectorToggle, at: .trailing))
         return window
     }
 }
@@ -3770,627 +3434,9 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
     }
 }
 
-/// The session list. It keeps the keys a list needs — the arrows, Return
-/// to go into the selected row, and ← and → to collapse and expand its
-/// project — and nothing typed here reaches a program.
-@MainActor
-final class WorkspaceSidebarView: NSTableView {
-    private(set) var pointerInside = false
-    var onPointerChanged: (() -> Void)?
-    private var pointerTracking: NSTrackingArea?
-
-    override func updateTrackingAreas() {
-        if let pointerTracking { removeTrackingArea(pointerTracking) }
-        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil)
-        addTrackingArea(area)
-        pointerTracking = area
-        super.updateTrackingAreas()
-    }
-    override func mouseEntered(with event: NSEvent) {
-        pointerInside = true
-        onPointerChanged?()
-    }
-    override func mouseExited(with event: NSEvent) {
-        pointerInside = false
-        onPointerChanged?()
-    }
-    var onReturn: (() -> Void)?
-    /// ← (true) or → (false).
-    var onCollapse: ((Bool) -> Void)?
-    /// ↑ (-1) or ↓ (1) while no line is selected; false leaves the key to
-    /// the list.
-    var onStep: ((Int) -> Bool)?
-    /// Whether the line at an index has anything for its right-click menu;
-    /// one that has nothing shows no menu rather than an empty one.
-    var hasMenu: ((Int) -> Bool)?
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        let index = row(at: convert(event.locationInWindow, from: nil))
-        guard hasMenu?(index) ?? true else { return nil }
-        return super.menu(for: event)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        let returnKeys: Set<UInt16> = [36, 76]
-        if returnKeys.contains(event.keyCode),
-           event.modifierFlags.isDisjoint(with: [.command, .control, .option]) {
-            onReturn?()
-            return
-        }
-        let arrows: [UInt16: Bool] = [123: true, 124: false]
-        if let collapsed = arrows[event.keyCode],
-           event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]) {
-            onCollapse?(collapsed)
-            return
-        }
-        // With no line selected — the pane's session was collapsed away —
-        // ↑ and ↓ go from that session, not from the top of the list.
-        let steps: [UInt16: Int] = [126: -1, 125: 1]
-        if selectedRow < 0, let offset = steps[event.keyCode],
-           event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]),
-           onStep?(offset) == true {
-            return
-        }
-        super.keyDown(with: event)
-    }
-}
-
-/// A line of the session list, drawn on its session's color when unselected.
-/// Selection contrasts the space around its rounded pill in either theme.
-@MainActor
-class WorkspaceRowView: NSTableRowView {
-    /// The text on a session's color. The daemon publishes colors bright
-    /// enough for it.
-    static let tabText = NSColor.black
-
-    var tabColor: NSColor? {
-        didSet {
-            selectionBorder.color = tabColor ?? .controlAccentColor
-            needsDisplay = true
-            syncCell()
-        }
-    }
-
-    override var isSelected: Bool {
-        didSet {
-            needsDisplay = true
-            needsLayout = true
-            syncCell()
-        }
-    }
-
-    /// Whether the color is what the line shows now.
-    var showsTabColor: Bool { tabColor != nil && !isSelected }
-
-    /// Tells the line's cell what it is drawn on, so its text stays legible.
-    func syncCell() {
-        guard numberOfColumns > 0 else { return }
-        guard let cell = view(atColumn: 0) as? WorkspaceRowCellView else { return }
-        cell.setTabText(showsTabColor ? Self.tabText : nil)
-        cell.setStateGlyphOutsidePill(isSelected && (self as? WorkspaceSessionRowView)?.hasStateGlyph == true)
-    }
-
-    override func drawBackground(in dirtyRect: NSRect) {
-        if isSelected {
-            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            (dark ? NSColor.white : NSColor.black).setFill()
-            bounds.fill()
-
-            NSColor.windowBackgroundColor.setFill()
-            outline().fill()
-            return
-        }
-        guard showsTabColor, let tabColor else {
-            super.drawBackground(in: dirtyRect)
-            return
-        }
-        tabColor.setFill()
-        outline().fill()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        needsDisplay = true
-    }
-
-    /// The selected line keeps its session's color as a border around the
-    /// pill, falling back to the accent color for uncolored rows.
-    /// It is a view over the line so background drawing cannot cover it.
-    let selectionBorder = WorkspaceSelectionBorderView()
-
-    static let selectionBorderWidth: CGFloat = 3
-    /// How far the list's selection is inset from the row's sides, and how
-    /// round its corners are.
-    static let selectionInset: CGFloat = 10
-    static let selectionRadius: CGFloat = 10
-    var pillLeadingInset: CGFloat { Self.selectionInset }
-
-    override func layout() {
-        super.layout()
-        if subviews.last !== selectionBorder {
-            addSubview(selectionBorder, positioned: .above, relativeTo: nil)
-        }
-        selectionBorder.frame = pillRect(verticalInset: 0)
-        selectionBorder.isHidden = !isSelected
-    }
-
-    /// The shape a line's color follows: the selection's, a point shorter so
-    /// two colored lines do not run together.
-    private func outline() -> NSBezierPath {
-        NSBezierPath(roundedRect: pillRect(verticalInset: 1),
-                     xRadius: Self.selectionRadius, yRadius: Self.selectionRadius)
-    }
-
-    private func pillRect(verticalInset: CGFloat) -> NSRect {
-        let left = bounds.minX + pillLeadingInset
-        return NSRect(x: left, y: bounds.minY + verticalInset,
-                      width: max(0, bounds.maxX - Self.selectionInset - left),
-                      height: max(0, bounds.height - 2 * verticalInset))
-    }
-}
-
-/// When selected, a session's state emoji sits on the contrast background to
-/// the left of its pill. The session text and border stay in the pill.
-@MainActor
-final class WorkspaceSessionRowView: WorkspaceRowView {
-    var hasStateGlyph = false {
-        didSet {
-            needsDisplay = true
-            needsLayout = true
-            syncCell()
-        }
-    }
-
-    override var pillLeadingInset: CGFloat { isSelected && hasStateGlyph ? 40 : Self.selectionInset }
-
-    override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
-        get { .none }
-        set { super.selectionHighlightStyle = .none }
-    }
-
-    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
-}
-
-/// An attached terminal uses only the session-colored border for selection.
-/// AppKit reapplies the table's highlight style when focus changes, so keep
-/// the override on this row rather than changing the whole sidebar.
-@MainActor
-final class WorkspaceTerminalRowView: WorkspaceRowView {
-    override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
-        get { .none }
-        set { super.selectionHighlightStyle = .none }
-    }
-
-    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
-}
-
-/// The border of the selected line. It takes no clicks.
-@MainActor
-final class WorkspaceSelectionBorderView: NSView {
-    var color: NSColor = .controlAccentColor {
-        didSet { needsDisplay = true }
-    }
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.borderWidth = WorkspaceRowView.selectionBorderWidth
-        layer?.cornerRadius = WorkspaceRowView.selectionRadius
-        layer?.cornerCurve = .continuous
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) is not supported for this view")
-    }
-
-    override var wantsUpdateLayer: Bool { true }
-
-    /// Runs again when the appearance or the accent color changes.
-    override func updateLayer() {
-        layer?.borderColor = color.cgColor
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-}
-
 /// The hovered link's overlay. It only shows the link: clicks under it go
 /// to the terminal beneath.
 @MainActor
 final class WorkspaceLinkLabel: NSTextField {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
-}
-
-/// The placeholder's button. As the default button it takes Return, but
-/// never from a field being typed in, such as the Go to… list's above it.
-@MainActor
-final class WorkspacePlaceholderButton: NSButton {
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if window?.firstResponder is NSText || window?.firstResponder is WorkspaceInspectorView { return false }
-        return super.performKeyEquivalent(with: event)
-    }
-}
-
-/// What the pane shows when it has no terminal to show: a title, a line of
-/// explanation, and at most one thing to do about it.
-@MainActor
-final class WorkspacePlaceholderView: NSView {
-    let titleLabel = NSTextField(labelWithString: "")
-    let messageLabel = NSTextField(wrappingLabelWithString: "")
-    let button = WorkspacePlaceholderButton(title: "", target: nil, action: nil)
-    private var onPress: (() -> Void)?
-    let secondaryActions = NSStackView()
-    private var secondaryHandlers: [() -> Void] = []
-
-    init() {
-        super.init(frame: .zero)
-        titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
-        messageLabel.textColor = .secondaryLabelColor
-        messageLabel.alignment = .center
-        button.bezelStyle = .rounded
-        button.target = self
-        button.action = #selector(pressed(_:))
-        secondaryActions.orientation = .vertical
-        secondaryActions.spacing = 6
-        let stack = NSStackView(views: [titleLabel, messageLabel, button, secondaryActions])
-        stack.orientation = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            stack.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 20),
-        ])
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) is not supported for this view")
-    }
-
-    /// With `isDefault`, Return presses the button, as it does a sheet's.
-    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = false, secondary: [(String, () -> Void)] = [], onPress: (() -> Void)? = nil) {
-        showSecondaryActions(secondary)
-        titleLabel.stringValue = title
-        messageLabel.stringValue = message
-        button.title = label ?? ""
-        button.isHidden = label == nil
-        button.keyEquivalent = isDefault && label != nil ? "\r" : ""
-        self.onPress = onPress
-    }
-
-    func showSecondaryActions(_ actions: [(String, () -> Void)]) {
-        secondaryHandlers = actions.map { $0.1 }
-        secondaryActions.isHidden = actions.isEmpty
-        if secondaryActions.arrangedSubviews.compactMap({ ($0 as? NSButton)?.title }) == actions.map({ $0.0 }) { return }
-        secondaryActions.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for (index, action) in actions.enumerated() {
-            let button = NSButton(title: action.0, target: self, action: #selector(secondaryPressed(_:)))
-            button.bezelStyle = .rounded
-            button.tag = index
-            secondaryActions.addArrangedSubview(button)
-        }
-    }
-
-    @objc private func secondaryPressed(_ sender: NSButton) {
-        guard secondaryHandlers.indices.contains(sender.tag) else { return }
-        secondaryHandlers[sender.tag]()
-    }
-
-    @objc private func pressed(_ sender: Any?) { onPress?() }
-
-    /// Presses the button, as a click does.
-    func press() { onPress?() }
-}
-
-/// A project's header line: its name, how many of its sessions wait, and
-/// whether it is collapsed. A click on it collapses or expands it, and so
-/// does its accessibility action.
-@MainActor
-final class WorkspaceGroupCellView: NSTableCellView {
-    static let identifier = NSUserInterfaceItemIdentifier("workspace.group")
-    static let collapsedDisclosure = "▸"
-    static let expandedDisclosure = "▾"
-    static let expandAction = "Expand"
-    static let collapseAction = "Collapse"
-    let nameLabel = NSTextField(labelWithString: "")
-    let countLabel = NSTextField(labelWithString: "")
-    /// ▸ while the project is collapsed to this line, ▾ while it is not; a
-    /// heading that is not a project has none.
-    let disclosureLabel = NSTextField(labelWithString: "")
-    /// Collapses or expands the project.
-    var onToggle: (() -> Void)?
-
-    init() {
-        super.init(frame: .zero)
-        identifier = Self.identifier
-        disclosureLabel.textColor = .secondaryLabelColor
-        disclosureLabel.isHidden = true
-        nameLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        nameLabel.textColor = .secondaryLabelColor
-        nameLabel.lineBreakMode = .byTruncatingTail
-        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        countLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
-        countLabel.textColor = .systemOrange
-        // Source-list group rows replace textField's attributed text with
-        // an 11-point heading style. Keep this custom-sized label independent
-        // of that outlet; the cell exposes its own accessibility label below.
-        let stack = NSStackView(views: [nameLabel, NSView(), countLabel, disclosureLabel])
-        stack.orientation = .horizontal
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) is not supported for this view")
-    }
-
-    /// A heading that is not a project: it counts nothing.
-    func show(section title: String) {
-        nameLabel.stringValue = title
-        countLabel.stringValue = ""
-        countLabel.toolTip = nil
-        disclosureLabel.isHidden = true
-        onToggle = nil
-        setAccessibilityLabel(title)
-        setAccessibilityDisclosed(false)
-        setAccessibilityCustomActions(nil)
-    }
-
-    func show(_ group: WorkspaceGroup) {
-        if group.needsAttention {
-            show(section: group.project)
-            countLabel.stringValue = String(group.rows.count)
-            countLabel.toolTip = "\(group.rows.count) waiting on you"
-            setAccessibilityLabel("\(group.project), \(group.rows.count) waiting")
-            return
-        }
-        nameLabel.stringValue = group.project
-        let waiting = group.attention
-        countLabel.stringValue = waiting > 0 ? String(waiting) : ""
-        countLabel.toolTip = waiting > 0 ? "\(waiting) waiting on you" : nil
-        disclosureLabel.isHidden = false
-        disclosureLabel.stringValue = group.collapsed ? Self.collapsedDisclosure : Self.expandedDisclosure
-        disclosureLabel.toolTip = group.collapsed ? "Collapsed: click to expand" : "Click to collapse"
-        disclosureLabel.setAccessibilityLabel(group.collapsed ? "collapsed" : "expanded")
-        var label = waiting > 0 ? "\(group.project), \(waiting) waiting" : group.project
-        label += group.collapsed ? ", collapsed" : ", expanded"
-        setAccessibilityLabel(label)
-        setAccessibilityDisclosed(!group.collapsed)
-        let action = NSAccessibilityCustomAction(name: group.collapsed ? Self.expandAction : Self.collapseAction) { [weak self] in
-            guard let onToggle = self?.onToggle else { return false }
-            onToggle()
-            return true
-        }
-        setAccessibilityCustomActions([action])
-    }
-}
-
-/// A session's line: its state glyph, its profile, and a line of detail,
-/// with a × in the top right corner while the pointer is over a line that can
-/// be closed. A session
-/// that was given a name has it on a line of its own above the profile, and
-/// one of the first ten has the key that goes to it in the bottom right.
-@MainActor
-final class WorkspaceRowCellView: NSTableCellView {
-    static let identifier = NSUserInterfaceItemIdentifier("workspace.row")
-    let glyphLabel = NSTextField(labelWithString: "")
-    let nameLabel = NSTextField(labelWithString: "")
-    let titleLabel = NSTextField(labelWithString: "")
-    let detailLabel = NSTextField(labelWithString: "")
-    let closeButton = NSButton(title: "", target: nil, action: nil)
-    /// `⌘1`: the key that goes to the session, empty when it has none.
-    let keyLabel = NSTextField(labelWithString: "")
-    /// What the × does for the line shown now.
-    var onClose: (() -> Void)?
-    /// Whether the pointer is over the line; the × is drawn only then.
-    var isHovered = false {
-        didSet { closeButton.alphaValue = isHovered ? 1 : 0 }
-    }
-    /// The side of the ×'s target, larger than its glyph.
-    static let closeTarget: CGFloat = 18
-    /// Keep the text clear of the × and the key label, each only while it
-    /// is there: a hidden one leaves the title the whole line.
-    private var clearOfClose: NSLayoutConstraint!
-    private var clearOfKey: NSLayoutConstraint!
-    private let contentStack = NSStackView()
-
-    init() {
-        super.init(frame: .zero)
-        identifier = Self.identifier
-        glyphLabel.alignment = .center
-        nameLabel.font = .systemFont(ofSize: 12, weight: .bold)
-        nameLabel.textColor = Self.nameColor
-        nameLabel.lineBreakMode = .byTruncatingTail
-        nameLabel.isHidden = true
-        titleLabel.lineBreakMode = .byTruncatingTail
-        detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        detailLabel.textColor = .secondaryLabelColor
-        detailLabel.lineBreakMode = .byTruncatingTail
-        textField = titleLabel
-        let text = NSStackView(views: [nameLabel, titleLabel, detailLabel])
-        text.orientation = .vertical
-        text.alignment = .leading
-        text.spacing = 1
-        contentStack.addArrangedSubview(glyphLabel)
-        contentStack.addArrangedSubview(text)
-        contentStack.orientation = .horizontal
-        contentStack.spacing = 6
-        contentStack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(contentStack)
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .bold))
-        closeButton.imagePosition = .imageOnly
-        closeButton.isBordered = false
-        closeButton.contentTintColor = .tertiaryLabelColor
-        closeButton.refusesFirstResponder = true
-        closeButton.target = self
-        closeButton.action = #selector(closePressed(_:))
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(closeButton)
-        keyLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
-        keyLabel.textColor = .tertiaryLabelColor
-        keyLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        keyLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(keyLabel)
-        NSLayoutConstraint.activate([
-            glyphLabel.widthAnchor.constraint(equalToConstant: 20),
-            contentStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            contentStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6),
-            keyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-            keyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            contentStack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 1),
-            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            closeButton.widthAnchor.constraint(equalToConstant: Self.closeTarget),
-            closeButton.heightAnchor.constraint(equalToConstant: Self.closeTarget),
-        ])
-        clearOfClose = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2)
-        clearOfKey = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4)
-        closeButton.alphaValue = 0
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-                                       owner: self, userInfo: nil))
-    }
-
-    @objc private func closePressed(_ sender: Any?) { onClose?() }
-
-    func setStateGlyphOutsidePill(_ outside: Bool) {
-        contentStack.spacing = outside ? 10 : 6
-    }
-
-    /// Whether the title may run under the × or the key label: only where
-    /// that one is not there.
-    var titleClearsClose: Bool { clearOfClose.isActive }
-    var titleClearsKey: Bool { clearOfKey.isActive }
-
-    private func syncTrailingRoom() {
-        clearOfClose.isActive = !closeButton.isHidden
-        clearOfKey.isActive = !keyLabel.stringValue.isEmpty
-    }
-
-    /// Whether the × can be seen now: the line can be closed and the
-    /// pointer is over it.
-    var showsCloseButton: Bool { !closeButton.isHidden && isHovered }
-
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
-
-    override func prepareForReuse() {
-        super.prepareForReuse()
-        isHovered = false
-        setStateGlyphOutsidePill(false)
-    }
-
-    /// After the title of a line whose terminal rang the bell unseen.
-    static let bellGlyph = "🔔"
-
-    /// A session's name on its color: a dark blue, which reads on every
-    /// color the daemon publishes, as black does.
-    static let nameOnTabColor = NSColor(srgbRed: 0, green: 0.16, blue: 0.55, alpha: 1)
-    /// A session's name on the list's own background: the same dark blue in
-    /// a light appearance, and a blue light enough to read in a dark one.
-    static let nameColor = NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            ? NSColor(srgbRed: 0.45, green: 0.68, blue: 1, alpha: 1) : nameOnTabColor
-    }
-
-    /// Draws the text in `color`, for a session's color behind it, or as the
-    /// list draws it when there is none.
-    func setTabText(_ color: NSColor?) {
-        nameLabel.textColor = color == nil ? Self.nameColor : Self.nameOnTabColor
-        glyphLabel.textColor = color ?? .labelColor
-        titleLabel.textColor = color ?? .labelColor
-        detailLabel.textColor = color?.withAlphaComponent(0.8) ?? .secondaryLabelColor
-        closeButton.contentTintColor = color?.withAlphaComponent(0.8) ?? .tertiaryLabelColor
-        keyLabel.textColor = color?.withAlphaComponent(0.8) ?? .tertiaryLabelColor
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) is not supported for this view")
-    }
-
-    /// A utility view's line: what it is and what it is about. It shows no
-    /// session state, because it has none.
-    /// `program` is the title its program set, shown under the view's own;
-    /// `bell` marks a bell rung while another was shown.
-    /// `progress` is what its program last reported of its progress.
-    func show(_ view: WorkspaceUtilityView, session: String? = nil, program: String? = nil, bell: Bool = false,
-              progress: Ghostty.Progress? = nil) {
-        nameLabel.stringValue = ""
-        nameLabel.isHidden = true
-        glyphLabel.stringValue = view.glyph
-        titleLabel.stringValue = bell ? "\(view.title) \(Self.bellGlyph)" : view.title
-        titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        let program = program.flatMap { $0.isEmpty ? nil : $0 }
-        let detail = view.detail(session: session, program: program)
-        let progressText = progress.map(Self.progressText)
-        detailLabel.stringValue = progressText.map { "\($0) · \(detail)" } ?? detail
-        toolTip = view.toolTip(session: session)
-        var spoken = ["\(view.title), \(view.kind.rawValue) view"]
-        if let program { spoken.append(program) }
-        if let progressText { spoken.append(progressText) }
-        if bell { spoken.append("bell") }
-        setAccessibilityLabel(spoken.joined(separator: ", "))
-        keyLabel.stringValue = ""
-        closeButton.isHidden = view.isPermanent
-        closeButton.toolTip = "Close View: \(view.title) — ends its program"
-        closeButton.setAccessibilityLabel("Close View: \(view.title). Ends its program.")
-        syncTrailingRoom()
-    }
-
-    /// Only an embedded session can be closed from here; `closing` is set
-    /// once it was asked to be. `sessionKey` is the digit that goes to the
-    /// session with ⌘, when it has one.
-    func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil, bell: Bool = false) {
-        nameLabel.stringValue = row.name
-        nameLabel.isHidden = row.name.isEmpty
-        glyphLabel.stringValue = row.glyph
-        // A pinned or promoted session names the project it is away from.
-        let place = row.pinned || row.needsAttention ? "\(row.project) — \(row.label)" : row.label
-        let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
-        let muted = row.muted ? "\(label) \(muteGlyph)" : label
-        titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
-        titleLabel.font = .systemFont(ofSize: 12, weight: row.attention ? .semibold : .regular)
-        detailLabel.stringValue = closing ? Self.closingDetail : row.detail
-        toolTip = row.toolTip
-        keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
-        setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))
-        closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
-        closeButton.toolTip = "Detach \(row.displayName); agent keeps running"
-        closeButton.setAccessibilityLabel("Detach \(row.displayName); agent keeps running")
-        syncTrailingRoom()
-    }
-
-    nonisolated static let closingDetail = "ending…"
-
-    /// What a utility view's line says of its program's progress (OSC 9;4).
-    nonisolated static func progressText(_ progress: Ghostty.Progress) -> String {
-        let percent = progress.percent.map { "\($0)%" }
-        switch progress.state {
-        case .normal: return percent ?? "in progress"
-        case .indeterminate: return "in progress"
-        case .paused: return percent.map { "paused at \($0)" } ?? "paused"
-        case .error: return percent.map { "failed at \($0)" } ?? "failed"
-        }
-    }
-
-    /// What VoiceOver says of a session's line: what the line shows, in
-    /// words. A session asked to close is said to be closing instead of its
-    /// detail, as the line shows it.
-    nonisolated static func accessibilityLabel(_ row: WorkspaceRow, closing: Bool = false, sessionKey: String? = nil,
-                                   bell: Bool = false) -> String {
-        var spoken = (row.name.isEmpty ? [] : [row.name]) + [row.project, row.label]
-        if row.pinned { spoken.append("pinned") }
-        if row.muted { spoken.append("muted") }
-        if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
-        if bell { spoken.append("bell") }
-        if closing { spoken.append("ending session") } else if !row.detail.isEmpty { spoken.append(row.detail) }
-        if let sessionKey { spoken.append("Command \(sessionKey)") }
-        return spoken.joined(separator: ", ")
-    }
 }

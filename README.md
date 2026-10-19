@@ -21,12 +21,19 @@ From this checkout:
 
 ```sh
 just install
-amx config edit
+amx config setup
 ```
 
 Installation puts `amx` in `~/.local/bin` and creates a starter configuration
 at `~/.config/agent-mux/config.toml` if none exists. Ensure `~/.local/bin` is on
-your `PATH`. For a minimal Claude setup, use the following configuration,
+your `PATH`. `config setup` asks for the installed agent CLI, its profile home,
+an existing project directory, and a default backend. **Keep** leaves it unset:
+CLI launch commands retain their Kitty default, while the dashboard uses Kitty
+inside Kitty and tmux in other terminals. Choosing Kitty or tmux pins future
+launches to that backend. Setup adds the
+first project without removing starter comments or changing other settings.
+For manual setup, run
+`amx config edit` and use the following minimal Claude configuration,
 replacing the project path with an existing checkout. This uses your usual Claude home;
 install and authenticate the CLI first.
 
@@ -57,9 +64,13 @@ as needed without duplicating TOML table headers.
 ```sh
 amx config validate
 amx config hooks-sync
-amx backend status --check
+amx backend status
 amx
 ```
+
+If launching on tmux, run `amx backend status --check` before `amx`.
+The `--check` flag tests tmux availability, including when your configured
+launch destination is Kitty.
 
 Press `l` to open the launcher, highlight your project, and press `Enter`.
 The launcher shows the destination and effective profile. `Enter` on the live

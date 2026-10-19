@@ -70,18 +70,19 @@ func codexScreenIdleFields(
 // the cleared idle UI because Codex does not emit an immediate hook for idle
 // `/clear`.
 func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
-	if h.kittyClient == nil {
+	client, socket := h.kittyListTarget()
+	if client == nil {
 		return
 	}
-	reducerReceipts := h.captureSnapshotReducerReceipts()
-	windows, err := h.kittyClient.ListWindows()
+	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
+	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("codex prompt probe: list windows failed", "err", err)
 		return
 	}
-	h.probeCodexScreenPromptsWithSnapshot(now, probes.NewSnapshot(windows, reducerReceipts),
-		h.screenTextCacheFor())
-	h.renderSnapshot(windows)
+	h.probeCodexScreenPromptsWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
+		h.screenTextCacheForSocket(socket))
+	h.renderSnapshotFor(windows, socket)
 }
 
 func (h *Handler) probeCodexScreenPromptsWithSnapshot(
@@ -119,7 +120,17 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(
 			if !found {
 				continue
 			}
+			h.stateMu.Lock()
+			slot := h.runtimeRoutes.kittySlotOf(snapshot.Socket(), win.ID)
+			foreign := h.windowOfOtherInstanceLocked(slot, snapshot.Socket())
+			h.stateMu.Unlock()
+			if foreign {
+				continue
+			}
 			binding.LegacyDirectManaged = true
+			binding.SourceStateSlot = slot
+			binding.TargetStateSlot = slot
+			binding.KittySocket = snapshot.Socket()
 			h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), win.UserVars, screens)
 		}
 	}
@@ -172,7 +183,7 @@ func (h *Handler) codexProbeTargetContext(
 	if !h.screenProbeBindingCurrentLocked(binding) {
 		return titleParts, userVars, false
 	}
-	st, ok := h.windowStateLocked(binding.TargetWindowID)
+	st, ok := h.windowStateLocked(binding.TargetSlot())
 	if !ok || st == nil {
 		return titleParts, userVars, true
 	}
@@ -289,7 +300,7 @@ func (h *Handler) applyCodexClearObservation(
 	titleParts palette.TitleParts,
 	userVars kitty.UserVars,
 ) {
-	windowID := binding.TargetWindowID
+	windowID := binding.TargetSlot()
 	targetHarness := harness.NormalizeKnown(userVars.EffectiveHarness())
 	if targetHarness == "" && binding.LegacyDirectManaged {
 		targetHarness = harness.Codex
@@ -396,7 +407,7 @@ func (h *Handler) applyCodexClearObservation(
 	meta.Durable.ActivityAt = now.Unix()
 	h.windowMetadata[windowID] = meta
 	eventRow := events.SessionEventFromRequest(req, req.Action, effective.Icon, titleParts.State)
-	eventRow.OriginWindowID = binding.SourceWindowID
+	eventRow.OriginWindowID = binding.SourceSlot()
 	h.appendEventLocked(windowID, eventRow)
 	h.syncRendererMetadataLocked(windowID)
 	// A real clear must always publish both durable reducer acknowledgement and
@@ -578,7 +589,7 @@ func (h *Handler) probeCodexWindow(
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,
 ) {
-	targetWindowID := binding.TargetWindowID
+	targetWindowID := binding.TargetSlot()
 	// The receipt was captured before the ListWindows call that produced the
 	// cached eligibility evidence. Reject it before beginning the screen read if
 	// any reducer event landed since; the apply path rechecks after the read.
@@ -630,7 +641,7 @@ func (h *Handler) applyCodexPromptObservation(
 	userVars kitty.UserVars,
 	classification activity.CodexPromptClassification,
 ) {
-	windowID := binding.TargetWindowID
+	windowID := binding.TargetSlot()
 	h.stateMu.Lock()
 	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
 		return codexPromptProbeCanOverwrite(icon)
@@ -645,7 +656,7 @@ func (h *Handler) applyCodexPromptObservation(
 	allowed, effectiveAction := h.guard.TryUpdate(windowID, classification.Action, true)
 	if !allowed {
 		h.appendCodexPromptProbeEventLocked(now, windowID, titleParts.Base, titleParts.State, userVars,
-			classification, protocol.IconStatePreserve, true, binding.LegacyDirectManaged, binding.SourceWindowID)
+			classification, protocol.IconStatePreserve, true, binding.LegacyDirectManaged, binding.SourceSlot())
 		h.stateMu.Unlock()
 		return
 	}
@@ -655,7 +666,7 @@ func (h *Handler) applyCodexPromptObservation(
 		iconState = classification.IconState
 	}
 	before, effective := h.recordCodexPromptProbeStateLocked(now, windowID, titleParts.Base, titleParts.State,
-		userVars, classification, binding.LegacyDirectManaged, binding.SourceWindowID)
+		userVars, classification, binding.LegacyDirectManaged, binding.SourceSlot())
 	h.stateMu.Unlock()
 
 	if effective.Icon == iconState && before.Icon != effective.Icon {
@@ -682,7 +693,7 @@ func (h *Handler) retractCodexPromptObservation(now time.Time, binding probes.Bi
 	if !h.screenProbeBindingCurrentLocked(binding) {
 		return
 	}
-	windowID := binding.TargetWindowID
+	windowID := binding.TargetSlot()
 	st, ok := h.windowStateLocked(windowID)
 	if !ok || st.Reducer == nil {
 		return
@@ -719,7 +730,7 @@ func (h *Handler) probeCodexClearWindow(
 	userVars kitty.UserVars,
 	screens *activity.ScreenTextCache,
 ) {
-	targetWindowID := binding.TargetWindowID
+	targetWindowID := binding.TargetSlot()
 	// Bind the stale-stop eligibility from the cached title to its reducer
 	// receipt before either slow read. The apply path rechecks after both.
 	h.stateMu.Lock()

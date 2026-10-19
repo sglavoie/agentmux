@@ -385,11 +385,32 @@ func dashboardSelectionRequest(osWindows []kitty.OSWindow) (tabID int, token str
 // dashboard overlays. The response has already been checked for OK by the
 // client, so a value here is genuine state rather than a refusal.
 func decodeDaemonState(resp protocol.Response) daemonState {
-	state := daemonState{Watchdog: resp.Watchdog, States: resp.States}
+	state := daemonState{Watchdog: make(map[int]protocol.WatchdogState), States: make(map[int]protocol.WindowStateSnapshot)}
+	localSlot := func(slot int) (int, bool) {
+		if key, ok := resp.KittySlots[slot]; ok {
+			if resp.KittySnapshot == nil || key.Socket != resp.KittySnapshot.Socket {
+				return 0, false
+			}
+			return key.WindowID, true
+		}
+		return slot, true // responses from older daemons use bare window IDs
+	}
+	for slot, entry := range resp.States {
+		if id, ok := localSlot(slot); ok {
+			state.States[id] = entry
+		}
+	}
+	for slot, entry := range resp.Watchdog {
+		if id, ok := localSlot(slot); ok {
+			state.Watchdog[id] = entry
+		}
+	}
 	if resp.Activity != nil {
 		state.Activity = make(map[int]time.Time, len(resp.Activity))
-		for id, secs := range resp.Activity {
-			state.Activity[id] = time.Unix(secs, 0)
+		for slot, secs := range resp.Activity {
+			if id, ok := localSlot(slot); ok {
+				state.Activity[id] = time.Unix(secs, 0)
+			}
 		}
 	}
 	return state

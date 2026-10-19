@@ -30,9 +30,14 @@ import (
 // read, or that a stop recovery applies. Binding itself only records and
 // validates that decision.
 type Binding struct {
-	Producer            conversation.Identity
-	SourceWindowID      int
-	TargetWindowID      int
+	Producer       conversation.Identity
+	SourceWindowID int
+	TargetWindowID int
+	// State slots may differ from Kitty's window numbers when two instances
+	// reuse a number. Zero preserves the legacy direct mapping.
+	SourceStateSlot     int
+	TargetStateSlot     int
+	KittySocket         string
 	SourceReceipt       uint64
 	TargetReceipt       uint64
 	SnapshotTabID       int
@@ -51,6 +56,20 @@ type Binding struct {
 	// its screen must be the named pane of that exact instance generation.
 	RuntimeInstance runtimesession.BackendInstance
 	RuntimePane     backend.Ref
+}
+
+func (b Binding) SourceSlot() int {
+	if b.SourceStateSlot > 0 {
+		return b.SourceStateSlot
+	}
+	return b.SourceWindowID
+}
+
+func (b Binding) TargetSlot() int {
+	if b.TargetStateSlot > 0 {
+		return b.TargetStateSlot
+	}
+	return b.TargetWindowID
 }
 
 // OnRuntimeBackend reports a binding whose pane is on a backend other than

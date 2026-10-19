@@ -51,15 +51,33 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 			resp = protocol.Response{OK: false, Error: protocol.OriginReasonTargetConflict}
 			break
 		}
+		if req.WindowID > 0 {
+			h.stateMu.Lock()
+			if isReusableKittySocket(req.KittyListenOn) {
+				req.WindowID = h.kittySlotLocked(req.KittyListenOn, req.WindowID)
+			} else {
+				matches := 0
+				rawWindowID := req.WindowID
+				for key, slot := range h.runtimeRoutes.kittyByKey {
+					if key.windowID == rawWindowID {
+						matches++
+						req.WindowID = slot
+					}
+				}
+				if matches > 1 {
+					h.stateMu.Unlock()
+					resp = protocol.Response{OK: false, Error: protocol.OriginReasonTargetConflict}
+					break
+				}
+			}
+			h.stateMu.Unlock()
+		}
 		resp = h.handleStateUpdate(req)
 	case protocol.TypeStateQuery:
 		resp = h.handleStateQuery()
 	case protocol.TypeOverviewPreferences:
 		resp = h.handleOverviewPreferences(req)
 	case protocol.TypeSessionDetail:
-		if req.RuntimeSessionID != "" {
-			req.WindowID = h.runtimeSessionSlot(req.RuntimeSessionID)
-		}
 		resp = h.handleSessionDetail(req)
 	case protocol.TypeEventsExport:
 		resp = h.handleEventsExport(req)
@@ -256,6 +274,12 @@ func (h *Handler) notificationTarget(windowID int, account string) notification.
 	}
 	h.stateMu.Lock()
 	target.KittyListenOn = h.kittySockets[windowID]
+	if key, mapped := h.runtimeRoutes.kittyWindow(windowID); mapped {
+		target.WindowID = key.windowID
+		if target.KittyListenOn == "" {
+			target.KittyListenOn = key.socket
+		}
+	}
 	if binding, bound := h.runtimeRoutes.binding(windowID); bound {
 		target.RuntimeSessionID = binding.runtime
 		target.Backend = binding.target.backend

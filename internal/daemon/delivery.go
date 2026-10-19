@@ -113,8 +113,19 @@ func (h *Handler) attachHookDeliveryAcknowledgement(req protocol.Request, resp p
 	} else if ctx.lookupFailed {
 		ack.RouteDecision = events.RouteDecisionSourceFallback
 	}
+	ack.SourceWindowID = h.deliveryKittyWindowID(ack.SourceWindowID)
+	ack.TargetWindowID = h.deliveryKittyWindowID(ack.TargetWindowID)
 	resp.Delivery = ack
 	return resp
+}
+
+func (h *Handler) deliveryKittyWindowID(slot int) int {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if key, mapped := h.runtimeRoutes.kittyWindow(slot); mapped {
+		return key.windowID
+	}
+	return slot
 }
 
 // handleDiagnosticProbe exercises the same cached Kitty routing discovery as
@@ -131,8 +142,13 @@ func (h *Handler) handleDiagnosticProbe(req protocol.Request) protocol.Response 
 			Delivery: baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementRejected, "invalid_window"),
 		}
 	}
+	if isReusableKittySocket(req.KittyListenOn) {
+		h.stateMu.Lock()
+		req.WindowID = h.runtimeRoutes.kittySlotOf(req.KittyListenOn, req.WindowID)
+		h.stateMu.Unlock()
+	}
 
-	ctx := h.resolveHookEventContext(req)
+	ctx := h.resolveHookEventContextReadOnly(req)
 	ack := baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementAccepted, "routing_discovered")
 	ack.Profile = ctx.req.Account
 	if ctx.req.Harness != "" {
@@ -150,6 +166,8 @@ func (h *Handler) handleDiagnosticProbe(req protocol.Request) protocol.Response 
 	} else if ctx.lookupFailed {
 		ack.RouteDecision = events.RouteDecisionSourceFallback
 	}
+	ack.SourceWindowID = h.deliveryKittyWindowID(ack.SourceWindowID)
+	ack.TargetWindowID = h.deliveryKittyWindowID(ack.TargetWindowID)
 	return protocol.Response{OK: true, Delivery: ack}
 }
 

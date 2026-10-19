@@ -13,6 +13,10 @@
     },
     {
       "type": "contains_text",
+      "text": "amx config setup"
+    },
+    {
+      "type": "contains_text",
       "text": "amx config edit"
     },
     {

@@ -718,8 +718,10 @@ session it is typed in: its runtime session (`AMX_RUNTIME_SESSION_ID`) when it
 has one, else its Kitty window. `--runtime-session ID` and `--window ID` name
 another. A probe of a runtime session reports where that session's hooks
 would be routed or the reason they would be refused; it claims no slot and
-names no window. `export-events` remains the compatibility and daemon
-snapshot surface:
+names no window. A Kitty probe needs that window's reusable socket; the
+current Kitty supplies `KITTY_LISTEN_ON`, or use `--window ID --kitty-socket
+unix:/path/to/socket` for another instance. `export-events` remains the
+compatibility and daemon snapshot surface:
 
 Trim every exported window to its trailing events without changing cumulative
 `stats`:
@@ -740,7 +742,10 @@ session named by `AMX_RUNTIME_SESSION_ID` when there is one (so it works in a
 tmux session, where an inherited `KITTY_WINDOW_ID` is not believed), else the
 Kitty window named by `KITTY_WINDOW_ID`. With neither it is an error, as it is
 combined with `--window`. `--runtime-session ID` selects a session from
-anywhere, and `--window ID` a Kitty window. An entry held by a runtime session
+anywhere, and `--window ID` a daemon slot from an unrestricted export. When two
+Kitty instances reuse a window number, a bare number is ambiguous; run
+`--current-window` inside the desired Kitty instance or use its distinct slot
+from the unrestricted export. An entry held by a runtime session
 carries `runtime_session_id` and `backend`; for a tmux session its `window_id`
 is the daemon's own slot for the session, not a Kitty window, and `live.found`
 is false. `--output PATH` writes the JSON to a file instead of

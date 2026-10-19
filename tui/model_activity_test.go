@@ -181,6 +181,7 @@ func TestPickerProfileOverride_Persists(t *testing.T) {
 }
 
 func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
+	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-test")
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
 	oldDaemonRequest := commands.DaemonRequest
@@ -205,7 +206,7 @@ func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
 	if len(runner.Calls) != 0 {
 		t.Errorf("clear must not write Kitty titles, got calls: %v", runner.Calls)
 	}
-	if gotRequest.Type != protocol.TypeStateUpdate || gotRequest.Action != "user_clear" || gotRequest.WindowID != 99 {
+	if gotRequest.Type != protocol.TypeStateUpdate || gotRequest.Action != "user_clear" || gotRequest.WindowID != 99 || gotRequest.KittyListenOn != "unix:/kitty-test" {
 		t.Errorf("daemon request = %+v, want user_clear for window 99", gotRequest)
 	}
 }

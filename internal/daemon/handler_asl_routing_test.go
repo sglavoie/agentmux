@@ -3,9 +3,11 @@ package daemon
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -34,6 +36,38 @@ func aslSiblingWindows(tabTitle, projectDir string, ownerID, sourceID int) []kit
 // so the stub mirrors that invariant.
 func aslCandidate(windowID int, projectDir string) agentloop.Candidate {
 	return agentloop.Candidate{WindowID: windowID, CWD: projectDir, Harness: harness.Claude, PID: 4242}
+}
+
+func TestASLSiblingHookInCollidingKittyInstanceRoutesToItsOwner(t *testing.T) {
+	projectDir := t.TempDir()
+	stubDaemonLoopDiscover(t, []agentloop.Candidate{aslCandidate(43, projectDir)}, nil)
+	h := newTestHandler()
+	h.useKittyClient(&fakeKittyClient{})
+	h.stateMu.Lock()
+	firstSlot := h.kittySlotLocked(kittyA, 42)
+	firstSource := h.kittySlotLocked(kittyA, 43)
+	h.ensureWindowStateLocked(firstSlot).DesiredIcon = "stop"
+	h.ensureWindowStateLocked(firstSource)
+	h.rememberKittySocketLocked(firstSlot, kittyA)
+	h.rememberKittySocketLocked(firstSource, kittyA)
+	h.stateMu.Unlock()
+	secondWindows := aslSiblingWindows("api", projectDir, 42, 43)
+	h.publishSnapshotFrom(probes.Publication{
+		Windows: secondWindows, Socket: kittyB, CapturedAt: time.Now(),
+	})
+
+	requireAccepted(t, h.Handle(legacyHook(t, 43, kittyB, "PreToolUse", hookevent.HookPayload{})))
+	h.stateMu.Lock()
+	secondSlot := h.runtimeRoutes.kittySlotOf(kittyB, 42)
+	secondSource := h.runtimeRoutes.kittySlotOf(kittyB, 43)
+	firstIcon := h.store[firstSlot].DesiredIcon
+	secondState := h.store[secondSlot]
+	h.stateMu.Unlock()
+	if secondSlot == firstSlot || secondSource == firstSource ||
+		secondState == nil || secondState.DesiredIcon != "bolt" || firstIcon != "stop" {
+		t.Fatalf("colliding owner/source first=%d,%d/%s second=%d,%d/%+v",
+			firstSlot, firstSource, firstIcon, secondSlot, secondSource, secondState)
+	}
 }
 
 func TestHandler_ActiveLoopSiblingRoutesActivityToOwner(t *testing.T) {

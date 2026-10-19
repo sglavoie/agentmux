@@ -68,11 +68,14 @@ func resetDebugTestState(t *testing.T) {
 	oldProbe := debugProbeClient
 	oldNewJournal := debugNewJournal
 	oldSelector := debugSelectorFlags
-	oldRuntimeSession, oldGetenv := debugRuntimeSession, debugGetenv
+	oldRuntimeSession, oldGetenv, oldProbeKittySocket := debugRuntimeSession, debugGetenv, debugProbeKittySocket
 	// A test run typed inside a managed session must not select it.
 	debugRuntimeSession, debugGetenv = "", func(string) string { return "" }
 	t.Setenv("KITTY_WINDOW_ID", "")
-	t.Cleanup(func() { debugRuntimeSession, debugGetenv = oldRuntimeSession, oldGetenv })
+	debugProbeKittySocket = ""
+	t.Cleanup(func() {
+		debugRuntimeSession, debugGetenv, debugProbeKittySocket = oldRuntimeSession, oldGetenv, oldProbeKittySocket
+	})
 	oldStatusJSON := debugStatusJSON
 	oldTailJSON := debugTailJSON
 	oldTailFollow := debugTailFollow
@@ -222,6 +225,7 @@ func TestDebugTailJSONAndFollowWrapperAreV2Snapshots(t *testing.T) {
 
 func TestDebugProbeJSONStatesScopeAndStages(t *testing.T) {
 	resetDebugTestState(t)
+	debugProbeKittySocket = "unix:/kitty-test"
 	debugSelectorFlags.windowID = 77
 	debugSelectorFlags.harness = "codex"
 	debugSelectorFlags.traceID = "trace-probe"

@@ -48,7 +48,7 @@ func (h *Handler) handleLoopLifecycleHookEvent(
 	baseReq protocol.Request,
 	windows []kitty.OSWindow,
 ) bool {
-	targets, openTargets := aslHookTargets(baseReq, windows, payload)
+	targets, openTargets := h.aslHookTargets(baseReq, windows, payload)
 	if len(targets) == 0 {
 		return false
 	}
@@ -166,8 +166,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 	}
 }
 
-func loopLifecycleTargets(windows []kitty.OSWindow, payload hookevent.HookPayload) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
-	payloadTarget := loopPayloadWorkspaceTarget(payload)
+func loopLifecycleTargets(windows []kitty.OSWindow, payloadTarget agentloop.WorkspaceTarget) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
 	if payloadTarget.CWD == "" && payloadTarget.WindowID <= 0 {
 		_, openTargets := loopLifecycleWindowTargets(windows)
 		return nil, openTargets

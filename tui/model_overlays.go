@@ -403,7 +403,11 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // indefinitely.
 func sessionDetailCmd(windowID int) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := ipc.NewClient().Send(commands.SessionDetailRequest(windowID))
+		req, err := commands.SessionDetailRequest(windowID)
+		if err != nil {
+			return commands.DetailEventsMsg{WindowID: windowID, Err: err}
+		}
+		resp, err := ipc.NewClient().Send(req)
 		if err != nil {
 			return commands.DetailEventsMsg{WindowID: windowID, Err: err}
 		}

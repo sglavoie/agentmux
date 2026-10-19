@@ -233,6 +233,19 @@ func (v SnapshotView) Age(now time.Time) time.Duration {
 // reducer receipts captured before the ListWindows call that supplied it and
 // the publication generation that owns both. Both the slice and map are
 // read-only after publication.
+func (s *SnapshotStore) loadForScreenProbesWithSocket() (
+	windows []kitty.OSWindow,
+	reducerReceipts map[int]uint64,
+	gen uint64,
+	probeTabs map[int]tabState,
+	socket string,
+	ready bool,
+) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.snap.windows, s.snap.reducerReceipts, s.snap.gen, s.snap.probeTabs, s.snap.socket, s.snap.ready
+}
+
 func (s *SnapshotStore) loadForScreenProbes() (
 	windows []kitty.OSWindow,
 	reducerReceipts map[int]uint64,
@@ -240,17 +253,16 @@ func (s *SnapshotStore) loadForScreenProbes() (
 	probeTabs map[int]tabState,
 	ready bool,
 ) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.snap.windows, s.snap.reducerReceipts, s.snap.gen, s.snap.probeTabs, s.snap.ready
+	windows, reducerReceipts, gen, probeTabs, _, ready = s.loadForScreenProbesWithSocket()
+	return
 }
 
 // ScreenProbeSnapshot returns the last published external evidence and its
 // causally earlier reducer receipts without any Kitty I/O. ready is false until
 // the initial restore has published once.
 func (s *SnapshotStore) ScreenProbeSnapshot() (Snapshot, bool) {
-	windows, receipts, gen, probeTabs, ready := s.loadForScreenProbes()
-	return Snapshot{windows: windows, reducerReceipts: receipts, probeTabs: probeTabs, gen: gen}, ready
+	windows, receipts, gen, probeTabs, socket, ready := s.loadForScreenProbesWithSocket()
+	return Snapshot{windows: windows, reducerReceipts: receipts, probeTabs: probeTabs, gen: gen, socket: socket}, ready
 }
 
 // Snapshot is the causally bound evidence consumed by every periodic
@@ -265,7 +277,8 @@ type Snapshot struct {
 	// it. Probe bindings use the narrower per-tab epochs above; gen remains the
 	// publication counter exposed by the general snapshot cache. A zero
 	// generation denotes a direct caller-supplied snapshot.
-	gen uint64
+	gen    uint64
+	socket string
 }
 
 // NewSnapshot binds an already-available window tree to reducer receipts
@@ -275,6 +288,12 @@ type Snapshot struct {
 func NewSnapshot(windows []kitty.OSWindow, reducerReceipts map[int]uint64) Snapshot {
 	return Snapshot{windows: windows, reducerReceipts: reducerReceipts}
 }
+
+func NewSnapshotWithSocket(windows []kitty.OSWindow, reducerReceipts map[int]uint64, socket string) Snapshot {
+	return Snapshot{windows: windows, reducerReceipts: reducerReceipts, socket: socket}
+}
+
+func (s Snapshot) Socket() string { return s.socket }
 
 // Windows returns the captured window tree. It is read-only after publication
 // and callers must not mutate it.

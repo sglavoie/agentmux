@@ -185,10 +185,11 @@ func (h *Handler) appendWatchdogEventLocked(windowID, originWindowID int, at tim
 //     negative ID derived from the account name so it cannot collide with
 //     real positive Kitty window IDs (see activity.HookSilenceWindowID).
 func (h *Handler) SweepHookSilence(now time.Time) {
-	if h.kittyClient == nil {
+	client, _ := h.kittyListTarget()
+	if client == nil {
 		return
 	}
-	windows, err := h.kittyClient.ListWindows()
+	windows, err := client.ListWindows()
 	if err != nil {
 		slog.Debug("hook-silence sweep: list windows failed", "err", err)
 		return
@@ -223,6 +224,17 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 	var silent []silentEntry
 
 	h.stateMu.Lock()
+	for _, windows := range h.otherKittyTrees {
+		for _, ow := range windows {
+			for _, tab := range ow.Tabs {
+				for _, win := range tab.Windows {
+					if account := win.UserVars.Account; account != "" {
+						running[account] = true
+					}
+				}
+			}
+		}
+	}
 	// A session on another backend is in no window listing; the profile its
 	// pane named is its account, for as long as it holds a slot.
 	for _, b := range h.runtimeRoutes.bySlot {
@@ -302,12 +314,14 @@ func runningAccount(running map[string]bool, account string) bool {
 // as an action name.
 func (h *Handler) SweepStale(now time.Time) {
 	var windows []kitty.OSWindow
+	var listedSocket string
 	// Prune eventLog entries for windows that Kitty no longer reports as live.
 	// Runs before the staleness scan so an event-log GC happens every sweep
 	// regardless of whether anyStaleThresholdSet() is true below.
 	if client, socket := h.kittyListTarget(); client != nil {
 		if snapshot, err := client.ListWindows(); err == nil {
 			windows = snapshot
+			listedSocket = socket
 			h.pruneClosedWindowsFor(now, liveWindowIDs(windows), socket)
 		} else {
 			slog.Debug("sweep: list windows failed for GC prune", "err", err)
@@ -315,7 +329,7 @@ func (h *Handler) SweepStale(now time.Time) {
 	}
 	changed := h.SweepStaleWithSnapshot(now, windows)
 	if changed && len(windows) > 0 {
-		h.renderSnapshot(windows)
+		h.renderSnapshotFor(windows, listedSocket)
 	}
 }
 
@@ -569,7 +583,11 @@ func (h *Handler) pruneClosedWindowsFor(now time.Time, liveIDs map[int]bool, lis
 		if isRuntimeSyntheticSlot(id) {
 			continue
 		}
-		if !liveIDs[id] && !h.windowOfOtherInstanceLocked(id, listedSocket) {
+		windowID := id
+		if key, ok := h.runtimeRoutes.kittyWindow(id); ok {
+			windowID = key.windowID
+		}
+		if !liveIDs[windowID] && !h.windowOfOtherInstanceLocked(id, listedSocket) {
 			closed[id] = struct{}{}
 		}
 	}
@@ -578,7 +596,11 @@ func (h *Handler) pruneClosedWindowsFor(now time.Time, liveIDs map[int]bool, lis
 	// closed one: resurrect it so its diagnostics resume live and it can count
 	// as renderer drift again.
 	for id := range liveIDs {
-		h.reviveTombstoneLocked(id)
+		if slot := h.runtimeRoutes.kittyByKey[kittySlotKey{listedSocket, id}]; slot > 0 {
+			h.reviveTombstoneLocked(slot)
+		} else if key, mapped := h.runtimeRoutes.kittyWindow(id); !mapped || key.socket == listedSocket {
+			h.reviveTombstoneLocked(id)
+		}
 	}
 	h.expireTombstonesLocked(now)
 	h.stateMu.Unlock()
@@ -592,6 +614,9 @@ func (h *Handler) windowOfOtherInstanceLocked(windowID int, listedSocket string)
 		return false
 	}
 	socket := h.kittySockets[windowID]
+	if key, ok := h.runtimeRoutes.kittyWindow(windowID); ok {
+		socket = key.socket
+	}
 	return socket != "" && socket != listedSocket
 }
 
@@ -614,6 +639,9 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 	for id := range h.store {
 		if h.windowOfOtherInstanceLocked(id, listedSocket) {
 			socket := h.kittySockets[id]
+			if key, mapped := h.runtimeRoutes.kittyWindow(id); mapped {
+				socket = key.socket
+			}
 			bySocket[socket] = append(bySocket[socket], id)
 		}
 	}
@@ -651,7 +679,13 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 		trees[socket] = windows
 		live := liveWindowIDs(windows)
 		for _, id := range bySocket[socket] {
-			if !live[id] {
+			windowID := id
+			h.stateMu.Lock()
+			if key, ok := h.runtimeRoutes.kittyWindow(id); ok {
+				windowID = key.windowID
+			}
+			h.stateMu.Unlock()
+			if !live[windowID] {
 				candidates[id] = socket
 			}
 		}
@@ -678,13 +712,17 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 // setOtherKittyTrees replaces the other instances' trees with listed, keeping
 // the previous tree of an instance whose listing failed this pass so one busy
 // listing does not strip its sessions of their titles. Every other instance's
-// tree is dropped. The companion is told whenever there is a set to show or
-// one to withdraw; the hub skips a publish that changed nothing.
+// tree is dropped. Fresh listings clear unseen attention for focused panes;
+// retained trees after failed listings are not new focus observations. The
+// companion is told whenever there is a set to show or one to withdraw; the
+// hub skips a publish that changed nothing.
 func (h *Handler) setOtherKittyTrees(listed map[string][]kitty.OSWindow, failed map[string]bool) {
 	h.stateMu.Lock()
 	next := make(map[string][]kitty.OSWindow, len(listed))
+	observedAt := time.Now()
 	for socket, windows := range listed {
 		next[socket] = windows
+		h.refreshFocusFromSnapshotForLocked(windows, socket, observedAt)
 	}
 	for socket := range failed {
 		if previous, ok := h.otherKittyTrees[socket]; ok {
@@ -716,6 +754,8 @@ func (h *Handler) dropClosedWindowsLocked(now time.Time, closed map[int]struct{}
 	for id := range closed {
 		delete(h.store, id)
 		delete(h.kittySockets, id)
+		delete(h.kittyRestored, id)
+		h.runtimeRoutes.releaseKittySlot(id)
 		h.recordWindowClosedLocked(id, now)
 	}
 	// ASL miss streaks and supervision records are per-window leases; a closed

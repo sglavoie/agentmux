@@ -130,7 +130,12 @@ func (h *Handler) probeScrollbackText(binding probes.Binding) (string, error) {
 		if h.kittyClient == nil {
 			return "", fmt.Errorf("window %d has no scrollback to read", binding.SourceWindowID)
 		}
-		return h.kittyClient.GetText(kitty.MatchWindowByID(binding.SourceWindowID), string(backend.ExtentAll))
+		socket := binding.KittySocket
+		if socket == "" {
+			socket = h.snapshots.View().Socket()
+		}
+		client := scopedKittyClient(h.kittyClient, socket)
+		return client.GetText(kitty.MatchWindowByID(binding.SourceWindowID), string(backend.ExtentAll))
 	}
 	if h.runtimeScreens == nil {
 		return "", fmt.Errorf("slot %d has no pane to read", binding.SourceWindowID)

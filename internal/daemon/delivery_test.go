@@ -2,8 +2,10 @@ package daemon
 
 import (
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/events"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
@@ -34,6 +36,29 @@ func TestDiagnosticProbeDiscoversRouteWithoutMutatingState(t *testing.T) {
 	h.stateMu.Unlock()
 	if storeLen != 0 || metadataLen != 0 {
 		t.Fatalf("probe mutated state: store=%d metadata=%d", storeLen, metadataLen)
+	}
+}
+
+func TestDiagnosticProbeDoesNotReserveManagedKittyOwner(t *testing.T) {
+	h := newTestHandler()
+	windows := unmanagedRouteWindows("api", harness.Codex, true)
+	h.SetKittyClient(&fakeKittyClient{windows: windows})
+	h.snapshots.Publish(probes.Publication{Windows: windows, Socket: kittyB, CapturedAt: time.Now()})
+	h.stateMu.Lock()
+	// Any existing route makes the mapping path inspect managed owners. The
+	// owner in Kitty B has not claimed its own slot yet.
+	h.kittySlotLocked(kittyA, 7)
+	before := len(h.runtimeRoutes.kittyByKey)
+	h.stateMu.Unlock()
+	resp := h.Handle(protocol.Request{Type: protocol.TypeDiagnosticProbe, WindowID: 43, KittyListenOn: kittyB, Harness: harness.Claude})
+	if !resp.OK || resp.Delivery == nil || !resp.Delivery.WindowFound {
+		t.Fatalf("probe response = %+v", resp)
+	}
+	h.stateMu.Lock()
+	after := len(h.runtimeRoutes.kittyByKey)
+	h.stateMu.Unlock()
+	if after != before {
+		t.Fatalf("probe reserved Kitty slots: before=%d after=%d", before, after)
 	}
 }
 

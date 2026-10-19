@@ -16,15 +16,26 @@ import (
 // cache in the same critical section as a publication, and the one best-effort
 // ListWindows the daemon performs at client-injection time.
 
-// captureSnapshotReducerReceipts samples every in-process window receipt
-// before a potentially slow ListWindows call. The returned map is immutable
-// once published with the resulting Kitty evidence.
-func (h *Handler) captureSnapshotReducerReceipts() map[int]uint64 {
+// captureSnapshotReducerReceiptsFor samples the requested Kitty instance's
+// in-process window receipts before a potentially slow ListWindows call. The
+// returned map is immutable once published with the resulting Kitty evidence.
+func (h *Handler) captureSnapshotReducerReceiptsFor(socket string) map[int]uint64 {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	receipts := make(map[int]uint64, len(h.store))
-	for windowID, st := range h.store {
+	for slot, st := range h.store {
 		if st != nil {
+			windowID := slot
+			if socket != "" {
+				if key, mapped := h.runtimeRoutes.kittyWindow(slot); mapped {
+					if key.socket != socket {
+						continue
+					}
+					windowID = key.windowID
+				} else if h.windowOfOtherInstanceLocked(slot, socket) {
+					continue
+				}
+			}
 			receipts[windowID] = st.ShadowSeq
 		}
 	}
@@ -93,12 +104,17 @@ type kittyCaptureLister interface {
 // coordinator hands every caller the executor's sample instead, so all three
 // facts describe one read.
 func (h *Handler) captureKittySnapshot(client kittyTitleClient, socket string) (kittySnapshotCapture, error) {
+	if socket == "" {
+		if endpoint, ok := client.(endpointKittyClient); ok {
+			socket = endpoint.Socket()
+		}
+	}
 	lister, ok := client.(kittyCaptureLister)
 	if !ok {
 		// No coalescing underneath, so this caller is always its own executor,
 		// and the socket it scoped the client to is the only account of the
 		// read's endpoint available.
-		reducerReceipts := h.captureSnapshotReducerReceipts()
+		reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
 		windows, err := client.ListWindows()
 		if err != nil {
 			return kittySnapshotCapture{}, err
@@ -110,7 +126,7 @@ func (h *Handler) captureKittySnapshot(client kittyTitleClient, socket string) (
 			at:              time.Now(),
 		}, nil
 	}
-	capture, err := lister.ListWindowsCapture(func() any { return h.captureSnapshotReducerReceipts() })
+	capture, err := lister.ListWindowsCapture(func() any { return h.captureSnapshotReducerReceiptsFor(socket) })
 	if err != nil {
 		return kittySnapshotCapture{}, err
 	}
@@ -145,7 +161,7 @@ func (h *Handler) publishCapture(capture kittySnapshotCapture) {
 func (h *Handler) publishSnapshot(windows []kitty.OSWindow, capturedAt time.Time) {
 	h.publishSnapshotFrom(probes.Publication{
 		Windows:         windows,
-		ReducerReceipts: h.captureSnapshotReducerReceipts(),
+		ReducerReceipts: h.captureSnapshotReducerReceiptsFor(h.currentKittyListenOn()),
 		Socket:          h.currentKittyListenOn(),
 		CapturedAt:      capturedAt,
 	})
@@ -164,8 +180,8 @@ func (h *Handler) publishSnapshotFrom(publication probes.Publication) {
 	// the publication means a publish path cannot raise the bit against a tree
 	// this read has already superseded.
 	h.stateMu.Lock()
-	h.refreshMutedFromSnapshotLocked(publication.Windows)
-	h.refreshFocusFromSnapshotLocked(publication.Windows, publication.CapturedAt)
+	h.refreshMutedFromSnapshotForLocked(publication.Windows, publication.Socket)
+	h.refreshFocusFromSnapshotForLocked(publication.Windows, publication.Socket, publication.CapturedAt)
 	h.snapshots.Publish(publication)
 	h.companionDirty()
 	h.stateMu.Unlock()
@@ -240,12 +256,20 @@ func (h *Handler) screenProbeBindings(snapshot probes.Snapshot, producerHarness 
 				if target.UserVars.EffectiveProfile() == "" && target.UserVars.EffectiveHarness() == "" {
 					continue
 				}
-				st, ok := h.windowStateLocked(target.ID)
+				targetSlot := h.runtimeRoutes.kittySlotOf(snapshot.Socket(), target.ID)
+				if h.windowOfOtherInstanceLocked(targetSlot, snapshot.Socket()) {
+					continue
+				}
+				st, ok := h.windowStateLocked(targetSlot)
 				if !ok || st == nil || st.Reducer == nil {
 					continue
 				}
-				identity, sourceWindowID, ok := st.Reducer.CurrentLiveProducerRoute(producerHarness, target.ID)
+				identity, sourceSlot, ok := st.Reducer.CurrentLiveProducerRoute(producerHarness, targetSlot)
 				if !ok {
+					continue
+				}
+				sourceWindowID, sameInstance := h.kittyRemoteWindowLocked(sourceSlot, snapshot.Socket())
+				if !sameInstance {
 					continue
 				}
 				// Direct managed sessions keep the historical behavior: only the
@@ -260,6 +284,9 @@ func (h *Handler) screenProbeBindings(snapshot probes.Snapshot, producerHarness 
 				if !found {
 					continue
 				}
+				binding.SourceStateSlot = sourceSlot
+				binding.TargetStateSlot = targetSlot
+				binding.KittySocket = snapshot.Socket()
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
 					if owner != nil && owner.ID == target.ID {
@@ -272,7 +299,11 @@ func (h *Handler) screenProbeBindings(snapshot probes.Snapshot, producerHarness 
 			// otherwise legacy managed producer pane that has not yet established
 			// an in-process session fact. Routed bindings never use this fallback.
 			if owner != nil && !ownerHasBinding && owner.UserVars.EffectiveHarness() == producerHarness {
-				if st, ok := h.windowStateLocked(owner.ID); ok && st != nil && st.LastHarness != "" &&
+				ownerSlot := h.runtimeRoutes.kittySlotOf(snapshot.Socket(), owner.ID)
+				if h.windowOfOtherInstanceLocked(ownerSlot, snapshot.Socket()) {
+					continue
+				}
+				if st, ok := h.windowStateLocked(ownerSlot); ok && st != nil && st.LastHarness != "" &&
 					harness.NormalizeKnown(st.LastHarness) != producerHarness {
 					continue
 				}
@@ -286,6 +317,9 @@ func (h *Handler) screenProbeBindings(snapshot probes.Snapshot, producerHarness 
 					continue
 				}
 				binding.LegacyDirectManaged = true
+				binding.SourceStateSlot = ownerSlot
+				binding.TargetStateSlot = ownerSlot
+				binding.KittySocket = snapshot.Socket()
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
 				}
@@ -338,12 +372,20 @@ func (h *Handler) screenProbeTerminalBindings(snapshot probes.Snapshot, producer
 				if target.UserVars.EffectiveProfile() == "" && target.UserVars.EffectiveHarness() == "" {
 					continue
 				}
-				st, ok := h.windowStateLocked(target.ID)
+				targetSlot := h.runtimeRoutes.kittySlotOf(snapshot.Socket(), target.ID)
+				if h.windowOfOtherInstanceLocked(targetSlot, snapshot.Socket()) {
+					continue
+				}
+				st, ok := h.windowStateLocked(targetSlot)
 				if !ok || st == nil || st.Reducer == nil {
 					continue
 				}
-				identity, sourceWindowID, ok := st.Reducer.CurrentTerminalProducerRoute(producerHarness, target.ID, now)
-				if !ok || sourceWindowID == target.ID {
+				identity, sourceSlot, ok := st.Reducer.CurrentTerminalProducerRoute(producerHarness, targetSlot, now)
+				if !ok || sourceSlot == targetSlot {
+					continue
+				}
+				sourceWindowID, sameInstance := h.kittyRemoteWindowLocked(sourceSlot, snapshot.Socket())
+				if !sameInstance {
 					continue
 				}
 				binding, found := probes.NewBinding(snapshot, identity, sourceWindowID, target.ID)
@@ -352,6 +394,9 @@ func (h *Handler) screenProbeTerminalBindings(snapshot probes.Snapshot, producer
 				}
 				binding.TerminalProducer = true
 				binding.TerminalAt = now
+				binding.SourceStateSlot = sourceSlot
+				binding.TargetStateSlot = targetSlot
+				binding.KittySocket = snapshot.Socket()
 				if h.screenProbeBindingCurrentLocked(binding) {
 					bindings = append(bindings, binding)
 				}
@@ -379,35 +424,54 @@ func (h *Handler) screenProbeTerminalBindings(snapshot probes.Snapshot, producer
 // screenProbeBindingCurrentLocked revalidates every causal component of a
 // binding. Callers hold stateMu and keep it held through any ensuing mutation.
 func (h *Handler) screenProbeBindingCurrentLocked(binding probes.Binding) bool {
+	if !binding.OnRuntimeBackend() {
+		if binding.SnapshotTabEpoch > 0 && binding.KittySocket != h.snapshots.View().Socket() {
+			return false
+		}
+		if key, mapped := h.runtimeRoutes.kittyWindow(binding.TargetSlot()); mapped &&
+			binding.KittySocket != "" && key.socket != binding.KittySocket {
+			return false
+		}
+	}
 	if !binding.Valid() || !h.snapshots.BindingFresh(binding) ||
-		!h.windowReceiptCurrentLocked(binding.SourceWindowID, binding.SourceReceipt) ||
-		!h.windowReceiptCurrentLocked(binding.TargetWindowID, binding.TargetReceipt) {
+		!h.windowReceiptCurrentLocked(binding.SourceSlot(), binding.SourceReceipt) ||
+		!h.windowReceiptCurrentLocked(binding.TargetSlot(), binding.TargetReceipt) {
 		return false
 	}
 	if binding.LegacyDirectManaged {
-		if binding.SourceWindowID != binding.TargetWindowID {
+		if binding.SourceSlot() != binding.TargetSlot() {
 			return false
 		}
-		st, ok := h.windowStateLocked(binding.TargetWindowID)
+		st, ok := h.windowStateLocked(binding.TargetSlot())
 		return !ok || st == nil || st.LastHarness == "" ||
 			harness.NormalizeKnown(st.LastHarness) == harness.NormalizeKnown(binding.Producer.Harness)
 	}
-	st, ok := h.windowStateLocked(binding.TargetWindowID)
+	st, ok := h.windowStateLocked(binding.TargetSlot())
 	if !ok || st == nil || st.Reducer == nil {
 		return false
 	}
 	if binding.RecoverySource.Kind != "" {
 		identity, sourceWindowID, ok := st.Reducer.ProbeStopRecoveryRoute(
-			binding.RecoverySource, binding.Producer.Harness, binding.TargetWindowID, binding.RecoveryAt,
+			binding.RecoverySource, binding.Producer.Harness, binding.TargetSlot(), binding.RecoveryAt,
 		)
-		return ok && identity == binding.Producer && sourceWindowID == binding.SourceWindowID
+		return ok && identity == binding.Producer && sourceWindowID == binding.SourceSlot()
 	}
 	if binding.TerminalProducer {
 		return st.Reducer.HasTerminalProducerRoute(
-			binding.Producer, binding.SourceWindowID, binding.TargetWindowID, binding.TerminalAt,
+			binding.Producer, binding.SourceSlot(), binding.TargetSlot(), binding.TerminalAt,
 		)
 	}
-	return st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceWindowID, binding.TargetWindowID)
+	return st.Reducer.HasLiveProducerRoute(binding.Producer, binding.SourceSlot(), binding.TargetSlot())
+}
+
+// kittyRemoteWindowLocked converts a reducer slot back to the number in the
+// snapshot's Kitty instance. A route across instances is never a valid tab
+// probe, even when both happen to use the same number.
+func (h *Handler) kittyRemoteWindowLocked(slot int, socket string) (int, bool) {
+	if key, mapped := h.runtimeRoutes.kittyWindow(slot); mapped {
+		return key.windowID, socket == "" || key.socket == socket
+	}
+	return slot, !h.windowOfOtherInstanceLocked(slot, socket)
 }
 
 // screenProbeBindingEligibilityCurrentLocked adds the target's current reduced
@@ -421,7 +485,7 @@ func (h *Handler) screenProbeBindingEligibilityCurrentLocked(
 	if !h.screenProbeBindingCurrentLocked(binding) {
 		return false
 	}
-	st, ok := h.windowStateLocked(binding.TargetWindowID)
+	st, ok := h.windowStateLocked(binding.TargetSlot())
 	if !ok || st == nil {
 		return binding.LegacyDirectManaged && eligible(fallbackIcon)
 	}

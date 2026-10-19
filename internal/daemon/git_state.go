@@ -79,8 +79,9 @@ func (h *Handler) gitStateTargets(windows []kitty.OSWindow) map[int]string {
 	targets := make(map[int]string)
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
+	socket := h.snapshots.View().Socket()
 	for windowID := range h.store {
-		if key, ok := h.gitStateDirectoryLocked(windows, windowID); ok {
+		if key, ok := h.gitStateDirectoryLocked(windows, socket, windowID); ok {
 			targets[windowID] = key
 		}
 	}
@@ -101,20 +102,20 @@ func (h *Handler) applyGitState(targets map[int]string, states map[string]gitsta
 	if len(targets) == 0 {
 		return
 	}
-	current, _, ready := h.cachedSnapshot()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
+	view := h.cachedSnapshotView()
 	for windowID, directory := range targets {
 		st, ok := h.store[windowID]
 		if !ok {
 			continue
 		}
-		if !ready && !isRuntimeSyntheticSlot(windowID) {
+		if !view.Ready() && !isRuntimeSyntheticSlot(windowID) {
 			// The snapshot cache went cold while the probes ran, so there is
 			// no evidence left to check a window's result against.
 			continue
 		}
-		observed, ok := h.gitStateDirectoryLocked(current, windowID)
+		observed, ok := h.gitStateDirectoryLocked(view.Windows(), view.Socket(), windowID)
 		if !ok || observed != directory {
 			st.GitDirectory, st.GitBranch, st.GitDirty = "", "", false
 			continue
@@ -127,11 +128,20 @@ func (h *Handler) applyGitState(targets map[int]string, states map[string]gitsta
 // gitStateDirectoryLocked is the directory a slot's Git facts are probed in:
 // a Kitty window's from the snapshot, any other session's from its label.
 // Callers hold stateMu.
-func (h *Handler) gitStateDirectoryLocked(windows []kitty.OSWindow, slot int) (string, bool) {
+func (h *Handler) gitStateDirectoryLocked(windows []kitty.OSWindow, snapshotSocket string, slot int) (string, bool) {
 	if isRuntimeSyntheticSlot(slot) {
 		return h.runtimeSlotDirectoryLocked(slot)
 	}
-	return gitStateDirectory(windows, slot)
+	if key, mapped := h.runtimeRoutes.kittyWindow(slot); mapped {
+		if key.socket == snapshotSocket {
+			return gitStateDirectory(windows, key.windowID)
+		}
+		return gitStateDirectory(h.otherKittyTrees[key.socket], key.windowID)
+	}
+	if !h.windowOfOtherInstanceLocked(slot, snapshotSocket) {
+		return gitStateDirectory(windows, slot)
+	}
+	return gitStateDirectory(h.otherKittyTrees[h.kittySockets[slot]], slot)
 }
 
 // runtimeSlotDirectoryLocked resolves the directory of a session with no

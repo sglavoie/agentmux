@@ -37,11 +37,15 @@ import (
 // (or has never run). Called from the maintenance tick with the fresh
 // snapshot.
 func (h *Handler) maybeReconcileASLLeases(now time.Time, windows []kitty.OSWindow) {
+	h.maybeReconcileASLLeasesFor(now, windows, h.currentKittyListenOn())
+}
+
+func (h *Handler) maybeReconcileASLLeasesFor(now time.Time, windows []kitty.OSWindow, socket string) {
 	h.stateMu.Lock()
 	due := h.lastASLReconcileAt.IsZero() || now.Sub(h.lastASLReconcileAt) >= asl.ReconcileInterval
 	h.stateMu.Unlock()
 	if due {
-		h.ReconcileASLLeases(now, windows)
+		h.reconcileASLLeasesFor(now, windows, socket)
 	}
 }
 
@@ -54,6 +58,10 @@ func (h *Handler) maybeReconcileASLLeases(now time.Time, windows []kitty.OSWindo
 // their runs are attributed by identity — so the sweep still runs for them, and
 // is skipped entirely only when there are none.
 func (h *Handler) ReconcileASLLeases(now time.Time, windows []kitty.OSWindow) {
+	h.reconcileASLLeasesFor(now, windows, h.currentKittyListenOn())
+}
+
+func (h *Handler) reconcileASLLeasesFor(now time.Time, windows []kitty.OSWindow, socket string) {
 	h.stateMu.Lock()
 	h.lastASLReconcileAt = now
 	runtimeState := h.hasRuntimeASLStateLocked()
@@ -73,7 +81,7 @@ func (h *Handler) ReconcileASLLeases(now time.Time, windows []kitty.OSWindow) {
 		slog.Debug("asl reconcile skipped: discovery failed; preserving leases", "err", err)
 		return
 	}
-	h.reconcileASLDiscovery(now, windows, result)
+	h.reconcileASLDiscoveryFor(now, windows, result, socket)
 }
 
 // aslSeed is one discovered run attributed to its managed owner window.
@@ -86,9 +94,9 @@ type aslSeed struct {
 	runtime bool
 }
 
-// reconcileASLDiscovery folds one successful sweep into the per-window
-// reducers.
-func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow, result agentloop.DiscoveryResult) {
+// reconcileASLDiscoveryFor folds one successful sweep into the per-window
+// reducers using the Kitty socket that supplied the snapshot.
+func (h *Handler) reconcileASLDiscoveryFor(now time.Time, windows []kitty.OSWindow, result agentloop.DiscoveryResult, socket string) {
 	sweep := asl.NewSweep(result)
 
 	// Attribute each present candidate to the managed owner window(s) of its
@@ -113,6 +121,20 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
+	ambiguousWindowIDs := h.ambiguousKittyWindowIDsLocked()
+	kept := seeds[:0]
+	for _, seed := range seeds {
+		if ambiguousWindowIDs[seed.candidate.WindowID] {
+			// ASL's durable projection has no Kitty socket. A scan cannot
+			// place this run by raw number, but a runtime claim below can.
+			continue
+		}
+		kept = append(kept, seed)
+	}
+	seeds = kept
+	for i := range seeds {
+		seeds[i].windowID = h.runtimeRoutes.kittySlotOf(socket, seeds[i].windowID)
+	}
 	// Leases, supervisor targets, and question projections all move below; the
 	// signal never blocks, and the hub's copy waits for this section to end.
 	h.companionDirty()
@@ -227,6 +249,23 @@ func (h *Handler) reconcileASLDiscovery(now time.Time, windows []kitty.OSWindow,
 		h.syncRendererMetadataLocked(windowID)
 		h.markWindowDirtyLocked(windowID)
 	}
+}
+
+// ambiguousKittyWindowIDsLocked identifies raw window numbers claimed by
+// more than one Kitty socket. Discovery has no socket provenance, so its
+// window number alone cannot be used to seed a workspace lease for these.
+// Callers hold stateMu.
+func (h *Handler) ambiguousKittyWindowIDsLocked() map[int]bool {
+	firstSocket := make(map[int]string)
+	ambiguous := make(map[int]bool)
+	for key := range h.runtimeRoutes.kittyByKey {
+		if previous, seen := firstSocket[key.windowID]; seen && previous != key.socket {
+			ambiguous[key.windowID] = true
+		} else if !seen {
+			firstSocket[key.windowID] = key.socket
+		}
+	}
+	return ambiguous
 }
 
 // originWindowID names the pane a seeded run reports from. A run attributed by

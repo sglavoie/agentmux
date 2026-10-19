@@ -147,8 +147,9 @@ func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 	states, _ := h.copyStateLocked(now.Unix())
 	view := h.snapshots.View()
 	return companion.Input{
-		States:  states,
-		Sockets: maps.Clone(h.kittySockets),
+		States:     states,
+		Sockets:    maps.Clone(h.kittySockets),
+		KittySlots: h.companionKittySlotsLocked(),
 		Kitty: companion.KittyTree{
 			Ready:   view.Ready(),
 			Stale:   protocol.KittySnapshotStale(view.Ready(), view.Age(now)),
@@ -163,6 +164,17 @@ func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 		ASLPending:   h.aslSupervisors.Pending(),
 		Now:          now,
 	}
+}
+
+func (h *Handler) companionKittySlotsLocked() map[companion.KittyWindowKey]int {
+	if len(h.runtimeRoutes.kittyByKey) == 0 {
+		return nil
+	}
+	out := make(map[companion.KittyWindowKey]int, len(h.runtimeRoutes.kittyByKey))
+	for key, slot := range h.runtimeRoutes.kittyByKey {
+		out[companion.KittyWindowKey{Socket: key.socket, WindowID: key.windowID}] = slot
+	}
+	return out
 }
 
 // companionRuntimeSlotsLocked copies the runtime binding of every slot for the

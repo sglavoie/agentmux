@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
+	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -182,6 +183,7 @@ func TestASLRunInKittyRuntimeSessionRoutesToItsOwnWindow(t *testing.T) {
 			}},
 		}}}
 		h.SetKittyClient(&fakeKittyClient{windows: windows})
+		h.publishSnapshotFrom(probes.Publication{Windows: windows, Socket: kittyA, CapturedAt: time.Now()})
 		directory := newFakeRuntimeDirectory()
 		h.SetRuntimeSessionDirectory(directory)
 		stubDaemonLoopDiscover(t, nil, nil)
@@ -224,6 +226,68 @@ func TestASLRunInKittyRuntimeSessionRoutesToItsOwnWindow(t *testing.T) {
 			t.Fatalf("Kitty notification target = %+v", target)
 		}
 	})
+}
+
+func TestASLRunInCollidingKittyInstanceKeepsSlotAsOrigin(t *testing.T) {
+	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false)
+	directory := newFakeRuntimeDirectory()
+	h.SetRuntimeSessionDirectory(directory)
+	stubDaemonLoopDiscover(t, nil, nil)
+	first, second := newRuntimeID(t), newRuntimeID(t)
+	directory.put(first, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	directory.put(second, runtimesession.StateLive, runtimesession.BackendKitty, kittyB, "kitty-b-1", "7")
+	for _, runtime := range []runtimesession.ID{first, second} {
+		requireAccepted(t, h.Handle(aslRuntimeHook(t, runtime, events.AgentSessionLoopStarted, hookevent.HookPayload{
+			CWD: t.TempDir(), RunID: string(runtime), KittyWindowID: 7,
+		})))
+	}
+	firstSlot, secondSlot := slotOf(t, h, first), slotOf(t, h, second)
+	if firstSlot == secondSlot {
+		t.Fatal("colliding Kitty runs share a reducer slot")
+	}
+	for runtime, slot := range map[runtimesession.ID]int{first: firstSlot, second: secondSlot} {
+		found := false
+		for _, fact := range slotFacts(h, slot) {
+			if fact.Kind != protocol.SourceASL || fact.RunID != string(runtime) {
+				continue
+			}
+			found = true
+			if fact.OriginWindowID != slot {
+				t.Fatalf("runtime %s origin = %d; want slot %d", runtime, fact.OriginWindowID, slot)
+			}
+		}
+		if !found {
+			t.Fatalf("runtime %s has no ASL fact in slot %d", runtime, slot)
+		}
+	}
+}
+
+func TestLegacyASLWindowIDSelectsOnlyItsCollidingKittyTab(t *testing.T) {
+	h := newTestHandler()
+	projectDir := t.TempDir()
+	h.stateMu.Lock()
+	firstSlot := h.kittySlotLocked(kittyA, 42)
+	h.ensureWindowStateLocked(firstSlot)
+	h.rememberKittySocketLocked(firstSlot, kittyA)
+	h.stateMu.Unlock()
+	raw := []kitty.OSWindow{{Tabs: []kitty.Tab{
+		{ID: 1, Title: "api", Windows: []kitty.Window{{
+			ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: projectDir},
+		}}},
+		{ID: 2, Title: "api-other", Windows: []kitty.Window{{
+			ID: 44, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: projectDir},
+		}}},
+	}}}
+	windows := h.slotMappedKittyWindows(raw, kittyB, true)
+	targets, _ := h.aslHookTargets(protocol.Request{KittyListenOn: kittyB}, windows,
+		hookevent.HookPayload{KittyWindowID: 42, CWD: projectDir, Harness: "claude"})
+	h.stateMu.Lock()
+	secondSlot := h.runtimeRoutes.kittySlotOf(kittyB, 42)
+	h.stateMu.Unlock()
+	if secondSlot == firstSlot || len(targets) != 1 || targets[0].windowID != secondSlot {
+		t.Fatalf("colliding legacy ASL targets = %+v; want only slot %d (first %d)", targets, secondSlot, firstSlot)
+	}
 }
 
 // TestASLRunStaysRoutedWithNoKitty: with no Kitty client at all — no viewer of
