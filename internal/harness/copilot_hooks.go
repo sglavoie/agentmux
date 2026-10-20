@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 type copilotHooksFile struct {
@@ -120,7 +122,7 @@ func buildCopilotHooks(disabledEvents []string, amxBin string) copilotHooksFile 
 		disabled[e] = true
 	}
 	hooks := make(map[string][]copilotHookDef)
-	bashCommand := shellQuoteArg(amxBin)
+	bashCommand := shellquote.Quote(amxBin)
 	powershellCommand := powershellQuoteArg(amxBin)
 	for _, event := range copilotHookEvents {
 		if disabled[event] {

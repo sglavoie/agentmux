@@ -7,6 +7,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 func tabToRunningSession(tab kitty.Tab, ctx projectMatchContext) (rs RunningSession, ghost *GhostTab, ok bool) {
@@ -211,7 +212,7 @@ func fallbackSessionFromMatch(tab kitty.Tab, winID int, m titleFallbackMatch, ba
 	homeDir := config.ExpandTilde(m.acc.EffectiveHomeDir())
 	projectDir := config.ExpandTilde(m.sess.Directory)
 	args := ResolveArgs(m.sess, m.acc, cfg.Defaults)
-	explicitArgs := shellQuoteArgs(m.sess.EffectiveArgs())
+	explicitArgs := shellquote.Join(m.sess.EffectiveArgs())
 	ccEnv := SerializeSessionEnv(m.sess.Env)
 	groups := append([]string(nil), m.sess.Groups...)
 

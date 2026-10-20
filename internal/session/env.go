@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 // ResolveEnv builds the env map passed as --env flags to kitten @ launch.
@@ -37,7 +38,7 @@ func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 // can round-trip through Kitty user vars and shell -c launch commands.
 // Precedence: project args > profile args > shared defaults args.
 func ResolveArgs(sess config.Session, acc config.Account, defaults config.Defaults) string {
-	return shellQuoteArgs(resolveArgv(sess, acc, defaults))
+	return shellquote.Join(resolveArgv(sess, acc, defaults))
 }
 
 // ResolveFlags is kept as a compatibility alias for older Claude-oriented code.

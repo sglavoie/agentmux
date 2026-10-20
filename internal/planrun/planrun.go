@@ -27,11 +27,11 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 // CommitMode is when a run commits what its sessions wrote.
@@ -268,7 +268,7 @@ const planDirPlaceholder = "PLAN_DIR"
 // RunArguments is what follows `asl run` for this plan and these options,
 // quoted for a shell.
 func RunArguments(planDir string, opts Options) string {
-	args := []string{shellQuote(planDir)}
+	args := []string{shellquote.Quote(planDir)}
 	if opts.Harness != "" {
 		args = append(args, "--harness", opts.Harness)
 	}
@@ -314,13 +314,4 @@ func Prompt(ctx context.Context, asl ASL, supervisorHarness, planDir string, opt
 		return strings.Replace(invocation, planDirPlaceholder, RunArguments(planDir, opts), 1), nil
 	}
 	return "", fmt.Errorf("asl supervisor-guide names no supervision skill for %s", name)
-}
-
-var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
-
-func shellQuote(value string) string {
-	if shellSafe.MatchString(value) {
-		return value
-	}
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }

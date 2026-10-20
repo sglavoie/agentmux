@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 // amxHookCommandIdentifier matches the executable basenames Agent Mux uses for
@@ -170,7 +172,7 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 	for _, e := range disabledEvents {
 		disabled[e] = true
 	}
-	amxCommand := shellQuoteArg(amxBin)
+	amxCommand := shellquote.Quote(amxBin)
 	hooks := make(map[string][]hookGroup)
 	for _, event := range claudeHookEvents {
 		if disabled[event] {
@@ -211,16 +213,6 @@ func buildClaudeHooks(disabledEvents []string, amxBin string) map[string][]hookG
 }
 
 func boolPtr(v bool) *bool { return &v }
-
-func shellQuoteArg(arg string) string {
-	if arg == "" {
-		return "''"
-	}
-	if !strings.ContainsAny(arg, " \t\n'\"\\$`!#&;()<>|*?[]{}") {
-		return arg
-	}
-	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
-}
 
 func powershellQuoteArg(arg string) string {
 	if arg == "" {

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 const (
@@ -148,7 +150,7 @@ func buildCodexHooks(disabledEvents []string, amxBin string) map[string][]hookGr
 		disabled[e] = true
 	}
 
-	amxCommand := shellQuoteArg(amxBin)
+	amxCommand := shellquote.Quote(amxBin)
 	hooks := make(map[string][]hookGroup)
 	for _, event := range codexHookEvents {
 		if disabled[event] {

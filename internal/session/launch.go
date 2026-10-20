@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 var launchDebug = newFileLogger("/tmp/amx-debug.log", "[launch] ")
@@ -60,7 +61,7 @@ func (p LaunchPolicy) String() string {
 // (EffectiveProfile, EffectiveHarness, ...) see a consistent contract.
 func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defaults) map[string]string {
 	args := ResolveArgs(sess, acc, defaults)
-	explicitArgs := shellQuoteArgs(sess.EffectiveArgs())
+	explicitArgs := shellquote.Join(sess.EffectiveArgs())
 	groups := strings.Join(sess.Groups, "\x1f")
 	ccEnv := SerializeSessionEnv(sess.Env)
 	profileName := effectiveSessionProfile(sess, acc)

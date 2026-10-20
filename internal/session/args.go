@@ -18,40 +18,6 @@ func resolveArgv(sess config.Session, acc config.Account, defaults config.Defaul
 	return defaults.EffectiveArgs()
 }
 
-func shellQuoteArgs(args []string) string {
-	if len(args) == 0 {
-		return ""
-	}
-	quoted := make([]string, 0, len(args))
-	for _, arg := range args {
-		quoted = append(quoted, shellQuoteWord(arg))
-	}
-	return strings.Join(quoted, " ")
-}
-
-func shellQuoteWord(s string) string {
-	if isSafeShellWord(s) {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
-}
-
-func isSafeShellWord(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			continue
-		}
-		if strings.ContainsRune("@%_+=:,./-", r) {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
 func splitShellArgs(raw string) ([]string, error) {
 	var (
 		args         []string

@@ -79,6 +79,28 @@ func TestBuildHooksQuoteAmxBinWithSpaces(t *testing.T) {
 	}
 }
 
+// Hook commands already written into operators' settings files are compared
+// byte for byte by hooks-status, so the shared quoter must spell an ordinary
+// amx path exactly as the old one did, and quote only what a shell would
+// otherwise reinterpret: a leading "~" was the old denylist's miss.
+func TestBuildClaudeHooksQuotesOnlyWhatTheShellWouldReinterpret(t *testing.T) {
+	for _, tc := range []struct{ bin, wantPrefix string }{
+		{"/Users/me/.local/bin/amx", "/Users/me/.local/bin/amx "},
+		{"/opt/agent-mux_1.2+3/bin/amx", "/opt/agent-mux_1.2+3/bin/amx "},
+		{"/Users/sébastien/bin/amx", "/Users/sébastien/bin/amx "},
+		{"~/bin/amx", "'~/bin/amx' "},
+		{"/Users/O'Brien/bin/amx", `'/Users/O'\''Brien/bin/amx' `},
+	} {
+		command := buildClaudeHooks(nil, tc.bin)["Stop"][0].Hooks[0].Command
+		if want := tc.wantPrefix + "hook-indicator Stop --harness=claude"; command != want {
+			t.Errorf("buildClaudeHooks(%q) command = %q, want %q", tc.bin, command, want)
+		}
+		if !isAmxHookEntry(hookEntry{Type: "command", Command: command}) {
+			t.Errorf("command for %q not recognized as Agent Mux-owned: %q", tc.bin, command)
+		}
+	}
+}
+
 func TestBuildCopilotHooksEscapesPowershellSingleQuote(t *testing.T) {
 	def := buildCopilotHooks(nil, `C:\Users\O'Brien\bin\amx.exe`).Hooks["agentStop"][0]
 	if want := `'C:\Users\O''Brien\bin\amx.exe' hook-indicator agentStop --harness=copilot`; def.Powershell != want {
