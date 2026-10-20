@@ -2867,10 +2867,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         store.show(notice: message)
     }
 
-    /// A launch, continue, or restart that failed after the menu closed: the
-    /// menu line says why, and the operator hears of it at once, by a
-    /// notification when app notifications are on and allowed, else by a
-    /// beep and the icon blinking.
     /// A mute, snooze, or answer that failed: one a notification's button
     /// asked for is reported as `reportFailure` does, since no menu is open
     /// to show it; one from the menu or a shortcut on the menu line.
@@ -2882,6 +2878,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         }
     }
 
+    /// A launch, continue, or restart that failed after the menu closed: the
+    /// menu line says why, and the operator hears of it at once, by a
+    /// notification when app notifications are on and allowed, else by a
+    /// beep and the icon blinking.
     private func reportFailure(title: String, _ message: String) {
         let line = Self.failureLine(title: title, message: message)
         report(line)
