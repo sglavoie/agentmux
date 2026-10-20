@@ -133,8 +133,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // LSUIElement already keeps the app out of the Dock; this states it
-        // for a build run straight from DerivedData.
-        NSApp.setActivationPolicy(.accessory)
+        // for a build run straight from DerivedData. A launch that reopens
+        // the workspace starts regular instead: becoming regular once the
+        // app is already active puts it last in ⌘Tab, behind the app it
+        // was launched from, and its window does not come forward.
+        NSApp.setActivationPolicy(Self.launchActivationPolicy(
+            reopensWorkspace: !Self.isRunningTests && launchReopensWorkspace && !isSecondInstance))
         UserDefaults.standard.register(defaults: Self.launchDefaults)
         // One workspace window and Settings: neither is a tab of the other,
         // whatever "Prefer tabs" says, and View has no tab bar items.
@@ -206,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// running is reported, not replaced.
     private func restoreWorkspace() {
         let restoration = WorkspaceRestoration.load()
-        guard restoration.windowOpen || preferencesModel.preferences.openWorkspaceAtLaunch else { return }
+        guard launchReopensWorkspace else { return }
         Self.logger.notice("workspace: reopening at launch (was open: \(restoration.windowOpen), place: \(restoration.place?.encoded ?? "none", privacy: .public))")
         let controller = workspaceController()
         controller.show()
@@ -218,6 +222,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         } else {
             if !controller.state.rows.isEmpty { controller.showDashboardUnlessPlaced() }
         }
+    }
+
+    private var launchReopensWorkspace: Bool {
+        WorkspaceRestoration.load().windowOpen || preferencesModel.preferences.openWorkspaceAtLaunch
+    }
+
+    /// A copy that hands off to the one already running and quits never
+    /// shows a window, so it never earns a Dock icon.
+    private var isSecondInstance: Bool {
+        guard let identifier = Bundle.main.bundleIdentifier else { return false }
+        return !SingleInstance.otherInstances(bundleIdentifier: identifier).isEmpty
+    }
+
+    nonisolated static func launchActivationPolicy(reopensWorkspace: Bool) -> NSApplication.ActivationPolicy {
+        activationPolicy(workspace: reopensWorkspace, settings: false)
     }
 
     /// The app was opened again while running (from the Dock, Finder,

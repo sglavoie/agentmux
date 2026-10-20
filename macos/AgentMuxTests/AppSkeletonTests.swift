@@ -20,6 +20,14 @@ final class AppSkeletonTests: XCTestCase {
                        "Settings behind another app's window is found again from the Dock and ⌘Tab")
     }
 
+    /// A launch that reopens the workspace starts regular, so the app comes
+    /// up in front and first in ⌘Tab rather than turning regular once
+    /// already active, which puts it last.
+    func testALaunchThatReopensTheWorkspaceStartsRegular() {
+        XCTAssertEqual(AppDelegate.launchActivationPolicy(reopensWorkspace: true), .regular)
+        XCTAssertEqual(AppDelegate.launchActivationPolicy(reopensWorkspace: false), .accessory)
+    }
+
     func testWindowsAreNeverTabbedTogether() {
         XCTAssertFalse(NSWindow.allowsAutomaticWindowTabbing, "Settings never opens as a tab of the workspace")
     }
