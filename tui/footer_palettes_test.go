@@ -62,7 +62,7 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 		{
 			name:    "session search",
 			palette: sessionSearchFooterPalette,
-			wants: []string{"/ filter", "h/p/r/m chips", "enter view", "c continue", "f fork",
+			wants: []string{"/ filter", "h/p/r/m filters", "enter view", "c continue", "f fork",
 				"w worktree", "H handoff", "E edit handoff", "d delete", "i ID", "Y path", "esc back"},
 		},
 		{
@@ -79,7 +79,7 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 		{
 			name:    "plan view",
 			palette: planViewFooterPalette,
-			wants:   []string{"/ search", "n/N match", "y copy", "Y path", "O editor", "esc back"},
+			wants:   []string{"/ refine query", "n/N match", "y copy", "Y path", "O editor", "esc back"},
 		},
 		{
 			name:    "worktrees",
@@ -175,7 +175,8 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   210,
 		want: []string{
-			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page",
+			"  g/G top/bottom",
 		},
 	},
 	{
@@ -183,7 +184,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff",
+			"  / filter · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff",
 			"  E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ? more",
 		},
 	},
@@ -201,7 +202,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · h/p/r/m chips · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -209,8 +210,8 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   200,
 		want: []string{
-			"  / search · j/k up/down · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page",
-			"  g/G top/bot",
+			"  / refine query · j/k up/down · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half",
+			"  ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -218,7 +219,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   90,
 		want: []string{
-			"  / search · j/k up/down · n/N match · enter view message · c continue · f fork",
+			"  / refine query · j/k up/down · n/N match · enter view message · c continue · f fork",
 			"  w worktree · H handoff · E edit handoff · i ID · y copy · Y path · esc back · ? more",
 		},
 	},
@@ -236,7 +237,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   0,
 		want: []string{
-			"  / search · j/k up/down · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / refine query · j/k up/down · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -244,7 +245,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   200,
 		want: []string{
-			"  / filter · r project · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project filter · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -252,8 +253,8 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · r project · enter view · o sort · O editor · R run · Y path · ? help",
-			"  esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project filter · enter view · o sort · O editor · R run · Y path · ? help",
+			"  esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -261,8 +262,8 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   40,
 		want: []string{
-			"  / filter · r project · enter view",
-			"  o sort · O editor · esc back · ? more",
+			"  / filter · enter view · o sort",
+			"  O editor · esc back · ? more",
 		},
 	},
 	{
@@ -270,7 +271,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · r project · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / filter · r project filter · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -278,7 +279,7 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   200,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · O editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / refine query · n/N match · y copy · Y path · O editor · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -286,8 +287,8 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   90,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · O editor · ? help · esc back · j/k scroll",
-			"  g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / refine query · n/N match · y copy · Y path · O editor · ? help · esc back",
+			"  j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -295,8 +296,8 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   40,
 		want: []string{
-			"  / search · n/N match · y copy · Y path",
-			"  O editor · esc back · ? more",
+			"  / refine query · n/N match · y copy",
+			"  Y path · O editor · esc back · ? more",
 		},
 	},
 	{
@@ -304,7 +305,7 @@ var footerHintCharacterizations = []struct {
 		entries: planViewFooterPalette,
 		width:   0,
 		want: []string{
-			"  / search · n/N match · y copy · Y path · O editor · ? help · esc back · j/k scroll · g/G top/bot · ctrl+d/u half · ctrl+f/b page",
+			"  / refine query · n/N match · y copy · Y path · O editor · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -313,7 +314,7 @@ var footerHintCharacterizations = []struct {
 		width:   200,
 		want: []string{
 			"  / filter · enter reopen · o shell · O editor · v diff · L land · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page",
-			"  g/G top/bot",
+			"  g/G top/bottom",
 		},
 	},
 	{
@@ -339,7 +340,7 @@ var footerHintCharacterizations = []struct {
 		entries: worktreesFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · enter reopen · o shell · O editor · v diff · L land · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / filter · enter reopen · o shell · O editor · v diff · L land · d remove · D delete branch · F forget · Y path · r refresh · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -347,7 +348,7 @@ var footerHintCharacterizations = []struct {
 		entries: aslRunsFooterPalette,
 		width:   200,
 		want: []string{
-			"  enter/f focus · r respond · s stop · a abort · w workbench · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  enter/f focus · r respond · s stop · X abort · w workbench · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -355,8 +356,8 @@ var footerHintCharacterizations = []struct {
 		entries: aslRunsFooterPalette,
 		width:   90,
 		want: []string{
-			"  enter/f focus · r respond · s stop · a abort · w workbench · Y path · ? help · esc back",
-			"  j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  enter/f focus · r respond · s stop · X abort · w workbench · Y path · ? help · esc back",
+			"  j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -365,7 +366,7 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  enter/f focus · r respond · s stop",
-			"  a abort · esc back · ? more",
+			"  X abort · esc back · ? more",
 		},
 	},
 	{
@@ -373,7 +374,7 @@ var footerHintCharacterizations = []struct {
 		entries: aslRunsFooterPalette,
 		width:   0,
 		want: []string{
-			"  enter/f focus · r respond · s stop · a abort · w workbench · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  enter/f focus · r respond · s stop · X abort · w workbench · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -381,7 +382,7 @@ var footerHintCharacterizations = []struct {
 		entries: aslResponseFooterPalette,
 		width:   200,
 		want: []string{
-			"  ctrl+s submit · tab editor/buttons · enter newline or button · ctrl+n/p question · esc cancel",
+			"  ctrl+s submit · tab editor/buttons · enter newline or button · ctrl+n/p question · esc keep & close",
 		},
 	},
 	{
@@ -390,7 +391,7 @@ var footerHintCharacterizations = []struct {
 		width:   90,
 		want: []string{
 			"  ctrl+s submit · tab editor/buttons · enter newline or button · ctrl+n/p question",
-			"  esc cancel",
+			"  esc keep & close",
 		},
 	},
 	{
@@ -399,7 +400,8 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  ctrl+s submit · tab editor/buttons",
-			"  esc cancel · ? more",
+			"  enter newline or button",
+			"  ctrl+n/p question · esc keep & close",
 		},
 	},
 	{
@@ -407,7 +409,7 @@ var footerHintCharacterizations = []struct {
 		entries: aslResponseFooterPalette,
 		width:   0,
 		want: []string{
-			"  ctrl+s submit · tab editor/buttons · enter newline or button · ctrl+n/p question · esc cancel",
+			"  ctrl+s submit · tab editor/buttons · enter newline or button · ctrl+n/p question · esc keep & close",
 		},
 	},
 }
@@ -556,7 +558,7 @@ func TestFooterHintASLRunsMixedAvailability(t *testing.T) {
 	if !strings.Contains(raw, chrome.Binding("s", "stop")) {
 		t.Fatalf("permitted stop is not rendered in the available style: %q", hintText(lines))
 	}
-	if !strings.Contains(raw, chrome.UnavailableBinding("a", "abort")) {
+	if !strings.Contains(raw, chrome.UnavailableBinding(keyASLAbort, "abort")) {
 		t.Fatalf("refused abort is not rendered in the muted style: %q", hintText(lines))
 	}
 

@@ -107,7 +107,7 @@ func TestPickerQReturnsToDashboardInOneStep(t *testing.T) {
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	m = pressKey(m, "t")
-	m = pressKey(m, "esc") // leave search mode; filter kept
+	m = pressKey(m, "enter") // leave search mode; filter kept
 	if m.pickerFilter == "" || m.mode != ModePicker {
 		t.Fatalf("setup: filter=%q mode=%d; want a kept filter in ModePicker", m.pickerFilter, m.mode)
 	}
@@ -137,16 +137,28 @@ func TestPickerEscClearsBufferThenExits(t *testing.T) {
 		t.Fatal("expected buffer populated before esc")
 	}
 
-	// Esc in search mode → exits search mode, filter KEPT, stays in picker.
-	m = pressKey(m, "esc")
+	// Esc in search mode cancels the edit: the filter `/` opened on comes
+	// back, as the dashboard's filter prompt does.
+	cancelled := pressKey(m, "esc")
+	if cancelled.pickerSearchMode || cancelled.pickerFilter != "" || cancelled.mode != ModePicker {
+		t.Fatalf("esc in search mode = search %v filter %q mode %d, want the empty filter restored in the picker",
+			cancelled.pickerSearchMode, cancelled.pickerFilter, cancelled.mode)
+	}
+	reopened := pressKey(pressKey(pressKey(m, "enter"), "/"), "x")
+	if got := pressKey(reopened, "esc").pickerFilter; got != "te" {
+		t.Fatalf("esc after reopening restored %q, want the committed 'te'", got)
+	}
+
+	// Enter in search mode → exits search mode, filter KEPT, stays in picker.
+	m = pressKey(m, "enter")
 	if m.pickerSearchMode {
-		t.Fatal("expected pickerSearchMode=false after esc in search mode")
+		t.Fatal("expected pickerSearchMode=false after enter in search mode")
 	}
 	if m.pickerFilter != "te" {
-		t.Fatalf("expected filter 'te' kept after esc from search mode, got %q", m.pickerFilter)
+		t.Fatalf("expected filter 'te' kept after enter from search mode, got %q", m.pickerFilter)
 	}
 	if m.mode != ModePicker {
-		t.Fatalf("expected to stay in ModePicker after esc from search mode, got %d", m.mode)
+		t.Fatalf("expected to stay in ModePicker after enter from search mode, got %d", m.mode)
 	}
 
 	// Esc in nav mode with non-empty filter → clears filter, stays in picker.
@@ -191,8 +203,8 @@ func TestPickerSelectionPersistsAcrossFilterChanges(t *testing.T) {
 		t.Fatal("selection must persist even when the row is filtered out")
 	}
 	// Exit search mode (filter kept), then clear filter.
-	m = pressKey(m, "esc") // search → nav, filter "ac" kept
-	m = pressKey(m, "esc") // nav + "ac" filter → clear filter
+	m = pressKey(m, "enter") // search → nav, filter "ac" kept
+	m = pressKey(m, "esc")   // nav + "ac" filter → clear filter
 	if !m.pickerSelected[first] {
 		t.Fatal("selection lost after clearing filter")
 	}
@@ -211,8 +223,8 @@ func TestPickerEnterLaunchesWhileFiltered(t *testing.T) {
 	if len(m.pickerFilteredIdx) != 1 {
 		t.Fatalf("expected 1 visible row, got %d", len(m.pickerFilteredIdx))
 	}
-	m = pressKey(m, "esc") // exit search mode → nav (filter kept)
-	m = pressKey(m, " ")   // select the visible row
+	m = pressKey(m, "enter") // exit search mode → nav (filter kept)
+	m = pressKey(m, " ")     // select the visible row
 	updated, cmd := m.Update(keyPress("enter"))
 	if updated.(Model).mode != ModeList {
 		t.Fatalf("expected ModeList after enter, got %d", updated.(Model).mode)
@@ -295,7 +307,7 @@ func TestPickerProjectSessionSearchEmptyFilterIsNoOp(t *testing.T) {
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	m = typeString(m, "zzzz")
-	m = pressKey(m, "esc")
+	m = pressKey(m, "enter")
 	if len(m.pickerFilteredIdx) != 0 {
 		t.Fatalf("setup: expected 0 matches, got %d", len(m.pickerFilteredIdx))
 	}

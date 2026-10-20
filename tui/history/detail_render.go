@@ -161,6 +161,7 @@ func (in DetailInput) Footer(total, visible int) string {
 		chrome.Binding("↑/↓", "scroll"),
 		chrome.Binding("pgup/pgdn", "page"),
 		chrome.Binding("g/G", "top/bottom"),
+		chrome.Binding("?", "help"),
 		chrome.Binding("esc/q/d", "close"),
 	)
 	return styleFooter.Render(pos+"   ") + hints

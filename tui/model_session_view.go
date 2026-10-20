@@ -85,7 +85,7 @@ func (m Model) handleSessionViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Back to the result list with the text query active, as the plan
 		// viewer does, so a query can be refined without esc then /.
 		m.exitSessionView()
-		m.sessionSearchMode = true
+		m.beginSessionQueryEdit()
 		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit

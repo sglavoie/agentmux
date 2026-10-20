@@ -9,10 +9,19 @@ capability was dropped — a key could only retire once the row naming it said
 which surviving surface still reached it, and that claim is worth being able to
 re-read after the fact.
 
-`tui/dashboard_bindings.go` remains the single declaration: a key absent from
-that table is not dispatched, not advertised in the palette, and not in the
-footer or the generated help. Retiring anything else needs no other edit, and
-adding anything back needs no more than a row there plus a row here.
+`tui/dashboard_bindings.go` remains the single declaration of the keys that
+run a catalog command: a command key absent from that table is not
+dispatched, not advertised in the palette, and not in the footer or the
+generated help. Retiring one needs no other edit, and adding one back needs no
+more than a row there plus a row here.
+
+The table does not hold every key the dashboard answers. Moving the cursor
+(`j`/`k`, the arrows, `PgUp`/`PgDn`, `Ctrl+f`/`Ctrl+b`, `Ctrl+d`/`Ctrl+u`,
+`Home`/`End`, `g`/`G`), `n`/`N`, folding a family with `Enter`, `Tab`, `:`,
+`a`, and the inspector's half of `Esc` are dispatched by `handleListKey`'s own
+switch in `tui/model_keys.go` before the table is consulted, because none of
+them is a catalog command (see [Keys that are not commands](#keys-that-are-not-commands)).
+A key that is in neither place is not dispatched.
 
 Both halves of that claim are asserted as a set rather than only per family.
 `tui.TestEveryRetiredDashboardKeyIsInertAtTheList` presses every spelling in
@@ -31,7 +40,9 @@ fails there.
 | Key | Meaning |
 | --- | --- |
 | `j`/`k`, `↑`/`↓` | Navigate queue or scroll focused inspector |
-| `PgUp`/`PgDn`, `Home`/`End` | Page or reach beginning/end of focused pane |
+| `PgUp`/`PgDn`, `Ctrl+b`/`Ctrl+f` | Page the focused pane |
+| `Ctrl+u`/`Ctrl+d` | Half-page the focused pane |
+| `Home`/`End`, `g`/`G` | Reach beginning/end of focused pane |
 | `Enter` | Open selected terminal; toggle a selected family summary |
 | `n`/`N` | Next/previous Needs you session, preserving pane focus |
 | `Tab`/`Shift+Tab` | Switch between visible panes |
@@ -111,6 +122,7 @@ successor named here or it had nowhere to go.
 | --- | --- | --- | --- |
 | `j`/`k`, `↓`/`↑` | Move the cursor | Survives | same |
 | `PgUp`/`PgDn` | Page the list | Survives | same, plus focused-pane paging |
+| `ctrl+f`/`ctrl+b` | Page the focused pane | Added for consistency with History, Plans, Worktrees, Runs, and the launcher | same as `PgDn`/`PgUp` |
 | `Home`/`End` | Top/bottom | Added | same |
 | `n`/`N` | Next/previous Needs you row | Added | same |
 | `tab`/`shift+tab` | Switch the focused pane | Added | same |

@@ -34,7 +34,7 @@ func TestPickerEmptyFilterNavigationIsSafe(t *testing.T) {
 	if len(m.pickerFilteredIdx) != 0 {
 		t.Fatalf("setup: expected 0 matches for 'zzzz', got %d", len(m.pickerFilteredIdx))
 	}
-	m = pressKey(m, "esc") // exit search mode; filter kept
+	m = pressKey(m, "enter") // exit search mode; filter kept
 	if m.pickerSearchMode {
 		t.Fatal("setup: expected pickerSearchMode=false after esc from search")
 	}
@@ -66,7 +66,7 @@ func TestPickerEnterOnEmptyFilterExitsCleanly(t *testing.T) {
 	if len(m.pickerFilteredIdx) != 0 {
 		t.Fatalf("setup: expected 0 matches, got %d", len(m.pickerFilteredIdx))
 	}
-	m = pressKey(m, "esc") // search → nav
+	m = pressKey(m, "enter") // search → nav
 	updated, cmd := m.Update(keyPress("enter"))
 	m2 := updated.(Model)
 	if m2.mode != ModeList {
@@ -91,8 +91,8 @@ func TestPickerBackspaceRecoversFromEmptyFilter(t *testing.T) {
 		t.Fatalf("setup: expected 0 matches, got %d", len(m.pickerFilteredIdx))
 	}
 	// Pre-move the cursor in nav mode to confirm backspace resets it.
-	m = pressKey(m, "esc") // search → nav, filter "zzzz" kept
-	m.pickerCursor = 99    // simulate a stale cursor value
+	m = pressKey(m, "enter") // search → nav, filter "zzzz" kept
+	m.pickerCursor = 99      // simulate a stale cursor value
 	// Backspace fires in nav mode while the filter still has content.
 	for i := 0; i < 4; i++ {
 		m = pressKey(m, "backspace")

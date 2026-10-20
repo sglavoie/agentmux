@@ -317,7 +317,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		scrollListToCursor(&m)
 		return m, m.refreshPreviewForCursor()
 
-	case keyPgDown:
+	case keyPgDown, keyCtrlF:
 		step := listVisibleHeight(m) - 1
 		if step < 1 {
 			step = 1
@@ -328,7 +328,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		step := listVisibleHeight(m) - 1
 		if step < 1 {
 			step = 1

@@ -40,6 +40,7 @@ var helpSectionFor = map[Mode]string{
 	ModePlanView:      "Plans",
 	ModeWorktrees:     "Worktrees",
 	ModeASLRuns:       "Runs",
+	ModeDetail:        "Session detail",
 }
 
 // helpSectionOffset is the scroll offset, in the same wrapped display rows the
@@ -89,8 +90,8 @@ var helpSections = []struct {
 	{"Navigate", []string{
 		"  j / ↓     move down",
 		"  k / ↑     move up",
-		"  pgdn      page down",
-		"  pgup      page up",
+		"  pgdn      page down (ctrl+f too)",
+		"  pgup      page up (ctrl+b too)",
 		"  home      go to top",
 		"  end       go to bottom",
 		"  g/G       aliases for home/end",
@@ -165,6 +166,7 @@ var helpSections = []struct {
 		"  z / Z     collapse all / expand all phases (timeline)",
 		"  s         show / hide suppressed events (timeline)",
 		"  T         show / hide the timestamp column (timeline)",
+		"  ?         this help",
 		"  esc/q/d   close",
 	}},
 	{"Filter", []string{
@@ -177,13 +179,14 @@ var helpSections = []struct {
 	}},
 	{"App", []string{
 		"  :         open command palette — every command, searchable",
-		"  u         " + recoverEndedHint + ": resume or relaunch (30 seconds)",
+		fmt.Sprintf("  u         %s: resume or relaunch (%d seconds)", recoverEndedHint, int(undoWindow.Seconds())),
 		"  ?         show / hide this help",
 		"  i         show / hide the session inspector",
 		"  q         quit",
 		"  ctrl+c    quit",
 		"  s         Past Sessions for the selected row's project",
 		"  S         Past Sessions across every project",
+		"  t         send text or keys to the selected tmux session",
 		"  (Plans, Worktrees, Runs, session detail, the phase timeline,",
 		"   health details, resort, and the list arrangement are palette",
 		"   entries — search the palette by name)",
@@ -216,6 +219,7 @@ func helpActOnRowLines() []string {
 	}
 	lines := []string{
 		"  enter     " + helpOpenSessionText(open),
+		"  F12       detach from an attached tmux session (it keeps running)",
 		"  a         open the actions menu for the selected session",
 		"  j/k ↑/↓   move the selection (in the menu)",
 		"  enter     run the selected action (in the menu)",
@@ -244,7 +248,7 @@ func helpOpenSessionText(open sessionactions.Definition) string {
 // says where the omitted keys went. The marker is a live binding rather than a
 // glyph: pressing `?` is what opens this overlay, so the footnote is describing
 // the key that was already pressed to read it.
-const helpFooterMoreLine = "  ? more    footer overflow — every omitted key is listed above"
+const helpFooterMoreLine = "  ? more    hidden footer keys are all listed above"
 
 // helpPalette is one mode's footer palette tagged with the scope name the
 // overlay uses to disambiguate keys the section's palettes label differently or
@@ -388,6 +392,22 @@ func helpMeaningLabel(meanings []helpKeyMeaning, palettes int) string {
 // Each section header is followed by its entries and a trailing blank
 // separator; the overflow footnote is appended at the end.
 func helpContentLines() []string {
+	raw := helpRawContentLines()
+	lines := make([]string, 0, len(raw))
+	for _, line := range raw {
+		lines = append(lines, line.style(line.text))
+	}
+	return lines
+}
+
+// helpLine is one logical help line before styling: the wrapper needs the
+// plain text to break it between words, and the styler to paint each piece.
+type helpLine struct {
+	text  string
+	style helpBodyStyler
+}
+
+func helpRawContentLines() []helpLine {
 	// Dashboard leads: it is the one section guaranteed complete, so a reader
 	// sent here by `? more` finds the missing key without scrolling past seven
 	// sections first. The static sections below repeat some of these keys where a
@@ -402,7 +422,7 @@ func helpContentLines() []string {
 	for _, sec := range helpPaletteSections {
 		lines = appendHelpSection(lines, sec.name, helpPaletteLines(sec.palettes), helpKeyBodyLine)
 	}
-	lines = append(lines, helpKeyBodyLine(helpFooterMoreLine))
+	lines = append(lines, helpLine{helpFooterMoreLine, helpKeyBodyLine})
 	return lines
 }
 
@@ -454,14 +474,53 @@ func helpKeyBodyLine(line string) string {
 	return indent + styleFooterKey.Render(key) + styleDim.Render(meaning)
 }
 
-// appendHelpSection appends one styled header, its body lines painted by style,
-// and the trailing blank separator the scroll math counts.
-func appendHelpSection(lines []string, name string, body []string, style helpBodyStyler) []string {
-	lines = append(lines, styleHeader.Render(name))
+// appendHelpSection appends one header, its body lines painted by style, and
+// the trailing blank separator the scroll math counts.
+func appendHelpSection(lines []helpLine, name string, body []string, style helpBodyStyler) []helpLine {
+	lines = append(lines, helpLine{name, helpHeaderLine})
 	for _, line := range body {
-		lines = append(lines, style(line))
+		lines = append(lines, helpLine{line, style})
 	}
-	return append(lines, "")
+	return append(lines, helpLine{"", helpPlainLine})
+}
+
+func helpHeaderLine(line string) string { return styleHeader.Render(line) }
+func helpPlainLine(line string) string  { return line }
+
+// helpWrapLine breaks one logical line between words. A key line's
+// continuation is indented past the key column, which helpKeyBodyLine already
+// reads as the dim continuation of the line above; a parenthetical note
+// continues under its opening parenthesis. Only a column too narrow to hold a
+// hanging indent falls back to breaking anywhere.
+func helpWrapLine(line helpLine, width int) []string {
+	if layout.Width(line.text) <= width {
+		return []string{line.style(line.text)}
+	}
+	const indent = "  "
+	hang := len(indent) + helpKeyColumnWidth
+	if strings.HasPrefix(line.text, indent+"(") {
+		hang = len(indent) + 1
+	}
+	if !strings.HasPrefix(line.text, indent) || hang >= len(line.text) || width-hang < 8 {
+		return layout.StyledWrapHard(line.style(line.text), width)
+	}
+	lead := layout.Truncate(line.text, hang, "")
+	rest := line.text[len(lead):]
+	if strings.TrimSpace(lead) != "" && !strings.HasSuffix(lead, " ") && !strings.HasPrefix(rest, " ") {
+		// The key column runs into the meaning: there is no word boundary at
+		// the hang, so a hanging wrap would split the key.
+		return layout.StyledWrapHard(line.style(line.text), width)
+	}
+	pieces := layout.WrapWords(rest, width-hang)
+	if len(pieces) == 0 {
+		return []string{line.style(line.text)}
+	}
+	out := []string{line.style(lead + pieces[0])}
+	pad := strings.Repeat(" ", hang)
+	for _, piece := range pieces[1:] {
+		out = append(out, line.style(pad+piece))
+	}
+	return out
 }
 
 // helpBoxInnerWidth returns the value passed to styleOverlayBox.Width for the
@@ -500,8 +559,8 @@ func helpContentWidth(m Model) int {
 func helpWrappedContentLines(m Model) []string {
 	width := helpContentWidth(m)
 	var out []string
-	for _, line := range helpContentLines() {
-		out = append(out, layout.StyledWrapHard(line, width)...)
+	for _, line := range helpRawContentLines() {
+		out = append(out, helpWrapLine(line, width)...)
 	}
 	return out
 }

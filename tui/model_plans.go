@@ -117,6 +117,13 @@ func (m Model) startPlanSearchRefresh() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// beginPlanQueryEdit opens the Plans query prompt and remembers the query it
+// opened on, which is what esc in the prompt restores.
+func (m *Model) beginPlanQueryEdit() {
+	m.planSearchMode = true
+	m.planQuerySaved = m.planQuery
+}
+
 // exitPlanSearch returns to ModeList and clears transient input state.
 func (m *Model) exitPlanSearch() {
 	m.mode = ModeList
@@ -136,8 +143,16 @@ func (m Model) handlePlanSearchTextKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	switch msg.String() {
 	case keyCtrlC:
 		return m, tea.Quit
-	case keyEsc, keyEnter:
+	case keyEnter:
 		m.planSearchMode = false
+		return m, nil
+	case keyEsc:
+		// Cancel restores the query `/` opened on; enter keeps the edit.
+		m.planSearchMode = false
+		if m.planQuery != m.planQuerySaved {
+			m.planQuery = m.planQuerySaved
+			return m, m.dispatchPlanSearch()
+		}
 		return m, nil
 	case keyBackspace:
 		if r := []rune(m.planQuery); len(r) > 0 {
@@ -169,7 +184,7 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.exitPlanSearch()
 		return m, nil
 	case keySlash:
-		m.planSearchMode = true
+		m.beginPlanQueryEdit()
 		return m, nil
 	case keyQuestion:
 		m.openHelp(ModePlanSearch)
@@ -477,7 +492,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// user can refine the query without re-traversing the navigation
 		// stack.
 		m.mode = ModePlanSearch
-		m.planSearchMode = true
+		m.beginPlanQueryEdit()
 		return m, nil
 	case keyY:
 		if len(m.planViewerLines) == 0 ||

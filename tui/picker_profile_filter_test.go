@@ -123,8 +123,8 @@ func TestPickerFIsSearchTextAndEscClearsAllFiltersBeforeExit(t *testing.T) {
 		t.Fatalf("f in search mode produced query %q, want f", m.pickerFilter)
 	}
 
-	m = pressKey(m, "esc") // Search input -> navigation; query retained.
-	m = pressKey(m, "f")   // All -> personal.
+	m = pressKey(m, "enter") // Search input -> navigation; query retained.
+	m = pressKey(m, "f")     // All -> personal.
 	if m.pickerProfileFilter != "personal" {
 		t.Fatalf("navigation-mode f filter = %q, want personal", m.pickerProfileFilter)
 	}

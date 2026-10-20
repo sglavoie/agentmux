@@ -411,7 +411,7 @@ func fallbackStatusText(m Model) string {
 		case asl.ViewUnavailable:
 			return "Runs: agent-session-loop unavailable"
 		}
-		return fmt.Sprintf("Runs: %d need action / %d active", asl.NeedsActionCount(m.aslRows), len(m.aslRows))
+		return fmt.Sprintf("Runs: %d need action / %d runs", asl.NeedsActionCount(m.aslRows), len(m.aslRows))
 	case ModeASLResponse:
 		if m.aslResponse.InFlight {
 			return "Runs: submitting"
@@ -459,9 +459,9 @@ func pickerStatusText(m Model) string {
 	case total == 0:
 		return base
 	case visible == total:
-		return fmt.Sprintf("%s - %d session%s", base, total, plural(total))
+		return fmt.Sprintf("%s · %d session%s", base, total, plural(total))
 	default:
-		return fmt.Sprintf("%s - %d/%d visible", base, visible, total)
+		return fmt.Sprintf("%s · %d/%d visible", base, visible, total)
 	}
 }
 
@@ -482,7 +482,7 @@ func sessionViewStatusText(m Model) string {
 			project = "(unknown)"
 		}
 		n := len(m.viewerMessages)
-		return fmt.Sprintf("Transcript: %s - %d message%s", project, n, plural(n))
+		return fmt.Sprintf("Transcript: %s · %d message%s", project, n, plural(n))
 	}
 	return "Transcript viewer"
 }

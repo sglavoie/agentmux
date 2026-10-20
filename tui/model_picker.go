@@ -129,8 +129,19 @@ func (m Model) handlePickerSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// ctrl+c quits from every mode. The default branch below would
 		// otherwise swallow it (msg.Text is empty for ctrl combos).
 		return m, tea.Quit
-	case keyEsc, keyEnter:
+	case keyEnter:
 		m.pickerSearchMode = false
+		return m, nil
+	case keyEsc:
+		// Cancel restores the filter `/` opened on; enter keeps the edit.
+		m.pickerSearchMode = false
+		if m.pickerFilter != m.pickerFilterSaved {
+			m.pickerFilter = m.pickerFilterSaved
+			m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
+			m.pickerCursor = 0
+			scrollPickerToCursor(&m)
+			return m, m.refreshPreviewForPickerCursor()
+		}
 		return m, nil
 	case keyBackspace:
 		if r := []rune(m.pickerFilter); len(r) > 0 {
@@ -180,6 +191,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, commands.EditHere(m.cfg, config.DefaultConfigPath(), func(err error) tea.Msg { return commands.ActionDoneMsg{Err: err} })
 	case keySlash:
 		m.pickerSearchMode = true
+		m.pickerFilterSaved = m.pickerFilter
 		return m, nil
 	case keyEsc:
 		// Two-stage Esc: first clears all active filters; second exits picker.
@@ -257,7 +269,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
-	case keyPgDown:
+	case keyPgDown, keyCtrlF:
 		step := pickerVisibleHeight(m) - 1
 		if step < 1 {
 			step = 1
@@ -268,7 +280,7 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		step := pickerVisibleHeight(m) - 1
 		if step < 1 {
 			step = 1

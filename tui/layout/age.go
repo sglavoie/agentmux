@@ -67,8 +67,8 @@ func CompactAge(at, now time.Time) string {
 }
 
 // When is the timestamp column of the Past Sessions and plan lists:
-// "NNm   ago" within the hour (at least one minute once any time has passed),
-// "NNh   ago" within the day, "NNd   ago" within the week, and the calendar
+// "NNm ago" right-aligned within the hour (at least one minute once any time has passed),
+// "NNh ago" within the day, "NNd ago" within the week, and the calendar
 // date after that. A zero time is ten blank cells. The relative forms are nine
 // cells and the date ten; the lists have always rendered that shape.
 func When(at, now time.Time) string {
@@ -82,11 +82,11 @@ func When(at, now time.Time) string {
 		if mins < 1 && delta > 0 {
 			mins = 1
 		}
-		return fmt.Sprintf("%2dm   ago", mins)
+		return fmt.Sprintf("%9s", fmt.Sprintf("%dm ago", mins))
 	case delta < 24*time.Hour:
-		return fmt.Sprintf("%2dh   ago", int(delta.Hours()))
+		return fmt.Sprintf("%9s", fmt.Sprintf("%dh ago", int(delta.Hours())))
 	case delta < 7*24*time.Hour:
-		return fmt.Sprintf("%2dd   ago", int(delta.Hours()/24))
+		return fmt.Sprintf("%9s", fmt.Sprintf("%dd ago", int(delta.Hours()/24)))
 	default:
 		return at.Format("2006-01-02")
 	}

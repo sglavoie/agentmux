@@ -149,6 +149,7 @@ func (m Model) handleWorktreesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keySlash:
 		m.worktreeFilterMode = true
+		m.worktreeFilterSaved = m.worktreeFilter
 		return m, nil
 	case keyQuestion:
 		m.openHelp(ModeWorktrees)
@@ -208,7 +209,13 @@ func (m Model) handleWorktreeFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyEsc:
+		// Cancel restores the filter `/` opened on; enter keeps the edit.
 		m.worktreeFilterMode = false
+		if m.worktreeFilter != m.worktreeFilterSaved {
+			m.worktreeFilter = m.worktreeFilterSaved
+			m.captureWorktreeSelection()
+			m.reapplyWorktreeFilter()
+		}
 		return m, nil
 	case keyEnter:
 		m.worktreeFilterMode = false

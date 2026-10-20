@@ -52,7 +52,7 @@ func renderFooter(m Model) string {
 				chrome.Binding("s", "sessions"), chrome.Binding("C", "override"),
 				chrome.Binding("d", "directory"),
 				chrome.Binding("o", "open dirs"), chrome.Binding("O", "open in editor"),
-				chrome.Binding("p", "preview"), chrome.Binding("esc", "clear/exit"),
+				chrome.Binding("p", "preview"), chrome.Binding("esc", "clear/back"),
 				chrome.Binding("?", "help"),
 			),
 			footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom")),
@@ -106,7 +106,7 @@ func renderFooter(m Model) string {
 			footerStyledLine(m.width, "  ", healthDismissFooterBinding(m), chrome.Binding("esc/q", "close")),
 		)
 	case ModeSessionSearch:
-		lines = footerHintLines(m, sessionSearchFooterPalette, footerHintMaxLines)
+		lines = footerHintLines(m, sessionSearchFooter(m), footerHintMaxLines)
 	case ModeSessionView:
 		lines = footerHintLines(m, sessionViewFooterPalette, footerHintMaxLines)
 	case ModePlanSearch:
@@ -661,6 +661,12 @@ func listFooterPalette() []listFooterCandidate {
 		listCommandBinding(bindings, commands.OpenLauncher, footerSectionLaunch, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.SearchAllSessions, footerSectionApp, footerPriorityPrimary),
 		listCommandBinding(bindings, commands.SearchProject, footerSectionRow, footerPriorityPrimary),
+		// Recovery is live only for the seconds after a confirmed close, so the
+		// entry is shown only then rather than drawn dim the rest of the time;
+		// it is still declared here, which is what puts `u` in the generated
+		// Dashboard help.
+		listCommandBinding(bindings, commands.UndoClose, footerSectionApp, footerPrioritySecondary).
+			shownWhen(dashboardCommandAvailable(commands.UndoClose)),
 	}
 }
 

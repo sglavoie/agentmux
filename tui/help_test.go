@@ -23,8 +23,8 @@ func TestRenderHelpNoHeightShowsAll(t *testing.T) {
 			t.Errorf("expected section header %q in help output, got:\n%s", header, out)
 		}
 	}
-	if !strings.Contains(out, "footer overflow") {
-		t.Errorf("expected footer overflow line in help output, got:\n%s", out)
+	if !strings.Contains(out, "hidden footer keys") {
+		t.Errorf("expected the ? more footnote in help output, got:\n%s", out)
 	}
 }
 
@@ -256,8 +256,8 @@ func TestHelpPreservesModeSpecificMeaning(t *testing.T) {
 	// The three meanings F-002 reported as suppressed by first-label-wins.
 	for _, want := range []string{
 		"enter     view (search) · view message (viewer)",
-		"/         filter (search) · search (viewer)",
-		"j/k       up/down (search) · scroll (viewer)",
+		"/         filter (search) · refine query (viewer)",
+		"j/k       up/down",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected overlay to render %q, got:\n%s", want, out)

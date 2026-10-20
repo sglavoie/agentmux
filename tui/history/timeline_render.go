@@ -218,9 +218,11 @@ func (in DetailInput) RenderTimeline() string {
 		chrome.Binding("t", "flat list"),
 		chrome.Binding("↑/↓", "scroll"),
 		chrome.Binding("enter", "fold"),
+		chrome.Binding("[/]", "phase"),
 		chrome.Binding("z/Z", "collapse/expand"),
 		chrome.Binding("s", "suppressed"),
 		chrome.Binding("T", "timestamps"),
+		chrome.Binding("?", "help"),
 		chrome.Binding("esc/q/d", "close"),
 	)
 	sb.WriteString(hints)

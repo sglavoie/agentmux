@@ -166,6 +166,13 @@ func (m Model) enterSessionSearchForProject(project string) (tea.Model, tea.Cmd)
 	return m, tea.Batch(searchCmd, refreshCmd)
 }
 
+// beginSessionQueryEdit opens the Past Sessions query prompt and remembers the
+// query it opened on, which is what esc in the prompt restores.
+func (m *Model) beginSessionQueryEdit() {
+	m.sessionSearchMode = true
+	m.sessionQuerySaved = m.sessionQuery
+}
+
 // exitSessionSearch returns to ModeList and clears transient input state
 // (the query and chip filters are preserved so re-entry feels stateful).
 func (m *Model) exitSessionSearch() {
@@ -189,8 +196,17 @@ func (m Model) handleSessionSearchTextKey(msg tea.KeyPressMsg) (tea.Model, tea.C
 	switch msg.String() {
 	case keyCtrlC:
 		return m, tea.Quit
-	case keyEsc, keyEnter:
+	case keyEnter:
 		m.sessionSearchMode = false
+		return m, nil
+	case keyEsc:
+		// Cancel restores the query `/` opened on, as the dashboard's filter
+		// prompt does; enter is what keeps the edit.
+		m.sessionSearchMode = false
+		if m.sessionQuery != m.sessionQuerySaved {
+			m.sessionQuery = m.sessionQuerySaved
+			return m, m.dispatchSessionSearch()
+		}
 		return m, nil
 	case keyBackspace:
 		if r := []rune(m.sessionQuery); len(r) > 0 {
@@ -225,7 +241,7 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		m.exitSessionSearch()
 		return m, nil
 	case keySlash:
-		m.sessionSearchMode = true
+		m.beginSessionQueryEdit()
 		return m, nil
 	case keyQuestion:
 		m.openHelp(ModeSessionSearch)

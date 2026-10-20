@@ -115,7 +115,8 @@ func (in SearchInput) Render() string {
 	case in.Query != "":
 		queryBar = styleSearch.Render("/") + in.Query
 	default:
-		queryBar = styleDim.Render("press / to search · enter view · c continue · f fork · w worktree fork · H handoff · E edit handoff")
+		// The footer names every row key; this line only says how to start.
+		queryBar = styleDim.Render("press / to search")
 	}
 	sb.WriteString(layout.ClampLine(queryBar, in.Width))
 	sb.WriteByte('\n')

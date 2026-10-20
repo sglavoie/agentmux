@@ -97,7 +97,7 @@ func worktreeForgettable(m Model) bool {
 
 var sessionSearchFooterPalette = []footerEntry{
 	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
-	{"h/p/r/m", "chips", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"h/p/r/m", "filters", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"enter", "view", footerSectionRow, hasSessionResult, footerPriorityEssential},
 	{"c", "continue", footerSectionRow, hasSessionResult, footerPriorityPrimary},
 	{"f", "fork", footerSectionRow, hasSessionResult, footerPriorityPrimary},
@@ -116,11 +116,31 @@ var sessionSearchFooterPalette = []footerEntry{
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
-	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bottom", footerSectionApp, footerAlways, footerPriorityNav},
 }
 
+// sessionSearchFooter is the Past Sessions palette as this model reads it.
+// Opened on its own (`amx history`, no dashboard behind it), esc with no query
+// to clear ends the program, so the footer says quit rather than back.
+func sessionSearchFooter(m Model) []footerEntry {
+	if !m.historyOnly || m.sessionQuery != "" {
+		return sessionSearchFooterPalette
+	}
+	entries := make([]footerEntry, len(sessionSearchFooterPalette))
+	copy(entries, sessionSearchFooterPalette)
+	for i := range entries {
+		if entries[i].key == "esc" {
+			entries[i].label = "quit"
+		}
+	}
+	return entries
+}
+
+// The viewers' `/` leaves for the result list with its query open, so it is
+// named for what it does there: it refines the query, it does not search the
+// text on screen.
 var sessionViewFooterPalette = []footerEntry{
-	{"/", "search", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"/", "refine query", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"n/N", "match", footerSectionApp, func(m Model) bool {
 		return len(m.viewerMatchLines) > 0
@@ -142,12 +162,12 @@ var sessionViewFooterPalette = []footerEntry{
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
-	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bottom", footerSectionApp, footerAlways, footerPriorityNav},
 }
 
 var planSearchFooterPalette = []footerEntry{
 	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
-	{"r", "project", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"r", "project filter", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"enter", "view", footerSectionRow, hasPlanResult, footerPriorityEssential},
 	{"o", "sort", footerSectionApp, footerAlways, footerPriorityPrimary},
 	{"O", "editor", footerSectionRow, hasPlanResult, footerPriorityPrimary},
@@ -158,13 +178,13 @@ var planSearchFooterPalette = []footerEntry{
 	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
-	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bottom", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
 }
 
 var planViewFooterPalette = []footerEntry{
-	{"/", "search", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"/", "refine query", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"n/N", "match", footerSectionApp, func(m Model) bool {
 		return len(m.planViewerMatchLines) > 0
 	}, footerPrioritySecondary},
@@ -179,8 +199,8 @@ var planViewFooterPalette = []footerEntry{
 	}, footerPriorityPrimary},
 	{"?", "help", footerSectionApp, footerAlways, footerPriorityHelp},
 	{"esc", "back", footerSectionApp, footerAlways, footerPriorityEssential},
-	{"j/k", "scroll", footerSectionApp, footerAlways, footerPriorityNav},
-	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bottom", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
 }
@@ -202,14 +222,14 @@ var worktreesFooterPalette = []footerEntry{
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
-	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bottom", footerSectionApp, footerAlways, footerPriorityNav},
 }
 
 var aslRunsFooterPalette = []footerEntry{
 	{"enter/f", "focus", footerSectionRow, aslFocusAvailable, footerPriorityEssential},
 	{"r", "respond", footerSectionRow, aslRespondAvailable, footerPriorityEssential},
 	{"s", "stop", footerSectionRow, aslStopAvailable, footerPriorityPrimary},
-	{"a", "abort", footerSectionRow, aslAbortAvailable, footerPriorityPrimary},
+	{keyASLAbort, "abort", footerSectionRow, aslAbortAvailable, footerPriorityPrimary},
 	{"w", "workbench", footerSectionRow, aslWorkbenchAvailable, footerPriorityPrimary},
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		row, ok := m.selectedASLRow()
@@ -220,7 +240,7 @@ var aslRunsFooterPalette = []footerEntry{
 	{"j/k", "up/down", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+d/u", "half", footerSectionApp, footerAlways, footerPriorityNav},
 	{"ctrl+f/b", "page", footerSectionApp, footerAlways, footerPriorityNav},
-	{"g/G", "top/bot", footerSectionApp, footerAlways, footerPriorityNav},
+	{"g/G", "top/bottom", footerSectionApp, footerAlways, footerPriorityNav},
 }
 
 // aslRespondAvailable, aslStopAvailable, and aslAbortAvailable read exactly the
@@ -252,14 +272,18 @@ func aslControlAvailable(m Model, method string) bool {
 	return allowed
 }
 
+// aslResponseFooterPalette, sendFooterPalette, and planRunFooterPalette are the
+// forms' footers. Every entry is essential, so they wrap rather than shed and
+// never append the `? more` marker: inside a form `?` is a character the
+// editor types (or, in the run form, nothing), not a way to the overlay.
 var aslResponseFooterPalette = []footerEntry{
 	{"ctrl+s", "submit", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"tab", "editor/buttons", footerSectionRow, footerAlways, footerPriorityEssential},
-	{"enter", "newline or button", footerSectionRow, footerAlways, footerPriorityPrimary},
+	{"enter", "newline or button", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"ctrl+n/p", "question", footerSectionRow, func(m Model) bool {
 		return len(m.aslResponse.QuestionIDs) > 1
-	}, footerPriorityPrimary},
-	{"esc", "cancel", footerSectionApp, footerAlways, footerPriorityEssential},
+	}, footerPriorityEssential},
+	{"esc", "keep & close", footerSectionApp, footerAlways, footerPriorityEssential},
 }
 
 // sendFooterPalette keeps the send, focus, discard and close actions visible.
@@ -276,7 +300,7 @@ var sendFooterPalette = []footerEntry{
 var planRunFooterPalette = []footerEntry{
 	{"enter", "check and run", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"h/l", "change", footerSectionRow, footerAlways, footerPriorityEssential},
-	{"j/k", "row", footerSectionRow, footerAlways, footerPriorityPrimary},
+	{"j/k", "row", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"esc", "close", footerSectionApp, footerAlways, footerPriorityEssential},
 }
 

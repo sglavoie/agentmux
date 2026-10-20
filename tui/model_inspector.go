@@ -334,9 +334,9 @@ func (m Model) handleInspectorKey(key string) (tea.Model, tea.Cmd, bool) {
 		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, 1)
 	case keyK, keyUp:
 		m.inspectorViewport = m.inspectorViewport.ScrollUp(latest, rows, 1)
-	case keyPgDown:
+	case keyPgDown, keyCtrlF:
 		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, fullPageStep(rows))
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		m.inspectorViewport = m.inspectorViewport.ScrollUp(latest, rows, fullPageStep(rows))
 	case keyCtrlD:
 		m.inspectorViewport = m.inspectorViewport.ScrollDown(rows, max(1, rows/2))

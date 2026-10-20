@@ -273,6 +273,11 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keyCtrlC:
 		return m, tea.Quit
+	case keyQuestion:
+		// Help opens at the Session detail section and esc comes back here, with
+		// the detail state the overlay was showing untouched.
+		m.openHelp(ModeDetail)
+		return m, nil
 	case "m":
 		m.detailMetadata = !m.detailMetadata
 		m.detailViewTimeline = false

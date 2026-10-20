@@ -210,22 +210,22 @@ func TestListFooterAvailability(t *testing.T) {
 		{
 			name: "empty list — only global actions available",
 			m:    Model{},
-			want: map[string]bool{"t": false, "a": false, "s": false, "n/N": false},
+			want: map[string]bool{"t": false, "a": false, "s": false, "n/N": false, "u": false},
 		},
 		{
 			name: "attention row — actions and needs-you both live",
 			m:    withListRows(Model{}, session.RunningSession{State: "key"}),
-			want: map[string]bool{"t": false, "a": true, "s": true, "n/N": true},
+			want: map[string]bool{"t": false, "a": true, "s": true, "n/N": true, "u": false},
 		},
 		{
 			name: "active row — actions live, nothing waiting to jump to",
 			m:    withListRows(Model{}, session.RunningSession{State: "bolt"}),
-			want: map[string]bool{"t": false, "a": true, "s": true, "n/N": false},
+			want: map[string]bool{"t": false, "a": true, "s": true, "n/N": false, "u": false},
 		},
 		{
 			name: "idle row — actions live, nothing waiting to jump to",
 			m:    withListRows(Model{}, session.RunningSession{State: ""}),
-			want: map[string]bool{"t": false, "a": true, "s": true, "n/N": false},
+			want: map[string]bool{"t": false, "a": true, "s": true, "n/N": false, "u": false},
 		},
 	}
 	for _, tc := range cases {

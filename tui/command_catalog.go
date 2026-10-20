@@ -5,6 +5,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
@@ -307,7 +309,7 @@ func applicationCommandDeclarations() []commands.Command[Model] {
 				}
 				return recoverEndedTitle + " (relaunch project)"
 			},
-			Description:  "Resume the exact conversation when known; otherwise relaunch its project. Available for 30 seconds after ending a session.",
+			Description:  fmt.Sprintf("Resume the exact conversation when known; otherwise relaunch its project. Available for %d seconds after ending a session.", int(undoWindow.Seconds())),
 			Aliases:      []string{"restore", "reopen", "resume", "relaunch", "undo last close"},
 			Availability: undoCommandAvailability,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {

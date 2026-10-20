@@ -30,11 +30,14 @@ import (
 // removed once that table names its successor.
 //
 // The retirement needs no other edit to take effect, which is the reason the
-// table is the single declaration. A key absent from here is not dispatched,
-// because `dispatchDashboardBinding` reports an unbound key as unclaimed; it is
-// not advertised, because `commandCatalog` reads every `Shortcut` from here and
-// a command with no binding gets no shortcut label; and it is not in the footer
-// or the generated help, because both read this table too.
+// table is the single declaration of command keys. A command key absent from
+// here is not dispatched, because `dispatchDashboardBinding` reports an unbound
+// key as unclaimed; it is not advertised, because `commandCatalog` reads every
+// `Shortcut` from here and a command with no binding gets no shortcut label; and
+// it is not in the footer or the generated help, because both read this table
+// too. The keys that are not commands — cursor movement, `n`/`N`, `tab`, `:`,
+// `a`, and fold-on-enter — never reach this table: `handleListKey` answers them
+// first, and the keymap inventory lists them separately.
 //
 // Order is dispatch precedence, not catalog order. Nothing shares a key now that
 // `d` has stopped being contested, so the two agree throughout.
