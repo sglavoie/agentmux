@@ -330,6 +330,12 @@ func (j *Journal) prepareAndPublishSpool(ctx context.Context, claim *claimedSpoo
 // the spool namespace, then ownership is transferred to claim.file before the
 // old inode is unlocked. A competing maintainer therefore observes either the
 // old locked inode or the new locked inode throughout the rewrite.
+//
+// It deliberately does not use internal/atomicfile: the temp must be flocked
+// before it is renamed into place, checked against the claim's inode just
+// before the rename, and kept open afterwards as the claim's new handle.
+// atomicfile closes its temp before renaming, which would open a window where
+// the claim is visible unlocked.
 func rewriteLockedSpoolClaim(claim *claimedSpool, data []byte) (retErr error) {
 	if claim == nil || claim.file == nil {
 		return errors.New("diagnostics: rewriting unlocked spool claim")

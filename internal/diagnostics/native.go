@@ -334,6 +334,9 @@ func retainFileTail(path string, size int64) error {
 	if _, err := source.Seek(info.Size()-size, io.SeekStart); err != nil {
 		return err
 	}
+	// A fixed "<log>.trim" name rather than internal/atomicfile's unique temp:
+	// orphanNativeTrimTemp recognizes and sweeps exactly this name after a
+	// crash, and the O_EXCL open below refuses a planted one.
 	tempPath := path + ".trim"
 	if err := validateRegularTarget(tempPath); err != nil {
 		return err

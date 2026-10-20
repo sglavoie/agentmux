@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -191,7 +192,7 @@ func normalizeBundleOutput(path string, now time.Time, mode BundleMode) (string,
 	return filepath.Clean(abs), nil
 }
 
-func writeBundleAtomic(path string, now time.Time, members []bundleMember) (retErr error) {
+func writeBundleAtomic(path string, now time.Time, members []bundleMember) error {
 	directory := filepath.Dir(path)
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
@@ -208,49 +209,28 @@ func writeBundleAtomic(path string, now time.Time, members []bundleMember) (retE
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	temp, err := os.CreateTemp(directory, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	tempPath := temp.Name()
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tempPath)
-		}
-	}()
-	if err := temp.Chmod(0o600); err != nil {
-		_ = temp.Close()
-		return err
-	}
 	sort.Slice(members, func(i, j int) bool { return members[i].name < members[j].name })
-	gzipWriter := gzip.NewWriter(temp)
-	gzipWriter.ModTime = now
-	gzipWriter.OS = 255
-	tarWriter := tar.NewWriter(gzipWriter)
-	for _, member := range members {
-		header := &tar.Header{
-			Name: member.name, Mode: 0o600, Size: int64(len(member.data)), ModTime: now,
-			AccessTime: time.Time{}, ChangeTime: time.Time{}, Uid: 0, Gid: 0, Uname: "", Gname: "",
-			Format: tar.FormatPAX,
+	// The archive is encoded straight into atomicfile's temp. The explicit
+	// target check above keeps this package's message; RequireRegularTarget
+	// repeats it as close to the temp's creation as the shared code can.
+	return atomicfile.WriteStream(path, 0o600, func(w io.Writer) error {
+		gzipWriter := gzip.NewWriter(w)
+		gzipWriter.ModTime = now
+		gzipWriter.OS = 255
+		tarWriter := tar.NewWriter(gzipWriter)
+		for _, member := range members {
+			header := &tar.Header{
+				Name: member.name, Mode: 0o600, Size: int64(len(member.data)), ModTime: now,
+				AccessTime: time.Time{}, ChangeTime: time.Time{}, Uid: 0, Gid: 0, Uname: "", Gname: "",
+				Format: tar.FormatPAX,
+			}
+			if err := tarWriter.WriteHeader(header); err != nil {
+				return err
+			}
+			if _, err := tarWriter.Write(member.data); err != nil {
+				return err
+			}
 		}
-		if err := tarWriter.WriteHeader(header); err != nil {
-			_ = temp.Close()
-			return err
-		}
-		if _, err := tarWriter.Write(member.data); err != nil {
-			_ = temp.Close()
-			return err
-		}
-	}
-	if err := errors.Join(tarWriter.Close(), gzipWriter.Close(), temp.Sync(), temp.Close()); err != nil {
-		return err
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		return err
-	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), dir.Close())
+		return errors.Join(tarWriter.Close(), gzipWriter.Close())
+	}, atomicfile.NoCreateParents(), atomicfile.RequireRegularTarget())
 }

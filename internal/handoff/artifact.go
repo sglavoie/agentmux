@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 )
 
 const (
@@ -86,10 +88,17 @@ func (s *ArtifactStore) Write(request WriteRequest) (Artifact, error) {
 		suffix = ".draft.md"
 	}
 	path := filepath.Join(s.directory, request.ID+suffix)
-	if err := validateArtifactTarget(path); err != nil {
-		return Artifact{}, err
-	}
-	if err := atomicWritePrivate(path, request.Content); err != nil {
+	// The directory was just made private and real, so the write neither
+	// creates parents nor follows a symlink or replaces a non-regular target
+	// planted where the artifact goes. The directory fsync stays best effort:
+	// by then the artifact is published, and failing the handoff over it would
+	// strand an artifact the caller was told did not land.
+	if err := atomicfile.Write(path, request.Content, artifactFileMode,
+		atomicfile.NoCreateParents(),
+		atomicfile.RequireRegularTarget(),
+		atomicfile.WithDirSync(atomicfile.SyncDirBestEffort),
+		atomicfile.ErrorPrefix("handoff: writing artifact"),
+	); err != nil {
 		return Artifact{}, err
 	}
 	sum := sha256.Sum256(request.Content)
@@ -106,20 +115,6 @@ func (s *ArtifactStore) Write(request WriteRequest) (Artifact, error) {
 	}, nil
 }
 
-func validateArtifactTarget(path string) error {
-	info, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("handoff: inspecting existing artifact: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("handoff: existing artifact %s is not a regular file", path)
-	}
-	return nil
-}
-
 func ensurePrivateDirectory(path string) error {
 	if info, err := os.Lstat(path); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
@@ -133,48 +128,6 @@ func ensurePrivateDirectory(path string) error {
 	}
 	if err := os.Chmod(path, artifactDirectoryMode); err != nil {
 		return fmt.Errorf("handoff: restricting artifact directory: %w", err)
-	}
-	return nil
-}
-
-func atomicWritePrivate(path string, data []byte) (retErr error) {
-	directory := filepath.Dir(path)
-	temp, err := os.CreateTemp(directory, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return fmt.Errorf("handoff: creating temporary artifact: %w", err)
-	}
-	tempPath := temp.Name()
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tempPath)
-		}
-	}()
-	if err := temp.Chmod(artifactFileMode); err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("handoff: restricting temporary artifact: %w", err)
-	}
-	n, err := temp.Write(data)
-	if err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("handoff: writing temporary artifact: %w", err)
-	}
-	if n != len(data) {
-		_ = temp.Close()
-		return fmt.Errorf("handoff: short artifact write: wrote %d of %d bytes", n, len(data))
-	}
-	if err := temp.Sync(); err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("handoff: syncing temporary artifact: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("handoff: closing temporary artifact: %w", err)
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		return fmt.Errorf("handoff: publishing artifact: %w", err)
-	}
-	if directoryHandle, err := os.Open(directory); err == nil {
-		_ = directoryHandle.Sync()
-		_ = directoryHandle.Close()
 	}
 	return nil
 }

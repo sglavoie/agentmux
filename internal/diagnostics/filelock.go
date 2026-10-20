@@ -3,50 +3,31 @@ package diagnostics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 )
 
-func atomicWritePrivate(path string, data []byte) (retErr error) {
+// atomicWritePrivate replaces path in one step inside a directory it first
+// makes private and real. The target check is atomicfile's, with the package's
+// prefix, so a symlink or other non-regular target still reads
+// "diagnostics: <path> is not a regular file", as validateRegularTarget says.
+func atomicWritePrivate(path string, data []byte) error {
 	if err := ensurePrivateDirectory(filepath.Dir(path)); err != nil {
 		return err
 	}
-	if err := validateRegularTarget(path); err != nil {
-		return err
+	err := atomicfile.Write(path, data, fileMode, atomicfile.NoCreateParents(), atomicfile.RequireRegularTarget())
+	var notRegular *atomicfile.NotRegularError
+	if errors.As(err, &notRegular) {
+		return fmt.Errorf("diagnostics: %w", err)
 	}
-	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	tempPath := temp.Name()
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tempPath)
-		}
-	}()
-	if err := temp.Chmod(fileMode); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if _, err := temp.Write(data); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if err := temp.Sync(); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if err := temp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		return err
-	}
-	return syncDirectory(filepath.Dir(path))
+	return err
 }
 
 func syncDirectory(path string) error {

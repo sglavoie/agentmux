@@ -127,7 +127,7 @@ func mergeViaContract(contract harness.HookContract, homeDir string, account con
 	if err := os.MkdirAll(filepath.Dir(writePath), 0o755); err != nil {
 		return MergeResult{}, fmt.Errorf("creating directory %s: %w", filepath.Dir(writePath), err)
 	}
-	if err := atomicWriteFile(writePath, newData, perm); err != nil {
+	if err := writeSettings(writePath, newData, perm); err != nil {
 		return MergeResult{}, fmt.Errorf("writing %s: %w", path, err)
 	}
 

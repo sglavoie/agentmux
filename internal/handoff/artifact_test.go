@@ -57,7 +57,7 @@ func TestArtifactStoreWritesPrivateDraftAndFinalWithLocalMetadata(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.Contains(entry.Name(), ".tmp-") {
+		if strings.Contains(entry.Name(), ".tmp") {
 			t.Fatalf("temporary artifact leaked: %s", entry.Name())
 		}
 	}

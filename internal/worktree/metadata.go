@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 )
 
 const (
@@ -78,7 +80,9 @@ func WriteMetadata(path string, metadata Metadata) error {
 		return fmt.Errorf("worktree: encoding metadata: %w", err)
 	}
 	data = append(data, '\n')
-	if err := atomicWriteMetadata(path, data); err != nil {
+	// The metadata directory is created private by the worktree flow; a
+	// missing one is an error to report, not a directory to recreate 0755.
+	if err := atomicfile.Write(path, data, metadataFileMode, atomicfile.NoCreateParents()); err != nil {
 		return fmt.Errorf("worktree: writing metadata %s: %w", path, err)
 	}
 	return nil
@@ -143,41 +147,4 @@ func rejectTrailingJSON(decoder *json.Decoder) error {
 		return err
 	}
 	return nil
-}
-
-func atomicWriteMetadata(path string, data []byte) (retErr error) {
-	directory := filepath.Dir(path)
-	temp, err := os.CreateTemp(directory, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	tempPath := temp.Name()
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tempPath)
-		}
-	}()
-	if err := temp.Chmod(metadataFileMode); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if _, err := temp.Write(data); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if err := temp.Sync(); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if err := temp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		return err
-	}
-	directoryHandle, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(directoryHandle.Sync(), directoryHandle.Close())
 }
