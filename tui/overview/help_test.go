@@ -106,7 +106,7 @@ func TestHelpOpensAndLeavesWithoutMovingTheGrid(t *testing.T) {
 
 // TestHelpIsAToggleAndIsNotAnExit separates the three ways out of the overlay
 // from the one way out of the program. `q` under the overlay closes the overlay
-// — the footer's `q exit` is the base view's, and the overlay's own hint line is
+// — the footer's `q quit` is the base view's, and the overlay's own hint line is
 // what says so — while ctrl+c is still the operator asking for the process.
 func TestHelpIsAToggleAndIsNotAnExit(t *testing.T) {
 	for _, name := range []string{"?", "esc", "q"} {

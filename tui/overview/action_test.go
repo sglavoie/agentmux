@@ -1188,7 +1188,7 @@ func TestAnEmptyGridKeepsItsHelpItsExitAndItsRecovery(t *testing.T) {
 	}
 
 	frame := frameOf(m)
-	for _, hint := range []string{"Enter focus", "a actions", "? help", "q exit"} {
+	for _, hint := range []string{"enter focus", "a actions", "? help", "q quit"} {
 		if !strings.Contains(frame, hint) {
 			t.Fatalf("the empty grid lost the %q hint:\n%s", hint, frame)
 		}

@@ -41,8 +41,8 @@ func footerRow(width int, sessions []session.RunningSession) string {
 // operator who resizes never sees an entry appear, and never has to re-read the
 // row to find out which half moved.
 func TestFooterGivesUpWholeEntriesAsTheTerminalNarrows(t *testing.T) {
-	labels := []string{"focus", "actions", "help", "exit", "jump", "needs you", "compact", "move", "next", "page", "ends"}
-	essential := map[string]bool{"focus": true, "actions": true, "help": true, "exit": true}
+	labels := []string{"focus", "actions", "help", "quit", "jump", "needs you", "compact", "move", "next", "page", "ends"}
+	essential := map[string]bool{"focus": true, "actions": true, "help": true, "quit": true}
 
 	sessions := viewSessions(40)
 	var previous map[string]bool
@@ -111,7 +111,7 @@ func TestFooterFallsBackToBareKeysBeforeItLosesAKey(t *testing.T) {
 			t.Fatalf("the bare row lost %q: %q", key, row)
 		}
 	}
-	for _, label := range []string{"focus", "actions", "help", "exit"} {
+	for _, label := range []string{"focus", "actions", "help", "quit"} {
 		if strings.Contains(row, label) {
 			t.Fatalf("the bare row still carries the label %q: %q", label, row)
 		}
@@ -164,17 +164,17 @@ func TestFooterYieldsToAModalThatSpeaksForItself(t *testing.T) {
 
 func TestFooterEmptyAndSingleSessionAvailability(t *testing.T) {
 	in := viewInput(160, 45, nil)
-	for _, key := range []string{"Enter", "1–0", "n", "N", "←↑↓→/hjkl", "Tab", "PgUp", "PgDn", "Home", "End"} {
+	for _, key := range []string{"enter", "1–0", "n", "N", "←↑↓→/hjkl", "tab", "pgup", "pgdn", "home", "end"} {
 		assertFooterKey(t, in, key, false)
 	}
 	for _, key := range []string{"q", "c"} {
 		assertFooterKey(t, in, key, true)
 	}
 	in.Sessions = viewSessions(1)
-	assertFooterKey(t, in, "Enter", true)
+	assertFooterKey(t, in, "enter", true)
 	assertFooterKey(t, in, "1–0", true)
 	assertFooterKey(t, in, "←↑↓→/hjkl", false)
-	assertFooterKey(t, in, "Tab", false)
+	assertFooterKey(t, in, "tab", false)
 }
 
 func TestFooterNeedsYouUsesDashboardSemantics(t *testing.T) {
@@ -210,11 +210,11 @@ func TestFooterNavigationTracksBothEndsAndGeometry(t *testing.T) {
 		in.Compact = compact
 		for _, index := range []int{0, 39} {
 			in.Selected = index
-			assertFooterKey(t, in, "Home", index != 0)
-			assertFooterKey(t, in, "PgUp", index != 0)
-			assertFooterKey(t, in, "End", index != 39)
-			assertFooterKey(t, in, "PgDn", index != 39)
-			assertFooterKey(t, in, "Tab", index != 39)
+			assertFooterKey(t, in, "home", index != 0)
+			assertFooterKey(t, in, "pgup", index != 0)
+			assertFooterKey(t, in, "end", index != 39)
+			assertFooterKey(t, in, "pgdn", index != 39)
+			assertFooterKey(t, in, "tab", index != 39)
 		}
 	}
 	// A one-tile normal page has no spatial neighbor. Compact mode makes room
@@ -228,13 +228,13 @@ func TestFooterNavigationTracksBothEndsAndGeometry(t *testing.T) {
 
 func TestFooterDisablesFocusDuringRequestAndRestoresAfterFailure(t *testing.T) {
 	m, _ := atSize(t, viewSessions(2), 0, 160, 45)
-	assertFooterKey(t, overviewInput(m), "Enter", true)
+	assertFooterKey(t, overviewInput(m), "enter", true)
 	assertFooterKey(t, overviewInput(m), "1–0", true)
 	m = only(t, m, key(t, "enter"))
-	assertFooterKey(t, overviewInput(m), "Enter", false)
+	assertFooterKey(t, overviewInput(m), "enter", false)
 	assertFooterKey(t, overviewInput(m), "1–0", false)
 	assertFooterKey(t, overviewInput(m), "q", true)
 	m = only(t, m, commands.FocusDoneMsg{Err: errors.New("focus unavailable")})
-	assertFooterKey(t, overviewInput(m), "Enter", true)
+	assertFooterKey(t, overviewInput(m), "enter", true)
 	assertFooterKey(t, overviewInput(m), "1–0", true)
 }

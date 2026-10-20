@@ -26,18 +26,20 @@
 //     available key group. PgUp can be dead while PgDn still works, so they are
 //     two parts of one entry rather than one part of one entry.
 //   - helpKeys is how the HELP spells it, which is not always the same string.
-//     The footer prints `q exit` because the row has eleven entries competing for
+//     The footer prints `q quit` because the row has eleven entries competing for
 //     one line; the help prints `esc / q / ctrl+c` because it has a column and
 //     the other two keys are real.
 
 package overview
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // Footer priority bands: which entries width pressure gives up, and in which
@@ -58,7 +60,7 @@ const (
 	sectionAct   = "Act on the selected session"
 	sectionMove  = "Move the selection"
 	sectionView  = "Change what a tile shows"
-	sectionLeave = "Help and exit"
+	sectionLeave = "Help and quit"
 )
 
 // helpSectionOrder is the order sections appear in the overlay. A binding whose
@@ -188,9 +190,9 @@ func footerAlways(footerFacts) bool { return true }
 func gridBindings() []gridBinding {
 	return []gridBinding{{
 		keys:     []string{"enter"},
-		parts:    []bindingPart{{display: "Enter", short: "↵", available: footerFacts.canFocus}},
+		parts:    []bindingPart{{display: "enter", short: "↵", available: footerFacts.canFocus}},
 		labelFor: fixedLabel("focus"),
-		help:     "Focus the selected session's Kitty tab and leave the overview. Nothing happens while a focus is already out.",
+		help:     "Show the selected session: focus its Kitty tab and leave the overview, or attach this terminal to a tmux session until you detach with F12, then come back here. Nothing happens while a focus is already out.",
 		section:  sectionAct,
 		priority: footerPriorityEssential,
 		onFooter: true,
@@ -225,7 +227,7 @@ func gridBindings() []gridBinding {
 		{
 			keys:     []string{"esc", "q", "ctrl+c"},
 			parts:    []bindingPart{{display: "q", available: footerAlways}},
-			labelFor: fixedLabel("exit"),
+			labelFor: fixedLabel("quit"),
 			helpKeys: "esc/q/ctrl+c",
 			help:     "Leave the overview. It leaves while a refresh or a focus is still out rather than waiting for one.",
 			section:  sectionLeave,
@@ -294,9 +296,9 @@ func gridBindings() []gridBinding {
 		},
 		{
 			keys:     []string{"tab", "shift+tab"},
-			parts:    []bindingPart{{display: "Tab", available: moveAvailable(MoveNext)}},
+			parts:    []bindingPart{{display: "tab", available: moveAvailable(MoveNext)}},
 			labelFor: fixedLabel("next"),
-			helpKeys: "Tab/shift+Tab",
+			helpKeys: "tab/shift+tab",
 			help:     "Select the next or previous session in grid order, crossing onto the next page when the current one runs out.",
 			section:  sectionMove,
 			priority: footerPriorityExtra,
@@ -306,8 +308,8 @@ func gridBindings() []gridBinding {
 		{
 			keys: []string{"pgup", "pgdown"},
 			parts: []bindingPart{
-				{display: "PgUp", available: moveAvailable(MovePageUp)},
-				{display: "PgDn", available: moveAvailable(MovePageDown)},
+				{display: "pgup", available: moveAvailable(MovePageUp)},
+				{display: "pgdn", available: moveAvailable(MovePageDown)},
 			},
 			labelFor: fixedLabel("page"),
 			help:     "Show the previous or next page of tiles. How many fit on a page is what the compact toggle changes. The mouse wheel turns the page too.",
@@ -319,8 +321,8 @@ func gridBindings() []gridBinding {
 		{
 			keys: []string{"home", "end"},
 			parts: []bindingPart{
-				{display: "Home", available: moveAvailable(MoveFirst)},
-				{display: "End", available: moveAvailable(MoveLast)},
+				{display: "home", available: moveAvailable(MoveFirst)},
+				{display: "end", available: moveAvailable(MoveLast)},
 			},
 			labelFor: fixedLabel("ends"),
 			help:     "Select the first or the last session in grid order.",
@@ -338,7 +340,7 @@ func gridBindings() []gridBinding {
 			// which appears when a recovery exists and expires with it.
 			keys:     []string{"u"},
 			helpKeys: "u",
-			help:     "Recover the last confirmed close within 30 seconds. Resume its exact conversation when known, otherwise relaunch its project; the feedback row names the action.",
+			help:     fmt.Sprintf("Recover the last confirmed close within %d seconds. Resume its exact conversation when known, otherwise relaunch its project; the feedback row names the action.", int(sessionactions.RecoveryWindow.Seconds())),
 			section:  sectionAct,
 			run:      func(m model, _ string) (tea.Model, tea.Cmd) { return m, m.undoLastClose() },
 		}}

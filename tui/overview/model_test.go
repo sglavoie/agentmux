@@ -1404,7 +1404,7 @@ func TestTheFeedbackRowReachesTheFrame(t *testing.T) {
 	if !strings.Contains(lines[1], "daemon unreachable") {
 		t.Fatalf("the reserved feedback row says %q, want the failure", lines[1])
 	}
-	if !strings.Contains(lines[len(lines)-1], "Enter focus") {
+	if !strings.Contains(lines[len(lines)-1], "enter focus") {
 		t.Fatalf("the hints row says %q, want the overview's own hints", lines[len(lines)-1])
 	}
 }

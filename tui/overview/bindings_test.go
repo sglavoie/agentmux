@@ -15,7 +15,7 @@ import (
 // it. A display with no entry here fails rather than passing unchecked, which is
 // what stops a new binding from being advertised in a spelling nothing answers.
 var keySpellings = map[string][]string{
-	"Enter":     {"enter"},
+	"enter":     {"enter"},
 	"↵":         {"enter"},
 	"esc":       {"esc"},
 	"q":         {"q"},
@@ -26,12 +26,12 @@ var keySpellings = map[string][]string{
 	"n":         {"n"},
 	"N":         {"N"},
 	"u":         {"u"},
-	"Tab":       {"tab"},
-	"shift+Tab": {"shift+tab"},
-	"PgUp":      {"pgup"},
-	"PgDn":      {"pgdown"},
-	"Home":      {"home"},
-	"End":       {"end"},
+	"tab":       {"tab"},
+	"shift+tab": {"shift+tab"},
+	"pgup":      {"pgup"},
+	"pgdn":      {"pgdown"},
+	"home":      {"home"},
+	"end":       {"end"},
 	"←↑↓→":      {"left", "up", "down", "right"},
 	"hjkl":      {"h", "j", "k", "l"},
 	"1–0":       nil, // filled by init from the digit row itself
@@ -81,7 +81,7 @@ func TestNoKeyIsBoundTwice(t *testing.T) {
 //
 // The footer is held to the forward direction only. It has one row and drops
 // whole entries under width pressure, so it is allowed to advertise a subset —
-// `q exit` for a binding that also answers esc and ctrl+c — and the help overlay
+// `q quit` for a binding that also answers esc and ctrl+c — and the help overlay
 // is where the rest of that subset is named.
 func TestEveryAdvertisedKeyIsBound(t *testing.T) {
 	for _, b := range gridBindings() {

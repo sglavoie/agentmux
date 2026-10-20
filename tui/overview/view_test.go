@@ -586,14 +586,14 @@ func TestASurfaceWithNoRoomForAGridStillSaysWhatItIs(t *testing.T) {
 	if !strings.Contains(three[0], DefaultTitle) {
 		t.Errorf("a three-row surface says %q on its first row", three[0])
 	}
-	if !strings.Contains(three[2], "Enter focus") {
+	if !strings.Contains(three[2], "enter focus") {
 		t.Errorf("a three-row surface says %q on its last row", three[2])
 	}
 
 	in := viewInput(80, 2, sessions)
 	in.Feedback = "dropped first"
 	two := plain(renderLines(t, in))
-	if !strings.Contains(two[0], DefaultTitle) || !strings.Contains(two[1], "Enter focus") {
+	if !strings.Contains(two[0], DefaultTitle) || !strings.Contains(two[1], "enter focus") {
 		t.Errorf("a two-row surface is %q / %q, want the title and the hints", two[0], two[1])
 	}
 	if strings.Contains(strings.Join(two, ""), "dropped first") {
