@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -21,6 +22,17 @@ const RuntimeSessionFlag = "runtime-session"
 // RuntimeSessionHint is where a runtime session ID comes from, for the end of
 // an error about a missing, malformed, or unknown one.
 const RuntimeSessionHint = "a runtime session ID looks like rs- followed by 32 hex digits; <Tab> completes the running ones, and `amx session list --live --json` reports each one as live.runtime_session_id"
+
+// ParseRuntimeSessionID reads a runtime session ID an operator typed. A value
+// that is not one is refused in words that say what one looks like and where
+// to find it, not the registry's own "malformed ID".
+func ParseRuntimeSessionID(raw string) (runtimesession.ID, error) {
+	id, err := runtimesession.ParseID(strings.TrimSpace(raw))
+	if err != nil {
+		return "", fmt.Errorf("%q is not a runtime session ID: %s", strings.TrimSpace(raw), RuntimeSessionHint)
+	}
+	return id, nil
+}
 
 // CompleteRuntimeSessions suggests the runtime sessions that are running, the
 // most recently launched first, each described by its project and harness. It

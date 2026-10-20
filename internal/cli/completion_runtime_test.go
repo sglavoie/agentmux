@@ -2,6 +2,7 @@ package cli
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,6 +70,18 @@ func TestCompleteRuntimeSessionsOffersTheLiveOnesNewestFirst(t *testing.T) {
 	}
 	if got, _ := CompleteRuntimeSessionFirstArg(nil, []string{string(live)}, ""); got != nil {
 		t.Fatalf("second argument completed %q", got)
+	}
+}
+
+func TestParseRuntimeSessionIDSaysWhatOneLooksLike(t *testing.T) {
+	_, err := ParseRuntimeSessionID("rs-nope")
+	if err == nil || strings.Contains(err.Error(), "runtimesession:") || strings.Contains(err.Error(), "malformed") ||
+		!strings.Contains(err.Error(), `"rs-nope" is not a runtime session ID`) || !strings.Contains(err.Error(), "amx session list") {
+		t.Fatalf("error = %v", err)
+	}
+	id := "rs-0123456789abcdef0123456789abcdef"
+	if got, err := ParseRuntimeSessionID(" " + id + " "); err != nil || string(got) != id {
+		t.Fatalf("ParseRuntimeSessionID(%q) = %q, %v", id, got, err)
 	}
 }
 

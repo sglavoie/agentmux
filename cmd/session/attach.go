@@ -139,7 +139,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return cli.MissingParameter(cmd, attachJSON, "runtime-session-id", "the runtime session to attach (rs-...)")
 	}
-	id, err := runtimesession.ParseID(strings.TrimSpace(args[0]))
+	id, err := cli.ParseRuntimeSessionID(strings.TrimSpace(args[0]))
 	if err != nil {
 		return cli.CommandFailure(cmd, attachJSON, "invalid_arguments", err)
 	}

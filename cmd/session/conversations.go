@@ -191,8 +191,8 @@ removes it. With --json it reports {action, changed, message, data}.`,
 }
 
 var sessionHandoffCmd = &cobra.Command{
-	Use:               "handoff <harness>:<session-id> | <session-id>",
-	ValidArgsFunction: completeOneConversation,
+	Use:               "handoff <harness> <session-id> | <harness>:<session-id> | <session-id>",
+	ValidArgsFunction: completeConversation,
 	Short:             "Launch a fresh target profile from a portable handoff pack",
 	Long: `Writes a handoff pack for a conversation: a bounded Markdown summary of where
 it stands and its recent messages, and launches a new agent under --profile
@@ -213,18 +213,14 @@ pack's path.`,
 		if edit && jsonOutput {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_options", errors.New("--edit cannot be used with --json"))
 		}
-		if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
-			return cli.MissingParameter(cmd, jsonOutput, "conversation", conversationParameterDescription)
-		}
-		if len(args) != 1 {
-			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("session handoff accepts exactly one conversation selector"))
-		}
-		if strings.TrimSpace(profile) == "" {
-			return cli.MissingParameter(cmd, jsonOutput, "profile", "target configured profile")
-		}
+		// The same selector forms as continue, fork, and show, read by the
+		// same parser, so one copied from any of them works here.
 		identity, err := conversationIdentityFromArgs(cmd, jsonOutput, "handoff", args)
 		if err != nil {
 			return err
+		}
+		if strings.TrimSpace(profile) == "" {
+			return cli.MissingParameter(cmd, jsonOutput, "profile", "target configured profile")
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {

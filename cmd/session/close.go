@@ -42,7 +42,7 @@ runtime session is closed by closing its tab.`,
 }
 
 func init() {
-	closeCmd.Flags().BoolVar(&closeJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(closeCmd, &closeJSON)
 	closeCmd.Flags().BoolVar(&closeYes, "yes", false, "confirm ending the agent")
 }
 
@@ -72,7 +72,7 @@ func runClose(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return cli.MissingParameter(cmd, closeJSON, "runtime-session-id", "the runtime session to end (rs-...)")
 	}
-	id, err := runtimesession.ParseID(strings.TrimSpace(args[0]))
+	id, err := cli.ParseRuntimeSessionID(strings.TrimSpace(args[0]))
 	if err != nil {
 		return cli.CommandFailure(cmd, closeJSON, "invalid_arguments", err)
 	}

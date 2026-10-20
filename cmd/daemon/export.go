@@ -112,7 +112,7 @@ type runtimeSessionExporter interface {
 func daemonExportRuntimeSession(raw, source string) (daemonExportTarget, error) {
 	id, err := runtimesession.ParseID(raw)
 	if err != nil {
-		return daemonExportTarget{}, fmt.Errorf("%s requires a valid runtime session ID, got %q", source, raw)
+		return daemonExportTarget{}, fmt.Errorf("%s requires a valid runtime session ID, got %q; %s", source, raw, cli.RuntimeSessionHint)
 	}
 	return daemonExportTarget{runtime: string(id)}, nil
 }

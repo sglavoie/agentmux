@@ -64,7 +64,7 @@ one file's patch. With --json it reports {root, base, files, patch}.`,
 			return err
 		},
 	}
-	cmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(cmd, nil)
 	cmd.Flags().String("directory", "", "checkout directory")
 	cmd.Flags().String("runtime-session", "", "runtime session ID of a live tmux session whose working directory to review")
 	cmd.Flags().String("base", "HEAD", "commit or reference to compare the working tree against")
@@ -75,7 +75,7 @@ one file's patch. With --json it reports {root, base, files, patch}.`,
 func init() { sessionCmd.AddCommand(newChangesCommand()) }
 
 func changesSessionDirectory(raw string) (string, error) {
-	id, err := runtimesession.ParseID(raw)
+	id, err := cli.ParseRuntimeSessionID(raw)
 	if err != nil {
 		return "", err
 	}
