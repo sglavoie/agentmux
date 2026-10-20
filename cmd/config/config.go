@@ -217,15 +217,15 @@ A config that loads is valid. Unknown and deprecated keys and project
 directories that are missing or not directories are printed as warnings,
 the way amx doctor reports them, because a project checked out on another
 machine is not a broken config. Pass --strict to fail on a project directory
-instead.
+instead. Warnings are printed on stderr, so stdout carries the verdict alone.
 
 With --json it reports {valid, path, unknown_keys, deprecations,
 invalid_project_directories}.`,
 	Example: `  amx config validate
   amx config validate --strict
   amx config validate --json`,
-	// Failures are already printed by ccerrors.Print; cobra printing them a
-	// second time only repeats the line that matters.
+	// Failures are printed by ccerrors.Print and returned quiet; printing
+	// them a second time only repeats the line that matters.
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -236,35 +236,36 @@ invalid_project_directories}.`,
 				return cli.CommandFailure(cmd, true, "config_invalid", err)
 			}
 			ccerrors.Print(err)
-			return err
+			return &cli.ExitError{Code: 1, Err: err, Quiet: true}
 		}
 		if jsonOutput {
 			return writeConfigValidateJSON(cmd, cfg, strict)
 		}
 		// Key warnings come first so they are still seen when a strict
 		// project directory check fails below.
-		out := cmd.OutOrStdout()
+		// Warnings go to stderr, so the verdict on stdout is all a script reads.
+		out, warnings := cmd.OutOrStdout(), cmd.ErrOrStderr()
 		for _, key := range cfg.UnknownKeys {
-			if _, err := fmt.Fprintf(out, "warning: unknown key %s (ignored; check its spelling and section)\n", key); err != nil {
+			if _, err := fmt.Fprintf(warnings, "warning: unknown key %s (ignored; check its spelling and section)\n", key); err != nil {
 				return err
 			}
 		}
 		for _, d := range cfg.Deprecations {
-			if _, err := fmt.Fprintf(out, "warning: deprecated %s in %s; use %s\n", d.Key, d.Location, d.Replacement); err != nil {
+			if _, err := fmt.Fprintf(warnings, "warning: deprecated %s in %s; use %s\n", d.Key, d.Location, d.Replacement); err != nil {
 				return err
 			}
 		}
 		if strict {
 			if err := validateProjectDirectories(cfg.Projects); err != nil {
 				ccerrors.Print(err)
-				return err
+				return &cli.ExitError{Code: 1, Err: err, Quiet: true}
 			}
 			_, err = fmt.Fprintln(out, "config is valid")
 			return err
 		}
 		issues := config.ProjectDirectoryIssues(cfg.Projects)
 		for _, issue := range issues {
-			if _, err := fmt.Fprintf(out, "warning: %s\n", issue.Format(cli.DisplayPath(issue.Directory))); err != nil {
+			if _, err := fmt.Fprintf(warnings, "warning: %s\n", issue.Format(cli.DisplayPath(issue.Directory))); err != nil {
 				return err
 			}
 		}

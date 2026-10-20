@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -108,6 +110,28 @@ func TestFlagErrorsHonorJSONAndReadPlainly(t *testing.T) {
 	}
 	if strings.Contains(stderr, "strconv") || !strings.Contains(stderr, `invalid value "x" for --last: want a whole number`) {
 		t.Fatalf("stderr:\n%s", stderr)
+	}
+}
+
+// config validate --strict prints its failure itself (in red, on stderr) and
+// returns it quiet, so the root does not print the same line a second time.
+func TestConfigValidateStrictPrintsItsFailureOnce(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	body := "[harness_emojis]\nclaude = \"🦊\"\n\n[[profiles]]\nname = \"work\"\nharness = \"claude\"\nhome_dir = \"" + dir + "\"\ncolor = \"blue\"\n\n" +
+		"[[projects]]\ntitle = \"gone\"\ndirectory = \"" + filepath.Join(dir, "gone") + "\"\nprofile = \"work\"\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AMX_CONFIG", path)
+	command, _, _ := rootCmd.Find([]string{"config", "validate"})
+	t.Cleanup(func() { _ = command.Flags().Set("strict", "false") })
+	_, stderr, code := executeRootArgs(t, nil, "config", "validate", "--strict")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if stderr != "" {
+		t.Fatalf("the root printed the failure again:\n%s", stderr)
 	}
 }
 

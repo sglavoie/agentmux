@@ -33,10 +33,12 @@ profile = "work"
 	oldOut := configValidateCmd.OutOrStdout()
 	t.Cleanup(func() {
 		configValidateCmd.SetOut(oldOut)
+		configValidateCmd.SetErr(nil)
 	})
 
 	var out bytes.Buffer
 	configValidateCmd.SetOut(&out)
+	configValidateCmd.SetErr(&out) // warnings go to stderr
 
 	if err := configValidateCmd.RunE(configValidateCmd, nil); err != nil {
 		t.Fatalf("RunE: %v", err)
@@ -63,10 +65,12 @@ func TestConfigValidateCommandWarnsAboutUnknownAndDeprecatedKeys(t *testing.T) {
 	oldOut := configValidateCmd.OutOrStdout()
 	t.Cleanup(func() {
 		configValidateCmd.SetOut(oldOut)
+		configValidateCmd.SetErr(nil)
 	})
 
 	var out bytes.Buffer
 	configValidateCmd.SetOut(&out)
+	configValidateCmd.SetErr(&out) // warnings go to stderr
 
 	if err := configValidateCmd.RunE(configValidateCmd, nil); err != nil {
 		t.Fatalf("RunE: %v", err)
@@ -127,10 +131,12 @@ profile = "work"
 	oldOut := configValidateCmd.OutOrStdout()
 	t.Cleanup(func() {
 		configValidateCmd.SetOut(oldOut)
+		configValidateCmd.SetErr(nil)
 	})
 
 	var out bytes.Buffer
 	configValidateCmd.SetOut(&out)
+	configValidateCmd.SetErr(&out) // warnings go to stderr
 
 	err := configValidateCmd.RunE(configValidateCmd, nil)
 	if err == nil {
@@ -185,9 +191,11 @@ profile = "work"
 	oldOut := configValidateCmd.OutOrStdout()
 	t.Cleanup(func() {
 		configValidateCmd.SetOut(oldOut)
+		configValidateCmd.SetErr(nil)
 	})
 	var out bytes.Buffer
 	configValidateCmd.SetOut(&out)
+	configValidateCmd.SetErr(&out) // warnings go to stderr
 
 	err := configValidateCmd.RunE(configValidateCmd, nil)
 	if err == nil {
@@ -221,9 +229,11 @@ profile = "work"
 	oldOut := configValidateCmd.OutOrStdout()
 	t.Cleanup(func() {
 		configValidateCmd.SetOut(oldOut)
+		configValidateCmd.SetErr(nil)
 	})
 	var out bytes.Buffer
 	configValidateCmd.SetOut(&out)
+	configValidateCmd.SetErr(&out) // warnings go to stderr
 
 	if err := configValidateCmd.RunE(configValidateCmd, nil); err != nil {
 		t.Fatalf("RunE: %v", err)

@@ -35,9 +35,13 @@ var hooksSyncThisBinary bool
 // hooksStatusJSON switches hooks-status to the schema-v1 envelope.
 var hooksStatusJSON bool
 
+// hooksSyncJSON is hooks-sync's --json.
+var hooksSyncJSON bool
+
 func init() {
 	configHooksSyncCmd.Flags().BoolVar(&hooksSyncThisBinary, "this-binary", false, "write hooks that run this amx even though it is not the amx on PATH")
-	configHooksStatusCmd.Flags().BoolVar(&hooksStatusJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(configHooksStatusCmd, &hooksStatusJSON)
+	cli.AddJSONFlag(configHooksSyncCmd, &hooksSyncJSON)
 }
 
 // hooksStatusData is the hooks-status --json payload: the report doctor also
@@ -48,6 +52,43 @@ type hooksStatusData struct {
 	JudgedBinary string   `json:"judged_binary"`
 	Foreign      bool     `json:"foreign"`
 	Hints        []string `json:"hints"`
+}
+
+// hooksSyncProfile is one profile's result in the `hooks-sync --json` data:
+// status is created, updated, or skipped (already up to date), or "error"
+// with the error that stopped it.
+type hooksSyncProfile struct {
+	Profile string `json:"profile"`
+	Path    string `json:"path,omitempty"`
+	Status  string `json:"status"`
+	Error   string `json:"error,omitempty"`
+}
+
+// hooksSyncData is the `hooks-sync --json` payload. Binary is the amx every
+// written hook runs.
+type hooksSyncData struct {
+	Binary   string             `json:"binary"`
+	Profiles []hooksSyncProfile `json:"profiles"`
+}
+
+// writeHooksSyncJSON reports every profile's result. A profile that failed
+// keeps the others' results: the data is written with a nonzero quiet exit,
+// as the text mode exits nonzero.
+func writeHooksSyncJSON(cmd *cobra.Command, bin string, results []hooks.MergeResult) error {
+	data := hooksSyncData{Binary: bin, Profiles: make([]hooksSyncProfile, 0, len(results))}
+	var failed []string
+	for _, r := range results {
+		row := hooksSyncProfile{Profile: r.Account, Path: r.Path, Status: string(r.Status)}
+		if r.Err != nil {
+			row.Status, row.Error = "error", r.Err.Error()
+			failed = append(failed, r.Account)
+		}
+		data.Profiles = append(data.Profiles, row)
+	}
+	if len(failed) > 0 {
+		return cli.WriteJSONPartial(cmd, data, fmt.Errorf("hooks-sync failed for %s: %s", cli.CountOf(len(failed), "profile", "profiles"), strings.Join(failed, ", ")))
+	}
+	return cli.WriteJSON(cmd, data)
 }
 
 // hooksStatusIsTerminal decides between the table for a person and the
@@ -69,23 +110,25 @@ A profile that fails to sync makes the command exit nonzero after the others
 are written.`,
 	Example: `  amx config hooks-sync
   amx config hooks-sync codex-work
+  amx config hooks-sync --json
   amx config hooks-status`,
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: cli.CompleteProfileFirstArg,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput := hooksSyncJSON
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			return err
+			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
 		}
 		bin, err := hooksBinary()
 		if err != nil {
-			return err
+			return cli.CommandFailure(cmd, jsonOutput, "binary_unresolved", err)
 		}
 		if err := cli.RefuseTransientBinary(bin, "write hook commands"); err != nil {
-			return err
+			return cli.CommandFailure(cmd, jsonOutput, "transient_binary", err)
 		}
 		if installed, foreign := hooks.ExpectedBinary(bin, hooksLookPath); foreign && !hooksSyncThisBinary {
-			return fmt.Errorf("refusing to write hook commands that run %s: it is not the amx on PATH (%s), which is the one hooks are expected to name; run `%s config hooks-sync`, or pass --this-binary to point every hook at this build", cli.DisplayPath(bin), cli.DisplayPath(installed), cli.DisplayPath(installed))
+			return cli.CommandFailure(cmd, jsonOutput, "foreign_binary", fmt.Errorf("refusing to write hook commands that run %s: it is not the amx on PATH (%s), which is the one hooks are expected to name; run `%s config hooks-sync`, or pass --this-binary to point every hook at this build", cli.DisplayPath(bin), cli.DisplayPath(installed), cli.DisplayPath(installed)))
 		}
 		filter := ""
 		if len(args) > 0 {
@@ -93,7 +136,10 @@ are written.`,
 		}
 		results, err := hooks.MergeAll(cfg, filter, bin)
 		if err != nil {
-			return err
+			return cli.CommandFailure(cmd, jsonOutput, "hooks_sync_failed", err)
+		}
+		if jsonOutput {
+			return writeHooksSyncJSON(cmd, bin, results)
 		}
 		var failed []string
 		for _, r := range results {
