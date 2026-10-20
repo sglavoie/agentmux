@@ -17,6 +17,8 @@ import (
 const claudeFixtureRoot = "testdata/claude"
 
 func TestClaudeReader_Discover(t *testing.T) {
+	t.Parallel()
+
 	r := NewClaudeReader()
 	metas, err := r.Discover(claudeFixtureRoot, DiscoverOptions{})
 	if err != nil {
@@ -83,6 +85,8 @@ func TestClaudeReader_Discover(t *testing.T) {
 }
 
 func TestClaudeReader_DiscoverMissingDir(t *testing.T) {
+	t.Parallel()
+
 	r := NewClaudeReader()
 	metas, err := r.Discover(filepath.Join(claudeFixtureRoot, "does-not-exist"), DiscoverOptions{})
 	if err != nil {
@@ -94,6 +98,8 @@ func TestClaudeReader_DiscoverMissingDir(t *testing.T) {
 }
 
 func TestClaudeReader_DiscoverEmptyHome(t *testing.T) {
+	t.Parallel()
+
 	r := NewClaudeReader()
 	metas, err := r.Discover("", DiscoverOptions{})
 	if err != nil {
@@ -105,6 +111,8 @@ func TestClaudeReader_DiscoverEmptyHome(t *testing.T) {
 }
 
 func TestClaudeReader_ReadMessages(t *testing.T) {
+	t.Parallel()
+
 	r := NewClaudeReader()
 	path := filepath.Join(claudeFixtureRoot, "projects",
 		"-Users-dev-projects-foo",
@@ -143,6 +151,8 @@ func TestClaudeReader_ReadMessages(t *testing.T) {
 }
 
 func TestClaudeMessageToolOnlyIsExcludedFromHandoff(t *testing.T) {
+	t.Parallel()
+
 	record := claudeRecord{
 		Type: "assistant",
 		Message: &claudeMessage{Role: "assistant", Content: []byte(`[
@@ -160,6 +170,8 @@ func TestClaudeMessageToolOnlyIsExcludedFromHandoff(t *testing.T) {
 }
 
 func TestFlattenClaudeContent_ToolResultArray(t *testing.T) {
+	t.Parallel()
+
 	raw := []byte(`[
 		{"type":"text","text":"before tool"},
 		{"type":"tool_result","content":[
@@ -182,6 +194,8 @@ func TestFlattenClaudeContent_ToolResultArray(t *testing.T) {
 }
 
 func TestClaudeDiscover_CacheHitSkipsParse(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	projDir := filepath.Join(root, "projects", "-tmp-cache-hit")
 	path := filepath.Join(projDir, "cccccccc-cccc-cccc-cccc-cccccccccccc.jsonl")
@@ -240,6 +254,8 @@ func TestClaudeDiscover_CacheHitSkipsParse(t *testing.T) {
 }
 
 func TestClaudeDiscover_MinTimeSkipsOldFiles(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	newPath := filepath.Join(root, "projects", "-tmp-new", "new.jsonl")
 	oldPath := filepath.Join(root, "projects", "-tmp-old", "old.jsonl")
@@ -268,6 +284,8 @@ func TestClaudeDiscover_MinTimeSkipsOldFiles(t *testing.T) {
 }
 
 func TestClaudeDiscover_CacheMissReparses(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	projDir := filepath.Join(root, "projects", "-tmp-cache-miss")
 	path := filepath.Join(projDir, "dddddddd-dddd-dddd-dddd-dddddddddddd.jsonl")
@@ -311,6 +329,8 @@ func TestClaudeDiscover_CacheMissReparses(t *testing.T) {
 }
 
 func TestTruncateSnippet(t *testing.T) {
+	t.Parallel()
+
 	short := "hello world"
 	if got := textutil.Snippet(short, snippetMaxLen); got != short {
 		t.Errorf("short pass-through = %q", got)
@@ -335,6 +355,8 @@ func TestTruncateSnippet(t *testing.T) {
 }
 
 func TestClaudeSlashCommand(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name, text, command string
 		withArgs, ok        bool
@@ -359,6 +381,8 @@ func TestClaudeSlashCommand(t *testing.T) {
 }
 
 func TestClaudeReader_SnippetSkipsSlashCommandMarkup(t *testing.T) {
+	t.Parallel()
+
 	const clear = `{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"},"timestamp":"2026-05-24T17:37:44.000Z","cwd":"/tmp/p"}`
 	const stdout = `{"type":"user","message":{"role":"user","content":"<local-command-stdout></local-command-stdout>"},"timestamp":"2026-05-24T17:37:45.000Z","cwd":"/tmp/p"}`
 	const prompt = `{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
@@ -405,6 +429,8 @@ func TestClaudeReader_SnippetSkipsSlashCommandMarkup(t *testing.T) {
 // and command output never stand for the operator's words in a handoff, so a
 // conversation that began with /clear does not hand its markup on as the goal.
 func TestClaudeReader_MessagesReadSlashCommandsAsTyped(t *testing.T) {
+	t.Parallel()
+
 	lines := []string{
 		`{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"},"timestamp":"2026-05-24T17:37:44.000Z","cwd":"/tmp/p"}`,
 		`{"type":"user","message":{"role":"user","content":"<local-command-stdout></local-command-stdout>"},"timestamp":"2026-05-24T17:37:45.000Z","cwd":"/tmp/p"}`,
@@ -445,6 +471,8 @@ func TestClaudeReader_MessagesReadSlashCommandsAsTyped(t *testing.T) {
 }
 
 func TestClaudeReader_TitlePrefersTheOperatorsLatestName(t *testing.T) {
+	t.Parallel()
+
 	const prompt = `{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
 	const aiFirst = `{"type":"ai-title","aiTitle":"Parser work","sessionId":"s"}`
 	const aiLater = `{"type":"ai-title","aiTitle":"Parser tightening","sessionId":"s"}`
@@ -478,6 +506,8 @@ func TestClaudeReader_TitlePrefersTheOperatorsLatestName(t *testing.T) {
 }
 
 func TestClaudeCacheFromBeforeTitlesIsReparsed(t *testing.T) {
+	t.Parallel()
+
 	if !claudeCachePredatesRules(SessionMeta{Harness: harness.Claude, Snippet: "Tighten the parser"}) {
 		t.Fatal("a Claude entry with no ReaderVersion predates titles and must be reparsed once")
 	}
@@ -490,6 +520,8 @@ func TestClaudeCacheFromBeforeTitlesIsReparsed(t *testing.T) {
 }
 
 func TestSessionMetaSummaryPrefersTitle(t *testing.T) {
+	t.Parallel()
+
 	if got := (SessionMeta{Snippet: "prompt", Title: "title"}).Summary(); got != "title" {
 		t.Fatalf("Summary = %q, want the title", got)
 	}
@@ -502,6 +534,8 @@ func TestSessionMetaSummaryPrefersTitle(t *testing.T) {
 // tool or only thought says nothing about how the conversation closed, and a
 // user prompt after the last reply does not replace it.
 func TestClaudeReader_EndingIsTheLastProseReply(t *testing.T) {
+	t.Parallel()
+
 	lines := []string{
 		`{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`,
 		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Looking at it."}]},"timestamp":"2026-05-24T17:37:47.000Z"}`,
@@ -525,6 +559,8 @@ func TestClaudeReader_EndingIsTheLastProseReply(t *testing.T) {
 // session show --last prints. Tool calls, tool results, and turns that only
 // thought are records of their own in a Claude transcript and are left out.
 func TestClaudeReader_MessageCountLeavesOutToolRecords(t *testing.T) {
+	t.Parallel()
+
 	lines := []string{
 		`{"type":"user","message":{"role":"user","content":"Tighten the parser"},"timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`,
 		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]},"timestamp":"2026-05-24T17:37:47.000Z"}`,
@@ -558,6 +594,8 @@ func TestClaudeReader_MessageCountLeavesOutToolRecords(t *testing.T) {
 }
 
 func TestCacheFromBeforeEndingsIsReparsedForEveryHarness(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		harness string
 		current int
@@ -580,6 +618,8 @@ func TestCacheFromBeforeEndingsIsReparsedForEveryHarness(t *testing.T) {
 // off, or matched as the operator's words, and stays searchable as harness
 // text.
 func TestClaudeReader_TaskNotificationIsNotAPrompt(t *testing.T) {
+	t.Parallel()
+
 	notice := "<task-notification>\n<task-id>a1</task-id>\n<summary>Agent \"Audit\" finished</summary>\n<result>All clear</result>\n</task-notification>"
 	encoded, err := json.Marshal(notice)
 	if err != nil {
@@ -625,6 +665,8 @@ func TestClaudeReader_TaskNotificationIsNotAPrompt(t *testing.T) {
 // An origin of a shape the reader does not expect costs only the notice
 // check, never the record.
 func TestClaudeReader_UnexpectedOriginKeepsTheRecord(t *testing.T) {
+	t.Parallel()
+
 	line := `{"type":"user","message":{"role":"user","content":"Tighten the parser"},"origin":"human","timestamp":"2026-05-24T17:37:46.000Z","cwd":"/tmp/p"}`
 	root := t.TempDir()
 	path := filepath.Join(root, "projects", "-tmp-p", "s.jsonl")

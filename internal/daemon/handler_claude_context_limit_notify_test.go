@@ -130,6 +130,8 @@ func TestProbeClaudeContextLimit_RecoveryReArmsNotifier(t *testing.T) {
 // explicit user_clear action through the TUI also resets the dedup flag,
 // mirroring the terminal/cleanup branch in handler_state_update.go.
 func TestProbeClaudeContextLimit_UserClearReArmsNotifier(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{
@@ -175,6 +177,8 @@ func TestProbeClaudeContextLimit_UserClearReArmsNotifier(t *testing.T) {
 // probed window, the contextLimitNotified entry is GC'd alongside the rest
 // of the per-window state.
 func TestProbeClaudeContextLimit_ClosedWindowGCDropsFlag(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{

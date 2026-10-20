@@ -29,6 +29,8 @@ func isQuit(cmd tea.Cmd) bool {
 }
 
 func TestHistoryViewStartsInPastSessionsOnTheStartupCacheLoad(t *testing.T) {
+	t.Parallel()
+
 	m, _ := historyModel(t, "miss")
 	if m.mode != ModeSessionSearch || !m.sessionLoading || !sessionQueryIsEmpty(m.currentSessionQuery()) {
 		t.Fatalf("mode=%v loading=%v query=%+v, want unfiltered Past Sessions loading", m.mode, m.sessionLoading, m.currentSessionQuery())
@@ -43,6 +45,8 @@ func TestHistoryViewStartsInPastSessionsOnTheStartupCacheLoad(t *testing.T) {
 }
 
 func TestHistoryViewSelectsTheWantedConversationWhenResultsPublish(t *testing.T) {
+	t.Parallel()
+
 	m, fixture := historyModel(t, "miss")
 	m = send(m, sessionCacheLoadDoneMsg{seq: m.sessionSearchSeq, idx: fixture.transcriptIndex, readers: fixture.transcriptReaders, results: fixture.sessionResults})
 	if m.sessionCursor != 1 || m.sessionResults[m.sessionCursor].Meta.ID != "miss" {
@@ -60,6 +64,8 @@ func TestHistoryViewSelectsTheWantedConversationWhenResultsPublish(t *testing.T)
 }
 
 func TestHistoryViewFindsAConversationOnlyTheRefreshLists(t *testing.T) {
+	t.Parallel()
+
 	m, fixture := historyModel(t, "miss")
 	m = send(m, sessionCacheLoadDoneMsg{seq: m.sessionSearchSeq, idx: fixture.transcriptIndex, readers: fixture.transcriptReaders, results: fixture.sessionResults[:1]})
 	if m.sessionCursor != 0 || m.sessionWantedKey == "" {
@@ -72,6 +78,8 @@ func TestHistoryViewFindsAConversationOnlyTheRefreshLists(t *testing.T) {
 }
 
 func TestHistoryViewLeavesTheCursorAtTheTopForAnAbsentConversation(t *testing.T) {
+	t.Parallel()
+
 	m, fixture := historyModel(t, "gone")
 	m = send(m, sessionCacheLoadDoneMsg{seq: m.sessionSearchSeq, idx: fixture.transcriptIndex, readers: fixture.transcriptReaders, results: fixture.sessionResults})
 	m = send(m, sessionWarmRefreshDoneMsg{seq: m.sessionSearchSeq, results: fixture.sessionResults})
@@ -81,6 +89,8 @@ func TestHistoryViewLeavesTheCursorAtTheTopForAnAbsentConversation(t *testing.T)
 }
 
 func TestHistoryViewQuitsInsteadOfShowingTheSessionList(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{"esc", "q"} {
 		m, _ := historyModel(t, "miss")
 		updated, cmd := m.Update(keyPress(key))
@@ -97,6 +107,8 @@ func TestHistoryViewQuitsInsteadOfShowingTheSessionList(t *testing.T) {
 }
 
 func TestHistoryViewSettlesOnPastSessionsWhereTheDashboardSettlesOnItsList(t *testing.T) {
+	t.Parallel()
+
 	m, fixture := historyModel(t, "miss")
 	m = send(m, sessionCacheLoadDoneMsg{seq: m.sessionSearchSeq, idx: fixture.transcriptIndex, readers: fixture.transcriptReaders, results: fixture.sessionResults})
 	m.openCommandPalette()

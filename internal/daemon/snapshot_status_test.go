@@ -23,6 +23,8 @@ import (
 // omitted one, because omission is reserved for a daemon too old to have the
 // field and would send a new client off to do its own Kitty I/O.
 func TestStateQuerySnapshotBlockReportsFreshStaleAndCold(t *testing.T) {
+	t.Parallel()
+
 	t.Run("cold", func(t *testing.T) {
 		h := newTestHandler()
 		block := stateQuerySnapshot(t, h)
@@ -85,6 +87,8 @@ func TestStateQuerySnapshotBlockReportsFreshStaleAndCold(t *testing.T) {
 // boundary rather than only inside the cache: a snapshot captured "in the
 // future" reads as brand new, never as negatively aged and never as stale.
 func TestSnapshotBlockClampsNegativeAge(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	capturedAt := time.Now().Add(time.Hour)
 	h.publishSnapshot(fakeOSWindowsWithTab(42, "W:api"), capturedAt)
@@ -107,6 +111,8 @@ func TestSnapshotBlockClampsNegativeAge(t *testing.T) {
 // cache", the state query answers "what is in it", and neither staleness nor
 // coldness may move Ready or DegradedReason.
 func TestHealthCarriesStatusOnlySnapshot(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.MarkReady()
 	h.publishSnapshot(fakeOSWindowsWithTab(42, "W:api"),
@@ -159,6 +165,8 @@ func TestHealthCarriesStatusOnlySnapshot(t *testing.T) {
 // daemon's own sweep tests inject — a nil Coordinator must be the answer, not a
 // panic and not a zero block that would read as a healthy socket.
 func TestSnapshotBlockOmitsCoordinatorWithoutStatusSurface(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{})
 	h.publishSnapshot(fakeOSWindowsWithTab(42, "W:api"), time.Now())
@@ -186,6 +194,8 @@ func TestSnapshotBlockOmitsCoordinatorWithoutStatusSurface(t *testing.T) {
 // daemon's effective list socket, and taking them does not deadlock against
 // stateMu even though kittyClientForList acquires that lock.
 func TestSnapshotBlockCarriesEffectiveSocketCoordination(t *testing.T) {
+	t.Parallel()
+
 	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
 	h, _ := newCoordinatedHandler(t, runner)
 	h.primeSnapshot()
@@ -218,6 +228,8 @@ func TestSnapshotBlockCarriesEffectiveSocketCoordination(t *testing.T) {
 // answer different questions: Socket describes THIS publication, Coordinator
 // describes the socket the daemon is reading through at response time.
 func TestStateQueryBindsSnapshotToCaptureSocket(t *testing.T) {
+	t.Parallel()
+
 	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
 	h, client := newCoordinatedHandler(t, runner)
 	h.primeSnapshot()
@@ -275,6 +287,8 @@ func TestStateQueryBindsSnapshotToCaptureSocket(t *testing.T) {
 // under the established stateMu → SnapshotStore order is what makes that
 // impossible.
 func TestStateQueryCapturesStateAndTopologyCoherently(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	const windowID = 42
 
@@ -361,6 +375,8 @@ func (c *statusClient) ListStatus() (kitty.ListStatus, bool) { return c.status, 
 // must omit the block rather than publish zeros a consumer could mistake for a
 // healthy socket.
 func TestKittyListStatusTreatsAbsentAccountingAsNoInformation(t *testing.T) {
+	t.Parallel()
+
 	present := &statusClient{status: kitty.ListStatus{Socket: "unix:/tmp/kitty-1", Attempts: 3}, ok: true}
 	status, ok := kittyListStatus(present, "")
 	if !ok || status.Attempts != 3 {

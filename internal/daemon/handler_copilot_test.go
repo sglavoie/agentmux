@@ -7,6 +7,8 @@ import (
 )
 
 func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{
@@ -53,6 +55,8 @@ func TestHandler_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
 // tab from the bolt to the stop icon, not preserve the existing bolt.
 // Regression source: commit 5858318.
 func TestHandler_CopilotTurnEndClearsBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	// Seed the guard at "active" (bolt visible).
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Account: "work",
@@ -75,6 +79,8 @@ func TestHandler_CopilotTurnEndClearsBolt(t *testing.T) {
 // permission guard (priority 3) would block a re-fired elicitation (priority 2)
 // within the guard window.
 func TestHandler_CopilotPendingPromptSuppressionKeepsElicitationGuard(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Harness: "copilot",
 		Action: "elicitation", Event: "notification", NotificationType: "elicitation_dialog"})
@@ -106,6 +112,8 @@ func TestHandler_CopilotPendingPromptSuppressionKeepsElicitationGuard(t *testing
 // subagent drains. subagentCount is seeded directly to isolate the gate from
 // the unrelated SubagentStart bookkeeping.
 func TestHandler_CopilotTurnEndDuringSubagentPreserves(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.stateMu.Lock()
 	h.ensureWindowStateLocked(42).SubagentCount = 1

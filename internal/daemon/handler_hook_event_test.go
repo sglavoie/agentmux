@@ -16,6 +16,8 @@ import (
 )
 
 func TestHandler_HookEventEnrichesFromKittySnapshot(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: hookEventWindows(palette.BuildTitle("api", "key", false), []kitty.Window{{
@@ -68,6 +70,8 @@ func TestHandler_HookEventEnrichesFromKittySnapshot(t *testing.T) {
 }
 
 func TestHandler_HookEventKeepsStampedProducerSeparateFromTargetMetadata(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{
 		windows: hookEventWindows("api", []kitty.Window{{
@@ -109,6 +113,8 @@ func TestHandler_HookEventKeepsStampedProducerSeparateFromTargetMetadata(t *test
 }
 
 func TestHandler_HookEventExplicitUnknownProducerIsNotInferredFromTarget(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{
 		windows: hookEventWindows("api", []kitty.Window{{
@@ -149,6 +155,8 @@ func TestHandler_HookEventExplicitUnknownProducerIsNotInferredFromTarget(t *test
 }
 
 func TestHandler_HookEventUnknownProducerDoesNotAcquireCopilotPermissionBehavior(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{
 		windows: hookEventWindows("api", []kitty.Window{{
@@ -322,6 +330,8 @@ func TestHandler_HookEventOwnerMismatchNoOps(t *testing.T) {
 }
 
 func TestHandler_HookEventTabTitleOwnerStillUpdates(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: hookEventWindows("api", []kitty.Window{
@@ -342,6 +352,8 @@ func TestHandler_HookEventTabTitleOwnerStillUpdates(t *testing.T) {
 }
 
 func TestHandler_HookEventScreenContextLimitPromotesStopFailure(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	// Run the async context-limit probe inline so the promotion is deterministic
 	// while still exercising the asynchronous request path.
@@ -392,6 +404,8 @@ func TestHandler_HookEventScreenContextLimitPromotesStopFailure(t *testing.T) {
 }
 
 func TestHandler_HookEventStopReasonContextLimitSkipsScreenProbe(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
@@ -422,6 +436,8 @@ func TestHandler_HookEventStopReasonContextLimitSkipsScreenProbe(t *testing.T) {
 }
 
 func TestHandler_HookEventIgnoredAndUnknownAreLoggedSuppressions(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		event  string

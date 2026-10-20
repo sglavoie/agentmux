@@ -14,6 +14,8 @@ import (
 )
 
 func TestHandler_PreserveCurrentIcon(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", PreservesIcon: true})
 	if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
@@ -22,6 +24,8 @@ func TestHandler_PreserveCurrentIcon(t *testing.T) {
 }
 
 func TestHandler_PreserveCurrentRestoresPreviousState(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name       string
 		prevAction string

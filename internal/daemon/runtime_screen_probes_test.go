@@ -442,6 +442,8 @@ func TestTmuxScreensFromAnotherGenerationOrAnExitedPaneAreNoEvidence(t *testing.
 // a reader for its pane and a probe for its harness. Otherwise it keeps the
 // short reset hold, as a Kitty stop does in a daemon with no Kitty.
 func TestTmuxStopIsHeldOnlyWhenItsPaneCanConfirmIt(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name, harness string
 		reader, want  bool

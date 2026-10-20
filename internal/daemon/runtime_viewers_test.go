@@ -138,6 +138,8 @@ func TestAttachingATerminalClearsATmuxSessionsUnseenAttention(t *testing.T) {
 // Kitty window: a Kitty session is seen through Kitty's focus, never through
 // this path.
 func TestViewerObservationLeavesKittySlotsAndSeenSessionsAlone(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
 	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
@@ -186,6 +188,8 @@ func TestViewerObservationLeavesKittySlotsAndSeenSessionsAlone(t *testing.T) {
 // session's own hooks (which carry no Kitty snapshot to read a mute from),
 // and never touches a Kitty slot, whose mute is Kitty's to report.
 func TestMuteObservationIsTheMuteOfASessionWithNoKittyWindow(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
 	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")

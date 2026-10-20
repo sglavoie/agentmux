@@ -48,6 +48,8 @@ func TestActivityCommandReadsDurableJournalWithoutDaemon(t *testing.T) {
 }
 
 func TestActivityCommandRejectsUnboundedReads(t *testing.T) {
+	t.Parallel()
+
 	for _, args := range [][]string{{"--days", "0"}, {"--days", "91"}, {"--limit", "0"}, {"--limit", "1001"}} {
 		cmd := newActivityCommand()
 		cmd.SetOut(&bytes.Buffer{})

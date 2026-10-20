@@ -12,6 +12,8 @@ import (
 )
 
 func TestRefresh_WritesSidecarAndClearsTransientSearchText(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-1.jsonl")
 	stat := writeTranscript(t, transcriptPath, "{}\n")
@@ -60,6 +62,8 @@ func TestRefresh_WritesSidecarAndClearsTransientSearchText(t *testing.T) {
 }
 
 func TestRefresh_MissingSidecarInvalidatesUnchangedCache(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-1.jsonl")
 	stat := writeTranscript(t, transcriptPath, "{}\n")
@@ -126,6 +130,8 @@ func TestRefresh_MissingSidecarInvalidatesUnchangedCache(t *testing.T) {
 }
 
 func TestRefresh_PreservesEntriesBeyondCutoff(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	projectDir := filepath.Join(tmp, "shared-project")
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
@@ -228,6 +234,8 @@ func TestRefresh_PreservesEntriesBeyondCutoff(t *testing.T) {
 }
 
 func TestRefresh_RescansFilesWithinCutoff(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-recent.jsonl")
 	writeTranscript(t, transcriptPath, "{}\n")

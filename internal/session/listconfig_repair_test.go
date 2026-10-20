@@ -9,6 +9,8 @@ import (
 )
 
 func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromHarnessEmojiTitle(t *testing.T) {
+	t.Parallel()
+
 	analyticsDir := t.TempDir()
 	logScannerDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
@@ -63,6 +65,8 @@ func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromHarnessEmojiTitle(t
 }
 
 func TestListWithConfig_CWDFallback_PrefersActiveWindow(t *testing.T) {
+	t.Parallel()
+
 	otherDir := t.TempDir()
 	projectDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
@@ -106,6 +110,8 @@ func TestListWithConfig_CWDFallback_PrefersActiveWindow(t *testing.T) {
 }
 
 func TestListWithConfig_CWDFallback_AmbiguousDirectorySkipped(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
 		ID:       1,
@@ -139,6 +145,8 @@ func TestListWithConfig_CWDFallback_AmbiguousDirectorySkipped(t *testing.T) {
 }
 
 func TestListWithConfig_TitleFallbackBeatsCWDFallback(t *testing.T) {
+	t.Parallel()
+
 	apiDir := t.TempDir()
 	backendDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{

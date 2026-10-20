@@ -36,6 +36,8 @@ func exportedScreenDeclines(t *testing.T, h *Handler, windowID int) []protocol.S
 // settle at the end is the retraction case — a stale published streak would
 // read to doctor as a classifier that is still stuck.
 func TestScreenDeclinePublishedThroughProbeAndRetracted(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
@@ -88,6 +90,8 @@ func TestScreenDeclinePublishedThroughProbeAndRetracted(t *testing.T) {
 // A closed window's metadata survives as a tombstone that doctor still reads,
 // so the streak has to be retracted explicitly rather than merely stop growing.
 func TestScreenDeclinePublicationClearedOnWindowClose(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	idleSeedHarness(t, h, 7, "cur-7", "active", time.Now().Unix())
@@ -110,6 +114,8 @@ func TestScreenDeclinePublicationClearedOnWindowClose(t *testing.T) {
 // a projection that forgot to pin the watchdog shape would leak it into three
 // schemas at once.
 func TestScreenDeclineAbsentFromSchemaV12(t *testing.T) {
+	t.Parallel()
+
 	payload := protocol.ExportEventsPayload{
 		SchemaVersion: protocol.EventsExportSchemaVersion,
 		Windows: []protocol.ExportWindow{{

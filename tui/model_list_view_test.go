@@ -141,6 +141,8 @@ var (
 // and the collapse map is empty rather than restored, because absent means
 // expanded and nothing carries a fold across a process boundary.
 func TestListStartsInUrgencyWithEveryFamilyExpanded(t *testing.T) {
+	t.Parallel()
+
 	fresh := NewModel(&config.Config{}, kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""))
 	if fresh.listView != dashboard.ViewUrgency {
 		t.Errorf("a fresh model opened in view %v, want Urgency", fresh.listView)
@@ -163,6 +165,8 @@ func TestListStartsInUrgencyWithEveryFamilyExpanded(t *testing.T) {
 // the palette entry still performs the whole switch — the field, the projection,
 // and the cursor mapping — so the capability moved rather than went away.
 func TestToggleListViewIsReachableOnlyThroughThePalette(t *testing.T) {
+	t.Parallel()
+
 	byKey, _ := listViewModel(dashboard.ViewUrgency)
 	byKey = selectLine(t, byKey, "session:lib")
 	before := itemLines(byKey)
@@ -204,6 +208,8 @@ func TestToggleListViewIsReachableOnlyThroughThePalette(t *testing.T) {
 // in both arrangements, so switching views moves it up or down the screen but
 // never off the operator's row.
 func TestViewSwitchKeepsAVisibleSelection(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:lib")
 
@@ -223,6 +229,8 @@ func TestViewSwitchKeepsAVisibleSelection(t *testing.T) {
 // cursor has to land on a session — and it lands on the one whose state the
 // summary was painting, not on whichever member happens to be listed first.
 func TestSummarySelectionMapsToItsLeadOnReturnToUrgency(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewProjects)
 
 	m = selectLine(t, m, "summary:monorepo(open)")
@@ -245,6 +253,8 @@ func TestSummarySelectionMapsToItsLeadOnReturnToUrgency(t *testing.T) {
 // entering Projects with a session selected whose family is folded lands on the
 // line that stands for it, because that line is where the row now lives.
 func TestChildHiddenByAFoldMapsToItsSummary(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
 	m = foldToggle(m)
@@ -270,6 +280,8 @@ func TestChildHiddenByAFoldMapsToItsSummary(t *testing.T) {
 // touching Kitty, and that on every line which is not a summary it is
 // FocusSession and nothing else.
 func TestEnterFoldsOnlyOnASummary(t *testing.T) {
+	t.Parallel()
+
 	t.Run("enter toggles the selected family without touching kitty", func(t *testing.T) {
 		m, runner := listViewModel(dashboard.ViewProjects)
 		calls := len(runner.Calls)
@@ -365,6 +377,8 @@ func TestEnterFoldsOnlyOnASummary(t *testing.T) {
 // model when it was made, so every rebuild has to carry it — otherwise the next
 // two-second topology refresh silently unfolds the screen.
 func TestFoldsSurviveRefreshFilterAndViewSwitch(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
 	m = foldToggle(m)
@@ -407,6 +421,8 @@ func TestFoldsSurviveRefreshFilterAndViewSwitch(t *testing.T) {
 // would reach into every copy that still holds it — including the pre-fold model
 // a test, or an in-flight command, is holding.
 func TestFoldingCopiesTheCollapseMap(t *testing.T) {
+	t.Parallel()
+
 	before, _ := listViewModel(dashboard.ViewProjects)
 	before = selectLine(t, before, "summary:monorepo(open)")
 
@@ -449,6 +465,8 @@ func TestFoldingCopiesTheCollapseMap(t *testing.T) {
 // item count, which is what a folded family makes smaller than the session
 // count — a clamp still charging sessions would let the cursor sit past the end.
 func TestProjectsNavigationAtListBoundaries(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		folds  []string
@@ -516,6 +534,8 @@ func TestProjectsNavigationAtListBoundaries(t *testing.T) {
 // filtered down to one visible checkout is a plain leaf: a summary over one row
 // would be a claim about a group the operator cannot see the rest of.
 func TestProjectsNavigationUnderAFilter(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewProjects)
 
 	m.applyFilterChange(dashboard.Parse("api"))
@@ -545,6 +565,8 @@ func TestProjectsNavigationUnderAFilter(t *testing.T) {
 // card answers the question the selection actually asked instead, out of facts
 // already on the rows.
 func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
+	t.Parallel()
+
 	m, runner := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
 	if cmd := m.refreshPreviewForCursor(); cmd != nil {
@@ -608,6 +630,8 @@ func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
 // pointed at the selection the refresh finished with, not the one it started
 // from and not whichever line the cursor passed over on the way.
 func TestRefreshRetargetsThePreviewAtTheSelectionItEndedOn(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
@@ -656,6 +680,8 @@ func TestRefreshRetargetsThePreviewAtTheSelectionItEndedOn(t *testing.T) {
 // before the detour would match on window ID and repaint the pane with
 // scrollback captured for an older selection.
 func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
@@ -708,6 +734,8 @@ func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 // help cannot reach on its own. Folding is bound in the list handler and appears
 // in no palette, so it needs a static section that a test holds in place.
 func TestKeyboardHelpDocumentsTheProjectsView(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewProjects)
 	m.mode = ModeHelp
 	m.height = 0

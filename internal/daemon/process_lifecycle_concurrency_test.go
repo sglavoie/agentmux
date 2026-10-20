@@ -13,6 +13,8 @@ import (
 )
 
 func TestProcessLifecycleConcurrentHookInvalidatesObservation(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5601, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
@@ -43,6 +45,8 @@ func TestProcessLifecycleConcurrentHookInvalidatesObservation(t *testing.T) {
 }
 
 func TestProcessLifecycleLateNativeStopWinsAndSettlementIsIdempotent(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5701, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
@@ -71,6 +75,8 @@ func TestProcessLifecycleLateNativeStopWinsAndSettlementIsIdempotent(t *testing.
 }
 
 func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
+	t.Parallel()
+
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5801, StartToken: "Thu Jul 16 10:20:30 2026"}
 	r := state.NewReducer(zeroCfg)
 	r.Apply(processReducerEvent(protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:restored"}, "active", 1, time.Now().Unix(), "restored", false, identity))
@@ -101,6 +107,8 @@ func TestProcessLifecycleRestoredV4StateSettlesOnFirstPass(t *testing.T) {
 }
 
 func TestProcessLifecycleSlowInspectorDoesNotBlockDaemonWork(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5901, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
@@ -153,6 +161,8 @@ func TestProcessLifecycleSlowInspectorDoesNotBlockDaemonWork(t *testing.T) {
 }
 
 func TestRunHarnessProcessLifecycleConvergesOnPollingPass(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5951, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
@@ -187,6 +197,8 @@ func TestRunHarnessProcessLifecycleConvergesOnPollingPass(t *testing.T) {
 }
 
 func TestSetHarnessProcessInspectorWhileLifecycleLoopRuns(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5971, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
@@ -246,6 +258,8 @@ func TestSetHarnessProcessInspectorWhileLifecycleLoopRuns(t *testing.T) {
 }
 
 func TestRunHarnessProcessLifecycleCancellationStopsPolling(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 6001, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)

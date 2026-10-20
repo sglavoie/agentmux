@@ -30,12 +30,16 @@ func assertCommandPaletteCleared(t *testing.T, m Model) {
 }
 
 func TestModeCommandPaletteIsAppended(t *testing.T) {
+	t.Parallel()
+
 	if ModeCommandPalette != ModePlanView+1 {
 		t.Fatalf("ModeCommandPalette = %d, want %d after ModePlanView", ModeCommandPalette, ModePlanView+1)
 	}
 }
 
 func TestCommandMatchesQueryAcrossEveryField(t *testing.T) {
+	t.Parallel()
+
 	candidate := commands.Command[Model]{
 		ID:          "test.command",
 		Group:       commands.GroupSession,
@@ -66,6 +70,8 @@ func TestCommandMatchesQueryAcrossEveryField(t *testing.T) {
 }
 
 func TestCommandPaletteResultsPreserveCatalogAndGroupOrder(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	ctx := captureCommandContext(m)
 
@@ -99,6 +105,8 @@ func TestCommandPaletteResultsPreserveCatalogAndGroupOrder(t *testing.T) {
 }
 
 func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{
 		TabID: 7, WindowID: 70, Base: "api", Project: "api", Profile: "work", State: "bolt",
 	}
@@ -131,6 +139,8 @@ func TestOpenCommandPaletteResetsStateAndCapturesTarget(t *testing.T) {
 }
 
 func TestOpenCommandPaletteSelectsFirstAvailableOrDisabledResult(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m.openCommandPalette()
 	if m.commandCursor != 0 || m.commandResults[0].ID != commands.OpenLauncher {
@@ -167,6 +177,8 @@ func TestOpenCommandPaletteSelectsFirstAvailableOrDisabledResult(t *testing.T) {
 }
 
 func TestCommandPaletteInputIsRuneSafeAndPrintableKeysStayText(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.openCommandPalette()
 	m.commandCursor = len(m.commandResults) - 1
@@ -204,6 +216,8 @@ func TestCommandPaletteInputIsRuneSafeAndPrintableKeysStayText(t *testing.T) {
 }
 
 func TestCommandPaletteNavigationClampsAndVisitsDisabledRows(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m.openCommandPalette()
 	// `close` is the query with disabled rows AHEAD of the available one now that
@@ -268,6 +282,8 @@ func TestCommandPaletteNavigationClampsAndVisitsDisabledRows(t *testing.T) {
 }
 
 func TestCommandPaletteEnterDisabledOrEmptyIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name  string
 		query string
@@ -296,6 +312,8 @@ func TestCommandPaletteEnterDisabledOrEmptyIsNoOp(t *testing.T) {
 }
 
 func TestCommandPaletteCtrlCQuits(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m.openCommandPalette()
 	updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))
@@ -312,6 +330,8 @@ func TestCommandPaletteCtrlCQuits(t *testing.T) {
 }
 
 func TestCommandPaletteExecutionUsesCapturedTargetAndClearsBeforeTransition(t *testing.T) {
+	t.Parallel()
+
 	original := session.RunningSession{
 		TabID: 7, WindowID: 70, Base: "api", Project: "api", Profile: "work", State: "bolt",
 	}
@@ -352,6 +372,8 @@ func TestCommandPaletteExecutionUsesCapturedTargetAndClearsBeforeTransition(t *t
 }
 
 func TestCommandPaletteEscClearsTransientStateAndPreservesDashboardSelection(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cursor = 1
 	m.openCommandPalette()
@@ -371,6 +393,8 @@ func TestCommandPaletteEscClearsTransientStateAndPreservesDashboardSelection(t *
 }
 
 func TestColonOpensCommandPaletteFromDashboard(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cursor = 1
 	wantTabID := m.filtered[m.cursor].TabID

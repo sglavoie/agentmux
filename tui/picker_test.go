@@ -42,6 +42,8 @@ func pickerModel(t *testing.T) Model {
 }
 
 func TestPickerTypingNarrowsLive(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	if len(m.pickerFilteredIdx) != 4 {
 		t.Fatalf("expected 4 picker sessions initially, got %d", len(m.pickerFilteredIdx))
@@ -66,6 +68,8 @@ func TestPickerTypingNarrowsLive(t *testing.T) {
 }
 
 func TestPickerBackspaceShrinksBuffer(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/") // enter search mode
 	for _, k := range []string{"t", "e", "s"} {
@@ -104,6 +108,8 @@ func TestPickerBackspaceShrinksBuffer(t *testing.T) {
 // unlike esc it skips the clear-filters stage, and unlike ctrl+c it never
 // closes amx.
 func TestPickerQReturnsToDashboardInOneStep(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	m = pressKey(m, "t")
@@ -127,6 +133,8 @@ func TestPickerQReturnsToDashboardInOneStep(t *testing.T) {
 }
 
 func TestPickerEscClearsBufferThenExits(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 
 	// Enter search mode and type a filter.
@@ -169,6 +177,8 @@ func TestPickerEscClearsBufferThenExits(t *testing.T) {
 }
 
 func TestPickerSelectionPersistsAcrossFilterChanges(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	// Default sort: personal, then work — cursor=0 is "dotfiles".
 	first := m.pickerFilteredIdx[m.pickerCursor]
@@ -202,6 +212,8 @@ func TestPickerSelectionPersistsAcrossFilterChanges(t *testing.T) {
 }
 
 func TestPickerEnterLaunchesWhileFiltered(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	// Enter search mode, filter to one row, then exit search mode.
 	m = pressKey(m, "/")
@@ -223,6 +235,8 @@ func TestPickerEnterLaunchesWhileFiltered(t *testing.T) {
 }
 
 func TestPickerProjectSessionSearchUsesFilteredRowTitle(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.mode = ModePicker
 	m.cfg.Sessions = []config.Session{
@@ -271,6 +285,8 @@ func TestPickerProjectSessionSearchUsesFilteredRowTitle(t *testing.T) {
 }
 
 func TestPickerProjectSessionSearchSIsTextInSearchMode(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 
@@ -292,6 +308,8 @@ func TestPickerProjectSessionSearchSIsTextInSearchMode(t *testing.T) {
 }
 
 func TestPickerProjectSessionSearchEmptyFilterIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	m = typeString(m, "zzzz")

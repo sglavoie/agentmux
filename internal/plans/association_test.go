@@ -13,6 +13,8 @@ import (
 )
 
 func TestRefreshClassifiesPlanFromStateMetadataAndLegacyPreparation(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	stateRoot := t.TempDir()
 	runDir := canonicalPlanTestPath(t, filepath.Join(t.TempDir(), "run-repo"))
@@ -56,6 +58,8 @@ func TestRefreshClassifiesPlanFromStateMetadataAndLegacyPreparation(t *testing.T
 }
 
 func TestRefreshReclassifiesMetadataOnlyChangesAndPreservesLastGood(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	firstDir := canonicalPlanTestPath(t, filepath.Join(t.TempDir(), "first"))
 	secondDir := canonicalPlanTestPath(t, filepath.Join(t.TempDir(), "second"))

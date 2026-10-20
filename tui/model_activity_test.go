@@ -16,6 +16,8 @@ import (
 )
 
 func TestSessionsMsgStoresActivity(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	now := time.Now()
 	activity := map[int]time.Time{42: now}
@@ -35,6 +37,8 @@ func TestSessionsMsgStoresActivity(t *testing.T) {
 // commands.SessionsMsg alongside the existing activity map and is stored on the model
 // for the next render pass to consume.
 func TestSessionsMsgStoresWatchdog(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	wd := map[int]protocol.WatchdogState{
 		7: {LastAction: "active", LastEventAt: time.Now().Unix(), ThresholdSec: 600},
@@ -56,6 +60,8 @@ func TestSessionsMsgStoresWatchdog(t *testing.T) {
 }
 
 func TestSessionsMsgNilActivityClassifiesAsActive(t *testing.T) {
+	t.Parallel()
+
 	// With no activity map, an empty-state session must not flip to Idle.
 	m := testModel()
 	sessions := []session.RunningSession{
@@ -68,6 +74,8 @@ func TestSessionsMsgNilActivityClassifiesAsActive(t *testing.T) {
 }
 
 func TestSessionsMsgStaleActivityFlipsToIdle(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, WindowID: 9, Base: "stale", Account: "work", State: ""},
@@ -81,6 +89,8 @@ func TestSessionsMsgStaleActivityFlipsToIdle(t *testing.T) {
 }
 
 func TestNewModelDefaultsIdleThreshold(t *testing.T) {
+	t.Parallel()
+
 	// Zero IdleThreshold in config should still produce a non-zero duration —
 	// otherwise stateGroup's threshold check disables itself.
 	cfg := &config.Config{
@@ -95,6 +105,8 @@ func TestNewModelDefaultsIdleThreshold(t *testing.T) {
 }
 
 func TestNewModelHonorsConfiguredIdleThreshold(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 42},
 	}
@@ -109,6 +121,8 @@ func TestNewModelHonorsConfiguredIdleThreshold(t *testing.T) {
 // ---- C key (dashboard launch) tests ----
 
 func TestCapitalCKeyOpensDashboardLaunchPicker(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyDashboardLaunch)
 	if m.mode != ModeConfigPicker {
@@ -120,6 +134,8 @@ func TestCapitalCKeyOpensDashboardLaunchPicker(t *testing.T) {
 }
 
 func TestCapitalCKeyEmptyListIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), nil)
 	updated, cmd := m.Update(keyPress("C"))
 	if updated.(Model).mode != ModeList {
@@ -131,6 +147,8 @@ func TestCapitalCKeyEmptyListIsNoOp(t *testing.T) {
 }
 
 func TestCapitalCUsesDashboardLaunchPurpose(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyDashboardLaunch)
 	if m.mode != ModeConfigPicker {

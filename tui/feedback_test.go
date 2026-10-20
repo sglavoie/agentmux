@@ -13,6 +13,8 @@ import (
 )
 
 func TestFeedbackRetainsFailuresThroughOtherActionsAndDismisses(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	now := time.Now()
 	m.now = func() time.Time { return now }
@@ -44,6 +46,8 @@ func TestFeedbackRetainsFailuresThroughOtherActionsAndDismisses(t *testing.T) {
 }
 
 func TestFeedbackSelectDismissAndOutcomeKeepNoticeIdentity(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	now := time.Date(2026, 10, 16, 12, 30, 0, 0, time.UTC)
 	m.now = func() time.Time { return now }
@@ -68,6 +72,8 @@ func TestFeedbackSelectDismissAndOutcomeKeepNoticeIdentity(t *testing.T) {
 }
 
 func TestFeedbackInspectDoesNotAttachOrRepeatAndRejectsReusedSession(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.mode = ModeFeedback
@@ -97,6 +103,8 @@ func TestFeedbackInspectDoesNotAttachOrRepeatAndRejectsReusedSession(t *testing.
 }
 
 func TestFeedbackDelayedOperationIsReplacedOnlyByItsOwnResult(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	now := time.Now()
 	m.now = func() time.Time { return now }
@@ -126,6 +134,8 @@ func TestFeedbackDelayedOperationIsReplacedOnlyByItsOwnResult(t *testing.T) {
 }
 
 func TestFeedbackWrapsAndScrollsLongDiagnostic(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height, m.mode = 60, 18, ModeFeedback
 	m.pushToast(Toast{Severity: toastError, Text: strings.Repeat("a long diagnostic ", 80) + "final detail"})
@@ -142,6 +152,8 @@ func TestFeedbackWrapsAndScrollsLongDiagnostic(t *testing.T) {
 }
 
 func TestRetainedNoticeKeepsItsDetailsRouteAtNarrowWidths(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{24, 40, 60, 80, 100} {
 		m := testModel()
 		m.width = width
@@ -154,6 +166,8 @@ func TestRetainedNoticeKeepsItsDetailsRouteAtNarrowWidths(t *testing.T) {
 }
 
 func TestFeedbackExplainsUnconfirmedOutcomeAndNextStep(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.beginActionFeedback(1, commands.RestartSession, "api", "work")
 	m.reportActionOutcome(sessionactions.Result{Request: 1, Action: commands.RestartSession, Outcome: sessionactions.OutcomeUnconfirmed})

@@ -32,6 +32,8 @@ func setenvFunc(t *testing.T) func(string, string) error {
 }
 
 func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
+	t.Parallel()
+
 	names := UITestFixtureNames()
 	want := []string{"action_feedback", "actions", "asl_question", "asl_runs", "attention_overlap", "basic", "blocked_reasons", "duplicate_names", "family_unread", "health_states", "no_sessions", "paused_output", "paused_queue", "portable_tmux", "preview_failure", "project_families", "run_timers", "setup_profile", "setup_project", "triage_integration", "triage_vertical", "unseen_stops", "wide_profiles", "worktree_branches", "worktree_lifecycle", "worktrees"}
 	if len(names) != len(want) {
@@ -45,6 +47,8 @@ func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
 }
 
 func TestTriageIntegrationFixturePinsReleaseMatrix(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("triage_integration")
 	if err != nil {
 		t.Fatalf("triage_integration fixture: %v", err)
@@ -101,6 +105,8 @@ func TestTriageIntegrationFixturePinsReleaseMatrix(t *testing.T) {
 }
 
 func TestTriageIntegrationFixtureRendersPriorityAndScopeOrder(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("triage_integration")
 	if err != nil {
 		t.Fatalf("triage_integration fixture: %v", err)
@@ -143,6 +149,8 @@ func TestTriageIntegrationFixtureRendersPriorityAndScopeOrder(t *testing.T) {
 }
 
 func TestUITestFixtureByNameUnknownReturnsStructuredError(t *testing.T) {
+	t.Parallel()
+
 	_, err := uitestFixtureByName("does-not-exist")
 	if err == nil {
 		t.Fatal("expected error for unknown fixture")
@@ -160,6 +168,8 @@ func TestUITestFixtureByNameUnknownReturnsStructuredError(t *testing.T) {
 }
 
 func TestUITestFixtureDriverLoadsSessionsWithoutLiveKitty(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatalf("basic fixture: %v", err)
@@ -184,6 +194,8 @@ func TestUITestFixtureDriverLoadsSessionsWithoutLiveKitty(t *testing.T) {
 }
 
 func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatalf("basic fixture: %v", err)
@@ -210,6 +222,8 @@ func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
 }
 
 func TestUITestFixtureActionsOverlayOpens(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("actions")
 	if err != nil {
 		t.Fatalf("actions fixture: %v", err)
@@ -230,6 +244,8 @@ func TestUITestFixtureActionsOverlayOpens(t *testing.T) {
 }
 
 func TestUITestFixtureConfigPickerOpens(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("wide_profiles")
 	if err != nil {
 		t.Fatalf("wide_profiles fixture: %v", err)
@@ -256,6 +272,8 @@ func TestUITestFixtureConfigPickerOpens(t *testing.T) {
 }
 
 func TestUITestKittyClientReturnsFixtureWindowsAndRecordsCalls(t *testing.T) {
+	t.Parallel()
+
 	windows := []kitty.OSWindow{uitestOSWindow(
 		uitestTab(1, 11, "🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 	)}

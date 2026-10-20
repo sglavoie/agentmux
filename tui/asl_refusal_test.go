@@ -14,6 +14,8 @@ import (
 )
 
 func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
+	t.Parallel()
+
 	fx := aslRunsFixture()
 	fx.ASLActionOutcomes = map[string]uitestASLOutcome{
 		aslbridge.MethodQuestionReply: {ErrorCode: "stale-action-token"},
@@ -45,6 +47,8 @@ func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
 }
 
 func TestASLResponseBridgeRefusalNeverEchoesBridgeText(t *testing.T) {
+	t.Parallel()
+
 	fx := aslRunsFixture()
 	fx.ASLActionOutcomes = map[string]uitestASLOutcome{
 		aslbridge.MethodQuestionReply: {ErrorCode: "mutation-failed"},
@@ -75,6 +79,8 @@ func TestASLResponseBridgeRefusalNeverEchoesBridgeText(t *testing.T) {
 }
 
 func TestASLResponseVanishedQuestionIsRefusedOnFetch(t *testing.T) {
+	t.Parallel()
+
 	fx := aslRunsFixture()
 	delete(fx.ASLQuestionBodies, "q-api-1")
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
@@ -96,6 +102,8 @@ func TestASLResponseVanishedQuestionIsRefusedOnFetch(t *testing.T) {
 }
 
 func TestASLResponseDisconnectedBridgeOffersNoActions(t *testing.T) {
+	t.Parallel()
+
 	fx := aslRunsFixture()
 	fx.ASLStatus.MutationsEnabled = false
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
@@ -121,6 +129,8 @@ func TestASLResponseDisconnectedBridgeOffersNoActions(t *testing.T) {
 }
 
 func TestASLResponseCachedRowsAreReadOnly(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()

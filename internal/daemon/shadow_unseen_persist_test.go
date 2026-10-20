@@ -146,6 +146,8 @@ func daemonRowGroup(t *testing.T, h *Handler, windowID int) int {
 // must land in Needs Attention. Without it, a test that never persisted the
 // clear at all would still pass on a payload that happened to restore as seen.
 func TestFocusClearPersistsUnseenAcrossRestart(t *testing.T) {
+	t.Parallel()
+
 	const windowID = 42
 
 	h := newTestHandler()

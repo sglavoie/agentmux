@@ -10,6 +10,8 @@ import (
 )
 
 func TestResolveLiveConversationRequiresExactCurrentOwner(t *testing.T) {
+	t.Parallel()
+
 	target := conversation.Identity{Harness: "claude", SessionID: "session-1"}
 	owner := kitty.Window{ID: 10, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", Project: "api"}}
 	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{
@@ -28,6 +30,8 @@ func TestResolveLiveConversationRequiresExactCurrentOwner(t *testing.T) {
 }
 
 func TestResolveLiveConversationRejectsStaleSiblingAndOwnerMismatch(t *testing.T) {
+	t.Parallel()
+
 	target := conversation.Identity{Harness: "claude", SessionID: "session-1"}
 	other := conversation.Identity{Harness: "claude", SessionID: "session-2"}
 	owner := kitty.Window{ID: 10, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"}}
@@ -73,6 +77,8 @@ func TestResolveLiveConversationRejectsStaleSiblingAndOwnerMismatch(t *testing.T
 }
 
 func TestResolveLiveConversationRejectsAmbiguousDuplicateOwners(t *testing.T) {
+	t.Parallel()
+
 	target := conversation.Identity{Harness: "codex", SessionID: "thread-1"}
 	states := map[int]protocol.WindowStateSnapshot{
 		10: {Conversation: &target},

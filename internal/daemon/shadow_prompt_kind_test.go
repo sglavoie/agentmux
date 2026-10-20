@@ -78,6 +78,8 @@ func probeCodexScreen(h *Handler, windowID int, fromIcon, screen string) {
 // is right while its icon is wrong would mean the window is showing a reason for
 // a prompt it is not displaying.
 func TestCodexPromptKindReachesWindowState(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name     string
 		screen   string
@@ -139,6 +141,8 @@ func TestCodexPromptKindReachesWindowState(t *testing.T) {
 // stop, a watchdog expiry, or a restore just as reliably as on a probe
 // retraction.
 func TestPromptKindClearedLeavingBlockedClass(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		icon string
@@ -177,6 +181,8 @@ func TestPromptKindClearedLeavingBlockedClass(t *testing.T) {
 // probe sees no prompt and retracts, and the row must stop claiming a reason at
 // the same moment it stops claiming the icon.
 func TestPromptKindClearedWhenPromptAnswered(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	probeCodexScreen(h, 42, "bolt", codexCommandApprovalScreen)
 	if got := promptKind(t, h, 42); got != string(activity.CodexPromptCommandApproval) {
@@ -198,6 +204,8 @@ func TestPromptKindClearedWhenPromptAnswered(t *testing.T) {
 // kind written only on the raise would leave the first prompt's name describing
 // the second prompt.
 func TestPromptKindReplacedAtTheSameIcon(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	probeCodexScreen(h, 42, "bolt", codexCommandApprovalScreen)
 	if got := promptKind(t, h, 42); got != string(activity.CodexPromptCommandApproval) {
@@ -222,6 +230,8 @@ func TestPromptKindReplacedAtTheSameIcon(t *testing.T) {
 // and therefore invisible in the diff that made it; without this the field could
 // be quietly added to the payload later and nothing would object.
 func TestPromptKindNotPersisted(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	probeCodexScreen(h, 42, "bolt", codexCommandApprovalScreen)
 

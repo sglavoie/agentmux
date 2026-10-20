@@ -86,6 +86,8 @@ func newFreshnessHandler(t *testing.T) (*Handler, *fakeKittyClient) {
 // old when the list begins; the published capture time must instead be later
 // than the moment the slow list actually returned.
 func TestSnapshotCaptureTimeIsStampedAtListCompletion(t *testing.T) {
+	t.Parallel()
+
 	for _, publisher := range snapshotPublishers() {
 		t.Run(publisher.name, func(t *testing.T) {
 			h, fake := newFreshnessHandler(t)
@@ -125,6 +127,8 @@ func TestSnapshotCaptureTimeIsStampedAtListCompletion(t *testing.T) {
 // tick time it was scheduled for. Folding the two together would date a
 // window-closed tombstone by however long Kitty took to answer.
 func TestMaintenanceKeepsTickTimeSeparateFromCaptureTime(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newFreshnessHandler(t)
 	h.MarkReady()
 
@@ -157,6 +161,8 @@ func TestMaintenanceKeepsTickTimeSeparateFromCaptureTime(t *testing.T) {
 // failing Kitty and proves none of them disturbs the last successful windows,
 // generation, or capture time.
 func TestFailedListPreservesLastGoodSnapshot(t *testing.T) {
+	t.Parallel()
+
 	for _, publisher := range snapshotPublishers() {
 		t.Run(publisher.name, func(t *testing.T) {
 			h := newTestHandler()
@@ -202,6 +208,8 @@ func TestFailedListPreservesLastGoodSnapshot(t *testing.T) {
 // before the first success there is nothing to preserve, and readiness only
 // distinguishes cold from published — never fresh from stale.
 func TestColdSnapshotSurvivesFailureThenPublishesOnRecovery(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api"), listErr: errors.New("kitty wedged")}
 	h.useKittyClient(fake)
@@ -250,6 +258,8 @@ func TestColdSnapshotSurvivesFailureThenPublishesOnRecovery(t *testing.T) {
 // acquires anything, so the queued work is still there for the next ordinary
 // maintenance flush to converge.
 func TestFailedDrainLeavesRenderPendingForTheNextMaintenanceCycle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api")}
 	h.SetKittyClient(fake)
@@ -307,6 +317,8 @@ func TestFailedDrainLeavesRenderPendingForTheNextMaintenanceCycle(t *testing.T) 
 // what the daemon guarantees is that each generation carries the completion time
 // of the read that produced it.
 func TestConcurrentPublishersAndReadersShareOneCoherentSnapshot(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api")}
 	h.SetKittyClient(fake)

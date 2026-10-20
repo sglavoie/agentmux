@@ -12,6 +12,8 @@ import (
 // TestRenderDeleteChoiceBox is a smoke test for the bordered wrapper: the
 // rounded top-left glyph appears and the prompt text survives the wrap.
 func TestRenderDeleteChoiceBox(t *testing.T) {
+	t.Parallel()
+
 	target := transcript.SessionMeta{
 		ID:      "abc123",
 		Harness: "claude",
@@ -39,6 +41,8 @@ func TestRenderDeleteChoiceBox(t *testing.T) {
 }
 
 func TestRenderDeleteChoiceCompactsSharedHomeProfiles(t *testing.T) {
+	t.Parallel()
+
 	target := transcript.SessionMeta{
 		ID:       "abc123",
 		Harness:  "claude",
@@ -57,6 +61,8 @@ func TestRenderDeleteChoiceCompactsSharedHomeProfiles(t *testing.T) {
 // the prompt asks about destroying a transcript, and a key that means "back"
 // everywhere else must not close amx from here.
 func TestDeleteChoiceQCancels(t *testing.T) {
+	t.Parallel()
+
 	target := transcript.SessionMeta{Harness: "claude", Path: "/tmp/demo.jsonl"}
 	m := Model{mode: ModeDeleteChoice, deleteTarget: &target}
 
@@ -74,6 +80,8 @@ func TestDeleteChoiceQCancels(t *testing.T) {
 
 // TestDeleteChoiceCtrlCQuits keeps ctrl+c as the one quit key in the prompt.
 func TestDeleteChoiceCtrlCQuits(t *testing.T) {
+	t.Parallel()
+
 	m := Model{mode: ModeDeleteChoice}
 
 	_, cmd := m.Update(keyPress("ctrl+c"))

@@ -14,6 +14,8 @@ import (
 // cache, the live client is set to fail every list, yet a hook still enriches
 // correctly from the cache (current icon, profile, harness).
 func TestHookRoutingReadsCacheNotLiveList(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: hookEventWindows(palette.BuildTitle("api", "key", false), []kitty.Window{{
@@ -54,6 +56,8 @@ func TestHookRoutingReadsCacheNotLiveList(t *testing.T) {
 // snapshot is published, a user_clear cannot silently vanish: an unreadable tab
 // falls back to wiping the source pane rather than being dropped.
 func TestHookRoutingColdCacheFallsBackToSourcePane(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	// Install a client but never prime the cache: use the field-only setter so
 	// the snapshot stays cold, modelling a degraded startup that has not yet

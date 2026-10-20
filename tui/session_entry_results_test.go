@@ -10,6 +10,8 @@ import (
 )
 
 func TestSessionSearchResultPreservesNewerSelection(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.sessionSearchSeq = 3
 	m.sessionCursor = 1
@@ -29,6 +31,8 @@ func TestSessionSearchResultPreservesNewerSelection(t *testing.T) {
 }
 
 func TestSessionViewerStaleResultCannotOverwriteNewerSelection(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:             ModeSessionView,
 		viewerSession:    &transcript.SessionMeta{ID: "newer", Harness: harness.Claude},
@@ -50,6 +54,8 @@ func TestSessionViewerStaleResultCannotOverwriteNewerSelection(t *testing.T) {
 }
 
 func TestRenderSessionSearchKeepsWarmedResultsVisibleDuringBackgroundScan(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.sessionRefreshInFlight = true
 	m.sessionLoading = false
@@ -73,6 +79,8 @@ func TestRenderSessionSearchKeepsWarmedResultsVisibleDuringBackgroundScan(t *tes
 }
 
 func TestSessionSearchActionsRemainAvailableDuringBackgroundScan(t *testing.T) {
+	t.Parallel()
+
 	t.Run("text search", func(t *testing.T) {
 		m := sessionSearchFilterModel(t)
 		m.sessionRefreshInFlight = true
@@ -160,6 +168,8 @@ func TestSessionSearchActionsRemainAvailableDuringBackgroundScan(t *testing.T) {
 }
 
 func TestRenderSessionSearchDistinguishesStatusAndErrors(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:                     ModeSessionSearch,
 		width:                    100,

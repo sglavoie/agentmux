@@ -10,6 +10,8 @@ import (
 )
 
 func TestDelete_IndexOnlyLeavesFile(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "transcript.jsonl")
 	writeTranscript(t, path, "{}\n")
@@ -32,6 +34,8 @@ func TestDelete_IndexOnlyLeavesFile(t *testing.T) {
 }
 
 func TestDelete_AlsoFileRemovesFile(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "transcript.jsonl")
 	writeTranscript(t, path, "{}\n")
@@ -51,6 +55,8 @@ func TestDelete_AlsoFileRemovesFile(t *testing.T) {
 }
 
 func TestDelete_MissingFileIsNotAnError(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	key := IndexKey(harness.Claude, "sess-1")
 	must(t, idx.SetEntryForTest(key, SessionMeta{
@@ -65,6 +71,8 @@ func TestDelete_MissingFileIsNotAnError(t *testing.T) {
 }
 
 func TestDelete_RemovesSearchSidecar(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "transcript.jsonl")
 	writeTranscript(t, path, "{}\n")

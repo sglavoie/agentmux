@@ -82,6 +82,8 @@ func waitLateStartupRestore(t *testing.T, client *gatedStartupListKittyClient) {
 // while a genuinely live ASL loop lease is preserved — a live loop, not a
 // resurrected one.
 func TestMaintenanceTick_MergeHonorsPreRestoreUserClear(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	old := now.Add(-time.Minute).Unix()
@@ -160,6 +162,8 @@ func TestMaintenanceTick_MergeHonorsPreRestoreUserClear(t *testing.T) {
 // the window ends on the prompt's own ⚡ — while a concurrent pipe-mode child and
 // a live ASL lease are preserved.
 func TestMaintenanceTick_MergeHonorsPreRestorePromptSupersession(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	old := now.Add(-time.Minute).Unix()
@@ -237,6 +241,8 @@ func TestMaintenanceTick_MergeHonorsPreRestorePromptSupersession(t *testing.T) {
 // merge must apply that retirement to the stale interactive bolt it imports so
 // the terminal result surfaces (bolt outranks stop) rather than being masked.
 func TestMaintenanceTick_MergeHonorsPreRestoreTerminalRetirement(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	old := now.Add(-time.Minute).Unix()
@@ -298,6 +304,8 @@ func TestMaintenanceTick_MergeHonorsPreRestoreTerminalRetirement(t *testing.T) {
 // lease contributions stay untouched and the late startup restore stays
 // idempotent.
 func TestMaintenanceTick_MergeHonorsSameTimestampHigherPersistedSequence(t *testing.T) {
+	t.Parallel()
+
 	t.Run("clear", func(t *testing.T) {
 		h := newTestHandler()
 		now := time.Now()

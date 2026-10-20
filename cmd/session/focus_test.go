@@ -9,6 +9,8 @@ import (
 )
 
 func TestFocusManagedTab_FocusesRelativeManagedTab(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeFocusManagedClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -33,6 +35,8 @@ func TestFocusManagedTab_FocusesRelativeManagedTab(t *testing.T) {
 }
 
 func TestFocusManagedTab_NoManagedTargetIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeFocusManagedClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -140,6 +144,8 @@ func testUnmanagedTab(tabID, windowID int, title string) kitty.Tab {
 // bit reads the same set, which is what keeps the menu bar's "next attention"
 // and focus-next landing on the same tab.
 func TestNextAttentionTab_UsesSharedAttentionSet(t *testing.T) {
+	t.Parallel()
+
 	for _, state := range []string{"bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", ""} {
 		t.Run("state="+state, func(t *testing.T) {
 			windows := []kitty.OSWindow{{
@@ -162,6 +168,8 @@ func TestNextAttentionTab_UsesSharedAttentionSet(t *testing.T) {
 }
 
 func TestNextAttentionTab_KittyFlagAndCurrentTab(t *testing.T) {
+	t.Parallel()
+
 	windows := []kitty.OSWindow{{
 		ID: 1,
 		Tabs: []kitty.Tab{

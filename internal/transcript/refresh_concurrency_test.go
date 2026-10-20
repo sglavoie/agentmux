@@ -10,6 +10,8 @@ import (
 )
 
 func TestRefresh_PreservesHiddenFromIndex(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "x", "sess-h.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
@@ -54,6 +56,8 @@ func TestRefresh_PreservesHiddenFromIndex(t *testing.T) {
 }
 
 func TestRefresh_ReleasesLockDuringDiscovery(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "x", "sess-lock.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
@@ -128,6 +132,8 @@ func TestRefresh_ReleasesLockDuringDiscovery(t *testing.T) {
 }
 
 func TestRefresh_PreservesHideDuringDiscovery(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "x", "sess-hide.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
@@ -219,6 +225,8 @@ func TestRefresh_PreservesHideDuringDiscovery(t *testing.T) {
 }
 
 func TestRefresh_PreservesDeleteDuringDiscovery(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "x", "sess-delete.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")

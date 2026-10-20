@@ -12,6 +12,8 @@ import (
 // TestLaunch_CallsKittenWithCorrectArgs verifies that Launch calls kitten @ launch
 // with the correct tab title and user vars.
 func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		// All ls calls return empty — no existing sessions.
@@ -91,6 +93,8 @@ func TestLaunch_CallsKittenWithCorrectArgs(t *testing.T) {
 }
 
 func TestLaunch_ProjectHarnessEnvOverridePinnedAtExec(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -140,6 +144,8 @@ func TestLaunch_ProjectHarnessEnvOverridePinnedAtExec(t *testing.T) {
 }
 
 func TestLaunchFreshIncludesHandoffInstruction(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{lsResponses: [][]byte{empty, empty, empty, empty, empty}}
 	client := kitty.NewClientWithSocket(runner, "")
@@ -170,6 +176,8 @@ func TestLaunchFreshIncludesHandoffInstruction(t *testing.T) {
 // TestLaunch_StoresExplicitFlags verifies that Launch stores project-explicit
 // args separately from the effective launch args.
 func TestLaunch_StoresExplicitFlags(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -221,6 +229,8 @@ func TestLaunch_StoresExplicitFlags(t *testing.T) {
 }
 
 func TestLaunch_MixedHarnessUsesProfileArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -316,6 +326,8 @@ func TestLaunch_MixedHarnessUsesProfileArgs(t *testing.T) {
 }
 
 func TestLaunch_QuotesArgsWithSpacesAndMetacharacters(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},

@@ -90,6 +90,8 @@ func windowGitState(t *testing.T, h *Handler, windowID int) state.WindowState {
 // behind a slow filesystem. TryLock inside the executor is the direct evidence
 // — it can only succeed if no lock is held at the moment git would have run.
 func TestGitStateRefreshTakesNoLockAcrossASubprocess(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"}}
 	h := seedGitStateHandler(t, git, map[int]string{42: "/repo/one", 43: "/repo/two"})
 	// Refresh probes directories concurrently. Serialize the assertions so one
@@ -114,6 +116,8 @@ func TestGitStateRefreshTakesNoLockAcrossASubprocess(t *testing.T) {
 }
 
 func TestGitStateRefreshStampsTrackedWindows(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{
 		branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"},
 		dirty:    map[string]bool{"/repo/two": true},
@@ -134,6 +138,8 @@ func TestGitStateRefreshStampsTrackedWindows(t *testing.T) {
 }
 
 func TestGitStateRefreshKeepsCollidingKittyInstancesSeparate(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{
 		"/repo/first": "first", "/repo/second": "second",
 	}}
@@ -184,6 +190,8 @@ func TestGitStateRefreshKeepsCollidingKittyInstancesSeparate(t *testing.T) {
 // An untracked pane is not a session, so nothing about it is worth a
 // subprocess. Only windows in the store are probed.
 func TestGitStateRefreshProbesOnlyTrackedWindows(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"}}
 	h := seedGitStateHandler(t, git, map[int]string{42: "/repo/one"})
 	windows := gitStateWindows(map[int]string{42: "/repo/one", 43: "/repo/two"})
@@ -203,6 +211,8 @@ func TestGitStateRefreshProbesOnlyTrackedWindows(t *testing.T) {
 // onto a directory it does not describe, and must not leave the previous
 // answer standing either, because the daemon now knows it is wrong.
 func TestGitStateRefreshDropsAResultForAPaneThatMoved(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"}}
 	collected := gitStateWindows(map[int]string{42: "/repo/one"})
 	h := seedGitStateHandler(t, git, map[int]string{42: "/repo/one"})
@@ -227,6 +237,8 @@ func TestGitStateRefreshDropsAResultForAPaneThatMoved(t *testing.T) {
 // A window closed while the probes ran has no state to write back to, and the
 // refresh must not resurrect an entry for it.
 func TestGitStateRefreshSkipsAWindowThatClosed(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
 	directories := map[int]string{42: "/repo/one"}
 	h := seedGitStateHandler(t, git, directories)
@@ -249,6 +261,8 @@ func TestGitStateRefreshSkipsAWindowThatClosed(t *testing.T) {
 // The toggle must cost nothing when it is off: no cache, no goroutine, and
 // above all no git.
 func TestGitStateDisabledRunsNoProbe(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
 	directories := map[int]string{42: "/repo/one"}
 	h := seedGitStateHandler(t, git, directories)
@@ -270,6 +284,8 @@ func TestGitStateDisabledRunsNoProbe(t *testing.T) {
 // A round already in flight wins: ticks arrive every second and a round that
 // hits several probe timeouts can outlast several of them.
 func TestGitStateRefreshSingleFlightsRounds(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
 	directories := map[int]string{42: "/repo/one"}
 	h := seedGitStateHandler(t, git, directories)
@@ -301,6 +317,8 @@ func TestGitStateRefreshSingleFlightsRounds(t *testing.T) {
 // watchdogTick is the integration point named by the design: the refresh runs
 // from the watchdog loop, never from the render path or the TUI.
 func TestWatchdogTickStartsTheGitStateRefresh(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
 	directories := map[int]string{42: "/repo/one"}
 	h := seedGitStateHandler(t, git, directories)

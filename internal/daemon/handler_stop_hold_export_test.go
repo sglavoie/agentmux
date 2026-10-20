@@ -71,6 +71,8 @@ func stopHoldExportJSON(t *testing.T, schema int) map[string]any {
 }
 
 func TestProjectExportEventsPayloadV12RoundTripsStopHoldFields(t *testing.T) {
+	t.Parallel()
+
 	raw := stopHoldExportJSON(t, protocol.EventsExportSchemaV12)
 	if got := int(raw["schema_version"].(float64)); got != 12 {
 		t.Fatalf("schema_version = %d; want 12", got)
@@ -192,6 +194,8 @@ func TestProjectExportEventsPayloadV11IdentityProjection(t *testing.T) {
 }
 
 func TestHandler_ExportProjectsBusySinceAndOmitsItWhenIdle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "PreToolUse", SessionTitle: "W:api"})
 
@@ -219,6 +223,8 @@ func TestHandler_ExportProjectsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 }
 
 func TestProjectExportEventsPayloadV10OmitsStopHoldDiagnostics(t *testing.T) {
+	t.Parallel()
+
 	raw := stopHoldExportJSON(t, protocol.EventsExportSchemaV10)
 	if got := int(raw["schema_version"].(float64)); got != 10 {
 		t.Fatalf("schema_version = %d; want 10", got)
@@ -311,6 +317,8 @@ func TestHandler_ExportProjectsLiveTerminalStopHold(t *testing.T) {
 }
 
 func TestHandler_AppendStopHoldEventRecordsSuppressedRow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	req := protocol.Request{
 		Type:         protocol.TypeStateUpdate,
@@ -360,6 +368,8 @@ func TestHandler_AppendStopHoldEventRecordsSuppressedRow(t *testing.T) {
 // nowhere else to record itself; the two release outcomes are stamped on the
 // stop the hold commits and must not also produce a row.
 func TestStopHoldDecisionReasonCoversHoldEndingOutcomes(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		outcome protocol.StopHoldOutcome
 		want    string

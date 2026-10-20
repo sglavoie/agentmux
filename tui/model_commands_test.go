@@ -38,6 +38,8 @@ func TestHealthCmd_StartsDaemonWhenDead(t *testing.T) {
 // the zero time rather than the unix epoch, and a window the daemon has no
 // entry for is cleared alongside State and Looping.
 func TestApplyDaemonStatesStampsBusySince(t *testing.T) {
+	t.Parallel()
+
 	anchor := time.Unix(1710000100, 0)
 	sessions := []session.RunningSession{
 		{WindowID: 1},
@@ -61,6 +63,8 @@ func TestApplyDaemonStatesStampsBusySince(t *testing.T) {
 }
 
 func TestApplyDaemonStatesOverlaysAndClearsPresentationChangedAt(t *testing.T) {
+	t.Parallel()
+
 	changedAt := time.Unix(1_710_000_100, 123_000_000)
 	sessions := []session.RunningSession{
 		{WindowID: 1},
@@ -89,6 +93,8 @@ func TestApplyDaemonStatesOverlaysAndClearsPresentationChangedAt(t *testing.T) {
 // authority for the bit, and leaving a stale true there would pin it under
 // Needs Attention for as long as the daemon stayed silent about it.
 func TestApplyDaemonStatesOverlaysUnseen(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{WindowID: 1},
 		{WindowID: 2, Unseen: true},
@@ -120,6 +126,8 @@ func TestApplyDaemonStatesOverlaysUnseen(t *testing.T) {
 // prompt that is no longer on screen — and it must not keep glossing one after
 // the daemon reports the window blocked by something it could not label either.
 func TestApplyDaemonStatesOverlaysReason(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{WindowID: 1},
 		{WindowID: 2, Reason: "command_approval"},
@@ -159,6 +167,8 @@ func TestApplyDaemonStatesOverlaysReason(t *testing.T) {
 // with no branch (a detached HEAD) must not keep the branch it held before, and
 // a window it reports clean must lose the dirty bit rather than the branch.
 func TestApplyDaemonStatesOverlaysBranchAndDirty(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{WindowID: 1},
 		{WindowID: 2, Branch: "amx/stale", Dirty: true},
@@ -199,6 +209,8 @@ func TestApplyDaemonStatesOverlaysBranchAndDirty(t *testing.T) {
 // a non-repository, a disabled probe, and a timeout all produce — rather than a
 // version skew a client would have to detect.
 func TestApplyDaemonStatesDecodesAnOlderDaemonAsUnbranched(t *testing.T) {
+	t.Parallel()
+
 	var legacy protocol.WindowStateSnapshot
 	if err := json.Unmarshal([]byte(`{"icon_state":"bolt","looping":false}`), &legacy); err != nil {
 		t.Fatalf("decoding a pre-branch state response failed: %v", err)
@@ -220,6 +232,8 @@ func TestApplyDaemonStatesDecodesAnOlderDaemonAsUnbranched(t *testing.T) {
 // field existed carries no `reason` key, and the row it overlays must come out
 // with nothing to gloss rather than keeping whatever it held before.
 func TestApplyDaemonStatesDecodesAnOlderDaemonAsUnlabelled(t *testing.T) {
+	t.Parallel()
+
 	var legacy protocol.WindowStateSnapshot
 	if err := json.Unmarshal([]byte(`{"icon_state":"key","looping":false}`), &legacy); err != nil {
 		t.Fatalf("json.Unmarshal() error: %v", err)
@@ -237,6 +251,8 @@ func TestApplyDaemonStatesDecodesAnOlderDaemonAsUnlabelled(t *testing.T) {
 // existed carries no `unseen` key, and the row it overlays must come out seen.
 // This is the property that keeps an upgrade from flooding Needs Attention.
 func TestApplyDaemonStatesDecodesAnOlderDaemonAsSeen(t *testing.T) {
+	t.Parallel()
+
 	var legacy protocol.WindowStateSnapshot
 	if err := json.Unmarshal([]byte(`{"icon_state":"stop","looping":false}`), &legacy); err != nil {
 		t.Fatalf("json.Unmarshal() error: %v", err)

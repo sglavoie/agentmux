@@ -12,6 +12,8 @@ import (
 // active transition appends a non-suppressed SessionEvent carrying the request's
 // tool_name through to the ring buffer.
 func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -48,6 +50,8 @@ func TestHandler_EventLog_AppendOnAllowed(t *testing.T) {
 }
 
 func TestHandler_EventLog_CarriesRoutedOriginWindow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	normalized := protocol.NormalizedEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"},
@@ -70,6 +74,8 @@ func TestHandler_EventLog_CarriesRoutedOriginWindow(t *testing.T) {
 // follow-up "active" (priority 1 < subagent priority 2), and the suppressed
 // transition is still recorded in the buffer with Suppressed=true.
 func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart"})
@@ -104,6 +110,8 @@ func TestHandler_EventLog_AppendOnGuardSuppressed(t *testing.T) {
 // this, the user has no signal in the detail pane explaining why the bolt did
 // not remain under the parent subagent icon.
 func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "subagentStart"})
@@ -128,6 +136,8 @@ func TestHandler_EventLog_AppendOnCopilotMidSubagentSuppression(t *testing.T) {
 }
 
 func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -169,6 +179,8 @@ func TestHandler_EventLog_AppendOnCopilotPendingPromptSuppression(t *testing.T) 
 }
 
 func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop", Event: "Stop"})
@@ -202,6 +214,8 @@ func TestHandler_EventLog_AppendOnActiveAfterTerminalSuppression(t *testing.T) {
 }
 
 func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -249,6 +263,8 @@ func TestHandler_EventLog_CarriesNormalizedDebugContext(t *testing.T) {
 }
 
 func TestHandler_EventLog_LoopFinishedCarriesSourceAndReason(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
@@ -287,6 +303,8 @@ func TestHandler_EventLog_LoopFinishedCarriesSourceAndReason(t *testing.T) {
 }
 
 func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -329,6 +347,8 @@ func TestHandler_EventLog_RewrittenResetStopCarriesResetFlow(t *testing.T) {
 // through the allowed path and asserts the buffer retains exactly
 // eventlog.MaxEventsPerWindow (oldest dropped from the front).
 func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	total := eventlog.MaxEventsPerWindow + 5
@@ -356,6 +376,8 @@ func TestHandler_EventLog_TrimsAtMax(t *testing.T) {
 // (including the terminal hook) so the detail pane can show the session's
 // history after it ends.
 func TestHandler_EventLog_PreservedAcrossTerminalActions(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse"})
@@ -381,6 +403,8 @@ func TestHandler_EventLog_PreservedAcrossTerminalActions(t *testing.T) {
 // change to eventlog.MaxEventsPerWindow trips this assertion and forces an explicit
 // decision about whether the contract still holds.
 func TestHandler_EventLog_CapAt5000(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	const cap5k = 5000

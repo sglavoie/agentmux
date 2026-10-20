@@ -11,6 +11,8 @@ import (
 )
 
 func TestDaemonCapturesLegacyHookPayloadAndTrustsClientCaptureMarker(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	store, err := diagnostics.NewCaptureStore(paths, diagnostics.CaptureOptions{})
 	if err != nil {
@@ -41,6 +43,8 @@ func TestDaemonCapturesLegacyHookPayloadAndTrustsClientCaptureMarker(t *testing.
 }
 
 func TestDaemonMaintenanceExpiresCaptureWithoutKittyOrFurtherHooks(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	store, err := diagnostics.NewCaptureStore(paths, diagnostics.CaptureOptions{Now: func() time.Time { return now }})

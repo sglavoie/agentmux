@@ -150,6 +150,8 @@ func selectByTitleAndProfile(m *Model, title, profile string) {
 // two sessions and dispatching while neither is in pickerRunning queues both
 // for launch.
 func TestDispatchPickerLaunch_BothQueuedWhenNoneRunning(t *testing.T) {
+	t.Parallel()
+
 	m := launchDispatchModel(t, nil)
 	selectByTitle(&m, "api", "backend")
 
@@ -186,6 +188,8 @@ func TestDispatchPickerLaunch_BothQueuedWhenNoneRunning(t *testing.T) {
 // TestDispatchPickerLaunch_RunningRowsStillQueued verifies that running rows
 // stay launchable from the picker.
 func TestDispatchPickerLaunch_RunningRowsStillQueued(t *testing.T) {
+	t.Parallel()
+
 	running := []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work"},
 		{TabID: 2, Base: "backend", Account: "work"},
@@ -211,6 +215,8 @@ func TestDispatchPickerLaunch_RunningRowsStillQueued(t *testing.T) {
 // TestDispatchPickerLaunch_RunningAndStoppedRowsQueued verifies the mixed case:
 // running and non-running rows are both launch requests.
 func TestDispatchPickerLaunch_RunningAndStoppedRowsQueued(t *testing.T) {
+	t.Parallel()
+
 	running := []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work"},
 	}
@@ -245,6 +251,8 @@ func TestDispatchPickerLaunch_RunningAndStoppedRowsQueued(t *testing.T) {
 }
 
 func TestDispatchPickerLaunch_RunningRowBypassesLaunchDedup(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeLaunchDispatchClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -286,6 +294,8 @@ func TestDispatchPickerLaunch_RunningRowBypassesLaunchDedup(t *testing.T) {
 }
 
 func TestDispatchPickerLaunch_SameProjectDifferentProfileLaunches(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeLaunchDispatchClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,

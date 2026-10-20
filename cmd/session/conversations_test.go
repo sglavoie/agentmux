@@ -324,6 +324,8 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 }
 
 func TestConversationIdentityAcceptsBothSelectorShapes(t *testing.T) {
+	t.Parallel()
+
 	for _, args := range [][]string{
 		{"codex", "session-1"},
 		{"codex:session-1"},
@@ -345,6 +347,8 @@ func TestConversationIdentityAcceptsBothSelectorShapes(t *testing.T) {
 // A command run with no selector at all asks for the conversation rather than
 // for a harness, since a bare session ID or prefix no longer needs one.
 func TestMissingSelectorAsksForTheConversation(t *testing.T) {
+	t.Parallel()
+
 	_, err := conversationIdentityFromArgs(sessionContinueCmd, false, "continue", nil)
 	if err == nil || !strings.HasPrefix(err.Error(), "conversation is required: ") {
 		t.Fatalf("text error = %v, want conversation is required with its selector forms", err)
@@ -374,6 +378,8 @@ func TestMissingSelectorAsksForTheConversation(t *testing.T) {
 }
 
 func TestParseSinceWindow(t *testing.T) {
+	t.Parallel()
+
 	for in, want := range map[string]time.Duration{"7d": 7 * 24 * time.Hour, "12h": 12 * time.Hour, " 90m ": 90 * time.Minute, "2w": 14 * 24 * time.Hour} {
 		if got, err := parseSinceWindow(in); err != nil || got != want {
 			t.Errorf("parseSinceWindow(%q) = %v, %v; want %v", in, got, err, want)
@@ -876,6 +882,8 @@ func TestAmbiguousPrefixCandidatesListTheNewestFirst(t *testing.T) {
 
 // fork shares continue's --here path, so it offers the same flag.
 func TestSessionForkOffersHereLikeContinue(t *testing.T) {
+	t.Parallel()
+
 	for _, cmd := range []*cobra.Command{sessionContinueCmd, sessionForkCmd} {
 		if cmd.Flags().Lookup("here") == nil {
 			t.Errorf("session %s does not declare --here", cmd.Name())

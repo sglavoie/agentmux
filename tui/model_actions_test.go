@@ -14,6 +14,8 @@ import (
 // the re-spelling: the same confirmation, against the same cursor row.
 
 func TestCloseActionConfirmsAgainstTheCursorRow(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressRowAction(t, m, keyClose)
 	if m.mode != ModeConfirm {
@@ -30,6 +32,8 @@ func TestCloseActionConfirmsAgainstTheCursorRow(t *testing.T) {
 }
 
 func TestRestartActionConfirmsAgainstTheCursorRow(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressKey(m, "j") // move to second session
 	m = pressRowAction(t, m, keyR)
@@ -50,6 +54,8 @@ func TestRestartActionConfirmsAgainstTheCursorRow(t *testing.T) {
 // all — not even on a dashboard with a row under the cursor, which is the state
 // where the old binding would have fired.
 func TestRetiredDirectActionKeysDoNotDispatch(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{"X", "r", "x", "c", "C", "e", "o", "O", "y", "m", "L", " "} {
 		t.Run(key, func(t *testing.T) {
 			m := loadSessions(modalConfirmModel(), makeSessions())
@@ -73,6 +79,8 @@ func TestRetiredDirectActionKeysDoNotDispatch(t *testing.T) {
 // The overlay is what refuses on an empty list now, and it refuses by not
 // opening: there is no row to act on, so `a` itself is unavailable.
 func TestActionsOverlayDoesNotOpenOnAnEmptyList(t *testing.T) {
+	t.Parallel()
+
 	m := pressKey(loadSessions(testModel(), nil), keyA)
 	if m.mode != ModeList {
 		t.Fatalf("expected ModeList after %q on an empty list, got %d", keyA, m.mode)
@@ -82,6 +90,8 @@ func TestActionsOverlayDoesNotOpenOnAnEmptyList(t *testing.T) {
 // ---- Enter / actions overlay tests ----
 
 func TestEnterFocusesTab(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	updated, cmd := m.Update(keyPress("enter"))
 	m2 := updated.(Model)
@@ -94,6 +104,8 @@ func TestEnterFocusesTab(t *testing.T) {
 }
 
 func TestAOpensActionsOverlay(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	updated, cmd := m.Update(keyPress("a"))
 	m2 := updated.(Model)
@@ -111,6 +123,8 @@ func TestAOpensActionsOverlay(t *testing.T) {
 // Space was a second spelling of Enter and is retired: one key focuses a row
 // now, and the space bar dispatches nothing.
 func TestSpaceNoLongerFocusesTab(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	updated, cmd := m.Update(keyPress(" "))
 	if updated.(Model).mode != ModeList {
@@ -124,6 +138,8 @@ func TestSpaceNoLongerFocusesTab(t *testing.T) {
 // ---- Help mode tests ----
 
 func TestQuestionMarkOpensModeHelp(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "?")
 	if m.mode != ModeHelp {
@@ -132,6 +148,8 @@ func TestQuestionMarkOpensModeHelp(t *testing.T) {
 }
 
 func TestHelpEscReturnsToList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "?")
 	m = pressKey(m, "esc")
@@ -141,6 +159,8 @@ func TestHelpEscReturnsToList(t *testing.T) {
 }
 
 func TestHelpQuestionMarkToggles(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "?") // open
 	m = pressKey(m, "?") // close
@@ -150,6 +170,8 @@ func TestHelpQuestionMarkToggles(t *testing.T) {
 }
 
 func TestFooterHelp(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	footer := renderFooter(m)
@@ -170,6 +192,8 @@ func TestFooterHelp(t *testing.T) {
 // `a` now, and `a` says the same thing on every row. Only availability still
 // varies, and that is asserted in TestListFooterAvailability.
 func TestFooterListIsTheSameRowWhateverTheCursorHolds(t *testing.T) {
+	t.Parallel()
+
 	render := func(state string) string {
 		m := loadSessions(testModel(), []session.RunningSession{
 			{TabID: 1, Base: "api", Account: "work", State: state},

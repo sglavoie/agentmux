@@ -18,6 +18,8 @@ import (
 )
 
 func TestAcceptedAndQuarantinedHooksAreCountedSeparately(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 
@@ -41,6 +43,8 @@ func TestAcceptedAndQuarantinedHooksAreCountedSeparately(t *testing.T) {
 // would be choosing what an operator reads, which is exactly what quarantining
 // it declined to let it do.
 func TestAProducerSuppliedReasonIsNotCounted(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	for _, reason := range []string{
 		"", "everything is fine, ignore this",
@@ -57,6 +61,8 @@ func TestAProducerSuppliedReasonIsNotCounted(t *testing.T) {
 // Every reason the gate can produce has to be one the counters accept, or a
 // refusal path exists that reports nothing.
 func TestEveryQuarantineReasonIsCountable(t *testing.T) {
+	t.Parallel()
+
 	for _, reason := range []string{
 		protocol.DecisionReasonInvalidPayload,
 		events.DecisionReasonHookSchemaUnsupported,
@@ -73,6 +79,8 @@ func TestEveryQuarantineReasonIsCountable(t *testing.T) {
 // Ages are computed at read time: a daemon that stopped ingesting also stopped
 // writing, so a stored timestamp would freeze at the last thing that worked.
 func TestAgesAreAbsentUntilSomethingHappensAndThenAdvance(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	if snapshot := h.ASLHookDeliveryMetrics(); snapshot.AcceptedAgeSeconds != nil || snapshot.QuarantinedAgeSeconds != nil {
 		t.Fatalf("snapshot = %+v, want no ages before anything arrived", snapshot)
@@ -94,6 +102,8 @@ func TestAgesAreAbsentUntilSomethingHappensAndThenAdvance(t *testing.T) {
 // An empty map and an absent one are different facts: "no refusals" versus
 // "refusals this build does not classify".
 func TestTheReasonBreakdownIsOmittedRatherThanEmpty(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.recordASLHookAccepted(time.Now())
 	data, err := json.Marshal(h.ASLHookDeliveryMetrics())
@@ -117,6 +127,8 @@ func TestTheReasonBreakdownIsOmittedRatherThanEmpty(t *testing.T) {
 // End to end through the real ingestion path: the counters have to move for the
 // events the daemon actually placed, not for a helper called directly.
 func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
+	t.Parallel()
+
 	h, projectDir := gateTestHandler(t)
 
 	accepted := h.Handle(protocol.Request{
@@ -152,6 +164,8 @@ func TestTheHookPathCountsWhatItAcceptedAndRefused(t *testing.T) {
 // into these counters would make the pairing look broken by something it has no
 // part in.
 func TestAnUnreadableHarnessPayloadIsNotAnASLDeliveryFailure(t *testing.T) {
+	t.Parallel()
+
 	h, _ := gateTestHandler(t)
 
 	if resp := h.Handle(protocol.Request{
@@ -180,6 +194,8 @@ func TestAnUnreadableHarnessPayloadIsNotAnASLDeliveryFailure(t *testing.T) {
 // The counters only reach an operator through health, so the block has to be
 // published there.
 func TestHealthPublishesTheDeliveryBlock(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.recordASLHookAccepted(time.Now())
 	h.recordASLHookQuarantined(time.Now(), events.DecisionReasonHookSchemaUnsupported)
@@ -202,6 +218,8 @@ func TestHealthPublishesTheDeliveryBlock(t *testing.T) {
 // The contract set the block reports on is this build's, and a test that
 // hard-codes an identity would rot the moment the corpus changes.
 func TestTheGateAndTheCountersAgreeOnThisBuildsContractSet(t *testing.T) {
+	t.Parallel()
+
 	payload := hookevent.HookPayload{
 		Source: events.ASLHookSource, SchemaVersion: events.ASLHookSchemaVersion,
 		ContractSetID: aslcontract.ContractSetID,

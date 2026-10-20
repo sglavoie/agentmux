@@ -14,6 +14,8 @@ import (
 )
 
 func TestPushToastAppendsNewestOnTop(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.pushToast(Toast{Severity: toastInfo, Text: "first"})
 	m.pushToast(Toast{Severity: toastInfo, Text: "second"})
@@ -26,6 +28,8 @@ func TestPushToastAppendsNewestOnTop(t *testing.T) {
 }
 
 func TestPushToastCapsAtMax(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	for i := 0; i < maxToasts+2; i++ {
 		m.pushToast(Toast{Severity: toastInfo, Text: "t"})
@@ -36,6 +40,8 @@ func TestPushToastCapsAtMax(t *testing.T) {
 }
 
 func TestPushToastDefaultsTTL(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	before := time.Now()
 	m.pushToast(Toast{Severity: toastInfo, Text: "x"})
@@ -45,6 +51,8 @@ func TestPushToastDefaultsTTL(t *testing.T) {
 }
 
 func TestPushToastFirstReturnsTickCmd(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	cmd := m.pushToast(Toast{Severity: toastInfo, Text: "x"})
 	if cmd == nil {
@@ -57,6 +65,8 @@ func TestPushToastFirstReturnsTickCmd(t *testing.T) {
 }
 
 func TestSweepToastsExpires(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.toasts = []Toast{
 		{Text: "alive", Expires: time.Now().Add(time.Hour)},
@@ -72,6 +82,8 @@ func TestSweepToastsExpires(t *testing.T) {
 }
 
 func TestSweepToastsAllExpiredQuiesces(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.toasts = []Toast{
 		{Text: "dead", Expires: time.Now().Add(-time.Hour)},
@@ -86,6 +98,8 @@ func TestSweepToastsAllExpiredQuiesces(t *testing.T) {
 }
 
 func TestReplaceToastByIDUpdatesInPlace(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.replaceToastByID(42, Toast{Severity: toastInfo, Text: "a"})
 	m.replaceToastByID(42, Toast{Severity: toastSuccess, Text: "b"})
@@ -98,6 +112,8 @@ func TestReplaceToastByIDUpdatesInPlace(t *testing.T) {
 }
 
 func TestReplaceToastByIDMovesUpdatedToastToTop(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.replaceToastByID(42, Toast{Severity: toastInfo, Text: "first"})
 	m.pushToast(Toast{Severity: toastError, Text: "newer unrelated"})
@@ -113,6 +129,8 @@ func TestReplaceToastByIDMovesUpdatedToastToTop(t *testing.T) {
 }
 
 func TestToastStatusBarIncludesLatestText(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 80
 	m.pushToast(Toast{Severity: toastSuccess, Text: "Launched 1/3 · api"})
@@ -120,6 +138,8 @@ func TestToastStatusBarIncludesLatestText(t *testing.T) {
 }
 
 func TestLaunchProgressIncrementsCounter(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.launchBatchID = 1
 	updated, _ := m.Update(launchProgressMsg{batchID: 1, total: 3, title: "api"})
@@ -137,6 +157,8 @@ func TestLaunchProgressIncrementsCounter(t *testing.T) {
 }
 
 func TestLaunchProgressErrorPushesErrorToast(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.launchBatchID = 5
 	updated, _ := m.Update(launchProgressMsg{
@@ -161,6 +183,8 @@ func TestLaunchProgressErrorPushesErrorToast(t *testing.T) {
 }
 
 func TestLaunchProgressFinalIsSuccess(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.launchBatchID = 7
 	m.launchBatchQuitOnSuccess = true
@@ -183,6 +207,8 @@ func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 }
 
 func TestResortDoneUsesStatusBarToast(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	updated, cmd := m.Update(commands.ResortDoneMsg{})
 	m = updated.(Model)
@@ -193,6 +219,8 @@ func TestResortDoneUsesStatusBarToast(t *testing.T) {
 }
 
 func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	updated, cmd := m.Update(commands.CopyDoneMsg{Err: errors.New("clipboard unavailable")})
 	m = updated.(Model)
@@ -203,6 +231,8 @@ func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
 }
 
 func TestCopyDoneSuccessSaysWhatWasCopied(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	updated, cmd := m.Update(commands.CopyDoneMsg{Text: "/tmp/demo.jsonl"})
 	m = updated.(Model)
@@ -213,6 +243,8 @@ func TestCopyDoneSuccessSaysWhatWasCopied(t *testing.T) {
 }
 
 func TestCopyExcerptKeepsOneBoundedLine(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]string{
 		"abc":                         "abc",
 		"  first line\nsecond line  ": "first line …",
@@ -226,6 +258,8 @@ func TestCopyExcerptKeepsOneBoundedLine(t *testing.T) {
 }
 
 func TestLaunchProgressFinalDashboardLaunchStaysInTUI(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.launchBatchID = 8
 	m.launchBatchQuitOnSuccess = false
@@ -241,6 +275,8 @@ func TestLaunchProgressFinalDashboardLaunchStaysInTUI(t *testing.T) {
 }
 
 func TestLaunchProgressStaleBatchIgnored(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.launchBatchID = 10
 	updated, _ := m.Update(launchProgressMsg{batchID: 9, total: 1, title: "stale"})
@@ -256,6 +292,8 @@ func TestLaunchProgressStaleBatchIgnored(t *testing.T) {
 // ---- Cursor restore tests ----
 
 func TestRestoreCursorPreservesPriorBase(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: ""},
 		{TabID: 2, Base: "db", Account: "work", State: ""},
@@ -267,6 +305,8 @@ func TestRestoreCursorPreservesPriorBase(t *testing.T) {
 }
 
 func TestRestoreCursorFallsBackToAttentionRow(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{TabID: 1, Base: "calm", Account: "work", State: "bolt"},
 		{TabID: 2, Base: "needs-perm", Account: "work", State: "key"},
@@ -280,6 +320,8 @@ func TestRestoreCursorFallsBackToAttentionRow(t *testing.T) {
 }
 
 func TestRestoreCursorDefaultsToZero(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{TabID: 1, Base: "a", Account: "work", State: "bolt"},
 		{TabID: 2, Base: "b", Account: "work", State: ""},
@@ -291,12 +333,16 @@ func TestRestoreCursorDefaultsToZero(t *testing.T) {
 }
 
 func TestRestoreCursorEmptyListReturnsZero(t *testing.T) {
+	t.Parallel()
+
 	if got := dashboard.RestoreCursor(nil, "anything", nil, 0); got != 0 {
 		t.Errorf("expected 0 for empty list, got %d", got)
 	}
 }
 
 func TestSessionsMsgRestoresCursorByBase(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// With bolt-first ordering, backend (bolt) is at index 0; j moves to api.
 	m = pressKey(m, "j")
@@ -316,6 +362,8 @@ func TestSessionsMsgRestoresCursorByBase(t *testing.T) {
 }
 
 func TestSessionsMsgMovesCursorToAttentionRowWhenPriorRowGone(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// Replace list with no api/backend, plus an attention row.
 	newSessions := []session.RunningSession{

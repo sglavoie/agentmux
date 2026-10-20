@@ -19,6 +19,8 @@ import (
 // header rather than a banner of its own — and the indicator stays one line and
 // one column-run whether or not the notice is there.
 func TestHeaderHealthIndicatorNamesTheConfigurationNotice(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		width:                 120,
 		daemonAlive:           true,
@@ -48,6 +50,8 @@ func TestHeaderHealthIndicatorNamesTheConfigurationNotice(t *testing.T) {
 // details overlay, and the overlay has no key of its own, so losing the target
 // would leave the reading unreadable to anyone not using the palette.
 func TestHeaderHealthIndicatorIsAClickTarget(t *testing.T) {
+	t.Parallel()
+
 	m := Model{width: 120, daemonAlive: false, daemonHealthCheckedAt: time.Now()}
 	header := renderHeaderWithHits(m)
 	var found bool
@@ -69,6 +73,8 @@ func TestHeaderHealthIndicatorIsAClickTarget(t *testing.T) {
 // degraded readings count rather than picking one. Both remedies stay one click
 // away in the overlay.
 func TestHeaderHealthIndicatorRanksSeverityOverCount(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	one := Model{
 		width:                 120,

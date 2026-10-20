@@ -15,6 +15,8 @@ import (
 // count does not exceed the terminal height — the bug fixed in Session 3 was
 // the overlay being pushed past the viewport.
 func TestRenderChipPickerOverlayComposition(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	m := Model{
 		mode:              ModeChipPicker,
@@ -60,6 +62,8 @@ func TestRenderChipPickerOverlayComposition(t *testing.T) {
 // rendered (so renderSessionSearch's chrome contract is exercised) and the
 // chip picker box is best-effort composited.
 func TestRenderChipPickerOverlayClampsOnTinyHeight(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:              ModeChipPicker,
 		width:             60,

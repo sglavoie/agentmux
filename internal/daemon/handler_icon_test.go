@@ -11,6 +11,8 @@ import (
 // non-negative uptime. The handler initializes startedAt in NewHandler, so even
 // the very first health probe must report uptime >= 0 (never negative).
 func TestHandler_Health(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if !resp.OK {

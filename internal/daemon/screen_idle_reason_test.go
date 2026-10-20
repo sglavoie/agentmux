@@ -39,6 +39,8 @@ func settleReason(t *testing.T, h *Handler, windowID int) string {
 // worse than none at all. The tier and the sample count are literals, so
 // re-tuning either has to be a deliberate edit here.
 func TestSettleReasonNamesTierSamplesAndGeneration(t *testing.T) {
+	t.Parallel()
+
 	t.Run("claude quiescent", func(t *testing.T) {
 		assertClaudeScreenTier(t, claudeQuiescentIdleScreen, screenstate.TierQuiescent)
 		base := time.Now()

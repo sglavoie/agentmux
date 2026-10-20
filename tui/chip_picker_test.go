@@ -25,6 +25,8 @@ func chipPickerFixture(kind chipPickerKind, opts []string, cursor int) Model {
 // TestRenderChipPickerHeaderByKind locks in the header copy for each chip
 // kind. The renderer chooses the string from m.chipPickerKind alone.
 func TestRenderChipPickerHeaderByKind(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		kind chipPickerKind
 		want string
@@ -43,6 +45,8 @@ func TestRenderChipPickerHeaderByKind(t *testing.T) {
 }
 
 func TestRenderChipPickerHeaderShowsFilterHint(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		kind chipPickerKind
@@ -69,6 +73,8 @@ func TestRenderChipPickerHeaderShowsFilterHint(t *testing.T) {
 // TestRenderChipPickerAnyFirstWhenNoFilter verifies the "(any)" row sits at
 // the top of the list and carries the cursor highlight when no filter is set.
 func TestRenderChipPickerAnyFirstWhenNoFilter(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerFixture(chipPickerHarness, []string{"", "claude", "codex"}, 0)
 	raw := renderChipPicker(m)
 	out := stripAnsi(raw)
@@ -92,6 +98,8 @@ func TestRenderChipPickerAnyFirstWhenNoFilter(t *testing.T) {
 // annotated with "(current)" so users can see the live selection without
 // counting rows.
 func TestRenderChipPickerCurrentAnnotation(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerFixture(chipPickerHarness, []string{"", "claude", "codex"}, 1)
 	m.filterHarness = []string{"claude"}
 	out := stripAnsi(renderChipPicker(m))
@@ -116,6 +124,8 @@ func TestRenderChipPickerCurrentAnnotation(t *testing.T) {
 // real option list is empty (so options == [""]). The overlay must still
 // render the (any) row without panicking.
 func TestRenderChipPickerEmptyRealOptions(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerFixture(chipPickerProfile, []string{""}, 0)
 	out := stripAnsi(renderChipPicker(m))
 	if !strings.Contains(out, "(any)") {
@@ -130,6 +140,8 @@ func TestRenderChipPickerEmptyRealOptions(t *testing.T) {
 // with ANSI styling (Bold+Reverse via styleSelected) while sibling rows are
 // plain. Without a textual marker, the styling itself is the signal.
 func TestRenderChipPickerCursorRowStyled(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerFixture(chipPickerProject, []string{"", "alpha", "beta", "gamma"}, 2)
 	raw := renderChipPicker(m)
 
@@ -148,6 +160,8 @@ func TestRenderChipPickerCursorRowStyled(t *testing.T) {
 // edge case: the active filter value is no longer in the option list, so the
 // cursor must land on the (any) row rather than running off-window.
 func TestEnterChipPickerGhostFilterFallsBackToAny(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:          ModeSessionSearch,
 		width:         100,
@@ -172,6 +186,8 @@ func TestEnterChipPickerGhostFilterFallsBackToAny(t *testing.T) {
 // TestRenderChipPickerBox is a smoke test for the bordered wrapper: the
 // rounded top-left glyph appears and the header text survives the wrap.
 func TestRenderChipPickerBox(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerFixture(chipPickerHarness, []string{"", "claude", "codex"}, 0)
 	raw := renderChipPickerBox(m)
 	if !strings.Contains(raw, "╭") {

@@ -11,6 +11,8 @@ import (
 )
 
 func TestSearchMessageSourceAcrossReaders(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		reader Reader
@@ -74,6 +76,8 @@ func TestSearchMessageSourceAcrossReaders(t *testing.T) {
 }
 
 func TestSearchMessageSourceUpgradesLegacySidecar(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	key := "claude:one"
 	must(t, idx.SetEntryForTest(key, SessionMeta{ID: "one", Harness: "claude", Path: "one", Snippet: "needle user"}))
@@ -95,6 +99,8 @@ func TestSearchMessageSourceUpgradesLegacySidecar(t *testing.T) {
 }
 
 func TestSearchMessageSourceSkipsLegacyMissWithoutParsing(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	key := "claude:one"
 	must(t, idx.SetEntryForTest(key, SessionMeta{ID: "one", Harness: "claude", Path: "unavailable"}))
@@ -110,6 +116,8 @@ func TestSearchMessageSourceSkipsLegacyMissWithoutParsing(t *testing.T) {
 }
 
 func TestClaudeMixedUserToolResultSource(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "mixed.jsonl")
 	body := `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"promptneedle"},{"type":"tool_result","content":"toolneedle"}]}}` + "\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
@@ -139,6 +147,8 @@ func TestClaudeMixedUserToolResultSource(t *testing.T) {
 }
 
 func TestSearchSourceSidecarRefreshesAfterTranscriptChange(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	path := filepath.Join(root, "home", "projects", "-tmp-demo", "one.jsonl")
 	stat := writeTranscript(t, path, "old transcript\n")

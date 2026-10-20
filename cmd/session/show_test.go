@@ -111,6 +111,8 @@ func TestSessionShowPrintsOneConversationBySelector(t *testing.T) {
 // A conversation two profiles share lists both under a plural label; one
 // profile keeps the singular.
 func TestSessionShowPluralizesSharedProfiles(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	var out bytes.Buffer
 	view := sessionView{Harness: "claude", ID: "abc", Profiles: []string{"personal", "work"}, Projects: []string{"api"}}
@@ -293,6 +295,8 @@ func TestSessionShowLastPrintsTheClosingMessages(t *testing.T) {
 }
 
 func TestConversationMatchWindowsKeepProseIdentityAndBoundaries(t *testing.T) {
+	t.Parallel()
+
 	messages := []transcript.Message{
 		{Role: "tool", Text: "needle"},
 		{Role: "user", Text: "first Needle"},
@@ -314,6 +318,8 @@ func TestConversationMatchWindowsKeepProseIdentityAndBoundaries(t *testing.T) {
 }
 
 func TestConversationEventWindowLocatesOldSupportingOutput(t *testing.T) {
+	t.Parallel()
+
 	at := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
 	messages := []transcript.Message{
 		{Role: "assistant", Text: "older", Timestamp: at.Add(-time.Hour)},

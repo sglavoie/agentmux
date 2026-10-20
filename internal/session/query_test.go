@@ -27,6 +27,8 @@ func newClientWithFixture(t *testing.T, fixture string) *kitty.SubprocessClient 
 }
 
 func TestList_ReturnsManagedTabs(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls.json")
 	sessions, err := session.List(client)
 	if err != nil {
@@ -38,6 +40,8 @@ func TestList_ReturnsManagedTabs(t *testing.T) {
 }
 
 func TestList_ExcludesUnmanagedTabs(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	sessions, err := session.List(client)
 	if err != nil {
@@ -55,6 +59,8 @@ func TestList_ExcludesUnmanagedTabs(t *testing.T) {
 }
 
 func TestList_UserVarOnlyDetection(t *testing.T) {
+	t.Parallel()
+
 	// Account detection must use user vars only (no cmdline fallback).
 	client := newClientWithFixture(t, "kitty_ls.json")
 	sessions, err := session.List(client)
@@ -84,6 +90,8 @@ func TestList_UserVarOnlyDetection(t *testing.T) {
 }
 
 func TestList_EmptyKitty(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_empty.json")
 	sessions, err := session.List(client)
 	if err != nil {
@@ -95,6 +103,8 @@ func TestList_EmptyKitty(t *testing.T) {
 }
 
 func TestFind_ByBaseTitle(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls.json")
 	sessions, _ := session.List(client)
 
@@ -108,6 +118,8 @@ func TestFind_ByBaseTitle(t *testing.T) {
 }
 
 func TestListFromOSWindows_AndFindByWindowID(t *testing.T) {
+	t.Parallel()
+
 	var osWindows []kitty.OSWindow
 	if err := json.Unmarshal(loadFixture(t, "kitty_ls.json"), &osWindows); err != nil {
 		t.Fatalf("Unmarshal fixture: %v", err)
@@ -128,6 +140,8 @@ func TestListFromOSWindows_AndFindByWindowID(t *testing.T) {
 }
 
 func TestListFromOSWindows_AssignsPhysicalTabNumbers(t *testing.T) {
+	t.Parallel()
+
 	managedTab := func(tabID, windowID int, title string) kitty.Tab {
 		return kitty.Tab{
 			ID:    tabID,
@@ -180,6 +194,8 @@ func TestListFromOSWindows_AssignsPhysicalTabNumbers(t *testing.T) {
 }
 
 func TestFind_NotFound(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls.json")
 	sessions, _ := session.List(client)
 
@@ -190,6 +206,8 @@ func TestFind_NotFound(t *testing.T) {
 }
 
 func TestSessionKey_DifferentHarnessesDoNotCollide(t *testing.T) {
+	t.Parallel()
+
 	claudeKey := session.SessionKey("claude-work", "api")
 	copilotKey := session.SessionKey("copilot-work", "api")
 	if claudeKey == copilotKey {
@@ -198,6 +216,8 @@ func TestSessionKey_DifferentHarnessesDoNotCollide(t *testing.T) {
 }
 
 func TestSessionKey_CaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	a := session.SessionKey("Work", "API")
 	b := session.SessionKey("work", "api")
 	if a != b {

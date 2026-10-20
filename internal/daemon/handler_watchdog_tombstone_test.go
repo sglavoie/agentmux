@@ -136,6 +136,8 @@ func TestSweepHookSilence_SleepGapDoesNotFire(t *testing.T) {
 // cancels its queued render, removes socket/live state and ASL miss streaks,
 // and retains its durable metadata behind a tombstone stamped WindowClosed.
 func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
+	t.Parallel()
+
 	h, _, _ := newSweepTestHandler(10 * time.Minute)
 	now := time.Now()
 
@@ -206,6 +208,8 @@ func TestPruneClosedWindows_CreatesTombstoneAndPurgesLiveState(t *testing.T) {
 // via a fresh event creating state, or Kitty reporting it live again — stops
 // being a tombstone and resumes live diagnostics.
 func TestTombstone_WindowReuseRevives(t *testing.T) {
+	t.Parallel()
+
 	h, _, _ := newSweepTestHandler(10 * time.Minute)
 	now := time.Now()
 
@@ -248,6 +252,8 @@ func TestTombstone_WindowReuseRevives(t *testing.T) {
 // TestTombstone_RetentionExpiryDropsMetadata: a tombstone (and the durable
 // metadata it retains) is dropped after the 24-hour retention.
 func TestTombstone_RetentionExpiryDropsMetadata(t *testing.T) {
+	t.Parallel()
+
 	h, _, _ := newSweepTestHandler(10 * time.Minute)
 	now := time.Now()
 
@@ -280,6 +286,8 @@ func TestTombstone_RetentionExpiryDropsMetadata(t *testing.T) {
 // maxWindowTombstones entries; overflow evicts the oldest together with their
 // metadata.
 func TestTombstone_CountBoundEvictsOldest(t *testing.T) {
+	t.Parallel()
+
 	h, _, _ := newSweepTestHandler(10 * time.Minute)
 	now := time.Now()
 

@@ -11,6 +11,8 @@ import (
 )
 
 func TestStateQuerySeparatesAgentCompletionAndASLAfterRestore(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now().Unix()
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:parent"}, SessionID: "parent", Action: "stop", Seq: 1, At: now - 42})
@@ -41,6 +43,8 @@ func TestStateQuerySeparatesAgentCompletionAndASLAfterRestore(t *testing.T) {
 }
 
 func TestLegacyStateQueryOmitsIndependentStatus(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.store[8] = &state.WindowState{}
 	data, err := json.Marshal(h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[8])

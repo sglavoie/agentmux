@@ -48,6 +48,8 @@ func readCodexCapture(t *testing.T, name string) string {
 // — and dropping any Codex row back to a single sample fails here rather than
 // silently switching Layer B off again.
 func TestCodexIdleProbeSampleTiers(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		tier screenstate.Tier
@@ -133,6 +135,8 @@ func codexTickingCompletedScreens(t *testing.T, n int) []string {
 // first tick would have painted 🛑 on a pane that is still repainting. The
 // screen fingerprint restarts the stabilization streak instead.
 func TestProbeCodexScreenPrompts_ChangingScreenNeverSettles(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	const ticks = 6
 	screens := codexTickingCompletedScreens(t, ticks)
@@ -191,6 +195,8 @@ func TestProbeCodexScreenPrompts_ChangingScreenNeverSettles(t *testing.T) {
 // repeats, the run completes and the stale ⚡ still settles — one 2s tick later
 // than before, and never not at all.
 func TestProbeCodexScreenPrompts_SettlesOnceTheScreenStopsChanging(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	moving := codexTickingCompletedScreens(t, 1)[0]
 	fake := &fakeKittyClient{
@@ -259,6 +265,8 @@ func TestProbeCodexScreenPrompts_SettlesOnceTheScreenStopsChanging(t *testing.T)
 // still be held after the first agreeing frame and settle only on the last, so
 // the fixtures prove Layer B is live on Codex rather than bypassed.
 func TestProbeCodexCurrentCompletedScreenSettles(t *testing.T) {
+	t.Parallel()
+
 	captures := []struct {
 		name    string
 		fixture string
@@ -340,6 +348,8 @@ func TestProbeCodexCurrentCompletedScreenSettles(t *testing.T) {
 // unreachable on the installed build for as long as the composer placeholder
 // was unknown.
 func TestProbeCodexCurrentClearedScreenRecovers(t *testing.T) {
+	t.Parallel()
+
 	cleared := readCodexCapture(t, "codex_cleared.txt")
 	if !screenstate.CodexScreenLooksCleared(cleared) {
 		t.Fatal("CodexScreenLooksCleared() = false: the clear probe's cheap first pass rejects a real cleared pane")
@@ -370,6 +380,8 @@ func TestProbeCodexCurrentClearedScreenRecovers(t *testing.T) {
 // started is still running, so the transition below is the real one an operator
 // sees when a background terminal exits.
 func TestProbeCodexBackgroundTerminalNeverSettles(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	running := readCodexCapture(t, "codex_interrupted.txt")
 	finished := readCodexCapture(t, "codex_interrupted_no_background.txt")

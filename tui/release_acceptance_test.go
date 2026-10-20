@@ -63,6 +63,8 @@ func TestAcceptanceMalformedPlanCacheRebuildsWithoutDatabase(t *testing.T) {
 }
 
 func TestAcceptanceRepeatedPlanRefreshRetainsLastGoodResults(t *testing.T) {
+	t.Parallel()
+
 	planRoot := t.TempDir()
 	seedPlanDir(t, planRoot, "alpha-aabb112233cc", map[string]string{"manifest.md": "# Alpha"})
 	idx, err := plans.LoadIndexAt(filepath.Join(t.TempDir(), "plans.json"))
@@ -241,6 +243,8 @@ func TestAcceptanceTUIContinuityForkUsesFilesystemSnapshotWithoutDatabase(t *tes
 }
 
 func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	sharedDir := filepath.Join(root, "shared")
 	if err := os.MkdirAll(sharedDir, 0o700); err != nil {

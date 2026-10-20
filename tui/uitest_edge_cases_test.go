@@ -49,6 +49,8 @@ func (c *uitestFocusFailureClient) FocusTab(matchExpr string) error {
 // report. A focus that acknowledged the row optimistically would throw away the
 // one signal saying this session is still waiting on a human.
 func TestAFailedFocusLeavesTheRowUnacknowledged(t *testing.T) {
+	t.Parallel()
+
 	d, client := newUITestFixtureDriver(unseenStopsFixture(), UITestSize{Width: 120, Height: 36})
 	defer func() { _ = d.Close() }()
 
@@ -97,6 +99,8 @@ func TestAFailedFocusLeavesTheRowUnacknowledged(t *testing.T) {
 // other than seenness, the icon or the title would have had to move with it, and
 // neither does.
 func TestClearingTheUnseenBitDemotesTheRowOnTheNextRefresh(t *testing.T) {
+	t.Parallel()
+
 	fx := unseenStopsFixture()
 	d, _ := newUITestFixtureDriver(fx, UITestSize{Width: 120, Height: 36})
 	defer func() { _ = d.Close() }()

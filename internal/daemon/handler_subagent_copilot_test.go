@@ -233,6 +233,8 @@ func TestHandler_CopilotMidSubagentSuppression(t *testing.T) {
 // subagentStart. Without the fix, the permission guard (priority 3) blocks the
 // subagent icon (priority 2), leaving the 🔑 showing while a subagent runs.
 func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
+	t.Parallel()
+
 	t.Run("subagentStart clears real permission prompt and shows robot icon", func(t *testing.T) {
 		h := newTestHandler()
 
@@ -354,6 +356,8 @@ func TestHandler_SubagentClearsHighPriorityGuard(t *testing.T) {
 // keep running; and when the surviving sibling later finishes successfully,
 // the stop_failure guard must persist (the user has not acknowledged it).
 func TestHandler_SubagentStopFailureSurfacesWhileSiblingsRun(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	// Two concurrent subagents start.

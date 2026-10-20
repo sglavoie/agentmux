@@ -18,6 +18,8 @@ import (
 // stale bolt, converge the tab to 🛑, and record a ScreenStopProbe row carrying
 // the ACTUAL reduced state.
 func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	boltTitle := palette.BuildTitleParts(palette.TitleParts{
@@ -90,6 +92,8 @@ func TestProbeCodexScreenPrompts_CompletedTurnStopsStuckBolt(t *testing.T) {
 // repainting, so the withheld stop is confirmed only once a full stabilization
 // run of agreeing screens has landed — never on the first probe pass.
 func TestProbeCodexScreenPrompts_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newTerminalHoldProbeHandler(t, harness.Codex, codexCompletedTurnScreen)
 	releaseHoldAtTestEnd(t, h, 42)
 	base := time.Now()
@@ -126,6 +130,8 @@ func TestProbeCodexScreenPrompts_ConfirmsHeldStopInsteadOfSettling(t *testing.T)
 // twin of the completed-turn recovery: a user-interrupted Codex turn that left
 // no Stop hook settles the same way through the authoritative-idle path.
 func TestProbeCodexScreenPrompts_InterruptedTurnStopsStuckBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -159,6 +165,8 @@ func TestProbeCodexScreenPrompts_InterruptedTurnStopsStuckBolt(t *testing.T) {
 }
 
 func TestProbeCodexScreenPrompts_ActiveWorkingTurnKeepsBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -190,6 +198,8 @@ func TestProbeCodexScreenPrompts_ActiveWorkingTurnKeepsBolt(t *testing.T) {
 }
 
 func TestProbeCodexScreenPrompts_CompletedTurnForcesCodexForForeground(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -223,6 +233,8 @@ func TestProbeCodexScreenPrompts_CompletedTurnForcesCodexForForeground(t *testin
 }
 
 func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingStopProbe(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	boltTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "📟AiBroker",
@@ -266,6 +278,8 @@ func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingStop
 }
 
 func TestProbeCodexScreenPrompts_ManagedNonCodexOwnerSuppressesUnmanagedCodexSibling(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeSplitWindows(

@@ -10,6 +10,8 @@ import (
 )
 
 func TestPickerStickyInputRendered(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width = 80
 
@@ -43,6 +45,8 @@ func TestPickerStickyInputRendered(t *testing.T) {
 }
 
 func TestPickerSlashEntersSearchMode(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	if m.pickerSearchMode {
 		t.Fatal("expected pickerSearchMode=false initially")
@@ -61,6 +65,8 @@ func TestPickerSlashEntersSearchMode(t *testing.T) {
 }
 
 func TestPickerNavModeIgnoresPrintableChars(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	// In nav mode, printable chars other than known shortcuts are silently ignored.
 	m = pressKey(m, "t")
@@ -75,6 +81,8 @@ func TestPickerNavModeIgnoresPrintableChars(t *testing.T) {
 }
 
 func TestPickerFooterShowsFilterControls(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
 	footer := stripAnsi(renderFooter(m))
@@ -106,6 +114,8 @@ func TestPickerFooterShowsFilterControls(t *testing.T) {
 // dashboard-list regression in list_test.go so the picker shares the same
 // visual contract.
 func TestPickerRowEmojiTitleColumnAlignment(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},

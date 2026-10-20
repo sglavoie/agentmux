@@ -20,6 +20,8 @@ func visiblePickerTitles(m Model) []string {
 }
 
 func TestPickerProfileCycleFiltersProjectProfilesAndWraps(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.cfg.Accounts = append(m.cfg.Accounts, config.Account{Name: "unused", Color: "gray"})
 
@@ -56,6 +58,8 @@ func TestPickerProfileCycleFiltersProjectProfilesAndWraps(t *testing.T) {
 }
 
 func TestPickerProfileCycleCombinesWithQueryAndUsesDefaultProfile(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	notesPos := pickerPositionByTitle(t, m, "notes")
 	notesIdx := m.pickerFilteredIdx[notesPos]
@@ -91,6 +95,8 @@ func TestPickerProfileCycleCombinesWithQueryAndUsesDefaultProfile(t *testing.T) 
 }
 
 func TestPickerProfileCyclePreservesSelectionAndResetsNavigation(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	selectedIdx := m.pickerFilteredIdx[0]
 	m.pickerSelected[selectedIdx] = true
@@ -113,6 +119,8 @@ func TestPickerProfileCyclePreservesSelectionAndResetsNavigation(t *testing.T) {
 }
 
 func TestPickerFIsSearchTextAndEscClearsAllFiltersBeforeExit(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	m = pressKey(m, "f")
@@ -146,6 +154,8 @@ func TestPickerFIsSearchTextAndEscClearsAllFiltersBeforeExit(t *testing.T) {
 }
 
 func TestPickerProfileIndicatorAndEntryReset(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width = 120
 
@@ -179,6 +189,8 @@ func TestPickerProfileIndicatorAndEntryReset(t *testing.T) {
 }
 
 func TestPickerProfileIndicatorDoesNotOverflowNarrowHeader(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width = 20
 	first := strings.SplitN(renderPicker(m), "\n", 2)[0]

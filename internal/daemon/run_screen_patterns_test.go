@@ -227,6 +227,8 @@ func TestRun_ScreenPatternsRejectsSemanticallyIncompleteOverride(t *testing.T) {
 // client can tell "this daemon predates the field" apart from "this daemon
 // loaded no patterns".
 func TestHealthOmitsScreenPatternsWhenLoadNeverRan(t *testing.T) {
+	t.Parallel()
+
 	h := NewHandler(activity.NewStateGuard(0), nil)
 	if resp := h.handleHealth(); resp.ScreenPatterns != nil {
 		t.Fatalf("ScreenPatterns = %+v; want nil", resp.ScreenPatterns)

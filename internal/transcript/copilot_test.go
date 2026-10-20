@@ -11,6 +11,8 @@ import (
 const copilotFixtureRoot = "testdata/copilot"
 
 func TestCopilotReader_Discover(t *testing.T) {
+	t.Parallel()
+
 	r := NewCopilotReader()
 	metas, err := r.Discover(copilotFixtureRoot, DiscoverOptions{})
 	if err != nil {
@@ -64,6 +66,8 @@ func TestCopilotReader_Discover(t *testing.T) {
 }
 
 func TestCopilotReader_DiscoverMissingDir(t *testing.T) {
+	t.Parallel()
+
 	r := NewCopilotReader()
 	metas, err := r.Discover(filepath.Join(copilotFixtureRoot, "does-not-exist"), DiscoverOptions{})
 	if err != nil {
@@ -75,6 +79,8 @@ func TestCopilotReader_DiscoverMissingDir(t *testing.T) {
 }
 
 func TestCopilotReader_DiscoverEmptyHome(t *testing.T) {
+	t.Parallel()
+
 	r := NewCopilotReader()
 	metas, err := r.Discover("", DiscoverOptions{})
 	if err != nil {
@@ -86,6 +92,8 @@ func TestCopilotReader_DiscoverEmptyHome(t *testing.T) {
 }
 
 func TestCopilotReader_ReadMessages(t *testing.T) {
+	t.Parallel()
+
 	r := NewCopilotReader()
 	path := filepath.Join(copilotFixtureRoot, "session-state",
 		"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "events.jsonl")
@@ -119,6 +127,8 @@ func TestCopilotReader_ReadMessages(t *testing.T) {
 }
 
 func TestCopilotDiscover_CacheHitSkipsParse(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, "session-state", "cccccccc-cccc-cccc-cccc-cccccccccccc")
 	path := filepath.Join(dir, "events.jsonl")
@@ -178,6 +188,8 @@ func TestCopilotDiscover_CacheHitSkipsParse(t *testing.T) {
 }
 
 func TestCopilotDiscover_MinTimeSkipsOldFiles(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	body := `{"type":"session.start","timestamp":"2026-05-24T13:00:01.000Z","data":{"sessionId":"sess-id","startTime":"2026-05-24T13:00:00.000Z","context":{"cwd":"/cwd"}}}` + "\n"
 	newPath := filepath.Join(root, "session-state",
@@ -208,6 +220,8 @@ func TestCopilotDiscover_MinTimeSkipsOldFiles(t *testing.T) {
 }
 
 func TestCopilotDiscover_CacheMissReparses(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, "session-state", "dddddddd-dddd-dddd-dddd-dddddddddddd")
 	path := filepath.Join(dir, "events.jsonl")
@@ -256,6 +270,8 @@ func TestCopilotDiscover_CacheMissReparses(t *testing.T) {
 
 // The tool-only assistant event carries no content and is not an ending.
 func TestCopilotDiscover_EndingIsTheLastAssistantReply(t *testing.T) {
+	t.Parallel()
+
 	metas, err := NewCopilotReader().Discover(copilotFixtureRoot, DiscoverOptions{})
 	if err != nil || len(metas) != 1 {
 		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)

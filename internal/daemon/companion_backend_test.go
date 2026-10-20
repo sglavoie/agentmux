@@ -104,6 +104,8 @@ func notificationEffect(h *Handler, stage string) (notification.NotificationDisp
 // arrives as a notification frame, and the app's dispositions settle it
 // without Alerter ever running.
 func TestAppNotificationReachesASubscriberAndSettles(t *testing.T) {
+	t.Parallel()
+
 	sock, h, alerter := newNotifyingTestServer(t)
 	sub := subscribeBackend(t, sock, "fake-app")
 	if !h.companion.Ready() {
@@ -133,6 +135,8 @@ func TestAppNotificationReachesASubscriberAndSettles(t *testing.T) {
 
 // TestNoSubscriberUsesAlerter: with nobody holding the role, nothing changes.
 func TestNoSubscriberUsesAlerter(t *testing.T) {
+	t.Parallel()
+
 	sock, h, alerter := newNotifyingTestServer(t)
 	plain, err := ipc.NewClientWithSocket(sock).Subscribe(context.Background(), protocol.SubscribeRequest{Protocol: 1})
 	if err != nil {
@@ -152,6 +156,8 @@ func TestNoSubscriberUsesAlerter(t *testing.T) {
 // TestAppNotificationRetractedOnSupersede: a newer event for the window sends
 // notification_retract for the notice still showing.
 func TestAppNotificationRetractedOnSupersede(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	sub := subscribeBackend(t, sock, "fake-app")
 
@@ -182,6 +188,8 @@ func TestAppNotificationRetractedOnSupersede(t *testing.T) {
 // TestNotificationDispositionIsIdempotent: delivered once, the first terminal
 // disposition wins, and reports about unknown notifications are ok.
 func TestNotificationDispositionIsIdempotent(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	sub := subscribeBackend(t, sock, "fake-app")
 
@@ -219,6 +227,8 @@ func TestNotificationDispositionIsIdempotent(t *testing.T) {
 // TestNotificationDispositionTerminalImpliesDelivered: a click that overtakes
 // its delivered report still counts as a delivery.
 func TestNotificationDispositionTerminalImpliesDelivered(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	subscribeBackend(t, sock, "fake-app")
 	ctx, cancel := context.WithCancel(context.Background())
@@ -234,6 +244,8 @@ func TestNotificationDispositionTerminalImpliesDelivered(t *testing.T) {
 }
 
 func TestNotificationDispositionRejectsMalformedRequests(t *testing.T) {
+	t.Parallel()
+
 	_, h, _ := newNotifyingTestServer(t)
 	for name, req := range map[string]protocol.Request{
 		"no block":       {Type: protocol.TypeNotificationDisposition},
@@ -251,6 +263,8 @@ func TestNotificationDispositionRejectsMalformedRequests(t *testing.T) {
 // notifications, and the previous one inherits the role when it leaves; a
 // delivery bound to the leaver ends instead of moving.
 func TestNewestBackendClaimantHoldsTheRole(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	older := subscribeBackend(t, sock, "older")
 	newer := subscribeBackend(t, sock, "newer")
@@ -293,6 +307,8 @@ func TestNewestBackendClaimantHoldsTheRole(t *testing.T) {
 }
 
 func TestNotificationTestRequestReportsTheApp(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	if resp := h.Handle(protocol.Request{Type: protocol.TypeNotificationTest}); !resp.OK || resp.NotificationTest == nil || resp.NotificationTest.Delivered || resp.NotificationTest.Reason != "app_unavailable" {
 		t.Fatalf("without an app: %+v", resp)

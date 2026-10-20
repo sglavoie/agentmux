@@ -11,6 +11,8 @@ import (
 )
 
 func TestListWithConfig_CWDFallback_HappyPath(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	staleDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
@@ -64,6 +66,8 @@ func TestListWithConfig_CWDFallback_HappyPath(t *testing.T) {
 }
 
 func TestListWithConfig_CWDFallbackMatchesLinkedGitWorktree(t *testing.T) {
+	t.Parallel()
+
 	git := requireSessionGit(t)
 	root := t.TempDir()
 	repo := filepath.Join(root, "vta_ss_oidc_op_worker")
@@ -119,6 +123,8 @@ func TestListWithConfig_CWDFallbackMatchesLinkedGitWorktree(t *testing.T) {
 }
 
 func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromForegroundCWD(t *testing.T) {
+	t.Parallel()
+
 	analyticsDir := t.TempDir()
 	logScannerDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
@@ -170,6 +176,8 @@ func TestListWithConfig_ManagedWindowRepairsStaleUserVarsFromForegroundCWD(t *te
 }
 
 func TestListWithConfig_ManagedWindowPreservesRuntimeProfileOverride(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
 		ID:       1,

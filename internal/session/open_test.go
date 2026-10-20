@@ -13,6 +13,8 @@ import (
 // TestOpenDirectory_LaunchesWithCorrectArgs verifies that OpenDirectory calls
 // kitten @ launch with the correct tab title and cwd but no exec claude command.
 func TestOpenDirectory_LaunchesWithCorrectArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -80,6 +82,8 @@ func TestOpenDirectory_LaunchesWithCorrectArgs(t *testing.T) {
 // calls kitten @ launch with the expected title, cwd, and editor cmdline, and
 // does not apply any account-derived color.
 func TestOpenPathInEditor_LaunchesWithCorrectArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -145,6 +149,8 @@ func TestOpenPathInEditor_LaunchesWithCorrectArgs(t *testing.T) {
 }
 
 func TestOpenPathInEditorUsesParentDirectoryForFile(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{lsResponses: [][]byte{empty, empty, empty}}
 	client := kitty.NewClientWithSocket(runner, "")
@@ -192,6 +198,8 @@ func containsInOrder(s, sub []string) bool {
 // TestOpenDirectory_ColorApplied verifies that set-tab-color is called
 // when the new tab appears in a post-launch ls response.
 func TestOpenDirectory_ColorApplied(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 
 	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +

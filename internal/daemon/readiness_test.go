@@ -63,6 +63,8 @@ func (c *errorThenListKittyClient) SetTabTitle(string, string) error { return ni
 func (c *errorThenListKittyClient) SetUserVars(string, map[string]string) error { return nil }
 
 func TestRestoreStateFromKittyBounded_ReadyWithResponsiveKitty(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "api")}
 	h.useKittyClient(fake)
@@ -83,6 +85,8 @@ func TestRestoreStateFromKittyBounded_ReadyWithResponsiveKitty(t *testing.T) {
 }
 
 func TestRestoreStateFromKittyBounded_DegradedWhenKittyWedged(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	client := &blockingListKittyClient{entered: make(chan struct{}, 1), release: make(chan struct{})}
 	h.useKittyClient(client)
@@ -113,6 +117,8 @@ func TestRestoreStateFromKittyBounded_DegradedWhenKittyWedged(t *testing.T) {
 }
 
 func TestMaintenanceTick_ClearsStartupDegradedAfterSuccessfulSnapshot(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.useKittyClient(&fakeKittyClient{windows: fakeOSWindowsWithTab(42, "api")})
 	h.MarkDegraded("initial kitty snapshot exceeded 400ms")

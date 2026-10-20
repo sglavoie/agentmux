@@ -83,6 +83,8 @@ func sendStep(t *testing.T, m Model, msg tea.Msg) Model {
 }
 
 func TestSendIsOfferedOnlyWhereThereIsAPaneToWriteTo(t *testing.T) {
+	t.Parallel()
+
 	asking := tmuxTestRow("question")
 	asking.ASLPhases = []string{"implement"}
 	supervising := tmuxTestRow("bolt")
@@ -114,6 +116,8 @@ func TestSendIsOfferedOnlyWhereThereIsAPaneToWriteTo(t *testing.T) {
 }
 
 func TestSendFormOpensOnWhatTheRowIsWaitingFor(t *testing.T) {
+	t.Parallel()
+
 	if m := sendFormOn(t, tmuxTestRow("key")); !m.send.FocusKeys {
 		t.Error("a row that is asking opened on the text half")
 	}
@@ -252,6 +256,8 @@ func TestSendFormIgnoresKeysWhileASendIsInFlight(t *testing.T) {
 }
 
 func TestSendFormFitsNarrowAndWideTerminals(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{40, 80, 160} {
 		m := sendFormOn(t, tmuxTestRow("key"))
 		m.width, m.height = width, 30
@@ -287,6 +293,8 @@ func sendResult(cmd tea.Cmd) (commands.SendDoneMsg, bool) {
 }
 
 func TestSendDraftEditingAndSessionIsolation(t *testing.T) {
+	t.Parallel()
+
 	m := sendFormOn(t, tmuxTestRow("stop"))
 	updated, _ := m.Update(tea.PasteMsg{Content: "first\r\n👩‍💻 café"})
 	m = updated.(Model)
@@ -379,6 +387,8 @@ func TestSendClosingAndReopeningCannotDuplicatePendingOperation(t *testing.T) {
 }
 
 func TestSendFullScreenAndLongDraftFitTogether(t *testing.T) {
+	t.Parallel()
+
 	for _, size := range [][2]int{{40, 20}, {60, 24}, {80, 24}, {140, 40}} {
 		m := sendFormOn(t, tmuxTestRow("stop"))
 		m.width, m.height = size[0], size[1]
@@ -415,6 +425,8 @@ func TestRetainedDraftAndPendingSendStayPrivateInModelFormatting(t *testing.T) {
 }
 
 func TestDashboardFooterPrioritizesTheSelectedSessionsNextAction(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{80, 100, 120} {
 		for _, state := range []string{"key", "question", "stop"} {
 			m := withListRows(testModelWithSessions(), tmuxTestRow(state))

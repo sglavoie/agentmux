@@ -35,6 +35,8 @@ import (
 // stuck behind the wedged list. Every Handle call must return promptly — the
 // hook path routes against the cached snapshot and performs no Kitty I/O.
 func TestFaultWedgedKittyListNeverBlocksHookIngestion(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	release := make(chan struct{})
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api")}
@@ -81,6 +83,8 @@ func TestFaultWedgedKittyListNeverBlocksHookIngestion(t *testing.T) {
 // leaves the window dirty (nothing is dropped), and the first successful flush
 // converges the rendered generation to the desired generation.
 func TestFaultFailingKittyListLeavesRenderPendingThenConverges(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api"), listErr: errors.New("kitty wedged")}
 	h.SetKittyClient(fake)
@@ -123,6 +127,8 @@ func TestFaultFailingKittyListLeavesRenderPendingThenConverges(t *testing.T) {
 // desired state, and once Kitty recovers the rendered generation equals the
 // desired generation with the failure diagnostics cleared.
 func TestFaultFlappingTitleWritesEventuallyConverge(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api")}
 	var titleAttempts atomic.Int32
@@ -171,6 +177,8 @@ func TestFaultFlappingTitleWritesEventuallyConverge(t *testing.T) {
 // the desired state and converge the title — the visible state may lag the
 // durable state, never run ahead of it.
 func TestFaultCrashBetweenPersistAndTitleRestoresDesiredState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api"), setTitleErr: errors.New("daemon crashed before title")}
 	h.SetKittyClient(fake)
@@ -219,6 +227,8 @@ func TestFaultCrashBetweenPersistAndTitleRestoresDesiredState(t *testing.T) {
 // ingest hook events; once Kitty recovers, rendering converges from the
 // accumulated state.
 func TestFaultDegradedStartupStillAppliesEvents(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetReducerConfig(state.ReducerConfig{GuardDuration: 1})
 	release := make(chan struct{})
@@ -263,6 +273,8 @@ func TestFaultDegradedStartupStillAppliesEvents(t *testing.T) {
 // healthy. The malformed window is discarded, the corrupted facts are dropped
 // while their valid siblings survive, and the healthy window is untouched.
 func TestFaultMalformedPersistedStateIsolatedPerWindow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetReducerConfig(state.ReducerConfig{GuardDuration: 1})
 

@@ -12,6 +12,8 @@ func copilotEvents(records ...string) string {
 }
 
 func TestCopilotLifecycle_FinalCompletion(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeTranscript(t, path, copilotEvents(
 		`{"type":"session.start","timestamp":"2026-05-24T13:00:00.000Z","data":{"sessionId":"s","startTime":"2026-05-24T13:00:00.000Z","context":{"cwd":"/w"}}}`,
@@ -34,6 +36,8 @@ func TestCopilotLifecycle_FinalCompletion(t *testing.T) {
 }
 
 func TestCopilotLifecycle_SessionShutdownIsTerminal(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeTranscript(t, path, copilotEvents(
 		`{"type":"assistant.turn_end","timestamp":"2026-05-24T13:00:04.000Z","data":{}}`,
@@ -50,6 +54,8 @@ func TestCopilotLifecycle_SessionShutdownIsTerminal(t *testing.T) {
 }
 
 func TestCopilotLifecycle_InternalTurnEndThenNewTurn(t *testing.T) {
+	t.Parallel()
+
 	// A settled turn followed by a new turn's activity must classify as active:
 	// the latest state-bearing event wins.
 	path := filepath.Join(t.TempDir(), "events.jsonl")
@@ -73,6 +79,8 @@ func TestCopilotLifecycle_InternalTurnEndThenNewTurn(t *testing.T) {
 }
 
 func TestCopilotLifecycle_ReportsTranscriptSizeGeneration(t *testing.T) {
+	t.Parallel()
+
 	// The evidence carries the transcript's byte size as a monotonic generation
 	// fingerprint the probe captures to detect a later append. It equals the
 	// on-disk file size, and it advances when a record is appended — exactly the
@@ -113,6 +121,8 @@ func TestCopilotLifecycle_ReportsTranscriptSizeGeneration(t *testing.T) {
 }
 
 func TestCopilotLifecycle_UserAbortThenBookkeepingNoise(t *testing.T) {
+	t.Parallel()
+
 	// A user-initiated abort is terminal; trailing hook and subagent
 	// (session.task_complete) noise must not flip it back to active.
 	path := filepath.Join(t.TempDir(), "events.jsonl")
@@ -137,6 +147,8 @@ func TestCopilotLifecycle_UserAbortThenBookkeepingNoise(t *testing.T) {
 }
 
 func TestCopilotLifecycle_NonUserAbortIsNotTerminal(t *testing.T) {
+	t.Parallel()
+
 	// An error abort is not the user-initiated terminal signal; the last
 	// trustworthy state-bearing event before it wins.
 	path := filepath.Join(t.TempDir(), "events.jsonl")
@@ -155,6 +167,8 @@ func TestCopilotLifecycle_NonUserAbortIsNotTerminal(t *testing.T) {
 }
 
 func TestCopilotLifecycle_TaskCompleteAloneIsUnknown(t *testing.T) {
+	t.Parallel()
+
 	// session.task_complete on its own (subagent completion) is not a
 	// main-turn terminal signal — nothing state-bearing precedes it here.
 	path := filepath.Join(t.TempDir(), "events.jsonl")
@@ -173,6 +187,8 @@ func TestCopilotLifecycle_TaskCompleteAloneIsUnknown(t *testing.T) {
 }
 
 func TestCopilotLifecycle_LaterActivity(t *testing.T) {
+	t.Parallel()
+
 	// A terminal turn_end followed later by a fresh user prompt is active.
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeTranscript(t, path, copilotEvents(

@@ -13,6 +13,8 @@ import (
 )
 
 func TestASLActionsFollowProjectedCapabilities(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	m := d.Model()
@@ -39,6 +41,8 @@ func TestASLActionsFollowProjectedCapabilities(t *testing.T) {
 }
 
 func TestASLStopAndAbortConfirmBeforeSubmitting(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		key         string
 		action      string
@@ -86,6 +90,8 @@ func TestASLStopAndAbortConfirmBeforeSubmitting(t *testing.T) {
 }
 
 func TestASLControlCancellationSubmitsNothingAndDropsTheCapture(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	if err := d.Key(keyASLStop); err != nil {
@@ -107,6 +113,8 @@ func TestASLControlCancellationSubmitsNothingAndDropsTheCapture(t *testing.T) {
 }
 
 func TestASLConfirmationKeepsItsCaptureWhenTheListRefreshes(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	if err := d.Key(keyASLStop); err != nil {
@@ -135,6 +143,8 @@ func TestASLConfirmationKeepsItsCaptureWhenTheListRefreshes(t *testing.T) {
 }
 
 func TestASLOperationReceiptsAdvanceAfterTheFormCloses(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-paused")
 	typeASLAnswer(t, d, "resume please")
 	if err := d.Key(keyCtrlS); err != nil {

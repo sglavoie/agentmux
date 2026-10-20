@@ -11,6 +11,8 @@ import (
 )
 
 func TestListWithConfig_ProjectDirectoryWithoutHarnessIsNotGhost(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
 		ID:       1,
@@ -61,6 +63,8 @@ func TestListWithConfig_ProjectDirectoryWithoutHarnessIsNotGhost(t *testing.T) {
 }
 
 func TestListWithConfig_StaleRecoveredMetadataWithoutHarnessIsIgnored(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
 		ID:       1,
@@ -102,6 +106,8 @@ func TestListWithConfig_StaleRecoveredMetadataWithoutHarnessIsIgnored(t *testing
 }
 
 func TestListWithConfig_CWDFallbackTargetsHarnessBelowActiveDashboardOverlay(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
 		ID:       1,

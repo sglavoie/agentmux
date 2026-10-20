@@ -13,6 +13,8 @@ import (
 )
 
 func TestProbeCodexScreenPrompts_IgnoresNonCodexManagedWindows(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
@@ -40,6 +42,8 @@ func TestProbeCodexScreenPrompts_IgnoresNonCodexManagedWindows(t *testing.T) {
 // advances the reducer receipt past the value the probe captured, so the stale
 // completed-turn read is discarded and the newer interactive bolt is preserved.
 func TestProbeCodexScreenPrompts_ConcurrentPromptInvalidatesStopProbe(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{

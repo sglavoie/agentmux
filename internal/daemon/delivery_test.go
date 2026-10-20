@@ -11,6 +11,8 @@ import (
 )
 
 func TestDiagnosticProbeDiscoversRouteWithoutMutatingState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 
@@ -40,6 +42,8 @@ func TestDiagnosticProbeDiscoversRouteWithoutMutatingState(t *testing.T) {
 }
 
 func TestDiagnosticProbeDoesNotReserveManagedKittyOwner(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	windows := unmanagedRouteWindows("api", harness.Codex, true)
 	h.SetKittyClient(&fakeKittyClient{windows: windows})
@@ -63,6 +67,8 @@ func TestDiagnosticProbeDoesNotReserveManagedKittyOwner(t *testing.T) {
 }
 
 func TestHookDeliveryAcknowledgesUnknownEvidenceWithoutState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 
@@ -83,6 +89,8 @@ func TestHookDeliveryAcknowledgesUnknownEvidenceWithoutState(t *testing.T) {
 }
 
 func TestHookDeliveryRejectsMissingWindow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{
 		Type: protocol.TypeHookEvent, WindowID: 0, Event: "Stop", Harness: harness.Claude,

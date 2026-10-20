@@ -78,6 +78,8 @@ func newFocusTestHandler(client *recordingFocusClient) *Handler {
 }
 
 func TestFocusWindowFocusesTabThenWindowOnEveryKnownSocket(t *testing.T) {
+	t.Parallel()
+
 	for _, socket := range []string{focusHookSocket, focusListenSocket, focusSnapshotSocket} {
 		t.Run(socket, func(t *testing.T) {
 			client := &recordingFocusClient{live: companionWindows(3)}
@@ -107,6 +109,8 @@ func TestFocusWindowFocusesTabThenWindowOnEveryKnownSocket(t *testing.T) {
 // TestFocusWindowRejectsUnknownSocketWithoutDialing is the security boundary:
 // an address the daemon did not learn itself is never dialed.
 func TestFocusWindowRejectsUnknownSocketWithoutDialing(t *testing.T) {
+	t.Parallel()
+
 	for _, socket := range []string{"unix:/tmp/attacker", "", "tcp:127.0.0.1:1"} {
 		client := &recordingFocusClient{live: companionWindows(3)}
 		h := newFocusTestHandler(client)
@@ -125,6 +129,8 @@ func TestFocusWindowRejectsUnknownSocketWithoutDialing(t *testing.T) {
 // zero values: with no listen address and no snapshot, an empty socket must
 // not match them.
 func TestFocusWindowEmptyListenAddressIsNotAWildcard(t *testing.T) {
+	t.Parallel()
+
 	client := &recordingFocusClient{live: companionWindows(3)}
 	h := newTestHandler()
 	h.SetFocusClient(client)
@@ -136,6 +142,8 @@ func TestFocusWindowEmptyListenAddressIsNotAWildcard(t *testing.T) {
 }
 
 func TestFocusWindowStaleTargetWritesNothing(t *testing.T) {
+	t.Parallel()
+
 	client := &recordingFocusClient{live: companionWindows(3)}
 	h := newFocusTestHandler(client)
 
@@ -149,6 +157,8 @@ func TestFocusWindowStaleTargetWritesNothing(t *testing.T) {
 }
 
 func TestFocusWindowReportsFocusFailure(t *testing.T) {
+	t.Parallel()
+
 	client := &recordingFocusClient{live: companionWindows(3), focusErr: errors.New("kitty refused")}
 	h := newFocusTestHandler(client)
 
@@ -163,6 +173,8 @@ func TestFocusWindowReportsFocusFailure(t *testing.T) {
 }
 
 func TestFocusWindowRejectsMalformedRequests(t *testing.T) {
+	t.Parallel()
+
 	client := &recordingFocusClient{live: companionWindows(3)}
 	h := newFocusTestHandler(client)
 	for name, req := range map[string]protocol.Request{
@@ -187,6 +199,8 @@ func TestFocusWindowRejectsMalformedRequests(t *testing.T) {
 // TestFocusWindowDialsKittyOffStateMu proves the Kitty subprocesses run with
 // stateMu released: every hook acknowledgement waits on it.
 func TestFocusWindowDialsKittyOffStateMu(t *testing.T) {
+	t.Parallel()
+
 	client := &recordingFocusClient{live: companionWindows(3)}
 	h := newFocusTestHandler(client)
 	held := true
@@ -218,6 +232,8 @@ func drainCompanionDirty(h *Handler) {
 }
 
 func TestNotificationSnoozeSetsReadsAndClears(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	until := time.Now().Add(time.Hour).Unix()
 
@@ -254,6 +270,8 @@ func TestNotificationSnoozeSetsReadsAndClears(t *testing.T) {
 }
 
 func TestNotificationSnoozeRefusalChangesNothing(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	drainCompanionDirty(h)
 	for name, req := range map[string]protocol.Request{

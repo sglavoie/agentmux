@@ -17,6 +17,8 @@ import (
 // rewrite paths only preserve a 🔇 that is already present, so the glyph
 // never appears on the tab.
 func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 	rs := session.RunningSession{
@@ -91,6 +93,8 @@ func TestToggleMuteCmdSetsUserVarAndPushesTitle(t *testing.T) {
 // session writes an empty cc_mute and rebuilds the title without the 🔇 glyph,
 // so the tab returns to its un-muted appearance immediately.
 func TestToggleMuteCmdUnmuteStripsGlyph(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 	rs := session.RunningSession{
@@ -138,6 +142,8 @@ func TestToggleMuteCmdUnmuteStripsGlyph(t *testing.T) {
 // fires but the undo affordance is dropped because hasAcc is false.
 // Mirrors the contract enforced by session.findAccount.
 func TestFindAccountByNameCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	accounts := []config.Account{
 		{Name: "work"},
 		{Name: "personal"},

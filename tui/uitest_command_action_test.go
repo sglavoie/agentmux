@@ -22,6 +22,8 @@ import (
 // and the palette closes. The Kitty call is the proof the operation itself ran
 // rather than the mode merely changing.
 func TestCommandActionDispatchesThroughThePalette(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +47,8 @@ func TestCommandActionDispatchesThroughThePalette(t *testing.T) {
 // command chosen is deliberately not the one the palette opens on, so a driver
 // that skipped the walk would run the wrong row.
 func TestCommandActionWalksTheCursorWithNavigationKeys(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +83,8 @@ func TestCommandActionWalksTheCursorWithNavigationKeys(t *testing.T) {
 // driver is asked directly because scenario validation rejects such an id
 // before a run starts — both gates exist, and this is the second one.
 func TestCommandActionFailsForAbsentCommand(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +102,8 @@ func TestCommandActionFailsForAbsentCommand(t *testing.T) {
 // hides rather than disables: clearing filters is offered only when a filter is
 // active, so on an unfiltered list the palette has no row for it at all.
 func TestCommandActionFailsForHiddenCommand(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatal(err)
@@ -121,6 +129,8 @@ func TestCommandActionFailsForHiddenCommand(t *testing.T) {
 // call recorded — a scenario that merely observed "nothing changed" could not
 // tell a refusal from a peek that opened and closed.
 func TestCommandActionFailsForDisabledCommandWithoutIssuingIt(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("unseen_stops")
 	if err != nil {
 		t.Fatal(err)
@@ -146,6 +156,8 @@ func TestCommandActionFailsForDisabledCommandWithoutIssuingIt(t *testing.T) {
 // pinned on the pure resolver, which is exactly where a future catalog that
 // grew a duplicate would be caught.
 func TestCommandRowResolutionRejectsDuplicateIDs(t *testing.T) {
+	t.Parallel()
+
 	rows := []commands.Command[Model]{
 		{ID: commands.ShowKeyboardHelp, Title: commands.StaticTitle[Model]("Keyboard shortcuts")},
 		{ID: commands.SearchPlans, Title: commands.StaticTitle[Model]("Plans")},
@@ -174,6 +186,8 @@ func TestCommandRowResolutionRejectsDuplicateIDs(t *testing.T) {
 // refuses under, which is what would break if the switcher were ever folded back
 // into the list mode.
 func TestCommandActionRefusesWhileTheProjectSwitcherIsOpen(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("project_families")
 	if err != nil {
 		t.Fatal(err)
@@ -197,6 +211,8 @@ func TestCommandActionRefusesWhileTheProjectSwitcherIsOpen(t *testing.T) {
 // the palette is a dashboard surface, so a command named from inside another
 // screen is a scenario-authoring mistake and says so by name.
 func TestCommandActionRefusesOutsideTheDashboard(t *testing.T) {
+	t.Parallel()
+
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatal(err)

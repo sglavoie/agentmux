@@ -95,6 +95,8 @@ func TestNameSessionWritesAndRemovesTheName(t *testing.T) {
 }
 
 func TestCleanNameKeepsOneShortLine(t *testing.T) {
+	t.Parallel()
+
 	for in, want := range map[string]string{
 		"":                       "",
 		" \t\n":                  "",

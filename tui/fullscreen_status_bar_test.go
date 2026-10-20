@@ -11,6 +11,8 @@ import (
 )
 
 func TestFullScreenModesReserveStickyStatusBar(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name       string
 		m          Model
@@ -79,6 +81,8 @@ func TestFullScreenModesReserveStickyStatusBar(t *testing.T) {
 }
 
 func TestFullScreenModeErrorsMirrorToStatusBar(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -117,6 +121,8 @@ func TestFullScreenModeErrorsMirrorToStatusBar(t *testing.T) {
 }
 
 func TestSessionSearchOverlaysReserveStickyStatusBar(t *testing.T) {
+	t.Parallel()
+
 	target := transcript.SessionMeta{
 		ID:      "abc",
 		Harness: "claude",

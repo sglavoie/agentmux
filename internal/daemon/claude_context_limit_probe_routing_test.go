@@ -11,6 +11,8 @@ import (
 )
 
 func TestProbeClaudeContextLimit_SplitTabNonOwnerCannotOverwriteManagedOwner(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeSplitWindows(
@@ -46,6 +48,8 @@ func TestProbeClaudeContextLimit_SplitTabNonOwnerCannotOverwriteManagedOwner(t *
 }
 
 func TestProbeClaudeContextLimit_UnmanagedClaudeForegroundNoOp(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeForegroundWindows(
@@ -78,6 +82,8 @@ func TestProbeClaudeContextLimit_UnmanagedClaudeForegroundNoOp(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_DedupesWithinEpisode(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{

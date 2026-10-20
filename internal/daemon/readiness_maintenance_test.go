@@ -62,6 +62,8 @@ func (g *gatedStartupListKittyClient) SetUserVars(string, map[string]string) err
 // that maintenance restore repopulated the store, and (2) the late-completing
 // startup restore cannot roll back a hook that landed during the degraded window.
 func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBackHook(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 
@@ -184,6 +186,8 @@ func TestMaintenanceTick_RestoresAmxStateBeforeReadyAndLateStartupCannotRollBack
 // not come up over a cold cache and empty store (which would stop the
 // maintenance loop from ever restoring durable amx_state).
 func TestRestoreStateFromKittyBounded_DegradedOnImmediateListError(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	client := &errorThenListKittyClient{err: errors.New("kitty unavailable")}
 	h.useKittyClient(client)
@@ -212,6 +216,8 @@ func TestRestoreStateFromKittyBounded_DegradedOnImmediateListError(t *testing.T)
 // must restore the persisted multi-source reducer facts BEFORE MarkReady, and
 // health must report recovered readiness only afterward.
 func TestMaintenanceTick_RestoresAfterImmediateStartupListError(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 
@@ -307,6 +313,8 @@ func TestMaintenanceTick_RestoresAfterImmediateStartupListError(t *testing.T) {
 // must be merged before SetUserVars so that first write cannot erase disjoint
 // durable facts, acknowledgement cutoffs, or a live ASL lease.
 func TestRenderWorkerDoesNotOverwriteUnrestoredFactsAfterDegradedStartup(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 

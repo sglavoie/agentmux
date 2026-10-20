@@ -19,6 +19,8 @@ import (
 )
 
 func TestProbeClaudeScreenStop_BusyPaneTitleDoesNotOverrideStop(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
 		Harness: harness.Claude,
@@ -51,6 +53,8 @@ func TestProbeClaudeScreenStop_BusyPaneTitleDoesNotOverrideStop(t *testing.T) {
 // receipt captured before ListWindows prevents a busy snapshot from replacing a
 // terminal reducer event that lands while Kitty is producing that snapshot.
 func TestProbeClaudeScreenStop_ConcurrentTerminalInvalidatesBusyRecovery(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
 		Harness: harness.Claude,
@@ -90,6 +94,8 @@ func TestProbeClaudeScreenStop_ConcurrentTerminalInvalidatesBusyRecovery(t *test
 // queued composer input, and the context-limit recovery banner (which the
 // dedicated context-limit probe owns).
 func TestProbeClaudeScreenStop_ProtectedScreensKeepBolt(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		screen string
@@ -136,6 +142,8 @@ func TestProbeClaudeScreenStop_ProtectedScreensKeepBolt(t *testing.T) {
 // advances the reducer receipt past the value the probe captured, so the stale
 // interruption read is discarded and the newer interactive bolt survives.
 func TestProbeClaudeScreenStop_ConcurrentPromptInvalidatesStopProbe(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -179,6 +187,8 @@ func TestProbeClaudeScreenStop_ConcurrentPromptInvalidatesStopProbe(t *testing.T
 // settles Claude-owned tabs: a Codex-managed owner showing the same idle screen
 // is left alone.
 func TestProbeClaudeScreenStop_IgnoresNonClaudeManagedOwner(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -210,6 +220,8 @@ func TestProbeClaudeScreenStop_IgnoresNonClaudeManagedOwner(t *testing.T) {
 // the Codex prompt probe — has no unmanaged-foreground fallback: a tab with no
 // managed title owner is never screen-read.
 func TestProbeClaudeScreenStop_UnmanagedForegroundNotProbed(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -242,6 +254,8 @@ func TestProbeClaudeScreenStop_UnmanagedForegroundNotProbed(t *testing.T) {
 // of that held stop instead of painting a synthetic one. The sample requirement
 // is unchanged by the hold: Claude still needs two agreeing screen reads.
 func TestProbeClaudeScreenStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newTerminalHoldProbeHandler(t, harness.Claude, claudeIdleScreen)
 	releaseHoldAtTestEnd(t, h, 42)
 	base := time.Now()

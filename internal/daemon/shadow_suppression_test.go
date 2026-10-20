@@ -24,6 +24,8 @@ import (
 // forcing an immediate title render; otherwise a restart can restore the older
 // terminal payload and accept an already-consumed replay.
 func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	now := time.Now()

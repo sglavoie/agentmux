@@ -17,6 +17,8 @@ import (
 // than its limit run, the rest wait in turn, and every one of them is
 // answered or told that it timed out.
 func TestClientGateNeverAdmitsMoreThanItsLimit(t *testing.T) {
+	t.Parallel()
+
 	const limit, callers = 3, 40
 	gate := newClientGate(limit)
 	release := make(chan struct{})
@@ -80,6 +82,8 @@ func TestClientGateNeverAdmitsMoreThanItsLimit(t *testing.T) {
 // A caller that cannot get a slot within its own timeout is told so, and
 // starts nothing.
 func TestClientGateTimesOutAQueuedCaller(t *testing.T) {
+	t.Parallel()
+
 	gate := newClientGate(1)
 	finish, err := gate.acquire(context.Background())
 	if err != nil {
@@ -161,6 +165,8 @@ func TestConcurrentCapturesStayWithinTheClientLimit(t *testing.T) {
 }
 
 func TestFailureClassIsAFixedVocabulary(t *testing.T) {
+	t.Parallel()
+
 	secret := "/Users/someone/project --prompt hunter2"
 	cases := []struct {
 		err  error

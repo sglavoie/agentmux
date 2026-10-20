@@ -11,6 +11,8 @@ import (
 )
 
 func TestRefresh_AddsNewEntries(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "claude-home", "projects", "-tmp-foo", "sess-1.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
@@ -69,6 +71,8 @@ func TestRefresh_AddsNewEntries(t *testing.T) {
 }
 
 func TestRefresh_SkipsUnchangedEntries(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-1.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
@@ -142,6 +146,8 @@ func TestRefresh_SkipsUnchangedEntries(t *testing.T) {
 }
 
 func TestRefresh_RefreshesChangedEntries(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-1.jsonl")
 	info1 := writeTranscript(t, transcriptPath, "{}\n")
@@ -214,6 +220,8 @@ func TestRefresh_RefreshesChangedEntries(t *testing.T) {
 }
 
 func TestRefresh_NoReaderForHarnessSkipped(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Profiles: []config.Account{
 			{Name: "work", Harness: harness.Claude, HomeDir: t.TempDir()},
@@ -239,6 +247,8 @@ func TestRefresh_NoReaderForHarnessSkipped(t *testing.T) {
 }
 
 func TestRefresh_FastPathSkipsUnchangedFiles(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-1.jsonl")
 	writeTranscript(t, transcriptPath, "{}\n")
@@ -297,6 +307,8 @@ func TestRefresh_FastPathSkipsUnchangedFiles(t *testing.T) {
 }
 
 func TestRefresh_PassesScanCutoffToDiscovery(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name     string
 		days     int
@@ -349,6 +361,8 @@ func TestRefresh_PassesScanCutoffToDiscovery(t *testing.T) {
 }
 
 func TestRefresh_SkipsFileChangedBeforeMerge(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "x", "sess-stale.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
@@ -419,6 +433,8 @@ func TestRefresh_SkipsFileChangedBeforeMerge(t *testing.T) {
 }
 
 func TestRefresh_RepairsMissingSearchSidecar(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	transcriptPath := filepath.Join(tmp, "home", "projects", "-tmp-foo", "sess-repair.jsonl")
 	info := writeTranscript(t, transcriptPath, "{}\n")
@@ -483,6 +499,8 @@ func TestRefresh_RepairsMissingSearchSidecar(t *testing.T) {
 // `<command-name>/clear…` snippets for transcripts that never change again.
 // Refresh must reparse those once, and only those.
 func TestRefresh_ReparsesClaudeSnippetHoldingCommandMarkup(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "home")
 	body := `{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>"},"timestamp":"2026-05-01T12:00:00.000Z","cwd":"/tmp/foo"}` + "\n" +
@@ -534,6 +552,8 @@ func TestRefresh_ReparsesClaudeSnippetHoldingCommandMarkup(t *testing.T) {
 // to learn it, an entry already marked is served from the cache, and the
 // session comes back on the refresh after its file grows.
 func TestRefresh_LeavesOutEmptyClaudeSessionsUntilTheirFirstPrompt(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "home")
 	clear := `{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>"},"timestamp":"2026-05-01T12:00:00.000Z","cwd":"/tmp/foo"}` + "\n"

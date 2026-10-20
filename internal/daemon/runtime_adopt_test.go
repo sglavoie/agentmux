@@ -33,6 +33,8 @@ func runtimeCompanionSessions(t *testing.T, h *Handler) map[string]protocol.Comp
 // under the harness and profile it was launched with; its first hook then
 // lands in the slot it was given.
 func TestALiveTmuxSessionIsListedBeforeItsFirstHook(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	quiet, kittyOnly, pending := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(quiet, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
@@ -79,6 +81,8 @@ func TestALiveTmuxSessionIsListedBeforeItsFirstHook(t *testing.T) {
 
 // A slot another live session holds is not taken by adoption.
 func TestAdoptionLeavesAnOccupiedSlotAlone(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	holder, late := newRuntimeID(t), newRuntimeID(t)
 	directory.put(holder, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")

@@ -47,6 +47,8 @@ func sessionsByTitle(d *uitestDriver, title string) []session.RunningSession {
 // would let a disambiguator pass by reaching for whichever it happened to try
 // first.
 func TestDuplicateNamesFixturePosesEachRungOfTheLadder(t *testing.T) {
+	t.Parallel()
+
 	d, _ := newUITestFixtureDriver(mustFixture(t, "duplicate_names"), UITestSize{})
 	cleanupUITestDriver(t, d)
 
@@ -95,6 +97,8 @@ func TestDuplicateNamesFixturePosesEachRungOfTheLadder(t *testing.T) {
 // two would render the same picture and every scenario built on this fixture
 // would pass without testing anything.
 func TestPausedOutputFixtureOverflowsThePane(t *testing.T) {
+	t.Parallel()
+
 	fx := mustFixture(t, "paused_output")
 	d, _ := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
@@ -130,6 +134,8 @@ func TestPausedOutputFixtureOverflowsThePane(t *testing.T) {
 // that merely repeated "degraded" would be indistinguishable from having no
 // fixture at all.
 func TestHealthStatesFixtureSaysSomethingTheDefaultCannot(t *testing.T) {
+	t.Parallel()
+
 	fx := mustFixture(t, "health_states")
 	if fx.Health == nil {
 		t.Fatal("fixture carries no Health block, so it reproduces the hermetic default")
@@ -174,6 +180,8 @@ func TestHealthStatesFixtureSaysSomethingTheDefaultCannot(t *testing.T) {
 // row, which is exactly why the fixture has to assert the facts rather than the
 // rendering.
 func TestAttentionOverlapFixtureCarriesMoreThanOneReasonPerRow(t *testing.T) {
+	t.Parallel()
+
 	d, _ := newUITestFixtureDriver(mustFixture(t, "attention_overlap"), UITestSize{})
 	cleanupUITestDriver(t, d)
 
@@ -222,6 +230,8 @@ func TestAttentionOverlapFixtureCarriesMoreThanOneReasonPerRow(t *testing.T) {
 // screen by naming a capability. A fixture the command action cannot be used
 // against is a fixture that only literal-key scenarios can drive.
 func TestRedesignFixturesAreReachableByCommandAction(t *testing.T) {
+	t.Parallel()
+
 	for _, name := range []string{"duplicate_names", "paused_output", "health_states", "attention_overlap"} {
 		t.Run(name, func(t *testing.T) {
 			d, _ := newUITestFixtureDriver(mustFixture(t, name), UITestSize{})

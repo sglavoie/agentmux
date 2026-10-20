@@ -34,6 +34,8 @@ func tmuxSessionIn(t *testing.T, h *Handler, runtime runtimesession.ID) protocol
 // failed read keeps the project and is retried later; an ended session's label
 // is forgotten. A v1 subscriber never sees any of it.
 func TestRuntimeSessionsAreLabeledForCompanions(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onTmux := newRuntimeID(t)
 	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
@@ -164,6 +166,8 @@ func TestTmuxRuntimeSessionLabelReadsPaneMetadata(t *testing.T) {
 // pass, and gives way to the profile's again when the pick is removed. A
 // Kitty slot never takes a color from the tmux observation.
 func TestRuntimeSessionColorFollowsThePickAndTheProfile(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
 	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
@@ -220,6 +224,8 @@ func TestRuntimeSessionColorFollowsThePickAndTheProfile(t *testing.T) {
 // labeling pass, and loses it when the name is removed. A Kitty slot never
 // takes a name from the tmux observation.
 func TestRuntimeSessionNameFollowsThePane(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
 	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
@@ -262,6 +268,8 @@ func TestRuntimeSessionNameFollowsThePane(t *testing.T) {
 // of the icon do not hide it, and an emoji that is no configured harness icon
 // is part of the title, not an icon.
 func TestRuntimeSessionHarnessIconFollowsTheTitle(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onTmux := newRuntimeID(t)
 	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")

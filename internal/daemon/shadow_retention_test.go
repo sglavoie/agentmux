@@ -13,6 +13,8 @@ import (
 )
 
 func TestShadowReducerRetentionRetiresCompletedSubagentsAfterStragglerWindow(t *testing.T) {
+	t.Parallel()
+
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 100})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "stop", Seq: 2, TurnID: "t1", At: 110})
@@ -40,6 +42,8 @@ func TestShadowReducerRetentionRetiresCompletedSubagentsAfterStragglerWindow(t *
 }
 
 func TestShadowReducerRetentionExpiresTerminalFactsAfterAcknowledgement(t *testing.T) {
+	t.Parallel()
+
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
@@ -59,6 +63,8 @@ func TestShadowReducerRetentionExpiresTerminalFactsAfterAcknowledgement(t *testi
 }
 
 func TestShadowReducerRetentionExpiresTerminalFactsAfterTombstoneWindow(t *testing.T) {
+	t.Parallel()
+
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: src, Action: "stop", Seq: 1, TurnID: "t1", At: 100})
@@ -78,6 +84,8 @@ func TestShadowReducerRetentionExpiresTerminalFactsAfterTombstoneWindow(t *testi
 }
 
 func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testing.T) {
+	t.Parallel()
+
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 5, At: 100})
@@ -100,6 +108,8 @@ func TestShadowReducerRetentionExpiresAckedNonTerminalFactsAfterWindow(t *testin
 }
 
 func TestShadowReducerRetentionCapsNewestAcknowledgedFactsDeterministically(t *testing.T) {
+	t.Parallel()
+
 	r := state.NewReducer(state.ReducerConfig{})
 	for i := 0; i < state.MaxAcknowledgedFacts+6; i++ {
 		r.Apply(protocol.ReducerEvent{
@@ -125,6 +135,8 @@ func TestShadowReducerRetentionCapsNewestAcknowledgedFactsDeterministically(t *t
 }
 
 func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *testing.T) {
+	t.Parallel()
+
 	facts := make([]protocol.SourceFactSnapshot, 0, state.MaxAcknowledgedFacts+2)
 	for i := 0; i < state.MaxAcknowledgedFacts+1; i++ {
 		facts = append(facts, protocol.SourceFactSnapshot{
@@ -149,6 +161,8 @@ func TestShadowReducerRetentionUsesSourceIdentityAsFinalEvictionTieBreak(t *test
 }
 
 func TestShadowReducerRetentionPreservesUnackedFactsAndLiveASLLeases(t *testing.T) {
+	t.Parallel()
+
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:acked"}, Action: "active", Seq: 1, At: 100})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 1, At: 100})

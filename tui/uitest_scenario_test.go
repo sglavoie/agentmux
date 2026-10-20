@@ -11,6 +11,8 @@ func intPtr(n int) *int { return &n }
 // TestUITestScenarioParseValid verifies a well-formed scenario decodes into the
 // expected struct with actions and assertions preserved in order.
 func TestUITestScenarioParseValid(t *testing.T) {
+	t.Parallel()
+
 	data := []byte(`{
 		"name": "open actions",
 		"fixture": "basic",
@@ -45,6 +47,8 @@ func TestUITestScenarioParseValid(t *testing.T) {
 // TestUITestScenarioParseRejectsBadInput verifies parse-time validation rejects
 // ambiguous or malformed scenarios with a path-aware error.
 func TestUITestScenarioParseRejectsBadInput(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]string{
 		"unknown field":     `{"fixture": "basic", "size": {"width": 80, "height": 24}, "fixtures": "x"}`,
 		"missing source":    `{"size": {"width": 80, "height": 24}}`,
@@ -70,6 +74,8 @@ func TestUITestScenarioParseRejectsBadInput(t *testing.T) {
 // TestUITestScenarioParseAllowsTrailingWhitespace verifies the exactly-one-object
 // rule still accepts trailing whitespace after the top-level object.
 func TestUITestScenarioParseAllowsTrailingWhitespace(t *testing.T) {
+	t.Parallel()
+
 	data := []byte("{\"fixture\": \"basic\", \"size\": {\"width\": 80, \"height\": 24}}\n\t  \n")
 	sc, err := parseUITestScenario(data)
 	if err != nil {
@@ -213,6 +219,8 @@ func TestUITestScenarioUnknownFixture(t *testing.T) {
 // TestUITestActionValidation exercises validateUITestAction across the accepted
 // action kinds and their failure modes.
 func TestUITestActionValidation(t *testing.T) {
+	t.Parallel()
+
 	ok := []UITestAction{
 		{Type: UITestActionKey, Key: "enter"},
 		{Type: UITestActionKey, Key: "ctrl+c"},
@@ -253,6 +261,8 @@ func TestUITestActionValidation(t *testing.T) {
 // TestUITestAssertionValidation exercises validateUITestAssertion across the
 // accepted assertion kinds and their failure modes.
 func TestUITestAssertionValidation(t *testing.T) {
+	t.Parallel()
+
 	modes := uitestModeNameSet()
 	ok := []UITestAssertion{
 		{Type: UITestAssertNoLayoutIssues},
@@ -292,6 +302,8 @@ func TestUITestAssertionValidation(t *testing.T) {
 // observation layer can emit is accepted by mode_equals validation, so the two
 // mappings never drift.
 func TestUITestAssertModeNamesAreValidatable(t *testing.T) {
+	t.Parallel()
+
 	modes := uitestModeNameSet()
 	for mode := ModeList; mode <= ModeCommandPalette; mode++ {
 		name := uitestModeName(mode)

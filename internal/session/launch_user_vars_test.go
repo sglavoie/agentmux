@@ -15,6 +15,8 @@ import (
 // inconsistent state. Update the expected map deliberately when changing the
 // contract.
 func TestBuildUserVars_Parity(t *testing.T) {
+	t.Parallel()
+
 	defaults := config.Defaults{
 		Sort: "alpha",
 		Args: []string{"--shared-default"},
@@ -87,6 +89,8 @@ func TestBuildUserVars_Parity(t *testing.T) {
 // is empty but Account.Name is set, BuildUserVars uses the account name for
 // both amx_profile and cc_account.
 func TestBuildUserVars_ProfileFallsBackToAccount(t *testing.T) {
+	t.Parallel()
+
 	defaults := config.Defaults{}
 	acc := config.Account{
 		Name:    "personal",
@@ -109,6 +113,8 @@ func TestBuildUserVars_ProfileFallsBackToAccount(t *testing.T) {
 }
 
 func TestBuildUserVars_InheritedArgsSetEmptyExplicitFlagsMarker(t *testing.T) {
+	t.Parallel()
+
 	defaults := config.Defaults{}
 	acc := config.Account{
 		Name:    "work",

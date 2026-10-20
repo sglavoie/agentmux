@@ -14,6 +14,8 @@ import (
 // transcript generation confirm the withheld agentStop instead of settling a
 // synthetic transcript stop.
 func TestProbeCopilotTranscriptStop_ConfirmsHeldStopInsteadOfSettling(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h, _, _ := copilotProbeHandlerNotifier(t, 42, "bolt", home)

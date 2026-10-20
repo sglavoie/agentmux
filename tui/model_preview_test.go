@@ -36,6 +36,8 @@ const splitFloor = inspectorMinQueueCols + inspectorDividerCols + inspectorMinCo
 // exactly what an operator who lives at a fixed terminal width would hit every
 // time.
 func TestInspectorSplitWidthBoundaryIsExact(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		width int
 		want  bool
@@ -59,6 +61,8 @@ func TestInspectorSplitWidthBoundaryIsExact(t *testing.T) {
 // honoured; one narrower than it is ignored, because the built-in floor is what
 // keeps the metadata block readable rather than a preference.
 func TestConfiguredMinColsRaisesTheSplitFloorAndNeverLowersIt(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name      string
 		minCols   int
@@ -86,6 +90,8 @@ func TestConfiguredMinColsRaisesTheSplitFloorAndNeverLowersIt(t *testing.T) {
 // gate: whatever the ratio asks for, neither column may end up below its floor,
 // because a ratio is a preference and a floor is a legibility requirement.
 func TestSplitWidthsNeverStarveEitherPane(t *testing.T) {
+	t.Parallel()
+
 	for _, ratio := range []float64{0, 0.05, 0.4, 0.5, 0.95, 1} {
 		for _, width := range []int{splitFloor, 100, 160, 240} {
 			m := testModel()
@@ -117,6 +123,8 @@ func TestSplitWidthsNeverStarveEitherPane(t *testing.T) {
 // so the assertion walks the terminal height down until the body crosses it and
 // checks the split turns off on exactly that step.
 func TestInspectorSplitHeightBoundaryIsExact(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 160
 	m.cfg.Defaults.Preview = inspectorGeometryCfg()
@@ -155,6 +163,8 @@ func withHeight(m Model, height int) Model {
 // sight of the session list is not a reasonable response to a resize nobody
 // asked the dashboard about.
 func TestAShortTerminalDropsToTheQueueRatherThanPromotingTheInspector(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height = 160, 50
 	m.cfg.Defaults.Preview = inspectorGeometryCfg()
@@ -177,6 +187,8 @@ func TestAShortTerminalDropsToTheQueueRatherThanPromotingTheInspector(t *testing
 // that is not one. The old pane answered this terminal with a toast; the
 // inspector answers it with the output the operator asked to read.
 func TestPressingTheKeyOnATerminalTooNarrowToSplitGoesFullScreen(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height = splitFloor-1, 50
 	m.cfg.Defaults.Preview = inspectorGeometryCfg()
@@ -207,6 +219,8 @@ func TestPressingTheKeyOnATerminalTooNarrowToSplitGoesFullScreen(t *testing.T) {
 // hidden: the operator asked to read output and then asked to stop, which says
 // nothing about whether a split should be drawn on a terminal that affords one.
 func TestFullScreenReturnsToTheSplitItCameFrom(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height = 160, 50
 	m.cfg.Defaults.Preview = inspectorGeometryCfg()

@@ -17,6 +17,8 @@ import (
 )
 
 func TestStateGroupClassification(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	threshold := 5 * time.Minute
 
@@ -158,6 +160,8 @@ func TestStateGroupClassification(t *testing.T) {
 }
 
 func TestStateGroupZeroThreshold(t *testing.T) {
+	t.Parallel()
+
 	// A zero threshold disables the staleness check; empty-state sessions
 	// with any activity record should still classify as Active.
 	s := session.RunningSession{State: "", WindowID: 1}
@@ -188,6 +192,8 @@ func stripAnsi(s string) string {
 // TestRenderListEmptyHeroNoSessions covers the case where no sessions are
 // running at all: the hero should advertise the `l` launch shortcut.
 func TestRenderListEmptyHeroNoSessions(t *testing.T) {
+	t.Parallel()
+
 	m := Model{width: 60}
 	out := stripAnsi(renderList(m))
 	if !strings.Contains(out, "No running sessions") {
@@ -204,6 +210,8 @@ func TestRenderListEmptyHeroNoSessions(t *testing.T) {
 // TestRenderListInitialLoadDoesNotClaimTheListIsEmpty verifies that the cold
 // startup state remains distinct from a successfully loaded empty snapshot.
 func TestRenderListInitialLoadDoesNotClaimTheListIsEmpty(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 60
 
@@ -229,6 +237,8 @@ func TestRenderListInitialLoadDoesNotClaimTheListIsEmpty(t *testing.T) {
 // but the active filter rules every one of them out: the hero should hint
 // at `esc` to clear the filter.
 func TestRenderListEmptyHeroFilteredOut(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		width:        60,
 		sessions:     []session.RunningSession{{Base: "x", State: "bolt"}},
@@ -248,6 +258,8 @@ func TestRenderListEmptyHeroFilteredOut(t *testing.T) {
 // (Needs you and Running) and asserts each row carries the left border glyph
 // and that group labels are emitted above each band.
 func TestRenderListMixedGroupBorders(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		cfg:   &config.Config{},
 		width: 80,
@@ -276,6 +288,8 @@ func TestRenderListMixedGroupBorders(t *testing.T) {
 // is the only one; the left border exists to tell two adjacent buckets apart, so
 // with nothing to separate it is not drawn at all.
 func TestRenderListSingleGroupKeepsItsHeadingWithoutABorder(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		cfg:   &config.Config{},
 		width: 80,
@@ -319,6 +333,8 @@ func queueRowFor(s session.RunningSession, width int) string {
 // padding would still push every name one cell right, and only the row that has
 // no icon would reveal it.
 func TestOperationalPrefixesAreGoneFromTheQueueRow(t *testing.T) {
+	t.Parallel()
+
 	for _, state := range []string{"", "bolt", "stop", "key", "warning", "error"} {
 		s := session.RunningSession{Base: "api", Account: "work", State: state, Unseen: state == "stop"}
 		row := queueRowFor(s, 80)
@@ -342,6 +358,8 @@ func TestOperationalPrefixesAreGoneFromTheQueueRow(t *testing.T) {
 // thing an operator would notice returning to the row, and a row that quietly
 // reserved its two cells again would go unnoticed by a label-only check.
 func TestHarnessTravelsWithTheSelectedSessionRatherThanEveryRow(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		HarnessEmojis: map[string]string{"claude": "🐱", "codex": "🦊", "copilot": "🐙"},
 	}
@@ -367,6 +385,8 @@ func TestHarnessTravelsWithTheSelectedSessionRatherThanEveryRow(t *testing.T) {
 // inspector spends a whole labelled line on the name instead, so the contract is
 // now that the name arrives intact and still renders as valid UTF-8.
 func TestMultibyteProfileNameSurvivesWholeInTheSelectedContext(t *testing.T) {
+	t.Parallel()
+
 	for _, profile := range []string{"éscriba", "中文", "🐙ctopus"} {
 		s := session.RunningSession{Base: "x", Account: profile}
 		pane := dashboard.RenderInspector(dashboard.InspectorInput{
@@ -394,6 +414,8 @@ func TestMultibyteProfileNameSurvivesWholeInTheSelectedContext(t *testing.T) {
 // would align by construction. Without grapheme-aware width, FE0F-bearing glyphs
 // and narrow pictographs pad the Session cell wrongly and the Status column frays.
 func TestQueueRowEmojiTitleColumnAlignment(t *testing.T) {
+	t.Parallel()
+
 	titles := []string{
 		"🐱amX",
 		"🧠BrainNotes",
@@ -468,6 +490,8 @@ func TestQueueRowEmojiTitleColumnAlignment(t *testing.T) {
 // needed both a spacious width and a tall terminal, so it was suppressed on
 // exactly the frames where an unfamiliar glyph is hardest to guess at.
 func TestStateIconReferenceIsGeneratedIntoHelp(t *testing.T) {
+	t.Parallel()
+
 	out := strings.Join(helpStateIconSection(), "\n")
 	for _, state := range dashboard.LegendStates {
 		gloss := dashboard.StateGloss(state)

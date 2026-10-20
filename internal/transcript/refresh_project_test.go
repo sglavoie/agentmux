@@ -13,6 +13,8 @@ import (
 )
 
 func TestRefresh_SharedHomeProfilesKeepStableDisplayAndFilterMembership(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "codex-home")
 	transcriptPath := filepath.Join(home, "projects", "-tmp-foo", "sess-shared.jsonl")
@@ -160,6 +162,8 @@ func TestRefresh_DuplicateDirectoryProjectsKeepOrderedMembership(t *testing.T) {
 }
 
 func TestRefresh_CachedEntryWithoutCWDKeepsProjectMetadata(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "claude-home")
 	transcriptPath := filepath.Join(home, "projects", "legacy", "sess-no-cwd.jsonl")
@@ -198,6 +202,8 @@ func TestRefresh_CachedEntryWithoutCWDKeepsProjectMetadata(t *testing.T) {
 }
 
 func TestRefresh_DuplicateProjectTitleUsesMatchedDirectoryProfile(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "claude-home")
 	transcriptPath := filepath.Join(home, "projects", "-tmp-personal-app", "sess-personal.jsonl")
@@ -255,6 +261,8 @@ func TestRefresh_DuplicateProjectTitleUsesMatchedDirectoryProfile(t *testing.T) 
 }
 
 func TestRefresh_GitLinkedWorktreeUsesConfiguredParentProjectAndProfile(t *testing.T) {
+	t.Parallel()
+
 	git := requireGit(t)
 	tmp := t.TempDir()
 	repo := filepath.Join(tmp, "repo")
@@ -334,6 +342,8 @@ func TestRefresh_GitLinkedWorktreeUsesConfiguredParentProjectAndProfile(t *testi
 }
 
 func TestRefresh_CodexSharedHomeRealDataStyleSessionVisible(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "codex-home")
 	const sessionID = "019ed5d2-642f-7ae0-85e0-9eaf5905b272"
@@ -388,6 +398,8 @@ func TestRefresh_CodexSharedHomeRealDataStyleSessionVisible(t *testing.T) {
 // Without tilde expansion in Refresh the per-harness readers silently
 // return zero entries because "~/.claude" doesn't exist as a literal path.
 func TestRefresh_ExpandsTildeInHomeDir(t *testing.T) {
+	t.Parallel()
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("no home dir available: %v", err)

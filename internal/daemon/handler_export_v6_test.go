@@ -15,6 +15,8 @@ import (
 // TestHealthCarriesBuildIdentityAndMetrics verifies TypeHealth reports the
 // artifact identity stamped at startup and the server's request metrics.
 func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
+	t.Parallel()
+
 	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 	build := buildinfo.Info{Version: "9.9.9", Revision: "abc", BinaryHash: "hash-x"}
 	h.SetBuildInfo(build)
@@ -43,6 +45,8 @@ func TestHealthCarriesBuildIdentityAndMetrics(t *testing.T) {
 }
 
 func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing.T) {
+	t.Parallel()
+
 	n := notification.NewNotifier(&config.NotificationConfig{Stop: true})
 	n.SetCapability(protocol.NotificationCapability{
 		Enabled: true, Backend: "alerter", Reason: "not_found",
@@ -62,6 +66,8 @@ func TestHealthCarriesNotificationCapabilityWithoutDegradingReadiness(t *testing
 // TestHealthWithoutBuildOrMetricsOmitsThem covers handlers running without a
 // server or startup stamp (unit-test topology, legacy daemons).
 func TestHealthWithoutBuildOrMetricsOmitsThem(t *testing.T) {
+	t.Parallel()
+
 	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 	resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 	if resp.Build != nil || resp.Metrics != nil {
@@ -73,6 +79,8 @@ func TestHealthWithoutBuildOrMetricsOmitsThem(t *testing.T) {
 // stamping (daemon sequence, nanosecond receipt) and identity/route stamping
 // on logged events, plus the live source facts on the shadow export section.
 func TestEventsExportStampsV6EventAndFactFields(t *testing.T) {
+	t.Parallel()
+
 	h := NewHandler(activity.NewStateGuard(time.Second), nil)
 
 	req := protocol.Request{

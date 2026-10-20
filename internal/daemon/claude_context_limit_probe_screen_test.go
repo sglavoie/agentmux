@@ -10,6 +10,8 @@ import (
 )
 
 func TestProbeClaudeContextLimit_NoMarker_NoOp(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{
@@ -40,6 +42,8 @@ func TestProbeClaudeContextLimit_NoMarker_NoOp(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_RealScreen_BoltToError(t *testing.T) {
+	t.Parallel()
+
 	fixture := loadClaudeContextLimitFixture(t)
 
 	h := newTestHandler()
@@ -100,6 +104,8 @@ func TestProbeClaudeContextLimit_RealScreen_BoltToError(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_RealScreen_EmptyToError(t *testing.T) {
+	t.Parallel()
+
 	fixture := loadClaudeContextLimitFixture(t)
 
 	h := newTestHandler()

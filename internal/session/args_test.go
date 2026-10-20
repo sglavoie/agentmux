@@ -8,6 +8,8 @@ import (
 )
 
 func TestShellQuoteArgs_RoundTripsThroughParseFlags(t *testing.T) {
+	t.Parallel()
+
 	args := []string{
 		"--prompt",
 		"hello world",
@@ -25,6 +27,8 @@ func TestShellQuoteArgs_RoundTripsThroughParseFlags(t *testing.T) {
 }
 
 func TestSplitShellArgs_DoubleQuotedBackslashes(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		raw  string
@@ -56,6 +60,8 @@ func TestSplitShellArgs_DoubleQuotedBackslashes(t *testing.T) {
 }
 
 func TestSplitShellArgs_BackslashNewlineContinuesLine(t *testing.T) {
+	t.Parallel()
+
 	raw := "cmd foo\\\nbar \"a\\\nb\" \\\n next"
 	want := []string{"cmd", "foobar", "ab", "next"}
 

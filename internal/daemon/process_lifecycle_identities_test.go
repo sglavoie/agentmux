@@ -9,6 +9,8 @@ import (
 )
 
 func TestDeduplicatedLifecycleIdentitiesStableOrder(t *testing.T) {
+	t.Parallel()
+
 	identities := []protocol.HarnessProcessIdentity{
 		{Harness: "codex", PID: 3, StartToken: "c"},
 		{Harness: "claude", PID: 2, StartToken: "b"},

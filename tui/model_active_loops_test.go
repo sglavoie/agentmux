@@ -90,6 +90,8 @@ func TestTickRefreshesActiveLoops(t *testing.T) {
 }
 
 func TestActiveLoopRefreshStoresCandidatesWithoutTitleWrite(t *testing.T) {
+	t.Parallel()
+
 	candidates := []agentloop.Candidate{{PlanDir: "/plans/api", CWD: "/work/api"}}
 	m := testModel()
 	m.activeLoopRefreshSeq = 4
@@ -105,6 +107,8 @@ func TestActiveLoopRefreshStoresCandidatesWithoutTitleWrite(t *testing.T) {
 }
 
 func TestActiveLoopRefreshClearsStaleCandidates(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.activeLoopRefreshSeq = 4
 	m.activeLoopCandidates = []agentloop.Candidate{{PlanDir: "/plans/stale", CWD: "/work/stale"}}
@@ -119,6 +123,8 @@ func TestActiveLoopRefreshClearsStaleCandidates(t *testing.T) {
 }
 
 func TestActiveLoopRefreshDropsStaleSequence(t *testing.T) {
+	t.Parallel()
+
 	current := agentloop.Candidate{PlanDir: "/plans/current", CWD: "/work/current"}
 	m := testModel()
 	m.activeLoopRefreshSeq = 6
@@ -135,6 +141,8 @@ func TestActiveLoopRefreshDropsStaleSequence(t *testing.T) {
 }
 
 func TestActiveLoopsForSelectedRowMatchesCanonicalWorkspace(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	realDir := mkdirTestDir(t, root, "project")
 	linkDir := filepath.Join(root, "project-link")
@@ -152,6 +160,8 @@ func TestActiveLoopsForSelectedRowMatchesCanonicalWorkspace(t *testing.T) {
 }
 
 func TestActiveLoopsForSelectedRowPrefersSameHarness(t *testing.T) {
+	t.Parallel()
+
 	workspace := mkdirTestDir(t, t.TempDir(), "project")
 	codexSession := session.RunningSession{WindowID: 101, Directory: workspace, Harness: "codex"}
 	copilotSession := session.RunningSession{WindowID: 202, Directory: workspace, Harness: "copilot"}
@@ -168,6 +178,8 @@ func TestActiveLoopsForSelectedRowPrefersSameHarness(t *testing.T) {
 }
 
 func TestActiveLoopsForSelectedRowMarksProjectOwner(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	callerDir := mkdirTestDir(t, root, "scripts")
 	workspace := mkdirTestDir(t, root, "project")
@@ -190,6 +202,8 @@ func TestActiveLoopsForSelectedRowMarksProjectOwner(t *testing.T) {
 }
 
 func TestActiveLoopsForSelectedRowUsesWindowIDBeforeWorkspace(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	workspace := mkdirTestDir(t, root, "project")
 	worktree := mkdirTestDir(t, root, "project--ws14")

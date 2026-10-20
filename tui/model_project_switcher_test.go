@@ -43,6 +43,8 @@ func scopeLabels(scopes []dashboard.ProjectScope) []string {
 // entry point and its cursor: `p` opens it preselecting what the filter already
 // names, j/k walk the list, and g/G reach both ends.
 func TestProjectSwitcherOpensOnTheAppliedScopeAndNavigates(t *testing.T) {
+	t.Parallel()
+
 	m := projectScopeTestModel()
 	m.activeFilter = dashboard.Parse("#docs")
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
@@ -91,6 +93,8 @@ func TestProjectSwitcherOpensOnTheAppliedScopeAndNavigates(t *testing.T) {
 // through the shared path so a label with a space comes back quoted, and lands
 // the dashboard cursor back on the session it was on.
 func TestProjectSwitcherAppliesOneComponentAndPreservesTheRest(t *testing.T) {
+	t.Parallel()
+
 	m := projectScopeTestModel()
 	m.activeFilter = dashboard.Parse("@work !attention")
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
@@ -135,6 +139,8 @@ func TestProjectSwitcherAppliesOneComponentAndPreservesTheRest(t *testing.T) {
 // than a second spelling of it: a label with a space in it must come back out of
 // the filter parser as the same one project.
 func TestProjectSwitcherQuotesLabelsThatNeedIt(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{
 		{TabID: 1, WindowID: 11, Project: "wide", FamilyLabel: "wide project", Profile: "work", State: "key"},
 		{TabID: 2, WindowID: 22, Project: "docs", Profile: "work", State: "bolt"},
@@ -172,6 +178,8 @@ func TestProjectSwitcherQuotesLabelsThatNeedIt(t *testing.T) {
 // as it was, and drops the transient query rather than carrying it into the next
 // time the overlay is opened.
 func TestProjectSwitcherCancelsWithoutTouchingTheFilter(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{keyEsc, keyQ, keyProjectSwitcher} {
 		t.Run(key, func(t *testing.T) {
 			m := projectScopeTestModel()
@@ -208,6 +216,8 @@ func TestProjectSwitcherCancelsWithoutTouchingTheFilter(t *testing.T) {
 // it produced, All survives every query, and a query matching nothing still
 // leaves a way out rather than an empty overlay.
 func TestProjectSwitcherSearchNarrowsAndKeepsAllReachable(t *testing.T) {
+	t.Parallel()
+
 	m := projectScopeTestModel()
 	m = pressKey(m, keyProjectSwitcher)
 	m = pressKey(m, keySlash)
@@ -258,6 +268,8 @@ func TestProjectSwitcherSearchNarrowsAndKeepsAllReachable(t *testing.T) {
 // project the operator was looking at, not leave it on whatever row inherited
 // the number.
 func TestProjectSwitcherSelectionSurvivesARefreshThatReordersScopes(t *testing.T) {
+	t.Parallel()
+
 	m := projectScopeTestModel()
 	m = pressKey(m, keyProjectSwitcher)
 	m = pressKey(m, keyGG)
@@ -298,6 +310,8 @@ func TestProjectSwitcherSelectionSurvivesARefreshThatReordersScopes(t *testing.T
 // overlay key that names a session action on the dashboard must not reach the
 // dashboard, and the overlay must not move the list cursor behind itself.
 func TestProjectSwitcherLeavesTheSessionSurfaceAlone(t *testing.T) {
+	t.Parallel()
+
 	m := projectScopeTestModel()
 	m = pressKey(m, keyProjectSwitcher)
 	beforeCursor := m.cursor
@@ -319,6 +333,8 @@ func TestProjectSwitcherLeavesTheSessionSurfaceAlone(t *testing.T) {
 // short enough to leave no room must still produce a box that fits rather than
 // one that overruns the footer.
 func TestProjectSwitcherSurvivesAResizeAndPaintsInsideTheBody(t *testing.T) {
+	t.Parallel()
+
 	m := projectScopeTestModel()
 	m = pressKey(m, keyProjectSwitcher)
 	m = pressKey(m, keyGG)

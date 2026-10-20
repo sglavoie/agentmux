@@ -129,6 +129,8 @@ func TestHandler_CopilotLatePermissionPromptAfterAutoApprovedToolPreservesBolt(t
 }
 
 func TestHandler_CopilotPermissionPromptAfterPrePermissionSignalShowsKey(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{

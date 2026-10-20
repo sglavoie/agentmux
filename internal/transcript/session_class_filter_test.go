@@ -11,6 +11,8 @@ import (
 )
 
 func TestSearchMainOnlyComposesWithExistingFilters(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	now := time.Now()
 	entries := []SessionMeta{
@@ -63,6 +65,8 @@ func (r *migrationClassifyingReader) ClassifySession(string) (SessionClass, erro
 }
 
 func TestRefreshMigratesLegacyClassBeyondCutoffWithoutRebuildingMetadata(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	path := filepath.Join(t.TempDir(), "old.jsonl")
 	if err := os.WriteFile(path, []byte("metadata marker only\n"), 0o600); err != nil {
@@ -118,6 +122,8 @@ func TestRefreshMigratesLegacyClassBeyondCutoffWithoutRebuildingMetadata(t *test
 }
 
 func TestMigrationPersistsMissingSourcesAsUnknown(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	path := filepath.Join(t.TempDir(), "missing.jsonl")
 	meta := SessionMeta{

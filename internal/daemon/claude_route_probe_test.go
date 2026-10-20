@@ -11,6 +11,8 @@ import (
 )
 
 func TestProbeClaudeContextLimit_RoutedProducerUpdatesManagedTarget(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	windows := routedClaudeProbeWindows(true)
@@ -55,6 +57,8 @@ func TestProbeClaudeContextLimit_RoutedProducerUpdatesManagedTarget(t *testing.T
 }
 
 func TestProbeClaudeScreenStop_RoutedProducerSettlesManagedTarget(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	fake := &fakeKittyClient{
@@ -98,6 +102,8 @@ func TestProbeClaudeScreenStop_RoutedProducerSettlesManagedTarget(t *testing.T) 
 }
 
 func TestProbeClaudeScreenStop_RoutedBusyProducerTitleKeepsManagedTargetActive(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	windows := routedClaudeProbeWindows(true)
@@ -134,6 +140,8 @@ func TestProbeClaudeScreenStop_RoutedBusyProducerTitleKeepsManagedTargetActive(t
 }
 
 func TestProbeClaudeScreenStop_RoutedBusyTitleInvalidatesStaleIdleRead(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	idleWindows := routedClaudeProbeWindows(true)
@@ -180,6 +188,8 @@ func TestProbeClaudeScreenStop_RoutedBusyTitleInvalidatesStaleIdleRead(t *testin
 }
 
 func TestProbeClaudeContextLimit_RoutedBindingSurvivesFocusAfterStaleReadIsDiscarded(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	oldWindows := routedClaudeProbeWindows(true)
@@ -222,6 +232,8 @@ func TestProbeClaudeContextLimit_RoutedBindingSurvivesFocusAfterStaleReadIsDisca
 }
 
 func TestProbeClaudeContextLimit_RoutedSourceReceiptInvalidatesObservation(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	windows := routedClaudeProbeWindows(true)

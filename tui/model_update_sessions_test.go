@@ -14,6 +14,8 @@ import (
 )
 
 func TestSessionsMsg_RestoresCursorByTabIDWhenBaseDuplicates(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	initial := []session.RunningSession{
 		{TabID: 1, WindowID: 11, Base: "api", Profile: "work", Account: "work", Project: "api", Harness: "claude", Directory: "/work/api"},
@@ -34,6 +36,8 @@ func TestSessionsMsg_RestoresCursorByTabIDWhenBaseDuplicates(t *testing.T) {
 }
 
 func TestSessionsMsgPresentationReorderPreservesSelectionAndPreviewTarget(t *testing.T) {
+	t.Parallel()
+
 	old := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
 	newest := old.Add(time.Hour)
 	m := loadSessions(testModel(), []session.RunningSession{
@@ -72,6 +76,8 @@ func TestSessionsMsgPresentationReorderPreservesSelectionAndPreviewTarget(t *tes
 }
 
 func TestSessionsMsg_InitialSourceTabSelectsMatchingSession(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m = applySessions(m, commands.SessionsMsg{
 		Sessions: []session.RunningSession{
@@ -87,6 +93,8 @@ func TestSessionsMsg_InitialSourceTabSelectsMatchingSession(t *testing.T) {
 }
 
 func TestSessionsMsg_UnmappedInitialSourceDoesNotOverrideSelection(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{
 		{TabID: 1, WindowID: 11, Base: "first", Account: "work"},
 		{TabID: 2, WindowID: 22, Base: "selected", Account: "work"},
@@ -111,6 +119,8 @@ func TestSessionsMsg_UnmappedInitialSourceDoesNotOverrideSelection(t *testing.T)
 }
 
 func TestSessionsMsg_InitialSourceWithNoSessionsLeavesCursorUnchanged(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.cursor = 0
 	m = applySessions(m, commands.SessionsMsg{SelectionTabID: 2})
@@ -121,6 +131,8 @@ func TestSessionsMsg_InitialSourceWithNoSessionsLeavesCursorUnchanged(t *testing
 }
 
 func TestSessionsMsg_DuplicateSelectionRequestDoesNotStealCursorAgain(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{TabID: 1, WindowID: 11, Base: "first", Account: "work"},
 		{TabID: 2, WindowID: 22, Base: "requested", Account: "work"},

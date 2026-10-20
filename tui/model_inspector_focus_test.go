@@ -34,6 +34,8 @@ func inspectorFocusModel(t *testing.T) Model {
 }
 
 func TestTabMakesTheFocusedPaneVisible(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 	before := renderDashboardFrame(m)
 	g := dashboardGeometry(m)
@@ -72,6 +74,8 @@ func TestTabMakesTheFocusedPaneVisible(t *testing.T) {
 }
 
 func TestPaneHeadingFollowsVisibleFocusOnResize(t *testing.T) {
+	t.Parallel()
+
 	m := pressKey(inspectorFocusModel(t), keyTab)
 	updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: splitFloor - 1, Height: 50})
 	m = updated.(Model)
@@ -99,6 +103,8 @@ func TestPaneHeadingFollowsVisibleFocusOnResize(t *testing.T) {
 // is also why the footer only prints `tab switch pane` while a second pane is
 // on screen.
 func TestTabCyclesThePanesAndIsInertWhenThereIsOneOfThem(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 	m.activeFilter = dashboard.Parse("@work")
 
@@ -141,6 +147,8 @@ func TestTabCyclesThePanesAndIsInertWhenThereIsOneOfThem(t *testing.T) {
 // too narrow to honour it, and Tab may neither aim the keys at a pane that is
 // not drawn nor quietly spend the operator's standing choice.
 func TestTabOnATerminalTooNarrowToSplitLeavesTheStandingFocusAlone(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 	m = pressKey(m, keyTab)
 	if !m.inspectorFocused() {
@@ -191,6 +199,8 @@ func fullScreenInspectorModel(t *testing.T) Model {
 // the focus bit alone, because a moved cursor is the damage a repaired focus
 // rule exists to prevent.
 func TestTabInAFullScreenInspectorKeepsTheKeysOnTheVisiblePane(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{keyTab, keyShiftTab} {
 		t.Run(key, func(t *testing.T) {
 			m := fullScreenInspectorModel(t)
@@ -224,6 +234,8 @@ func TestTabInAFullScreenInspectorKeepsTheKeysOnTheVisiblePane(t *testing.T) {
 // the keys back on the way out of full screen, and Tab has to keep working once
 // two panes are on screen again.
 func TestFullScreenStillLeavesTheSplitAndItsPaneSwitchingIntact(t *testing.T) {
+	t.Parallel()
+
 	m := fullScreenInspectorModel(t)
 
 	updated, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 160, Height: 50})
@@ -256,6 +268,8 @@ func TestFullScreenStillLeavesTheSplitAndItsPaneSwitchingIntact(t *testing.T) {
 // help box was in front of it, would each pass a test written about that rung
 // alone.
 func TestEscapePeelsOverlayThenFullScreenThenFocusThenFilters(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 	m.activeFilter = dashboard.Parse("@work")
 	m.inspectorDisplay = inspectorFullScreen
@@ -312,6 +326,8 @@ func TestEscapePeelsOverlayThenFullScreenThenFocusThenFilters(t *testing.T) {
 // that cannot honour it, and an Escape spent silently clearing that invisible
 // bit would read to the operator as a press that did nothing.
 func TestEscapeOnAQueueOnlyDashboardClearsFiltersRatherThanAStandingFocus(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 	m.activeFilter = dashboard.Parse("@work")
 	m = pressKey(m, keyTab)
@@ -380,6 +396,8 @@ func inspectorWindow(m Model) string {
 // place in the output — and a repair that kept the flag while dropping the held
 // copy would pass a test written about the flag.
 func TestAWidthRoundTripLeavesAHeldInspectorHeld(t *testing.T) {
+	t.Parallel()
+
 	m := heldInspectorModel(t)
 	target, text, window := m.previewWindowID, m.previewText, inspectorWindow(m)
 	poll := m.previewPollSeq
@@ -428,6 +446,8 @@ func TestAWidthRoundTripLeavesAHeldInspectorHeld(t *testing.T) {
 // gone; coming back to a different session with the previous session's snapshot
 // held would show one session's output under another's metadata.
 func TestAWidthRoundTripStillResetsTheHoldWhenTheSelectionMoved(t *testing.T) {
+	t.Parallel()
+
 	m := heldInspectorModel(t)
 	target := m.previewWindowID
 
@@ -499,6 +519,8 @@ func openLauncherPreview(t *testing.T, m Model) Model {
 // content on it, so the dashboard's snapshot is gone rather than merely
 // unattended, and coming back means putting it back rather than leaving it alone.
 func TestALauncherVisitLeavesAHeldInspectorHeld(t *testing.T) {
+	t.Parallel()
+
 	m := launcherHeldInspectorModel(t)
 	target, text, window := m.previewWindowID, m.previewText, inspectorWindow(m)
 	poll := m.previewPollSeq
@@ -547,6 +569,8 @@ func TestALauncherVisitLeavesAHeldInspectorHeld(t *testing.T) {
 // looks like giving it back and is not: it points the shared target at nothing,
 // and the inspector behind the launcher is pointed at that same target.
 func TestTurningTheLauncherPreviewOffAndOnAgainLeavesAHeldInspectorHeld(t *testing.T) {
+	t.Parallel()
+
 	m := launcherHeldInspectorModel(t)
 	target, window := m.previewWindowID, inspectorWindow(m)
 
@@ -575,6 +599,8 @@ func TestTurningTheLauncherPreviewOffAndOnAgainLeavesAHeldInspectorHeld(t *testi
 // hold perfectly and paint one session's output as another's: the launcher's
 // pane is an answer about the row under ITS cursor.
 func TestTheLauncherPreviewShowsItsOwnTargetWhileItHoldsThePane(t *testing.T) {
+	t.Parallel()
+
 	m := launcherHeldInspectorModel(t)
 	dashboardTarget := m.previewWindowID
 
@@ -598,6 +624,8 @@ func TestTheLauncherPreviewShowsItsOwnTargetWhileItHoldsThePane(t *testing.T) {
 // launcher is on screen — a topology refresh reorders the queue under it — and a
 // restore that ignored that would hand the new session the old one's snapshot.
 func TestALauncherVisitStillResetsTheHoldWhenTheSelectionMoved(t *testing.T) {
+	t.Parallel()
+
 	m := launcherHeldInspectorModel(t)
 	target := m.previewWindowID
 
@@ -647,6 +675,8 @@ func pastSessionsReadyLauncherModel(t *testing.T) Model {
 // whose snapshot is still sitting in the launcher's stash when that esc lands is
 // one the operator can read, scroll, and resume while it is still on loan.
 func TestLeavingTheLauncherIntoPastSessionsGivesThePaneBack(t *testing.T) {
+	t.Parallel()
+
 	m := pastSessionsReadyLauncherModel(t)
 	target, text, window := m.previewWindowID, m.previewText, inspectorWindow(m)
 	poll := m.previewPollSeq
@@ -697,6 +727,8 @@ func TestLeavingTheLauncherIntoPastSessionsGivesThePaneBack(t *testing.T) {
 // launcher visit hands back the snapshot from before that resume — a pause they
 // already cancelled, reinstated by a surface they only passed through.
 func TestAPastSessionsExitLeavesNoStashForALaterLauncherVisitToRestore(t *testing.T) {
+	t.Parallel()
+
 	m := pastSessionsReadyLauncherModel(t)
 
 	launcher := openLauncherPreview(t, m)
@@ -744,6 +776,8 @@ func TestAPastSessionsExitLeavesNoStashForALaterLauncherVisitToRestore(t *testin
 // that the launcher's pane does not fit in and the dashboard's does — and the
 // test would be asserting about a resize that changed nothing for either.
 func TestADashboardResizeLeavesTheLaunchersRememberedPreviewAlone(t *testing.T) {
+	t.Parallel()
+
 	m := launcherHeldInspectorModel(t)
 	m.cfg.Defaults.Preview.Direction = "vertical"
 	m.cfg.Defaults.Preview.MinRows = 40
@@ -790,6 +824,8 @@ func TestADashboardResizeLeavesTheLaunchersRememberedPreviewAlone(t *testing.T) 
 // that briefly got narrow must not be able to answer "does the operator want an
 // inspector, and where were they reading".
 func TestResizingAcrossTheFloorPreservesSelectionScopeAndFocus(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 	m.activeFilter = dashboard.Parse("@work")
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
@@ -834,6 +870,8 @@ func TestResizingAcrossTheFloorPreservesSelectionScopeAndFocus(t *testing.T) {
 // state that has made no statement, so the geometry may answer for it; hidden is
 // a statement, and a widening is not a reason to overturn it.
 func TestAnExplicitHideSurvivesEveryResize(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 	m = pressKey(m, keyInspector)
 	if m.inspectorDisplay != inspectorHidden {
@@ -861,6 +899,8 @@ func TestAnExplicitHideSurvivesEveryResize(t *testing.T) {
 // terminal. A mode-sensitive answer here would show up as an inspector that
 // forgot its scroll position every time the operator opened the palette.
 func TestInspectorStateSurvivesOverlaysAndOtherRootViews(t *testing.T) {
+	t.Parallel()
+
 	base := inspectorFocusModel(t)
 	base = pressKey(base, keyTab)
 	base.inspectorViewport = base.inspectorViewport.Top([]string{"one", "two", "three"}, 1)
@@ -899,6 +939,8 @@ func TestInspectorStateSurvivesOverlaysAndOtherRootViews(t *testing.T) {
 // closing each overlay is what an operator actually does, and it runs the
 // handlers that a mode assignment skips.
 func TestOverlayRoundTripsLeaveTheInspectorExactlyWhereItWas(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		open string
@@ -941,6 +983,8 @@ func TestOverlayRoundTripsLeaveTheInspectorExactlyWhereItWas(t *testing.T) {
 // dashboard's and answers nothing in the launcher, and neither writes the
 // other's state.
 func TestTheLauncherPreviewAndTheDashboardInspectorAreSeparateSurfaces(t *testing.T) {
+	t.Parallel()
+
 	m := inspectorFocusModel(t)
 
 	// `p` retired its dashboard meaning in this session. Until the project

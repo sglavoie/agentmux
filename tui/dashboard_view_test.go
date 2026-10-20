@@ -15,6 +15,8 @@ import (
 // merely stopped printing the number but still reserved its column would leave
 // the same leading blanks, and only checking the prefix exactly catches that.
 func TestRenderListRowsOpenWithNamesRatherThanTabNumbers(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 120
 	m = loadSessions(m, []session.RunningSession{
@@ -41,6 +43,8 @@ func TestRenderListRowsOpenWithNamesRatherThanTabNumbers(t *testing.T) {
 // renderListAt wraps a locked row in the explicit muted foreground while also
 // marking its name with the lock glyph.
 func TestRenderListLockedRowIsDimmed(t *testing.T) {
+	t.Parallel()
+
 	build := func(locked bool) Model {
 		m := testModel()
 		m.width = 120
@@ -86,6 +90,8 @@ func TestRenderListLockedRowIsDimmed(t *testing.T) {
 // context, so the list never reserves anything for it and the strip says it for
 // the one row the operator is on.
 func TestSupervisionMarkerMovedOffTheRowIntoTheSelectedContext(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height = 120, 40
 	m = loadSessions(m, []session.RunningSession{
@@ -119,6 +125,8 @@ func TestSupervisionMarkerMovedOffTheRowIntoTheSelectedContext(t *testing.T) {
 // now facts the row does not print — so a renderer that resurrected either
 // column would blow the budget here first.
 func TestRenderListRowsFitNarrowWidth(t *testing.T) {
+	t.Parallel()
+
 	const width = 56
 	m := testModel()
 	m.width = width

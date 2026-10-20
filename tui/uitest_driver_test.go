@@ -23,6 +23,8 @@ func cleanupUITestDriver(t testing.TB, d *uitestDriver) {
 // that opens the actions overlay and a resize, verifying an observation is
 // captured after each step and reflects the new mode/size.
 func TestUITestDriverOpenActionsAndResize(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 	d := newUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
@@ -62,6 +64,8 @@ func TestUITestDriverOpenActionsAndResize(t *testing.T) {
 }
 
 func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
+	t.Parallel()
+
 	fx := worktreesFixture()
 	client := newUITestKittyClient(fx.Windows)
 	d := newUITestDriver(fx.Config, client, UITestSize{Width: 120, Height: 30})
@@ -95,6 +99,8 @@ func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
 // TestUITestDriverTextTypesEachRune verifies Text enters a search query one key
 // at a time, matching how the model sees per-rune input.
 func TestUITestDriverTextTypesEachRune(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 	d := newUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
@@ -118,6 +124,8 @@ func TestUITestDriverTextTypesEachRune(t *testing.T) {
 // the drain path — which runs fast refresh commands and abandons the
 // re-scheduled 2s tick — without hanging or leaving list mode.
 func TestUITestDriverTickDrainsWithoutBlocking(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	d := newUITestDriverModel(m, UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
@@ -141,6 +149,8 @@ func TestUITestDriverTickDrainsWithoutBlocking(t *testing.T) {
 // TestUITestDriverKeyRejectsBadSpec verifies an invalid key spec surfaces an
 // error rather than mutating the model.
 func TestUITestDriverKeyRejectsBadSpec(t *testing.T) {
+	t.Parallel()
+
 	d := newUITestDriver(testModelWithSessions().cfg, testModel().client, UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 	if err := d.Key("nope"); err == nil {
@@ -151,6 +161,8 @@ func TestUITestDriverKeyRejectsBadSpec(t *testing.T) {
 // TestUITestDriverFlattenCmds verifies slice-shaped batch messages are expanded
 // into their component commands and non-slice messages are left alone.
 func TestUITestDriverFlattenCmds(t *testing.T) {
+	t.Parallel()
+
 	leaf := func() tea.Msg { return commands.TickMsg{} }
 	batch := tea.Batch(leaf, leaf)
 	if batch == nil {
@@ -172,6 +184,8 @@ func TestUITestDriverFlattenCmds(t *testing.T) {
 // TestUITestDriverSkipsTimersBeforeLaunch verifies scheduled effects are the
 // only commands omitted by the harness and never start a goroutine.
 func TestUITestDriverSkipsTimersBeforeLaunch(t *testing.T) {
+	t.Parallel()
+
 	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 
@@ -197,6 +211,8 @@ func TestUITestDriverSkipsTimersBeforeLaunch(t *testing.T) {
 }
 
 func TestUITestDriverCloseCancelsAndJoinsStartedCommandBeforeRemovingRoot(t *testing.T) {
+	t.Parallel()
+
 	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	root := d.tempRoot
 	started := make(chan struct{})

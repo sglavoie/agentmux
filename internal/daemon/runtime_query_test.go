@@ -12,6 +12,8 @@ import (
 // The state query has to tell it which slot that is, and the two operator
 // requests it sends back have to be addressable the same way.
 func TestStateQueryNamesTheRuntimeSessionOfEachBoundSlot(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	tmuxRuntime := newRuntimeID(t)
 	directory.put(tmuxRuntime, runtimesession.StateLive, runtimesession.BackendTmux, "/tmp/amx/tmux.sock", "gen-1", "%0")
@@ -35,6 +37,8 @@ func TestStateQueryNamesTheRuntimeSessionOfEachBoundSlot(t *testing.T) {
 }
 
 func TestOperatorUpdatesReachARuntimeSessionByItsID(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	tmuxRuntime := newRuntimeID(t)
 	directory.put(tmuxRuntime, runtimesession.StateLive, runtimesession.BackendTmux, "/tmp/amx/tmux.sock", "gen-1", "%0")

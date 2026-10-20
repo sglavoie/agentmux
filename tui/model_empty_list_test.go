@@ -28,6 +28,8 @@ func pressKeySafe(t *testing.T, m Model, key string) Model {
 // a zero-row filtered list and confirms no panic, cursor stays at 0, and
 // mode stays ModeList.
 func TestEmptyListNavigationKeysAreSafe(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), nil)
 	if len(m.filtered) != 0 {
 		t.Fatalf("setup: expected empty filtered list, got %d", len(m.filtered))
@@ -49,6 +51,8 @@ func TestEmptyListNavigationKeysAreSafe(t *testing.T) {
 // zero-row filtered list and confirms each is a no-op: mode stays ModeList,
 // no cmd is returned, and no state is mutated.
 func TestEmptyListRowActionKeysAreNoOp(t *testing.T) {
+	t.Parallel()
+
 	for _, k := range []string{"a", "e", "r", "x", "c", "y", "o", "C"} {
 		t.Run("key="+k, func(t *testing.T) {
 			m := loadSessions(testModel(), nil)
@@ -68,6 +72,8 @@ func TestEmptyListRowActionKeysAreNoOp(t *testing.T) {
 // an explicit / search rather than nil sessions. This exercises the codepath
 // where m.sessions is non-empty but m.filtered collapses to zero.
 func TestEmptyFilteredListAfterExplicitSearchIsSafe(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = pressKey(m, "z")
@@ -95,6 +101,8 @@ func TestEmptyFilteredListAfterExplicitSearchIsSafe(t *testing.T) {
 // after explicit search narrows the list to empty, Esc clears the filter so
 // the full session list is visible again.
 func TestEmptyListEscClearsFilterAndRestoresList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = pressKey(m, "z")
@@ -117,6 +125,8 @@ func TestEmptyListEscClearsFilterAndRestoresList(t *testing.T) {
 // selected — the renderer must not deref m.filtered[m.cursor] before the
 // hasRow gate.
 func TestEmptyListFooterRendersWithoutPanic(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), nil)
 	m.width, m.height = 120, 40
 	defer func() {

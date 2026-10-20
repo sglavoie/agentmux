@@ -10,6 +10,8 @@ import (
 )
 
 func TestRenderPlanViewBody_WrapsLongLineWithoutTruncation(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		width:           8,
 		planViewerLines: []string{"abcdefghijklmnopqrstuvwxTAIL"},
@@ -27,6 +29,8 @@ func TestRenderPlanViewBody_WrapsLongLineWithoutTruncation(t *testing.T) {
 }
 
 func TestRenderPlanViewBody_VisualScrollShowsWrappedTail(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		width:            8,
 		planViewerScroll: 3,
@@ -43,6 +47,8 @@ func TestRenderPlanViewBody_VisualScrollShowsWrappedTail(t *testing.T) {
 }
 
 func TestRenderPlanViewBody_IndicatorsUseWrappedRowCount(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		width:           8,
 		planViewerLines: []string{"abcdefghijklmnopqrstuvwxTAIL"},
@@ -64,6 +70,8 @@ func TestRenderPlanViewBody_IndicatorsUseWrappedRowCount(t *testing.T) {
 }
 
 func TestRenderPlanViewBody_StylesEveryWrappedRowBySourceLine(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		width:           8,
 		planViewerLines: []string{"--- abcdefghijklmnop ---", "needleabcdefghijklmnop", "selectedabcdefghijklmnop"},
@@ -95,6 +103,8 @@ func TestRenderPlanViewBody_StylesEveryWrappedRowBySourceLine(t *testing.T) {
 }
 
 func TestRenderPlanViewBody_RowsFitWithinModelWidth(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		width: 12,
 		planViewerLines: []string{
@@ -115,6 +125,8 @@ func TestRenderPlanViewBody_RowsFitWithinModelWidth(t *testing.T) {
 }
 
 func TestPlanViewerRows_ZeroWidthFallsBackToBoundedWrap(t *testing.T) {
+	t.Parallel()
+
 	line := strings.Repeat("x", layout.FallbackWidth+1)
 	rows := planViewerRows(Model{
 		width:           0,

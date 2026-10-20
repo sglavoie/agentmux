@@ -43,6 +43,8 @@ var emojiTitleFixture = []struct {
 // the subsequent cross-mode surface tests rely on — if the helper itself
 // drifts, every surface visibly breaks alignment.
 func TestCrossModeEmojiTitleIconColumn(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range emojiTitleFixture {
 		t.Run(tc.title, func(t *testing.T) {
 			rendered := layout.RenderTitleIcon(tc.title)
@@ -72,6 +74,8 @@ func TestCrossModeEmojiTitleIconColumn(t *testing.T) {
 // fixture through the dashboard list renderer at a narrow viewport and
 // asserts every rendered row stays within the viewport width.
 func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
+	t.Parallel()
+
 	// Every third row carries a branch, and one of them is longer than the
 	// column's cap. That makes this the width regression for the conditionally
 	// reserved branch column too: the reserved width is measured across the
@@ -138,6 +142,8 @@ func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
 // TestCrossModePickerWidthAcrossFixture mirrors the dashboard test for
 // the picker list.
 func TestCrossModePickerWidthAcrossFixture(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{harness.Claude: "🦊"},
@@ -178,6 +184,8 @@ func TestCrossModePickerWidthAcrossFixture(t *testing.T) {
 // TestCrossModeSessionSearchWidthAcrossFixture walks the fixture through
 // the session-search results renderer.
 func TestCrossModeSessionSearchWidthAcrossFixture(t *testing.T) {
+	t.Parallel()
+
 	var results []transcript.Result
 	for _, tc := range emojiTitleFixture {
 		results = append(results, transcript.Result{
@@ -223,6 +231,8 @@ func TestCrossModeSessionSearchWidthAcrossFixture(t *testing.T) {
 // the same title-icon policy. Already-wide pictographs and ASCII titles pass
 // through unchanged.
 func TestCrossModeViewerHeadersPadEmojiIconColumn(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range emojiTitleFixture {
 		t.Run("session_view/"+tc.title, func(t *testing.T) {
 			m := Model{
@@ -257,6 +267,8 @@ func TestCrossModeViewerHeadersPadEmojiIconColumn(t *testing.T) {
 // overlay header, and delete-choice overlay header. All four overlays
 // must show the same icon-column padding policy as the viewers above.
 func TestCrossModeDetailAndOverlayHeadersPadEmojiIconColumn(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range emojiTitleFixture {
 		t.Run("detail/"+tc.title, func(t *testing.T) {
 			m := loadSessions(testModelWithSessions(), []session.RunningSession{
@@ -326,6 +338,8 @@ func TestCrossModeDetailAndOverlayHeadersPadEmojiIconColumn(t *testing.T) {
 // where the footer and status bar have least room to fit in, which is what this
 // test measures.
 func TestCrossModeFooterAndStatusBarWidthAcrossFixture(t *testing.T) {
+	t.Parallel()
+
 	var running []session.RunningSession
 	for i, tc := range emojiTitleFixture {
 		running = append(running, session.RunningSession{

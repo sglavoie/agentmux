@@ -12,6 +12,8 @@ import (
 )
 
 func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m = withListRows(m, session.RunningSession{TabID: 1, WindowID: 10, Base: "Foo", Profile: "work"})
@@ -61,6 +63,8 @@ func TestListProjectSessionSearchWithReadyCacheDispatchesProjectFilter(t *testin
 }
 
 func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m = withListRows(m, session.RunningSession{
@@ -88,6 +92,8 @@ func TestListProjectSessionSearchUsesResolvedProjectForWorktreeRow(t *testing.T)
 }
 
 func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{{TabID: 1, WindowID: 10, Base: "Foo"}})
 	m.sessionCacheLoadInFlight = true
 	seq := m.sessionSearchSeq
@@ -118,6 +124,8 @@ func TestListProjectSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.
 // An empty list has no project to search: the shortcut is inert and the
 // palette command is disabled.
 func TestListProjectSessionSearchIsDisabledOnAnEmptyList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), nil)
 	updated, cmd := m.Update(keyPress(keyProjectSessionSearch))
 	m = updated.(Model)
@@ -135,6 +143,8 @@ func TestListProjectSessionSearchIsDisabledOnAnEmptyList(t *testing.T) {
 }
 
 func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m = withListRows(m, session.RunningSession{TabID: 1, WindowID: 10, Project: "Foo"})
@@ -172,6 +182,8 @@ func TestListProjectSessionSearchClearsPriorFiltersAndResetsEntryState(t *testin
 }
 
 func TestGlobalSessionSearchDoesNotApplyTheProjectChip(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m = withListRows(m, session.RunningSession{TabID: 1, WindowID: 10, Project: "Foo"})
@@ -197,6 +209,8 @@ func TestGlobalSessionSearchDoesNotApplyTheProjectChip(t *testing.T) {
 }
 
 func TestSessionWarmRefreshDoneRerunsLatestProjectSearch(t *testing.T) {
+	t.Parallel()
+
 	old := transcript.SessionMeta{ID: "old", Harness: harness.Claude, Project: "Foo", LastAt: time.Now().Add(-time.Hour)}
 	fresh := transcript.SessionMeta{ID: "fresh", Harness: harness.Claude, Project: "Foo", LastAt: time.Now()}
 	other := transcript.SessionMeta{ID: "other", Harness: harness.Claude, Project: "Bar", LastAt: time.Now()}

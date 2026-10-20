@@ -272,6 +272,8 @@ func TestPersonalConfigIsolation(t *testing.T) {
 }
 
 func TestPersonalConfigIsolationRejectsSharedDirectory(t *testing.T) {
+	t.Parallel()
+
 	requireTmux(t)
 	dir, err := os.MkdirTemp("", "amxtmux")
 	if err != nil {
@@ -586,6 +588,8 @@ func TestSetMetadataMergesUnderConcurrency(t *testing.T) {
 }
 
 func TestRefsRejectForeignTargetSyntax(t *testing.T) {
+	t.Parallel()
+
 	refs := []backend.Ref{
 		backend.GroupID("amx-name"), backend.GroupID("$1:0"), backend.GroupID("$01"), backend.GroupID("%1"),
 		backend.PaneID("$1"), backend.PaneID("%-1"), backend.PaneID("%1;kill-server"), backend.PaneID("=x:"),
@@ -603,6 +607,8 @@ func TestRefsRejectForeignTargetSyntax(t *testing.T) {
 }
 
 func TestClientEnvStripsTerminalIdentity(t *testing.T) {
+	t.Parallel()
+
 	got := clientEnv([]string{"PATH=/bin", "TMUX=x", "TMUX_PANE=%1", "KITTY_WINDOW_ID=3", "KITTY_PID=9",
 		"WINDOWID=5", "CLAUDECODE=1", "AMX_RUNTIME_SESSION_ID=rs-x", "AMX_WORKSPACE_HOSTED=1", "CLAUDE_CONFIG_DIR=/p", "TMUX_TMPDIR=/t"})
 	want := []string{"PATH=/bin", "CLAUDE_CONFIG_DIR=/p", "TMUX_TMPDIR=/t"}
@@ -623,6 +629,8 @@ func TestCommandErrorRedactsLaunchEnvironment(t *testing.T) {
 }
 
 func TestEscapeArgKeepsTrailingSemicolon(t *testing.T) {
+	t.Parallel()
+
 	for in, want := range map[string]string{"a": "a", "a;": `a\;`, `a\;`: `a\\;`, ";": `\;`, "a;b": "a;b"} {
 		if got := escapeArg(in); got != want {
 			t.Errorf("escapeArg(%q) = %q, want %q", in, got, want)

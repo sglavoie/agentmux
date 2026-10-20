@@ -9,6 +9,8 @@ import (
 )
 
 func TestHandler_UnknownType(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: "bogus"})
 	if resp.OK {
@@ -17,6 +19,8 @@ func TestHandler_UnknownType(t *testing.T) {
 }
 
 func TestHandler_StateUpdateWithoutNotifier(t *testing.T) {
+	t.Parallel()
+
 	h := NewHandler(activity.NewStateGuard(time.Hour), nil)
 
 	resp := h.Handle(protocol.Request{
@@ -31,6 +35,8 @@ func TestHandler_StateUpdateWithoutNotifier(t *testing.T) {
 }
 
 func TestHandler_MissingAction(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1})
 	if resp.OK {
@@ -39,6 +45,8 @@ func TestHandler_MissingAction(t *testing.T) {
 }
 
 func TestHandler_InvalidWindowID(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		windowID int
@@ -59,6 +67,8 @@ func TestHandler_InvalidWindowID(t *testing.T) {
 }
 
 func TestHandler_UnknownAction(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "nope"})
 	if resp.OK {

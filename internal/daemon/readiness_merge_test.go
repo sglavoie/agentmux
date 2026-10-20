@@ -19,6 +19,8 @@ import (
 // a late-completing startup restore can neither duplicate nor roll any of it
 // back.
 func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
@@ -186,6 +188,8 @@ func TestMaintenanceTick_MergesPersistedFactsWithHookState(t *testing.T) {
 // same-source hook fact still wins its own slot, and a late-completing startup
 // restore neither duplicates nor rolls any of it back.
 func TestMaintenanceTick_MergesAcknowledgedPersistedFactsWithHookState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 

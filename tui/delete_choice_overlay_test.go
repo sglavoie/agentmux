@@ -14,6 +14,8 @@ import (
 // composited on top of renderSessionSearch (the base header bleeds through
 // the dim) and the total line count stays within the terminal height.
 func TestRenderDeleteChoiceOverlayComposition(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	target := transcript.SessionMeta{
 		ID:      "abc",
@@ -67,6 +69,8 @@ func TestRenderDeleteChoiceOverlayComposition(t *testing.T) {
 // without panicking when the terminal is far narrower than the box's preferred
 // width. The chip picker header still survives the truncation.
 func TestRenderChipPickerOverlayNarrowTerminal(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:              ModeChipPicker,
 		width:             20,
@@ -89,6 +93,8 @@ func TestRenderChipPickerOverlayNarrowTerminal(t *testing.T) {
 // TestRenderDeleteChoiceOverlayNarrowTerminal confirms the delete-choice
 // overlay also clamps without panicking on a very narrow terminal.
 func TestRenderDeleteChoiceOverlayNarrowTerminal(t *testing.T) {
+	t.Parallel()
+
 	target := transcript.SessionMeta{
 		ID:      "abc",
 		Harness: "claude",

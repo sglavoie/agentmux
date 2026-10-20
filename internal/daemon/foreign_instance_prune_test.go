@@ -101,6 +101,8 @@ func storeHas(h *Handler, windowID int) bool {
 }
 
 func TestListingOfOneInstanceKeepsAnotherInstancesWindows(t *testing.T) {
+	t.Parallel()
+
 	h, listed, _ := twoInstanceHandler(t, &perSocketRunner{})
 
 	h.pruneClosedWindowsFor(time.Now(), map[int]bool{}, listed)
@@ -114,6 +116,8 @@ func TestListingOfOneInstanceKeepsAnotherInstancesWindows(t *testing.T) {
 }
 
 func TestCollidingWindowNumbersPruneOnlyTheClosedInstance(t *testing.T) {
+	t.Parallel()
+
 	h, listed, foreign := twoInstanceHandler(t, &perSocketRunner{})
 	h.stateMu.Lock()
 	// The fixture's foreign window claimed bare 7 first; the listed
@@ -136,6 +140,8 @@ func TestCollidingWindowNumbersPruneOnlyTheClosedInstance(t *testing.T) {
 }
 
 func TestCollidingWindowRendererWritesTheOwningKitty(t *testing.T) {
+	t.Parallel()
+
 	runner := &perSocketRunner{answers: map[string][]byte{}}
 	h, listed, foreign := twoInstanceHandler(t, runner)
 	h.useKittyClient(kitty.NewClientWithSocket(runner, ""))
@@ -163,6 +169,8 @@ func TestCollidingWindowRendererWritesTheOwningKitty(t *testing.T) {
 }
 
 func TestForeignKittyRestoreKeepsSameNumberSeparate(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	const first, second = "unix:/kitty-first", "unix:/kitty-second"
 	h.stateMu.Lock()
@@ -193,6 +201,8 @@ func TestForeignKittyRestoreKeepsSameNumberSeparate(t *testing.T) {
 }
 
 func TestUnscopedPruneStillJudgesEveryWindow(t *testing.T) {
+	t.Parallel()
+
 	h, _, _ := twoInstanceHandler(t, &perSocketRunner{})
 
 	h.pruneClosedWindows(time.Now(), map[int]bool{})
@@ -203,6 +213,8 @@ func TestUnscopedPruneStillJudgesEveryWindow(t *testing.T) {
 }
 
 func TestForeignWindowIsJudgedByItsOwnInstance(t *testing.T) {
+	t.Parallel()
+
 	runner := &perSocketRunner{answers: map[string][]byte{}}
 	h, listed, foreign := twoInstanceHandler(t, runner)
 
@@ -226,6 +238,8 @@ func TestForeignWindowIsJudgedByItsOwnInstance(t *testing.T) {
 }
 
 func TestForeignWindowSurvivesAFailedListing(t *testing.T) {
+	t.Parallel()
+
 	runner := &perSocketRunner{failing: map[string]bool{}}
 	h, listed, foreign := twoInstanceHandler(t, runner)
 	runner.failing[foreign] = true
@@ -238,6 +252,8 @@ func TestForeignWindowSurvivesAFailedListing(t *testing.T) {
 }
 
 func TestForeignWindowClosesWhenItsInstanceExited(t *testing.T) {
+	t.Parallel()
+
 	runner := &perSocketRunner{}
 	h, listed, foreign := twoInstanceHandler(t, runner)
 	if err := os.Remove(foreign[len("unix:"):]); err != nil {
@@ -261,6 +277,8 @@ func otherTrees(h *Handler) map[string][]kitty.OSWindow {
 }
 
 func TestForeignInstanceTreeIsKeptForTheCompanion(t *testing.T) {
+	t.Parallel()
+
 	runner := &perSocketRunner{answers: map[string][]byte{}, failing: map[string]bool{}}
 	h, listed, foreign := twoInstanceHandler(t, runner)
 	runner.answers[foreign] = mustMarshalWindows(t, fakeOSWindowsWithTab(7, "W:notes"))

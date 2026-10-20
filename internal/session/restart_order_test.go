@@ -97,6 +97,8 @@ func replacements(project config.Session) map[string]replaceFunc {
 }
 
 func TestRestartLaunchesBeforeClosingOnKitty(t *testing.T) {
+	t.Parallel()
+
 	empty, err := os.ReadFile(filepath.Join("..", "..", "testdata", "kitty_ls_empty.json"))
 	if err != nil {
 		t.Fatal(err)

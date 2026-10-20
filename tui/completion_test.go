@@ -20,6 +20,8 @@ func completionTestModel() Model {
 }
 
 func TestRecomputeCompletion_HidesWithoutSigil(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "api"
 	m.recomputeCompletion()
@@ -29,6 +31,8 @@ func TestRecomputeCompletion_HidesWithoutSigil(t *testing.T) {
 }
 
 func TestRecomputeCompletion_ShowsForAccountSigil(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "@"
 	m.recomputeCompletion()
@@ -41,6 +45,8 @@ func TestRecomputeCompletion_ShowsForAccountSigil(t *testing.T) {
 }
 
 func TestRecomputeCompletion_NarrowsByPrefix(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "@p"
 	m.recomputeCompletion()
@@ -53,6 +59,8 @@ func TestRecomputeCompletion_NarrowsByPrefix(t *testing.T) {
 }
 
 func TestRecomputeCompletion_HidesAfterTrailingSpace(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "@work "
 	m.recomputeCompletion()
@@ -62,6 +70,8 @@ func TestRecomputeCompletion_HidesAfterTrailingSpace(t *testing.T) {
 }
 
 func TestRecomputeCompletion_HidesWhenNoMatch(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "@zzz"
 	m.recomputeCompletion()
@@ -71,6 +81,8 @@ func TestRecomputeCompletion_HidesWhenNoMatch(t *testing.T) {
 }
 
 func TestCycleCompletion_WrapsBothDirections(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "@"
 	m.recomputeCompletion()
@@ -92,6 +104,8 @@ func TestCycleCompletion_WrapsBothDirections(t *testing.T) {
 }
 
 func TestInsertCompletion_ReplacesTokenAndAppendsSpace(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "api @wo"
 	m.recomputeCompletion()
@@ -112,6 +126,8 @@ func TestInsertCompletion_ReplacesTokenAndAppendsSpace(t *testing.T) {
 }
 
 func TestInsertCompletion_StateAtEnd(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "!ke"
 	m.recomputeCompletion()
@@ -129,6 +145,8 @@ func TestInsertCompletion_StateAtEnd(t *testing.T) {
 }
 
 func TestRenderCompletion_HiddenReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	if got := renderCompletion(m); got != "" {
 		t.Errorf("expected empty when hidden, got %q", got)
@@ -136,6 +154,8 @@ func TestRenderCompletion_HiddenReturnsEmpty(t *testing.T) {
 }
 
 func TestRenderCompletion_RendersCandidates(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.filterText = "@"
 	m.recomputeCompletion()
@@ -148,6 +168,8 @@ func TestRenderCompletion_RendersCandidates(t *testing.T) {
 }
 
 func TestRecomputeCompletion_ProjectCandidatesUseLiveSessions(t *testing.T) {
+	t.Parallel()
+
 	m := completionTestModel()
 	m.sessions = []session.RunningSession{
 		{FamilyLabel: "API", Account: "work", State: "error"},

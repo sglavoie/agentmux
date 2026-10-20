@@ -179,6 +179,8 @@ func tabIDs(tabs []kitty.Tab) []int {
 }
 
 func TestResort(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name      string
 		mode      string
@@ -276,6 +278,8 @@ func TestResort(t *testing.T) {
 }
 
 func TestResort_NoOpWhenSingleTab(t *testing.T) {
+	t.Parallel()
+
 	fake := &fakeKittyClient{
 		tabs: []kitty.Tab{managedTab(1, "personal", "P:solo")},
 	}
@@ -288,6 +292,8 @@ func TestResort_NoOpWhenSingleTab(t *testing.T) {
 }
 
 func TestResort_NoOpWhenNoManagedTabs(t *testing.T) {
+	t.Parallel()
+
 	fake := &fakeKittyClient{
 		tabs: []kitty.Tab{unmanagedTab(1, "shell"), unmanagedTab(2, "editor")},
 	}
@@ -300,6 +306,8 @@ func TestResort_NoOpWhenNoManagedTabs(t *testing.T) {
 }
 
 func TestResort_RestoresFocus(t *testing.T) {
+	t.Parallel()
+
 	fake := &fakeKittyClient{
 		tabs: []kitty.Tab{
 			managedTab(1, "personal", "P:c"),
@@ -326,6 +334,8 @@ func TestResort_RestoresFocus(t *testing.T) {
 }
 
 func TestResort_UnmanagedTabContentsPreserved(t *testing.T) {
+	t.Parallel()
+
 	fake := &fakeKittyClient{
 		tabs: []kitty.Tab{
 			managedTab(10, "personal", "P:zeta"),
@@ -352,6 +362,8 @@ func TestResort_UnmanagedTabContentsPreserved(t *testing.T) {
 }
 
 func TestResort_SortsEachOSWindowIndependently(t *testing.T) {
+	t.Parallel()
+
 	fake := &fakeKittyClient{
 		windows: []kitty.OSWindow{
 			{

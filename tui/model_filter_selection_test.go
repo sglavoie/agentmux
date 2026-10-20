@@ -53,6 +53,8 @@ func pressKeyForPreview(t *testing.T, m Model, key string) (Model, int) {
 // list differs from its index in the full one; a clamp lands on a different row
 // and the assertion names both.
 func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
+	t.Parallel()
+
 	t.Run("a still-visible session survives live edits and the commit", func(t *testing.T) {
 		m, _ := listViewModel(dashboard.ViewUrgency)
 		m = selectLine(t, m, "session:cli")

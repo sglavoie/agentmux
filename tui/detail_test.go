@@ -25,6 +25,8 @@ func detailModel(t *testing.T) Model {
 }
 
 func TestRenderDetailLoading(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailLoading = true
 	m.detailEvents = nil
@@ -37,6 +39,8 @@ func TestRenderDetailLoading(t *testing.T) {
 }
 
 func TestRenderDetailEmpty(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = nil
 
@@ -48,6 +52,8 @@ func TestRenderDetailEmpty(t *testing.T) {
 }
 
 func TestRenderDetailPopulatedMostRecentFirst(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
@@ -84,6 +90,8 @@ func TestRenderDetailPopulatedMostRecentFirst(t *testing.T) {
 }
 
 func TestRenderDetailSuppressedRow(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "Stop", Action: "stop", Suppressed: true},
@@ -97,6 +105,8 @@ func TestRenderDetailSuppressedRow(t *testing.T) {
 }
 
 func TestRenderDetailToolNameVisible(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "PreToolUse", Action: "active", ToolName: "Bash"},
@@ -110,6 +120,8 @@ func TestRenderDetailToolNameVisible(t *testing.T) {
 }
 
 func TestRenderDetailError(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailErr = errors.New("daemon offline")
 
@@ -138,6 +150,8 @@ func makeEvents(n int) []protocol.SessionEvent {
 }
 
 func TestRenderDetailScrollIndicatorAtTop(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(60)
@@ -154,6 +168,8 @@ func TestRenderDetailScrollIndicatorAtTop(t *testing.T) {
 }
 
 func TestRenderDetailScrollIndicatorAtBottom(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(60)
@@ -171,6 +187,8 @@ func TestRenderDetailScrollIndicatorAtBottom(t *testing.T) {
 }
 
 func TestRenderDetailFooterCount(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(60)
@@ -187,6 +205,8 @@ func TestRenderDetailFooterCount(t *testing.T) {
 }
 
 func TestDetailPageScrollKeys(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.height = 14 // overlay-aware: detailVisibleHeight(m) == detailMinVisible == 3
 	m.detailEvents = makeEvents(20)
@@ -242,6 +262,8 @@ func TestDetailPageScrollKeys(t *testing.T) {
 }
 
 func TestRenderDetail_HeaderShowsSessionEnded(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
@@ -256,6 +278,8 @@ func TestRenderDetail_HeaderShowsSessionEnded(t *testing.T) {
 }
 
 func TestRenderDetail_SessionEndedSeparatorRendered(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
@@ -282,6 +306,8 @@ func TestRenderDetail_SessionEndedSeparatorRendered(t *testing.T) {
 }
 
 func TestRenderDetail_NoSeparatorForActiveSession(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
@@ -296,6 +322,8 @@ func TestRenderDetail_NoSeparatorForActiveSession(t *testing.T) {
 }
 
 func TestRenderDetail_FailureDoesNotMarkSessionEnded(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = []protocol.SessionEvent{
 		{At: 100, Event: "SessionStart", Action: "active"},
@@ -315,6 +343,8 @@ func TestRenderDetail_FailureDoesNotMarkSessionEnded(t *testing.T) {
 // pre-clamp bug left m.detailScroll above the new maxOffset so the next
 // j/k press had to scroll up through dead rows before the viewport reacted.
 func TestDetailScrollClampsOnResize(t *testing.T) {
+	t.Parallel()
+
 	m := detailModel(t)
 	m.detailEvents = makeEvents(20)
 

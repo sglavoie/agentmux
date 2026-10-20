@@ -27,6 +27,8 @@ func unmanagedRouteWindows(title, ownerHarness string, sourceActive bool) []kitt
 }
 
 func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
+	t.Parallel()
+
 	for _, ownerHarness := range []string{harness.Claude, harness.Codex, harness.Copilot} {
 		for _, producerHarness := range []string{harness.Claude, harness.Codex, harness.Copilot} {
 			name := ownerHarness + "_owner_" + producerHarness + "_producer"
@@ -79,6 +81,8 @@ func TestHandler_UnmanagedRouteCrossHarnessMatrix(t *testing.T) {
 }
 
 func TestHandler_ActiveUnmanagedNonPromptEstablishesRoute(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 
@@ -343,6 +347,8 @@ func TestHandler_PipeModeOwnerlessTabStillMarksLoop(t *testing.T) {
 }
 
 func TestHandler_ManagedNonOwnerPersistsWithoutRenderingUntilFocused(t *testing.T) {
+	t.Parallel()
+
 	title := palette.BuildTitle("api", "error", false)
 	windows := hookEventWindows(title, []kitty.Window{
 		{ID: 42, IsActive: true, UserVars: kitty.UserVars{Profile: "one", Harness: harness.Claude}},
@@ -383,6 +389,8 @@ func TestHandler_ManagedNonOwnerPersistsWithoutRenderingUntilFocused(t *testing.
 }
 
 func TestHandler_OwnerlessStampedCodexKeepsCodexIdentity(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: hookEventWindows("scratch", []kitty.Window{{ID: 43, IsActive: true}})})
 

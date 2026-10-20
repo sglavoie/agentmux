@@ -12,6 +12,8 @@ import (
 // slot and nothing else, on a tmux session (no Kitty window to name) and on a
 // Kitty one alike, and says whose slot it is.
 func TestEventsExportSelectsByRuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onKitty, onTmux, other := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
@@ -61,6 +63,8 @@ func TestEventsExportSelectsByRuntimeSession(t *testing.T) {
 // A session the daemon holds no slot for is refused: answering with every
 // window would hand the caller other sessions' history under its own name.
 func TestEventsExportRefusesAnUnknownRuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	known, unknown := newRuntimeID(t), newRuntimeID(t)
 	directory.put(known, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")

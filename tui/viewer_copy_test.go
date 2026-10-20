@@ -86,6 +86,8 @@ func TestSessionViewerYCopiesBackingMultilineText(t *testing.T) {
 }
 
 func TestSessionViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -149,6 +151,8 @@ func TestSessionSearchCopyPathCopiesSelectedTranscriptPath(t *testing.T) {
 }
 
 func TestSessionSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -198,6 +202,8 @@ func TestSessionSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
 }
 
 func TestSessionSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:              ModeSessionSearch,
 		sessionSearchMode: true,
@@ -247,6 +253,8 @@ func TestSessionSearchCopyIDCopiesSelectedSessionID(t *testing.T) {
 }
 
 func TestSessionSearchCopyIDNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -296,6 +304,8 @@ func TestSessionSearchCopyIDNoOpForEmptyOrInvalidSelection(t *testing.T) {
 }
 
 func TestSessionSearchCopyIDIgnoredDuringTextEntry(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:              ModeSessionSearch,
 		sessionSearchMode: true,
@@ -337,6 +347,8 @@ func TestSessionViewerCopyPathCopiesTranscriptPath(t *testing.T) {
 }
 
 func TestSessionViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -371,6 +383,8 @@ func TestSessionViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
 // TestSessionViewerSlashReopensTheQuery mirrors the plan viewer: `/` returns
 // to the result list with the text query being edited, the same query intact.
 func TestSessionViewerSlashReopensTheQuery(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:           ModeSessionView,
 		sessionQuery:   "auth refactor",

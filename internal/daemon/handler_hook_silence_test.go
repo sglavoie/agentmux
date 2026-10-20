@@ -336,6 +336,8 @@ func TestSweepHookSilence_ListWindowsErrorTolerated(t *testing.T) {
 // different accounts → different IDs, and every ID is negative so it cannot
 // collide with any real Kitty window ID (always positive).
 func TestHookSilenceWindowID_StableAndNegative(t *testing.T) {
+	t.Parallel()
+
 	a1 := activity.HookSilenceWindowID("work")
 	a2 := activity.HookSilenceWindowID("work")
 	b1 := activity.HookSilenceWindowID("personal")

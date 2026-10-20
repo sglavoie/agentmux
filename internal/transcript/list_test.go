@@ -11,6 +11,8 @@ import (
 )
 
 func TestList_FiltersAndSort(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 
 	must(t, idx.SetEntryForTest("claude:a", SessionMeta{
@@ -52,6 +54,8 @@ func TestList_FiltersAndSort(t *testing.T) {
 }
 
 func TestList_ProfileFilterMatchesAllCandidateProfiles(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	data := []byte(`{
@@ -151,6 +155,8 @@ func TestSessionMeta_ProjectMembershipHelpers(t *testing.T) {
 }
 
 func TestDisplayProfileForGroupPrefersProjectDefaultWithinGroup(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Projects: []config.Session{{
 			Title:   "Foo",
@@ -173,6 +179,8 @@ func TestDisplayProfileForGroupPrefersProjectDefaultWithinGroup(t *testing.T) {
 }
 
 func TestList_SortTieBreakersAreDeterministic(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	lastAt := time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC)
 

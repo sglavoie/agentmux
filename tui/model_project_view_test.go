@@ -37,6 +37,8 @@ func projectViewModel(view dashboard.ViewMode) Model {
 // urgency view still projects one line per session, and Projects folds the
 // family into a summary plus its two members.
 func TestRebuildItemsFollowsTheView(t *testing.T) {
+	t.Parallel()
+
 	urgency := projectViewModel(dashboard.ViewUrgency)
 	if got, want := urgency.listItemCount(), 3; got != want {
 		t.Errorf("urgency projected %d lines, want %d (one per session)", got, want)
@@ -78,6 +80,8 @@ func TestRebuildItemsFollowsTheView(t *testing.T) {
 // TestProjectsViewRendersTheTreeAndOmitsHeadings drives the real root renderer,
 // which is what proves the view reaches ListInput rather than only the builder.
 func TestProjectsViewRendersTheTreeAndOmitsHeadings(t *testing.T) {
+	t.Parallel()
+
 	projects := stripAnsi(renderList(projectViewModel(dashboard.ViewProjects)))
 	if !strings.Contains(projects, "monorepo") {
 		t.Errorf("the family label never reached the rendered list:\n%s", projects)
@@ -104,6 +108,8 @@ func TestProjectsViewRendersTheTreeAndOmitsHeadings(t *testing.T) {
 // root: with no headings drawn, the cost from offset to cursor is the plain item
 // count, and the cursor the model scrolls to is one the renderer emits.
 func TestProjectsScrollMathChargesTheChromeItDraws(t *testing.T) {
+	t.Parallel()
+
 	m := projectViewModel(dashboard.ViewProjects)
 	if listShowsGroupHeadings(&m) {
 		t.Fatal("the Projects view claims it draws urgency headings")
@@ -139,6 +145,8 @@ func TestProjectsScrollMathChargesTheChromeItDraws(t *testing.T) {
 // a hand-spliced summary; this asserts the summary the real builder now emits is
 // the same kind of thing, so that proof still covers what the dashboard draws.
 func TestBuiltSummaryRefusesTheSelectedSession(t *testing.T) {
+	t.Parallel()
+
 	m := projectViewModel(dashboard.ViewProjects)
 	m.cursor = 0
 

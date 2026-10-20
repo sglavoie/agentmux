@@ -11,6 +11,8 @@ import (
 )
 
 func TestHandler_StateQuery(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
 	if !resp.OK {
@@ -25,6 +27,8 @@ func TestHandler_StateQuery(t *testing.T) {
 }
 
 func TestHandler_StateQueryReturnsActivity(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active"})
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "permission"})
@@ -42,6 +46,8 @@ func TestHandler_StateQueryReturnsActivity(t *testing.T) {
 }
 
 func TestHandler_StateQueryReturnsDaemonStateSnapshot(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "permission"})
 	h.stateMu.Lock()
@@ -64,6 +70,8 @@ func TestHandler_StateQueryReturnsDaemonStateSnapshot(t *testing.T) {
 // must write no `unseen` key at all, so a dashboard reading a response from a
 // daemon too old to carry the field decodes exactly what a seen window decodes.
 func TestHandler_StateQueryReportsUnseenAndOmitsItWhenSeen(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "stop"})
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "stop"})
@@ -113,6 +121,8 @@ func TestHandler_StateQueryReportsUnseenAndOmitsItWhenSeen(t *testing.T) {
 // exactly what the unlabelled window decodes. That equivalence is what makes
 // "no reason" a supported steady state rather than a version skew to detect.
 func TestHandler_StateQueryReportsPromptKindAndOmitsItWhenUnlabelled(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "permission"})
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "permission"})
@@ -175,6 +185,8 @@ func TestHandler_StateQueryReportsPromptKindAndOmitsItWhenUnlabelled(t *testing.
 // GitDirectory is deliberately not on the wire: it is the write-back's staleness
 // evidence, not a display fact, and the last assertion pins that it stays home.
 func TestHandler_StateQueryReportsGitBranchAndDirtyAndOmitsThemWhenUnprobed(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	for _, id := range []int{7, 9, 11} {
 		h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: id, Action: "active", IsPrompt: true})
@@ -231,6 +243,8 @@ func TestHandler_StateQueryReportsGitBranchAndDirtyAndOmitsThemWhenUnprobed(t *t
 }
 
 func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", IsPrompt: true})
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 9, Action: "permission"})
@@ -266,6 +280,8 @@ func TestHandler_StateQueryReportsBusySinceAndOmitsItWhenIdle(t *testing.T) {
 }
 
 func TestHandler_StateQueryReportsPresentationChangedAtInMillisecondsAndOmitsZero(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	changedAt := time.Unix(1_710_000_100, 123_000_000)
 	h.stateMu.Lock()
@@ -287,6 +303,8 @@ func TestHandler_StateQueryReportsPresentationChangedAtInMillisecondsAndOmitsZer
 }
 
 func TestHandler_PromptBypassesStopGuard(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "stop"})
 
@@ -297,6 +315,8 @@ func TestHandler_PromptBypassesStopGuard(t *testing.T) {
 }
 
 func TestHandler_Shutdown(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	called := make(chan struct{}, 1)
 	h.onShutdown = func() { called <- struct{}{} }

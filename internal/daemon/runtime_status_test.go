@@ -50,6 +50,8 @@ func brightBg(t *testing.T, name string) string {
 // state, title, or color is written by the next pass; a Kitty session's tab
 // is still Kitty's.
 func TestSettledTmuxStateIsRenderedOnceIntoItsSessionsStatus(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onKitty, api, web := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
@@ -136,6 +138,8 @@ func TestSettledTmuxStateIsRenderedOnceIntoItsSessionsStatus(t *testing.T) {
 // TestUnsettledTmuxStateIsNotRendered: a state the checkpoint does not hold
 // yet is not shown; the pass that makes it durable renders it.
 func TestUnsettledTmuxStateIsNotRendered(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	id := newRuntimeID(t)
 	directory.put(id, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
@@ -168,6 +172,8 @@ func TestUnsettledTmuxStateIsNotRendered(t *testing.T) {
 // pass; everything is written once more after the retry interval, and a
 // change in between is still written when it happens.
 func TestFailedStatusWriteIsRepeatedLaterNotEveryPass(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	id := newRuntimeID(t)
 	directory.put(id, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")

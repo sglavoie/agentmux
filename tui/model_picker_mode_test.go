@@ -12,6 +12,8 @@ import (
 )
 
 func TestLKeyOpensPicker(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "l")
 	if m.mode != ModePicker {
@@ -23,6 +25,8 @@ func TestLKeyOpensPicker(t *testing.T) {
 }
 
 func TestPickerEscReturnsToList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "l")
 	m = pressKey(m, "esc")
@@ -32,6 +36,8 @@ func TestPickerEscReturnsToList(t *testing.T) {
 }
 
 func TestPickerSpaceTogglesSelection(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "l")
 	// pickerCursor=0, not selected yet
@@ -49,6 +55,8 @@ func TestPickerSpaceTogglesSelection(t *testing.T) {
 }
 
 func TestPickerEnterEmitsLaunchCmd(t *testing.T) {
+	t.Parallel()
+
 	// No running sessions so this asserts the plain picker launch path without
 	// also exercising duplicate-instance behavior.
 	m := loadSessions(testModelWithSessions(), nil)
@@ -64,6 +72,8 @@ func TestPickerEnterEmitsLaunchCmd(t *testing.T) {
 }
 
 func TestPickerRunningStatus(t *testing.T) {
+	t.Parallel()
+
 	running := makeSessions() // api, backend, dotfiles
 	m := loadSessions(testModelWithSessions(), running)
 	m = pressKey(m, "l")
@@ -77,6 +87,8 @@ func TestPickerRunningStatus(t *testing.T) {
 }
 
 func TestBuildPickerRunning(t *testing.T) {
+	t.Parallel()
+
 	running := append(makeSessions(), session.RunningSession{
 		TabID: 4, Base: "api", Account: "work", Directory: "/home/user/api",
 	})
@@ -98,6 +110,8 @@ func TestBuildPickerRunning(t *testing.T) {
 // ---- Footer hints for new modes ----
 
 func TestFooterConfirmHint(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeConfirm
 	footer := stripAnsi(renderFooter(m))
@@ -110,6 +124,8 @@ func TestFooterConfirmHint(t *testing.T) {
 }
 
 func TestFooterPickerHint(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModePicker
 	footer := stripAnsi(renderFooter(m))
@@ -122,6 +138,8 @@ func TestFooterPickerHint(t *testing.T) {
 }
 
 func TestFooterListHintNoSessions(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), nil) // empty list
 	footer := stripAnsi(renderFooter(m))
 	if !strings.Contains(footer, "l launch") {
@@ -142,6 +160,8 @@ func TestFooterListHintNoSessions(t *testing.T) {
 // closed assertion — the row is exactly the bindings the dashboard declares,
 // with no key on it that is not one of them.
 func TestFooterIsTheSmallKeymapAndNothingElse(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	footer := stripAnsi(renderFooter(m))
 
@@ -179,6 +199,8 @@ func TestFooterIsTheSmallKeymapAndNothingElse(t *testing.T) {
 }
 
 func TestFooterEscHintShownWhenFiltered(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("test")
 	footer := stripAnsi(renderFooter(m))
@@ -196,6 +218,8 @@ func TestFooterEscHintShownWhenFiltered(t *testing.T) {
 // ---- Config picker mode tests ----
 
 func TestCKeyOpensConfigPicker(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyC)
 	if m.mode != ModeConfigPicker {
@@ -213,6 +237,8 @@ func TestCKeyOpensConfigPicker(t *testing.T) {
 // out of it returns to the menu it was raised from and a second esc leaves the
 // row.
 func TestConfigPickerEscReturnsToTheActionsOverlay(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyC)
 	m = pressKey(m, "esc")
@@ -225,6 +251,8 @@ func TestConfigPickerEscReturnsToTheActionsOverlay(t *testing.T) {
 }
 
 func TestConfigPickerNavigation(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyC) // → ModeConfigPicker, cursor=0
 	if m.configPickerCursor != 0 {
@@ -245,6 +273,8 @@ func TestConfigPickerNavigation(t *testing.T) {
 }
 
 func TestConfigPickerSameAccountNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyC) // → ModeConfigPicker
 	// After state-group sort cursor=0 is backend (bolt), account="work".
@@ -265,6 +295,8 @@ func TestConfigPickerSameAccountNoOp(t *testing.T) {
 }
 
 func TestConfigPickerCurrentProfileCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -304,6 +336,8 @@ func TestConfigPickerCurrentProfileCaseInsensitive(t *testing.T) {
 }
 
 func TestConfigPickerDifferentAccountEmitsCmd(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressRowAction(t, m, keyC) // → ModeConfigPicker (current=work, cursor=0)
 	m = pressKey(m, "j")           // cursor=1 (personal)
@@ -317,6 +351,8 @@ func TestConfigPickerDifferentAccountEmitsCmd(t *testing.T) {
 }
 
 func TestFooterConfigPickerHint(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeConfigPicker
 	footer := stripAnsi(renderFooter(m))

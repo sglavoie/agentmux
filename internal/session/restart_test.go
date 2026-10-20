@@ -12,6 +12,8 @@ import (
 // TestRestart_ClosesAndRelaunches verifies that Restart sends close-tab
 // followed by launch with the session's preserved metadata.
 func TestRestart_ClosesAndRelaunches(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		// All ls calls return empty — tab is already gone and no existing sessions.
@@ -78,6 +80,8 @@ func TestRestart_ClosesAndRelaunches(t *testing.T) {
 
 // TestRestart_UnknownAccountErrors returns an error when the account is missing.
 func TestRestart_UnknownAccountErrors(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := buildTestConfig()
@@ -97,6 +101,8 @@ func TestRestart_UnknownAccountErrors(t *testing.T) {
 // TestRestart_PreservesEnvAndGroups verifies that env and groups from user vars
 // are preserved through the restart cycle.
 func TestRestart_PreservesEnvAndGroups(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -144,6 +150,8 @@ func TestRestart_PreservesEnvAndGroups(t *testing.T) {
 // explicit-args marker with no project args, restart recomputes inherited
 // profile args instead of pinning the previous effective args as project args.
 func TestRestart_NewSessionUsesAccountArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -198,6 +206,8 @@ func TestRestart_NewSessionUsesAccountArgs(t *testing.T) {
 // duplicates, so a running tab whose user var case has drifted from the config
 // must still restart cleanly rather than failing with "profile not found".
 func TestRestart_CaseInsensitiveProfileLookup(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -221,6 +231,8 @@ func TestRestart_CaseInsensitiveProfileLookup(t *testing.T) {
 // TestRestart_DedupRaceSkipped verifies that Restart still launches even when
 // the old tab appears in Kitty's ls output (stale state after close).
 func TestRestart_DedupRaceSkipped(t *testing.T) {
+	t.Parallel()
+
 	stale := loadFixture(t, "kitty_ls.json") // contains W:api
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
@@ -266,6 +278,8 @@ func TestRestart_DedupRaceSkipped(t *testing.T) {
 // TestRestart_OverrideResolution verifies that nil/empty RunningSession fields
 // result in empty user vars (no defaults injected from outside the session).
 func TestRestart_OverrideResolution(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -311,6 +325,8 @@ func TestRestart_OverrideResolution(t *testing.T) {
 }
 
 func TestRestart_QuotedExplicitArgsRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},

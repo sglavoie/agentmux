@@ -19,6 +19,8 @@ import (
 )
 
 func TestRefresh_IdempotentNoSidecarRewrite(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md":  "# title\nbody",
@@ -50,6 +52,8 @@ func TestRefresh_IdempotentNoSidecarRewrite(t *testing.T) {
 }
 
 func TestRefresh_RebuildsMissingSidecarOnCacheHit(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md":  "# title",
@@ -86,6 +90,8 @@ func TestRefresh_RebuildsMissingSidecarOnCacheHit(t *testing.T) {
 }
 
 func TestRefresh_RebuildsNonRegularSidecarOnCacheHit(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md":  "# title",
@@ -126,6 +132,8 @@ func TestRefresh_RebuildsNonRegularSidecarOnCacheHit(t *testing.T) {
 }
 
 func TestRefresh_RebuildsWhenMarkdownFileListChanges(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md": "# title",
@@ -177,6 +185,8 @@ func TestRefresh_RebuildsWhenMarkdownFileListChanges(t *testing.T) {
 }
 
 func TestRefresh_DropsPreviouslyIndexedSkippedDirectories(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	for _, name := range []string{"sources", ".hidden"} {
 		planDir := seedPlanDir(t, root, name, map[string]string{
@@ -209,6 +219,8 @@ func TestRefresh_DropsPreviouslyIndexedSkippedDirectories(t *testing.T) {
 }
 
 func TestRefresh_DropsVanishedPlans(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planA := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md": "# alpha",
@@ -252,6 +264,8 @@ func TestRefresh_DropsVanishedPlans(t *testing.T) {
 }
 
 func TestRefresh_DropsPlanWhenMarkdownRemoved(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md": "# alpha",
@@ -291,6 +305,8 @@ func TestRefresh_DropsPlanWhenMarkdownRemoved(t *testing.T) {
 // form back, which is the evidence this test reads. A real change must still
 // be written.
 func TestRefresh_UnchangedPlansDoNotRewriteTheCache(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md": "# Alpha\nbody",

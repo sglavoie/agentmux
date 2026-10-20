@@ -52,6 +52,8 @@ func hasIssueType(issues []UITestLayoutIssue, t UITestLayoutIssueType) bool {
 // terminal — where its natural width equals its rendered width and its rows fit
 // the body area — reports no modal-fit issues.
 func TestUITestModalNoIssuesWhenFits(t *testing.T) {
+	t.Parallel()
+
 	if iss := detectModalFitIssues(actionsModalAt(140, 50)); len(iss) != 0 {
 		t.Errorf("actions overlay at 140x50 should fit, got %v", iss)
 	}
@@ -72,6 +74,8 @@ func TestUITestModalNoIssuesWhenFits(t *testing.T) {
 // clipping cases are the synthetic line/height overflow tests in
 // uitest_screen_test.go. The profile picker below now fits narrow widths too.
 func TestUITestActionsMenuFitsEveryTargetSize(t *testing.T) {
+	t.Parallel()
+
 	for _, size := range []struct{ w, h int }{{80, 24}, {100, 24}, {120, 30}, {160, 45}} {
 		m := actionsModalAt(size.w, size.h)
 		if iss := detectModalFitIssues(m); len(iss) != 0 {
@@ -88,6 +92,8 @@ func TestUITestActionsMenuFitsEveryTargetSize(t *testing.T) {
 
 // The responsive profile list and selected detail fit ordinary terminal sizes.
 func TestUITestModalConfigPickerFitsNarrowAndWide(t *testing.T) {
+	t.Parallel()
+
 	for _, size := range [][2]int{{60, 24}, {80, 24}, {140, 50}} {
 		if iss := detectModalFitIssues(configPickerModalAt(size[0], size[1])); len(iss) != 0 {
 			t.Errorf("config picker at %dx%d: %v", size[0], size[1], iss)
@@ -106,6 +112,8 @@ func TestUITestModalConfigPickerFitsNarrowAndWide(t *testing.T) {
 // Three rows leaves a body of two, which cannot hold the box frame itself. The
 // paired positive assertion is the line below.
 func TestUITestModalDetectsHeightOverflow(t *testing.T) {
+	t.Parallel()
+
 	iss := detectModalFitIssues(actionsModalAt(120, 3))
 	if !hasIssueType(iss, UITestIssueModalHeightOverflow) {
 		t.Fatalf("expected modal_height_overflow for actions at 120x3, got %v", iss)
@@ -131,6 +139,8 @@ func TestUITestModalDetectsHeightOverflow(t *testing.T) {
 // at and above the exact fit boundary it anchors at a row that keeps the bottom
 // border visible, so modal_clipped_by_root should not appear.
 func TestUITestModalTopAnchoredBoundaryFits(t *testing.T) {
+	t.Parallel()
+
 	var sawHeight, sawClean bool
 	for h := 6; h <= 16; h++ {
 		iss := detectModalFitIssues(configPickerModalAt(120, h))
@@ -165,6 +175,8 @@ func TestUITestModalTopAnchoredBoundaryFits(t *testing.T) {
 // modal-fit issues, so the detector never fabricates issues for views whose
 // overflow is already covered by the screen-level checks.
 func TestUITestModalIgnoresNonModalModes(t *testing.T) {
+	t.Parallel()
+
 	list := loadSessions(testModelWithSessions(), makeSessions())
 	list.width, list.height = 40, 10
 	if iss := detectModalFitIssues(list); iss != nil {
@@ -188,6 +200,8 @@ func TestUITestModalIgnoresNonModalModes(t *testing.T) {
 // the first WindowSizeMsg lands (m.width == 0), so a pre-sized render never
 // produces spurious overflow.
 func TestUITestModalUnsizedModelIsSkipped(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "a")
 	m.width, m.height = 0, 0
@@ -200,6 +214,8 @@ func TestUITestModalUnsizedModelIsSkipped(t *testing.T) {
 // against drift: every mode model_preview.go composites as a bounded popup must
 // resolve to a renderer, and plainly non-modal modes must not.
 func TestUITestModalBoxRendererCoversOverlayModes(t *testing.T) {
+	t.Parallel()
+
 	modal := []Mode{
 		ModeActions, ModeConfirm, ModeConfigPicker, ModeHelp,
 		ModeDetail, ModeDeleteChoice, ModeChipPicker, ModeCommandPalette,

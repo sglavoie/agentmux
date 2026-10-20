@@ -9,6 +9,8 @@ import (
 )
 
 func TestRendererConvergesDriftAndPreservesOverriddenHarnessBadge(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -47,6 +49,8 @@ func TestRendererConvergesDriftAndPreservesOverriddenHarnessBadge(t *testing.T) 
 }
 
 func TestRendererUsesLatestLiveTitleSnapshotAndPreservesStarAndMuteMarkers(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -90,6 +94,8 @@ func TestRendererUsesLatestLiveTitleSnapshotAndPreservesStarAndMuteMarkers(t *te
 }
 
 func TestRendererUsesActiveManagedTitleOwner(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -127,6 +133,8 @@ func TestRendererUsesActiveManagedTitleOwner(t *testing.T) {
 }
 
 func TestRendererRetriesFailedWrites(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{setTitleErr: errors.New("kitty unavailable")}
 	h.SetKittyClient(fake)
@@ -175,6 +183,8 @@ func TestRendererRetriesFailedWrites(t *testing.T) {
 }
 
 func TestRendererStaleSeqDoesNotClearDirty(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(42)

@@ -59,6 +59,8 @@ func sessionIcon(snap protocol.CompanionSnapshot, windowID int) string {
 // stateMu on every publish path, so it must return however many times it is
 // rung with nobody draining it.
 func TestCompanionDirtyNeverBlocksUnderStateMu(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	done := make(chan struct{})
 	go func() {
@@ -86,6 +88,8 @@ func TestCompanionDirtyNeverBlocksUnderStateMu(t *testing.T) {
 // TestCompanionDirtyRungByPublishPaths pins the wiring: a state change, a
 // snapshot publication, and a readiness transition each ring the doorbell.
 func TestCompanionDirtyRungByPublishPaths(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]func(h *Handler){
 		"state update": func(h *Handler) { companionStateUpdate(h, 7, "subagent", "SubagentStart") },
 		"snapshot":     func(h *Handler) { h.publishSnapshot(companionWindows(1), time.Now()) },
@@ -110,6 +114,8 @@ func TestCompanionDirtyRungByPublishPaths(t *testing.T) {
 // itself, which would deadlock (and fail TryLock) if the build held it. The
 // concurrent writers make the race detector check the copy is a real copy.
 func TestCompanionHubBuildsOutsideStateMu(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.publishSnapshot(companionWindows(4), time.Now())
 	var projected, lockFree atomic.Int32
@@ -155,6 +161,8 @@ func TestCompanionHubBuildsOutsideStateMu(t *testing.T) {
 // TestCompanionHubSkipsUnchangedDigest: republishing an unchanged world hands
 // subscribers nothing new.
 func TestCompanionHubSkipsUnchangedDigest(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.publishSnapshot(companionWindows(2), time.Now())
 	h.publishCompanionSnapshot(time.Now())
@@ -259,6 +267,8 @@ func TestCompanionHeartbeat(t *testing.T) {
 // TestCompanionNotificationBackendRequiresAuthorization: a backend claim
 // without OS authorization is not reported as a connected backend.
 func TestCompanionNotificationBackendRequiresAuthorization(t *testing.T) {
+	t.Parallel()
+
 	sock, _, h := newTestServerWithRef(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -283,6 +293,8 @@ func TestCompanionNotificationBackendRequiresAuthorization(t *testing.T) {
 // TestFaultDaemonRestartSendsByeShutdown: a daemon going down tells every
 // subscriber why, so a companion reconnects instead of reporting a crash.
 func TestFaultDaemonRestartSendsByeShutdown(t *testing.T) {
+	t.Parallel()
+
 	sock, server, h := newTestServerWithRef(t)
 	h.publishSnapshot(companionWindows(1), time.Now())
 	h.publishCompanionSnapshot(time.Now())
@@ -315,6 +327,8 @@ func TestFaultDaemonRestartSendsByeShutdown(t *testing.T) {
 // nothing — the writer unwinds, the hub forgets the sink, and both a new
 // subscriber and ordinary requests are served afterwards.
 func TestFaultSubscriberKilledMidWrite(t *testing.T) {
+	t.Parallel()
+
 	sock, _, h := newTestServerWithRef(t)
 	// Enough windows that one snapshot frame is far larger than a Unix socket
 	// buffer, so the writer is parked mid-frame when the peer dies.

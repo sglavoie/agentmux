@@ -14,6 +14,8 @@ import (
 // of SessionMeta.SearchText. The readers map is intentionally nil because
 // sidecars make readers optional when every survivor has one.
 func TestSearch_FastPathUsesSidecar(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
 		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
@@ -54,6 +56,8 @@ func TestSearch_FastPathUsesSidecar(t *testing.T) {
 // Reader.ReadMessages. A reader that errors on every call is supplied; if
 // Search were still routing through fallback the result would drop to zero.
 func TestSearch_FastPathSkipsReader(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
 		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
@@ -84,6 +88,8 @@ func TestSearch_FastPathSkipsReader(t *testing.T) {
 // case snippet as Preview, but it must still scan the sidecar so Matches
 // reports the full session count.
 func TestSearch_SnippetHitStillCountsSidecar(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
 		ID: "hit", Harness: harness.Claude,
@@ -113,6 +119,8 @@ func TestSearch_SnippetHitStillCountsSidecar(t *testing.T) {
 // needle is absent from the snippet the sidecar path must still run and
 // produce the full match count.
 func TestSearch_SnippetMissFallsThroughToSidecar(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
 		ID: "hit", Harness: harness.Claude,

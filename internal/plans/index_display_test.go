@@ -8,6 +8,8 @@ import (
 )
 
 func TestDisplayName(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in, want string
 	}{
@@ -30,6 +32,8 @@ func TestDisplayName(t *testing.T) {
 }
 
 func TestTruncateSnippetBoundary(t *testing.T) {
+	t.Parallel()
+
 	exact := strings.Repeat("a", snippetMaxLen)
 	if got := textutil.Snippet(exact, snippetMaxLen); got != exact {
 		t.Errorf("Snippet(exact length) = %q, want %q", got, exact)

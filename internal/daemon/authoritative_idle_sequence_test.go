@@ -13,6 +13,8 @@ import (
 // evidence captured before a later reducer event lands is discarded, so newer
 // activity is never overwritten.
 func TestAuthoritativeIdleDiscardedWhenSequenceMoved(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "cur", "active", base)
@@ -46,6 +48,8 @@ func TestAuthoritativeIdleDiscardedWhenSequenceMoved(t *testing.T) {
 // must advance even though the event's own sequence did not raise it, and the
 // stale idle observation must be discarded rather than retire the newer work.
 func TestAuthoritativeIdleDiscardedWhenLowerExplicitSequenceLands(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	// Push the window receipt generation up with sequence-less activity from the
@@ -95,6 +99,8 @@ func TestAuthoritativeIdleDiscardedWhenLowerExplicitSequenceLands(t *testing.T) 
 // so an idle observation captured before the sweep is discarded rather than
 // allowed to settle a synthetic stop over the freshly self-healed state.
 func TestAuthoritativeIdleDiscardedWhenWatchdogExpiryLands(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	// A small active threshold so a lone stale bolt fact self-heals in one sweep.
 	h.SetStaleThresholds(map[string]time.Duration{"active": time.Second}, nil)
@@ -128,6 +134,8 @@ func TestAuthoritativeIdleDiscardedWhenWatchdogExpiryLands(t *testing.T) {
 // idle observation captured before the merge is discarded rather than allowed to
 // settle over the newly surfaced disjoint state.
 func TestAuthoritativeIdleDiscardedWhenPersistedMergeLands(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	base := now.Unix()
@@ -177,6 +185,8 @@ func TestAuthoritativeIdleDiscardedWhenPersistedMergeLands(t *testing.T) {
 // observation captured before the seed is discarded rather than allowed to retire
 // the freshly seeded lease.
 func TestAuthoritativeIdleDiscardedWhenASLLeaseSeedLands(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "cur", "active", base)

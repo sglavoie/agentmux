@@ -27,6 +27,8 @@ func seedOwnerState(h *Handler, windowID int, action, icon string) {
 }
 
 func TestHandler_UserClearWipesManagedPaneIcons(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		action string
 		icon   string
@@ -76,6 +78,8 @@ func TestHandler_UserClearWipesManagedPaneIcons(t *testing.T) {
 }
 
 func TestHandler_UserClearFromUnmanagedSiblingTargetsOwner(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
 		palette.BuildTitle("api", "stop", false),
@@ -117,6 +121,8 @@ func TestHandler_UserClearFromUnmanagedSiblingTargetsOwner(t *testing.T) {
 }
 
 func TestHandler_UserClearFromManagedNonOwnerTargetsOwner(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
 		palette.BuildTitle("api", "key", false),
@@ -152,6 +158,8 @@ func TestHandler_UserClearFromManagedNonOwnerTargetsOwner(t *testing.T) {
 }
 
 func TestHandler_UserClearNoOwnerLeavesTabUnchanged(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
 		"api",
@@ -187,6 +195,8 @@ func TestHandler_UserClearNoOwnerLeavesTabUnchanged(t *testing.T) {
 // subprocess case: a harness such as `claude -p` can leave a recognized state
 // icon on a tab with no managed title owner, and F8 must still dismiss it.
 func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	liveTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "api",
@@ -234,6 +244,8 @@ func TestHandler_UserClearOwnerlessTabWithGlyphClearsSource(t *testing.T) {
 }
 
 func TestHandler_UserClearOwnerlessRecordedStateWithoutLiveIcon(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab(
 		"api",
@@ -263,6 +275,8 @@ func TestHandler_UserClearOwnerlessRecordedStateWithoutLiveIcon(t *testing.T) {
 // ownership is unknown, the wipe falls back to the source pane that fired the
 // clear rather than vanishing.
 func TestHandler_UserClearKittyLookupFailureWipesSourceFallback(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: hookEventWindows(palette.BuildTitle("api", "stop", false), []kitty.Window{{
@@ -296,6 +310,8 @@ func TestHandler_UserClearKittyLookupFailureWipesSourceFallback(t *testing.T) {
 }
 
 func TestHandler_UserClearPreservesForeignTitleParts(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	liveTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "W:renamed",
@@ -340,6 +356,8 @@ func TestHandler_UserClearPreservesForeignTitleParts(t *testing.T) {
 }
 
 func TestHandler_UserClearClearsGuardActionAndStaleLoop(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(
 		palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "error", Looping: true}),
@@ -379,6 +397,8 @@ func TestHandler_UserClearClearsGuardActionAndStaleLoop(t *testing.T) {
 }
 
 func TestHandler_UserClearConvergesDriftedTitleAndResetsFailures(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(
 		palette.BuildTitle("api", "stop", false), // live title drifted to stop
@@ -423,6 +443,8 @@ func TestHandler_UserClearConvergesDriftedTitleAndResetsFailures(t *testing.T) {
 }
 
 func TestHandler_UserClearThenPromptSetsBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(
 		palette.BuildTitle("api", "stop", false),
@@ -451,6 +473,8 @@ func TestHandler_UserClearThenPromptSetsBolt(t *testing.T) {
 }
 
 func TestHandler_UserClearLoopOnlyTab(t *testing.T) {
+	t.Parallel()
+
 	for _, managed := range []bool{false, true} {
 		for _, recorded := range []bool{false, true} {
 			t.Run(fmt.Sprintf("managed=%t/recorded=%t", managed, recorded), func(t *testing.T) {
@@ -492,6 +516,8 @@ func TestHandler_UserClearLoopOnlyTab(t *testing.T) {
 }
 
 func TestHandler_UserClearKeepsLiveLoopLease(t *testing.T) {
+	t.Parallel()
+
 	for _, phase := range []string{state.ASLPhaseTurn, state.ASLPhaseBetween, state.ASLPhaseWaiting} {
 		t.Run(phase, func(t *testing.T) {
 			h := newTestHandler()

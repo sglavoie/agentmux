@@ -9,6 +9,8 @@ import (
 )
 
 func TestResolveFlags_Empty(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{ClaudeFlags: nil}
 	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != "" {
 		t.Errorf("ResolveFlags(nil) = %q, want %q", got, "")
@@ -16,6 +18,8 @@ func TestResolveFlags_Empty(t *testing.T) {
 }
 
 func TestResolveFlags_Single(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{ClaudeFlags: []string{"--dangerously-skip-permissions"}}
 	want := "--dangerously-skip-permissions"
 	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != want {
@@ -24,6 +28,8 @@ func TestResolveFlags_Single(t *testing.T) {
 }
 
 func TestResolveFlags_Multiple(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{ClaudeFlags: []string{"--flag-a", "--flag-b"}}
 	want := "--flag-a --flag-b"
 	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != want {
@@ -32,6 +38,8 @@ func TestResolveFlags_Multiple(t *testing.T) {
 }
 
 func TestResolveFlags_DefaultsFallback(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{ClaudeFlags: nil}
 	defaults := config.Defaults{ClaudeFlags: []string{"--dangerously-skip-permissions"}}
 	want := "--dangerously-skip-permissions"
@@ -41,6 +49,8 @@ func TestResolveFlags_DefaultsFallback(t *testing.T) {
 }
 
 func TestResolveFlags_AccountFallback(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{}
 	acc := config.Account{Args: []string{"--account-flag"}}
 	want := "--account-flag"
@@ -50,6 +60,8 @@ func TestResolveFlags_AccountFallback(t *testing.T) {
 }
 
 func TestResolveFlags_ProjectOverridesAccount(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{Args: []string{"--project-flag"}}
 	acc := config.Account{Args: []string{"--account-flag"}}
 	want := "--project-flag"
@@ -59,6 +71,8 @@ func TestResolveFlags_ProjectOverridesAccount(t *testing.T) {
 }
 
 func TestResolveFlags_AccountOverridesDefaults(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{}
 	acc := config.Account{Args: []string{"--account-flag"}}
 	defaults := config.Defaults{ClaudeFlags: []string{"--defaults-flag"}}
@@ -69,6 +83,8 @@ func TestResolveFlags_AccountOverridesDefaults(t *testing.T) {
 }
 
 func TestResolveFlags_LegacyClaudeFlagsSession(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{ClaudeFlags: []string{"--legacy-flag"}}
 	want := "--legacy-flag"
 	if got := session.ResolveFlags(sess, config.Account{}, config.Defaults{}); got != want {
@@ -77,6 +93,8 @@ func TestResolveFlags_LegacyClaudeFlagsSession(t *testing.T) {
 }
 
 func TestSerializeSessionEnv_Empty(t *testing.T) {
+	t.Parallel()
+
 	if got := session.SerializeSessionEnv(nil); got != "" {
 		t.Errorf("SerializeSessionEnv(nil) = %q, want %q", got, "")
 	}
@@ -86,6 +104,8 @@ func TestSerializeSessionEnv_Empty(t *testing.T) {
 }
 
 func TestSerializeSessionEnv_Single(t *testing.T) {
+	t.Parallel()
+
 	got := session.SerializeSessionEnv(map[string]string{"KEY": "value"})
 	if got != "KEY=value" {
 		t.Errorf("SerializeSessionEnv = %q, want %q", got, "KEY=value")
@@ -93,6 +113,8 @@ func TestSerializeSessionEnv_Single(t *testing.T) {
 }
 
 func TestSerializeSessionEnv_MultiSorted(t *testing.T) {
+	t.Parallel()
+
 	// Keys should be sorted for stable output.
 	env := map[string]string{"Z_KEY": "z", "A_KEY": "a"}
 	got := session.SerializeSessionEnv(env)
@@ -103,6 +125,8 @@ func TestSerializeSessionEnv_MultiSorted(t *testing.T) {
 }
 
 func TestResolveEnv_SetsCLAUDE_CONFIG_DIR(t *testing.T) {
+	t.Parallel()
+
 	acc := config.Account{
 		Name:      "work",
 		ConfigDir: "~/.config/claude-work",
@@ -116,6 +140,8 @@ func TestResolveEnv_SetsCLAUDE_CONFIG_DIR(t *testing.T) {
 }
 
 func TestResolveEnv_SetsCLAUDE_CONFIG_DIRForDefaultHome(t *testing.T) {
+	t.Parallel()
+
 	defaultDir := harness.DefaultHomeDir("claude")
 	acc := config.Account{
 		Name:    "claude-default",
@@ -131,6 +157,8 @@ func TestResolveEnv_SetsCLAUDE_CONFIG_DIRForDefaultHome(t *testing.T) {
 }
 
 func TestResolveEnv_SessionOverrides(t *testing.T) {
+	t.Parallel()
+
 	acc := config.Account{Name: "work", ConfigDir: "~/.config/claude-work"}
 	sess := config.Session{
 		Account: "work",
@@ -149,6 +177,8 @@ func TestResolveEnv_SessionOverrides(t *testing.T) {
 }
 
 func TestResolveEnv_CopilotSetsCorrectEnvVar(t *testing.T) {
+	t.Parallel()
+
 	acc := config.Account{
 		Name:    "copilot-work",
 		Harness: "copilot",
@@ -167,6 +197,8 @@ func TestResolveEnv_CopilotSetsCorrectEnvVar(t *testing.T) {
 }
 
 func TestResolveEnv_CopilotDefaultHomeDirSetsEnvVar(t *testing.T) {
+	t.Parallel()
+
 	defaultDir := harness.DefaultHomeDir("copilot")
 	acc := config.Account{
 		Name:    "copilot-default",
@@ -182,6 +214,8 @@ func TestResolveEnv_CopilotDefaultHomeDirSetsEnvVar(t *testing.T) {
 }
 
 func TestResolveEnv_CodexSetsCorrectEnvVar(t *testing.T) {
+	t.Parallel()
+
 	acc := config.Account{
 		Name:    "codex-work",
 		Harness: "codex",
@@ -200,6 +234,8 @@ func TestResolveEnv_CodexSetsCorrectEnvVar(t *testing.T) {
 }
 
 func TestResolveEnv_CodexDefaultHomeDirSetsEnvVar(t *testing.T) {
+	t.Parallel()
+
 	defaultDir := harness.DefaultHomeDir("codex")
 	acc := config.Account{
 		Name:    "codex-default",

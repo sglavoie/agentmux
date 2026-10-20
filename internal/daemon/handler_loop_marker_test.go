@@ -16,6 +16,8 @@ import (
 // lifecycle signal arriving on a fresh window returns IconStatePreserve and
 // never introduces a bolt icon.
 func TestHandler_LoopMarkerPreservesIconWithoutPriorState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{
@@ -34,6 +36,8 @@ func TestHandler_LoopMarkerPreservesIconWithoutPriorState(t *testing.T) {
 // loop_marker leaves the guard, lastAction, and lastActiveEvent untouched so a
 // running stop/key/active state stays the source of truth.
 func TestHandler_LoopMarkerDoesNotDisturbGuardOrLastAction(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		prevAction string
 		event      string
@@ -93,6 +97,8 @@ func TestHandler_LoopMarkerDoesNotDisturbGuardOrLastAction(t *testing.T) {
 // TestHandler_LoopMarkerAppendsRingBufferEntry verifies that loop_marker still
 // records a SessionEvent with ResultIconState=preserve for inspectability.
 func TestHandler_LoopMarkerAppendsRingBufferEntry(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -130,6 +136,8 @@ func TestHandler_LoopMarkerAppendsRingBufferEntry(t *testing.T) {
 // fires for an ASL lifecycle signal, even when the notifier is wired for stop
 // and permission events. The marker is silent by design.
 func TestHandler_LoopMarkerSuppressesNotifications(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.NotificationConfig{Stop: true, Permission: true}
 	notifier := notification.NewNotifier(cfg)
 	var mu sync.Mutex
@@ -166,6 +174,8 @@ func TestHandler_LoopMarkerSuppressesNotifications(t *testing.T) {
 // notifiedStale and contextLimitNotified per-window latches survive a
 // loop_marker so a fresh real event can still re-arm them.
 func TestHandler_LoopMarkerLeavesStaleTrackingUntouched(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -200,6 +210,8 @@ func TestHandler_LoopMarkerLeavesStaleTrackingUntouched(t *testing.T) {
 // profile resets the hook-silence latch so the profile is not flagged as silent
 // while ASL is actively driving the loop.
 func TestHandler_LoopMarkerArmsHookSilenceLatch(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -236,6 +248,8 @@ func TestHandler_LoopMarkerArmsHookSilenceLatch(t *testing.T) {
 // "idle" clear the bolt, because the marker did not overwrite lastAction or
 // the guard.
 func TestHandler_LoopMarkerAfterActiveLeavesBoltClearable(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "UserPromptSubmit", IsPrompt: true})

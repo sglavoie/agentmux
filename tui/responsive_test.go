@@ -124,6 +124,8 @@ func responsiveCases(t *testing.T, fn func(t *testing.T, m Model)) {
 // the real render rather than a leaf so a field that fits its own allocation but
 // not the row it is joined into still fails.
 func TestResponsiveViewFitsItsViewport(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		lines := strings.Split(m.render(), "\n")
 		if len(lines) != m.height {
@@ -146,6 +148,8 @@ func TestResponsiveViewFitsItsViewport(t *testing.T) {
 // spans both panes, so a list column that overflowed into the divider would
 // still fit the terminal; this is the assertion that catches it.
 func TestResponsiveListPaneFitsItsColumn(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		g := dashboardGeometry(m)
 		lines := layout.SectionLines(renderListAt(m, g.listWidth, g.listHeight))
@@ -166,6 +170,8 @@ func TestResponsiveListPaneFitsItsColumn(t *testing.T) {
 // floor, so there is no width at which the operator trades a readable list for
 // an inspector beside an elided one.
 func TestResponsiveSplitNeverStarvesTheListColumn(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		g := dashboardGeometry(m)
 		if !g.split || g.fullScreen {
@@ -196,6 +202,8 @@ func TestResponsiveSplitNeverStarvesTheListColumn(t *testing.T) {
 // with dashboard `p`, because the inspector carries the same facts at every
 // width and those rows cost two sessions the list could have shown.
 func TestResponsiveGeometryIsStableUnderRepeatedResolution(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		first := dashboardGeometry(m)
 		if second := dashboardGeometry(m); second != first {
@@ -216,6 +224,8 @@ func TestResponsiveGeometryIsStableUnderRepeatedResolution(t *testing.T) {
 // sum and the band the queue's own width falls into — the facts that decide what
 // a session row is allowed to spell.
 func TestResponsiveBandsAndSplitGeometry(t *testing.T) {
+	t.Parallel()
+
 	base := responsiveModel(160, 40, dashboard.ViewUrgency, false)
 
 	bands := []struct {
@@ -261,6 +271,8 @@ func TestResponsiveBandsAndSplitGeometry(t *testing.T) {
 // duplication the quiet chrome exists to remove. The scope stays a click target,
 // which is what keeps the control reachable without the wording.
 func TestProjectSelectorIsAlwaysOfferedInTheHeader(t *testing.T) {
+	t.Parallel()
+
 	for width := 90; width <= 200; width++ {
 		for height := 8; height <= 30; height++ {
 			m := responsiveModel(width, height, dashboard.ViewUrgency, true)
@@ -310,6 +322,8 @@ func TestProjectSelectorIsAlwaysOfferedInTheHeader(t *testing.T) {
 // one that over-drew would push the footer off the bottom of a terminal the
 // scroll math had already clamped the cursor against.
 func TestResponsiveInspectorDrawsExactlyWhatItReserved(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		g := dashboardGeometry(m)
 		if !g.split {
@@ -333,6 +347,8 @@ func TestResponsiveInspectorDrawsExactlyWhatItReserved(t *testing.T) {
 // render-and-measure now, so a chrome element that grew a line without telling
 // the budget is a mismatch here rather than a clipped footer at run time.
 func TestResponsiveChromeBudgetMatchesRenderedChrome(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		above := len(layout.SectionLines(renderHeader(m))) +
 			len(layout.SectionLines(renderChips(m, m.width))) +
@@ -358,6 +374,8 @@ func TestResponsiveChromeBudgetMatchesRenderedChrome(t *testing.T) {
 // show the whole list, the offset the scroll math settled on has to place the
 // cursor inside the window the renderer was given.
 func TestResponsiveCursorStaysVisibleInShortTerminals(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		m.filtered = makeRowsForScroll(40)
 		m.rebuildItems()
@@ -392,6 +410,8 @@ func TestResponsiveCursorStaysVisibleInShortTerminals(t *testing.T) {
 // operator cannot navigate without in one spelling or the other, and no
 // truncation of the required set at any width the dashboard claims to support.
 func TestCompactFooterIsOneRowAndKeepsTheRequiredTokens(t *testing.T) {
+	t.Parallel()
+
 	// Each required control, in the labelled spelling and the bare-key one the
 	// row falls back to. The row must carry one of the two for every control.
 	required := [][2]string{
@@ -428,6 +448,8 @@ func TestCompactFooterIsOneRowAndKeepsTheRequiredTokens(t *testing.T) {
 // all-or-nothing rule. A row that spelled the first two controls out and
 // shortened the rest would read as a ranking the four do not have.
 func TestCompactFooterFallsBackWholesaleRatherThanMixingSpellings(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{dashboard.MinRowWidth(), 24, 36, 48, 60, 79} {
 		m := responsiveModel(width, 24, dashboard.ViewUrgency, false)
 		plain := stripAnsi(rootFooterLines(m)[0])
@@ -453,6 +475,8 @@ func TestCompactFooterFallsBackWholesaleRatherThanMixingSpellings(t *testing.T) 
 // and they spend that budget on the labelled palette rather than on the compact
 // row's abbreviations. Extra width buys more of the palette, never a third row.
 func TestStandardAndSpaciousOutspendCompactWithinTwoRows(t *testing.T) {
+	t.Parallel()
+
 	compact := rootFooterLines(responsiveModel(70, 30, dashboard.ViewUrgency, false))
 	if len(compact) != 1 {
 		t.Fatalf("compact band spent %d rows, want exactly 1: %q", len(compact), stripAnsi(strings.Join(compact, " / ")))
@@ -487,6 +511,8 @@ func TestStandardAndSpaciousOutspendCompactWithinTwoRows(t *testing.T) {
 // most: with group borders and half the row fields gone, the header line is the
 // only thing left saying which projection the list is under.
 func TestHeaderNamesTheActiveView(t *testing.T) {
+	t.Parallel()
+
 	for _, view := range []dashboard.ViewMode{dashboard.ViewUrgency, dashboard.ViewProjects} {
 		for _, width := range responsiveWidths {
 			m := responsiveModel(width, 30, view, false)

@@ -19,6 +19,8 @@ func inspectorPane(m Model) string {
 // so the pane can only tell them apart if the model records that a read has come
 // back — which is what previewLoaded is for.
 func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
@@ -56,6 +58,8 @@ func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
 // scroll position or a loaded flag surviving a retarget would show one session's
 // snapshot under another session's metadata.
 func TestRetargetResetsTheInspectorsReadState(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
@@ -86,6 +90,8 @@ func TestRetargetResetsTheInspectorsReadState(t *testing.T) {
 // TestInspectorPaneNamesTheSelectedSession checks that the root actually hands
 // the leaf the facts the queue row stopped carrying.
 func TestInspectorPaneNamesTheSelectedSession(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
@@ -104,6 +110,8 @@ func TestInspectorPaneNamesTheSelectedSession(t *testing.T) {
 // TestInspectorPaneOverAVanishedWindow separates "not running" from "nothing to
 // read": the metadata is still the answer to who this session was.
 func TestInspectorPaneOverAVanishedWindow(t *testing.T) {
+	t.Parallel()
+
 	m, _ := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	for i := range m.sessions {

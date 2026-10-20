@@ -62,6 +62,8 @@ func TestNewDaemonKittyClient_NoSocketOutsideKitty(t *testing.T) {
 }
 
 func TestHookKittyClient_ScopesToRequestSocket(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	h.SetKittyClient(kitty.NewClientWithSocket(runner, "unix:/tmp/kitty-daemon"))
@@ -72,6 +74,8 @@ func TestHookKittyClient_ScopesToRequestSocket(t *testing.T) {
 }
 
 func TestHookKittyClient_FallsBackForUnusableRequestSocket(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name   string
 		socket string
@@ -95,6 +99,8 @@ func TestHookKittyClient_FallsBackForUnusableRequestSocket(t *testing.T) {
 }
 
 func TestRememberKittySocket_RejectsUnusableAndPreservesStable(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -124,6 +130,8 @@ func TestRememberKittySocket_RejectsUnusableAndPreservesStable(t *testing.T) {
 }
 
 func TestIsReusableKittySocket(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]bool{
 		"unix:/tmp/kitty-1": true,
 		"tcp:localhost:900": true,

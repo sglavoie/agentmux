@@ -15,6 +15,8 @@ import (
 )
 
 func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 
 	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
@@ -40,6 +42,8 @@ func TestEnterSessionSearchStartsCacheLoadWhenCacheMissing(t *testing.T) {
 }
 
 func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.T) {
+	t.Parallel()
+
 	meta := transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "work", Project: "api"}
 	base := Model{
 		mode:                   ModeSessionSearch,
@@ -96,6 +100,8 @@ func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.
 }
 
 func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.sessionCacheLoadInFlight = true
 
@@ -116,6 +122,8 @@ func TestEnterSessionSearchDuringCacheLoadDoesNotDuplicateWork(t *testing.T) {
 }
 
 func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeList
 	m.sessionQuery = "needle"
@@ -165,6 +173,8 @@ func TestEnterSessionSearchReusesWarmedResultsOnRepeatedEntry(t *testing.T) {
 }
 
 func TestEnterSessionSearchWithWarmCacheRefreshesAndShowsNewTranscript(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "claude-home")
 	transcriptPath := filepath.Join(home, "projects", "-tmp-foo", "sess-new.jsonl")
@@ -276,6 +286,8 @@ func TestEnterSessionSearchWithWarmCacheRefreshesAndShowsNewTranscript(t *testin
 }
 
 func TestEnterSessionSearchWithPreservedQueryRefreshesMatchingRows(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "claude-home")
 	transcriptPath := filepath.Join(home, "projects", "-tmp-foo", "sess-new.jsonl")

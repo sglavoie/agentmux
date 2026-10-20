@@ -21,6 +21,8 @@ import (
 // for each. A definition whose runner went missing would be dropped by
 // actionsFor rather than rendered as a dead row, so this is what reports it.
 func TestOverlayOffersEveryMenuDefinition(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10},
 	})
@@ -67,6 +69,8 @@ func TestOverlayOffersEveryMenuDefinition(t *testing.T) {
 // opened on a cold dashboard is most often a way to go somewhere — and the
 // property being checked was never about position.
 func TestPaletteOffersEverySessionDefinition(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work", State: "bolt"}
 	m, ctx, _ := commandTestModel(target)
 
@@ -124,6 +128,8 @@ func TestPaletteOffersEverySessionDefinition(t *testing.T) {
 // host, so it cannot read the root's unexported key constants; this is what
 // stops the two from drifting.
 func TestMenuMnemonicsMatchDashboardKeyConstants(t *testing.T) {
+	t.Parallel()
+
 	want := map[commands.ID]string{
 		commands.FocusSession:    keyEnter,
 		commands.PeekScrollback:  keyE,
@@ -163,6 +169,8 @@ func TestMenuMnemonicsMatchDashboardKeyConstants(t *testing.T) {
 // excluded here: the menu takes it, ImmediateKey hides it, and enter on the
 // initial selection still runs focus-session.
 func TestMenuNavigationKeysShadowNoMnemonic(t *testing.T) {
+	t.Parallel()
+
 	navigation := []string{
 		keyEsc, keyQ, keyCtrlC,
 		keyJ, keyK, keyDown, keyUp,
@@ -189,6 +197,8 @@ func TestMenuNavigationKeysShadowNoMnemonic(t *testing.T) {
 // verdict. Before the vocabulary was one file, these were two rules that
 // happened to agree.
 func TestBothSurfacesAgreeOnAvailability(t *testing.T) {
+	t.Parallel()
+
 	base := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work"}
 	withState := func(state string) session.RunningSession {
 		row := base

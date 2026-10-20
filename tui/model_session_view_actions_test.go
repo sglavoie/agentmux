@@ -53,6 +53,8 @@ func viewerActionModel() Model {
 }
 
 func TestSessionViewerDispatchesContinuityActions(t *testing.T) {
+	t.Parallel()
+
 	base := viewerActionModel()
 	for _, key := range []string{"c", "f"} {
 		updated, cmd := base.Update(keyPress(key))
@@ -78,6 +80,8 @@ func TestSessionViewerCopyIDCopiesViewedSessionID(t *testing.T) {
 }
 
 func TestSessionViewerWorktreeForkReturnsToViewer(t *testing.T) {
+	t.Parallel()
+
 	updated, cmd := viewerActionModel().Update(keyPress("w"))
 	confirm := updated.(Model)
 	if confirm.mode != ModeConfirm || cmd != nil {
@@ -113,6 +117,8 @@ func TestSessionViewerWorktreeForkReturnsToViewer(t *testing.T) {
 }
 
 func TestSessionViewerHandoffPickerReturnsToViewer(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		key      string
 		wantEdit bool
@@ -156,6 +162,8 @@ func TestSessionViewerHandoffPickerReturnsToViewer(t *testing.T) {
 }
 
 func TestSessionViewerContinuityActionsNoOpWithoutViewedTranscript(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{"c", "f", "w", "H", "E", "i"} {
 		t.Run(key, func(t *testing.T) {
 			m := Model{mode: ModeSessionView, width: 200, height: 30, cfg: viewerActionConfig()}
@@ -169,6 +177,8 @@ func TestSessionViewerContinuityActionsNoOpWithoutViewedTranscript(t *testing.T)
 }
 
 func TestSessionViewerFooterAdvertisesContinuityActions(t *testing.T) {
+	t.Parallel()
+
 	footer := stripAnsi(renderFooter(Model{mode: ModeSessionView, width: 200}))
 	for _, want := range []string{"c continue", "f fork", "w worktree", "H handoff", "E edit handoff", "i ID"} {
 		if !strings.Contains(footer, want) {
@@ -276,6 +286,8 @@ func assertViewerRetained(t *testing.T, updated tea.Model) {
 }
 
 func TestSessionViewerExecutesContinuityActionsAgainstFakeDependencies(t *testing.T) {
+	t.Parallel()
+
 	t.Run("c focuses the exact live conversation", func(t *testing.T) {
 		exec := newViewerActionExecution(t)
 		identity := conversation.Identity{Harness: harness.Claude, SessionID: "viewer-source"}
@@ -395,6 +407,8 @@ func TestSessionViewerExecutesContinuityActionsAgainstFakeDependencies(t *testin
 }
 
 func TestSessionSearchContinuityFlowsStillReturnToSearch(t *testing.T) {
+	t.Parallel()
+
 	meta := viewerActionMeta()
 	base := Model{
 		mode:              ModeSessionSearch,

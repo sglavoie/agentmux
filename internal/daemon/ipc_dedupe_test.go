@@ -64,6 +64,8 @@ func windowEventCount(t *testing.T, c *ipc.Client, windowID int) int {
 // event carried by one request ID is applied exactly once across concurrent
 // duplicates and a later ambiguous-timeout retry.
 func TestIPC_DedupeAppliesEventOnce(t *testing.T) {
+	t.Parallel()
+
 	sock, server, _ := newTestServerWithRef(t)
 	c := ipc.NewClientWithSocket(sock)
 
@@ -128,6 +130,8 @@ func TestIPC_DedupeAppliesEventOnce(t *testing.T) {
 // request ID: a new logical event with a fresh ID applies again, and a legacy
 // (no-ID) request always applies.
 func TestIPC_DistinctRequestIDsEachApply(t *testing.T) {
+	t.Parallel()
+
 	sock, server, _ := newTestServerWithRef(t)
 	c := ipc.NewClientWithSocket(sock)
 
@@ -168,6 +172,8 @@ func TestIPC_DistinctRequestIDsEachApply(t *testing.T) {
 // TestIPC_RejectedMetricCountsBadPayload confirms malformed input increments the
 // rejected metric rather than any dedupe bucket.
 func TestIPC_RejectedMetricCountsBadPayload(t *testing.T) {
+	t.Parallel()
+
 	sock, server, _ := newTestServerWithRef(t)
 
 	conn, err := net.Dial("unix", sock)

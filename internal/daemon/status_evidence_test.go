@@ -8,6 +8,8 @@ import (
 )
 
 func TestStatusEvidenceFollowsWinningFactAndSurvivesRestore(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		source protocol.SourceID
 		want   string

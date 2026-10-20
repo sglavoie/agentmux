@@ -335,6 +335,8 @@ func TestRunShutdownPersistsQueuedStageRows(t *testing.T) {
 }
 
 func TestJournalMaintenanceWithConcurrentAppendersReportsNoLockTimeout(t *testing.T) {
+	t.Parallel()
+
 	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
 	if err != nil {
 		t.Fatal(err)

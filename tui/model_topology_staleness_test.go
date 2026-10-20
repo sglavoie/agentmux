@@ -84,6 +84,8 @@ func assertTopologyReading(t *testing.T, m Model, state dashboard.HealthState, s
 // rather than a second copy of six seconds, so the dashboard and the daemon
 // cannot drift apart about when topology has gone old.
 func TestStaleWarningOnsetIsExactlyTheSharedThreshold(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		elapsed time.Duration
@@ -114,6 +116,8 @@ func TestStaleWarningOnsetIsExactlyTheSharedThreshold(t *testing.T) {
 // age computed when the last message landed would freeze at the moment the
 // dashboard stopped being able to see Kitty.
 func TestStaleWarningAgeAdvancesWithoutAnyRefreshResult(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 
@@ -134,6 +138,8 @@ func TestStaleWarningAgeAdvancesWithoutAnyRefreshResult(t *testing.T) {
 // not a separate code path, it is the same stamping that made the warning
 // possible, applied to a newer tree.
 func TestStaleWarningClearsOnTheNextSuccessfulTopology(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(30 * time.Second)
@@ -155,6 +161,8 @@ func TestStaleWarningClearsOnTheNextSuccessfulTopology(t *testing.T) {
 // topology that is older than the threshold. The warning must then re-derive
 // from the new capture rather than either clearing or continuing to grow.
 func TestRecoveryToAnAlreadyStaleSnapshotReportsTheNewAge(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(90 * time.Second)
@@ -176,6 +184,8 @@ func TestRecoveryToAnAlreadyStaleSnapshotReportsTheNewAge(t *testing.T) {
 // With no tree ever rendered there is nothing to degrade to, so the failure is
 // the whole state of the dashboard and keeps its red error.
 func TestColdRefreshFailureStaysRed(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 100
 	m.now = func() time.Time { return staleTestEpoch }
@@ -196,6 +206,8 @@ func TestColdRefreshFailureStaysRed(t *testing.T) {
 // the same error is not red once there is a list to keep showing, and it never
 // becomes red — it becomes a warning.
 func TestWarmRefreshFailureIsQuietThenNonfatal(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(2 * time.Second)
@@ -216,6 +228,8 @@ func TestWarmRefreshFailureIsQuietThenNonfatal(t *testing.T) {
 // standing condition stays in the header indicator, where it is still readable
 // at the same moment rather than queued behind the error.
 func TestStaleWarningNeverDisplacesAnActionError(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(30 * time.Second)
@@ -232,6 +246,8 @@ func TestStaleWarningNeverDisplacesAnActionError(t *testing.T) {
 // between the capture and the render. The answer is zero, not a negative age
 // formatted into the warning.
 func TestTopologyAgeClampsABackwardsClock(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	m.topology.Age = time.Second
@@ -252,6 +268,8 @@ func TestTopologyAgeClampsABackwardsClock(t *testing.T) {
 // any other, and the row the operator had selected follows it across the
 // rebuild even though the tree it came from is old enough to be unwritable.
 func TestStaleTopologyStillRebuildsTheListAndKeepsTheCursor(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	m = pressKey(m, "j")
@@ -281,6 +299,8 @@ func TestStaleTopologyStillRebuildsTheListAndKeepsTheCursor(t *testing.T) {
 // the window, the dashboard sees the same token on every stale refresh and must
 // honour it once rather than re-stealing the cursor on each one.
 func TestStaleTopologyConsumesAnUnseenSelectionTokenExactlyOnce(t *testing.T) {
+	t.Parallel()
+
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 

@@ -78,6 +78,8 @@ func runFormKey(key string) tea.KeyPressMsg {
 }
 
 func TestRunFormOffersTheProjectsThePlanNames(t *testing.T) {
+	t.Parallel()
+
 	m, _ := planRunModel(t)
 	m = planRunStep(t, m, runFormKey(keyRunPlan))
 	if m.mode != ModePlanRun || !m.planRun.Active {
@@ -107,6 +109,8 @@ func TestRunFormOffersTheProjectsThePlanNames(t *testing.T) {
 }
 
 func TestRunFormSubmitsItsChoicesAndClosesOnAStartedRun(t *testing.T) {
+	t.Parallel()
+
 	m, recorder := planRunModel(t)
 	m = planRunStep(t, m, runFormKey(keyRunPlan))
 	// Supervisor → home, harness → claude, review harness → codex.
@@ -138,6 +142,8 @@ func TestRunFormSubmitsItsChoicesAndClosesOnAStartedRun(t *testing.T) {
 // TestRunFormKeepsARefusedPlanOpenOnWhatASLSaid: the form stays, shows each
 // finding, and a second enter asks again.
 func TestRunFormKeepsARefusedPlanOpenOnWhatASLSaid(t *testing.T) {
+	t.Parallel()
+
 	m, recorder := planRunModel(t)
 	readiness := planrun.Readiness{State: planrun.StateNotReady, Findings: []planrun.Finding{{Severity: "red", Category: "plan-structure", Message: "session-3.md is missing"}}}
 	recorder.answer = planRunDoneMsg{
@@ -167,6 +173,8 @@ func TestRunFormKeepsARefusedPlanOpenOnWhatASLSaid(t *testing.T) {
 }
 
 func TestRunFormRefusesChoicesASLWouldRefuseWithoutAsking(t *testing.T) {
+	t.Parallel()
+
 	m, recorder := planRunModel(t)
 	m = planRunStep(t, m, runFormKey(keyRunPlan))
 	// Harness and review harness both on the first harness.
@@ -180,6 +188,8 @@ func TestRunFormRefusesChoicesASLWouldRefuseWithoutAsking(t *testing.T) {
 }
 
 func TestRunFormDropsAnAnswerToAnEarlierForm(t *testing.T) {
+	t.Parallel()
+
 	m, _ := planRunModel(t)
 	m = planRunStep(t, m, runFormKey(keyRunPlan))
 	stale := planRunDoneMsg{seq: m.planRun.Seq}

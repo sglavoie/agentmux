@@ -27,6 +27,8 @@ func chipTestModel() Model {
 }
 
 func TestRenderChipsEmptyCollapses(t *testing.T) {
+	t.Parallel()
+
 	m := chipTestModel()
 	if got := renderChips(m, m.width); got != "" {
 		t.Errorf("expected empty chip line when no filter, got %q", got)
@@ -34,6 +36,8 @@ func TestRenderChipsEmptyCollapses(t *testing.T) {
 }
 
 func TestRenderChipsOne(t *testing.T) {
+	t.Parallel()
+
 	m := chipTestModel()
 	m.activeFilter = dashboard.Parse("api")
 	out := stripAnsi(renderChips(m, m.width))
@@ -46,6 +50,8 @@ func TestRenderChipsOne(t *testing.T) {
 }
 
 func TestRenderChipsAllKindsOnOneLine(t *testing.T) {
+	t.Parallel()
+
 	m := chipTestModel()
 	m.activeFilter = dashboard.Parse("api @work !key")
 	out := stripAnsi(renderChips(m, m.width))
@@ -60,6 +66,8 @@ func TestRenderChipsAllKindsOnOneLine(t *testing.T) {
 }
 
 func TestRenderChipsWrapAtNarrowWidth(t *testing.T) {
+	t.Parallel()
+
 	m := chipTestModel()
 	m.activeFilter = dashboard.Parse("aaaa bbbb cccc dddd")
 	// Each chip is ~9 cells (▌/aaaa ✕). Set width tight enough to force wrap.
@@ -75,6 +83,8 @@ func TestRenderChipsWrapAtNarrowWidth(t *testing.T) {
 // one; with no focus to have, every chip in the row renders identically, and no
 // keystroke can make one of them look selected.
 func TestRenderChipsHaveNoFocusedSpelling(t *testing.T) {
+	t.Parallel()
+
 	m := chipTestModel()
 	m.activeFilter = dashboard.Parse("api @work !key")
 	out := stripAnsi(renderChips(m, m.width))
@@ -94,6 +104,8 @@ func TestRenderChipsHaveNoFocusedSpelling(t *testing.T) {
 // — the dashboard binding table reports an unknown key as unclaimed and the
 // dispatcher drops it.
 func TestRetiredChipKeysDoNotDispatch(t *testing.T) {
+	t.Parallel()
+
 	retired := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "backspace", "x", "X"}
 	for _, key := range retired {
 		t.Run(key, func(t *testing.T) {
@@ -119,6 +131,8 @@ func TestRetiredChipKeysDoNotDispatch(t *testing.T) {
 // there is no second pane to hand the keyboard to, so the key answers nothing
 // rather than falling back to the ring it used to cycle.
 func TestTabWithChipsSwitchesNothingWithoutAnInspector(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width, m.height = 60, 24
 	m.activeFilter = dashboard.Parse("api @work !key")
@@ -144,6 +158,8 @@ func TestTabWithChipsSwitchesNothingWithoutAnInspector(t *testing.T) {
 // the ring. Entering the filter editor must carry the filter already on screen
 // into the buffer, because "remove one chip" is now "backspace one component".
 func TestSlashPrefillsTheActiveFilterForEditing(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("api @work")
 	raw := m.activeFilter.Raw
@@ -174,6 +190,8 @@ func TestSlashPrefillsTheActiveFilterForEditing(t *testing.T) {
 // `/` now applies the operator's own filter live on entry, so aborting must put
 // back what was there rather than leaving the buffer's parse behind.
 func TestEscRestoresTheFilterTheEditorWasEnteredFrom(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("api @work")
 
@@ -203,6 +221,8 @@ func TestEscRestoresTheFilterTheEditorWasEnteredFrom(t *testing.T) {
 // through the rendered hit map in TestMouseProjectSwitcherHeaderChipAndScopeRow.
 
 func TestEnterFocusesTheRowWithChipsActive(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("api")
 	updated, cmd := m.Update(keyPress("enter"))
@@ -216,6 +236,8 @@ func TestEnterFocusesTheRowWithChipsActive(t *testing.T) {
 }
 
 func TestEscClearsChips(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("api @work")
 	m = pressKey(m, keyEsc)
@@ -230,6 +252,8 @@ func TestEscClearsChips(t *testing.T) {
 // ring. Both hints named keys that no longer do anything, and a footer that
 // names a dead key is worse than one that says nothing.
 func TestFooterOmitsRetiredChipHints(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("api @work")
 	footer := stripAnsi(renderFooter(m))

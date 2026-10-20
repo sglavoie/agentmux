@@ -9,6 +9,8 @@ import (
 )
 
 func TestSaveLoadRoundtrip(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md":  "# alpha title\nmore",
@@ -73,6 +75,8 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 }
 
 func TestLoadIndexAt_MissingFileReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
 	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "does-not-exist.json"))
 	if err != nil {
 		t.Fatalf("LoadIndexAt: %v", err)
@@ -83,6 +87,8 @@ func TestLoadIndexAt_MissingFileReturnsEmpty(t *testing.T) {
 }
 
 func TestDelete_RemovesEntryAndSidecar(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md": "# alpha",

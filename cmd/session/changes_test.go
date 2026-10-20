@@ -13,6 +13,8 @@ import (
 )
 
 func TestChangesCommandEmitsCheckoutScopedJSON(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	for _, args := range [][]string{
 		{"init", "-q"}, {"config", "user.name", "Test"}, {"config", "user.email", "test@example.invalid"},
@@ -45,6 +47,8 @@ func TestChangesCommandEmitsCheckoutScopedJSON(t *testing.T) {
 }
 
 func TestChangesCommandRequiresOneTarget(t *testing.T) {
+	t.Parallel()
+
 	for _, args := range [][]string{{"--json"}, {"--json", "--directory", "/tmp", "--runtime-session", "rs-bad"}} {
 		cmd := newChangesCommand()
 		var out bytes.Buffer

@@ -114,6 +114,8 @@ func sessionSearchFilterModel(t *testing.T) Model {
 }
 
 func TestCurrentSessionQueryAlwaysRequestsMainSessions(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		sessionQuery:  "needle",
 		filterHarness: []string{harness.Claude},
@@ -147,6 +149,8 @@ func drainCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
 // future regressions to the seq-dispatch glue between
 // dispatchSessionSearch, sessionSearchDebounceMsg, and sessionSearchDoneMsg.
 func TestSessionSearch_TypingShrinksResultSet(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	if len(m.sessionResults) != 2 {
 		t.Fatalf("setup: want 2 results, got %d", len(m.sessionResults))
@@ -204,6 +208,8 @@ func TestSessionSearch_TypingShrinksResultSet(t *testing.T) {
 // race: a late refresh must search the updated index with the current text
 // instead of leaving the pre-refresh rows in place.
 func TestSessionSearch_StaleRefreshRerunsTypedQuery(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 
 	// Simulate the post-typing state: query set, seq advanced, results
@@ -240,6 +246,8 @@ func TestSessionSearch_StaleRefreshRerunsTypedQuery(t *testing.T) {
 }
 
 func TestSessionSearchErrorsRetainLastGoodResults(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		msg  tea.Msg
@@ -272,6 +280,8 @@ func TestSessionSearchErrorsRetainLastGoodResults(t *testing.T) {
 }
 
 func TestSessionSearchDeleteChoiceInvalidatesLateWarmRefresh(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name       string
 		key        string

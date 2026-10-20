@@ -3,6 +3,8 @@ package transcript
 import "testing"
 
 func TestShortenPaths(t *testing.T) {
+	t.Parallel()
+
 	const home = "/Users/me"
 	for _, tc := range []struct{ in, want string }{
 		{
@@ -29,6 +31,8 @@ func TestShortenPaths(t *testing.T) {
 }
 
 func TestElideCommandEnv(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct{ in, want string }{
 		{"/asl CLAUDE_CONFIG_DIR=~/.claude-personal run /plans/x/ --harness claude", "/asl … run /plans/x/ --harness claude"},
 		{"$asl CLAUDE_CONFIG_DIR=~/.claude-personal AMX_DEBUG=1 run x", "$asl … run x"},
@@ -47,6 +51,8 @@ func TestElideCommandEnv(t *testing.T) {
 }
 
 func TestShortenSummaryElidesEnvBeforeCuttingPaths(t *testing.T) {
+	t.Parallel()
+
 	in := "/asl CLAUDE_CONFIG_DIR=/Users/me/.claude-personal run /Users/me/.local/share/agent-plans/fb6b735245b5-0becb229fad4/ --harness claude"
 	if got, want := ShortenSummary(in, "/Users/me"), "/asl … run …/fb6b735245b5-0becb229fad4/ --harness claude"; got != want {
 		t.Errorf("ShortenSummary = %q, want %q", got, want)

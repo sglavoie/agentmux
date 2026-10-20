@@ -10,6 +10,8 @@ import (
 // A terminal table without --limit stops at sessionTableRows and says how
 // many it left out; an explicit --limit, even 0, is taken as given.
 func TestTerminalTableDefaultLimit(t *testing.T) {
+	t.Parallel()
+
 	newCmd := func() *cobra.Command {
 		cmd := &cobra.Command{}
 		cmd.Flags().IntP("limit", "n", 0, "")
@@ -61,6 +63,8 @@ func TestTerminalTableDefaultLimit(t *testing.T) {
 }
 
 func TestShellWordQuotesWhatAShellWouldSplit(t *testing.T) {
+	t.Parallel()
+
 	for value, want := range map[string]string{
 		"copilot":         "copilot",
 		"🐱amx":            "🐱amx",

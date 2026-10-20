@@ -20,6 +20,8 @@ import (
 )
 
 func TestRendererWritesStateBeforeTitle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -44,6 +46,8 @@ func TestRendererWritesStateBeforeTitle(t *testing.T) {
 }
 
 func TestRendererPersistFailureWithholdsTitle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{setUserVarsErr: errors.New("kitty unavailable")}
 	h.SetKittyClient(fake)
@@ -94,6 +98,8 @@ func TestRendererPersistFailureWithholdsTitle(t *testing.T) {
 }
 
 func TestRendererSupersededGenerationNeverLandsAfterNewerState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -149,6 +155,8 @@ func TestRendererSupersededGenerationNeverLandsAfterNewerState(t *testing.T) {
 }
 
 func TestRendererGenerationRevalidationRequeuesSupersededWindow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(42)
@@ -168,6 +176,8 @@ func TestRendererGenerationRevalidationRequeuesSupersededWindow(t *testing.T) {
 }
 
 func TestRendererSlowWindowDoesNotDelayEventIngestion(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	fake.windows = []kitty.OSWindow{
@@ -252,6 +262,8 @@ func TestRendererSlowWindowDoesNotDelayEventIngestion(t *testing.T) {
 }
 
 func TestRendererActivityOnlyEventsBatchPersistence(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)

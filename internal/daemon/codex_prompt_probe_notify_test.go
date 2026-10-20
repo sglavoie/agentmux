@@ -182,6 +182,8 @@ func TestProbeCodexScreenPrompts_DiscardsStaleMuteSnapshot(t *testing.T) {
 }
 
 func TestProbeCodexScreenPrompts_PreservesLoopMarkerAndHarnessEmoji(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	tabTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "🦊api",
@@ -220,6 +222,8 @@ func TestProbeCodexScreenPrompts_PreservesLoopMarkerAndHarnessEmoji(t *testing.T
 }
 
 func TestProbeCodexScreenPrompts_DoesNotOverwriteProtectedIcons(t *testing.T) {
+	t.Parallel()
+
 	protected := []string{"stop", "warning", "error", "subagent", "compact"}
 	for _, state := range protected {
 		t.Run(state, func(t *testing.T) {

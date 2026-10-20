@@ -14,6 +14,8 @@ import (
 // the tab to 🛑, and records a TranscriptStopProbe row carrying the ACTUAL
 // reduced state under the copilot_transcript probe source.
 func TestProbeCopilotTranscriptStop_CompletedTurnStopsStuckBolt(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h, fake := copilotProbeHandler(t, 42, "bolt", home)
@@ -58,6 +60,8 @@ func TestProbeCopilotTranscriptStop_CompletedTurnStopsStuckBolt(t *testing.T) {
 // twin: a user-initiated abort record is terminal evidence and settles the same
 // way as a clean completion.
 func TestProbeCopilotTranscriptStop_UserAbortStopsStuckBolt(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotAbortTranscript)
 	h, fake := copilotProbeHandler(t, 42, "bolt", home)
@@ -84,6 +88,8 @@ func TestProbeCopilotTranscriptStop_UserAbortStopsStuckBolt(t *testing.T) {
 // and a malformed tail. Each leaves the stuck ⚡ untouched and records no
 // TranscriptStopProbe row.
 func TestProbeCopilotTranscriptStop_NonTerminalEvidenceKeepsBolt(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		content string
@@ -128,6 +134,8 @@ func TestProbeCopilotTranscriptStop_NonTerminalEvidenceKeepsBolt(t *testing.T) {
 // subagent.completed). Once a genuine main assistant.turn_end follows the
 // reconstructed span's close, the probe settles stop as usual.
 func TestProbeCopilotTranscriptStop_SubagentSpanBeganOutsideTail(t *testing.T) {
+	t.Parallel()
+
 	t.Run("open span keeps bolt", func(t *testing.T) {
 		home := t.TempDir()
 		writeCopilotTranscript(t, home, "sess-1", copilotSpanBeforeTailTranscript(true))

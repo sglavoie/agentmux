@@ -13,6 +13,8 @@ import (
 // overlay under the legacy confirm flow flips to ModeConfirm. The default
 // toast/undo path is covered by undo_test.go.
 func TestActionsOverlayDispatchClose(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cfg.Defaults.ConfirmDestructive = true
 	m = openActionsOverlay(t, m)
@@ -29,6 +31,8 @@ func TestActionsOverlayDispatchClose(t *testing.T) {
 // destructive confirmation: it lands exactly where esc does rather than
 // closing amx.
 func TestConfirmQCancelsWithoutQuitting(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cfg.Defaults.ConfirmDestructive = true
 	m = openActionsOverlay(t, m)
@@ -49,6 +53,8 @@ func TestConfirmQCancelsWithoutQuitting(t *testing.T) {
 }
 
 func TestActionsOverlayDispatchClearStatus(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "key", WindowID: 42},
 	})
@@ -64,6 +70,8 @@ func TestActionsOverlayDispatchClearStatus(t *testing.T) {
 }
 
 func TestActionsOverlayDispatchDashboardLaunch(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
 	m = pressKey(m, "C")
@@ -78,6 +86,8 @@ func TestActionsOverlayDispatchDashboardLaunch(t *testing.T) {
 // TestActionsOverlayDispatchRestart verifies that `r` from the overlay
 // under the legacy confirm flow flips to ModeConfirm.
 func TestActionsOverlayDispatchRestart(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cfg.Defaults.ConfirmDestructive = true
 	m = openActionsOverlay(t, m)
@@ -92,6 +102,8 @@ func TestActionsOverlayDispatchRestart(t *testing.T) {
 
 // TestActionsOverlayDispatchConfigPicker verifies `c` opens ModeConfigPicker.
 func TestActionsOverlayDispatchConfigPicker(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
 	m = pressKey(m, "c")
@@ -106,6 +118,8 @@ func TestActionsOverlayDispatchConfigPicker(t *testing.T) {
 // TestActionsOverlayDispatchPeek verifies pressing `e` on an active row
 // closes the overlay and returns a non-nil peek cmd.
 func TestActionsOverlayDispatchPeek(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 42},
 	})
@@ -123,6 +137,8 @@ func TestActionsOverlayDispatchPeek(t *testing.T) {
 // TestActionsOverlayPeekUnavailableNoDispatch verifies pressing `e` on a
 // non-bolt row is a no-op (overlay stays open, no cmd).
 func TestActionsOverlayPeekUnavailableNoDispatch(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "", WindowID: 42},
 	})
@@ -139,6 +155,8 @@ func TestActionsOverlayPeekUnavailableNoDispatch(t *testing.T) {
 
 // TestActionsOverlayDispatchCopyTitle verifies `y` dispatches a copy cmd.
 func TestActionsOverlayDispatchCopyTitle(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
 	updated, cmd := m.Update(keyPress("y"))
@@ -160,6 +178,8 @@ func TestActionsOverlayDispatchCopyTitle(t *testing.T) {
 // TestOpenDirActionOpensWhenConfigMatches verifies the open-dir action resolves
 // the target row's config session and dispatches.
 func TestOpenDirActionOpensWhenConfigMatches(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt"},
 	})
@@ -175,6 +195,8 @@ func TestOpenDirActionOpensWhenConfigMatches(t *testing.T) {
 // TestOpenDirActionUnavailableWithoutMatchingConfig verifies the entry dims on
 // a row whose title isn't in the config, rather than dispatching into nothing.
 func TestOpenDirActionUnavailableWithoutMatchingConfig(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{
 		{TabID: 1, Base: "orphan", Account: "work", State: "bolt"},
 	})
@@ -193,6 +215,8 @@ func TestOpenDirActionUnavailableWithoutMatchingConfig(t *testing.T) {
 // TestOpenInEditorActionUnavailableWithoutConfig verifies the `O` action
 // falls back to unavailable when no config.Session matches the row's project.
 func TestOpenInEditorActionUnavailableWithoutConfig(t *testing.T) {
+	t.Parallel()
+
 	m := testModel() // no Sessions in cfg
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, Base: "nosuch", Account: "work", State: "bolt"},
@@ -208,6 +232,8 @@ func TestOpenInEditorActionUnavailableWithoutConfig(t *testing.T) {
 // TestOpenEditorActionOpensWhenConfigMatches verifies the open-in-editor action
 // resolves the target row's config session and dispatches.
 func TestOpenEditorActionOpensWhenConfigMatches(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt"},
 	})

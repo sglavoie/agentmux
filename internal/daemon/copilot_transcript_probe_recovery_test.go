@@ -17,6 +17,8 @@ import (
 // stale terminal read is discarded and the newer interactive bolt survives. The
 // injected lifecycle reader models the concurrent prompt landing mid-read.
 func TestProbeCopilotTranscriptStop_ConcurrentPromptInvalidatesStopProbe(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h, fake := copilotProbeHandler(t, 42, "bolt", home)
@@ -54,6 +56,8 @@ func TestProbeCopilotTranscriptStop_ConcurrentPromptInvalidatesStopProbe(t *test
 // active, so the streak restarts, the stuck bolt is preserved, and no
 // TranscriptStopProbe is recorded.
 func TestProbeCopilotTranscriptStop_IntermediateTurnEndDoesNotFalseStop(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h, fake := copilotProbeHandler(t, 42, "bolt", home)
@@ -98,6 +102,8 @@ func TestProbeCopilotTranscriptStop_IntermediateTurnEndDoesNotFalseStop(t *testi
 // PRE-append size and performs the append, modeling the write that lands between
 // the terminal read and the settle.
 func TestProbeCopilotTranscriptStop_TurnEndAppendedBeforeApplyKeepsBolt(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h, fake := copilotProbeHandler(t, 42, "bolt", home)
@@ -150,6 +156,8 @@ func TestProbeCopilotTranscriptStop_TurnEndAppendedBeforeApplyKeepsBolt(t *testi
 // is preserved: the sibling cases prove recovery never fires on still-terminal or
 // non-probe-owned stops.
 func TestProbeCopilotTranscriptStop_PostStatAppendSelfHealsSyntheticStop(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h, fake := copilotProbeHandler(t, 42, "bolt", home)
@@ -218,6 +226,8 @@ func TestProbeCopilotTranscriptStop_PostStatAppendSelfHealsSyntheticStop(t *test
 // agentStop fact) that leaves the tab at 🛑 is never taken back, even if the
 // transcript reads Active, because the stop is not the probe's contribution.
 func TestProbeCopilotTranscriptStop_RecoveryNeverReopensNativeStop(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	// An active transcript: recovery WOULD fire if the stop were probe-owned.
 	writeCopilotTranscript(t, home, "sess-1", copilotActiveTranscript)
@@ -256,6 +266,8 @@ func TestProbeCopilotTranscriptStop_RecoveryNeverReopensNativeStop(t *testing.T)
 // interactive bolt, but the ASL turn fact keeps the tab looping/active, so the
 // recorded row reports the ACTUAL reduced icon rather than a false stop.
 func TestProbeCopilotTranscriptStop_ActiveASLLeaseMasksStop(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h, _ := copilotProbeHandler(t, 42, "bolt", home)
@@ -302,6 +314,8 @@ func TestProbeCopilotTranscriptStop_ActiveASLLeaseMasksStop(t *testing.T) {
 // modeling the post-stat append landing between the settle-time freshness check and
 // the reducer mutation.
 func TestProbeCopilotTranscriptStop_PostStatAppendNotificationSuppressed(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	realSize := copilotTranscriptSize(t, home, "sess-1")

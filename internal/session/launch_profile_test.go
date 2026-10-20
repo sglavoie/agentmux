@@ -15,6 +15,8 @@ import (
 // config-backed title fallback already treats that tab as running for
 // ListWithConfig/ReanchorAll; launch dedup must use the same view.
 func TestLaunch_DedupSeesConfigMatchedGhostTabs(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
 		`{"id":10,"is_active":true,"title":"api","windows":[` +
 		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{},` +
@@ -51,6 +53,8 @@ func TestLaunch_DedupSeesConfigMatchedGhostTabs(t *testing.T) {
 }
 
 func TestLaunch_ProjectDirectoryWithoutHarnessDoesNotDedup(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
 		`{"id":10,"is_active":true,"title":"api","windows":[` +
 		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{},` +
@@ -84,6 +88,8 @@ func TestLaunch_ProjectDirectoryWithoutHarnessDoesNotDedup(t *testing.T) {
 // TestLaunch_ColorRetryApplied verifies that SetTabColor is called when the
 // new tab appears in a post-launch ls response.
 func TestLaunch_ColorRetryApplied(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 
 	// Post-launch fixture: newproject tab with ID 100 (not in pre-launch IDs).
@@ -130,6 +136,8 @@ func TestLaunch_ColorRetryApplied(t *testing.T) {
 }
 
 func TestLaunch_ColorRetryUsesTabIDWithDuplicateTitles(t *testing.T) {
+	t.Parallel()
+
 	preLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
 		`{"id":42,"is_active":true,"title":"🦊api","windows":[` +
 		`{"id":43,"is_active":true,"title":"🦊api","cwd":"/tmp/api","cmdline":["zsh"],"user_vars":{}}` +
@@ -179,6 +187,8 @@ func TestLaunch_ColorRetryUsesTabIDWithDuplicateTitles(t *testing.T) {
 // launched under an override profile, the inactive Kitty tab-bar accent follows
 // the chosen launch profile rather than the project's default profile.
 func TestLaunch_ColorTracksLaunchProfile(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 
 	postLaunch := []byte(`[{"id":1,"is_active":true,"is_focused":true,"last_focused":true,"tabs":[` +
@@ -261,6 +271,8 @@ func TestLaunch_ColorTracksLaunchProfile(t *testing.T) {
 }
 
 func TestLaunch_InsertsRelativeToFocusedWindow(t *testing.T) {
+	t.Parallel()
+
 	twoWindows := loadFixture(t, "kitty_ls_two_windows.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{twoWindows, twoWindows},

@@ -14,6 +14,8 @@ import (
 )
 
 func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	idx.entries[IndexKey(harness.Claude, "visible-ok")] = SessionMeta{
 		ID: "visible-ok", Harness: harness.Claude, Profile: "work", Profiles: []string{"work", "personal"}, MessageCount: 1,
@@ -58,6 +60,8 @@ func TestStatusReportsCountsAndMissingSidecars(t *testing.T) {
 }
 
 func TestStatusMalformedMetadataQuarantinesAndReportsWarning(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	writeMalformedMetadata(t, path)
 
@@ -73,6 +77,8 @@ func TestStatusMalformedMetadataQuarantinesAndReportsWarning(t *testing.T) {
 }
 
 func TestCompactMigratesLegacySearchTextAndRewritesMetadataOnly(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	key := IndexKey(harness.Claude, "legacy")
@@ -117,6 +123,8 @@ func TestCompactMigratesLegacySearchTextAndRewritesMetadataOnly(t *testing.T) {
 }
 
 func TestCompactMalformedMetadataQuarantinesAndRepairsInOneRun(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	writeMalformedMetadata(t, path)
 
@@ -135,6 +143,8 @@ func TestCompactMalformedMetadataQuarantinesAndRepairsInOneRun(t *testing.T) {
 }
 
 func TestCompactRemovesOnlyOrphanRegularSidecars(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	sourcePath := filepath.Join(dir, "source.jsonl")

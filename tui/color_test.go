@@ -16,6 +16,8 @@ import (
 // title in the profile color while the "<emoji> <profile>/<harness>" cell uses
 // the configured harness color.
 func TestPickerRowProfileColor(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -65,6 +67,8 @@ func TestPickerRowProfileColor(t *testing.T) {
 // harness cell uses the configured harness color rather than either profile's
 // color.
 func TestPickerRowOverrideSplitsColor(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -115,6 +119,8 @@ func TestPickerRowOverrideSplitsColor(t *testing.T) {
 // TestConfigPickerHarnessEmojiAndColor verifies that the launch-profile
 // overlay uses the same harness emoji/color cues as the main launch picker.
 func TestConfigPickerHarnessEmojiAndColor(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{
@@ -189,6 +195,8 @@ func TestConfigPickerHarnessEmojiAndColor(t *testing.T) {
 // TestPickerPreviewOverrideHeaderColor verifies the picker preview header tracks
 // the project's *default* profile color even when an override is active.
 func TestPickerPreviewOverrideHeaderColor(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort:            "alpha",
@@ -244,6 +252,8 @@ func TestPickerPreviewOverrideHeaderColor(t *testing.T) {
 // label a fact rather than encode it, and one identity color on the title is
 // what the eye is meant to find.
 func TestQueueRowDrawsNoProfileColorWhileTheInspectorDoes(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
@@ -290,6 +300,8 @@ func TestQueueRowDrawsNoProfileColorWhileTheInspectorDoes(t *testing.T) {
 }
 
 func TestRenderInspectorOverrideTitleColor(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Projects: []config.Session{
 			{Title: "api", Profile: "personal"},
@@ -320,6 +332,8 @@ func TestRenderInspectorOverrideTitleColor(t *testing.T) {
 }
 
 func TestDetailHeaderOverrideBadgeColor(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},
@@ -360,6 +374,8 @@ func TestDetailHeaderOverrideBadgeColor(t *testing.T) {
 // drives the launcher's rows and its profile overlay, which is where an operator
 // picks a harness and therefore where the color still distinguishes something.
 func TestHarnessColorNoLongerReachesTheSessionRow(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{HarnessEmojis: map[string]string{"claude": "🦊"}}
 	s := session.RunningSession{
 		TabID: 1, Base: "api", Project: "api", Account: "work",

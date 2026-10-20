@@ -30,6 +30,8 @@ func (r *countingListRunner) Run(_ string, args ...string) ([]byte, []byte, erro
 // ready without asking, and still restore durable state from the first Kitty
 // a hook introduces.
 func TestDaemonWithNoKittySocketIsReadyAndRestoresFromTheFirstKitty(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 

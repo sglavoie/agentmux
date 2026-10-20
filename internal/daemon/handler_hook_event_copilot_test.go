@@ -68,6 +68,8 @@ func TestHandler_CopilotLateInitialSessionStartPreservesPromptAndAllowsStop(t *t
 // prompt, not an auto-approved tool. The PermissionRequest event is applied (not
 // suppressed) and surfaces the 🔑 icon.
 func TestHandler_HookEventClaudePermissionRequestSurfacesKey(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
 		ID:       42,

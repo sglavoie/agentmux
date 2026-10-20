@@ -264,6 +264,8 @@ func TestASLRunInCollidingKittyInstanceKeepsSlotAsOrigin(t *testing.T) {
 }
 
 func TestLegacyASLWindowIDSelectsOnlyItsCollidingKittyTab(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	projectDir := t.TempDir()
 	h.stateMu.Lock()
@@ -461,6 +463,8 @@ func TestASLReconcileWithoutSnapshotLeavesKittyLeasesAlone(t *testing.T) {
 // TestOperatorClearReachesARuntimeSlot: F8 from a session with no Kitty tab
 // behind it clears that session's attention, with Kitty running and without.
 func TestOperatorClearReachesARuntimeSlot(t *testing.T) {
+	t.Parallel()
+
 	for _, withKitty := range []bool{true, false} {
 		t.Run(fmt.Sprintf("kitty=%v", withKitty), func(t *testing.T) {
 			h := newTestHandler()

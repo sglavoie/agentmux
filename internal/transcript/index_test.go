@@ -63,6 +63,8 @@ func newTestIndex(t *testing.T) *Index {
 }
 
 func TestLoadIndex_MissingFileReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
 	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "does-not-exist.json"))
 	if err != nil {
 		t.Fatalf("LoadIndexAt: %v", err)
@@ -73,6 +75,8 @@ func TestLoadIndex_MissingFileReturnsEmpty(t *testing.T) {
 }
 
 func TestSetHiddenRemovesSearchSidecar(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	key := IndexKey(harness.Claude, "sess-1")
 	must(t, idx.SetEntryForTest(key, SessionMeta{

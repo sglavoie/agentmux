@@ -11,6 +11,8 @@ import (
 )
 
 func TestDashboardRestartProfile_CrossHarnessUsesConfiguredProjectTemplate(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeLaunchDispatchClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -88,6 +90,8 @@ func TestDashboardRestartProfile_CrossHarnessUsesConfiguredProjectTemplate(t *te
 }
 
 func TestDashboardLaunch_OrphanRowUsesSessionFromRunningTemplate(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeLaunchDispatchClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -137,6 +141,8 @@ func TestDashboardLaunch_OrphanRowUsesSessionFromRunningTemplate(t *testing.T) {
 // progress handler only quits when every launchProgressMsg has nil err, so
 // this branch must surface a real error.
 func TestDispatchPickerLaunch_MissingAccountReportsError(t *testing.T) {
+	t.Parallel()
+
 	m := launchDispatchModel(t, nil)
 	m.cfg.Sessions[0].Account = "missing"
 	m.pickerSessions = launch.SortSessions(m.cfg.Sessions)
@@ -166,6 +172,8 @@ func TestDispatchPickerLaunch_MissingAccountReportsError(t *testing.T) {
 // m.pickerRunning after dispatch does NOT affect which sessions launch because
 // the closures don't re-poll the snapshot.
 func TestDispatchPickerLaunch_RunningSnapshotIsStable(t *testing.T) {
+	t.Parallel()
+
 	m := launchDispatchModel(t, nil)
 	selectByTitle(&m, "api", "backend")
 

@@ -158,6 +158,8 @@ func dashboardBindingStates(t *testing.T) []struct {
 // makes the table safe to derive labels from: a binding whose command does not
 // exist would advertise a key in the footer and the palette that nothing runs.
 func TestEveryDashboardBindingNamesACatalogCommand(t *testing.T) {
+	t.Parallel()
+
 	for _, binding := range dashboardBindings() {
 		if len(binding.Keys) == 0 {
 			t.Errorf("binding for %q declares no key", binding.Command)
@@ -176,6 +178,8 @@ func TestEveryDashboardBindingNamesACatalogCommand(t *testing.T) {
 // entry carries a shortcut of its own, so a rebinding cannot leave the palette
 // advertising the old key.
 func TestPaletteShortcutsComeFromTheBindingTable(t *testing.T) {
+	t.Parallel()
+
 	bindings := dashboardBindings()
 	for _, candidate := range commandCatalog() {
 		want := bindings.Display(candidate.ID)
@@ -191,6 +195,8 @@ func TestPaletteShortcutsComeFromTheBindingTable(t *testing.T) {
 // here and covered by name below — their difference is the declaration, not an
 // accident.
 func TestDirectKeyAndPaletteAgree(t *testing.T) {
+	t.Parallel()
+
 	for _, state := range dashboardBindingStates(t) {
 		for _, binding := range dashboardBindings() {
 			if binding.Gate != commands.GateChecked {
@@ -222,6 +228,8 @@ func TestDirectKeyAndPaletteAgree(t *testing.T) {
 // than look dead; it has no dashboard key now, and the palette says the same
 // thing by dimming the row.
 func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
+	t.Parallel()
+
 	unchecked := map[commands.ID]bool{}
 	for _, binding := range dashboardBindings() {
 		if binding.Gate == commands.GateUnchecked {
@@ -246,6 +254,8 @@ func TestUncheckedBindingsRunTheirCommandRegardless(t *testing.T) {
 // keystroke rather than after it. So a key whose command refuses must leave the
 // model untouched and say nothing at all.
 func TestEveryRefusedBindingIsSilentAndInert(t *testing.T) {
+	t.Parallel()
+
 	for _, state := range dashboardBindingStates(t) {
 		for _, binding := range dashboardBindings() {
 			if binding.Gate != commands.GateChecked || binding.Binds(keyEnter) {
@@ -281,6 +291,8 @@ func TestEveryRefusedBindingIsSilentAndInert(t *testing.T) {
 // question is no longer "does the key say so" but "does the row the operator is
 // choosing from say so" — and it must say so with the lock named.
 func TestLockedRowRefusesThroughTheActionsOverlay(t *testing.T) {
+	t.Parallel()
+
 	locked := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 3, WindowID: 13, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt", Locked: true,
 	})
@@ -313,6 +325,8 @@ func TestLockedRowRefusesThroughTheActionsOverlay(t *testing.T) {
 // than the surface the command was reached from, so the preference is set here
 // instead of assumed.
 func TestRestartStillConfirmsFromThePalette(t *testing.T) {
+	t.Parallel()
+
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 7, WindowID: 17, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
@@ -345,6 +359,8 @@ func TestRestartStillConfirmsFromThePalette(t *testing.T) {
 // the operator in a mode they never opened. Both are palette-only now, and the
 // palette is raised from the dashboard, so the answer must still be ModeList.
 func TestProfileOverlaysReturnToTheDashboard(t *testing.T) {
+	t.Parallel()
+
 	for _, id := range []commands.ID{commands.OverrideProfile, commands.LaunchAnother} {
 		t.Run(string(id), func(t *testing.T) {
 			m := withListRows(testModelWithSessions(), session.RunningSession{
@@ -374,6 +390,8 @@ func TestProfileOverlaysReturnToTheDashboard(t *testing.T) {
 // take it as a target — and the refusal comes from the captured context being
 // empty rather than from a check each binding remembers to perform.
 func TestFamilySummaryRefusesEverySessionBinding(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m.listView = dashboard.ViewProjects
 	m = withListRows(m,
@@ -421,6 +439,8 @@ func TestFamilySummaryRefusesEverySessionBinding(t *testing.T) {
 // the previous test honest: enter is bound to FocusSession, but on a summary it
 // never gets there.
 func TestEnterFoldsASummaryBeforeReachingTheTable(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m.listView = dashboard.ViewProjects
 	m = withListRows(m,
@@ -446,6 +466,8 @@ func TestEnterFoldsASummaryBeforeReachingTheTable(t *testing.T) {
 // the dispatcher still loops over every claimant, so the property is enforced
 // here rather than by the loop being impossible to enter twice.
 func TestNoDashboardKeyIsSharedIsTheDeclarationOrderInvariant(t *testing.T) {
+	t.Parallel()
+
 	claimants := map[string][]commands.ID{}
 	for _, binding := range dashboardBindings() {
 		for _, key := range binding.Keys {
@@ -464,6 +486,8 @@ func TestNoDashboardKeyIsSharedIsTheDeclarationOrderInvariant(t *testing.T) {
 // dismissal is a palette command; what must not have happened is the command
 // going with the key.
 func TestDeprecationBannerIsDismissedByNameNotByAKey(t *testing.T) {
+	t.Parallel()
+
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 9, WindowID: 19, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
@@ -485,6 +509,8 @@ func TestDeprecationBannerIsDismissedByNameNotByAKey(t *testing.T) {
 // keypress is gated and executed against one snapshot, so it cannot be checked
 // against one row and run against another.
 func TestBindingsShareOneCapturedTarget(t *testing.T) {
+	t.Parallel()
+
 	m := withListRows(testModelWithSessions(),
 		session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt"},
 		session.RunningSession{TabID: 2, WindowID: 12, Base: "backend", Account: "work", Directory: "/home/user/backend", State: "bolt"},
@@ -528,6 +554,8 @@ func TestBindingsShareOneCapturedTarget(t *testing.T) {
 // dashboard binding is dispatched while a scope is being chosen at all — and the
 // binding context has exactly one answer again.
 func TestProjectSwitcherIsNotADashboardBindingState(t *testing.T) {
+	t.Parallel()
+
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})
@@ -560,6 +588,8 @@ func TestProjectSwitcherIsNotADashboardBindingState(t *testing.T) {
 // the keystroke, and the overlay behind it is where a locked row's refusal is
 // drawn.
 func TestFooterDimsWhatTheCursorCannotDo(t *testing.T) {
+	t.Parallel()
+
 	locked := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 3, WindowID: 13, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt", Locked: true,
 	})
@@ -593,6 +623,8 @@ func TestFooterDimsWhatTheCursorCannotDo(t *testing.T) {
 // TestFooterKeysAreTheKeysThatDispatch closes the loop the derivation exists
 // for: a footer entry backed by a command names the key that actually runs it.
 func TestFooterKeysAreTheKeysThatDispatch(t *testing.T) {
+	t.Parallel()
+
 	bindings := dashboardBindings()
 	declared := map[string]bool{}
 	for _, binding := range bindings {
@@ -660,6 +692,8 @@ var retiredDashboardKeys = []string{
 // fired on a locked row, an unconfigured project, or a visible banner would
 // look inert in the one state a narrower test happened to pick.
 func TestEveryRetiredDashboardKeyIsInertAtTheList(t *testing.T) {
+	t.Parallel()
+
 	bound := map[string]bool{}
 	for _, binding := range dashboardBindings() {
 		for _, key := range binding.Keys {
@@ -699,6 +733,8 @@ func TestEveryRetiredDashboardKeyIsInertAtTheList(t *testing.T) {
 // list does not build — and the fix for the second is to build that state here,
 // which keeps the list an inventory of what the gates actually depend on.
 func TestEveryCatalogCommandIsAvailableSomewhere(t *testing.T) {
+	t.Parallel()
+
 	states := dashboardBindingStates(t)
 
 	// Two gates need a state the binding sweep has no reason to build: an undo
@@ -751,6 +787,8 @@ func TestEveryCatalogCommandIsAvailableSomewhere(t *testing.T) {
 // state and against the palette, by TestDirectKeyAndPaletteAgree and
 // TestUncheckedBindingsRunTheirCommandRegardless.
 func TestEveryFinalDashboardBindingDispatches(t *testing.T) {
+	t.Parallel()
+
 	// A row under the cursor, so the checked bindings' gates can pass.
 	m := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
@@ -772,6 +810,8 @@ func TestEveryFinalDashboardBindingDispatches(t *testing.T) {
 // different state after toggling the pane, so the same command left two
 // different models depending on how it was reached.
 func TestInspectorKeyMatchesThePaletteFromEitherPath(t *testing.T) {
+	t.Parallel()
+
 	base := withListRows(testModelWithSessions(), session.RunningSession{
 		TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt",
 	})

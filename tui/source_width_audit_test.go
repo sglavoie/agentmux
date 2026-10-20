@@ -167,6 +167,8 @@ func TestSourceAuditNoRawWidthAPIsOutsideHelper(t *testing.T) {
 // in-memory file that uses every banned identifier (under both renamed
 // and default-alias imports) and asserts every one is flagged.
 func TestSourceAuditDetectsViolationsInSyntheticFixture(t *testing.T) {
+	t.Parallel()
+
 	const src = `package fake
 
 import (
@@ -211,6 +213,8 @@ func bad(s string) int {
 // JoinHorizontal / JoinVertical / Wrap. Only the bare lipgloss.Width
 // selector is forbidden.
 func TestSourceAuditIgnoresAllowedLipglossStyleBuilders(t *testing.T) {
+	t.Parallel()
+
 	const src = `package fake
 
 import "charm.land/lipgloss/v2"

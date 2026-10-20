@@ -37,6 +37,8 @@ func filesystemTranscriptFixture(t *testing.T) (*config.Config, map[string]Reade
 }
 
 func TestCloneSessionEntriesDeepCopiesMemberships(t *testing.T) {
+	t.Parallel()
+
 	original := map[string]SessionMeta{
 		"claude:shared": {
 			Profiles: []string{"work", "personal"},
@@ -58,6 +60,8 @@ func TestCloneSessionEntriesDeepCopiesMemberships(t *testing.T) {
 }
 
 func TestFilesystemLoadStrictDiagnosticsAndMalformedRecovery(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	if err := os.WriteFile(path, []byte(`{"entries":`), 0o644); err != nil {
@@ -95,6 +99,8 @@ func TestFilesystemLoadStrictDiagnosticsAndMalformedRecovery(t *testing.T) {
 }
 
 func TestFilesystemLoadDoesNotQuarantineValidMetadataOnSidecarFailure(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	key := IndexKey(harness.Claude, "legacy")
@@ -243,6 +249,8 @@ func TestFilesystemRefreshReturnsSnapshotWhenQuarantineOrPersistenceFails(t *tes
 }
 
 func TestFilesystemRefreshKeepsPartialTranscriptDiscoveries(t *testing.T) {
+	t.Parallel()
+
 	cfg, readers, path := filesystemTranscriptFixture(t)
 	reader := readers[harness.Claude].(*fakeReader)
 	info, err := os.Stat(path)
@@ -268,6 +276,8 @@ func TestFilesystemRefreshKeepsPartialTranscriptDiscoveries(t *testing.T) {
 }
 
 func TestFilesystemTranscriptSearchRepairsUnreadableSidecar(t *testing.T) {
+	t.Parallel()
+
 	cfg, readers, _ := filesystemTranscriptFixture(t)
 	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "transcripts.json"))
 	if err != nil {

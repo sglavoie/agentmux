@@ -15,6 +15,8 @@ import (
 )
 
 func TestSaveLoad_Roundtrip(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	idx, err := LoadIndexAt(path)
@@ -62,6 +64,8 @@ func TestSaveLoad_Roundtrip(t *testing.T) {
 }
 
 func TestSearchTextPath_IsStableHashOfIndexKey(t *testing.T) {
+	t.Parallel()
+
 	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "transcripts.json"))
 	if err != nil {
 		t.Fatalf("LoadIndexAt: %v", err)
@@ -76,6 +80,8 @@ func TestSearchTextPath_IsStableHashOfIndexKey(t *testing.T) {
 }
 
 func TestSearchTextSidecar_WriteReadStatsAndDelete(t *testing.T) {
+	t.Parallel()
+
 	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "transcripts.json"))
 	if err != nil {
 		t.Fatalf("LoadIndexAt: %v", err)
@@ -131,6 +137,8 @@ func TestSearchTextSidecar_WriteReadStatsAndDelete(t *testing.T) {
 }
 
 func TestSave_WritesMetadataOnlyJSONAndSearchSidecar(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	idx, err := LoadIndexAt(path)
@@ -181,6 +189,8 @@ func TestSave_WritesMetadataOnlyJSONAndSearchSidecar(t *testing.T) {
 }
 
 func TestLoadIndex_MigratesLegacySearchTextToSidecars(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	key1 := IndexKey(harness.Claude, "legacy-1")
@@ -263,6 +273,8 @@ func TestLoadIndex_MigratesLegacySearchTextToSidecars(t *testing.T) {
 }
 
 func TestLoadIndex_RejectsTrailingJSONValue(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	if err := os.WriteFile(path, []byte(`{"entries":{}}{"entries":{}}`), 0o644); err != nil {
 		t.Fatalf("write index: %v", err)

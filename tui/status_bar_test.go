@@ -24,6 +24,8 @@ func assertStatusBarContains(t *testing.T, m Model, want string) {
 }
 
 func TestRenderStatusBarExactWidthNoTrailingNewline(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 24
 	m.toasts = []Toast{{
@@ -42,6 +44,8 @@ func TestRenderStatusBarExactWidthNoTrailingNewline(t *testing.T) {
 }
 
 func TestStatusBarSelectsLatestActiveToast(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 	m := testModel()
 	m.toasts = []Toast{
@@ -59,6 +63,8 @@ func TestStatusBarSelectsLatestActiveToast(t *testing.T) {
 }
 
 func TestStatusBarIgnoresExpiredToasts(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 	m := testModel()
 	m.toasts = []Toast{
@@ -88,6 +94,8 @@ func TestStatusBarIgnoresExpiredToasts(t *testing.T) {
 // the dashboard's row is a feedback slot, and what it does when nothing has
 // happened is asserted by TestDashboardFeedbackSlotIsBlankWhenIdle.
 func TestStatusBarFallbackBehavior(t *testing.T) {
+	t.Parallel()
+
 	picker := testModel()
 	picker.mode = ModePicker
 	picker.pickerSessions = []config.Session{{Title: "api"}, {Title: "db"}, {Title: "web"}}
@@ -151,6 +159,8 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 // inspector describes the selected row — and so is the "Health degraded" line,
 // which the header's indicator now names precisely instead of generically.
 func TestDashboardFeedbackSlotIsBlankWhenIdle(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width, m.height = 120, 32
 
@@ -168,6 +178,8 @@ func TestDashboardFeedbackSlotIsBlankWhenIdle(t *testing.T) {
 // An action error is the reason the slot exists. It must reach it even though
 // nothing else on the dashboard does.
 func TestDashboardFeedbackSlotCarriesActionErrors(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width, m.height = 120, 32
 	m.actionErr = errors.New("kitty refused the focus")
@@ -185,6 +197,8 @@ func TestDashboardFeedbackSlotCarriesActionErrors(t *testing.T) {
 // Every other root keeps the sticky status line under the footer, so the two
 // readings of the row never appear on one screen.
 func TestFeedbackRowSitsAboveTheFooterOnTheDashboardOnly(t *testing.T) {
+	t.Parallel()
+
 	dash := loadSessions(testModel(), makeSessions())
 	dash.width, dash.height = 120, 32
 	dash.actionErr = errors.New("marker error")
@@ -233,6 +247,8 @@ func TestFeedbackRowSitsAboveTheFooterOnTheDashboardOnly(t *testing.T) {
 // duplication the quiet chrome exists to remove. TestRenderListEmptyHeroNoSessions
 // and TestRenderListInitialLoadDoesNotClaimTheListIsEmpty pin the surviving copy.
 func TestDashboardFeedbackSlotDoesNotRepeatTheEmptyListHero(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 80
 	assertStatusBarLacks(t, m, "Loading sessions")
@@ -245,6 +261,8 @@ func TestDashboardFeedbackSlotDoesNotRepeatTheEmptyListHero(t *testing.T) {
 }
 
 func TestStatusBarPromotesTranscriptScanWithCachedResults(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:                   ModeSessionSearch,
 		width:                  100,

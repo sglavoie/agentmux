@@ -51,6 +51,8 @@ func lifecyclePayloadJSON(t *testing.T, schemaVersion int, contractSetID, projec
 }
 
 func TestAnIncompatibleLifecycleHookIsQuarantinedWithoutReduction(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name          string
 		schemaVersion int
@@ -124,6 +126,8 @@ func TestAnIncompatibleLifecycleHookIsQuarantinedWithoutReduction(t *testing.T) 
 // produce the same words, and resending must never be the advice. Both reasons
 // are daemon-authored constants for exactly that purpose.
 func TestTheHookRefusalIsStableAndNonRetryable(t *testing.T) {
+	t.Parallel()
+
 	payload := hookevent.HookPayload{Source: events.ASLHookSource, SchemaVersion: 1}
 	first := events.ASLHookContractRefusal(events.AgentSessionLoopTurnStarted, payload)
 	if first != events.ASLHookContractRefusal(events.AgentSessionLoopTurnStarted, payload) {
@@ -147,6 +151,8 @@ func TestTheHookRefusalIsStableAndNonRetryable(t *testing.T) {
 // function. A harness hook carries no compatibility block, is not asked to, and
 // reduces normally.
 func TestHarnessHooksAreUnaffectedByTheLifecycleGate(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	windows := hookEventWindows(palette.BuildTitle("api", "", false), []kitty.Window{{
 		ID:       42,

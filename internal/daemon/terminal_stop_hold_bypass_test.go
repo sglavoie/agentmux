@@ -186,6 +186,8 @@ func TestTerminalStopHold_UnrelatedProcessExitPreservesGate(t *testing.T) {
 }
 
 func TestSupersedesStopHold(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		req  protocol.Request
@@ -250,6 +252,8 @@ func TestTerminalStopHold_SupersededByPromptAndClear(t *testing.T) {
 // immediately": a reset-sensitive one still falls back to the reset class,
 // exactly as before the gate existed.
 func TestTerminalStopHold_BypassMatrix(t *testing.T) {
+	t.Parallel()
+
 	baseReq := protocol.Request{
 		Type:     protocol.TypeStateUpdate,
 		WindowID: 42,

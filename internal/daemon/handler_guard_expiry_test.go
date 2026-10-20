@@ -123,6 +123,8 @@ func restoreV1State(t *testing.T, h *Handler, windowID int, action string, at ti
 // window's own legacy source, so a benign non-prompt "active" arriving within
 // the grace cannot clear the unacknowledged stop — while a prompt still can.
 func TestHandler_RestoredStopSuppressesTrailingActiveWithinGrace(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler() // 1h guard → 3600s grace
 	restoreV1State(t, h, 1, "stop", time.Now())
 
@@ -141,6 +143,8 @@ func TestHandler_RestoredStopSuppressesTrailingActiveWithinGrace(t *testing.T) {
 }
 
 func TestHandler_ActiveAllowedByCurrentWarningIconAfterDaemonRestart(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	restoreV1State(t, h, 1, "failure", time.Now())
 
@@ -162,6 +166,8 @@ func TestHandler_ActiveAllowedByCurrentWarningIconAfterDaemonRestart(t *testing.
 // fact, so within the grace a benign non-prompt "active" cannot clear the
 // unacknowledged failure. A prompt is authoritative recovery.
 func TestHandler_RestoredErrorStaysStickyUntilPromptRecovery(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	restoreV1State(t, h, 1, "stop_failure", time.Now())
 

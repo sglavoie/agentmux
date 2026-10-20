@@ -8,6 +8,8 @@ import (
 )
 
 func TestUITestModalLayoutRegressions(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		fixture string
@@ -109,6 +111,8 @@ func TestUITestModalLayoutRegressions(t *testing.T) {
 }
 
 func TestUITestNarrowConfigPickerFits(t *testing.T) {
+	t.Parallel()
+
 	obs, err := RunUITestFixture("wide_profiles", UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, []UITestAction{
 		{Type: UITestActionKey, Key: keyA},
 		{Type: UITestActionKey, Key: keyDashboardLaunch},

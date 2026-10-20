@@ -43,6 +43,8 @@ func newTestIndex(t *testing.T) *Index {
 }
 
 func TestRefresh_PopulatesEntriesAndSkipsSources(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planA := seedPlanDir(t, root, "alpha-aabb112233cc-ddee445566ff", map[string]string{
 		"manifest.md":  "# alpha plan\n\nfirst line is the title",
@@ -159,6 +161,8 @@ func TestRefresh_RelativeRootStoresAbsolutePaths(t *testing.T) {
 }
 
 func TestRefresh_PrefersManifestSnippet(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		// "00-context.md" sorts alphabetically before "manifest.md"
@@ -181,6 +185,8 @@ func TestRefresh_PrefersManifestSnippet(t *testing.T) {
 }
 
 func TestRefresh_FallsBackToFirstFileSnippetWhenNoManifest(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"00-overview.md": "overview opening line",
@@ -201,6 +207,8 @@ func TestRefresh_FallsBackToFirstFileSnippetWhenNoManifest(t *testing.T) {
 }
 
 func TestRefresh_SkipsPlanWithNoMarkdown(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	_ = seedPlanDir(t, root, "empty-plan-aabb112233cc", map[string]string{
 		"notes.txt": "no markdown here",
@@ -216,6 +224,8 @@ func TestRefresh_SkipsPlanWithNoMarkdown(t *testing.T) {
 }
 
 func TestRefresh_WalksDepthTwoOnly(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "deep-aabb112233cc", map[string]string{
 		"manifest.md":      "# manifest",

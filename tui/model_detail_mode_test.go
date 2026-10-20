@@ -23,6 +23,8 @@ func detailSessions() []session.RunningSession {
 }
 
 func TestShowDetailsCommandOpensDetailMode(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	want := m.filtered[m.cursor].WindowID
 	got, cmd := runDashboardCommand(t, m, commands.ShowDetails)
@@ -45,6 +47,8 @@ func TestShowDetailsCommandOpensDetailMode(t *testing.T) {
 // bug the second test below existed to pin. Both are palette commands now, so
 // neither can shadow the other, and the key itself is inert.
 func TestRetiredDetailKeyIsInertAtTheList(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name     string
 		sessions []session.RunningSession
@@ -74,6 +78,8 @@ func TestRetiredDetailKeyIsInertAtTheList(t *testing.T) {
 
 // The dismissal itself survives as a palette command, independent of detail.
 func TestDismissDeprecationCommandSilencesTheNotice(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	m.deprecations = []config.Deprecation{{Key: "stale_active_threshold", Replacement: "[defaults.watchdog].active"}}
 	m.deprecationDismissed = false
@@ -88,6 +94,8 @@ func TestDismissDeprecationCommandSilencesTheNotice(t *testing.T) {
 }
 
 func TestDetailEventsMsgPopulatesEvents(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	{
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
@@ -112,6 +120,8 @@ func TestDetailEventsMsgPopulatesEvents(t *testing.T) {
 }
 
 func TestDetailEventsMsgStaleIsIgnored(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	{
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
@@ -133,6 +143,8 @@ func TestDetailEventsMsgStaleIsIgnored(t *testing.T) {
 }
 
 func TestDetailEventsMsgErrorPropagates(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	{
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
@@ -153,6 +165,8 @@ func TestDetailEventsMsgErrorPropagates(t *testing.T) {
 }
 
 func TestDetailEscReturnsToListAndZerosFields(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	{
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
@@ -180,6 +194,8 @@ func TestDetailEscReturnsToListAndZerosFields(t *testing.T) {
 // `d` survives inside the detail view as the key that closes it, the same way
 // `A` survives inside ASL Runs. Only the dashboard half of the toggle is gone.
 func TestDetailDKeyClosesTheViewItNoLongerOpens(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	m = pressDashboardCommand(t, m, commands.ShowDetails)
 	if m.mode != ModeDetail {
@@ -195,6 +211,8 @@ func TestDetailDKeyClosesTheViewItNoLongerOpens(t *testing.T) {
 }
 
 func TestDetailTKeyTogglesTimeline(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	updated, cmd := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
 	m = updated.(Model)
@@ -229,6 +247,8 @@ func TestDetailTKeyTogglesTimeline(t *testing.T) {
 }
 
 func TestDetailScrollKeys(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	{
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
@@ -273,6 +293,8 @@ func TestDetailScrollKeys(t *testing.T) {
 }
 
 func TestHelpListsDetailKey(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 0
@@ -288,6 +310,8 @@ func TestHelpListsDetailKey(t *testing.T) {
 // leaves the detail pane mode and windowID intact so the new live-refresh
 // query (added in Session 5) re-targets the correct window.
 func TestTickInDetailModePreservesPaneState(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	{
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
@@ -314,6 +338,8 @@ func TestTickInDetailModePreservesPaneState(t *testing.T) {
 // the next j/k press would have to chew through dead rows before the
 // viewport reacts.
 func TestDetailEventsMsgClampsScrollOnShrink(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	{
 		mm, _ := m.enterDetailMode(m.filtered[m.cursor].WindowID, false)
@@ -348,6 +374,8 @@ func TestDetailEventsMsgClampsScrollOnShrink(t *testing.T) {
 // must not repopulate detailEvents. Sets detailWindowID directly so the
 // windowID guard alone cannot account for the drop.
 func TestDetailEventsMsgIgnoredOutsideDetailMode(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	m.detailWindowID = m.filtered[m.cursor].WindowID
 	// Mode intentionally stays ModeList — exercises the new m.mode guard.
@@ -366,6 +394,8 @@ func TestDetailEventsMsgIgnoredOutsideDetailMode(t *testing.T) {
 }
 
 func TestSessionDetailsMetadataToggleKeepsEventNavigation(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), detailSessions())
 	selected, ok := m.selectedSession()
 	if !ok {
