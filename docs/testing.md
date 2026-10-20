@@ -9,7 +9,10 @@ just check
 
 `just acceptance` runs the full Go suite, race-sensitive transcript, plan,
 handoff, worktree, daemon, and TUI tests, `go vet`, and every committed TUI
-scenario. `just check` adds the repository linter and is the final local/CI
+scenario. The scenarios run inside the Go suite, twice over: `cmd/tuitest`
+runs them through the CLI exactly as `just tui-scenarios` does, under a
+sentinel `HOME` that must come back untouched, and `tui` runs them in-package
+against the README inventory. `just check` adds the repository linter and is the final local/CI
 gate. The end-to-end coverage map is documented in
 [`docs/acceptance.md`](acceptance.md).
 

@@ -220,12 +220,17 @@ func TestExitCodeDistinguishesFailureFromInvalid(t *testing.T) {
 const committedScenariosDir = "../../docs/tui-testing/scenarios"
 
 // TestTUITestRunCommittedScenariosEndToEnd drives every committed example
-// scenario through the real CLI run path in one invocation and asserts the
-// harness emits a stable JSON array of passing results, exits zero, and stays
-// silent on stderr. This is the end-to-end complement to the in-process
-// tui.TestExampleScenariosParseAndPass drift guard: it proves the same files
-// pass through flag parsing, scenario staging, and result encoding, not just the
-// package-level runner.
+// scenario through the real CLI run path in one invocation, the way
+// `just tui-scenarios` runs them, and asserts the harness emits a stable JSON
+// array of passing results, exits zero, and stays silent on stderr. This is the
+// end-to-end complement to the in-process tui.TestExampleScenariosParseAndPass
+// drift guard: it proves the same files pass through flag parsing, scenario
+// staging, and result encoding, not just the package-level runner.
+//
+// The same run is the isolation check for the committed set: it happens under
+// a sentinel HOME, and every file there must survive byte for byte. One run
+// serves both claims because each pass over the scenarios costs tens of
+// seconds.
 func TestTUITestRunCommittedScenariosEndToEnd(t *testing.T) {
 	entries, err := os.ReadDir(committedScenariosDir)
 	if err != nil {
@@ -242,9 +247,11 @@ func TestTUITestRunCommittedScenariosEndToEnd(t *testing.T) {
 		t.Fatalf("no committed scenarios found in %s", committedScenariosDir)
 	}
 
+	home, files := sentinelHome(t)
 	args := append([]string{"tui-test", "run"}, paths...)
 	args = append(args, "--json")
 	stdout, stderr, err := runRootArgs(t, args...)
+	requireUntouched(t, home, files)
 	if err != nil {
 		t.Fatalf("committed scenarios returned error: %v (stderr=%q)", err, stderr)
 	}

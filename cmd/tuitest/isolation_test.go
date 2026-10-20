@@ -103,17 +103,3 @@ func TestFixtureRunsLeaveTheUsersHomeAlone(t *testing.T) {
 		t.Fatalf("HOME after the runs = %q; want it restored to %q", got, home)
 	}
 }
-
-// Every committed scenario, run the way `just tui-scenarios` runs them.
-func TestCommittedScenariosLeaveTheUsersHomeAlone(t *testing.T) {
-	scenarios, err := filepath.Glob("../../docs/tui-testing/scenarios/*.json")
-	if err != nil || len(scenarios) == 0 {
-		t.Fatalf("no committed scenarios found: %v", err)
-	}
-	home, files := sentinelHome(t)
-	args := append([]string{"tui-test", "run"}, scenarios...)
-	if _, stderr, err := runRootArgs(t, args...); err != nil {
-		t.Fatalf("run: %v (stderr=%q)", err, stderr)
-	}
-	requireUntouched(t, home, files)
-}

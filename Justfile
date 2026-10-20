@@ -58,6 +58,9 @@ fmt-check:
 race-core:
     go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
 
+# `just test` already runs the same set through the same CLI path (see the
+# acceptance recipe), so this is for running them by hand.
+#
 # Run every committed narrow/wide TUI acceptance scenario in isolation
 tui-scenarios:
     go run . tui-test run docs/tui-testing/scenarios/*.json
@@ -540,8 +543,15 @@ paired-release-gate asl_root signing_key="" tag="no":
 # failure says the least about the change: a formatting drift found after a
 # twenty-minute race suite is a twenty-minute wait for a one-command fix.
 #
+# Every committed TUI scenario runs inside `test`, so tui-scenarios is not
+# repeated here: cmd/tuitest's TestTUITestRunCommittedScenariosEndToEnd runs
+# the same files through the same CLI path that recipe does (under a sentinel
+# HOME that must come back untouched), and tui's
+# TestExampleScenariosParseAndPass runs them in-package against the README
+# inventory. The tui-scenarios recipe stays for running them by hand.
+#
 # Run product acceptance: gofmt, tests, race suites, vet, TUI scenarios (no linter)
-acceptance: fmt-check test race-core vet tui-scenarios
+acceptance: fmt-check test race-core vet
 
 # golangci-lint's default lock is machine-wide, not repository-scoped, so a
 # linter running in an unrelated checkout would otherwise fail this gate.
