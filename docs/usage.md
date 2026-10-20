@@ -1,157 +1,26 @@
 # Usage
 
-## Dashboard views and continuity
+## Contents
 
-The default TUI opens on the live-session dashboard and selects the session
-it was opened from when possible: the tmux session a popup is over, or the
-Kitty tab. It runs in any terminal; Kitty is one of two backends and is never
-required ([The tmux backend](#the-tmux-backend-and-kitty)). `/` filters the live-session
-list; `:` opens the command palette, from which **Search All Past Sessions**
-opens Past Sessions and **Search Plans** opens Plans.
-
-Beside it, `amx overview` (bound to `F2`) opens the
-[live session overview](#live-session-overview): a separate program that shows
-every managed session at once as a grid of live pane previews.
-
-The same workflows are scriptable. Machine-readable commands use one
-`{"schema_version":1,"data":...}` success envelope; failures use a structured
-`error` envelope and ambiguous selectors return candidates instead of guessing.
-
-```bash
-amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls or the background-task notices Claude Code writes as prompts), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or Kitty could not be asked), and that last reply (empty when there was none) when piped
-amx session list --json
-amx session list --since 7d   # only sessions active in the last week (or 2w, 12h, 90m, …)
-amx session list --here -n 5  # the five latest sessions started in this directory or below it
-amx session list --harness codex --profile codex-work   # both repeatable
-amx session list --project amx   # one project's sessions; "amx" reaches "🐱amx" as project launch reads it, and a directory-named project works too (repeatable)
-amx session list --live       # only conversations open right now, in a Kitty tab or a tmux session; refused, not empty, when the daemon (or Kitty, for a Kitty tab) cannot say
-amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
-amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
-amx session search race daemon            # conversations mentioning both words, newest first, with match counts and a matched line (one you or the agent wrote before tool output); the conversation you search from comes last, and a terminal says how many automated sessions also match
-amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
-amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output, including Claude's background-task notices)
-amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is live, message count, transcript path, how it ended, and the commands that continue or fork it
-cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
-amx session show 09467ec1 --last 4       # the same, then its last 4 user and assistant messages in full, oldest first
-amx session show 09467ec1 --find '"race condition"' --match 2 --count 50  # prose around the second matching message
-amx session show 09467ec1 --from 100 --count 50 --json  # a bounded message window, with zero-based message ordinals
-amx session show 09467ec1 --at 2026-10-17T12:00:00Z --count 50 --json # supporting assistant output at or before an event
-amx session continue codex <session-id>
-amx session continue --here   # the most recently active conversation started in this directory or below it, named on stderr before acting
-amx session fork claude <session-id>
-amx session fork-worktree codex <session-id> --yes
-amx session handoff claude:<session-id> --profile codex-work
-```
-
-`session show --at` opens a bounded window around the latest timestamped assistant
-message at or before the given RFC3339 event time, including old messages outside
-the recent tail. It returns `focus_message` when one exists; otherwise it returns
-recent messages without attributing them to the event. It cannot be combined with
-`--last`, `--find`, or `--from`. Activity uses this same lookup when opening History,
-briefly highlights the located message, and returns focus to Activity when History
-closes. Opening a conversation does not mark the event read.
-
-`session show --find` uses the same terms and quoted phrases as search. It
-navigates user/assistant prose only; a match confined to tool output or hidden
-reasoning is not exposed. `--match` is one-based; `--from` and the JSON
-`messages_start`, `match_messages`, and `focus_message` ordinals are zero-based.
-Window size defaults to 50 and is limited to 500; `--last` remains a separate
-way to request the tail. JSON includes `match_terms` for highlighting.
-
-`continue`, `fork`, and `fork-worktree` also accept the single
-`<harness>:<session-id>` selector that `handoff` takes, so
-`amx session continue codex:<session-id>` works too. All four also accept a
-bare `<session-id>`: it resolves when exactly one indexed conversation carries
-that ID, and an ID shared across harnesses is refused with the
-harness-qualified candidates rather than guessed. Any of these forms may give
-just the start of the ID, at least four characters, the way a short Git hash
-works: `amx session continue 7f67dc81`. An exact ID always wins over a longer
-one it begins, and a prefix that several conversations share is refused with
-every candidate.
-
-`session continue` opens the exact live session when one exists—attaching on
-tmux or focusing its Kitty tab—and otherwise resumes the closed conversation. `session list` and `session search`
-in a terminal mark those conversations with `●` in a LIVE column, and the one
-open in the window the command runs in with `here`; `session show` identifies their live backend target, and all three put the tab under `live` in `--json`; when the daemon or
-Kitty cannot be asked, the column and line are left out rather than reporting
-nothing open. Native forks are used for Claude
-and Codex. Copilot forks use a portable handoff because Copilot does not expose
-native fork semantics. Worktree forks create a tracked isolated Git worktree
-and never copy uncommitted changes unless `--allow-dirty` is explicitly
-confirmed.
-
-## Launch destinations
-
-| Entry point | Destination |
-| --- | --- |
-| CLI launch commands | `--backend`, then `[defaults] launch_backend`, then Kitty for compatibility |
-| Terminal dashboard | Configured backend; when unset, tmux outside Kitty and Kitty inside it |
-| App → Launch Project | App Settings → **Launch projects in**: Workspace (default), Kitty, or Follow CLI configuration; the last reads the CLI default again before launching |
-| App → Run a Plan | Workspace (tmux), shown beside the supervisor selection |
-| Open an existing live session | Its recorded backend; launch preferences do not move it |
-
-The launcher header names its actual destination and its source (`--backend`,
-`config.toml`, the workspace host, or the terminal/compatibility default).
-In the launcher, `Ctrl+e` opens configuration. The dashboard reloads valid edits
-automatically, including `launch_backend`; an open form or confirmation keeps its
-captured settings until it finishes. Invalid edits retain the previous configuration
-and show a notice. Daemon settings still require `amx daemon restart`. The status line names the
-highlighted project's effective profile, including a one-time override. App
-Settings also reports the CLI backend so an override is visible. The app's
-Launch Project menu repeats the destination above the profile groups.
-
-## Session lifecycle
-
-**End Session** stops the agent; its saved conversation remains available.
-**Detach Terminal** leaves the agent running. **Close View** ends a utility
-program such as a shell or editor. These names have the same meaning in the
-native app, Dashboard, and Overview. `amx close` keeps its command name and
-requires `--yes`; it performs End Session.
-
-The TUI's `confirm_destructive` setting controls End Session, restart, and
-restart under another profile, including in the app's embedded Dashboard and
-Overview. Native menus and sidebar actions use the separate **Confirm before
-closing views or ending sessions** preference. Neither setting turns detaching
-into ending a session. Recovery after End Session offers Resume or Relaunch
-for 30 seconds; it does not restore the terminated process or unsaved work.
-
-## Action feedback
-
-Retained notices reserve space for `: feedback ↵`: open the command palette,
-type `feedback`, and press Enter to read the full notice. Details separate what
-happened, any unconfirmed outcome, and the next step.
-
-Failed and unconfirmed dashboard actions remain available in `:` → **Show
-Action Feedback**, even after later actions succeed. Each notice carries its
-first occurrence time and, when known, the session it concerns. `Tab` and
-`Shift+Tab` select notices; `j`/`k`, page keys, and `g`/`G` scroll long messages.
-Press `y` to copy the selected message or `Y` to copy all notices; `d` dismisses
-the selected notice and `D` dismisses all completed notices. Active operations
-and available session recovery remain visible.
-
-`Enter` inspects the notice's session without attaching or repeating the action;
-notices without a session open health details. `h` opens health, `c` opens the
-configuration in the configured editor, and `Esc` returns to the dashboard.
-`u` recovers the most recently ended session while its countdown is visible.
-
-A lifecycle operation still awaiting its result after ten seconds says **Still
-waiting**. This is not a timeout verdict or permission to repeat it: inspect
-the live session and connection health first. A late result replaces that
-operation's notice. Dismissing a notice does not cancel the operation.
-Successful feedback clears after four seconds, except a send whose form was
-closed: its outcome remains until dismissed. End Session recovery keeps
-its separate 30-second deadline. Notices live for this dashboard process.
-Recovery resumes the exact conversation when its identity is known, validating
-its transcript first. Otherwise it explicitly offers a project relaunch. A failed
-resume never silently starts a fresh conversation.
-
-## Terminal appearance
-
-The dashboard, overview, and pickers adapt their colors to the terminal's
-reported background. If the terminal cannot report it, the dark palette is
-used. Set `AMX_TUI_THEME=light`, `dark`, or `auto` to override or restore
-automatic selection, for example `AMX_TUI_THEME=light amx`. Captured agent
-output keeps its original colors.
+- [Dashboard](#dashboard): keys, triage order, layout, project switcher,
+  Projects view, header and footer
+- [Dashboard views and continuity](#dashboard-views-and-continuity):
+  `amx session list|search|show|continue|fork|handoff`
+- [Session lifecycle](#session-lifecycle), [Action feedback](#action-feedback),
+  [Terminal appearance](#terminal-appearance)
+- [Live session overview](#live-session-overview)
+- [The agent-session-loop cockpit](#the-agent-session-loop-cockpit)
+- [Launcher](#launcher): [launch destinations](#launch-destinations),
+  [the tmux backend, and Kitty](#the-tmux-backend-and-kitty),
+  [launching from a shell](#launching-from-a-shell)
+- [Answering or prompting an agent without attaching](#answering-or-prompting-an-agent-without-attaching) (`amx send`)
+- [Managed worktrees](#managed-worktrees)
+- [Past sessions](#past-sessions)
+- [Plans and local storage](#plans-and-local-storage):
+  [starting a run of a plan](#starting-a-run-of-a-plan),
+  [local storage](#local-storage)
+- [Filter DSL](#filter-dsl)
+- Upgrading from an older release: [docs/upgrading.md](upgrading.md)
 
 ## Dashboard
 
@@ -173,9 +42,9 @@ through two surfaces it opens: `a` for the row under the cursor, `:` for the
 rest. Both are browsable lists you move a cursor through rather than sheets of
 letters to aim at, and both read the same declaration of what a session action
 is, so they cannot disagree about which actions exist or when one is allowed.
-If you are upgrading from a release with the larger direct keymap, see
-[Upgrading from the old dashboard shortcuts](#upgrading-from-the-old-dashboard-shortcuts)
-below for where each key went.
+If you are upgrading from a release with the larger direct keymap,
+[Upgrading from the old dashboard shortcuts](upgrading.md#upgrading-from-the-old-dashboard-shortcuts)
+says where each key went.
 
 - `j`/`k` or `↑`/`↓`: move the cursor, or scroll the inspector when it has focus
 - `PgUp`/`PgDn`, `Home`/`End`: page, or jump to the ends of the focused pane
@@ -254,7 +123,8 @@ supports less-style `Ctrl+d/u/f/b` paging, and `y` copies the selected raw
 line), **Manage Worktrees**, **Show Runs** (the `agent-session-loop`
 intervention cockpit), **Show Projects View** / **Show Urgency View**, **Cycle
 Profile Filter**, **Show Session Details** and **Show Session Timeline** (the
-per-session hook event log), **Resort Tabs**, and **Resume Last Ended Conversation** or **Relaunch Last Ended Session**.
+per-session hook event log), **Resort Tabs**, and **Recover Ended Session** (it resumes the exact conversation when known,
+otherwise relaunches the project).
 
 The dashboard profile cycle is an `@profile` filter: it follows
 case-insensitive alphabetical profile order, preserves any active word,
@@ -269,42 +139,6 @@ does nothing on them. Its shortcut labels are references: printable keys edit
 the query while the palette is open. A command shows a shortcut only when the
 dashboard actually binds one, so the palette never advertises a key that no
 longer dispatches. `:` does not open the palette from other modes.
-
-### Upgrading from the old dashboard shortcuts
-
-The dashboard used to bind roughly thirty keys directly. It binds twelve now,
-and the rest of the capabilities moved to the two surfaces above — no capability
-was dropped. A retired key is *unbound* rather than rebound: pressing it does
-nothing at all, so nothing you remember can now mean something else.
-
-| You used to press | Do this instead |
-| --- | --- |
-| `space` (focus) | `Enter` |
-| `e` peek, `r` restart, `c` profile override, `C` launch another, `x` clear icon, `X` close, `o` shell, `O` editor, `y` copy title, `L` lock, `m` mute | `a`, then the same letter. The menu's mnemonics are unchanged; you can also move to the entry and press `Enter` |
-| `u` undo close | `u` — it came back. What it undoes expires after 30 seconds, and a capability that has to be found by name before it lapses is not reachable. `:` → **Resume Last Ended Conversation** or **Relaunch Last Ended Session** still works |
-| `s` / `S` past sessions | `s` / `S` — both came back for browsing. `:` → **Search This Project's Past Sessions** / **Search All Past Sessions** still works |
-| `P` plans, `W` worktrees, `A` runs | `:` → **Search Plans** / **Manage Worktrees** / **Show Runs** |
-| `d` session detail, `T` timeline | `i` for the inspector, or `:` → **Show Session Details** / **Show Session Timeline** |
-| `v` urgency ↔ projects | `:` → **Show Projects View** / **Show Urgency View** |
-| `f` cycle profile | `:` → **Cycle Profile Filter**, or `/` for any filter component |
-| `R` resort tabs | `:` → **Resort Tabs** |
-| `p` preview | `i` — the inspector absorbed it. `p` is the project switcher now, which is the one key whose meaning changed rather than disappearing |
-| `b` project rail | `p` — the rail is gone; the switcher applies the same scopes |
-| `g` / `G` | Restored as aliases for `Home` / `End`, including the dashboard's focused queue or inspector |
-| `Ctrl+d` / `Ctrl+u` | Restored half-page movement in the focused pane; `PgUp` / `PgDn` move a full page |
-| `]`/`[`, `]]`/`[[`, `}`/`{` attention jumps | `n`/`N`. The chord is gone, and so is the variant that focused the terminal on arrival: press `Enter` when you want that |
-| `Tab` chip cycling, `1`–`9` chip removal, `Backspace` on a focused chip | `/`, which now opens on the filter already applied; `Backspace` removes the last component. `Tab` switches panes instead |
-| `←`/`→` to fold a family | `Enter` on the family summary |
-
-Two configuration keys changed meaning with them. `[defaults.jump]` no longer
-selects anything — `n`/`N` walk the Needs You group as displayed — and is
-reported as a deprecated key until you delete it; your config file is never
-rewritten. `[defaults.preview]` still sets the live pane's ratio, refresh, and
-minimum size, now for the dashboard's inspector as well as the launcher's
-preview; `direction` applies to the launcher only.
-
-The full row-by-row record, including which surface each retired key's
-capability went to, is `docs/dashboard-keymap-inventory.md`.
 
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
 workspace matches the project row. Loop matching canonicalizes the workspace
@@ -447,13 +281,10 @@ single-checkout project and a session that resolved to no project at all both
 render as ordinary top-level rows, which keeps a summary a claim about a group
 rather than decoration on a lone session.
 
-Tree keys, all of which are inert in the urgency view:
+Tree key, inert in the urgency view:
 
-- `→`: expand the selected project
-- `←`: collapse the selected project; pressed on a session it selects that
-  session's project first, so two presses fold the project you are inside
-- `enter` / `space`: fold or unfold the selected project. This is the one place
-  these keys do not act on a session — on a project summary every session action
+- `enter`: fold or unfold the selected project. This is the one place
+  the key does not act on a session — on a project summary every session action
   (focus, restart, close, peek, open directory) is refused rather than applied to
   a guessed member.
 
@@ -508,6 +339,139 @@ The detail pane's event history persists through terminal hooks (`Stop`,
 review what a session did after its icon clears. History is held in memory per
 Kitty window and capped at 5 000 events (oldest dropped); it is released only
 when the window closes or the daemon restarts.
+
+## Dashboard views and continuity
+
+The default TUI opens on the live-session dashboard and selects the session
+it was opened from when possible: the tmux session a popup is over, or the
+Kitty tab. It runs in any terminal; Kitty is one of two backends and is never
+required ([The tmux backend](#the-tmux-backend-and-kitty)). `/` filters the live-session
+list; `:` opens the command palette, from which **Search All Past Sessions**
+opens Past Sessions and **Search Plans** opens Plans.
+
+Beside it, `amx overview` (bound to `F2`) opens the
+[live session overview](#live-session-overview): a separate program that shows
+every managed session at once as a grid of live pane previews.
+
+The same workflows are scriptable. Machine-readable commands use one
+`{"schema_version":1,"data":...}` success envelope; failures use a structured
+`error` envelope and ambiguous selectors return candidates instead of guessing.
+
+```bash
+amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls or the background-task notices Claude Code writes as prompts), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or Kitty could not be asked), and that last reply (empty when there was none) when piped
+amx session list --json
+amx session list --since 7d   # only sessions active in the last week (or 2w, 12h, 90m, …)
+amx session list --here -n 5  # the five latest sessions started in this directory or below it
+amx session list --harness codex --profile codex-work   # both repeatable
+amx session list --project amx   # one project's sessions; "amx" reaches "🐱amx" as project launch reads it, and a directory-named project works too (repeatable)
+amx session list --live       # only conversations open right now, in a Kitty tab or a tmux session; refused, not empty, when the daemon (or Kitty, for a Kitty tab) cannot say
+amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
+amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
+amx session search race daemon            # conversations mentioning both words, newest first, with match counts and a matched line (one you or the agent wrote before tool output); the conversation you search from comes last, and a terminal says how many automated sessions also match
+amx session search '"race condition"' --here --since 7d   # a quoted phrase; takes every list selector
+amx session search --source user flaky    # only your own prompts (or --source harness for the agent's output, including Claude's background-task notices)
+amx session show 09467ec1                 # one conversation: title, directory, ages, whether it is live, message count, transcript path, how it ended, and the commands that continue or fork it
+cd "$(amx session show 09467ec1 --json | jq -r .data.session.cwd)"
+amx session show 09467ec1 --last 4       # the same, then its last 4 user and assistant messages in full, oldest first
+amx session show 09467ec1 --find '"race condition"' --match 2 --count 50  # prose around the second matching message
+amx session show 09467ec1 --from 100 --count 50 --json  # a bounded message window, with zero-based message ordinals
+amx session show 09467ec1 --at 2026-10-17T12:00:00Z --count 50 --json # supporting assistant output at or before an event
+amx session continue codex <session-id>
+amx session continue --here   # the most recently active conversation started in this directory or below it, named on stderr before acting
+amx session fork claude <session-id>
+amx session fork-worktree codex <session-id> --yes
+amx session handoff claude:<session-id> --profile codex-work
+```
+
+`session show --at` opens a bounded window around the latest timestamped assistant
+message at or before the given RFC3339 event time, including old messages outside
+the recent tail. It returns `focus_message` when one exists; otherwise it returns
+recent messages without attributing them to the event. It cannot be combined with
+`--last`, `--find`, or `--from`. Activity uses this same lookup when opening History,
+briefly highlights the located message, and returns focus to Activity when History
+closes. Opening a conversation does not mark the event read.
+
+`session show --find` uses the same terms and quoted phrases as search. It
+navigates user/assistant prose only; a match confined to tool output or hidden
+reasoning is not exposed. `--match` is one-based; `--from` and the JSON
+`messages_start`, `match_messages`, and `focus_message` ordinals are zero-based.
+Window size defaults to 50 and is limited to 500; `--last` remains a separate
+way to request the tail. JSON includes `match_terms` for highlighting.
+
+`continue`, `fork`, and `fork-worktree` also accept the single
+`<harness>:<session-id>` selector that `handoff` takes, so
+`amx session continue codex:<session-id>` works too. All four also accept a
+bare `<session-id>`: it resolves when exactly one indexed conversation carries
+that ID, and an ID shared across harnesses is refused with the
+harness-qualified candidates rather than guessed. Any of these forms may give
+just the start of the ID, at least four characters, the way a short Git hash
+works: `amx session continue 7f67dc81`. An exact ID always wins over a longer
+one it begins, and a prefix that several conversations share is refused with
+every candidate.
+
+`session continue` opens the exact live session when one exists—attaching on
+tmux or focusing its Kitty tab—and otherwise resumes the closed conversation. `session list` and `session search`
+in a terminal mark those conversations with `●` in a LIVE column, and the one
+open in the window the command runs in with `here`; `session show` identifies their live backend target, and all three put the tab under `live` in `--json`; when the daemon or
+Kitty cannot be asked, the column and line are left out rather than reporting
+nothing open. Native forks are used for Claude
+and Codex. Copilot forks use a portable handoff because Copilot does not expose
+native fork semantics. Worktree forks create a tracked isolated Git worktree
+and never copy uncommitted changes unless `--allow-dirty` is explicitly
+confirmed.
+
+## Session lifecycle
+
+**End Session** stops the agent; its saved conversation remains available.
+**Detach Terminal** leaves the agent running. **Close View** ends a utility
+program such as a shell or editor. These names have the same meaning in the
+native app, Dashboard, and Overview. `amx close` keeps its command name and
+requires `--yes`; it performs End Session.
+
+The TUI's `confirm_destructive` setting controls End Session, restart, and
+restart under another profile, including in the app's embedded Dashboard and
+Overview. Native menus and sidebar actions use the separate **Confirm before
+closing views or ending sessions** preference. Neither setting turns detaching
+into ending a session. Recovery after End Session offers Resume or Relaunch
+for 30 seconds; it does not restore the terminated process or unsaved work.
+
+## Action feedback
+
+Retained notices reserve space for `: feedback ↵`: open the command palette,
+type `feedback`, and press Enter to read the full notice. Details separate what
+happened, any unconfirmed outcome, and the next step.
+
+Failed and unconfirmed dashboard actions remain available in `:` → **Show
+Action Feedback**, even after later actions succeed. Each notice carries its
+first occurrence time and, when known, the session it concerns. `Tab` and
+`Shift+Tab` select notices; `j`/`k`, page keys, and `g`/`G` scroll long messages.
+Press `y` to copy the selected message or `Y` to copy all notices; `d` dismisses
+the selected notice and `D` dismisses all completed notices. Active operations
+and available session recovery remain visible.
+
+`Enter` inspects the notice's session without attaching or repeating the action;
+notices without a session open health details. `h` opens health, `c` opens the
+configuration in the configured editor, and `Esc` returns to the dashboard.
+`u` recovers the most recently ended session while its countdown is visible.
+
+A lifecycle operation still awaiting its result after ten seconds says **Still
+waiting**. This is not a timeout verdict or permission to repeat it: inspect
+the live session and connection health first. A late result replaces that
+operation's notice. Dismissing a notice does not cancel the operation.
+Successful feedback clears after four seconds, except a send whose form was
+closed: its outcome remains until dismissed. End Session recovery keeps
+its separate 30-second deadline. Notices live for this dashboard process.
+Recovery resumes the exact conversation when its identity is known, validating
+its transcript first. Otherwise it explicitly offers a project relaunch. A failed
+resume never silently starts a fresh conversation.
+
+## Terminal appearance
+
+The dashboard, overview, and pickers adapt their colors to the terminal's
+reported background. If the terminal cannot report it, the dark palette is
+used. Set `AMX_TUI_THEME=light`, `dark`, or `auto` to override or restore
+automatic selection, for example `AMX_TUI_THEME=light amx`. Captured agent
+output keeps its original colors.
 
 ## Live session overview
 
@@ -816,6 +780,27 @@ is an explicit request for new tab(s): if the selected project/profile is
 already running, Agent Mux opens another instance instead of skipping or
 focusing the existing tab.
 
+### Launch destinations
+
+| Entry point | Destination |
+| --- | --- |
+| CLI launch commands | `--backend`, then `[defaults] launch_backend`, then Kitty for compatibility |
+| Terminal dashboard | Configured backend; when unset, tmux outside Kitty and Kitty inside it |
+| App → Launch Project | App Settings → **Launch projects in**: Workspace (default), Kitty, or Follow CLI configuration; the last reads the CLI default again before launching |
+| App → Run a Plan | Workspace (tmux), shown beside the supervisor selection |
+| Open an existing live session | Its recorded backend; launch preferences do not move it |
+
+The launcher header names its actual destination and its source (`--backend`,
+`config.toml`, the workspace host, or the terminal/compatibility default).
+In the launcher, `Ctrl+e` opens configuration. The dashboard reloads valid edits
+automatically; an open form or confirmation keeps its captured settings until it
+finishes. The backend a dashboard launches on is chosen when it starts, so restart
+the dashboard after changing `launch_backend`. Invalid edits retain the previous configuration
+and show a notice. Daemon settings still require `amx daemon restart`. The status line names the
+highlighted project's effective profile, including a one-time override. App
+Settings also reports the CLI backend so an override is visible. The app's
+Launch Project menu repeats the destination above the profile groups.
+
 ### The tmux backend, and Kitty
 
 The dashboard and the overview run in any terminal — stock Ghostty, Terminal,
@@ -873,66 +858,7 @@ already stopped cleans up what is left of it, and closing one that is already
 gone succeeds with `closed: false` under `--json`. It refuses a Kitty runtime
 session (`unsupported_backend`): close its tab instead.
 
-#### Answering or prompting an agent without attaching
-
-`amx send` writes to a running agent's terminal with nothing attached, and
-takes the session from nobody who has it:
-
-```bash
-amx send ID "run the tests and fix what fails"   # pasted as one prompt, then entered
-git diff | amx send ID --stdin --no-enter         # typed into its prompt box, not entered
-amx send ID --key 1                               # answer the permission prompt it is showing
-amx send ID --key down --key enter --wait 10s     # and watch for the agent taking it
-```
-
-`--key` takes `enter`, `escape`, `tab`, `shift-tab`, `up`, `down`, `left`,
-`right`, `space`, `y`, `n`, and the digits. Text may span lines and may not
-carry control characters.
-
-What is sent has to fit what the agent's screen shows, which is read just
-before writing with the same classifiers the daemon uses:
-
-| Sent | Screen | Result |
-| --- | --- | --- |
-| text | at rest, or working | written; what a prompt typed mid-turn does is the harness's to decide |
-| text | asking something | refused, `prompt_showing`: a sentence typed into a menu answers it |
-| keys | asking something | written |
-| keys | anything else | refused, `no_prompt_showing` |
-| text | no prompt showing and nothing else to go on | written, reported as `screen: "unknown"`: a session before its first turn, and Copilot at rest, read this way |
-| either | unreadable, or a harness with no screen adapter | refused, `screen_unreadable` |
-
-`--any-screen` skips the reading, for when you have looked yourself.
-
-**agent-session-loop.** `amx send` types at a terminal; it is not a reply to
-a run. A supervisor question is answered through the run's mailbox, from the
-Runs view, Agent Mux.app's answer panel, or the Workbench, so that the run
-records the reply. A session with such a question open is therefore refused
-whatever is passed (`asl_question_open`). A session that runs a run with no
-question open needs `--yes`, because what is typed reaches the run's
-supervisor, and so does any session while the daemon cannot be asked
-(`daemon_unavailable`).
-
-**Once.** `--operation-id` names a send; without one a name is made up and
-reported. The operation is recorded on the pane before its input is written
-and again after, so repeating a finished operation writes nothing and reports
-`delivery: "replayed"`, and repeating one that was never seen to finish is
-refused (`operation_outcome_unknown`) instead of risking a second copy. Only
-a session's latest operation is remembered.
-
-**What it claims.** `delivery` is `accepted` once the input is written, which
-says nothing about the agent. With `--wait`, a session that was at rest or
-asking is watched, and `delivery` becomes `consumed` when the daemon's state
-for it moves. An agent that was already working moves by itself, so it is not
-watched and stays `accepted`. `--json` reports `{runtime_session_id, backend,
-project, operation_id, input, screen, delivery}` and never the text, which is
-passed to tmux on standard input and appears in no argument list, log, or
-journal. A Kitty runtime session is refused (`unsupported_backend`).
-
-**Looking first.** `amx send ID --look` sends nothing and prints the last
-rows of the agent's screen; with `--json` it reports `{runtime_session_id,
-backend, project, screen, lines}`, where `screen` is the word a send would
-report. It is what Agent Mux.app shows when a permission banner's Answer… is
-chosen, so the prompt is read before a key is pressed.
+#### When tmux cannot be used, and what doctor reports
 
 When no tmux can be used, a tmux launch fails with `backend_unavailable` and a
 message that names each place tried and what to do:
@@ -987,7 +913,9 @@ each pass that found an agent stopped), and a share-mode `amx debug bundle`
 hold counts, durations, releases, and words from fixed vocabularies; a bundle
 keeps a problem's code and severity and drops its text and every path.
 
-Agent Mux.app embeds both as views of its workspace window (see
+#### What changes for a tmux session
+
+Agent Mux.app embeds the dashboard and the overview as views of its workspace window (see
 [the companion app](companion-app.md#dashboard-and-utility-views)). Hosted
 there they launch on tmux, and what would take over the terminal elsewhere —
 attaching to a session, the scrollback pager, a project shell, the editor —
@@ -1174,6 +1102,69 @@ remote-control socket:
 KITTY_LISTEN_ON=unix:/tmp/kitty-12345 amx project launch --title API --json
 KITTY_LISTEN_ON=unix:/tmp/kitty-12345 amx open-dashboard --json
 ```
+
+## Answering or prompting an agent without attaching
+
+`amx send` writes to a running agent's terminal with nothing attached, and
+takes the session from nobody who has it. It works on tmux sessions only (see
+[The tmux backend, and Kitty](#the-tmux-backend-and-kitty)); the dashboard's
+`t` form and Agent Mux.app's prompt answer panel run it underneath.
+
+```bash
+amx send ID "run the tests and fix what fails"   # pasted as one prompt, then entered
+git diff | amx send ID --stdin --no-enter         # typed into its prompt box, not entered
+amx send ID --key 1                               # answer the permission prompt it is showing
+amx send ID --key down --key enter --wait 10s     # and watch for the agent taking it
+```
+
+`--key` takes `enter`, `escape`, `tab`, `shift-tab`, `up`, `down`, `left`,
+`right`, `space`, `y`, `n`, and the digits. Text may span lines and may not
+carry control characters.
+
+What is sent has to fit what the agent's screen shows, which is read just
+before writing with the same classifiers the daemon uses:
+
+| Sent | Screen | Result |
+| --- | --- | --- |
+| text | at rest, or working | written; what a prompt typed mid-turn does is the harness's to decide |
+| text | asking something | refused, `prompt_showing`: a sentence typed into a menu answers it |
+| keys | asking something | written |
+| keys | anything else | refused, `no_prompt_showing` |
+| text | no prompt showing and nothing else to go on | written, reported as `screen: "unknown"`: a session before its first turn, and Copilot at rest, read this way |
+| either | unreadable, or a harness with no screen adapter | refused, `screen_unreadable` |
+
+`--any-screen` skips the reading, for when you have looked yourself.
+
+**agent-session-loop.** `amx send` types at a terminal; it is not a reply to
+a run. A supervisor question is answered through the run's mailbox, from the
+Runs view, Agent Mux.app's answer panel, or the Workbench, so that the run
+records the reply. A session with such a question open is therefore refused
+whatever is passed (`asl_question_open`). A session that runs a run with no
+question open needs `--yes`, because what is typed reaches the run's
+supervisor, and so does any session while the daemon cannot be asked
+(`daemon_unavailable`).
+
+**Once.** `--operation-id` names a send; without one a name is made up and
+reported. The operation is recorded on the pane before its input is written
+and again after, so repeating a finished operation writes nothing and reports
+`delivery: "replayed"`, and repeating one that was never seen to finish is
+refused (`operation_outcome_unknown`) instead of risking a second copy. Only
+a session's latest operation is remembered.
+
+**What it claims.** `delivery` is `accepted` once the input is written, which
+says nothing about the agent. With `--wait`, a session that was at rest or
+asking is watched, and `delivery` becomes `consumed` when the daemon's state
+for it moves. An agent that was already working moves by itself, so it is not
+watched and stays `accepted`. `--json` reports `{runtime_session_id, backend,
+project, operation_id, input, screen, delivery}` and never the text, which is
+passed to tmux on standard input and appears in no argument list, log, or
+journal. A Kitty runtime session is refused (`unsupported_backend`).
+
+**Looking first.** `amx send ID --look` sends nothing and prints the last
+rows of the agent's screen; with `--json` it reports `{runtime_session_id,
+backend, project, screen, lines}`, where `screen` is the word a send would
+report. It is what Agent Mux.app shows when a permission banner's Answer… is
+chosen, so the prompt is read before a key is pressed.
 
 ## Managed worktrees
 
@@ -1491,6 +1482,8 @@ keeps its last-good association and surfaces a refresh warning. `asl prepare`
 and non-dry-run `asl run` write the versioned `plan-metadata.json` contract for
 new and resumed plans.
 
+### Local storage
+
 Agent Mux does not use SQLite. Local files have deliberately narrow ownership:
 
 | Path | Ownership and cleanup |
@@ -1507,30 +1500,8 @@ between runs. Do not delete the whole `agent-mux` data directory to repair a
 cache: transcript files, plan directories, handoffs, durable worktrees and sidecars, configuration,
 and launch overrides have separate lifecycles.
 
-## One-off cleanup after upgrading from a SQLite release
-
-Old installations may still contain retired database artifacts. This is a
-manual deployment cleanup, not a recurring migration. First build and pass
-`just acceptance`, stop the installed daemon, and confirm `amx daemon status`
-no longer reports it running. Preserve the caches and assets in the table
-above, then remove only these entries from
-`~/.local/share/agent-mux/`:
-
-```text
-agent-mux.db
-agent-mux.db-wal
-agent-mux.db-shm
-agent-mux.db.recovery.lock
-agent-mux.db.rebuild
-agent-mux.db.rebuild-startup.lock
-recovery/
-```
-
-Install atomically with `just install`, restart with `amx daemon restart`, and
-verify `amx daemon status`, `amx doctor --strict`, `amx session list`, Past
-Sessions, and Plans. Recheck the allowlist above afterward; none of the files
-or the `recovery/` directory should be recreated. Future runs never delete
-these legacy paths automatically.
+Upgrading from a release that used SQLite? The one-off cleanup of its leftover files is in
+[Upgrading](upgrading.md#one-off-cleanup-after-upgrading-from-a-sqlite-release).
 
 ## Filter DSL
 

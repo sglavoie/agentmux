@@ -24,6 +24,11 @@ const doctorSuppressionWindow = 15 * time.Minute
 
 // doctorReportSchemaVersion versions the `amx doctor --json` payload.
 //
+// The optional `remediation` field on a finding (doctor_remediation.go) did
+// not bump it: it is an additive field, which the v2 policy below does not
+// bump for, no finding identifier or severity changed with it, and every
+// message kept its exact text.
+//
 // v7 adds the top-level `backend` and `versions` blocks, `daemon.runtime`,
 // and the findings derived from them: `backend_tmux_unavailable`,
 // `backend_server_unreadable`, `backend_server_binary_unknown`,
@@ -181,11 +186,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		Findings:      make([]doctorFinding, 0),
 	}
 	addFinding := func(severity, check string, format string, args ...any) {
-		report.Findings = append(report.Findings, doctorFinding{
-			Severity: severity,
-			Check:    check,
-			Message:  fmt.Sprintf(format, args...),
-		})
+		report.Findings = append(report.Findings, newDoctorFinding(severity, check, 0, fmt.Sprintf(format, args...)))
 	}
 	reportIssue := func(check string) func(string, ...any) {
 		return func(format string, args ...any) {
@@ -388,6 +389,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			evaluateDaemonInvariants(snapshot, health, report.CLIBuild, liveByID, now)...)
 	}
 
+	attachDoctorRemediations(&report)
 	if err := writeDoctorFindings(textOut, report.Findings, doctorVerbose); err != nil {
 		return err
 	}

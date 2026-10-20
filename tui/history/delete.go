@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -33,13 +34,13 @@ func (in DeleteInput) Render() string {
 	sb.WriteByte('\n')
 	sb.WriteByte('\n')
 	sb.WriteString("  ")
-	sb.WriteString(renderFooterBinding("[i]", "index only — hide from search; file kept on disk"))
+	sb.WriteString(chrome.Binding("[i]", "index only — hide from search; file kept on disk"))
 	sb.WriteByte('\n')
 	sb.WriteString("  ")
-	sb.WriteString(renderFooterBindingWithLabel("[f]", " ", "also delete file — irreversible, removes the JSONL", styleError))
+	sb.WriteString(chrome.BindingWithLabel("[f]", " ", "also delete file — irreversible, removes the JSONL", styleError))
 	sb.WriteByte('\n')
 	sb.WriteString("  ")
-	sb.WriteString(renderFooterBinding("[esc]", "cancel"))
+	sb.WriteString(chrome.Binding("[esc]", "cancel"))
 	sb.WriteByte('\n')
 	return sb.String()
 }

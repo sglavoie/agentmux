@@ -58,6 +58,9 @@ renderer must agree, persisted process identities must be well formed, render
 generations must not drift, queues must not saturate, and the daemon must run
 the same artifact as this CLI). Any failure
 observed in any sample makes the command exit nonzero.`,
+	Example: `  amx daemon audit
+  amx daemon audit --duration 2m
+  amx daemon audit --duration 30s --json`,
 	Args: cobra.NoArgs,
 	// A violation exit is a structured result (cli.ExitError), not a usage problem;
 	// Execute owns the stderr line and process status.
@@ -97,11 +100,11 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 		now := auditNow()
 		health := client.Health()
 		if !health.Alive {
-			record(doctorFinding{Severity: severityFailure, Check: "daemon_unreachable", Message: "daemon is unreachable"})
+			record(newDoctorFinding(severityFailure, "daemon_unreachable", 0, "daemon is unreachable"))
 		} else {
 			snapshot, err := client.ExportEvents(0)
 			if err != nil {
-				record(doctorFinding{Severity: severityFailure, Check: "daemon_export", Message: fmt.Sprintf("daemon export is unavailable: %s", err)})
+				record(newDoctorFinding(severityFailure, "daemon_export", 0, fmt.Sprintf("daemon export is unavailable: %s", err)))
 			} else {
 				var liveByID map[int]protocol.WindowLiveMetadata
 				if windows, kittyErr := newDoctorKitty().ListWindows(); kittyErr == nil {

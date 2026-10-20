@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -207,9 +208,9 @@ func (in PaletteInput[M]) SelectedCommand() (Command[M], bool) {
 // so the window has something to show and the caller needs no separate case.
 func (in PaletteInput[M]) Rows(width int) []PaletteRow {
 	if len(in.Results) == 0 {
-		message := "No matching commands."
+		message := layout.Sentence(layout.EmptyText("commands", ""))
 		if strings.TrimSpace(in.Query) != "" {
-			message = fmt.Sprintf("No commands match %q.", in.Query)
+			message = layout.Sentence(layout.WithHint(fmt.Sprintf("no commands match %q", in.Query), "backspace edits the query"))
 		}
 		lines := layout.WrapWords(message, width)
 		rows := make([]PaletteRow, 0, len(lines))
@@ -480,7 +481,7 @@ func paletteHintLine(width int, above, below bool) string {
 		right = " ▼"
 	}
 	middleWidth := max(width-layout.Width(left)-layout.Width(right), 0)
-	middle := joinFooterBindings(" · ", renderFooterBinding("↑/↓", "move"), renderFooterBinding("enter", "run"), renderFooterBinding("esc", "close"))
+	middle := chrome.JoinBindings(" · ", chrome.Binding("↑/↓", "up/down"), chrome.Binding("enter", "run"), chrome.Binding("esc", "close"))
 	middle = layout.StyledTruncate(middle, middleWidth, "…")
 	if padding := middleWidth - layout.StyledWidth(middle); padding > 0 {
 		middle += strings.Repeat(" ", padding)

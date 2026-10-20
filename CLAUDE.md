@@ -213,7 +213,7 @@ failed request.
 
 There is no SQLite runtime or migration path. Never add automatic deletion of
 legacy database files. A one-off operator cleanup must stop the installed
-daemon first and use the exact allowlist documented in `docs/usage.md` ("One-off
+daemon first and use the exact allowlist documented in `docs/upgrading.md` ("One-off
 cleanup after upgrading from a SQLite release"); it must preserve caches,
 handoffs, worktrees, launch overrides, and ordinary daemon locks.
 
@@ -363,7 +363,8 @@ TUI (`tui/...`):
 - `tui` is the only package that names `Model`; leaves take explicit `*Input`
   values and return strings. Effects run in `tui/commands`.
 - Dependency direction: `tui` → `tui/sessionactions` → `tui/commands` →
-  `tui/dashboard`; `tui/layout` and `tui/theme` have no in-repo dependencies.
+  `tui/dashboard`; `tui/layout` and `tui/theme` have no in-repo dependencies,
+  and `tui/chrome` (footer bindings) depends only on `tui/theme`.
   Other leaves: `history`, `launch`, `plans`, `runform`, `sendform`,
   `worktrees`, `asl`.
 - `tui/overview` and `tui/customization` are standalone programs that root `tui`

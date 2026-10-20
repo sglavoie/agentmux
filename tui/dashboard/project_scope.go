@@ -220,7 +220,7 @@ func RenderProjectSwitcher(in ProjectSwitcherInput) ProjectSwitcherRender {
 	}
 
 	if len(in.Scopes) == 0 {
-		sb.WriteString(styleDim.Render("  (no projects match)"))
+		sb.WriteString(styleDim.Render(layout.ClampLine("  "+layout.Placeholder(layout.NoMatchText("projects", layout.SearchEditHint(in.Searching))), width)))
 		sb.WriteByte('\n')
 		return ProjectSwitcherRender{Text: sb.String()}
 	}

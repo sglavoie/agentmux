@@ -56,6 +56,18 @@ var (
 var daemonStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the daemon (blocks until shutdown)",
+	Long: `Runs the Agent Mux daemon in the foreground until it is interrupted or asked
+to shut down (` + "`amx daemon stop`" + `). The daemon reduces hook events, writes
+every rendered session state, and serves the dashboard, the app, and the
+CLI over its socket.
+
+The daemon normally runs on its own: commands that need it, such as hooks
+and the dashboard, start it detached when it is not running, and
+` + "`amx daemon restart`" + ` replaces it in the background. Run start by hand to
+watch its log in a terminal (add --debug for verbose logging). It has no
+--json: it answers nothing until it stops.`,
+	Example: `  amx daemon start
+  amx --debug daemon start`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
@@ -92,14 +104,27 @@ var daemonStartCmd = &cobra.Command{
 var daemonStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the running daemon",
+	Long: `Asks the running daemon to shut down. Agents keep running: they live in
+their Kitty tabs or on Agent Mux's private tmux server, not in the daemon, and
+the next command that needs a daemon starts one again. A daemon that is not
+running is an error.
+
+With --json it reports {stopped}; a failure is a structured error
+(daemon_not_running, daemon_error).`,
+	Example: `  amx daemon stop
+  amx daemon stop --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
 		c := newDaemonLifecycleClient()
 		resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
 		if err != nil {
-			return fmt.Errorf("daemon not running: %w", err)
+			return cli.CommandFailure(cmd, jsonOutput, "daemon_not_running", fmt.Errorf("daemon not running: %w", err))
 		}
 		if !resp.OK {
-			return fmt.Errorf("daemon error: %s", resp.Error)
+			return cli.CommandFailure(cmd, jsonOutput, "daemon_error", fmt.Errorf("daemon error: %s", resp.Error))
+		}
+		if jsonOutput {
+			return cli.WriteJSON(cmd, daemonStopData{Stopped: true})
 		}
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon stopped")
 		return err
@@ -109,7 +134,20 @@ var daemonStopCmd = &cobra.Command{
 var daemonRestartCmd = &cobra.Command{
 	Use:   "restart",
 	Short: "Restart the daemon detached in the background",
+	Long: `Replaces the running daemon with a new one started detached from this
+executable, and waits until the new one answers on its socket before
+reporting, so the next command does not reach a daemon that is not there yet.
+With no daemon running it starts one. Agents keep running throughout. A
+` + "`go run`" + ` build is refused, because its executable is deleted when the
+command exits.
+
+With --json it reports {pid, ready, degraded_reason}: ready is false, with a
+reason, when the new daemon came up degraded. A daemon that never answered
+is a structured error (restart_timeout).`,
+	Example: `  amx daemon restart
+  amx daemon restart --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
 		c := newDaemonLifecycleClient()
 		// A daemon that cannot be located re-execs by name off PATH; the
 		// resolution failure is not itself a reason to refuse the restart.
@@ -117,22 +155,43 @@ var daemonRestartCmd = &cobra.Command{
 		// A `go run` build is deleted when this command exits, so the daemon
 		// would come back up from a file that no longer exists.
 		if err := cli.RefuseTransientBinary(amxBin, "restart the daemon"); err != nil {
-			return err
+			return cli.CommandFailure(cmd, jsonOutput, "transient_binary", err)
 		}
 		carryKittySocket(c)
 		if err := c.RestartDetached(amxBin); err != nil {
-			return err
+			return cli.CommandFailure(cmd, jsonOutput, "restart_failed", err)
 		}
 		// RestartDetached returns once the replacement is spawned, before it
 		// binds its socket. Saying "restarted" then would send the next
 		// command (a doctor, a status check) to a daemon that is not there yet.
 		health, ok := waitForRestartedDaemon(c)
 		if !ok {
-			return fmt.Errorf("daemon restart requested, but the new daemon did not answer within %s; run `amx daemon status` or check the bootstrap log", daemonRestartWait)
+			return cli.CommandFailure(cmd, jsonOutput, "restart_timeout", fmt.Errorf("daemon restart requested, but the new daemon did not answer within %s; run `amx daemon status` or check the bootstrap log", daemonRestartWait))
+		}
+		if jsonOutput {
+			return cli.WriteJSON(cmd, daemonRestartData{PID: health.PID, Ready: health.Ready, DegradedReason: health.DegradedReason})
 		}
 		_, err := fmt.Fprintf(cmd.OutOrStdout(), "daemon restarted (%s)\n", restartedDetail(health))
 		return err
 	},
+}
+
+// daemonStopData is the `daemon stop --json` data.
+type daemonStopData struct {
+	Stopped bool `json:"stopped"`
+}
+
+// daemonRestartData is the `daemon restart --json` data: the new daemon as it
+// first answered. PID is omitted when the daemon did not report one.
+type daemonRestartData struct {
+	PID            int    `json:"pid,omitempty"`
+	Ready          bool   `json:"ready"`
+	DegradedReason string `json:"degraded_reason,omitempty"`
+}
+
+func init() {
+	daemonStopCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	daemonRestartCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 }
 
 // carryKittySocket hands the Kitty the running daemon reads to its

@@ -413,7 +413,7 @@ func TestIconPickerWriteFailureStaysVisibleAndCanRetry(t *testing.T) {
 	if m.applied || m.err == nil {
 		t.Fatalf("failed apply state = applied %v err %v", m.applied, m.err)
 	}
-	if view := m.View().Content; !strings.Contains(view, "set tab title: Kitty unavailable") {
+	if view := m.View().Content; !strings.Contains(view, "Couldn't apply the icon to this tab: Kitty unavailable") {
 		t.Fatalf("view does not contain write error: %q", view)
 	}
 

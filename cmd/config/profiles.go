@@ -17,7 +17,15 @@ type profileChoice struct {
 var configProfilesCmd = &cobra.Command{
 	Use:   "profiles",
 	Short: "List configured launch profiles",
-	Args:  cobra.NoArgs,
+	Long: `Lists every configured profile with the harness it launches, one per line
+as tab-separated name and harness, including profiles no project uses. Only
+launch identities are shown: never a profile's environment, arguments, or
+home directory.
+
+With --json it reports an array of {name, harness}.`,
+	Example: `  amx config profiles
+  amx config profiles --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := cli.LoadRunnableConfig()

@@ -49,10 +49,12 @@ fails there.
 | `q`, `Ctrl+C` | Quit dashboard |
 | `Esc` | Close overlay, then leave full-screen/inspector focus, then clear filters |
 
-Three of these keys survive their own spelling but change meaning: `p` moved
-from the preview toggle to the project switcher, `Tab` from filter-chip cycling
-to pane switching, and `Enter` keeps focusing but no longer shares the job with
-`space`.
+Two of these keys survive their own spelling but change meaning: `p` moved
+from the preview toggle to the project switcher, and `Tab` from filter-chip
+cycling to pane switching. `Enter` keeps its meaning — open the selected
+session, which focuses a Kitty session's tab and attaches a tmux session to
+this terminal — but no longer shares it with `space`, and no longer removes a
+focused filter chip, since chips are edited inside `/` now.
 
 ## Command-backed bindings
 
@@ -65,7 +67,7 @@ named first.
 
 | Key | Command ID | Capability | Disposition | Successor |
 | --- | --- | --- | --- | --- |
-| `enter` / `space` | `FocusSession` | Focus the session's Kitty tab | `enter` survives, `space` **retired** | `Enter`; actions `a` → **Open session**; palette |
+| `enter` / `space` | `FocusSession` | Open the session: focus its Kitty tab, or attach a tmux session here | `enter` survives, `space` **retired** | `Enter`; actions `a` → **Open session**; palette |
 | `e` | `PeekScrollback` | Peek at the pane's scrollback | **Retired** | actions `a`; palette |
 | `r` | `RestartSession` | Restart the harness in place | **Retired** | actions `a`; palette |
 | `c` | `OverrideProfile` | Relaunch under a different profile | **Retired** | actions `a`; palette |
@@ -94,7 +96,7 @@ named first.
 | `b` | `ToggleRail` | Toggle the project rail | **Retired.** The rail, its command, and its key are gone; every scope it could apply is reachable from the switcher, which keeps `rail` as a palette alias so the old word still finds it | project switcher `p`; palette |
 | `v` | `ToggleListView` | Urgency ↔ Projects view | **Retired** | palette (the contract keeps Projects view palette-accessible) |
 | `R` | `ResortTabs` | Resort Kitty tabs | **Retired** | palette |
-| `u` | `UndoClose` | Resume the last closed conversation, or relaunch when no exact conversation is known | Survives (restored) | `u`; palette. It came back because what it undoes expires: the recovery window is 30 seconds, and a capability that has to be reached by name before it lapses is not reachable. The recovery toast names `u` again, and the palette command is unchanged |
+| `u` | `UndoClose` | Recover the last ended session: resume its exact conversation, or relaunch its project when no exact conversation is known | Survives (restored) | `u`; palette **Recover Ended Session**. It came back because what it undoes expires: the recovery window is 30 seconds, and a capability that has to be reached by name before it lapses is not reachable. The recovery toast names `u` again, and the palette command runs the same recovery under the same name the footer and help use |
 | `?` | `ShowKeyboardHelp` | Keyboard help | Survives | `?` |
 | `q` / `ctrl+c` | `Quit` | Quit the dashboard | Survives | `q`, `Ctrl+C` |
 

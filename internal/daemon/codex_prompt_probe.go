@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"log/slog"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -107,7 +106,7 @@ func (h *Handler) probeCodexScreenPromptsWithSnapshot(
 	for i := range snapshot.Windows() {
 		for j := range snapshot.Windows()[i].Tabs {
 			tab := &snapshot.Windows()[i].Tabs[j]
-			win, ok := codexPromptProbeTarget(tab)
+			win, ok := probes.CodexForegroundTarget(tab)
 			if !ok {
 				continue
 			}
@@ -205,69 +204,6 @@ func (h *Handler) codexProbeTargetContext(
 		userVars.Harness = targetHarness
 	}
 	return titleParts, userVars, true
-}
-
-func codexPromptProbeTarget(tab *kitty.Tab) (*kitty.Window, bool) {
-	if _, ok := kitty.FindTabTitleOwner(tab); ok {
-		return nil, false
-	}
-	if tab == nil {
-		return nil, false
-	}
-
-	var fallback *kitty.Window
-	for i := range tab.Windows {
-		win := &tab.Windows[i]
-		if !codexPromptProbeShouldScan(*win) {
-			continue
-		}
-		if fallback == nil {
-			fallback = win
-		}
-		if win.IsActive {
-			return win, true
-		}
-	}
-	if fallback == nil {
-		return nil, false
-	}
-	return fallback, true
-}
-
-func codexPromptProbeShouldScan(win kitty.Window) bool {
-	switch win.UserVars.EffectiveHarness() {
-	case harness.Codex:
-		return true
-	case "":
-		return codexPromptProbeHasCodexForeground(win)
-	default:
-		return false
-	}
-}
-
-func codexPromptProbeHasCodexForeground(win kitty.Window) bool {
-	if codexPromptProbeCmdlineIsCodex(win.Cmdline) {
-		return true
-	}
-	for _, proc := range win.ForegroundProcesses {
-		if codexPromptProbeCmdlineIsCodex(proc.Cmdline) {
-			return true
-		}
-	}
-	return false
-}
-
-// codexPromptProbeCmdlineIsCodex accepts only an interactive Codex invocation.
-// A non-interactive run such as `codex exec` is a background subprocess in an
-// unmanaged pane, not a session the dashboard reports on.
-func codexPromptProbeCmdlineIsCodex(cmdline []string) bool {
-	if len(cmdline) == 0 {
-		return false
-	}
-	if !strings.EqualFold(filepath.Base(cmdline[0]), "codex") {
-		return false
-	}
-	return !harness.InvocationIsPipeMode(harness.Codex, cmdline[1:])
 }
 
 func codexPromptProbeCanOverwrite(iconState string) bool {

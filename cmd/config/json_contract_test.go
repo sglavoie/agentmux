@@ -16,7 +16,7 @@ import (
 // Config leaves that share the retained command envelope. `asl-sync` has its
 // own audit in asl_sync_json_test.go; this one covers the rest of the family.
 func TestConfigJSONCommandSurfaceIsVersioned(t *testing.T) {
-	for _, command := range []*cobra.Command{configValidateCmd, configProfilesCmd, configDaemonStatusCmd} {
+	for _, command := range []*cobra.Command{configValidateCmd, configProfilesCmd, configDaemonStatusCmd, configShowCmd, configASLSyncCmd} {
 		if command.Flags().Lookup("json") == nil {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}
@@ -134,5 +134,54 @@ func TestProfilesCatalogIncludesUnassignedProfilesWithoutPrivateConfiguration(t 
 	}
 	if !found {
 		t.Fatalf("unassigned profile omitted: %s", out.String())
+	}
+}
+
+// `config show --json` carries the file as text beside its path, and a config
+// that is not there is the structured error, not an empty content.
+func TestConfigShowJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	t.Setenv("amx_CONFIG", "")
+	t.Setenv("AMX_CONFIG", path)
+	run := func() (string, error) {
+		t.Helper()
+		if err := configShowCmd.Flags().Set("json", "true"); err != nil {
+			t.Fatal(err)
+		}
+		oldOut := configShowCmd.OutOrStdout()
+		t.Cleanup(func() {
+			_ = configShowCmd.Flags().Set("json", "false")
+			configShowCmd.SetOut(oldOut)
+		})
+		var out bytes.Buffer
+		configShowCmd.SetOut(&out)
+		err := configShowCmd.RunE(configShowCmd, nil)
+		return out.String(), err
+	}
+
+	out, err := run()
+	var exit *cli.ExitError
+	if !errors.As(err, &exit) || !strings.Contains(out, `"code":"config_unreadable"`) {
+		t.Fatalf("missing config: out = %s, err = %v", out, err)
+	}
+
+	body := "# mine\n[defaults]\nsort = \"alpha\"\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err = run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		SchemaVersion int            `json:"schema_version"`
+		Data          configShowData `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("JSON = %v\n%s", err, out)
+	}
+	if payload.SchemaVersion != 1 || payload.Data.Path != path || payload.Data.Content != body {
+		t.Fatalf("payload = %+v", payload)
 	}
 }

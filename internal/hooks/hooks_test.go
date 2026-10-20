@@ -9,9 +9,11 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 func TestMain(m *testing.M) {
+	testenv.ClearSessionEnv()
 	testRoot, err := os.MkdirTemp("", "agentmux-hooks-test-")
 	if err != nil {
 		panic(err)

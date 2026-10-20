@@ -2,45 +2,28 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class WorkspaceHistoryWindow: NSObject, NSWindowDelegate {
+final class WorkspaceHistoryWindow: ReviewWindowController {
     let model: WorkspaceHistoryModel
-    private(set) var window: NSWindow?
-    var onVisibilityChanged: (Bool) -> Void = { _ in }
+    private var opening: (project: String, conversation: ConversationIdentity?, eventTime: String?)?
 
     init(model: WorkspaceHistoryModel) {
         self.model = model
-        super.init()
-        model.revealFeedback = { [weak self] in
-            self?.onVisibilityChanged(true)
-            self?.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate()
-        }
+        super.init(title: "Conversation History", autosaveName: "WorkspaceHistory", size: NSSize(width: 1000, height: 680))
+        model.revealFeedback = { [weak self] in self?.reveal() }
     }
 
     func show(project: String, conversation: ConversationIdentity?, eventTime: String? = nil) {
-        if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 680),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "Conversation History"
-            window.minSize = NSSize(width: 720, height: 450)
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            let host = WorkspaceReviewHost(rootView: WorkspaceHistoryView(model: model))
-            host.closesWindow = true
-            window.contentView = host
-            ReviewWindowPlacement.restore(window, name: "WorkspaceHistory")
-            self.window = window
-        }
-        onVisibilityChanged(true)
-        model.open(project: project, conversation: conversation, eventTime: eventTime)
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate()
+        opening = (project, conversation, eventTime)
+        present()
     }
 
-    func windowWillClose(_ notification: Notification) {
-        model.close()
-        onVisibilityChanged(false)
+    override func makeContentView() -> NSView { Self.host(WorkspaceHistoryView(model: model)) }
+    override func willPresent() {
+        guard let opening else { return }
+        self.opening = nil
+        model.open(project: opening.project, conversation: opening.conversation, eventTime: opening.eventTime)
     }
+    override func didClose() { model.close() }
 }
 
 struct WorkspaceHistoryView: View {
@@ -106,7 +89,7 @@ struct WorkspaceHistoryView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(entry.conversation.displayName).font(.headline)
-                                if model.liveConversations.contains(entry.id) { Text("Live").font(.caption).foregroundStyle(.green) }
+                                if model.liveConversations.contains(entry.id) { Text("Live").font(.caption).foregroundStyle(WorkspaceReviewColors.live) }
                             }
                             HStack {
                                 Text("\(entry.conversation.harness) · \(entry.conversation.profile)").lineLimit(1)
@@ -129,18 +112,13 @@ struct WorkspaceHistoryView: View {
                     .frame(maxWidth: .infinity)
                     .overlay {
                         if model.entries.isEmpty && !model.loading && model.error == nil {
-                            VStack(spacing: 10) {
-                                Text("No conversations found").font(.headline)
-                                if !model.resultsQuery.isEmpty { Button("Clear search") { model.query = "" } }
-                                if model.scope != .all { Button("Search all history") { model.scope = .all } }
-                                if !model.includeAutomated {
-                                    if model.hiddenAutomated > 0 {
-                                        Text("\(model.hiddenAutomated) automated matches hidden").font(.caption)
-                                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    Button("Include automated sessions") { model.includeAutomated = true }.font(.callout)
-                                }
-                            }.padding(12)
+                            WorkspaceEmpty(title: "No conversations found", detail: emptyResultsDetail, symbol: "magnifyingglass") {
+                                VStack(spacing: 6) {
+                                    if !model.resultsQuery.isEmpty { Button("Clear search") { model.query = "" } }
+                                    if model.scope != .all { Button("Search all history") { model.scope = .all } }
+                                    if !model.includeAutomated { Button("Include automated sessions") { model.includeAutomated = true } }
+                                }.padding(.top, 2)
+                            }
                         }
                     }
                     if model.hasMoreResults {
@@ -247,6 +225,10 @@ struct WorkspaceHistoryView: View {
         }.padding(.horizontal, 12).padding(.vertical, 8)
             .onAppear { focus = .search }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
+    }
+    private var emptyResultsDetail: String {
+        guard !model.includeAutomated, model.hiddenAutomated > 0 else { return "" }
+        return "\(model.hiddenAutomated) automated \(model.hiddenAutomated == 1 ? "match" : "matches") hidden."
     }
     private func toggleResults() {
         model.layout.collapsed.toggle()

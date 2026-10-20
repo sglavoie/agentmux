@@ -11,6 +11,21 @@ This is the operator index. Each area below has its own guide.
 | [Screen classifier health](screen-classifier-health.md) | pattern-set sources in `amx doctor`, `screenstate_override_invalid` and `screenstate_persistent_decline`, the decline-signal drill |
 | [Troubleshooting](troubleshooting.md) | symptom-first recovery for icons, hooks, routing, the daemon, the ASL cockpit, and debug bundles |
 
+## Which install or update command
+
+- `just install`: put a freshly built `amx` in `~/.local/bin` (and seed a
+  starter config); the running daemon is not restarted.
+- `just install-restart-smoke`: install, restart the daemon onto it, and gate on
+  `amx doctor --strict`. Use it when there is no Xcode, or in the
+  [pair upgrade](#upgrading-the-pair) order.
+- `just update`: the one to run after pulling or committing here: install, sync
+  hooks, `mac-install`, then restart and verify. Needs Xcode.
+- `just mac-install`: rebuild and reinstall only Agent Mux.app; it never stops
+  the tmux server.
+
+The full table, with the smoke recipes, is in
+[Build and test](testing.md#which-install-or-smoke-recipe).
+
 ## Config commands
 
 Start with the [minimum profile/project configuration](../README.md#first-session).

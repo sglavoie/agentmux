@@ -13,6 +13,12 @@
 // runs one way between those two. The test for whether something belongs here
 // is that it names no model, no session, and no action.
 //
+// Two pieces of shared wording live here for the same reason: the list-state
+// sentences every view says "loading", "nothing matches", and "nothing here
+// yet" with (states.go), and the age labels every list and sentence says "how
+// long ago" with (age.go), which take the reference instant explicitly rather
+// than reading the clock.
+//
 // Every visible-cell calculation in the TUI should route through the helpers
 // in this package. Direct production calls to runewidth.StringWidth,
 // runewidth.Truncate, or lipgloss.Width outside these helpers are discouraged

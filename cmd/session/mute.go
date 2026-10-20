@@ -27,7 +27,7 @@ var (
 
 var muteToggleCmd = &cobra.Command{
 	Use:   "mute-toggle",
-	Short: "Toggle mute on the focused Agent Mux tab",
+	Short: "Toggle mute on the current Agent Mux session (Kitty tab or tmux session)",
 	Long: `Flips the cc_mute user var on the window identified by --window-id
 (or $KITTY_WINDOW_ID when the flag is zero) and rewrites the tab title so
 the 🔇 glyph appears or disappears immediately. Muted sessions suppress all
@@ -45,6 +45,8 @@ With --json it reports {window_id, muted, changed}: muted is the window's
 mute state after the command, and changed is false for the no-op. A session
 named by --runtime-session reports runtime_session_id as well, and a
 window_id of zero.`,
+	Example: `  amx mute-toggle
+  amx mute-toggle --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --json`,
 	RunE: runMuteToggle,
 }
 
@@ -101,7 +103,7 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 			return cli.CommandFailure(cmd, muteToggleJSON, "backend_unavailable", errors.New("tmux backend cannot mute sessions"))
 		}
 		result, err = muteToggleRuntime(term, id)
-		if errors.Is(err, errMuteNoSession) {
+		if errors.Is(err, errNoRuntimeSession) {
 			return cli.CommandFailure(cmd, muteToggleJSON, "not_found", err)
 		}
 	} else {
@@ -137,15 +139,11 @@ func muteToggle(client kitty.KittyClient, windowID int) (muteToggleResult, error
 	return applyMuteToggle(kitty.NewBackend(client), rs, result)
 }
 
-// errMuteNoSession reports that the runtime session named is not a running
-// tmux session.
-var errMuteNoSession = errors.New("no running tmux session")
-
 // muteToggleRuntime toggles the mute of the tmux session a runtime session
 // ID names. Only a pane that still carries that runtime session is touched.
 func muteToggleRuntime(term muteTerminal, id runtimesession.ID) (muteToggleResult, error) {
 	result := muteToggleResult{RuntimeSessionID: string(id)}
-	panes, err := term.Discover()
+	panes, err := runtimeSessionPanes(term, id)
 	if err != nil {
 		return result, err
 	}
@@ -155,7 +153,7 @@ func muteToggleRuntime(term muteTerminal, id runtimesession.ID) (muteToggleResul
 			return applyMuteToggle(term, rs, result)
 		}
 	}
-	return result, fmt.Errorf("%w is %s", errMuteNoSession, id)
+	return result, noRuntimeSession(id)
 }
 
 // applyMuteToggle flips rs's mute on term and fills in result.

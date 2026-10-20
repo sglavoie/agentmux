@@ -217,7 +217,7 @@ func TestKeybindingsCloseAndIgnoredKeys(t *testing.T) {
 
 func TestKeybindingsFooterShowsNavigationAndCloseHints(t *testing.T) {
 	view := stripAnsi((keybindingsModel{}).View().Content)
-	for _, want := range []string{"j/k scroll", "g/G top/bottom", "q/esc close"} {
+	for _, want := range []string{"j/k scroll", "g/G top/bottom", "esc/q close"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("keybinding footer missing %q:\n%s", want, view)
 		}

@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/transcript"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestFooterBindingStyles(t *testing.T) {
-	available := renderFooterBinding("enter", "apply")
+	available := chrome.Binding("enter", "apply")
 	if !strings.Contains(available, styleFooterKey.Render("enter")) {
 		t.Fatalf("available binding does not use the accent key style: %q", available)
 	}
@@ -17,7 +18,7 @@ func TestFooterBindingStyles(t *testing.T) {
 		t.Fatalf("available binding does not retain the dim label style: %q", available)
 	}
 
-	unavailable := renderUnavailableFooterBinding("x", "clear")
+	unavailable := chrome.UnavailableBinding("x", "clear")
 	if !strings.Contains(unavailable, styleFooterUnavailableKey.Render("x")) {
 		t.Fatalf("unavailable binding does not use the bold muted key style: %q", unavailable)
 	}
@@ -25,7 +26,7 @@ func TestFooterBindingStyles(t *testing.T) {
 		t.Fatalf("unavailable binding label is not dim: %q", unavailable)
 	}
 
-	destructive := renderFooterBindingWithLabel("[f]", " ", "also delete file", styleError)
+	destructive := chrome.BindingWithLabel("[f]", " ", "also delete file", styleError)
 	if !strings.Contains(destructive, styleFooterKey.Render("[f]")) ||
 		!strings.Contains(destructive, styleError.Render("also delete file")) {
 		t.Fatalf("destructive binding did not split accent key from red label: %q", destructive)

@@ -3,9 +3,12 @@ package daemon
 import (
 	"os"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 func TestMain(m *testing.M) {
+	testenv.ClearSessionEnv()
 	stateRoot, err := os.MkdirTemp("", "agentmux-daemon-test-state-")
 	if err != nil {
 		panic(err)

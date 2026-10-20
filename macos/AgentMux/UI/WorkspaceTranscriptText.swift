@@ -229,7 +229,7 @@ struct WorkspaceTranscriptCode: View {
             .onChange(of: text) { _, _ in feedback = WorkspaceCopyFeedback() }
             .task(id: feedback.revision) {
                 guard feedback.succeeded else { return }
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                do { try await Task.sleep(for: WorkspaceCopyNotice.duration) } catch { return }
                 guard !Task.isCancelled else { return }
                 feedback = WorkspaceCopyFeedback()
             }

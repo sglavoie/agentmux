@@ -57,7 +57,7 @@ func (in RunsInput) headerText() string {
 	header := "Runs"
 	switch in.View() {
 	case ViewLoading:
-		return header + "  " + styleDim.Render("(loading…)")
+		return header + "  " + styleDim.Render(layout.Placeholder(layout.LoadingText("")))
 	case ViewUnavailable:
 		return header + "  " + styleStateWarning.Render("[unavailable]")
 	}
@@ -73,15 +73,19 @@ func (in RunsInput) headerText() string {
 	return header
 }
 
+// emptyRunsText is the empty list's state and its next step: a run starts from
+// a saved plan, with R in the Plans view (":" then "Search Plans").
+var emptyRunsText = layout.EmptyText("active or actionable runs", "R on a plan in Search Plans starts one")
+
 func (in RunsInput) renderRunList(height int) string {
 	switch in.View() {
 	case ViewLoading:
-		return styleDim.Render("  (loading runs…)") + "\n"
+		return styleDim.Render("  "+layout.Placeholder(layout.LoadingText("runs"))) + "\n"
 	case ViewUnavailable:
 		return in.renderUnavailable()
 	}
 	if len(in.Rows) == 0 {
-		return styleDim.Render("  (no active or actionable runs)") + "\n"
+		return styleDim.Render(layout.ClampLine("  "+layout.Placeholder(emptyRunsText), in.Width)) + "\n"
 	}
 
 	now := in.now()

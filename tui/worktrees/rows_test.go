@@ -46,7 +46,7 @@ func TestCompactAgeBuckets(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := CompactAge(tc.created, now); got != tc.want {
+			if got := layout.CompactAge(tc.created, now); got != tc.want {
 				t.Errorf("CompactAge(%v) = %q, want %q", tc.created, got, tc.want)
 			}
 		})

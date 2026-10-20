@@ -473,12 +473,12 @@ func healthTopologyIssue(f HealthFacts) HealthIssue {
 		age = 0
 	}
 	issue.ObservedAt = f.Now.Add(-age)
-	issue.Observed = "tree on screen is " + healthAgeText(age) + " old"
+	issue.Observed = "tree on screen is " + layout.AgeUnits(age) + " old"
 	issue.Details = healthTopologyDetails(f)
 	if f.TopologyStaleAfter > 0 && age >= f.TopologyStaleAfter {
 		issue.State = HealthWarning
 		issue.Summary = fmt.Sprintf("showing cached sessions (%ds old)", int(age/time.Second))
-		issue.Compact = "sessions " + healthAgeText(age) + " stale"
+		issue.Compact = "sessions " + layout.AgeUnits(age) + " stale"
 		if f.TopologyErr != "" {
 			issue.Remedy = "amx doctor --strict"
 		}
@@ -495,7 +495,7 @@ func healthTopologyIssue(f HealthFacts) HealthIssue {
 		return issue
 	}
 	issue.State = HealthOK
-	issue.Summary = "refreshed " + healthAgeText(age) + " ago"
+	issue.Summary = "refreshed " + layout.AgeUnits(age) + " ago"
 	issue.Compact = "sessions ok"
 	return issue
 }
@@ -558,26 +558,7 @@ func healthObservedText(at, now time.Time) string {
 	if at.IsZero() {
 		return "never checked"
 	}
-	return "checked " + healthAgeText(now.Sub(at)) + " ago"
-}
-
-// healthAgeText is a coarse single-unit age. Health ages are read to decide
-// whether something is current, not to do arithmetic on, so seconds stop
-// mattering past a minute.
-func healthAgeText(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d/time.Second))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d/time.Hour))
-	default:
-		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
-	}
+	return "checked " + layout.AgeUnits(now.Sub(at)) + " ago"
 }
 
 func healthPlural(n int) string {

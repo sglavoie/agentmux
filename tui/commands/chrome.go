@@ -1,11 +1,10 @@
 package commands
 
 import (
-	"strings"
-
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
@@ -14,11 +13,9 @@ var (
 	styleSelected  = theme.Selected()
 	styleDim       = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
 	styleSearch    = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
-	styleFooter    = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleFooter    = chrome.FooterLabel
 	styleHeader    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
-	styleFooterKey = lipgloss.NewStyle().
-			Foreground(theme.Color(theme.Primary)).
-			Bold(true)
+	styleFooterKey = chrome.FooterKey
 
 	// styleOverlayBox wraps the palette and actions popups in a rounded
 	// border with the de-facto accent teal. Padding adds a single column of
@@ -40,31 +37,6 @@ var (
 // only its visible content before applying the shared selection style.
 func renderSelectedRow(row string) string {
 	return styleSelected.Render(ansi.Strip(row))
-}
-
-// renderFooterBinding renders an available key separately from its dim
-// description. Keeping the two segments independent lets keys carry the shared
-// accent without changing the description's established styling.
-func renderFooterBinding(key, description string) string {
-	return renderFooterBindingWithLabel(key, " ", description, styleFooter)
-}
-
-// renderFooterBindingWithLabel is the custom-label variant used when a compact
-// prompt needs no gap between the key and its label.
-func renderFooterBindingWithLabel(key, gap, label string, labelStyle lipgloss.Style) string {
-	return styleFooterKey.Render(key) + gap + labelStyle.Render(label)
-}
-
-// joinFooterBindings joins already-rendered binding segments without adding an
-// indent or wrapping.
-func joinFooterBindings(separator string, rendered ...string) string {
-	kept := make([]string, 0, len(rendered))
-	for _, item := range rendered {
-		if item != "" {
-			kept = append(kept, item)
-		}
-	}
-	return strings.Join(kept, styleFooter.Render(separator))
 }
 
 func clamp(value, low, high int) int {

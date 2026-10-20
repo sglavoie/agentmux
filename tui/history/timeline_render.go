@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -213,14 +214,14 @@ func (in DetailInput) RenderTimeline() string {
 	}
 	sb.WriteByte('\n')
 
-	hints := joinFooterBindings(" · ",
-		renderFooterBinding("t", "flat list"),
-		renderFooterBinding("↑/↓", "scroll"),
-		renderFooterBinding("enter", "fold"),
-		renderFooterBinding("z/Z", "collapse/expand"),
-		renderFooterBinding("s", "suppressed"),
-		renderFooterBinding("T", "timestamps"),
-		renderFooterBinding("esc", "close"),
+	hints := chrome.JoinBindings(" · ",
+		chrome.Binding("t", "flat list"),
+		chrome.Binding("↑/↓", "scroll"),
+		chrome.Binding("enter", "fold"),
+		chrome.Binding("z/Z", "collapse/expand"),
+		chrome.Binding("s", "suppressed"),
+		chrome.Binding("T", "timestamps"),
+		chrome.Binding("esc/q/d", "close"),
 	)
 	sb.WriteString(hints)
 	sb.WriteByte('\n')

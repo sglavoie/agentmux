@@ -1,21 +1,20 @@
 // This file is the root's visual vocabulary: the lipgloss theme every root
 // renderer paints with, the normalized selected-row renderer every selectable
 // list routes its highlight through, and the small shared text helpers —
-// pluralization, rune clamping, relative times, title display, the search bar,
+// pluralization, rune clamping, title display, the search bar,
 // and the path row — that draw with that theme.
 
 package tui
 
 import (
-	"fmt"
-	"github.com/sglavoie/agentmux/tui/dashboard"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/tui/chrome"
+	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
@@ -25,11 +24,9 @@ var (
 	styleError     = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
 	styleDim       = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
 	styleSearch    = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
-	styleFooter    = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleFooter    = chrome.FooterLabel
 	styleHeader    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
-	styleFooterKey = lipgloss.NewStyle().
-			Foreground(theme.Color(theme.Primary)).
-			Bold(true)
+	styleFooterKey = chrome.FooterKey
 
 	// Popups retain their existing one-column padding and border geometry.
 	styleOverlayBox = theme.Popup()
@@ -37,9 +34,7 @@ var (
 	// styleFooterUnavailableKey renders actions that do not apply to the current
 	// cursor row. The dim grey foreground keeps the key visible while signaling
 	// that pressing it would be a no-op.
-	styleFooterUnavailableKey = lipgloss.NewStyle().
-					Foreground(theme.Color(theme.Disabled)).
-					Bold(true)
+	styleFooterUnavailableKey = chrome.FooterUnavailableKey
 
 	// Status bar styles own the fixed bottom row. Each style sets a
 	// background so the padded row reads as a full-width mode/status strip.
@@ -78,43 +73,15 @@ func renderSelectedRow(row string) string {
 	return styleSelected.Render(ansi.Strip(row))
 }
 
-// The helpers below are the root's shared count and timestamp labels. They
-// used to live alongside the Past Sessions list; that view moved into
-// tui/history, which carries its own private copies, so what remains here is
-// what the plan search, the plan viewer, and the status bar still need.
+// plural is the root's count suffix. Timestamp and age labels are not here:
+// every view builds them from tui/layout's age helpers (When, Ago,
+// CompactAge), which take the reference instant explicitly.
 
 func plural(n int) string {
 	if n == 1 {
 		return ""
 	}
 	return "s"
-}
-
-// formatSessionWhen returns a short human-readable representation of a
-// timestamp. Entries newer than 24h show as "Xh", older up to 7d as "Xd", and
-// anything older falls back to YYYY-MM-DD.
-func formatSessionWhen(t time.Time) string {
-	if t.IsZero() {
-		return "          "
-	}
-	delta := time.Since(t)
-	if delta < 0 {
-		delta = 0
-	}
-	switch {
-	case delta < time.Hour:
-		mins := int(delta.Minutes())
-		if mins < 1 && delta > 0 {
-			mins = 1
-		}
-		return fmt.Sprintf("%2dm   ago", mins)
-	case delta < 24*time.Hour:
-		return fmt.Sprintf("%2dh   ago", int(delta.Hours()))
-	case delta < 7*24*time.Hour:
-		return fmt.Sprintf("%2dd   ago", int(delta.Hours()/24))
-	default:
-		return t.Format("2006-01-02")
-	}
 }
 
 func renderPathRow(label, path string, maxWidth int) string {

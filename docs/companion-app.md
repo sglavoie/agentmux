@@ -208,9 +208,11 @@ terminals of their own beside the agents, and none of them needs Kitty.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you
   are on is working and lists it right under that session; pressed again, it
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[
-  (also ⌘⇧→ and ⌘⇧←) stop at every session and every terminal under one,
-  in sidebar order; ⌘⇧] and ⌘⇧[ go from session to session, passing over
-  the terminals. The digits
+  (**Session › Next Session or Terminal** and **Previous Session or
+  Terminal**, also ⌘⇧→ and ⌘⇧←) stop at every session and every terminal
+  under one, in sidebar order; ⌘⇧] and ⌘⇧[ (**Next Session (Kitty Sessions
+  in Kitty)** and its Previous twin) go from session to session, passing
+  over the terminals, as F9 and F7 do. The digits
   (⌘1 to ⌘0) count sessions only. It applies to sessions whose terminal
   is in the workspace, not to Kitty sessions; with no such session shown
   the item is greyed out. If the session ends first, the
@@ -353,7 +355,7 @@ terminal attached. Nothing here needs a tmux key or prefix.
 | View › Page Up / Page Down | ⇧Page Up / ⇧Page Down | One page through the history |
 | View › Scroll to Top | ⌘Home | The oldest line tmux holds |
 | View › Scroll to Bottom | ⌘End | Back to the live screen |
-| Edit › Find… | ⌘F | Asks for text at the bottom of the terminal and jumps to the nearest match above |
+| Edit › Find in Terminal… | ⌘F | Asks for text at the bottom of the terminal and jumps to the nearest match above |
 | Edit › Find Next / Find Previous | ⌘G / ⇧⌘G | The match before, or back toward the newest |
 | Session › Function Keys › Toggle Error and Warning Markers | F3 | Highlights every `error`, `failed`, `warning`, and `deprecated`, in any case, from the last one up; ⌘G steps to the one before, and F3 again returns to the live screen |
 
@@ -440,7 +442,7 @@ labels; raw protocol reasons remain in the session inspector.
 
 ### Conversation History
 
-**View › Conversation History…** searches full transcripts, scoped to all history,
+**View › Conversation History…** (⌘⇧H) searches full transcripts, scoped to all history,
 the selected session's project, or its conversation. Resume, fork, or focus a live
 session from the preview. Search opens around its first matching prose message,
 even outside the latest 50 messages. Highlighted terms and previous/next match
@@ -466,14 +468,14 @@ losing the wider preference when the window shrinks. The sidebar button or **⌘
 hides results and restores focus to the selected result on reopening. Down from
 search also reveals results. Selection and reading position remain intact.
 
-**Edit › Search Conversation…** opens the selected session's recorded conversation
+**Edit › Search Conversation…** (⌘⇧S) opens the selected session's recorded conversation
 in History once its identity is known. **Edit › Find in Terminal…** uses the
 terminal find bar: **Find on visible screen** for a full-screen agent, **Find in
 terminal history** otherwise. Utility terminals search terminal history.
 
 ### Checkout Changes
 
-**View › Review Checkout Changes…**, or **Changes…** in the Session inspector,
+**View › Checkout Changes…** (⌘⇧C), or **Changes…** in the Session inspector,
 shows checkout-wide files, line counts, and diffs against a chosen branch or commit.
 Changes includes every session using that checkout. The app and `amx` must both
 be rebuilt for checkout review.
@@ -512,7 +514,7 @@ review cannot authorize landing while its replacement is being read.
 
 ### Since Last Looked
 
-**View › Since Last Looked…** shows recorded state transitions, process exits,
+**View › Since Last Looked…** (⌘⇧U) shows recorded state transitions, process exits,
 and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days.
 Select an event for details and the last timestamped assistant output at or before
 it; **Load earlier messages** searches further back for supporting output.
@@ -530,7 +532,7 @@ transcripts, truncation, and unreadable journal records remain explicit.
 
 ### ASL Runs and Run a Plan
 
-**View › ASL Runs…** lists the full active/actionable run projection, including
+**View › ASL Runs…** (⌘⇧R) lists the full active/actionable run projection, including
 pauses without an unanswered question. Select a run for progress, blockers, and
 permitted controls above the scrolling plan sessions. **Run details** expands
 paths, identifiers, and timestamps; **Recorded verification** expands check evidence.
@@ -558,7 +560,7 @@ summaries trigger a read on the next poll. Explicit refresh and reactivation rea
 immediately. Hidden/inactive windows suspend polling. Evidence is run-scoped and
 bounded; unavailable or truncated results are labeled.
 
-**View › Run a Plan…**, also in Runs and the palette, opens the native launch form.
+**View › Run a Plan…** (⌘⇧N), also in Runs and the palette, opens the native launch form.
 Choose a directory or configured plan name, optionally choose a supervising
 project/profile and worker/review harnesses, then **Check Readiness**. Searchable
 project and supervisor choices support arrows, Return, and Escape; unavailable
@@ -620,7 +622,10 @@ attached elsewhere stay detached. Restored utility programs require explicit Reo
 
 Assign keys in **Settings › Workspace shortcuts** with **Record Shortcut**. Bindings
 apply immediately and persist. **Clear** removes a binding; **Restore Default**
-restores its original key (⌘⇧P for Command Palette, unassigned for other new commands).
+restores its original key: ⌘⇧P for Command Palette, ⌘⇧R for ASL Runs…, ⌘⇧N for
+Run a Plan…, ⌘⇧U for Since Last Looked…, ⌘⇧H for Conversation History…, and ⌘⇧C
+for Checkout Changes…; the pane commands have none. None of these holds Option, and
+none is a key Ghostty binds with ⌘⇧.
 The recorder checks menu/global conflicts; Escape cancels. These keys work while
 the app is active. History and Changes also have separate resizable native windows.
 
@@ -631,9 +636,13 @@ the app is active. History and Changes also have separate resizable native windo
 | History | ⌘F search; Down from search reveals results; ⌘G / ⌘⇧G next/previous match; ⌘R refresh transcript; ⌘Return resume/focus; ⌘⇧Return fork; ⌘⌥S toggle results |
 | Changes | ⌘G / ⌘⇧G next/previous hunk; ⌘R refresh comparison; ⌘E open file; ⌘⇧F reveal/focus files; ⌘⇧E edit base; ⌘⌥S toggle files |
 | Runs | ⌘R refresh; ⌘⇧F reveal/focus runs; ⌘Return open session; ⌘⇧I inspect failed check; ⌘⌥S toggle runs |
-| Activity | ⌘R refresh; ⌘⇧F focus events; ⌘Return focus live session; ⌘⇧Return open recorded conversation |
+| Activity | ⌘R refresh; ⌘⇧F reveal/focus events; ⌘Return focus live session; ⌘⇧Return open recorded conversation; ⌘⌥S toggle events |
 
 **⌘W** closes a standalone review window and returns to the workspace when open.
+The four review windows share one minimum size and remember their placement. Each
+reads again when it is shown; Checkout Changes also compares again when you come
+back to the app, since an agent may have edited files meanwhile, and Runs polls only
+while its window can be seen.
 In a split workspace, review shortcuts belong to the focused review pane.
 Refreshes retain selection and focus; toggling a sidebar retains reading position.
 

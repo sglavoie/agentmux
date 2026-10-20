@@ -13,7 +13,7 @@
     },
     {
       "type": "contains_text",
-      "text": "No running sessions."
+      "text": "No running sessions"
     },
     {
       "type": "contains_text",
@@ -25,7 +25,7 @@
     },
     {
       "type": "excludes_text",
-      "text": "No sessions match the active filter."
+      "text": "No sessions match the active filter"
     },
     {
       "type": "no_layout_issues"

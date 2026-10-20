@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -24,20 +25,20 @@ func renderFooter(m Model) string {
 	case ModeSearch:
 		lines = nonEmptyFooterLines(
 			footerLine(m.width, " · ", "filter: @profile", "#project", "%harness", "!state (!attention)", "word", "\\@ \\# \\% \\! literal"),
-			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply"), renderFooterBinding("esc", "cancel")),
+			footerStyledLine(m.width, "  ", chrome.Binding("enter", "apply"), chrome.Binding("esc", "cancel")),
 		)
 	case ModeConfirm:
 		lines = nonEmptyFooterLines(footerStyledLine(m.width, "   ",
-			renderFooterBindingWithLabel("[y]", "", "es", styleFooter),
-			renderFooterBindingWithLabel("[n]", "", "o", styleFooter),
-			renderFooterBinding("[esc]", "cancel"),
+			chrome.BindingWithLabel("[y]", "", "es", styleFooter),
+			chrome.BindingWithLabel("[n]", "", "o", styleFooter),
+			chrome.Binding("[esc]", "cancel"),
 		))
 	case ModePicker:
 		if m.pickerDirMode {
 			lines = nonEmptyFooterLines(
 				footerStyledLine(m.width, "  ",
-					renderFooterBinding("enter", "apply"), renderFooterBinding("tab", "complete"),
-					renderFooterBinding("ctrl+u", "clear"), renderFooterBinding("esc", "cancel"),
+					chrome.Binding("enter", "apply"), chrome.Binding("tab", "complete"),
+					chrome.Binding("ctrl+u", "clear"), chrome.Binding("esc", "cancel"),
 				),
 				footerLine(m.width, " · ", "launch directory", "relative paths start at the project's directory", "empty restores it"),
 			)
@@ -45,29 +46,29 @@ func renderFooter(m Model) string {
 		}
 		lines = nonEmptyFooterLines(
 			footerStyledLine(m.width, "  ",
-				renderFooterBinding("space", "toggle"), renderFooterBinding("enter", "launch"),
-				renderFooterBinding("ctrl+e", "settings"),
-				renderFooterBinding("f", "profile"), renderFooterBinding("P", "pin"),
-				renderFooterBinding("s", "sessions"), renderFooterBinding("C", "override"),
-				renderFooterBinding("d", "directory"),
-				renderFooterBinding("o", "open dirs"), renderFooterBinding("O", "open in editor"),
-				renderFooterBinding("p", "preview"), renderFooterBinding("esc", "clear/exit"),
-				renderFooterBinding("?", "help"),
+				chrome.Binding("space", "toggle"), chrome.Binding("enter", "launch"),
+				chrome.Binding("ctrl+e", "settings"),
+				chrome.Binding("f", "profile"), chrome.Binding("P", "pin"),
+				chrome.Binding("s", "sessions"), chrome.Binding("C", "override"),
+				chrome.Binding("d", "directory"),
+				chrome.Binding("o", "open dirs"), chrome.Binding("O", "open in editor"),
+				chrome.Binding("p", "preview"), chrome.Binding("esc", "clear/exit"),
+				chrome.Binding("?", "help"),
 			),
-			footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom")),
+			footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom")),
 		)
 	case ModeConfigPicker:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "select"), renderFooterBinding("esc/q", "cancel")),
-			footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down")),
+			footerStyledLine(m.width, "  ", chrome.Binding("enter", "select"), chrome.Binding("esc/q", "cancel")),
+			footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down")),
 		)
 	case ModeLiveSessionPicker:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "focus"), renderFooterBinding("esc/q", "cancel")),
-			footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down")),
+			footerStyledLine(m.width, "  ", chrome.Binding("enter", "focus"), chrome.Binding("esc/q", "cancel")),
+			footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down")),
 		)
 	case ModeHelp:
-		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("esc/?/q", "close help")))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("esc/?/q", "close")))
 	case ModeActions:
 		// The menu carries its own hint line — select, run, the letters, and how
 		// to close — so this row said the same three things a second time, in a
@@ -78,7 +79,7 @@ func renderFooter(m Model) string {
 		// which is why the shed ladder gives up the header before it.
 		lines = nil
 	case ModeCommandPalette:
-		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", renderFooterBinding("↑/↓ or ctrl+j/k or ctrl+n/p", "move"), renderFooterBinding("enter", "run"), renderFooterBinding("esc", "close"), renderFooterBinding("ctrl+c", "quit")))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", chrome.Binding("↑/↓ or ctrl+j/k or ctrl+n/p", "up/down"), chrome.Binding("enter", "run"), chrome.Binding("esc", "close"), chrome.Binding("ctrl+c", "quit")))
 	case ModeDetail:
 		// Inner box footer already carries the scroll position and detail
 		// keymap; the outer hint area stays blank so the dimmed dashboard
@@ -86,23 +87,23 @@ func renderFooter(m Model) string {
 		lines = nil
 	case ModeChipPicker:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "select"), renderFooterBinding("esc/q", "cancel")),
-			footerStyledLine(m.width, "  ", renderFooterBinding("/", "search"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
+			footerStyledLine(m.width, "  ", chrome.Binding("enter", "select"), chrome.Binding("esc/q", "cancel")),
+			footerStyledLine(m.width, "  ", chrome.Binding("/", "search"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("pgup/pgdn", "page")),
 		)
 	case ModeProjectSwitcher:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", renderFooterBinding("enter", "apply scope"), renderFooterBinding("esc/q/p", "cancel")),
-			footerStyledLine(m.width, "  ", renderFooterBinding("/", "search"), renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
+			footerStyledLine(m.width, "  ", chrome.Binding("enter", "apply scope"), chrome.Binding("esc/q/p", "cancel")),
+			footerStyledLine(m.width, "  ", chrome.Binding("/", "search"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("pgup/pgdn", "page")),
 		)
 	case ModeFeedback:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", renderFooterBinding("tab", "next notice"), renderFooterBinding("j/k", "scroll"), renderFooterBinding("enter", "inspect"), renderFooterBinding("u", "recover")),
-			footerStyledLine(m.width, "  ", renderFooterBinding("y/Y", "copy/all"), renderFooterBinding("d/D", "dismiss/all"), renderFooterBinding("h", "health"), renderFooterBinding("esc/q", "close")),
+			footerStyledLine(m.width, "  ", chrome.Binding("tab", "next notice"), chrome.Binding("j/k", "scroll"), chrome.Binding("enter", "inspect"), chrome.Binding("u", "recover")),
+			footerStyledLine(m.width, "  ", chrome.Binding("y/Y", "copy/all"), chrome.Binding("d/D", "dismiss/all"), chrome.Binding("h", "health"), chrome.Binding("esc/q", "close")),
 		)
 	case ModeHealth:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", renderFooterBinding("j/k", "up/down"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("pgup/pgdn", "page")),
-			footerStyledLine(m.width, "  ", healthDismissFooterBinding(m), renderFooterBinding("esc/q", "close")),
+			footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("pgup/pgdn", "page")),
+			footerStyledLine(m.width, "  ", healthDismissFooterBinding(m), chrome.Binding("esc/q", "close")),
 		)
 	case ModeSessionSearch:
 		lines = footerHintLines(m, sessionSearchFooterPalette, footerHintMaxLines)
@@ -123,7 +124,7 @@ func renderFooter(m Model) string {
 	case ModePlanRun:
 		lines = footerHintLines(m, planRunFooterPalette, footerHintMaxLines)
 	case ModeMessageDetail:
-		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", renderFooterBinding("j/k", "scroll"), renderFooterBinding("ctrl+d/u", "half"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("y", "copy"), renderFooterBinding("esc/q/enter", "close")))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", chrome.Binding("j/k", "scroll"), chrome.Binding("ctrl+d/u", "half"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("y", "copy"), chrome.Binding("esc/q/enter", "close")))
 	case ModeDeleteChoice:
 		lines = nonEmptyFooterLines(footerLineFromTokens(m.width, " · ",
 			footerBindingToken("[i]", "index only"),
@@ -299,7 +300,7 @@ func footerSingleRow(tokens []prioritizedFooterToken, indent string, truncated, 
 		parts = append(parts, rendered)
 	}
 	if truncated && !short && !strings.Contains(ansi.Strip(strings.Join(parts, " ")), "? help") {
-		parts = append(parts, renderFooterBinding("?", "more"))
+		parts = append(parts, chrome.Binding("?", "more"))
 	}
 	return indent + strings.Join(parts, sep)
 }
@@ -449,37 +450,16 @@ func countFooterPhysicalRows(lines []string) int {
 // `priority` orders truncation when a palette cannot fit its row budget: 0 is
 // never dropped, and higher numbers are dropped before lower ones.
 
-// renderFooterBinding renders an available key separately from its dim
-// description. Keeping the two segments independent lets keys carry the
-// shared accent without changing the description's established styling.
-func renderFooterBinding(key, description string) string {
-	return renderFooterBindingWithLabel(key, " ", description, styleFooter)
-}
-
-// renderUnavailableFooterBinding keeps an unavailable key visible in the
-// muted palette while its description retains the same dim style used by
-// available bindings.
-func renderUnavailableFooterBinding(key, description string) string {
-	return styleFooterUnavailableKey.Render(key) + " " + styleFooter.Render(description)
-}
-
-// renderFooterBindingWithLabel is the custom-label variant used when a
-// description has semantic styling (for example, a destructive red label) or
-// a compact prompt needs no gap between the key and label (for example [y]es).
-func renderFooterBindingWithLabel(key, gap, label string, labelStyle lipgloss.Style) string {
-	return styleFooterKey.Render(key) + gap + labelStyle.Render(label)
-}
-
 func footerBindingToken(key, description string) footerToken {
-	return footerRenderedToken(renderFooterBinding(key, description))
+	return footerRenderedToken(chrome.Binding(key, description))
 }
 
 func footerUnavailableBindingToken(key, description string) footerToken {
-	return footerRenderedToken(renderUnavailableFooterBinding(key, description))
+	return footerRenderedToken(chrome.UnavailableBinding(key, description))
 }
 
 func footerCustomBindingToken(key, gap, label string, labelStyle lipgloss.Style) footerToken {
-	return footerRenderedToken(renderFooterBindingWithLabel(key, gap, label, labelStyle))
+	return footerRenderedToken(chrome.BindingWithLabel(key, gap, label, labelStyle))
 }
 
 type footerEntry struct {
@@ -637,7 +617,7 @@ func listFooterPalette() []listFooterCandidate {
 		listMetadata(footerPriorityEssential, func(m Model, _ string) string {
 			row, ok := m.selectedSession()
 			if commands.SendAvailability(commands.Context{Target: row, HasTarget: ok}).Reason == commands.ReasonSendASLQuestion {
-				return renderFooterBinding(": runs ↵", "answer run")
+				return chrome.Binding(": runs ↵", "answer run")
 			}
 			return ""
 		}),

@@ -349,3 +349,80 @@ func TestSetupAllowsCorrectingAChoice(t *testing.T) {
 		t.Fatalf("corrected choices were not saved: %+v", cfg)
 	}
 }
+
+// Outside Kitty, or without it, setup recommends tmux before the backend
+// question and again in the summary when keep was chosen. It only
+// recommends: keep stays the default answer and still writes nothing.
+func TestSetupRecommendsTmuxWhereKittyIsNotAvailable(t *testing.T) {
+	for _, tc := range []struct {
+		name, windowID, answer string
+		noKitten               bool
+		want                   string
+		pinned                 string
+	}{
+		{name: "plain terminal, keep", answer: "", want: "Recommended: tmux (this terminal is not Kitty)"},
+		{name: "no Kitty installed", windowID: "5", answer: "", noKitten: true, want: "Recommended: tmux (Kitty's kitten is not on PATH)"},
+		{name: "inside Kitty", windowID: "5", answer: ""},
+		{name: "plain terminal, tmux chosen", answer: "tmux", want: "Recommended: tmux (this terminal is not Kitty):", pinned: config.LaunchBackendTmux},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			t.Setenv("amx_CONFIG", path)
+			t.Setenv("KITTY_WINDOW_ID", tc.windowID)
+			t.Setenv("KITTY_LISTEN_ON", "")
+			input := "codex\n\n\n" + t.TempDir() + "\n\n" + tc.answer + "\nno\n"
+			var out string
+			var err error
+			if tc.noKitten {
+				out, err = runSetupWithLookPath(t, input, func(name string) (string, error) {
+					if name == "kitten" {
+						return "", errors.New("not installed")
+					}
+					return "/fixture/bin/" + name, nil
+				})
+			} else {
+				out, err = runSetupWithInput(t, input)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" && strings.Contains(out, "Recommended:") {
+				t.Fatalf("recommended a backend inside Kitty:\n%s", out)
+			}
+			if tc.want != "" && !strings.Contains(out, tc.want) {
+				t.Fatalf("missing %q:\n%s", tc.want, out)
+			}
+			summaryRecommends := strings.Contains(out, "  Recommended: tmux")
+			if summaryRecommends != (tc.want != "" && tc.pinned == "") {
+				t.Fatalf("summary recommendation = %t:\n%s", summaryRecommends, out)
+			}
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Defaults.LaunchBackend != tc.pinned {
+				t.Fatalf("launch_backend = %q, want %q", cfg.Defaults.LaunchBackend, tc.pinned)
+			}
+		})
+	}
+}
+
+// runSetupWithLookPath is runSetupWithInput with the PATH lookup replaced
+// after its own stub is installed.
+func runSetupWithLookPath(t *testing.T, input string, look func(string) (string, error)) (string, error) {
+	t.Helper()
+	oldStatus := setupBackendStatus
+	setupBackendStatus = func(*config.Config) cli.BackendStatus {
+		return cli.BackendStatus{Tmux: cli.TmuxStatus{Available: true, Version: "3.5", Path: "/fixture/tmux"}}
+	}
+	oldLook := setupLookPath
+	setupLookPath = look
+	t.Cleanup(func() { setupLookPath, setupBackendStatus = oldLook, oldStatus })
+	oldIn, oldOut := configSetupCmd.InOrStdin(), configSetupCmd.OutOrStdout()
+	t.Cleanup(func() { configSetupCmd.SetIn(oldIn); configSetupCmd.SetOut(oldOut) })
+	var out bytes.Buffer
+	configSetupCmd.SetIn(strings.NewReader(input))
+	configSetupCmd.SetOut(&out)
+	err := configSetupCmd.RunE(configSetupCmd, nil)
+	return out.String(), err
+}

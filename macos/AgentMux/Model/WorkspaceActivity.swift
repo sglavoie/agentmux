@@ -68,6 +68,8 @@ struct WorkspaceActivityReadStore {
 
 @MainActor
 final class WorkspaceActivityModel: ObservableObject {
+    private let reviewState: WorkspaceReviewState
+    @Published var layout: WorkspaceReviewState.SidebarLayout { didSet { reviewState.activityLayout = layout } }
     @Published var unreadOnly = true
     @Published var days = 7
     @Published private(set) var reportRefreshedAt: Date?
@@ -104,7 +106,10 @@ final class WorkspaceActivityModel: ObservableObject {
     }
     var unreadResultCount: Int { visible.filter { readState.read[$0.id] == nil }.count }
 
-    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), readStore: WorkspaceActivityReadStore = .standard) {
+    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), readStore: WorkspaceActivityReadStore = .standard,
+         defaults: UserDefaults? = nil) {
+        reviewState = WorkspaceReviewState(defaults: defaults)
+        layout = reviewState.activityLayout
         self.command = command
         self.runner = runner
         self.readStore = readStore

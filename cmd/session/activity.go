@@ -14,6 +14,17 @@ import (
 
 func newActivityCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "activity", Short: "Read recorded state changes, exits, and ASL lifecycle events", Args: cobra.NoArgs,
+		Long: `Reads what the daemon recorded in its journal over the last --days days:
+sessions changing state, agents exiting, and agent-session-loop runs starting
+and finishing. It is a record of what happened, never rebuilt from the
+sessions running now, so it goes back only as far as the journal is retained.
+
+Each line is the time, the harness, a title, and a detail; at most --limit
+records are read. With --json it reports {entries, since,
+earliest_available, truncated, corrupt_lines, matched}.`,
+		Example: `  amx session activity
+  amx session activity --days 1 --limit 50
+  amx session activity --json`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")
 			days, _ := cmd.Flags().GetInt("days")

@@ -4,9 +4,12 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 func TestMain(m *testing.M) {
+	testenv.ClearSessionEnv()
 	stateRoot, err := os.MkdirTemp("", "agentmux-hooks-test-state-")
 	if err != nil {
 		panic(err)

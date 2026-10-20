@@ -58,7 +58,9 @@ func renderChipPicker(m Model) string {
 	total := len(m.chipPickerOptions)
 	if total == 0 {
 		if chipPickerSearchVisible(m) {
-			sb.WriteString(styleDim.Render("  (no " + chipPickerPluralLabel(m.chipPickerKind) + " match)"))
+			// The overlay box wraps a line wider than itself, so the hint is
+			// never cut off mid-key.
+			sb.WriteString(styleDim.Render("  " + layout.Placeholder(layout.NoMatchText(chipPickerPluralLabel(m.chipPickerKind), layout.SearchEditHint(m.chipPickerSearchMode)))))
 		} else {
 			sb.WriteString(styleDim.Render("  (no options)"))
 		}

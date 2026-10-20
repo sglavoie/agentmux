@@ -36,34 +36,12 @@ package overview
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // footerSeparator is what sits between two entries on the row.
 const footerSeparator = " · "
-
-type footerKey struct {
-	text      string
-	available bool
-}
-
-// footerKeys renders paired keys independently: PgUp can be unavailable while
-// PgDn still works. Labels and separators retain the dashboard's dim style.
-func footerKeys(label string, keys ...footerKey) string {
-	parts := make([]string, len(keys))
-	for i, key := range keys {
-		style := styleFooterUnavailableKey
-		if key.available {
-			style = styleFooterKey
-		}
-		parts[i] = style.Render(key.text)
-	}
-	joined := strings.Join(parts, styleDim.Render("/"))
-	if label == "" {
-		return joined
-	}
-	return joined + " " + styleDim.Render(label)
-}
 
 // footerEntry is one rendered entry plus what the drop ladder needs to know
 // about it: how it is spelled without its label, and when it may be given up.
@@ -82,8 +60,8 @@ func renderFooter(in Input, g Geometry, selected int) string {
 			continue
 		}
 		entries = append(entries, footerEntry{
-			full:     footerKeys(b.labelFor(f), footerParts(b, f, false)...),
-			short:    footerKeys("", footerParts(b, f, true)...),
+			full:     chrome.Keys(b.labelFor(f), footerParts(b, f, false)...),
+			short:    chrome.Keys("", footerParts(b, f, true)...),
 			priority: b.priority,
 		})
 	}
@@ -100,15 +78,15 @@ func renderFooter(in Input, g Geometry, selected int) string {
 // that answer it are said here — once, and only while it is up.
 func confirmHints() string {
 	return strings.Join([]string{
-		footerKeys("confirm", footerKey{"y", true}),
-		footerKeys("cancel", footerKey{"n", true}, footerKey{"esc", true}, footerKey{"q", true}),
+		chrome.Keys("confirm", chrome.Key{Text: "y", Available: true}),
+		chrome.Keys("cancel", chrome.Key{Text: "n", Available: true}, chrome.Key{Text: "esc", Available: true}, chrome.Key{Text: "q", Available: true}),
 	}, styleDim.Render(footerSeparator))
 }
 
 // footerParts renders one binding's key groups, each with its own availability.
 // bare selects the short spelling, which is what the last-ditch row uses.
-func footerParts(b gridBinding, f footerFacts, bare bool) []footerKey {
-	keys := make([]footerKey, len(b.parts))
+func footerParts(b gridBinding, f footerFacts, bare bool) []chrome.Key {
+	keys := make([]chrome.Key, len(b.parts))
 	for i, p := range b.parts {
 		text := p.display
 		if bare {
@@ -118,7 +96,7 @@ func footerParts(b gridBinding, f footerFacts, bare bool) []footerKey {
 		if p.available != nil {
 			available = p.available(f)
 		}
-		keys[i] = footerKey{text: text, available: available}
+		keys[i] = chrome.Key{Text: text, Available: available}
 	}
 	return keys
 }

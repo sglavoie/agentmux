@@ -180,10 +180,7 @@ func (in SearchInput) emptyHint() string {
 	if in.HarnessChip != "" || in.ProfileChip != "" || in.ProjectChip != "" || in.MessageSourceChip != "" {
 		ways = append(ways, "h/p/r/m change the filters")
 	}
-	if len(ways) == 0 {
-		return ""
-	}
-	return " — " + strings.Join(ways, " · ")
+	return strings.Join(ways, " · ")
 }
 
 // emptyText is what an empty list says. With nothing narrowing it no
@@ -192,9 +189,9 @@ func (in SearchInput) emptyHint() string {
 func (in SearchInput) emptyText() string {
 	hint := in.emptyHint()
 	if hint == "" {
-		return "(no past sessions found — each profile's home_dir in config.toml says where to look)"
+		return layout.Placeholder(layout.EmptyText("past sessions found", "each profile's home_dir in config.toml says where to look"))
 	}
-	return "(no sessions match" + hint + ")"
+	return layout.Placeholder(layout.NoMatchText("sessions", hint))
 }
 
 // RenderList renders the scrollable results list. height is the per-call row
@@ -206,7 +203,7 @@ func (in SearchInput) RenderList(height int) string {
 	total := len(in.Results)
 	if total == 0 {
 		if label := in.loadingLabel(); label != "" {
-			sb.WriteString(styleDim.Render("  (" + label + ")"))
+			sb.WriteString(styleDim.Render("  " + layout.Placeholder(label)))
 		} else if in.RefreshInFlight {
 			sb.WriteString(styleDim.Render("  (scanning transcripts…)"))
 		} else {
@@ -259,7 +256,7 @@ func (in SearchInput) loadingLabel() string {
 		return ""
 	}
 	if in.CacheLoadInFlight || !in.IndexReady {
-		return "loading cache…"
+		return layout.LoadingText("past sessions")
 	}
 	return "searching…"
 }

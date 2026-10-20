@@ -8,16 +8,16 @@ import (
 )
 
 // TestDaemonStateAcceptanceDoc_CodexUsesNativeHookSpellings guards the exact
-// expected-state table in docs/daemon_state_acceptance.md against a regression
+// expected-state table in docs/acceptance/daemon-state.md against a regression
 // where the Codex cells adopt Copilot's hook dialect. Codex fires native
 // capitalized `Stop`/`UserPromptSubmit` hooks (see internal/hookevent/events.go
 // and the installed live evidence in this document); Copilot's lowercase
 // `agentStop`/`userPromptSubmitted` spellings must never reappear in the Codex
 // column.
 func TestDaemonStateAcceptanceDoc_CodexUsesNativeHookSpellings(t *testing.T) {
-	data, err := os.ReadFile("docs/daemon_state_acceptance.md")
+	data, err := os.ReadFile("docs/acceptance/daemon-state.md")
 	if err != nil {
-		t.Fatalf("ReadFile(docs/daemon_state_acceptance.md): %v", err)
+		t.Fatalf("ReadFile(docs/acceptance/daemon-state.md): %v", err)
 	}
 
 	cells := codexExactStateCells(t, string(data))

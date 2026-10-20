@@ -13,7 +13,7 @@ import (
 
 func TestCommandPaletteFooterHints(t *testing.T) {
 	out := stripAnsi(renderFooter(Model{mode: ModeCommandPalette, width: 100}))
-	for _, want := range []string{"ctrl+j/k", "ctrl+n/p move", "enter run", "esc close", "ctrl+c quit"} {
+	for _, want := range []string{"ctrl+j/k", "ctrl+n/p up/down", "enter run", "esc close", "ctrl+c quit"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("palette footer = %q, want %q", out, want)
 		}
@@ -175,7 +175,7 @@ func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
 	}
 	// One hint from each priority band, so a regression that sheds a whole band
 	// at zero width is what this catches rather than one entry going missing.
-	for _, want := range []string{"j/k up/down", "a actions", "n/N needs you", "l launch", "S past sessions", "s project history"} {
+	for _, want := range []string{"j/k up/down", "a actions", "n/N needs you", "l launch", "S past sessions", "s project's past sessions"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("zero-width footer missing %q: %q", want, out)
 		}

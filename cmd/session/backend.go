@@ -42,7 +42,7 @@ var backendCmd = &cobra.Command{
 	Short: "Show or stop the terminal backend agents run on",
 	Long: `Show or stop the terminal backend agents run on.
 
-Agents launch into Kitty tabs or into AgentMux's private tmux server, whose
+Agents launch into Kitty tabs or into Agent Mux's private tmux server, whose
 agents outlive every terminal and the desktop app. ` + "`amx backend status`" + ` says
 which one a launch uses, which tmux the private server runs, and what to do
 when something is missing.`,
@@ -51,7 +51,17 @@ when something is missing.`,
 var backendStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Report the launch backend, the tmux in use, and any setup problem",
-	Args:  cobra.NoArgs,
+	Long: `Reports which backend a launch uses, which tmux the private server runs
+and where it came from, whether that server is running and how many agents
+it holds, and each setup problem with what to do about it. It reads and
+changes nothing.
+
+--check exits 1 when launching on tmux would not work, for scripts. With
+--json it reports the same fields.`,
+	Example: `  amx backend status
+  amx backend status --check
+  amx backend status --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		status := collectBackendStatus()
 		if backendStatusJSON {
@@ -76,7 +86,11 @@ var backendStopCmd = &cobra.Command{
 Nothing else ends them: closing a terminal, quitting or updating the desktop
 app, and restarting the daemon all leave agents running. This is the explicit
 way to end them all at once, and it asks for --yes because their work in
-progress is lost. Their conversations stay on disk and can be resumed.`,
+progress is lost. Their conversations stay on disk and can be resumed.
+
+With --json it reports {running, sessions, agents, stopped}.`,
+	Example: `  amx backend stop
+  amx backend stop --yes`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		status := collectBackendStatus()
@@ -166,9 +180,9 @@ func writeBackendStatus(w io.Writer, status cli.BackendStatus) {
 func BackendCommand() *cobra.Command { return backendCmd }
 
 func init() {
-	backendStatusCmd.Flags().BoolVar(&backendStatusJSON, "json", false, "emit the report as JSON")
+	backendStatusCmd.Flags().BoolVar(&backendStatusJSON, "json", false, "emit schema-v1 JSON")
 	backendStatusCmd.Flags().BoolVar(&backendStatusCheck, "check", false, "exit 1 when launching on tmux would not work")
-	backendStopCmd.Flags().BoolVar(&backendStopJSON, "json", false, "emit the result as JSON")
+	backendStopCmd.Flags().BoolVar(&backendStopJSON, "json", false, "emit schema-v1 JSON")
 	backendStopCmd.Flags().BoolVar(&backendStopYes, "yes", false, "confirm ending every running agent")
 	backendCmd.AddCommand(backendStatusCmd, backendStopCmd)
 }

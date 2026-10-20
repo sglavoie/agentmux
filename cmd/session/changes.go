@@ -14,6 +14,19 @@ import (
 func newChangesCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "changes", Short: "Review checkout changes for a live session or directory",
+		Long: `Shows what changed in a Git checkout compared with --base (HEAD unless
+given): staged and unstaged changes to tracked files, and untracked paths.
+Name the checkout with exactly one of --directory, or --runtime-session for
+the directory a live tmux session's agent is working in (a Kitty session is
+reviewed by --directory). Nothing is written, and no Git hook, external diff
+driver, or textconv runs.
+
+Each changed file is listed as +added -deleted and its path; --file adds that
+one file's patch. With --json it reports {root, base, files, patch}.`,
+		Example: `  amx session changes --directory .
+  amx session changes --directory ~/projects/api --base main
+  amx session changes --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --file README.md
+  amx session changes --directory . --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -53,7 +66,7 @@ func newChangesCommand() *cobra.Command {
 	}
 	cmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	cmd.Flags().String("directory", "", "checkout directory")
-	cmd.Flags().String("runtime-session", "", "live embedded session whose checkout to review")
+	cmd.Flags().String("runtime-session", "", "runtime session ID of a live tmux session whose working directory to review")
 	cmd.Flags().String("base", "HEAD", "commit or reference to compare the working tree against")
 	cmd.Flags().String("file", "", "changed path whose patch to include")
 	return cmd

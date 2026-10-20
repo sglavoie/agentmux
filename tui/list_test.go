@@ -190,7 +190,7 @@ func stripAnsi(s string) string {
 func TestRenderListEmptyHeroNoSessions(t *testing.T) {
 	m := Model{width: 60}
 	out := stripAnsi(renderList(m))
-	if !strings.Contains(out, "No running sessions.") {
+	if !strings.Contains(out, "No running sessions") {
 		t.Errorf("expected title; got %q", out)
 	}
 	if !strings.Contains(out, "press  l  to launch") {
@@ -211,13 +211,13 @@ func TestRenderListInitialLoadDoesNotClaimTheListIsEmpty(t *testing.T) {
 	if !strings.Contains(out, "Loading sessions…") {
 		t.Errorf("expected loading title; got %q", out)
 	}
-	if strings.Contains(out, "No running sessions.") {
+	if strings.Contains(out, "No running sessions") {
 		t.Errorf("startup must not render the confirmed-empty title; got %q", out)
 	}
 
 	m = loadSessions(m, nil)
 	out = stripAnsi(renderList(m))
-	if !strings.Contains(out, "No running sessions.") {
+	if !strings.Contains(out, "No running sessions") {
 		t.Errorf("expected confirmed-empty title after load; got %q", out)
 	}
 	if strings.Contains(out, "Loading sessions…") {
@@ -236,7 +236,7 @@ func TestRenderListEmptyHeroFilteredOut(t *testing.T) {
 		activeFilter: dashboard.Parse("nomatch"),
 	}
 	out := stripAnsi(renderList(m))
-	if !strings.Contains(out, "No sessions match the active filter.") {
+	if !strings.Contains(out, "No sessions match the active filter") {
 		t.Errorf("expected filtered-out title; got %q", out)
 	}
 	if !strings.Contains(out, "press  esc  to clear filters") {

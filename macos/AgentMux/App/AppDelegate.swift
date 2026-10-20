@@ -132,6 +132,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     ]
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: Self.launchDefaults)
+        // Settings and the answer panels need the Edit menu's keys (⌘C, ⌘V,
+        // ⌘Z, ...) and ⌘W from the start, not once the workspace was opened.
+        // Before the activation policy: an app that starts regular with no
+        // main menu is given AppKit's default one, which `install` keeps,
+        // and the workspace's keys would then reach no menu.
+        if !Self.isRunningTests { WorkspaceMenu.install(target: self) }
         // LSUIElement already keeps the app out of the Dock; this states it
         // for a build run straight from DerivedData. A launch that reopens
         // the workspace starts regular instead: becoming regular once the
@@ -139,7 +146,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         // was launched from, and its window does not come forward.
         NSApp.setActivationPolicy(Self.launchActivationPolicy(
             reopensWorkspace: !Self.isRunningTests && launchReopensWorkspace && !isSecondInstance))
-        UserDefaults.standard.register(defaults: Self.launchDefaults)
         // One workspace window and Settings: neither is a tab of the other,
         // whatever "Prefer tabs" says, and View has no tab bar items.
         NSWindow.allowsAutomaticWindowTabbing = false
@@ -163,9 +169,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             }
         }
 
-        // Settings and the answer panels need the Edit menu's keys (⌘C, ⌘V,
-        // ⌘Z, ...) and ⌘W from the start, not once the workspace was opened.
-        WorkspaceMenu.install(target: self)
         statusItem = StatusItemController(delegate: self)
         setUpPreferences()
         setUpHotKeys()
@@ -245,21 +248,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// Dock icon is there for Settings.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         guard !Self.isRunningTests else { return false }
-        if activityVisible && !workspaceVisible && !settingsVisible {
-            activityWindow?.window?.makeKeyAndOrderFront(nil)
-            return false
-        }
-        if runsVisible && !workspaceVisible && !settingsVisible {
-            runsWindow?.window?.makeKeyAndOrderFront(nil)
-            return true
-        }
-        if changesVisible && !workspaceVisible && !settingsVisible {
-            changesWindow?.window?.makeKeyAndOrderFront(nil)
-            return false
-        }
-        if historyVisible && !workspaceVisible && !settingsVisible {
-            historyWindow?.window?.makeKeyAndOrderFront(nil)
-            return false
+        // With only review windows open, the first of them comes forward.
+        if !workspaceVisible && !settingsVisible {
+            let reviews: [(Bool, ReviewWindowController?)] = [(activityVisible, activityWindow), (runsVisible, runsWindow),
+                                                              (changesVisible, changesWindow), (historyVisible, historyWindow)]
+            if let open = reviews.first(where: { $0.0 && $0.1 != nil })?.1 {
+                open.window?.makeKeyAndOrderFront(nil)
+                return false
+            }
         }
         switch Self.reopenTarget(workspace: workspaceVisible, settings: settingsVisible) {
         case .workspace: showWorkspace()
@@ -855,10 +851,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private func inspectFeedbackCheckout(_ directory: String) {
         let controller = changesWindow ?? WorkspaceChangesWindow(model: makeChangesModel())
         guard !controller.model.landing else { controller.show(); return }
-        controller.onVisibilityChanged = { [weak self] visible in
-            self?.changesVisible = visible
-            self?.syncActivationPolicy()
-        }
+        trackVisibility(of: controller, \.changesVisible)
         controller.model.onOpenFile = { [weak self] path in
             self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
         }
@@ -872,11 +865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         workspace.show()
         let controller = changesWindow ?? WorkspaceChangesWindow(model: makeChangesModel())
         guard !controller.model.landing else { controller.show(); return }
-        controller.onVisibilityChanged = { [weak self] visible in
-            self?.changesVisible = visible
-            self?.syncActivationPolicy()
-            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
-        }
+        trackVisibility(of: controller, \.changesVisible)
         controller.model.onOpenFile = { [weak self] path in
             self?.showWorkspaceView(WorkspaceUtilityView(kind: .editor, target: path, title: (path as NSString).lastPathComponent))
         }
@@ -896,6 +885,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         controller.show()
     }
 
+    /// Every review window counts toward the activation policy while it is
+    /// open, and closing one returns to the workspace, or wherever `onHide`
+    /// says.
+    private func trackVisibility(of controller: ReviewWindowController, _ flag: ReferenceWritableKeyPath<AppDelegate, Bool>,
+                                 onHide: ((AppDelegate) -> Void)? = nil) {
+        controller.onVisibilityChanged = { [weak self] visible in
+            guard let self else { return }
+            self[keyPath: flag] = visible
+            self.syncActivationPolicy()
+            guard !visible else { return }
+            if let onHide {
+                onHide(self)
+            } else if self.workspaceVisible {
+                self.workspace?.window.makeKeyAndOrderFront(nil)
+            }
+        }
+    }
+
     @objc func showRuns(_ sender: Any?) { openRuns(launch: false) }
     @objc func runPlan(_ sender: Any?) { openRuns(launch: true) }
 
@@ -903,11 +910,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let controller = runsWindow ?? WorkspaceRunsWindow(
             model: WorkspaceRunsModel(command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory, defaults: .standard),
             plan: WorkspaceRunPlanModel(command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory))
-        controller.onVisibilityChanged = { [weak self] visible in
-            self?.runsVisible = visible
-            self?.syncActivationPolicy()
-            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
-        }
+        trackVisibility(of: controller, \.runsVisible)
         controller.model.onAnswer = { [weak self] target in self?.answer(target) }
         controller.model.onFocus = { [weak self] row in
             guard let self else { return }
@@ -925,12 +928,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     @objc func showActivity(_ sender: Any?) {
-        let controller = activityWindow ?? WorkspaceActivityWindow(model: WorkspaceActivityModel(command: { [weak self] in self?.command }))
-        controller.onVisibilityChanged = { [weak self] visible in
-            self?.activityVisible = visible
-            self?.syncActivationPolicy()
-            if !visible, self?.workspaceVisible == true { self?.workspace?.window.makeKeyAndOrderFront(nil) }
-        }
+        let controller = activityWindow ?? WorkspaceActivityWindow(model: WorkspaceActivityModel(command: { [weak self] in self?.command }, defaults: .standard))
+        trackVisibility(of: controller, \.activityVisible)
         controller.model.onConversation = { [weak self] identity, at in self?.openHistory(conversation: identity, eventTime: at) }
         controller.model.onFocus = { [weak self] entry in
             guard let self else { return }
@@ -976,17 +975,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let returnResponder: NSResponder? = searchNote == nil ? workspace.window.firstResponder : workspace.shownTerminalView
         workspace.show()
         let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }, defaults: .standard, feedbackHistory: reviewFeedbackHistory))
-        controller.onVisibilityChanged = { [weak self, weak returnResponder] visible in
-            self?.historyVisible = visible
-            self?.syncActivationPolicy()
-            if !visible, let self {
-                if eventTime != nil, let activity = self.activityWindow?.window, activity.isVisible {
-                    activity.makeKeyAndOrderFront(nil)
-                } else if self.workspaceVisible {
-                    self.workspace?.window.makeKeyAndOrderFront(nil)
-                    if let view = returnResponder as? NSView, view.window === self.workspace?.window,
-                       !view.isHiddenOrHasHiddenAncestor { self.workspace?.window.makeFirstResponder(view) }
-                }
+        trackVisibility(of: controller, \.historyVisible) { [weak returnResponder] app in
+            if eventTime != nil, let activity = app.activityWindow?.window, activity.isVisible {
+                activity.makeKeyAndOrderFront(nil)
+            } else if app.workspaceVisible {
+                app.workspace?.window.makeKeyAndOrderFront(nil)
+                if let view = returnResponder as? NSView, view.window === app.workspace?.window,
+                   !view.isHiddenOrHasHiddenAncestor { app.workspace?.window.makeFirstResponder(view) }
             }
         }
         controller.model.onAction = { [weak self] conversation, fork, completion in
@@ -1034,6 +1029,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         func entry(_ command: WorkspaceCommand, _ title: String, _ detail: String = "", reason: String? = nil) -> WorkspaceSwitcher.Entry {
             WorkspaceSwitcher.Entry(place: .command(command), glyph: "›", title: title, detail: detail, unavailableReason: reason)
         }
+        /// The key the command has now, as Settings may have changed it.
+        func key(_ shortcut: WorkspaceShortcut) -> String {
+            shortcut.combo(in: preferencesModel.preferences)?.displayString ?? ""
+        }
         var entries = [
             entry(.newTerminal, "New Terminal Here", "⌘↩", reason: workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first"),
             entry(.newShell, "New Shell", "⌘T"),
@@ -1043,11 +1042,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             entry(.focusOtherPane, "Focus Other Pane", reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
             entry(.swapPanes, "Swap Panes", reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
             entry(.collapsePane, "Hide Other Pane", reason: workspace?.isSplit == true ? (workspace?.canHideOtherPane == true ? nil : "Wait for the checkout operation to finish") : "Open a second pane first"),
-            entry(.history, "Search Conversation History"),
-            entry(.activity, "Since Last Looked"),
-            entry(.runs, "Open ASL Runs"),
-            entry(.runPlan, "Run a Plan…", reason: command == nil ? "amx is not available" : nil),
-            entry(.changes, "Review Checkout Changes"),
+            entry(.history, "Search Conversation History", key(.history)),
+            entry(.activity, "Since Last Looked", key(.activity)),
+            entry(.runs, "Open ASL Runs", key(.runs)),
+            entry(.runPlan, "Run a Plan…", key(.runPlan), reason: command == nil ? "amx is not available" : nil),
+            entry(.changes, "Checkout Changes", key(.changes)),
             entry(.dashboard, "Open Dashboard", "⌘D"),
             entry(.overview, "Open Overview", "⌘O"),
             entry(.nextWaiting, "Next Waiting Session", "⌘⇧A", reason: store.feed != .live ? "Waiting for a live session list" : (AttentionCycler.ordered(store.sessions).isEmpty ? "No sessions are waiting" : nil)),

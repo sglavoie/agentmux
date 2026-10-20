@@ -75,6 +75,17 @@ struct DaemonClient {
         return error.operatorMessage
     }
 
+    /// A reply decoded, or nil when it cannot be: the caller reports
+    /// `DaemonPhrase.unreadable`, and why it was unreadable goes to the log.
+    static func decodeReply<T: Decodable>(_ type: T.Type, from reply: Data, request: String) -> T? {
+        do {
+            return try JSONDecoder().decode(type, from: reply)
+        } catch {
+            logger.error("daemon \(request, privacy: .public) reply unreadable: \(SubscriptionClient.describe(error), privacy: .public)")
+            return nil
+        }
+    }
+
     func health(timeout: TimeInterval = healthTimeout) -> DaemonStatus {
         let reply: Data
         do {
@@ -89,7 +100,7 @@ struct DaemonClient {
     }
 
     static func status(fromHealthReply reply: Data) -> DaemonStatus {
-        guard let response = try? JSONDecoder().decode(HealthResponse.self, from: reply) else {
+        guard let response = decodeReply(HealthResponse.self, from: reply, request: "health") else {
             return .unresponsive(DaemonPhrase.unreadable)
         }
         guard response.ok else {
@@ -117,7 +128,7 @@ struct DaemonClient {
     }
 
     static func focusOutcome(fromReply reply: Data) -> FocusOutcome {
-        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+        guard let response = decodeReply(DaemonResponse.self, from: reply, request: "focus_window") else {
             return .failed(DaemonPhrase.unreadable)
         }
         if response.ok {
@@ -147,7 +158,7 @@ struct DaemonClient {
     }
 
     static func focusSessionOutcome(fromReply reply: Data) -> FocusSessionOutcome {
-        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+        guard let response = decodeReply(DaemonResponse.self, from: reply, request: "focus_session") else {
             return .failed(DaemonPhrase.unreadable)
         }
         if response.ok { return .shown }
@@ -178,7 +189,7 @@ struct DaemonClient {
     }
 
     static func snoozeOutcome(fromReply reply: Data) -> SnoozeOutcome {
-        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+        guard let response = decodeReply(DaemonResponse.self, from: reply, request: "notification_snooze") else {
             return .failed(DaemonPhrase.unreadable)
         }
         if response.ok {
@@ -209,7 +220,7 @@ struct DaemonClient {
     }
 
     static func dispositionError(fromReply reply: Data) -> String? {
-        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+        guard let response = decodeReply(DaemonResponse.self, from: reply, request: "notification_disposition") else {
             return "unreadable notification_disposition reply"
         }
         return response.ok ? nil : (response.error ?? "notification_disposition refused")
@@ -259,7 +270,7 @@ struct DaemonClient {
     }
 
     static func aslResult(fromReply reply: Data) -> Result<ASLResult, ASLRequestError> {
-        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: reply) else {
+        guard let response = decodeReply(DaemonResponse.self, from: reply, request: "asl") else {
             return .failure(.transport(DaemonPhrase.unreadable))
         }
         guard response.ok else {

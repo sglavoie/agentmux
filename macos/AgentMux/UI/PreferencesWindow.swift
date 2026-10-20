@@ -552,7 +552,7 @@ struct PreferencesView: View {
                         validate: { workspaceShortcut.problem(for: $0, preferences: model.preferences, menu: NSApp.mainMenu) })
                 }
                 if let problem = workspaceShortcut.problem(for: workspaceShortcut.combo(in: model.preferences), preferences: model.preferences, menu: NSApp.mainMenu) {
-                    Text(problem + " This binding is inactive until the conflict is resolved.").font(.caption).foregroundStyle(.orange)
+                    Text(problem + " This binding is inactive until the conflict is resolved.").font(.caption).foregroundStyle(WorkspaceReviewColors.warning)
                 }
                 note("Choose a command, click Record Shortcut, and press its keys. Changes apply immediately while Agent Mux is active. Esc cancels recording; Clear removes a binding.")
             }
@@ -728,7 +728,7 @@ struct PreferencesView: View {
     private func note(_ text: String, warning: Bool = false) -> some View {
         Text(text)
             .font(.callout)
-            .foregroundStyle(warning ? Color.orange : Color.secondary)
+            .foregroundStyle(warning ? WorkspaceReviewColors.warning : Color.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -761,7 +761,7 @@ private struct DaemonSettingsView: View {
             Text("Applied daemon settings").font(.headline)
             Text(model.status?.message ?? "Check whether saved settings are applied.")
                 .textSelection(.enabled)
-            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if let error = model.error { Text(error).foregroundStyle(WorkspaceReviewColors.failure).textSelection(.enabled) }
             HStack {
                 Button(model.busy ? "Checking…" : "Check settings") { model.refresh() }.disabled(model.busy)
                 if model.status?.changed.isEmpty == false {
@@ -815,7 +815,7 @@ struct HotKeyRecorderView: View {
                 }
             }
             if recorder.isRecording, let hint = recorder.hint {
-                Text(hint).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                Text(hint).font(.caption).foregroundStyle(WorkspaceReviewColors.warning).fixedSize(horizontal: false, vertical: true)
             }
         }
         .onDisappear { recorder.stop() }

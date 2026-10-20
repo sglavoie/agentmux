@@ -283,13 +283,18 @@ func writeDoctorFindings(out io.Writer, findings []doctorFinding, verbose bool) 
 		if _, err := fmt.Fprintln(out, group.heading); err != nil {
 			return err
 		}
-		lines := doctorFindingLines(findings, group.severity)
+		entries := doctorFindingEntries(findings, group.severity)
 		if !verbose {
-			lines = summarizeClosedTombstones(lines, findings, group.severity)
+			entries = summarizeClosedTombstones(entries, findings, group.severity)
 		}
-		for _, line := range lines {
-			if _, err := fmt.Fprintln(out, line); err != nil {
+		for _, entry := range entries {
+			if _, err := fmt.Fprintln(out, entry.line); err != nil {
 				return err
+			}
+			if entry.remediation != "" {
+				if _, err := fmt.Fprintln(out, entry.remediation); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -321,9 +326,27 @@ func doctorVerdict(findings []doctorFinding) string {
 // profile. The structured findings are untouched: JSON consumers still get
 // one per profile.
 func doctorFindingLines(findings []doctorFinding, severity string) []string {
+	entries := doctorFindingEntries(findings, severity)
+	lines := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		lines = append(lines, entry.line)
+	}
+	return lines
+}
+
+// doctorFindingEntry is one finding line of the text report and the
+// remediation line printed under it ("" for none). A grouped hook line keeps
+// the remediation of its first finding: the group shares one detail, and so
+// one remedy.
+type doctorFindingEntry struct {
+	line        string
+	remediation string
+}
+
+func doctorFindingEntries(findings []doctorFinding, severity string) []doctorFindingEntry {
 	const hooksPrefix = "hooks for "
 	infixes := map[string]string{"hooks": " require attention: ", "hooks_unverified": " are unverified: ", "hooks_contract_ahead": " are ahead of the verified contract: ", "hooks_unused": " are not in use: "}
-	var lines []string
+	var lines []doctorFindingEntry
 	groupLine := map[string]int{}
 	groupProfiles := map[string][]string{}
 	for _, finding := range findings {
@@ -335,7 +358,7 @@ func doctorFindingLines(findings []doctorFinding, severity string) []string {
 				key := finding.Check + "\x00" + detail
 				if index, seen := groupLine[key]; seen {
 					groupProfiles[key] = append(groupProfiles[key], profile)
-					lines[index] = fmt.Sprintf("- [%s] %s%s%s%s", finding.Check, hooksPrefix, strings.Join(groupProfiles[key], ", "), infix, detail)
+					lines[index].line = fmt.Sprintf("- [%s] %s%s%s%s", finding.Check, hooksPrefix, strings.Join(groupProfiles[key], ", "), infix, detail)
 					continue
 				}
 				groupLine[key] = len(lines)
@@ -346,7 +369,10 @@ func doctorFindingLines(findings []doctorFinding, severity string) []string {
 		if finding.WindowID != 0 {
 			location = fmt.Sprintf("window %d: ", finding.WindowID)
 		}
-		lines = append(lines, fmt.Sprintf("- [%s] %s%s", finding.Check, location, finding.Message))
+		lines = append(lines, doctorFindingEntry{
+			line:        fmt.Sprintf("- [%s] %s%s", finding.Check, location, finding.Message),
+			remediation: remediationLine(finding),
+		})
 	}
 	return lines
 }
@@ -357,7 +383,7 @@ func doctorFindingLines(findings []doctorFinding, severity string) []string {
 // of the report and the one an operator can do nothing about. The summary
 // takes the place of the first of them; --verbose and the JSON findings keep
 // one per window.
-func summarizeClosedTombstones(lines []string, findings []doctorFinding, severity string) []string {
+func summarizeClosedTombstones(lines []doctorFindingEntry, findings []doctorFinding, severity string) []doctorFindingEntry {
 	var ids []string
 	for _, finding := range findings {
 		if finding.Severity == severity && finding.Check == checkClosedTombstone && finding.WindowID != 0 {
@@ -374,12 +400,12 @@ func summarizeClosedTombstones(lines []string, findings []doctorFinding, severit
 	}
 	summary := fmt.Sprintf("%s%d %s (%s) retained for post-mortem export; `amx doctor --verbose` lists them",
 		prefix, len(ids), noun, strings.Join(ids, ", "))
-	kept := make([]string, 0, len(lines)-len(ids)+1)
+	kept := make([]doctorFindingEntry, 0, len(lines)-len(ids)+1)
 	for _, line := range lines {
-		if !strings.HasPrefix(line, prefix) {
+		if !strings.HasPrefix(line.line, prefix) {
 			kept = append(kept, line)
 		} else if summary != "" {
-			kept = append(kept, summary)
+			kept = append(kept, doctorFindingEntry{line: summary})
 			summary = ""
 		}
 	}

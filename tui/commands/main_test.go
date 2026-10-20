@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 // TestMain gives the package a home of its own. Tests here launch stand-in
@@ -13,6 +15,7 @@ import (
 // could read or write anything else a path helper resolves under HOME. None
 // of that may be the home of whoever runs the suite.
 func TestMain(m *testing.M) {
+	testenv.ClearSessionEnv()
 	root, err := os.MkdirTemp("", "amx-tui-commands-home-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "tui/commands tests: creating an isolated home:", err)

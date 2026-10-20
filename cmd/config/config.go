@@ -34,6 +34,12 @@ var configCmd = &cobra.Command{
 var configInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Create a starter config.toml",
+	Long: `Writes the commented example configuration to the config path
+(~/.config/agent-mux/config.toml, or $AMX_CONFIG) and prints where it went.
+An existing config is never overwritten: the command fails instead. For a
+guided setup that adds a first profile and project, use ` + "`amx config setup`" + `.`,
+	Example: `  amx config init
+  AMX_CONFIG=~/tmp/amx.toml amx config init`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := config.DefaultConfigPath()
 		if _, err := os.Stat(path); err == nil {
@@ -53,6 +59,11 @@ var configInitCmd = &cobra.Command{
 var configEditCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "Open config.toml in $EDITOR",
+	Long: `Opens the config file in $EDITOR, or vi when it is unset, and waits for the
+editor to exit. $EDITOR may carry its own arguments, quoted as a shell would
+("code --wait"). Run ` + "`amx config validate`" + ` afterwards to check the result.`,
+	Example: `  amx config edit
+  EDITOR="code --wait" amx config edit`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := config.DefaultConfigPath()
 		name, editorArgs, err := resolveEditorCommand(os.Getenv("EDITOR"), path)
@@ -157,19 +168,40 @@ func splitEditorFields(s string) ([]string, error) {
 var configShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Display config.toml contents",
+	Long: `Prints the config file exactly as it is on disk, comments included. It does
+not validate it; ` + "`amx config validate`" + ` does.
+
+With --json it reports {path, content}: content is the file's text, unparsed.`,
+	Example: `  amx config show
+  amx config show --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
 		data, err := config.ReadDefault()
 		if err != nil {
-			return fmt.Errorf("reading config: %w", err)
+			return cli.CommandFailure(cmd, jsonOutput, "config_unreadable", fmt.Errorf("reading config: %w", err))
+		}
+		if jsonOutput {
+			return cli.WriteJSON(cmd, configShowData{Path: config.DefaultConfigPath(), Content: string(data)})
 		}
 		_, err = fmt.Fprint(cmd.OutOrStdout(), string(data))
 		return err
 	},
 }
 
+// configShowData is the `config show --json` data: the file as text, since
+// the file itself, comments and all, is what show reports.
+type configShowData struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 var configPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Print the config.toml path",
+	Long: `Prints the path amx reads its configuration from: $AMX_CONFIG when set, else
+~/.config/agent-mux/config.toml. The file need not exist.`,
+	Example: `  amx config path
+  $EDITOR "$(amx config path)"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), config.DefaultConfigPath())
 		return err
@@ -185,7 +217,13 @@ A config that loads is valid. Unknown and deprecated keys and project
 directories that are missing or not directories are printed as warnings,
 the way amx doctor reports them, because a project checked out on another
 machine is not a broken config. Pass --strict to fail on a project directory
-instead.`,
+instead.
+
+With --json it reports {valid, path, unknown_keys, deprecations,
+invalid_project_directories}.`,
+	Example: `  amx config validate
+  amx config validate --strict
+  amx config validate --json`,
 	// Failures are already printed by ccerrors.Print; cobra printing them a
 	// second time only repeats the line that matters.
 	SilenceErrors: true,
@@ -293,6 +331,7 @@ func validateProjectDirectories(projects []config.Session) error {
 
 func init() {
 	configValidateCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	configShowCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	configValidateCmd.Flags().Bool("strict", false, "fail when a project directory is missing or not a directory")
 	configCmd.AddCommand(
 		configInitCmd,

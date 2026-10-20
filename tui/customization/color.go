@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
@@ -144,7 +145,7 @@ func (m *colorPickerModel) apply() {
 
 	c, err := palette.Lookup(colorName)
 	if err != nil {
-		m.err = fmt.Errorf("lookup %q: %w", colorName, err)
+		m.err = fmt.Errorf("couldn't find the color %q in the palette: %w", colorName, err)
 		return
 	}
 	if m.ctx.Apply != nil {
@@ -153,7 +154,7 @@ func (m *colorPickerModel) apply() {
 			picked = ""
 		}
 		if err := m.ctx.Apply(picked); err != nil {
-			m.err = fmt.Errorf("set color: %w", err)
+			m.err = fmt.Errorf("couldn't apply the color to this session: %w", err)
 			return
 		}
 		m.applied = true
@@ -166,7 +167,7 @@ func (m *colorPickerModel) apply() {
 		kitty.TabColorDefault, palette.InactiveFg,
 	)
 	if err != nil {
-		m.err = fmt.Errorf("set tab color: %w", err)
+		m.err = fmt.Errorf("couldn't apply the color to this tab: %w", err)
 		return
 	}
 
@@ -176,7 +177,9 @@ func (m *colorPickerModel) apply() {
 			map[string]string{"cc_color": colorName},
 		)
 		if err != nil {
-			m.err = fmt.Errorf("set user vars: %w", err)
+			// The tab is already recolored; only the record Kitty keeps of
+			// the choice for later redraws failed, so say exactly that.
+			m.err = fmt.Errorf("the tab is recolored, but Kitty couldn't remember the color for this window: %w", err)
 			return
 		}
 	}
@@ -253,10 +256,10 @@ func (m colorPickerModel) View() tea.View {
 	sb.WriteString(styleDim.Render(divider) + "\n")
 
 	if m.err != nil {
-		sb.WriteString(styleError.Render(m.err.Error()) + "\n")
+		sb.WriteString(styleError.Render(layout.Sentence(m.err.Error())) + "\n")
 	}
 
-	sb.WriteString(joinFooterBindings(" · ", renderFooterBinding("j/k", "navigate"), renderFooterBinding("enter", "apply"), renderFooterBinding("esc", "cancel")) + "\n")
+	sb.WriteString(chrome.JoinBindings(" · ", chrome.Binding("j/k", "up/down"), chrome.Binding("enter", "apply"), chrome.Binding("esc/q", "cancel")) + "\n")
 
 	return tea.NewView(sb.String())
 }

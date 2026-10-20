@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 func TestFormatRelativeAge(t *testing.T) {
@@ -28,9 +29,9 @@ func TestFormatRelativeAge(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := formatRelativeAge(tc.at, now)
+			got := layout.Ago(tc.at, now)
 			if got != tc.want {
-				t.Errorf("formatRelativeAge: got %q want %q", got, tc.want)
+				t.Errorf("layout.Ago: got %q want %q", got, tc.want)
 			}
 		})
 	}

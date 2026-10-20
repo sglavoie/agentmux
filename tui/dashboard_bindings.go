@@ -46,7 +46,7 @@ func dashboardBindings() commands.BindingSet {
 		// context, not a check the key performs. `handleListKey` answers Enter on a
 		// summary before it ever reaches here, by folding.
 		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "open session", Command: commands.FocusSession},
-		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project history", Command: commands.SearchProject},
+		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project's past sessions", Command: commands.SearchProject},
 		{Keys: []string{keySend}, Display: keySend, Hint: "send", Command: commands.SendToSession},
 
 		// Navigate.
@@ -69,7 +69,7 @@ func dashboardBindings() commands.BindingSet {
 		// recoverable and dead — with "nothing to undo" beside it — the rest of
 		// the time. It is the one key here whose availability changes on a timer
 		// rather than with the cursor.
-		{Keys: []string{keyUndoClose}, Display: keyUndoClose, Hint: "recover ended", Command: commands.UndoClose},
+		{Keys: []string{keyUndoClose}, Display: keyUndoClose, Hint: recoverEndedHint, Command: commands.UndoClose},
 		{Keys: []string{keyQuestion}, Display: keyQuestion, Hint: "help", Command: commands.ShowKeyboardHelp},
 		{Keys: []string{keyQ, keyCtrlC}, Display: keyQ + " / " + keyCtrlC, Hint: "quit", Command: commands.Quit},
 	}

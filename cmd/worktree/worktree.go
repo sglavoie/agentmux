@@ -98,11 +98,38 @@ func Command() *cobra.Command { return worktreeCmd }
 var worktreeCmd = &cobra.Command{
 	Use:   "worktree",
 	Short: "Inspect and manage Agent Mux Git worktrees",
+	Long: `Inspects and manages the Git worktrees Agent Mux creates for sessions
+(` + "`amx session fork-worktree`" + `, or the dashboard). Every command that takes a
+<selector> names one managed worktree by:
+
+` + worktreeSelectorHelp + `
+
+An ambiguous selector is refused with the candidates it matched; nothing is
+picked on your behalf.`,
 }
+
+// worktreeSelectorHelp is what a <selector> may be, as
+// worktree.ResolveSelector reads it, for the help of every command taking one.
+const worktreeSelectorHelp = `  - its stable ID (the ID column of ` + "`amx worktree list`" + `), or a unique
+    prefix of it, in any case;
+  - its branch name, exactly;
+  - the absolute path of its checkout.`
 
 var worktreeListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List managed worktrees",
+	Long: `Lists every managed worktree with its ID, project, branch, state, and path.
+STATE is active (a live session or an agent-session-loop run uses it), dirty
+(uncommitted changes), unavailable (Git could not inspect it), or clean.
+
+In a terminal the list is an aligned table, and an empty one says so. Piped,
+it is one headerless tab-separated row per worktree (id, project, branch,
+state, path), and an empty list prints nothing. Warnings follow the rows.
+
+With --json it reports {worktrees, warnings}.`,
+	Example: `  amx worktree list
+  amx worktree list | cut -f1,3
+  amx worktree list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if len(args) != 0 {
@@ -149,13 +176,63 @@ func writeWorktreeTable(out io.Writer, views []actions.WorktreeView) error {
 	return cli.WriteTable(out, []string{"ID", "PROJECT", "BRANCH", "STATE", "PATH"}, rows)
 }
 
-var worktreeShowCmd = newWorktreeSelectorCommand("show", actions.WorktreeShow, "Show one managed worktree")
-var worktreeShellCmd = newWorktreeSelectorCommand("shell", actions.WorktreeShell, "Open a shell in a managed worktree")
-var worktreeEditCmd = newWorktreeSelectorCommand("edit", actions.WorktreeEditor, "Open a managed worktree in the configured editor")
+var worktreeShowCmd = newWorktreeSelectorCommand("show", actions.WorktreeShow, "Show one managed worktree",
+	`Shows one managed worktree: its ID, project, path, branch, classification,
+whether it is dirty or locked, and how many live sessions and
+agent-session-loop runs use it. The <selector> is one of:
+
+`+worktreeSelectorHelp+`
+
+With --json it reports {worktree, warnings}.`,
+	`  amx worktree show 3f9c2a1e
+  amx worktree show amx/fix-login
+  amx worktree show 3f9c2a1e --json`)
+
+var worktreeShellCmd = newWorktreeSelectorCommand("shell", actions.WorktreeShell, "Open a shell in a managed worktree",
+	`Opens $SHELL (else /bin/sh) in a managed worktree. On the Kitty backend it
+opens in a new Kitty tab; hosted by the Agent Mux workspace it opens as a
+view beside the session; otherwise it runs in this terminal and returns when
+the shell exits. The <selector> is one of:
+
+`+worktreeSelectorHelp+`
+
+--backend picks where it opens as it would for a launch. With --json nothing
+is run here: the result says where the shell went, or that the caller should
+run it itself (continuation "here").`,
+	`  amx worktree shell 3f9c2a1e
+  amx worktree shell amx/fix-login --backend tmux`)
+
+var worktreeEditCmd = newWorktreeSelectorCommand("edit", actions.WorktreeEditor, "Open a managed worktree in the configured editor",
+	`Opens a managed worktree in the configured editor. Where it opens follows
+the same rules as `+"`amx worktree shell`"+`: a Kitty tab, a view in the Agent
+Mux workspace, or this terminal. The <selector> is one of:
+
+`+worktreeSelectorHelp+`
+
+With --json nothing is run here; the result says where the editor went.`,
+	`  amx worktree edit 3f9c2a1e
+  amx worktree edit ~/projects/api-worktrees/fix-login`)
 
 var worktreeReopenCmd = &cobra.Command{
 	Use:   "reopen <selector>",
 	Short: "Focus, resume, or freshly launch a managed worktree",
+	Long: `Gets you back to work in a managed worktree, in the first way that applies:
+
+  1. a live session already running in it is focused (a tmux session is
+     reported for you to attach to instead); several are refused with their
+     candidate IDs, and --live-session picks one;
+  2. otherwise the newest indexed conversation started in it is resumed;
+  3. otherwise a fresh agent is launched there with the worktree's recorded
+     profile, or --profile.
+
+The <selector> is one of:
+
+` + worktreeSelectorHelp + `
+
+With --json it reports {action, changed, message, data}.`,
+	Example: `  amx worktree reopen 3f9c2a1e
+  amx worktree reopen 3f9c2a1e --live-session 12
+  amx worktree reopen amx/fix-login --profile claude-work --backend tmux`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		selector, err := worktreeSelectorFromArgs(cmd, jsonOutput, "reopen", args)
@@ -163,7 +240,7 @@ var worktreeReopenCmd = &cobra.Command{
 			return err
 		}
 		parameters := make(map[string]string)
-		if value, _ := cmd.Flags().GetString("session"); strings.TrimSpace(value) != "" {
+		if value := worktreeReopenLiveSession(cmd); value != "" {
 			parameters["session"] = value
 		}
 		if value, _ := cmd.Flags().GetString("profile"); strings.TrimSpace(value) != "" {
@@ -176,6 +253,21 @@ var worktreeReopenCmd = &cobra.Command{
 var worktreeRemoveCmd = &cobra.Command{
 	Use:   "remove <selector>",
 	Short: "Safely remove a clean inactive worktree",
+	Long: `Removes a managed worktree's checkout with ` + "`git worktree remove`" + `, and its
+Agent Mux metadata. It asks for --yes, and it refuses a worktree that is
+dirty, locked, or used by a live session or an agent-session-loop run; each
+of those is checked again at the moment of removal. --delete-branch also
+deletes the worktree's branch with ` + "`git branch -d`" + `, which Git refuses
+unless the branch is merged. A checkout that is already gone is cleaned up
+only with --delete-branch; otherwise use ` + "`amx worktree forget`" + `.
+
+The <selector> is one of:
+
+` + worktreeSelectorHelp + `
+
+With --json it reports {action, changed, message, data}.`,
+	Example: `  amx worktree remove 3f9c2a1e --yes
+  amx worktree remove amx/fix-login --yes --delete-branch`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		selector, err := worktreeSelectorFromArgs(cmd, jsonOutput, "remove", args)
@@ -195,6 +287,17 @@ var worktreeRemoveCmd = &cobra.Command{
 var worktreeForgetCmd = &cobra.Command{
 	Use:   "forget <selector>",
 	Short: "Forget stale or invalid worktree metadata",
+	Long: `Deletes the Agent Mux metadata of a managed worktree whose checkout is gone or
+whose metadata is invalid, so it stops being listed. It asks for --yes. No
+checkout, branch, or Git state is touched, and a healthy worktree whose
+checkout is present is refused: remove that one with ` + "`amx worktree remove`" + `.
+
+The <selector> is one of:
+
+` + worktreeSelectorHelp + `
+
+With --json it reports {action, changed, message, data}.`,
+	Example: `  amx worktree forget 3f9c2a1e --yes`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		selector, err := worktreeSelectorFromArgs(cmd, jsonOutput, "forget", args)
@@ -206,9 +309,9 @@ var worktreeForgetCmd = &cobra.Command{
 	},
 }
 
-func newWorktreeSelectorCommand(name string, actionID actions.ID, short string) *cobra.Command {
+func newWorktreeSelectorCommand(name string, actionID actions.ID, short, long, example string) *cobra.Command {
 	return &cobra.Command{
-		Use: name + " <selector>", Short: short,
+		Use: name + " <selector>", Short: short, Long: long, Example: example,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")
 			selector, err := worktreeSelectorFromArgs(cmd, jsonOutput, name, args)
@@ -399,6 +502,17 @@ func worktreeCommandError(cmd *cobra.Command, jsonOutput bool, result actions.Re
 	return cli.CommandFailure(cmd, jsonOutput, "action_failed", err)
 }
 
+// worktreeReopenLiveSession is the live session --live-session, or its
+// deprecated alias --session, names; the canonical flag wins when both are
+// given.
+func worktreeReopenLiveSession(cmd *cobra.Command) string {
+	if value, _ := cmd.Flags().GetString("live-session"); strings.TrimSpace(value) != "" {
+		return value
+	}
+	value, _ := cmd.Flags().GetString("session")
+	return strings.TrimSpace(value)
+}
+
 func worktreeSelectorFromArgs(cmd *cobra.Command, jsonOutput bool, name string, args []string) (string, error) {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return "", cli.MissingParameter(cmd, jsonOutput, "selector", "stable ID, unique ID prefix, branch, or canonical path (see `amx worktree list`)")
@@ -519,14 +633,18 @@ func init() {
 	for _, command := range []*cobra.Command{worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd} {
 		cli.AddBackendFlag(command)
 	}
-	worktreeReopenCmd.Flags().String("session", "", "live-session candidate identifier")
+	worktreeReopenCmd.Flags().String("live-session", "", "live session to focus when several run in the worktree: a candidate ID from the ambiguous_live_sessions error (a Kitty tab ID)")
+	// --session was the flag's first name; it stays as a hidden alias so
+	// scripts that pass it keep working.
+	worktreeReopenCmd.Flags().String("session", "", "deprecated alias of --live-session")
+	_ = worktreeReopenCmd.Flags().MarkDeprecated("session", "use --live-session")
 	worktreeReopenCmd.Flags().String("profile", "", "replacement profile for a fresh launch")
 	_ = worktreeReopenCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	worktreeReopenCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	worktreeRemoveCmd.Flags().Bool("yes", false, "confirm worktree removal")
 	worktreeRemoveCmd.Flags().Bool("delete-branch", false, "also safely delete the merged worktree branch")
 	worktreeRemoveCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
-	worktreeForgetCmd.Flags().Bool("yes", false, "confirm metadata forgetting")
+	worktreeForgetCmd.Flags().Bool("yes", false, "confirm deleting the worktree's Agent Mux metadata")
 	worktreeForgetCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
 		command.ValidArgsFunction = completeWorktreeSelectors

@@ -32,11 +32,24 @@ func Command() *cobra.Command { return transcriptsCmd }
 var transcriptsCmd = &cobra.Command{
 	Use:   "transcripts",
 	Short: "Inspect and maintain the transcript search index",
+	Long: `Inspects and maintains the transcript index Past Sessions, ` + "`amx session list`" + `,
+and ` + "`amx session search`" + ` read: transcripts.json, a disposable metadata cache,
+and its search sidecars. These commands rewrite only that cache; the
+harnesses' own transcript files are never touched.`,
 }
 
 var transcriptsStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show transcript index, sidecar, and orphan usage",
+	Long: `Reports what the transcript index holds: where the metadata cache and its
+search sidecars are and how large, how many conversations are visible,
+hidden, or empty, and how many sidecars are orphaned or missing. It reads
+and changes nothing, and suggests ` + "`compact`" + ` or ` + "`rebuild --all`" + ` when either would help.
+
+In a terminal the report is a summary; piped, it is one key: value line per
+field with raw byte counts. With --json it reports the same fields.`,
+	Example: `  amx transcripts status
+  amx transcripts status --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		status, err := transcript.Status(transcriptsIndexPath())
@@ -54,6 +67,16 @@ var transcriptsStatusCmd = &cobra.Command{
 var transcriptsCompactCmd = &cobra.Command{
 	Use:   "compact",
 	Short: "Migrate legacy search text and remove orphan sidecars",
+	Long: `Moves search text still stored inline in the metadata cache (from older
+releases) into sidecars, rewrites the cache, and deletes the search sidecars
+no conversation in the cache refers to any more. Nothing is reparsed, and no
+transcript file is touched.
+
+With --json it reports {legacy_search_text_entries, orphan_sidecars_removed,
+orphan_sidecar_size_removed, before, after, warnings}, where before and
+after are the status reports around the compaction.`,
+	Example: `  amx transcripts compact
+  amx transcripts compact --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		result, err := transcript.Compact(transcriptsIndexPath())
@@ -91,6 +114,16 @@ var transcriptsCompactCmd = &cobra.Command{
 var transcriptsRebuildCmd = &cobra.Command{
 	Use:   "rebuild",
 	Short: "Reparse transcripts from configured profiles and reset sidecars",
+	Long: `Reparses the transcripts of every configured profile and rebuilds their
+search sidecars, then reports the index status as ` + "`status`" + ` does. Run it when
+search misses conversations it should find, or after changing profiles.
+
+Conversations older than [defaults.session_archive] scan_max_age_days are
+skipped; --all reindexes every discoverable transcript regardless of age.
+Only the cache is rewritten; the transcript files themselves never are.`,
+	Example: `  amx transcripts rebuild
+  amx transcripts rebuild --all
+  amx transcripts rebuild --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := transcriptsLoadConfig()

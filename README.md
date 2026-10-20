@@ -12,34 +12,54 @@ and managed Git worktrees. It can also start and supervise prepared
 
 ## First session
 
-Requires Go 1.26+, [just](https://github.com/casey/just), tmux 3.5+ on `PATH`,
-and an installed agent CLI. On macOS, native notifications additionally need
-[alerter](https://github.com/vjeantet/alerter) 26.x+ when enabled. The optional
-macOS app bundles tmux.
+Requires Go 1.26+, [just](https://github.com/casey/just), tmux 3.5+ on `PATH`
+(the optional macOS app bundles its own), and an installed, authenticated agent
+CLI. On macOS, native notifications additionally need
+[alerter](https://github.com/vjeantet/alerter) 26.x+ when enabled.
 
-From this checkout:
+1. **Install.** From this checkout, run `just install`. It puts `amx` in
+   `~/.local/bin` (put that on your `PATH`) and creates a starter
+   `~/.config/agent-mux/config.toml` if none exists.
+2. **Configure.** Run `amx config setup`. It asks for the agent CLI, its
+   profile home, an existing project directory, and a default backend, adds
+   the first project without touching other settings, and offers to sync the
+   profile's hooks (answer explicitly; **no** prints the command to finish
+   later). Choose **tmux** unless you work inside Kitty: **Keep** leaves
+   `launch_backend` unset, which still sends CLI launch commands to Kitty, and
+   setup recommends tmux when this terminal is not Kitty or Kitty is not
+   installed. Authentication is not checked. To write the configuration by
+   hand, see [Manual configuration](#manual-configuration).
+3. **Check.**
 
-```sh
-just install
-amx config setup
-```
+   ```sh
+   amx config validate
+   amx config hooks-sync        # skip if setup synced the profile
+   amx backend status --check
+   ```
 
-Installation puts `amx` in `~/.local/bin` and creates a starter configuration
-at `~/.config/agent-mux/config.toml` if none exists. Ensure `~/.local/bin` is on
-your `PATH`. `config setup` asks for the installed agent CLI, its profile home,
-an existing project directory, and a default backend. **Keep** leaves it unset:
-CLI launch commands retain their Kitty default, while the dashboard uses Kitty
-inside Kitty and tmux in other terminals. Choosing Kitty or tmux pins future
-launches to that backend. Setup adds the
-first project without removing starter comments or changing other settings.
-Setup also offers to sync hooks for the chosen profile, checks the agent CLI
-and backend, and reports where CLI and dashboard launches will open. Answer
-the hook prompt explicitly; choosing **no** leaves hook files unchanged and
-prints the command to finish later. Authentication is not checked by setup.
-For manual setup, run
-`amx config edit` and use the following minimal Claude configuration,
-replacing the project path with an existing checkout. This uses your usual Claude home;
-install and authenticate the CLI first.
+   `amx backend status --check` exits 1 when launching on tmux would not work:
+   no usable tmux or a configuration that does not load, whatever
+   `launch_backend` says, and a private server that does not answer when
+   launches go to tmux. The report names each problem and its fix.
+   `amx doctor --strict` checks the whole installation.
+4. **Launch.** Run `amx`, press `l`, highlight your project, and press
+   `Enter`. The launcher shows the destination and effective profile. `Enter`
+   on the live session attaches and `F12` detaches back to the dashboard;
+   attached, `F1` shows the shortcuts and `F2` opens the live overview.
+
+Where a launch goes depends on the entry point: CLI launch commands use
+`--backend`, then `[defaults] launch_backend`, then Kitty for compatibility;
+the dashboard uses the configured backend, else Kitty inside Kitty and tmux
+elsewhere; the app has its own Launch Project preference. Setting
+`launch_backend = "tmux"` keeps them consistent. See
+[launch destinations](docs/usage.md#launch-destinations) for precedence; the
+unset default changes only after the [daily-driver trial](docs/daily-driver-trial.md).
+
+### Manual configuration
+
+Run `amx config edit` and start from this minimal Claude configuration,
+replacing the project path with an existing checkout. It uses your usual Claude
+home.
 
 ```toml
 [defaults]
@@ -61,33 +81,9 @@ profile = "claude-local"
 ```
 
 For Codex, Copilot, or an isolated profile home, follow
-[Profile setup](docs/operations.md#harness-profiles). A new isolated home needs
+[Profile setup](docs/operations.md#harness-profiles); a new isolated home needs
 its own authentication. The starter file documents optional settings; add them
-as needed without duplicating TOML table headers.
-
-```sh
-amx config validate
-amx config hooks-sync
-amx backend status
-amx
-```
-
-Skip `hooks-sync` here if setup already synced the profile successfully.
-
-If launching on tmux, run `amx backend status --check` before `amx`.
-The `--check` flag tests tmux availability, including when your configured
-launch destination is Kitty.
-
-Press `l` to open the launcher, highlight your project, and press `Enter`.
-The launcher shows the destination and effective profile. `Enter` on the live
-session attaches; `F12` detaches back to the dashboard. Attached, `F1` shows
-the shortcuts and `F2` opens the live overview.
-
-An unset command-line backend still means Kitty for compatibility. Explicitly
-setting `launch_backend = "tmux"` keeps launches consistent across terminals.
-The app's Launch Project preference is separate and shown in its menu;
-[launch destination rules](docs/usage.md#launch-destinations) explain precedence.
-The default will change only after the [daily-driver trial](docs/daily-driver-trial.md).
+as needed without duplicating TOML table headers. Then continue from step 3.
 
 ## Everyday use
 

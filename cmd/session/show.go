@@ -25,6 +25,29 @@ var sessionShowCmd = &cobra.Command{
 	Use:               "show <harness> <session-id> | <harness>:<session-id> | <session-id>",
 	ValidArgsFunction: completeConversation,
 	Short:             "Show one indexed conversation",
+	Long: `Shows what the transcript index knows about one conversation: its harness,
+session ID, profile, project, working directory, transcript path, timestamps,
+message count, and whether it is open right now. The conversation is
+resolved exactly as ` + "`session continue`" + ` and ` + "`session fork`" + ` resolve it, so
+show is the way to check what one of those would act on. A selector is one
+of ` + conversationSelectorHelp + `.
+
+Messages are read from the transcript only when asked for:
+
+  --last N               the last N user and assistant messages;
+  --find QUERY           a window of --count messages around the --match'th
+                         message matching QUERY (session search's syntax);
+  --from I               a window of --count messages starting at index I;
+  --at TIME              a window around the last assistant message at or
+                         before an RFC 3339 time.
+
+With --json it reports {session, messages, messages_total, messages_start,
+...}: session is a row as ` + "`session list --json`" + ` gives it, and the message
+fields are present only when messages were read.`,
+	Example: `  amx session show 3c1e9f0a
+  amx session show claude:3c1e9f0a-7b2d-4e8f-9a1b-2c3d4e5f6a7b --last 4
+  amx session show 3c1e9f0a --find "race condition" --count 20
+  amx session show 3c1e9f0a --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		last, _ := cmd.Flags().GetInt("last")

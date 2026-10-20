@@ -22,6 +22,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -460,11 +461,11 @@ func actionsHintLine(width int, above, below bool) string {
 		right = " ▼"
 	}
 	middleWidth := max(width-layout.Width(left)-layout.Width(right), 0)
-	middle := joinFooterBindings(" · ",
-		renderFooterBinding("↑/↓", "select"),
-		renderFooterBinding("⏎", "run"),
-		renderFooterBinding("a key", "runs it"),
-		renderFooterBinding("esc/q", "close"),
+	middle := chrome.JoinBindings(" · ",
+		chrome.Binding("↑/↓", "up/down"),
+		chrome.Binding("⏎", "run"),
+		chrome.Binding("a key", "runs it"),
+		chrome.Binding("esc/q", "close"),
 	)
 	middle = layout.StyledTruncate(middle, middleWidth, "…")
 	if padding := middleWidth - layout.StyledWidth(middle); padding > 0 {

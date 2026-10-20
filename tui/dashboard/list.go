@@ -503,14 +503,14 @@ func renderEmptyHero(in ListInput) string {
 	hasSessions := in.SessionCount > 0
 	hasFilters := !in.Filter.IsEmpty()
 
-	title := "No running sessions."
+	title := layout.Sentence(layout.EmptyText("running sessions", ""))
 	detail := in.Setup.Detail
 	var hint heroHint
 	if in.Loading {
-		title = "Loading sessions…"
+		title = layout.Sentence(layout.LoadingText("sessions"))
 		hint = heroAllKeysHint()
 	} else if hasSessions && hasFilters {
-		title = "No sessions match the active filter."
+		title = layout.Sentence(layout.NoMatchText("sessions", "")) + " the active filter"
 		hint = append(heroHint{{text: "press  "}, {text: "esc", key: true}, {text: "  to clear filters     "}}, heroAllKeysHint()...)
 	} else if in.Setup.Blocked {
 		if in.Setup.Title != "" {

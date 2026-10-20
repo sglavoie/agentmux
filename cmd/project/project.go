@@ -98,7 +98,7 @@ var projectLaunchCmd = &cobra.Command{
 	Short: "Launch a new session from a configured project",
 	Long: `Launches a new session from the configured project named by TITLE (or
 --title), in a new Kitty tab, through the same launch action the dashboard uses.
---backend tmux launches it on AgentMux's private tmux server instead; the
+--backend tmux launches it on Agent Mux's private tmux server instead; the
 agent keeps running when no terminal shows it, and the JSON payload carries
 the runtime_session_id that ` + "`amx attach`" + ` takes.
 

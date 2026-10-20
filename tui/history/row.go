@@ -29,7 +29,7 @@ type rowFilters struct {
 }
 
 func formatRow(res transcript.Result, acctColor map[string]string, maxWidth int, filters rowFilters) string {
-	when := formatSessionWhen(res.Meta.LastAt)
+	when := layout.When(res.Meta.LastAt, time.Now())
 	project := res.Meta.Project
 	if project == "" {
 		project = "(unknown)"
@@ -116,36 +116,4 @@ func sessionProfileLabel(meta transcript.SessionMeta) string {
 		return profile
 	}
 	return fmt.Sprintf("%s+%d", profile, extra)
-}
-
-// formatSessionWhen returns a short human-readable representation of a
-// transcript's LastAt timestamp. Sessions newer than 24h show as "Xh", older
-// up to 7d as "Xd", and anything older falls back to YYYY-MM-DD.
-//
-// This is a deliberate private duplicate of the root helper of the same name,
-// which the plan search list still uses for its own timestamps. Sharing it
-// would mean either a utility package or a leaf-to-root edge, and both are
-// worse than the duplication.
-func formatSessionWhen(t time.Time) string {
-	if t.IsZero() {
-		return "          "
-	}
-	delta := time.Since(t)
-	if delta < 0 {
-		delta = 0
-	}
-	switch {
-	case delta < time.Hour:
-		mins := int(delta.Minutes())
-		if mins < 1 && delta > 0 {
-			mins = 1
-		}
-		return fmt.Sprintf("%2dm   ago", mins)
-	case delta < 24*time.Hour:
-		return fmt.Sprintf("%2dh   ago", int(delta.Hours()))
-	case delta < 7*24*time.Hour:
-		return fmt.Sprintf("%2dd   ago", int(delta.Hours()/24))
-	default:
-		return t.Format("2006-01-02")
-	}
 }

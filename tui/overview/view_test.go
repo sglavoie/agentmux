@@ -800,6 +800,7 @@ func TestTheRenderingHalfPerformsNoIO(t *testing.T) {
 
 		"github.com/sglavoie/agentmux/internal/config":  true,
 		"github.com/sglavoie/agentmux/internal/session": true,
+		"github.com/sglavoie/agentmux/tui/chrome":       true, // footer binding styles only
 		"github.com/sglavoie/agentmux/tui/dashboard":    true,
 		"github.com/sglavoie/agentmux/tui/layout":       true,
 		"github.com/sglavoie/agentmux/tui/theme":        true,

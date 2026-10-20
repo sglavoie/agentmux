@@ -124,12 +124,12 @@ func (in ListInput) Render() string {
 func (in ListInput) RenderList(height int) string {
 	if len(in.Filtered) == 0 {
 		if in.Loading {
-			return styleDim.Render("  (loading worktrees…)") + "\n"
+			return styleDim.Render("  "+layout.Placeholder(layout.LoadingText("worktrees"))) + "\n"
 		}
 		if len(in.Entries) > 0 {
-			return styleDim.Render(layout.ClampLine("  (no worktrees match — esc clears the filter)", in.Width)) + "\n"
+			return styleDim.Render(layout.ClampLine("  "+layout.Placeholder(layout.NoMatchText("worktrees", layout.ClearFilterHint)), in.Width)) + "\n"
 		}
-		return styleDim.Render(layout.ClampLine("  (no managed worktrees — w in Past Sessions forks a conversation into one)", in.Width)) + "\n"
+		return styleDim.Render(layout.ClampLine("  "+layout.Placeholder(layout.EmptyText("managed worktrees", "w in Past Sessions forks a conversation into one")), in.Width)) + "\n"
 	}
 
 	window := layout.ListWindowFor(len(in.Filtered), in.Offset, height)

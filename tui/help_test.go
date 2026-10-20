@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 func TestRenderHelpNoHeightShowsAll(t *testing.T) {
@@ -100,10 +101,10 @@ func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
 		":         open command palette",
 		// The per-row commands moved behind `a`, and help says so in the
 		// spelling the operator actually types: "a, then <letter>".
-		"a, then x clear session icon",
-		"a, then X end session (follows confirmation preference)",
-		"a, then C launch another session in the same project",
-		"a, then e peek scrollback (active rows only)",
+		"a, then x clear status",
+		"a, then X end session",
+		"a, then C launch another session",
+		"a, then e peek scrollback",
 		// The launcher kept its own direct keymap; only the dashboard's shrank.
 		"f         cycle the launch profile (in the launcher)",
 		":         then \"Show Projects View\" to group by project",
@@ -428,5 +429,52 @@ func TestHelpKeymapPaintsItsKeysLikeKeys(t *testing.T) {
 			t.Errorf("the key column of %q runs past %d cells and is cut at %q",
 				plain, helpKeyColumnWidth, column)
 		}
+	}
+}
+
+// TestHelpActOnRowFollowsTheSessionActionTable pins the Act on row section to
+// sessionactions.MenuDefinitions: every menu mnemonic is listed with the
+// label and description the menu itself draws, in menu order, and Enter is
+// described for both backends rather than as a Kitty tab focus.
+func TestHelpActOnRowFollowsTheSessionActionTable(t *testing.T) {
+	var section []string
+	for _, sec := range helpSections {
+		if sec.name == "Act on row" {
+			section = sec.lines
+		}
+	}
+	if section == nil {
+		t.Fatal("help has no Act on row section")
+	}
+	joined := strings.Join(section, "\n")
+	last := -1
+	for _, def := range sessionactions.MenuDefinitions() {
+		if def.Mnemonic.Key == keyEnter {
+			want := "  enter     " + strings.ToLower(def.MenuLabel) + " (attach on tmux, focus tab on Kitty)"
+			if !strings.Contains(joined, want) {
+				t.Errorf("Act on row lacks %q:\n%s", want, joined)
+			}
+			continue
+		}
+		want := "  a, then " + def.Mnemonic.Display + " " + strings.ToLower(def.MenuLabel) + " — " + def.MenuDescription
+		at := strings.Index(joined, want)
+		if at < 0 {
+			t.Errorf("Act on row lacks the menu's %q entry; want line %q", def.Mnemonic.Key, want)
+			continue
+		}
+		if at < last {
+			t.Errorf("Act on row lists %q out of menu order", def.Mnemonic.Key)
+		}
+		last = at
+	}
+	for _, sec := range helpSections {
+		for _, line := range sec.lines {
+			if sec.name != "Act on row" && strings.HasPrefix(line, "  a, then ") {
+				t.Errorf("%s restates a menu mnemonic outside Act on row: %q", sec.name, line)
+			}
+		}
+	}
+	if strings.Contains(joined, "focus the session's tab") {
+		t.Error("Act on row still describes Enter as a Kitty-only tab focus")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -135,7 +136,7 @@ func healthInput(m Model) dashboard.HealthInput {
 func healthDismissFooterBinding(m Model) string {
 	for _, issue := range healthIssues(m) {
 		if issue.Dismissible && issue.WantsAttention() {
-			return renderFooterBinding("d", "dismiss config notice")
+			return chrome.Binding("d", "dismiss config notice")
 		}
 	}
 	return ""

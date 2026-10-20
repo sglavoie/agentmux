@@ -22,6 +22,7 @@ package overview
 import (
 	"strings"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
@@ -206,10 +207,10 @@ func helpHintLine(width int, above, below bool) string {
 	}
 	middleWidth := max(width-layout.Width(left)-layout.Width(right), 0)
 	middle := strings.Join([]string{
-		footerKeys("scroll", footerKey{"j/k", true}),
-		footerKeys("page", footerKey{"ctrl+f/b", true}),
-		footerKeys("ends", footerKey{"g/G", true}),
-		footerKeys("close", footerKey{"esc", true}, footerKey{"q", true}, footerKey{"?", true}),
+		chrome.Keys("scroll", chrome.Key{Text: "j/k", Available: true}),
+		chrome.Keys("page", chrome.Key{Text: "ctrl+f/b", Available: true}),
+		chrome.Keys("ends", chrome.Key{Text: "g/G", Available: true}),
+		chrome.Keys("close", chrome.Key{Text: "esc", Available: true}, chrome.Key{Text: "q", Available: true}, chrome.Key{Text: "?", Available: true}),
 	}, styleDim.Render(footerSeparator))
 	middle = layout.StyledTruncate(middle, middleWidth, "…")
 	if padding := middleWidth - layout.StyledWidth(middle); padding > 0 {

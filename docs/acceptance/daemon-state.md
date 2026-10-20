@@ -395,4 +395,4 @@ These convergence expectations are pinned by the automated gate:
   and interruption classification with fail-closed handling of active/unknown
   evidence.
 
-Continued in [daemon_state_acceptance_manual.md](daemon_state_acceptance_manual.md).
+Continued in [daemon-state-manual.md](daemon-state-manual.md).

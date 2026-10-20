@@ -13,7 +13,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/layout"
-	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
 // formatRow renders one run. A wide row carries session/phase, harness, and
@@ -25,7 +24,7 @@ func formatRow(row aslbridge.Row, width int, wide bool, now time.Time) string {
 	}
 	state := stateText(row)
 	label := RowLabel(row)
-	age := tuiworktrees.CompactAge(activityTime(row), now)
+	age := layout.CompactAge(activityTime(row), now)
 	var line string
 	if wide {
 		line = fmt.Sprintf("  %s  %s  %s  %s  %5s  %s",

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
@@ -18,14 +19,10 @@ var (
 	styleError    = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
 	styleDim      = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
 	styleSearch   = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
-	styleFooter   = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
+	styleFooter   = chrome.FooterLabel
 	styleHeader   = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 	styleChip     = lipgloss.NewStyle()
 	styleBanner   = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber)).Bold(true)
-
-	styleFooterKey = lipgloss.NewStyle().
-			Foreground(theme.Color(theme.Primary)).
-			Bold(true)
 
 	// styleOverlayBox wraps the delete-choice prompt, the event detail pane,
 	// and the timeline in a rounded blue border with a dark surface.
@@ -79,33 +76,6 @@ func accountStyle(colorName string) lipgloss.Style {
 		return lipgloss.NewStyle()
 	}
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(c.ForegroundHex()))
-}
-
-// renderFooterBinding renders an available key separately from its dim
-// description. Keeping the two segments independent lets keys carry the
-// shared accent without changing the description's established styling.
-func renderFooterBinding(key, description string) string {
-	return renderFooterBindingWithLabel(key, " ", description, styleFooter)
-}
-
-// renderFooterBindingWithLabel is the custom-label variant used when a
-// description has semantic styling — the delete prompt's destructive red
-// label is the only such case in this package.
-func renderFooterBindingWithLabel(key, gap, label string, labelStyle lipgloss.Style) string {
-	return styleFooterKey.Render(key) + gap + labelStyle.Render(label)
-}
-
-// joinFooterBindings joins already-rendered binding segments without adding an
-// indent or wrapping. The modal footers in this package are fixed width, so
-// they never need the root's wrapping path.
-func joinFooterBindings(separator string, rendered ...string) string {
-	kept := make([]string, 0, len(rendered))
-	for _, item := range rendered {
-		if item != "" {
-			kept = append(kept, item)
-		}
-	}
-	return strings.Join(kept, styleFooter.Render(separator))
 }
 
 // renderPathRow renders the dim "  <label>: <path>" row shown above the

@@ -17,7 +17,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .runPlan: return "Run a Plan…"
         case .activity: return "Since Last Looked…"
         case .history: return "Conversation History…"
-        case .changes: return "Review Checkout Changes…"
+        case .changes: return "Checkout Changes…"
         case .commandPalette: return "Command Palette…"
         }
     }
@@ -36,9 +36,27 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .commandPalette: return #selector(AppDelegate.showCommandPalette(_:))
         }
     }
+    /// ⌘⇧ and a letter for the command palette and the review windows;
+    /// none for the panes. Each is free in the main menu and among Ghostty's
+    /// ⌘⇧ bindings (which take , D F G J P T V W Z [ ] ↑ ↓ and Return), and
+    /// none holds Option, which stays the focused program's.
     var defaultCombo: HotKeyCombo? {
-        self == .commandPalette ? HotKeyCombo(string: "shift+cmd+p", scope: .application) : nil
+        defaultKey.flatMap { HotKeyCombo(string: "shift+cmd+" + $0, scope: .application) }
     }
+    private var defaultKey: String? {
+        switch self {
+        case .commandPalette: return "p"
+        case .runs: return "r"
+        case .runPlan: return "n"
+        case .activity: return "u"
+        case .history: return "h"
+        case .changes: return "c"
+        case .splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane: return nil
+        }
+    }
+    /// The default as a main menu key equivalent with ⌘ (uppercase implies
+    /// Shift), for the menu as it is built before `apply` runs.
+    var defaultMenuKey: String { defaultKey?.uppercased() ?? "" }
     func combo(in preferences: AppPreferences) -> HotKeyCombo? {
         guard let stored = preferences.workspaceShortcuts[rawValue] else { return defaultCombo }
         if stored.isEmpty { return nil }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/testenv"
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
@@ -21,6 +22,7 @@ func quietBackendStatus() cli.BackendStatus {
 }
 
 func TestMain(m *testing.M) {
+	testenv.ClearSessionEnv()
 	stateRoot, err := os.MkdirTemp("", "agentmux-debug-test-state-")
 	if err != nil {
 		panic(err)

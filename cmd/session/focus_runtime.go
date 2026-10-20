@@ -163,7 +163,7 @@ func runFocusRuntime(cmd *cobra.Command, named string, choose focusChoice) error
 		}
 	}
 	if current < 0 {
-		return cli.CommandFailure(cmd, false, "not_found", fmt.Errorf("no running tmux session is %s", id))
+		return cli.CommandFailure(cmd, false, "not_found", noRuntimeSession(id))
 	}
 	target, ok := choose(ordered, current, runtimeAttention())
 	if !ok || target.RuntimeSessionID == "" {

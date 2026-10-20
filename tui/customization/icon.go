@@ -11,6 +11,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/chrome"
+	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
@@ -100,14 +102,14 @@ func (m *iconPickerModel) apply() bool {
 		parts.Base = m.items[m.cursor].emoji + parts.Base
 		title := palette.BuildTitleParts(parts)
 		if err := m.ctx.SetTitle(title); err != nil {
-			m.err = fmt.Errorf("set title: %w", err)
+			m.err = fmt.Errorf("couldn't apply the icon to this session's title: %w", err)
 			return false
 		}
 		m.ctx.CurrentTitle, m.err, m.applied = title, nil, true
 		return true
 	}
 	if m.ctx.Client == nil {
-		m.err = errors.New("set tab title: Kitty client is unavailable")
+		m.err = errors.New("couldn't apply the icon: Kitty isn't reachable from this overlay")
 		return false
 	}
 
@@ -130,7 +132,7 @@ func (m *iconPickerModel) apply() bool {
 	title := palette.BuildTitleParts(parts)
 
 	if err := m.ctx.Client.SetTabTitle(kitty.MatchTabByID(m.ctx.TabID), title); err != nil {
-		m.err = fmt.Errorf("set tab title: %w", err)
+		m.err = fmt.Errorf("couldn't apply the icon to this tab: %w", err)
 		return false
 	}
 
@@ -188,9 +190,9 @@ func (m iconPickerModel) View() tea.View {
 	}
 	sb.WriteString(styleDim.Render(divider) + "\n")
 	if m.err != nil {
-		sb.WriteString(styleError.Render(m.err.Error()) + "\n")
+		sb.WriteString(styleError.Render(layout.Sentence(m.err.Error())) + "\n")
 	}
-	sb.WriteString(joinFooterBindings(" · ", renderFooterBinding("j/k", "navigate"), renderFooterBinding("enter", "apply"), renderFooterBinding("esc", "cancel")) + "\n")
+	sb.WriteString(chrome.JoinBindings(" · ", chrome.Binding("j/k", "up/down"), chrome.Binding("enter", "apply"), chrome.Binding("esc/q", "cancel")) + "\n")
 
 	return tea.NewView(sb.String())
 }

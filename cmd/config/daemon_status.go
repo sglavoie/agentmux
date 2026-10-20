@@ -22,7 +22,16 @@ type daemonSettingsStatus struct {
 var configDaemonStatusCmd = &cobra.Command{
 	Use:   "daemon-status",
 	Short: "Compare saved settings with the running daemon",
-	Args:  cobra.NoArgs,
+	Long: `Compares the daemon settings saved in config.toml with the ones the running
+daemon applied when it started, and names the settings that differ. A daemon
+reads its settings once, so a changed setting takes effect only after
+` + "`amx daemon restart`" + `. The daemon is never started or restarted here.
+
+With --json it reports {known, changed, message}: known is false when the
+daemon is not running or cannot report its settings.`,
+	Example: `  amx config daemon-status
+  amx config daemon-status --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOut, _ := cmd.Flags().GetBool("json")
 		cfg, err := daemonSettingsLoad()
@@ -58,6 +67,6 @@ var configDaemonStatusCmd = &cobra.Command{
 }
 
 func init() {
-	configDaemonStatusCmd.Flags().Bool("json", false, "output structured settings status")
+	configDaemonStatusCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
 	configCmd.AddCommand(configDaemonStatusCmd)
 }

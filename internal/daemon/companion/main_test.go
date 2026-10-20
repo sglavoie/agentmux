@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 // TestMain fails the package if any test leaves a goroutine behind. The
@@ -17,6 +19,7 @@ import (
 // dependency: a third-party test dependency is a decision for the operator,
 // and a pure package needs no more than a count to prove it starts nothing.
 func TestMain(m *testing.M) {
+	testenv.ClearSessionEnv()
 	baseline := runtime.NumGoroutine()
 	code := m.Run()
 	if code == 0 {

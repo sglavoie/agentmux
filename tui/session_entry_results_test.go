@@ -173,7 +173,7 @@ func TestRenderSessionSearchDistinguishesStatusAndErrors(t *testing.T) {
 
 	out := stripAnsi(renderSessionSearch(m))
 	for _, want := range []string{
-		"loading cache",
+		"loading past sessions",
 		"scanning transcripts",
 		"cache load error: cache unavailable",
 		"search error: sidecar denied",

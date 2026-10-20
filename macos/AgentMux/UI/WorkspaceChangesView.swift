@@ -63,8 +63,8 @@ struct WorkspaceChangesView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 WorkspacePath(path: tree.path).font(.headline)
                                 Text("\(tree.ahead) ahead · \(tree.behind) behind · \(WorkspaceWording.status(tree.lands))")
-                                ForEach(Array((tree.warnings ?? []).enumerated()), id: \.offset) { _, warning in Text(warning).foregroundStyle(.orange) }
-                                ForEach(Array((tree.conflicts ?? []).enumerated()), id: \.offset) { _, conflict in Text("Conflict: " + conflict).foregroundStyle(.red) }
+                                ForEach(Array((tree.warnings ?? []).enumerated()), id: \.offset) { _, warning in Text(warning).foregroundStyle(WorkspaceReviewColors.warning) }
+                                ForEach(Array((tree.conflicts ?? []).enumerated()), id: \.offset) { _, conflict in Text("Conflict: " + conflict).foregroundStyle(WorkspaceReviewColors.failure) }
                                 if let reason = model.landingReason { Text(reason).foregroundStyle(.secondary) }
                             }.textSelection(.enabled).padding(16).frame(maxWidth: .infinity, alignment: .leading)
                         }.frame(width: 400, height: 240)
@@ -140,6 +140,7 @@ struct WorkspaceChangesView: View {
                                               },
                                               onCopy: { copyFeedback = $0 })
                                 .opacity(model.patchIdentity == model.diffIdentity ? 1 : 0)
+                                .overlay { diffEmptyState }
                                 .onChange(of: model.diffIdentity) { _, _ in hunk = nil; visibleHunk = nil; copyFeedback = WorkspaceCopyFeedback() }
                                 .onChange(of: model.diff) { _, _ in hunk = nil; visibleHunk = nil; copyFeedback = WorkspaceCopyFeedback() }
                         }.padding(4).frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
@@ -158,7 +159,7 @@ struct WorkspaceChangesView: View {
             .onChange(of: focus) { _, value in if value != nil { diffFocusRequest = nil } }
             .task(id: copyFeedback.revision) {
                 guard copyFeedback.succeeded else { return }
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                do { try await Task.sleep(for: WorkspaceCopyNotice.duration) } catch { return }
                 guard !Task.isCancelled else { return }
                 copyFeedback = WorkspaceCopyFeedback()
             }
@@ -173,6 +174,13 @@ struct WorkspaceChangesView: View {
             } message: {
                 Text("Fast-forward the source branch to the committed work in \(confirmedTree?.path ?? "this worktree"). The checkout must be clean and inactive. The worktree and its branch are retained.")
             }
+    }
+    @ViewBuilder private var diffEmptyState: some View {
+        if model.selectedFile == nil {
+            WorkspaceEmpty(title: "No file selected", detail: "Select a changed file to review its diff.", symbol: "doc.text.magnifyingglass")
+        } else if !model.reading && model.patchError == nil && model.patchIdentity == model.diffIdentity && model.diff.lines.isEmpty {
+            WorkspaceEmpty(title: "No line changes", detail: "This file changed without a textual diff, such as a mode change or a binary file.", symbol: "doc")
+        }
     }
     private var diffFeedback: WorkspaceFeedback? {
         let target = model.selectedFile ?? "Diff"
@@ -223,31 +231,30 @@ struct WorkspaceChangesView: View {
 }
 
 @MainActor
-final class WorkspaceChangesWindow: NSObject, NSWindowDelegate {
+final class WorkspaceChangesWindow: ReviewWindowController {
     let model: WorkspaceChangesModel
-    private(set) var window: NSWindow?
-    var onVisibilityChanged: (Bool) -> Void = { _ in }
-    init(model: WorkspaceChangesModel) { self.model = model }
-
-    func show() {
-        if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1050, height: 700),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "Checkout Changes"
-            window.minSize = NSSize(width: 720, height: 450)
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            let host = WorkspaceReviewHost(rootView: WorkspaceChangesView(model: model))
-            host.closesWindow = true
-            window.contentView = host
-            ReviewWindowPlacement.restore(window, name: "WorkspaceChanges")
-            self.window = window
-        }
-        onVisibilityChanged(true)
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate()
+    init(model: WorkspaceChangesModel) {
+        self.model = model
+        super.init(title: "Checkout Changes", autosaveName: "WorkspaceChanges", size: NSSize(width: 1050, height: 700))
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool { !model.landing }
-    func windowWillClose(_ notification: Notification) { model.close(); onVisibilityChanged(false) }
+    func show() { present() }
+    override func makeContentView() -> NSView { Self.host(WorkspaceChangesView(model: model)) }
+    /// Reshowing reads the checkout again, unless `open` already is.
+    override func willPresent() { refreshIfIdle(olderThan: 0) }
+    /// An agent edits files while the operator is in another app: coming
+    /// back compares again rather than showing the old diff as current.
+    override func applicationDidBecomeActive() { refreshIfIdle(olderThan: Self.reactivationInterval) }
+    override var canClose: Bool { !model.landing }
+    override func didClose() { model.close() }
+
+    /// Reactivation within this many seconds of the last comparison (the
+    /// activation `present` itself causes) reads nothing again.
+    static let reactivationInterval: TimeInterval = 2
+
+    private func refreshIfIdle(olderThan interval: TimeInterval) {
+        guard !model.loading, !model.landing, let refreshed = model.comparisonRefreshedAt,
+              Date().timeIntervalSince(refreshed) >= interval else { return }
+        model.refresh()
+    }
 }

@@ -17,10 +17,10 @@ import (
 var worktreeDiffCmd = &cobra.Command{
 	Use:   "diff <selector>",
 	Short: "Review what a managed worktree changed and how it would land",
-	Example: `  amx worktree diff wt-1a2b              # summary, files, and landing verdict
-  amx worktree diff wt-1a2b --patch      # followed by the unified diff
-  amx worktree diff wt-1a2b --committed  # leave uncommitted changes out
-  amx worktree diff wt-1a2b --json`,
+	Example: `  amx worktree diff 3f9c2a1e             # summary, files, and landing verdict
+  amx worktree diff 3f9c2a1e --patch      # followed by the unified diff
+  amx worktree diff 3f9c2a1e --committed  # leave uncommitted changes out
+  amx worktree diff 3f9c2a1e --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		selector, err := worktreeSelectorFromArgs(cmd, jsonOutput, "diff", args)

@@ -1,9 +1,6 @@
 package plans
 
 import (
-	"fmt"
-	"time"
-
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
@@ -56,31 +53,4 @@ func maxRunes(n int) int {
 		return 8
 	}
 	return n
-}
-
-// formatWhen returns a short human-readable representation of a timestamp.
-// Entries newer than 24h show as "Xh", older up to 7d as "Xd", and anything
-// older falls back to YYYY-MM-DD.
-func formatWhen(t time.Time) string {
-	if t.IsZero() {
-		return "          "
-	}
-	delta := time.Since(t)
-	if delta < 0 {
-		delta = 0
-	}
-	switch {
-	case delta < time.Hour:
-		mins := int(delta.Minutes())
-		if mins < 1 && delta > 0 {
-			mins = 1
-		}
-		return fmt.Sprintf("%2dm   ago", mins)
-	case delta < 24*time.Hour:
-		return fmt.Sprintf("%2dh   ago", int(delta.Hours()))
-	case delta < 7*24*time.Hour:
-		return fmt.Sprintf("%2dd   ago", int(delta.Hours()/24))
-	default:
-		return t.Format("2006-01-02")
-	}
 }

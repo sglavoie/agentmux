@@ -70,12 +70,14 @@ attached to the same agent is detached, and the agent's size follows this
 terminal. Detaching (closing the terminal, or another attach taking over)
 leaves the agent running; ` + "`amx attach`" + ` again picks it back up.
 
-A tmux runtime session is attached through AgentMux's private tmux server. A
+A tmux runtime session is attached through Agent Mux's private tmux server. A
 Kitty runtime session has its window focused instead.
 
 --json does not attach, since its output is the JSON document: it checks that
 the runtime session is live and reports the command a terminal runs to attach.
 Runtime-session IDs come from ` + "`amx project launch --backend tmux --json`" + `.`,
+	Example: `  amx attach rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f
+  amx attach rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAttach,
 }

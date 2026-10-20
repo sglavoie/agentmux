@@ -95,6 +95,9 @@ type doctorFinding struct {
 	Check    string `json:"check"`
 	WindowID int    `json:"window_id,omitempty"`
 	Message  string `json:"message"`
+	// Remediation is what to do about it (doctor_remediation.go). Additive
+	// and optional: informational findings carry none.
+	Remediation string `json:"remediation,omitempty"`
 }
 
 // evaluateDaemonInvariants applies the correctness invariants to one export
@@ -105,12 +108,7 @@ type doctorFinding struct {
 func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health, cliBuild buildinfo.Info, liveByID map[int]protocol.WindowLiveMetadata, now time.Time) []doctorFinding {
 	findings := make([]doctorFinding, 0)
 	add := func(severity, check string, windowID int, format string, args ...any) {
-		findings = append(findings, doctorFinding{
-			Severity: severity,
-			Check:    check,
-			WindowID: windowID,
-			Message:  fmt.Sprintf(format, args...),
-		})
+		findings = append(findings, newDoctorFinding(severity, check, windowID, fmt.Sprintf(format, args...)))
 	}
 
 	ids := make([]int, 0, len(snapshot.WindowMetadata)+len(snapshot.EventsByWindow))

@@ -46,7 +46,7 @@ func chipPickerSearchCases() []chipPickerSearchCase {
 			wantOptions:    []string{"claude"},
 			wantSelected:   "claude",
 			wantAllOptions: []string{"", "claude", "copilot", "codex"},
-			wantNoMatch:    "  (no harnesses match)",
+			wantNoMatch:    "  (no harnesses match —",
 			wantResults:    2,
 		},
 		{
@@ -57,7 +57,7 @@ func chipPickerSearchCases() []chipPickerSearchCase {
 			wantOptions:    []string{"work"},
 			wantSelected:   "work",
 			wantAllOptions: []string{"", "work", "personal", "ops"},
-			wantNoMatch:    "  (no profiles match)",
+			wantNoMatch:    "  (no profiles match —",
 			wantResults:    2,
 		},
 		{
@@ -68,7 +68,7 @@ func chipPickerSearchCases() []chipPickerSearchCase {
 			wantOptions:    []string{"Foo"},
 			wantSelected:   "Foo",
 			wantAllOptions: []string{"", "Foo", "Bar", "baz"},
-			wantNoMatch:    "  (no projects match)",
+			wantNoMatch:    "  (no projects match —",
 			wantResults:    1,
 		},
 	}

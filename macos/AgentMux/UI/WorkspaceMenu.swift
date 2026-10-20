@@ -28,10 +28,12 @@ import AppKit
 /// there, and the Show in Kitty submenu that lists those is shown only while
 /// one of the digits goes to a Kitty session (`updateKittyItems`). ⌘] and ⌘[
 /// stop at every session and every terminal under one; ⌘⇧→ and ⌘⇧← do the
-/// same. With Shift on the brackets, they go from session to session. ⌘L goes
+/// same. With Shift on the brackets, they go from session to session, as F9
+/// and F7 do, except that a Kitty session comes forward in Kitty. ⌘L goes
 /// back to where the pane was
 /// before, and again returns. ⌘P lists every session and view to go to by
-/// name.
+/// name. The review windows have ⌘⇧ and a letter (R, N, U, H, C) and Search
+/// Conversation ⌘⇧S; none of those letters is a Ghostty binding with ⌘⇧.
 enum WorkspaceMenu {
     /// What each function key does, in the order the menu lists them: the
     /// keys Kitty binds for its tabs, acting on the workspace's sessions.
@@ -98,8 +100,11 @@ enum WorkspaceMenu {
         edit.addItem(item("Paste", #selector(NSText.paste(_:)), "v"))
         edit.addItem(item("Select All", #selector(NSResponder.selectAll(_:)), "a"))
         edit.addItem(.separator())
-        edit.addItem(item("Find…", #selector(Ghostty.SurfaceView.find(_:)), "f"))
-        edit.addItem(item("Search Conversation…", #selector(AppDelegate.searchConversation(_:)), "", target: target))
+        // Titled for what the focused terminal searches when validated
+        // (`Ghostty.SurfaceView.validateMenuItem`): Find in Terminal…, or
+        // Find in Terminal History… in a utility view.
+        edit.addItem(item(findTitle, #selector(Ghostty.SurfaceView.find(_:)), "f"))
+        edit.addItem(item("Search Conversation…", #selector(AppDelegate.searchConversation(_:)), "S", target: target))
         edit.addItem(item("Find Next", #selector(Ghostty.SurfaceView.findNext(_:)), "g"))
         edit.addItem(item("Find Previous", #selector(Ghostty.SurfaceView.findPrevious(_:)), "G"))
 
@@ -149,11 +154,11 @@ enum WorkspaceMenu {
         view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
         view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
-        view.addItem(item("ASL Runs…", #selector(AppDelegate.showRuns(_:)), "", target: target))
-        view.addItem(item("Run a Plan…", #selector(AppDelegate.runPlan(_:)), "", target: target))
-        view.addItem(item("Since Last Looked…", #selector(AppDelegate.showActivity(_:)), "", target: target))
-        view.addItem(item("Conversation History…", #selector(AppDelegate.showHistory(_:)), "", target: target))
-        view.addItem(item("Review Checkout Changes…", #selector(AppDelegate.showChanges(_:)), "", target: target))
+        // The review windows: ⌘⇧ and a letter by default
+        // (`WorkspaceShortcut.defaultCombo`), reassignable in Settings.
+        for shortcut in [WorkspaceShortcut.runs, .runPlan, .activity, .history, .changes] {
+            view.addItem(item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target))
+        }
         view.addItem(.separator())
         view.addItem(item("Split with Shell", #selector(AppDelegate.splitWorkspaceShell(_:)), "", target: target))
         view.addItem(item("Split with Checkout Changes", #selector(AppDelegate.splitWorkspaceChanges(_:)), "", target: target))
@@ -175,12 +180,16 @@ enum WorkspaceMenu {
         session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), ".", target: target))
         session.addItem(item(WorkspaceWindowController.endSessionTitle, #selector(AppDelegate.endWorkspaceSession(_:)), "W", target: target))
         session.addItem(.separator())
-        session.addItem(item("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
-        session.addItem(item("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
+        // Three ways through the sidebar: ⌘] and ⌘[ stop at every session
+        // and every terminal under one; F9 and F7 (Function Keys) at sessions
+        // only, staying here; ⌘} and ⌘{ at sessions only, a Kitty one coming
+        // forward in Kitty.
+        session.addItem(item(nextStopTitle, #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
+        session.addItem(item(previousStopTitle, #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
         // Keep the bracket keys in the menu and accept the arrow chords as aliases.
         for (title, action, arrow) in [
-            ("Select Next Session", #selector(AppDelegate.selectNextSession(_:)), NSRightArrowFunctionKey),
-            ("Select Previous Session", #selector(AppDelegate.selectPreviousSession(_:)), NSLeftArrowFunctionKey),
+            (nextStopTitle, #selector(AppDelegate.selectNextSession(_:)), NSRightArrowFunctionKey),
+            (previousStopTitle, #selector(AppDelegate.selectPreviousSession(_:)), NSLeftArrowFunctionKey),
         ] {
             let alias = item(title, action, key(arrow), mask: [.command, .shift], target: target)
             alias.isHidden = true
@@ -189,8 +198,6 @@ enum WorkspaceMenu {
         }
         session.addItem(item("Next Tab in Project", #selector(AppDelegate.selectNextProjectTab(_:)), key(NSRightArrowFunctionKey), target: target))
         session.addItem(item("Previous Tab in Project", #selector(AppDelegate.selectPreviousProjectTab(_:)), key(NSLeftArrowFunctionKey), target: target))
-        // From session to session, passing over the terminals under one; a
-        // Kitty session comes forward in Kitty.
         session.addItem(item(nextSessionTitle, #selector(AppDelegate.showNextSessionInKitty(_:)), "}", target: target))
         session.addItem(item(previousSessionTitle, #selector(AppDelegate.showPreviousSessionInKitty(_:)), "{", target: target))
         session.addItem(item("Back to Last Shown", #selector(AppDelegate.toggleRecentPlace(_:)), "l", target: target))
@@ -239,8 +246,11 @@ enum WorkspaceMenu {
         return main
     }
 
-    static let nextSessionTitle = "Next Session, Skipping Terminals"
-    static let previousSessionTitle = "Previous Session, Skipping Terminals"
+    static let findTitle = "Find in Terminal…"
+    static let nextStopTitle = "Next Session or Terminal"
+    static let previousStopTitle = "Previous Session or Terminal"
+    static let nextSessionTitle = "Next Session (Kitty Sessions in Kitty)"
+    static let previousSessionTitle = "Previous Session (Kitty Sessions in Kitty)"
     static let showInKittyIdentifier = NSUserInterfaceItemIdentifier("amx.session.showInKitty")
     /// The View menu's sidebar and inspector items, whose titles the app
     /// sets to Show or Hide as each is (`WorkspaceWindowController`'s

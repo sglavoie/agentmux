@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
@@ -180,7 +181,7 @@ func (m keybindingsModel) View() tea.View {
 	}
 
 	sb.WriteString(styleDim.Render(divider) + "\n")
-	footer := joinFooterBindings(" · ", renderFooterBinding("j/k", "scroll"), renderFooterBinding("g/G", "top/bottom"), renderFooterBinding("q/esc", "close"))
+	footer := chrome.JoinBindings(" · ", chrome.Binding("j/k", "scroll"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("esc/q", "close"))
 	sb.WriteString(layout.StyledTruncate(footer, width, "…"))
 
 	view := tea.NewView(sb.String())

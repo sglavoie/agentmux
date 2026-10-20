@@ -8,9 +8,9 @@
 // transcript.Search Past Sessions does, and it and `list` share one set of
 // selector flags. The root-level tab controls work on the live instance
 // instead: focus-prev-managed and focus-next-managed, focus-next (the next tab
-// that wants attention), mute-toggle on the focused tab, and resort into the
-// configured order. Both halves reduce to "which session, and what happens to
-// it".
+// that wants attention), mute-toggle on the current tab or tmux session,
+// name-session on a tmux session, and resort into the configured order. Both
+// halves reduce to "which session, and what happens to it".
 //
 // `attach` and `close` work on a runtime session instead of a tab: the first
 // hands this terminal to a running agent, the second ends one agent and the

@@ -188,6 +188,9 @@ var configASLSyncCmd = &cobra.Command{
 		"path and state root into config.toml, restart the daemon, and verify the " +
 		"live bridge. Any failure after the write restores the previous configuration.\n\n" +
 		"--check performs the entire preflight and writes nothing.",
+	Example: `  amx config asl-sync --check
+  amx config asl-sync
+  amx config asl-sync --command ~/scripts/asl --json`,
 	Args: cobra.NoArgs,
 	// Every failure this command produces is a structured refusal with its own
 	// remediation. Printing the flag list under one would bury the line the
@@ -203,7 +206,7 @@ func init() {
 		"executable to pair with; defaults to defaults.asl.command, then `asl`")
 	configASLSyncCmd.Flags().BoolVar(&configASLSyncCheck, "check", false,
 		"run the full preflight and report what would change, without writing")
-	configASLSyncCmd.Flags().BoolVar(&configASLSyncJSON, "json", false, "emit JSON")
+	configASLSyncCmd.Flags().BoolVar(&configASLSyncJSON, "json", false, "emit schema-v1 JSON")
 	configCmd.AddCommand(configASLSyncCmd)
 }
 

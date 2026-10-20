@@ -91,7 +91,7 @@ func TestHelpOverlayDimsOriginatingView(t *testing.T) {
 	if !strings.Contains(out, "Transcript:") {
 		t.Fatalf("expected the dimmed transcript view behind the overlay, got:\n%s", out)
 	}
-	if strings.Contains(out, "No running sessions.") {
+	if strings.Contains(out, "No running sessions") {
 		t.Fatalf("expected no dashboard backdrop behind the overlay, got:\n%s", out)
 	}
 }

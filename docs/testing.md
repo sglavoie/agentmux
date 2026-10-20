@@ -13,6 +13,54 @@ scenario. `just check` adds the repository linter and is the final local/CI
 gate. The end-to-end coverage map is documented in
 [`docs/acceptance.md`](acceptance.md).
 
+Two of acceptance's steps are cheap enough to run on their own while iterating:
+`just fmt-check` fails on any tracked Go file that is not gofmt-clean and
+prints the paths (it leads `acceptance`, so a formatting slip fails in seconds
+rather than after the race suites), and `just vet` runs `go vet ./...`.
+
+### Running the suite from inside an agent session
+
+The suite is safe to run from a shell inside an Agent Mux session: a tmux pane
+on the private server, a Kitty window, or a terminal of the desktop workspace.
+Such a shell carries variables naming its session and terminal
+(`AMX_RUNTIME_SESSION_ID`, `AMX_WORKSPACE_HOSTED`, `TMUX`, `TMUX_PANE`,
+`KITTY_WINDOW_ID`, `KITTY_LISTEN_ON`, and others), and production code reads
+them to decide which session a hook or command is about. Every package whose
+code reads them clears them in its `TestMain` through
+`internal/testenv.ClearSessionEnv`, so a test sees a plain terminal unless it
+sets one of them itself with `t.Setenv`. Wrapping the run in
+`env -u AMX_RUNTIME_SESSION_ID ...`, as older acceptance records do, is no
+longer needed.
+
+`testenv.SessionVars` is the list, and it holds only session and terminal
+identity. Configuration overrides (`AMX_CONFIG`, `AMX_TMUX`, `XDG_*`, `HOME`)
+stay with each package's `TestMain`, which isolates them as it needs. A new
+package whose code reads the session environment, directly or through
+`internal/cli`, `internal/kitty`, `internal/tmux`, or `internal/indicator`,
+calls `testenv.ClearSessionEnv()` first thing in its `TestMain`, and a new
+variable of that kind goes into `SessionVars`. To check, run the suite with
+bogus values set:
+
+```bash
+AMX_RUNTIME_SESSION_ID=rs-bogus TMUX=/tmp/x,1,0 TMUX_PANE=%9 KITTY_WINDOW_ID=7 \
+  go test ./cmd/... ./internal/... ./tui/...
+```
+
+### Which install or smoke recipe
+
+| Recipe | Does | Use it when |
+| --- | --- | --- |
+| `just install` | Builds `amx` and renames it atomically into `~/.local/bin`; writes a starter `config.toml` if none exists. Restarts nothing; a running daemon keeps its open executable. | You want the new CLI on `PATH` and will restart the daemon yourself, or no daemon runs. |
+| `just install-restart-smoke` | `install`, then restarts the daemon onto the new binary, waits for it to report ready, and gates on `amx doctor --strict` (CLI and daemon the same artifact, no invariant violated). | The usual way to deploy a Go change from this checkout when there is no Xcode, or the app has not changed. |
+| `just update` | `install`, syncs the hook files, builds and installs the Release `Agent Mux.app`, then restarts and verifies as `install-restart-smoke` does. Needs Xcode. | You want everything from this checkout installed: CLI, hooks, menu bar app, and daemon, judged as a pair. |
+| `just cockpit-smoke` | Read-only check of what is already installed: the tmux `amx backend status` resolves runs, the daemon is ready, `export-events`, strict doctor, and `config asl-sync --check`. Fails rather than skips. | After an install, to confirm the installed pair works against a real tmux; from any terminal. |
+| `just kitty-smoke` | Read-only check that the installed daemon observes a live Kitty window. In no gate. | Only if you launch agents into Kitty; run it from a Kitty window. |
+
+The recipes that take a checkout path (`asl-contract-sync`,
+`overseer-integration`, `paired-release-gate`) accept the documented
+`asl_root=~/scripts` form from zsh as well as bash: zsh leaves a `~` after `=`
+unexpanded, so the recipes expand a leading `~` themselves.
+
 Three gates sit outside `just check` because each needs something a hermetic
 suite does not have:
 
@@ -69,7 +117,7 @@ record the waiver separately from verified behavior.
 
 The Codex completion lifecycle fixtures do not replace the installed-build and
 physical sleep/wake observations recorded for
-[F-001](desktop-improvements.md#remaining-installed-build-check-for-f-001).
+[F-001](acceptance/desktop-improvements.md#remaining-installed-build-check-for-f-001).
 
 `just asl-integration` is separate and opt-in. Every other recipe is hermetic
 and needs no `agent-session-loop` installed; this one launches the real bridge

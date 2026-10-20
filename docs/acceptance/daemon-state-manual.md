@@ -1,6 +1,6 @@
 # Daemon State Manual Acceptance Evidence
 
-Manual drills and dogfood records supplementing [daemon_state_acceptance.md](daemon_state_acceptance.md).
+Manual drills and dogfood records supplementing [daemon-state.md](daemon-state.md).
 
 ## Manual live evidence log
 

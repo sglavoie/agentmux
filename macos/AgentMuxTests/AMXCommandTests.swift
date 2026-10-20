@@ -318,7 +318,7 @@ final class AMXCommandTests: XCTestCase {
 
     Available Commands:
       config             Manage amx configuration
-      mute-toggle        Toggle mute on the focused Agent Mux tab
+      mute-toggle        Toggle mute on the current Agent Mux session (Kitty tab or tmux session)
       notifications      Inspect and test native notifications
       open-dashboard     Bring the dashboard forward, opening it if absent
       project            List and launch configured projects
@@ -354,7 +354,7 @@ final class AMXCommandTests: XCTestCase {
       project            List configured projects and launch sessions from them
 
     Kitty tabs:
-      mute-toggle        Toggle mute on the focused Agent Mux tab
+      mute-toggle        Toggle mute on the current Agent Mux session (Kitty tab or tmux session)
 
     Setup and diagnostics:
       config             Manage amx configuration

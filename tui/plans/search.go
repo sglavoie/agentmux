@@ -3,6 +3,7 @@ package plans
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	planindex "github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -151,10 +152,7 @@ func (in SearchInput) emptyHint() string {
 	if in.FilterProject.Kind != planindex.ProjectAny {
 		ways = append(ways, "r changes the project")
 	}
-	if len(ways) == 0 {
-		return ""
-	}
-	return " — " + strings.Join(ways, " · ")
+	return strings.Join(ways, " · ")
 }
 
 // emptyText is what an empty list says. With nothing narrowing it the list
@@ -163,9 +161,9 @@ func (in SearchInput) emptyHint() string {
 func (in SearchInput) emptyText() string {
 	hint := in.emptyHint()
 	if hint == "" {
-		return "(no saved plans found — plans_directory in config.toml says where to look)"
+		return layout.Placeholder(layout.EmptyText("saved plans found", "plans_directory in config.toml says where to look"))
 	}
-	return "(no plans match" + hint + ")"
+	return layout.Placeholder(layout.NoMatchText("plans", hint))
 }
 
 // RenderList renders the scrollable results list. height is the per-call row
@@ -177,7 +175,7 @@ func (in SearchInput) RenderList(height int) string {
 	total := len(in.Results)
 	if total == 0 {
 		if in.Loading {
-			sb.WriteString(styleDim.Render("  (loading…)"))
+			sb.WriteString(styleDim.Render("  " + layout.Placeholder(layout.LoadingText("plans"))))
 		} else {
 			sb.WriteString(styleDim.Render(layout.ClampLine("  "+in.emptyText(), in.Width)))
 		}
@@ -218,7 +216,7 @@ func (in SearchInput) RenderList(height int) string {
 // FormatRow returns a single-line summary of one plan result. Format:
 // "  <when>  [<project>]  <name>  <N files>  [m matches]?  <preview>"
 func FormatRow(res planindex.Result, maxWidth int) string {
-	when := formatWhen(res.Meta.ModTime)
+	when := layout.When(res.Meta.ModTime, time.Now())
 	name := res.Meta.Name
 	if name == "" {
 		name = "(unnamed)"

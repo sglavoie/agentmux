@@ -3,6 +3,7 @@ package notifications
 import (
 	"fmt"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/spf13/cobra"
@@ -17,14 +18,50 @@ var notificationsHealth = func() ipc.Health { return ipc.NewClient().Health() }
 // notification would go right now and whether a snooze is holding it, ahead
 // of the subcommands, which are the next thing the operator reaches for.
 func runNotificationsStatus(cmd *cobra.Command, _ []string) error {
+	health := notificationsHealth()
+	if notificationsStatusJSON {
+		return cli.WriteJSON(cmd, notificationsStatusDataFrom(health))
+	}
 	out := cmd.OutOrStdout()
-	for _, line := range notificationsStatusLines(notificationsHealth()) {
+	for _, line := range notificationsStatusLines(health) {
 		if _, err := fmt.Fprintln(out, line); err != nil {
 			return err
 		}
 	}
 	_, err := fmt.Fprint(out, "\n"+cmd.UsageString())
 	return err
+}
+
+// notificationsStatusJSON is a bare `amx notifications --json`.
+var notificationsStatusJSON bool
+
+// notificationsStatusData is the bare `amx notifications --json` data: the
+// facts notificationsStatusLines puts in sentences, and the sentences
+// themselves as summary. Every field past daemon_running is zero when the
+// daemon is not running or too old to report notifications.
+type notificationsStatusData struct {
+	DaemonRunning  bool          `json:"daemon_running"`
+	Enabled        bool          `json:"enabled"`
+	App            string        `json:"app,omitempty"`
+	AlerterReady   bool          `json:"alerter_ready"`
+	AlerterVersion string        `json:"alerter_version,omitempty"`
+	AlerterReason  string        `json:"alerter_reason,omitempty"`
+	Snooze         snoozePayload `json:"snooze"`
+	Summary        []string      `json:"summary"`
+}
+
+func notificationsStatusDataFrom(health ipc.Health) notificationsStatusData {
+	data := notificationsStatusData{DaemonRunning: health.Alive, Summary: notificationsStatusLines(health)}
+	n := health.Notification
+	if !health.Alive || n == nil {
+		return data
+	}
+	data.Enabled = n.Enabled
+	data.App = notificationsApp(health.Companion)
+	data.AlerterReady = n.Available && n.Interactive
+	data.AlerterVersion, data.AlerterReason = n.Version, n.Reason
+	data.Snooze = snoozePayloadOf(protocol.SnoozeState{Indefinite: n.SnoozeIndefinite, SnoozedUntil: n.SnoozedUntil})
+	return data
 }
 
 // notificationsStatusLines says, in sentences, which backend delivers a

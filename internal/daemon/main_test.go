@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 // TestMain points the whole package at an empty XDG state home. A Handler with
@@ -19,6 +21,7 @@ import (
 // with stubDaemonDiscoverPlans; tests that need their own state home still set
 // it with t.Setenv.
 func TestMain(m *testing.M) {
+	testenv.ClearSessionEnv()
 	stateHome, err := os.MkdirTemp("", "amx-daemon-state-home")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "daemon tests: creating isolated state home:", err)

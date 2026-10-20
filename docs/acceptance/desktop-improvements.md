@@ -1,7 +1,7 @@
 # Desktop workflow improvements
 
 Current completion-visibility status: **F-001 resolved by operator confirmation
-on 2026-10-18**. See [the recorded build and observations](acceptance/workspace-consistency/observations.json).
+on 2026-10-18**. See [the recorded build and observations](workspace-consistency/observations.json).
 Earlier pending statements below describe the evidence available during those
 passes. The separate five-workday migration trial remains pending.
 
@@ -158,21 +158,21 @@ goldens; locale, system fonts, and scrolling appearance can vary between Macs.
 
 | State | Light | Dark |
 | --- | --- | --- |
-| Populated | [Capture](acceptance/workspace-polish/review-populated-light.png) | [Capture](acceptance/workspace-polish/review-populated-dark.png) |
-| Empty | [Capture](acceptance/workspace-polish/review-empty-light.png) | [Capture](acceptance/workspace-polish/review-empty-dark.png) |
-| Loading with retained results | [Capture](acceptance/workspace-polish/review-loading-light.png) | [Capture](acceptance/workspace-polish/review-loading-dark.png) |
-| Failed read with retained results | [Capture](acceptance/workspace-polish/review-failed-light.png) | [Capture](acceptance/workspace-polish/review-failed-dark.png) |
+| Populated | [Capture](workspace-polish/review-populated-light.png) | [Capture](workspace-polish/review-populated-dark.png) |
+| Empty | [Capture](workspace-polish/review-empty-light.png) | [Capture](workspace-polish/review-empty-dark.png) |
+| Loading with retained results | [Capture](workspace-polish/review-loading-light.png) | [Capture](workspace-polish/review-loading-dark.png) |
+| Failed read with retained results | [Capture](workspace-polish/review-failed-light.png) | [Capture](workspace-polish/review-failed-dark.png) |
 
-Additional references: [History search](acceptance/workspace-polish/history.png),
-[History at minimum size](acceptance/workspace-polish/history-dark-minimum.png),
-[Changes](acceptance/workspace-polish/changes.png),
-[Changes at minimum size](acceptance/workspace-polish/changes-dark-minimum.png),
-[Waiting and palette, light](acceptance/workspace-polish/waiting-palette-light.png),
-[Waiting and palette, dark](acceptance/workspace-polish/waiting-palette-dark.png).
+Additional references: [History search](workspace-polish/history.png),
+[History at minimum size](workspace-polish/history-dark-minimum.png),
+[Changes](workspace-polish/changes.png),
+[Changes at minimum size](workspace-polish/changes-dark-minimum.png),
+[Waiting and palette, light](workspace-polish/waiting-palette-light.png),
+[Waiting and palette, dark](workspace-polish/waiting-palette-dark.png).
 The TUI's normalized 80×24 renders show the
-[selected profile detail](acceptance/workspace-polish/tui-picker-80x24.txt) and
-[empty dashboard](acceptance/workspace-polish/tui-empty-80x24.txt).
-[Capture provenance and hashes](acceptance/workspace-polish/manifest.json)
+[selected profile detail](workspace-polish/tui-picker-80x24.txt) and
+[empty dashboard](workspace-polish/tui-empty-80x24.txt).
+[Capture provenance and hashes](workspace-polish/manifest.json)
 record the fixture source, sizes, and review criteria.
 
 ### Verification
@@ -226,15 +226,15 @@ The focused coverage lives in `WorkspaceReadingPolishTests`,
 recovery tests. Hosted input tests exercise Return and Escape through AppKit;
 restoration tests create fresh models and views from isolated preferences.
 
-Reviewed fixtures: [formatted transcript, light](acceptance/workspace-reading-polish/transcript-light.png),
-[dark](acceptance/workspace-reading-polish/transcript-dark.png),
-[waiting actions, light](acceptance/workspace-reading-polish/waiting-light.png),
-[dark](acceptance/workspace-reading-polish/waiting-dark.png),
-[minimum History](acceptance/workspace-reading-polish/history-dark-minimum.png),
-[minimum Changes](acceptance/workspace-reading-polish/changes-dark-minimum.png),
-[TUI notices, 120×32](acceptance/workspace-reading-polish/feedback-120x32.txt),
-[60×18](acceptance/workspace-reading-polish/feedback-60x18.txt).
-[Provenance and hashes](acceptance/workspace-reading-polish/manifest.json) identify
+Reviewed fixtures: [formatted transcript, light](workspace-reading-polish/transcript-light.png),
+[dark](workspace-reading-polish/transcript-dark.png),
+[waiting actions, light](workspace-reading-polish/waiting-light.png),
+[dark](workspace-reading-polish/waiting-dark.png),
+[minimum History](workspace-reading-polish/history-dark-minimum.png),
+[minimum Changes](workspace-reading-polish/changes-dark-minimum.png),
+[TUI notices, 120×32](workspace-reading-polish/feedback-120x32.txt),
+[60×18](workspace-reading-polish/feedback-60x18.txt).
+[Provenance and hashes](workspace-reading-polish/manifest.json) identify
 the fixture sources and review criteria. Captures use fixture data, without live
 agent sessions. Earlier acceptance captures remain unchanged.
 
@@ -306,12 +306,12 @@ end-to-end installed-application latency.
 
 Fresh fixtures use only test data; earlier acceptance images remain unchanged.
 
-- [Compact Changes, minimum window](acceptance/workspace-review-refinement/changes-dark-minimum.png)
-- [Larger wrapped diff text](acceptance/workspace-review-refinement/changes-wrapped-large.png)
-- [Search result highlighting](acceptance/workspace-review-refinement/history-dark-minimum.png)
-- [Actionable empty search](acceptance/workspace-review-refinement/history-empty-scoped.png)
-- [New messages without losing the reading position](acceptance/workspace-review-refinement/history-new-messages.png)
-- [Capture provenance and hashes](acceptance/workspace-review-refinement/manifest.json)
+- [Compact Changes, minimum window](workspace-review-refinement/changes-dark-minimum.png)
+- [Larger wrapped diff text](workspace-review-refinement/changes-wrapped-large.png)
+- [Search result highlighting](workspace-review-refinement/history-dark-minimum.png)
+- [Actionable empty search](workspace-review-refinement/history-empty-scoped.png)
+- [New messages without losing the reading position](workspace-review-refinement/history-new-messages.png)
+- [Capture provenance and hashes](workspace-review-refinement/manifest.json)
 
 Offset pages describe a changing archive, not a frozen snapshot. The native view
 removes duplicate identities across pages; refresh obtains a fresh ordering.
@@ -358,11 +358,11 @@ History, Waiting, Activity and the empty workspace in light and dark appearances
 
 Reviewed references:
 
-- [History, large reading text](acceptance/workspace-daily-polish/history-large-dark.png)
-- [Waiting, proportional context and keyboard reader](acceptance/workspace-daily-polish/waiting-large-dark.png)
-- [Activity, large reading text](acceptance/workspace-daily-polish/activity-large-light.png)
-- [Empty workspace actions](acceptance/workspace-daily-polish/empty-workspace-light.png)
-- [Capture provenance and hashes](acceptance/workspace-daily-polish/manifest.json)
+- [History, large reading text](workspace-daily-polish/history-large-dark.png)
+- [Waiting, proportional context and keyboard reader](workspace-daily-polish/waiting-large-dark.png)
+- [Activity, large reading text](workspace-daily-polish/activity-large-light.png)
+- [Empty workspace actions](workspace-daily-polish/empty-workspace-light.png)
+- [Capture provenance and hashes](workspace-daily-polish/manifest.json)
 
 Validation:
 
@@ -435,12 +435,12 @@ the feedback layout, target, message, and recovery assertions.
 
 Reviewed references:
 
-- [History with 24-point prose](acceptance/workspace-clarity-polish/history-dark.png)
-- [Collapsed History results](acceptance/workspace-clarity-polish/history-collapsed-light.png)
-- [Runs at minimum size](acceptance/workspace-clarity-polish/runs-dark.png)
-- [Retained action outcomes](acceptance/workspace-clarity-polish/feedback-light.png)
-- [Retained-content age](acceptance/workspace-clarity-polish/stale-dark.png)
-- [Capture provenance and hashes](acceptance/workspace-clarity-polish/manifest.json)
+- [History with 24-point prose](workspace-clarity-polish/history-dark.png)
+- [Collapsed History results](workspace-clarity-polish/history-collapsed-light.png)
+- [Runs at minimum size](workspace-clarity-polish/runs-dark.png)
+- [Retained action outcomes](workspace-clarity-polish/feedback-light.png)
+- [Retained-content age](workspace-clarity-polish/stale-dark.png)
+- [Capture provenance and hashes](workspace-clarity-polish/manifest.json)
 
 ## Event navigation and workflow polish on 2026-10-17
 
@@ -489,11 +489,11 @@ Validation and evidence:
   ancestry; `AMX_RUNTIME_SESSION_ID` was unset for this test process only.
 - `git diff --check`: passed. Screenshot and fixture-source hashes were verified.
 - Nine fixture screenshots were visually reviewed. They are fixture evidence,
-  not daily-use acceptance: [event location](acceptance/workspace-navigation-polish/event-location-dark.png),
-  [independent reads](acceptance/workspace-navigation-polish/read-details-light.png),
-  [failed check](acceptance/workspace-navigation-polish/runs-dark.png),
-  [destinations](acceptance/workspace-navigation-polish/launch-settings.png), and
-  [capture provenance and hashes](acceptance/workspace-navigation-polish/manifest.json).
+  not daily-use acceptance: [event location](workspace-navigation-polish/event-location-dark.png),
+  [independent reads](workspace-navigation-polish/read-details-light.png),
+  [failed check](workspace-navigation-polish/runs-dark.png),
+  [destinations](workspace-navigation-polish/launch-settings.png), and
+  [capture provenance and hashes](workspace-navigation-polish/manifest.json).
 
 Changes are prepared in the repository; no installation or release was performed.
 
@@ -539,6 +539,10 @@ uncompleted acceptance item.
   app reopening, and physical sleep/wake. Tests do not count as operator use;
   the five-workday trial remains pending. No live session was relaunched.
 
+> Later note (added 2026-10-19): F-001 was resolved by operator confirmation
+> on 2026-10-18; see [Lifecycle, Waiting, and setup consistency on 2026-10-18](#lifecycle-waiting-and-setup-consistency-on-2026-10-18).
+> The statement above is kept as the record of that pass.
+
 ### Validation
 
 - `macos/scripts/test-app.sh`: 901 hosted tests passed, zero failures or skips.
@@ -553,17 +557,17 @@ uncompleted acceptance item.
   unknown verification reasons are not relabeled as failures. An unhosted SwiftUI
   state assertion was removed; hosted loading screenshots retain that coverage.
 - `just mac-app Release`: built and signed `macos/build/Agent Mux.app`, bundling
-  this checkout's CLI. [Candidate hashes](acceptance/workspace-finishing-polish/candidate.json)
+  this checkout's CLI. [Candidate hashes](workspace-finishing-polish/candidate.json)
   identify the prepared executables. No installation or release was performed.
 - `git diff --check`: passed.
 - Six minimum-window captures were inspected in both appearances:
-  [diff light](acceptance/workspace-finishing-polish/diff-light.png),
-  [diff dark](acceptance/workspace-finishing-polish/diff-dark.png),
-  [Runs light](acceptance/workspace-finishing-polish/runs-light.png),
-  [Runs dark](acceptance/workspace-finishing-polish/runs-dark.png),
-  [refresh failure light](acceptance/workspace-finishing-polish/refresh-failed-light.png),
-  [refresh failure dark](acceptance/workspace-finishing-polish/refresh-failed-dark.png).
-  [Provenance and hashes](acceptance/workspace-finishing-polish/manifest.json)
+  [diff light](workspace-finishing-polish/diff-light.png),
+  [diff dark](workspace-finishing-polish/diff-dark.png),
+  [Runs light](workspace-finishing-polish/runs-light.png),
+  [Runs dark](workspace-finishing-polish/runs-dark.png),
+  [refresh failure light](workspace-finishing-polish/refresh-failed-light.png),
+  [refresh failure dark](workspace-finishing-polish/refresh-failed-dark.png).
+  [Provenance and hashes](workspace-finishing-polish/manifest.json)
   identify the fixture source and full test result.
 The new focused coverage is in `WorkspaceFinishingPolishTests`,
 `codex_completion_lifecycle_test.go`, and the expanded isolated-hook tests.
@@ -600,6 +604,10 @@ The automated tests establish shell selection, ownership, reducer persistence,
 and simulated observation gaps. They do not establish physical sleep behavior
 or recurrence in real use. F-001 and the separate five-workday trial therefore
 remain open until the operator supplies those observations.
+
+> Later note (added 2026-10-19): F-001 was resolved by operator confirmation
+> on 2026-10-18; see [Lifecycle, Waiting, and setup consistency on 2026-10-18](#lifecycle-waiting-and-setup-consistency-on-2026-10-18).
+> The statement above is kept as the record of that pass.
 
 ## Review usability on 2026-10-18
 
@@ -640,6 +648,10 @@ installation across resume, `/new`, app reopening, and physical sleep/wake. The
 separate five-workday migration trial is unchanged. Automated checks and fixture
 screenshots do not supply those observations.
 
+> Later note (added 2026-10-19): F-001 was resolved by operator confirmation
+> on 2026-10-18; see [Lifecycle, Waiting, and setup consistency on 2026-10-18](#lifecycle-waiting-and-setup-consistency-on-2026-10-18).
+> The statement above is kept as the record of that pass.
+
 Validation:
 
 - `env -u AMX_RUNTIME_SESSION_ID just check`: passed the full Go suite, core race
@@ -652,12 +664,12 @@ Validation:
   `internal/screenstate`, `internal/daemon`, and `internal/session` passed with
   `-run Codex -count=1` and the inherited runtime-session variable removed.
 - Ten new fixture captures were inspected in both appearances. Representative
-  references: [expanded Changes](acceptance/workspace-review-usability/diff-light.png),
-  [collapsed Changes](acceptance/workspace-review-usability/diff-collapsed-dark.png),
-  [Runs](acceptance/workspace-review-usability/runs-light.png),
-  [selected failed check](acceptance/workspace-review-usability/inspected-check-dark.png),
-  and [code blocks](acceptance/workspace-review-usability/code-light.png).
-  [Provenance and hashes](acceptance/workspace-review-usability/manifest.json)
+  references: [expanded Changes](workspace-review-usability/diff-light.png),
+  [collapsed Changes](workspace-review-usability/diff-collapsed-dark.png),
+  [Runs](workspace-review-usability/runs-light.png),
+  [selected failed check](workspace-review-usability/inspected-check-dark.png),
+  and [code blocks](workspace-review-usability/code-light.png).
+  [Provenance and hashes](workspace-review-usability/manifest.json)
   identify the fixture sources and final focused test result.
 - Local guide links and `git diff --check` passed.
 
@@ -671,10 +683,14 @@ retained generation `4085-1792330813` and all six agents in six sessions. The da
 and ASL bridge report ready, with the companion connected. Strict doctor returned
 exit 0, overall OK with two warnings: Kitty is unreachable from this environment,
 and the Claude hook evidence is stale against the newer CLI contract.
-[Candidate and installed-artifact hashes](acceptance/workspace-review-usability/candidate.json)
+[Candidate and installed-artifact hashes](workspace-review-usability/candidate.json)
 record the completed installation and the earlier interrupted attempt. F-001's
 real-use observations remain pending; installation and automated verification do
 not establish completion visibility across physical sleep/wake.
+
+> Later note (added 2026-10-19): F-001 was resolved by operator confirmation
+> on 2026-10-18; see [Lifecycle, Waiting, and setup consistency on 2026-10-18](#lifecycle-waiting-and-setup-consistency-on-2026-10-18).
+> The statement above is kept as the record of that pass.
 
 ## Lifecycle, Waiting, and setup consistency on 2026-10-18
 
@@ -711,7 +727,7 @@ This pass implements the six review recommendations against existing workflows:
   expose its virtual controls in this test host, and system Accessibility access is
   unavailable. Its explicit test skip is not recorded as a pass.
 
-The current [observation record](acceptance/workspace-consistency/observations.json)
+The current [observation record](workspace-consistency/observations.json)
 separates confirmed completion-state behavior from the waived accessibility check.
 
 For an optional future check on the prepared build, use VoiceOver to find a waiting agent,
@@ -735,16 +751,16 @@ Validation for this pass:
   label; clipboard comparisons remain exact.
 - The minimal README configuration passed validation in an isolated directory.
   Local documentation links and `git diff --check` passed.
-- Four fixture captures were inspected: [Waiting light](acceptance/workspace-consistency/waiting-contrast-light.png),
-  [Waiting dark](acceptance/workspace-consistency/waiting-contrast-dark.png),
-  [Reading light](acceptance/workspace-consistency/reading-contrast-light.png), and
-  [Reading dark](acceptance/workspace-consistency/reading-contrast-dark.png).
-  [Provenance and validation](acceptance/workspace-consistency/manifest.json)
+- Four fixture captures were inspected: [Waiting light](workspace-consistency/waiting-contrast-light.png),
+  [Waiting dark](workspace-consistency/waiting-contrast-dark.png),
+  [Reading light](workspace-consistency/reading-contrast-light.png), and
+  [Reading dark](workspace-consistency/reading-contrast-dark.png).
+  [Provenance and validation](workspace-consistency/manifest.json)
   record source hashes and the final test result bundle.
 
 `just mac-app Release` built and signed `macos/build/Agent Mux.app`; bundle
 verification passed. This pass did not install it. The
-[candidate record](acceptance/workspace-consistency/candidate.json) identifies the
+[candidate record](workspace-consistency/candidate.json) identifies the
 app and bundled CLI hashes. All requested implementation work is complete; the
 manual VoiceOver check is waived, with no claim that it passed.
 
@@ -807,7 +823,7 @@ literal query into the selected conversation's History scope and restoring focus
 when History closes. Large-diff work measures styling and layout separately and
 checks reading-position preservation alongside selection latency.
 
-The [implementation and acceptance record](acceptance/workspace-seams-polish/README.md)
+The [implementation and acceptance record](workspace-seams-polish/README.md)
 contains validation, fixture captures, and the pending real-work observations.
 The user waived VoiceOver acceptance for this pass. Real-work observations are
 not supplied by automated tests.

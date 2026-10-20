@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -26,26 +27,6 @@ func sessionEndedSeparator(width int) string {
 	left := remaining / 2
 	right := remaining - left
 	return styleDim.Render(strings.Repeat("─", left) + label + strings.Repeat("─", right))
-}
-
-// formatRelativeAge renders a compact "N{unit} ago" label for an event
-// timestamp. Negative durations clamp to zero so a clock skew between the
-// daemon and the TUI does not surface a misleading negative count.
-func formatRelativeAge(at, now time.Time) string {
-	d := now.Sub(at)
-	if d < 0 {
-		d = 0
-	}
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d/time.Second))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d/time.Hour))
-	default:
-		return fmt.Sprintf("%dd ago", int(d/(24*time.Hour)))
-	}
 }
 
 // Header renders the two-line pane header: badge + state icon + title +
@@ -97,7 +78,7 @@ func (in DetailInput) Header() string {
 // preview, compact trace ID, and the decisive reason without disturbing the
 // fixed event/action columns.
 func detailRow(ev protocol.SessionEvent, now time.Time, width int) string {
-	timeCell := padRight(formatRelativeAge(time.Unix(ev.At, 0), now), detailColTime)
+	timeCell := padRight(layout.Ago(time.Unix(ev.At, 0), now), detailColTime)
 	eventCell := padRight(ev.Event, detailColEvent)
 	actionCell := padRight(ev.Action, detailColAction)
 
@@ -174,13 +155,13 @@ func (in DetailInput) Footer(total, visible int) string {
 		}
 		pos = fmt.Sprintf("%d–%d of %d", start, end, total)
 	}
-	hints := joinFooterBindings(" · ",
-		renderFooterBinding("m", "metadata"),
-		renderFooterBinding("t", "timeline"),
-		renderFooterBinding("↑/↓", "scroll"),
-		renderFooterBinding("pgup/pgdn", "page"),
-		renderFooterBinding("g/G", "top/bottom"),
-		renderFooterBinding("d/esc", "close"),
+	hints := chrome.JoinBindings(" · ",
+		chrome.Binding("m", "metadata"),
+		chrome.Binding("t", "timeline"),
+		chrome.Binding("↑/↓", "scroll"),
+		chrome.Binding("pgup/pgdn", "page"),
+		chrome.Binding("g/G", "top/bottom"),
+		chrome.Binding("esc/q/d", "close"),
 	)
 	return styleFooter.Render(pos+"   ") + hints
 }
@@ -211,7 +192,7 @@ func (in DetailInput) Render() string {
 	}
 	if in.Loading && len(in.Events) == 0 {
 		sb.WriteString("\n")
-		sb.WriteString(styleDim.Render("Loading…"))
+		sb.WriteString(styleDim.Render(layout.Sentence(layout.LoadingText("events"))))
 		sb.WriteString("\n\n\n")
 		sb.WriteString(in.Footer(0, 0))
 		sb.WriteByte('\n')

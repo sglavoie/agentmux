@@ -50,6 +50,22 @@ enum WorkspaceReviewColors {
             ? NSColor(srgbRed: 1, green: 0.72, blue: 0.32, alpha: 1)
             : NSColor(srgbRed: 0.55, green: 0.28, blue: 0.02, alpha: 1)
     })
+    /// A read, check, or operation that failed. Dark red on light
+    /// backgrounds, a lighter red on dark, both legible as caption text.
+    static let failure = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 1, green: 0.45, blue: 0.42, alpha: 1)
+            : NSColor(srgbRed: 0.75, green: 0.1, blue: 0.08, alpha: 1)
+    })
+    /// Something that succeeded, or is live now (History's "Live" badge).
+    static let success = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.35, green: 0.85, blue: 0.45, alpha: 1)
+            : NSColor(srgbRed: 0.1, green: 0.5, blue: 0.18, alpha: 1)
+    })
+    static let live = success
+    /// The unread marker beside an Activity event: the accent, as Mail uses.
+    static let unread = Color.accentColor
 }
 
 /// Prose is shared by History, Activity and Waiting; terminal/code sizing stays independent.
@@ -89,9 +105,9 @@ struct WorkspaceStatus: View {
 
     private var color: Color {
         switch feedback?.kind {
-        case .error: return .red
-        case .warning: return .orange
-        case .success: return .green
+        case .error: return WorkspaceReviewColors.failure
+        case .warning: return WorkspaceReviewColors.warning
+        case .success: return WorkspaceReviewColors.success
         default: return .secondary
         }
     }
@@ -172,6 +188,22 @@ struct WorkspacePath: View {
 }
 
 /// The same acknowledgement for code and diff copies; failures are visible too.
+/// How every copy in the app says it worked: for the same time, and to
+/// VoiceOver at the same, unhurried priority.
+enum WorkspaceCopyNotice {
+    /// How long a "Copied" confirmation stays before what was there returns.
+    static let seconds: TimeInterval = 1.5
+    static var duration: Duration { .milliseconds(Int(seconds * 1000)) }
+
+    /// Speaks `text` without interrupting what VoiceOver was saying: a copy
+    /// confirms an action the operator just took, never an alert.
+    @MainActor
+    static func announce(_ text: String, from element: Any) {
+        NSAccessibility.post(element: element, notification: .announcementRequested,
+                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+    }
+}
+
 struct WorkspaceCopyFeedback: Equatable {
     private(set) var revision = UUID()
     var message: String?
@@ -181,6 +213,13 @@ struct WorkspaceCopyFeedback: Equatable {
         pasteboard.clearContents()
         succeeded = pasteboard.setString(text, forType: .string)
         message = succeeded ? "Copied" : "Copy failed. Try again."
+        // Copies come from the UI, on the main thread; VoiceOver hears the
+        // outcome the view shows.
+        if let message, Thread.isMainThread {
+            MainActor.assumeIsolated {
+                if let window = NSApp.keyWindow { WorkspaceCopyNotice.announce(message, from: window) }
+            }
+        }
     }
 }
 
@@ -192,7 +231,7 @@ struct WorkspaceNotice: View {
     var actionTitle = "Try Again"
     var action: (() -> Void)?
     enum Kind { case information, warning, error }
-    private var color: Color { kind == .error ? .red : kind == .warning ? .orange : .secondary }
+    private var color: Color { kind == .error ? WorkspaceReviewColors.failure : kind == .warning ? WorkspaceReviewColors.warning : .secondary }
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: kind == .error ? "exclamationmark.circle" : kind == .warning ? "exclamationmark.triangle" : "info.circle")
@@ -217,16 +256,28 @@ struct WorkspaceLoading: View {
     }
 }
 
-struct WorkspaceEmpty: View {
+/// Every review's empty or nothing-selected state: a symbol, what is empty,
+/// why, and optionally the ways out.
+struct WorkspaceEmpty<Actions: View>: View {
     let title: String
     let detail: String
     var symbol = "tray"
+    @ViewBuilder var actions: () -> Actions
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: symbol).font(.title2).foregroundStyle(.secondary)
             Text(title).font(.headline)
-            Text(detail).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            if !detail.isEmpty {
+                Text(detail).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            actions()
         }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+extension WorkspaceEmpty where Actions == EmptyView {
+    init(title: String, detail: String, symbol: String = "tray") {
+        self.init(title: title, detail: detail, symbol: symbol, actions: { EmptyView() })
     }
 }
 
@@ -346,7 +397,7 @@ struct WorkspaceFeedbackHistoryView: View {
                     }.textSelection(.enabled)
                     Divider()
                 }
-                if let copyError { Text(copyError).foregroundStyle(.red) }
+                if let copyError { Text(copyError).foregroundStyle(WorkspaceReviewColors.failure) }
                 Text("Dismissing a notice does not cancel an operation. Recovery never repeats the original action.").font(.caption).foregroundStyle(.secondary)
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
         }.frame(width: 420, height: 360)

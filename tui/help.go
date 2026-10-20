@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
+	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
 // helpMinVisible is the floor on the visible content window. Even on
@@ -124,42 +125,14 @@ var helpSections = []struct {
 		"  (reads the cached checks; it never triggers a health refresh)",
 		"  (dismissing the notice never silences a daemon or hooks failure)",
 	}},
-	// Act on row and the two sections below it name no dashboard letters of
-	// their own, because there are none left to name: the row commands are
-	// reached through the actions menu and the palette, both of which draw
-	// each entry with its own availability. The keys inside the menu are its
-	// own mnemonics rather than dashboard bindings, which is why they are listed
-	// as "a, then e" rather than as "e".
-	//
-	// The menu is selectable as well as typeable, and both are listed because
-	// neither replaced the other: j/k and enter reach every entry without
-	// knowing a letter, and the letters still run their entry from anywhere in
-	// the list. Only enter is spelled twice in this section — on the dashboard
-	// it focuses the row, inside the menu it runs the selection — so each is
-	// scoped by the line it appears on.
-	{"Act on row", []string{
-		"  enter     focus the session's tab (a project folds instead)",
-		"  a         open the actions menu for the selected session",
-		"  j/k ↑/↓   move the selection (in the menu)",
-		"  enter     run the selected action (in the menu)",
-		"  a, then e peek scrollback (active rows only)",
-		"  a, then r restart session (follows confirmation preference)",
-		"  a, then x clear session icon",
-		"  a, then b mark session active (⚡ until its next real event)",
-		"  a, then X end session (follows confirmation preference)",
-		"  a, then c override session profile",
-		"  a, then L lock / unlock session (blocks restart/end/override)",
-		"  a, then m mute / unmute session (suppresses notifications)",
-		"  a, then y copy session title",
-		"  a, then o open a shell in the session's directory",
-		"  a, then O open the configured editor there",
-		"  (a locked row draws restart, override, and End Session dimmed; L unlocks it)",
-		"  (a dimmed entry is still selectable; the menu says why it will not run)",
-	}},
+	// Act on row is generated from the session-action table: see
+	// helpActOnRowLines.
+	{"Act on row", helpActOnRowLines()},
 	// The launcher keeps its own direct keymap: it is a modal surface with no
 	// dashboard rows behind it, so its letters collide with nothing. Only the
-	// dashboard's keymap shrank, which is why every line but the first and last
-	// here is scoped "in the launcher".
+	// dashboard's keymap shrank, which is why every line after the first is
+	// scoped to the launcher. Launching another session from a row is
+	// a row action (a, then C), listed under Act on row.
 	{"Launch / open", []string{
 		"  l         open session launcher (live filter + preview)",
 		"  /         filter launcher projects (DSL: @profile, word)",
@@ -174,7 +147,6 @@ var helpSections = []struct {
 		"  s         search past sessions for the highlighted project (launcher)",
 		"  o         open selected launcher directories (highlighted fallback)",
 		"  O         open those directories in the configured editor (launcher)",
-		"  a, then C launch another session in the same project",
 	}},
 	// Session detail has no dashboard key of its own any more — `d` opened it
 	// and is retired — but the view it opens still has a full keymap, and that
@@ -190,7 +162,7 @@ var helpSections = []struct {
 		"  j/k ↑/↓   scroll; g/G jump to the ends; pgup/pgdn page",
 		"  enter     fold / unfold the phase under the cursor (timeline)",
 		"  [ / ]     previous / next phase header (timeline)",
-		"  z / Z     unfold all / fold all phases (timeline)",
+		"  z / Z     collapse all / expand all phases (timeline)",
 		"  s         show / hide suppressed events (timeline)",
 		"  T         show / hide the timestamp column (timeline)",
 		"  esc/q/d   close",
@@ -205,7 +177,7 @@ var helpSections = []struct {
 	}},
 	{"App", []string{
 		"  :         open command palette — every command, searchable",
-		"  u         recover ended session: resume or relaunch (30 seconds)",
+		"  u         " + recoverEndedHint + ": resume or relaunch (30 seconds)",
 		"  ?         show / hide this help",
 		"  i         show / hide the session inspector",
 		"  q         quit",
@@ -216,6 +188,55 @@ var helpSections = []struct {
 		"   health details, resort, and the list arrangement are palette",
 		"   entries — search the palette by name)",
 	}},
+}
+
+// helpActOnRowLines is the Act on row section, generated from the session
+// action table (sessionactions.MenuDefinitions) so a mnemonic, label, or
+// description edited there is what help says, in the order the menu shows it.
+//
+// The row commands have no dashboard letters of their own: they are reached
+// through the actions menu and the palette, both of which draw each entry with
+// its own availability. The keys inside the menu are its own mnemonics rather
+// than dashboard bindings, which is why they read "a, then e" rather than "e".
+// The menu is selectable as well as typeable, and both are listed because
+// neither replaced the other: j/k and enter reach every entry without knowing
+// a letter, and the letters run their entry from anywhere in the list. Enter is
+// spelled twice — on the dashboard it opens the row, inside the menu it runs
+// the selection — so each is scoped by the line it appears on.
+func helpActOnRowLines() []string {
+	var open sessionactions.Definition
+	var mnemonics []string
+	for _, def := range sessionactions.MenuDefinitions() {
+		if def.Mnemonic.Key == keyEnter {
+			open = def
+			continue
+		}
+		mnemonics = append(mnemonics, fmt.Sprintf("  a, then %s %s — %s",
+			def.Mnemonic.Display, strings.ToLower(def.MenuLabel), def.MenuDescription))
+	}
+	lines := []string{
+		"  enter     " + helpOpenSessionText(open),
+		"  a         open the actions menu for the selected session",
+		"  j/k ↑/↓   move the selection (in the menu)",
+		"  enter     run the selected action (in the menu)",
+	}
+	lines = append(lines, mnemonics...)
+	return append(lines,
+		"  (restart, restart with another profile, and end session follow the confirmation preference)",
+		"  (a locked row draws those three dimmed; a, then L unlocks it)",
+		"  (a dimmed entry is still selectable; the menu says why it will not run)",
+	)
+}
+
+// helpOpenSessionText is what Enter on a session row does, named as the menu
+// names it and qualified by backend: the same key attaches a tmux session to
+// this terminal and focuses a Kitty session's tab.
+func helpOpenSessionText(open sessionactions.Definition) string {
+	label := "open session"
+	if open.MenuLabel != "" {
+		label = strings.ToLower(open.MenuLabel)
+	}
+	return label + " (attach on tmux, focus tab on Kitty)"
 }
 
 // helpFooterMoreLine is the dim footnote shown after the section list. It names

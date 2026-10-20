@@ -1,7 +1,6 @@
 package worktrees
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -34,7 +33,7 @@ func formatRow(entry actions.WorktreeView, width int) string {
 	if identity == "" {
 		identity = "unknown profile"
 	}
-	age := CompactAge(entry.CreatedAt, time.Now())
+	age := layout.CompactAge(entry.CreatedAt, time.Now())
 	badges := BadgeText(entry)
 	row := "  " + column(project, 18) + "  " + column(branch, 24) + "  " + column(identity, 18) + "  " + layout.PadLeft(age, 6) + "  " + badges
 	return layout.StyledTruncate(row, width, "…")
@@ -45,29 +44,6 @@ func formatRow(entry actions.WorktreeView, width int) string {
 // display cells so an emoji title lines up with a plain one.
 func column(s string, width int) string {
 	return layout.PadRight(layout.Truncate(s, width, "…"), width)
-}
-
-// CompactAge renders how long ago created was in the six columns the age
-// field budgets: "now", minutes, hours, then days. A zero time reads "?"
-// rather than an absurd duration measured from the Go epoch.
-func CompactAge(created, now time.Time) string {
-	if created.IsZero() {
-		return "?"
-	}
-	d := now.Sub(created)
-	if d < 0 {
-		d = 0
-	}
-	switch {
-	case d < time.Minute:
-		return "now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	}
 }
 
 // BadgeText renders the state labels as bracketed badges. A valid

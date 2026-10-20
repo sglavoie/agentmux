@@ -239,7 +239,7 @@ func TestDashboardFeedbackSlotDoesNotRepeatTheEmptyListHero(t *testing.T) {
 
 	m = loadSessions(m, nil)
 	assertStatusBarLacks(t, m, "No running sessions")
-	if !strings.Contains(stripAnsi(renderList(m)), "No running sessions.") {
+	if !strings.Contains(stripAnsi(renderList(m)), "No running sessions") {
 		t.Fatal("the list body dropped the confirmed-empty hero along with the status copy")
 	}
 }

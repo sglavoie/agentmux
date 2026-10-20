@@ -187,6 +187,28 @@ final class GhosttyInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testCommandReturnOpensATerminalBelowRatherThanReachingGhostty() throws {
+        let savedMenu = NSApp.mainMenu
+        let savedWindowsMenu = NSApp.windowsMenu
+        defer { NSApp.mainMenu = savedMenu; NSApp.windowsMenu = savedWindowsMenu }
+        let menu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
+        NSApp.mainMenu = menu
+        let receiver = TerminalBelowReceiver()
+        let key = TestKey.command("\r", keyCode: 36)
+        let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()))
+        XCTAssertEqual(item.title, "New Terminal Below")
+        item.target = receiver
+        for scrollback in [Ghostty.Scrollback.terminal, .server] {
+            try record(scrollback: scrollback)
+            let event = key.event()
+            if !view.performKeyEquivalent(with: event), !menu.performKeyEquivalent(with: event) {
+                view.keyDown(with: event)
+            }
+        }
+        XCTAssertEqual(receiver.calls, 2)
+    }
+
+    @MainActor
     func testZoomKeysResizeTheFocusedTerminalWithoutSendingInput() throws {
         let savedMenu = NSApp.mainMenu
         let savedWindowsMenu = NSApp.windowsMenu
@@ -626,8 +648,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("[", keyCode: 33), "⌘["),
             (.left.with(.command), "Previous Tab in Project"),
             (.right.with(.command), "Next Tab in Project"),
-            (.left.with([.command, .shift]), "Select Previous Session"),
-            (.right.with([.command, .shift]), "Select Next Session"),
+            (.left.with([.command, .shift]), WorkspaceMenu.previousStopTitle),
+            (.right.with([.command, .shift]), WorkspaceMenu.nextStopTitle),
             (.command("]", keyCode: 30, shifted: "}"), "⌘}"),
             (.command("[", keyCode: 33, shifted: "{"), "⌘{"),
             (.command("l", keyCode: 37), "Back to Last Shown"),
@@ -673,7 +695,8 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("c", keyCode: 8), "Copy"),
             (.command("v", keyCode: 9), "Paste"),
             (.command("a", keyCode: 0), "Select All"),
-            (.command("f", keyCode: 3), "Find…"),
+            (.command("f", keyCode: 3), "Find in Terminal…"),
+            (.command("s", keyCode: 1, shifted: "S"), "Search Conversation…"),
             (.command("g", keyCode: 5), "Find Next"),
             (.command("g", keyCode: 5, shifted: "G"), "Find Previous"),
             (.command("=", keyCode: 24, shifted: "+"), "Bigger"),
@@ -696,18 +719,23 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("o", keyCode: 31), "Overview"),
             (.command("t", keyCode: 17), "New Shell"),
             (.command("w", keyCode: 13), "Close"),
+            (.command("r", keyCode: 15, shifted: "R"), "ASL Runs…"),
+            (.command("n", keyCode: 45, shifted: "N"), "Run a Plan…"),
+            (.command("u", keyCode: 32, shifted: "U"), "Since Last Looked…"),
+            (.command("h", keyCode: 4, shifted: "H"), "Conversation History…"),
+            (.command("c", keyCode: 8, shifted: "C"), "Checkout Changes…"),
             (.command("p", keyCode: 35), "Go to…"),
             (.command("p", keyCode: 35, shifted: "P"), "Command Palette…"),
             (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
             (.command("\r", keyCode: 36), "New Terminal Below"),
             (.command("r", keyCode: 15), "Name Session…"),
             (.command(".", keyCode: 47), "Pin Session"),
-            (.command("]", keyCode: 30), "Select Next Session"),
-            (.command("[", keyCode: 33), "Select Previous Session"),
+            (.command("]", keyCode: 30), WorkspaceMenu.nextStopTitle),
+            (.command("[", keyCode: 33), WorkspaceMenu.previousStopTitle),
             (.left.with(.command), "Previous Tab in Project"),
             (.right.with(.command), "Next Tab in Project"),
-            (.left.with([.command, .shift]), "Select Previous Session"),
-            (.right.with([.command, .shift]), "Select Next Session"),
+            (.left.with([.command, .shift]), WorkspaceMenu.previousStopTitle),
+            (.right.with([.command, .shift]), WorkspaceMenu.nextStopTitle),
             (.command("l", keyCode: 37), "Back to Last Shown"),
             (.function(NSF1FunctionKey, keyCode: 122), "Keybinding Reference"),
             (.function(NSF2FunctionKey, keyCode: 120), "Overview"),
@@ -1175,6 +1203,11 @@ private final class WorkspaceShortcutReceiver: NSObject {
 }
 
 @MainActor
+private final class TerminalBelowReceiver: NSObject {
+    var calls = 0
+    @objc func newSessionTerminal(_ sender: Any?) { calls += 1 }
+}
+
 private final class NavigationShortcutReceiver: NSObject {
     var steps: [String] = []
     @objc func selectNextProjectTab(_ sender: Any?) { steps.append("project next") }

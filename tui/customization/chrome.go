@@ -1,19 +1,19 @@
 package customization
 
 import (
-	"strings"
-
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
 // The overlays in this package are standalone Bubble Tea programs: each one
 // owns a whole Kitty overlay window rather than a region of the dashboard.
 // They therefore need a handful of the root TUI's presentation decisions —
-// the header, dim, and error styles, the selection wrapper, and the footer
-// binding row — without needing the root TUI itself.
+// the header, dim, and error styles and the selection wrapper — without
+// needing the root TUI itself. Footer bindings come from tui/chrome, like
+// every other footer's.
 //
 // Their styles remain local, with colors derived from the shared palette.
 
@@ -22,10 +22,7 @@ var (
 	styleError     = lipgloss.NewStyle().Foreground(theme.Color(theme.Red))
 	styleDim       = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
 	styleHeader    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
-	styleFooter    = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
-	styleFooterKey = lipgloss.NewStyle().
-			Foreground(theme.Color(theme.Primary)).
-			Bold(true)
+	styleFooterKey = chrome.FooterKey
 )
 
 // renderSelectedRow normalizes a selectable row to one continuous selection
@@ -36,24 +33,4 @@ var (
 // keeps only its visible content before applying the shared selection style.
 func renderSelectedRow(row string) string {
 	return styleSelected.Render(ansi.Strip(row))
-}
-
-// renderFooterBinding renders an available key separately from its dim
-// description. Keeping the two segments independent lets keys carry the
-// shared accent without changing the description's established styling.
-func renderFooterBinding(key, description string) string {
-	return styleFooterKey.Render(key) + " " + styleFooter.Render(description)
-}
-
-// joinFooterBindings joins already-rendered binding segments without adding
-// an indent or wrapping. These overlays render a single fixed-width footer
-// row, so they never need the root's wrapping footer machinery.
-func joinFooterBindings(separator string, rendered ...string) string {
-	kept := make([]string, 0, len(rendered))
-	for _, item := range rendered {
-		if item != "" {
-			kept = append(kept, item)
-		}
-	}
-	return strings.Join(kept, styleFooter.Render(separator))
 }

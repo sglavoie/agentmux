@@ -1219,7 +1219,7 @@ palette. Fixtures use injected services and never read real conversations or
 operate a real run. PNGs are attached to the XCTest result and written to
 `/tmp/agentmux-polish-previews`; older macOS versions skip only these capture
 tests. Reviewed reference images and their provenance are recorded in
-[`docs/desktop-improvements.md`](../docs/desktop-improvements.md).
+[`docs/acceptance/desktop-improvements.md`](../docs/acceptance/desktop-improvements.md).
 
 ### Running the UI on another Mac
 

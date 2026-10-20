@@ -26,7 +26,7 @@ var (
 var closeCmd = &cobra.Command{
 	Use:   "close RUNTIME_SESSION_ID",
 	Short: "End a running agent and its tmux session",
-	Long: `Ends the agent a runtime session runs in AgentMux's private tmux server,
+	Long: `Ends the agent a runtime session runs in Agent Mux's private tmux server,
 and the tmux session that holds it. It asks for --yes because the agent's
 work in progress is lost; its conversation stays on disk and can be resumed.
 
@@ -34,6 +34,8 @@ Only the pane the launch tagged with this runtime session is ever killed. A
 session whose agent already stopped has what is left of it cleaned up, and
 closing one that is already gone succeeds without doing anything. A Kitty
 runtime session is closed by closing its tab.`,
+	Example: `  amx close rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --yes
+  amx close rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --yes --json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runClose,
 }

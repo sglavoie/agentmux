@@ -31,7 +31,7 @@ func TestRenderDetailLoading(t *testing.T) {
 
 	out := stripAnsi(renderDetail(m))
 
-	if !strings.Contains(out, "Loading…") {
+	if !strings.Contains(out, "Loading events…") {
 		t.Errorf("expected loading indicator in detail output, got:\n%s", out)
 	}
 }
@@ -181,8 +181,8 @@ func TestRenderDetailFooterCount(t *testing.T) {
 	if !strings.Contains(out, "of 60") {
 		t.Errorf("expected `of 60` in footer, got:\n%s", out)
 	}
-	if !strings.Contains(out, "d/esc close") {
-		t.Errorf("expected key hint `d/esc close` in footer, got:\n%s", out)
+	if !strings.Contains(out, "esc/q/d close") {
+		t.Errorf("expected key hint `esc/q/d close` in footer, got:\n%s", out)
 	}
 }
 

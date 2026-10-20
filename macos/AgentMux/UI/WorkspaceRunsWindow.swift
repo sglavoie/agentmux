@@ -84,7 +84,7 @@ struct WorkspaceRunsView: View {
                                     if let active = detail.runner.activeVerification {
                                         Text("Checking \(active.currentCheckName) · session \(active.sessionID) · \(active.checkCount) checks")
                                     }
-                                    if let error = detail.verificationError { Text(error).foregroundStyle(.red) }
+                                    if let error = detail.verificationError { Text(error).foregroundStyle(WorkspaceReviewColors.failure) }
                                     DisclosureGroup("Recorded verification", isExpanded: $evidenceExpanded) {
                                         VStack(alignment: .leading, spacing: 8) {
                                             if let seconds = detail.runner.durationSeconds { Text("Recorded duration: \(seconds.formatted(.number.precision(.fractionLength(0)))) seconds") }
@@ -264,13 +264,13 @@ struct WorkspaceRunPlanView: View {
                     WorkspaceChoice(id: $0.profile + "/" + $0.title, label: $0.title + " · " + $0.profile,
                                     detail: $0.directory, problem: $0.directoryProblem)
                 })
-                if let problem = model.projectProblem { Text(problem).font(.caption).foregroundStyle(.orange) }
+                if let problem = model.projectProblem { Text(problem).font(.caption).foregroundStyle(WorkspaceReviewColors.warning) }
                 WorkspaceChoicePicker(title: "Supervisor", selection: $model.profile, label: model.profileLabel,
                                       defaultLabel: "Use project default",
                                       choices: model.profiles.map {
                     WorkspaceChoice(id: $0.name, label: $0.name, detail: $0.harness)
                 })
-                if let problem = model.profileProblem { Text(problem).font(.caption).foregroundStyle(.orange) }
+                if let problem = model.profileProblem { Text(problem).font(.caption).foregroundStyle(WorkspaceReviewColors.warning) }
                 Text(model.destinationSummary).font(.caption).foregroundStyle(.secondary)
                 if model.loadingChoices { WorkspaceLoading(title: "Loading projects and profiles…") }
                 if let error = model.choicesError {
@@ -296,7 +296,7 @@ struct WorkspaceRunPlanView: View {
                     Spacer()
                     Button("Start Supervised Run") { model.start() }.disabled(!model.canStart)
                 }
-                if model.optionsChanged { Text("Options changed. Check readiness again.").foregroundStyle(.orange) }
+                if model.optionsChanged { Text("Options changed. Check readiness again.").foregroundStyle(WorkspaceReviewColors.warning) }
                 if model.submitted.contains(model.selector) { Text("A launch for this plan was submitted. Check Runs and the workspace for its supervising session.").foregroundStyle(.secondary) }
                 WorkspaceStatus(loading: model.checking || model.launching,
                                 title: model.launching ? "Starting supervised run…" : "Checking readiness…", showTarget: true, feedback: model.feedback,
@@ -324,49 +324,30 @@ struct WorkspaceRunPlanView: View {
 }
 
 @MainActor
-final class WorkspaceRunsWindow: NSObject, NSWindowDelegate {
+final class WorkspaceRunsWindow: ReviewWindowController {
     let model: WorkspaceRunsModel
     let plan: WorkspaceRunPlanModel
-    private(set) var window: NSWindow?
-    private var activityObservers: [NSObjectProtocol] = []
-    var onVisibilityChanged: (Bool) -> Void = { _ in }
+    private var launching = false
     init(model: WorkspaceRunsModel, plan: WorkspaceRunPlanModel) {
         self.model = model; self.plan = plan
-        super.init()
-        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
-            activityObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.updateAutomaticRefresh() }
-            })
-        }
+        super.init(title: "ASL Runs", autosaveName: "WorkspaceRuns", size: NSSize(width: 1100, height: 740))
         model.revealFeedback = { [weak self] in self?.show() }
         plan.revealFeedback = { [weak self] in self?.show() }
         plan.onFeedbackRuns = { [weak self] in self?.plan.isPresented = false; self?.show() }
     }
 
     func show(launch: Bool = false) {
-        if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 740),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "ASL Runs"
-            window.minSize = NSSize(width: 780, height: 500)
-            window.isReleasedWhenClosed = false; window.delegate = self
-            let host = WorkspaceReviewHost(rootView: WorkspaceRunsView(model: model, plan: plan))
-            host.closesWindow = true
-            window.contentView = host
-            ReviewWindowPlacement.restore(window, name: "WorkspaceRuns")
-            self.window = window
-        }
+        launching = launch
+        present()
+    }
+    override func makeContentView() -> NSView { Self.host(WorkspaceRunsView(model: model, plan: plan)) }
+    override func willPresent() {
         model.start()
-        if launch { plan.isPresented = true }
-        onVisibilityChanged(true)
-        window?.makeKeyAndOrderFront(nil); NSApp.activate()
-        updateAutomaticRefresh()
+        if launching { plan.isPresented = true }
+        launching = false
     }
-    private func updateAutomaticRefresh() {
-        model.setAutomaticRefreshEnabled(NSApp.isActive && window?.occlusionState.contains(.visible) == true)
-    }
-    func windowDidChangeOcclusionState(_ notification: Notification) { updateAutomaticRefresh() }
-    deinit { activityObservers.forEach(NotificationCenter.default.removeObserver) }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { !model.acting && !plan.launching }
-    func windowWillClose(_ notification: Notification) { model.close(); onVisibilityChanged(false) }
+    /// Runs poll only while someone can see them.
+    override func readingLiveChanged(_ live: Bool) { model.setAutomaticRefreshEnabled(live) }
+    override var canClose: Bool { !model.acting && !plan.launching }
+    override func didClose() { model.close() }
 }

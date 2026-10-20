@@ -333,7 +333,7 @@ func TestAcceptanceHarnessProcessLifecyclePipeline(t *testing.T) {
 }
 
 func TestProcessLifecycleAcceptanceDocumentation(t *testing.T) {
-	data, err := os.ReadFile("../docs/acceptance-testing.md")
+	data, err := os.ReadFile("../docs/process-lifecycle-fixture.md")
 	if err != nil {
 		t.Fatal(err)
 	}

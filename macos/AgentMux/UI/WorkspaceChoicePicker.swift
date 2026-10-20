@@ -71,7 +71,7 @@ struct WorkspaceChoicePicker: View {
                                             VStack(alignment: .leading, spacing: 3) {
                                                 Text(choice.label)
                                                 if !choice.detail.isEmpty { Text(choice.detail).font(.caption).foregroundStyle(.secondary) }
-                                                if let problem = choice.problem { Text(problem).font(.caption).foregroundStyle(.orange) }
+                                                if let problem = choice.problem { Text(problem).font(.caption).foregroundStyle(WorkspaceReviewColors.warning) }
                                             }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                                                 .background(highlighted == choice.id ? Color.accentColor.opacity(0.15) : .clear)
                                         }.buttonStyle(.plain).disabled(choice.problem != nil).id(choice.id)

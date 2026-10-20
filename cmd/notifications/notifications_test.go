@@ -22,6 +22,7 @@ func resetNotificationsTestState(t *testing.T) {
 	oldOut := notificationsTestCmd.OutOrStdout()
 	oldSnoozeOut := notificationsSnoozeCmd.OutOrStdout()
 	oldSnoozeJSON := snoozeJSON
+	oldTestJSON := notificationsTestJSON
 	// No test may reach the operator's daemon: by default the daemon is
 	// unreachable, which is what a missing daemon looks like.
 	notificationsSnoozeClient = func() snoozeClient { return &fakeSnoozeClient{err: errors.New("dial unix: no such file")} }
@@ -37,6 +38,7 @@ func resetNotificationsTestState(t *testing.T) {
 		notificationsTestCmd.SetOut(oldOut)
 		notificationsSnoozeCmd.SetOut(oldSnoozeOut)
 		snoozeJSON = oldSnoozeJSON
+		notificationsTestJSON = oldTestJSON
 	})
 }
 

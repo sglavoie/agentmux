@@ -52,7 +52,7 @@ var (
 var sendCmd = &cobra.Command{
 	Use:   "send RUNTIME_SESSION_ID [TEXT]",
 	Short: "Answer or prompt a running agent without attaching",
-	Long: `Writes input to the agent a runtime session runs in AgentMux's private
+	Long: `Writes input to the agent a runtime session runs in Agent Mux's private
 tmux server, with no terminal attached and without taking the session from
 whoever has it.
 
@@ -91,6 +91,10 @@ stays "accepted". The text itself is never logged or recorded.
 screen is the word a send would report. It is what a surface shows before a
 key is pressed, and it is refused where a send would be for a session that is
 gone or a screen that cannot be read.`,
+	Example: `  amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f "run the tests again"
+  git diff | amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --stdin --no-enter
+  amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --key down --key enter
+  amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --look --json`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: runSend,
 }

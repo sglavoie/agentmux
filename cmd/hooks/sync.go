@@ -32,8 +32,22 @@ var hooksLookPath = exec.LookPath
 // the installed amx, which it otherwise refuses to do.
 var hooksSyncThisBinary bool
 
+// hooksStatusJSON switches hooks-status to the schema-v1 envelope.
+var hooksStatusJSON bool
+
 func init() {
 	configHooksSyncCmd.Flags().BoolVar(&hooksSyncThisBinary, "this-binary", false, "write hooks that run this amx even though it is not the amx on PATH")
+	configHooksStatusCmd.Flags().BoolVar(&hooksStatusJSON, "json", false, "emit schema-v1 JSON")
+}
+
+// hooksStatusData is the hooks-status --json payload: the report doctor also
+// reads, the remedies a person would be shown, and which amx hook files were
+// judged against.
+type hooksStatusData struct {
+	debugger.HookReport
+	JudgedBinary string   `json:"judged_binary"`
+	Foreign      bool     `json:"foreign"`
+	Hints        []string `json:"hints"`
 }
 
 // hooksStatusIsTerminal decides between the table for a person and the
@@ -42,8 +56,20 @@ func init() {
 var hooksStatusIsTerminal = cli.IsTerminal
 
 var configHooksSyncCmd = &cobra.Command{
-	Use:               "hooks-sync [PROFILE]",
-	Short:             "Sync Agent Mux hooks for configured harness profiles",
+	Use:   "hooks-sync [PROFILE]",
+	Short: "Sync Agent Mux hooks for configured harness profiles",
+	Long: `Write the Agent Mux hook entries into each configured profile's harness
+settings, so the daemon hears about prompts, permissions, and stops. Only the
+Agent Mux entries are merged; anything else in the file is kept. With PROFILE,
+only that profile is synced.
+
+Hooks name the amx on PATH. A different build refuses to write them unless
+--this-binary is passed, which points every hook at that build instead.
+A profile that fails to sync makes the command exit nonzero after the others
+are written.`,
+	Example: `  amx config hooks-sync
+  amx config hooks-sync codex-work
+  amx config hooks-status`,
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: cli.CompleteProfileFirstArg,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -99,19 +125,40 @@ var configHooksSyncCmd = &cobra.Command{
 var configHooksStatusCmd = &cobra.Command{
 	Use:   "hooks-status",
 	Short: "Show hook sync and activation status per profile",
+	Long: `Report, for each configured profile, whether its hook files match what
+hooks-sync would write (SYNC) and whether the harness has been seen running
+them (ACTIVATION), with the reason in DETAIL. Hints below the table name the
+remedy for each state some profile is in.
+
+On a terminal the report is a table; piped, it is headerless tab-separated
+rows with the hints on stderr. A build other than the installed amx judges the
+installed one, and says so.`,
+	Example: `  amx config hooks-status
+  amx config hooks-status --json
+  amx config hooks-status | awk -F'\t' '$3 != "in_sync"'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			return err
+			return cli.CommandFailure(cmd, hooksStatusJSON, "config_error", err)
 		}
 		running, err := hooksBinary()
 		if err != nil {
-			return err
+			return cli.CommandFailure(cmd, hooksStatusJSON, "binary_unresolved", err)
 		}
 		// A build other than the installed amx judges the installation, not
 		// itself: against itself every hook file would read as drifted.
 		bin, foreign := hooks.ExpectedBinary(running, hooksLookPath)
 		report := debugger.InspectHooks(cfg, bin, time.Now())
+		if hooksStatusJSON {
+			data := hooksStatusData{HookReport: report, JudgedBinary: bin, Foreign: foreign, Hints: hooksStatusHints(report.Profiles)}
+			if data.Hints == nil {
+				data.Hints = []string{}
+			}
+			if report.Error != "" {
+				return cli.WriteJSONPartial(cmd, data, fmt.Errorf("%s", report.Error))
+			}
+			return cli.WriteJSON(cmd, data)
+		}
 		out := cmd.OutOrStdout()
 		errOut := cmd.ErrOrStderr()
 		rows := make([][]string, 0, len(report.Profiles))

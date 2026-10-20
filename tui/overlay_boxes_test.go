@@ -38,7 +38,7 @@ func TestRenderActionsBox(t *testing.T) {
 	// The menu is a list the operator moves through, so the hint has to name the
 	// two keys that do the moving and the running as well as the one that backs
 	// out. A hint that only offered esc would describe the legend this replaced.
-	for _, frag := range []string{"↑/↓ select", "⏎ run"} {
+	for _, frag := range []string{"↑/↓ up/down", "⏎ run"} {
 		if !strings.Contains(plain, frag) {
 			t.Errorf("expected %q in the menu hint; got %q", frag, plain)
 		}

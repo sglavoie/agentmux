@@ -129,9 +129,9 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 		}
 	}
 
-	acceptanceData, err := os.ReadFile("../../docs/daemon_state_acceptance.md")
+	acceptanceData, err := os.ReadFile("../../docs/acceptance/daemon-state.md")
 	if err != nil {
-		t.Fatalf("ReadFile(../../docs/daemon_state_acceptance.md): %v", err)
+		t.Fatalf("ReadFile(../../docs/acceptance/daemon-state.md): %v", err)
 	}
 	acceptance := string(acceptanceData)
 	for _, want := range []string{

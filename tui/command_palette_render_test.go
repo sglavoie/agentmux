@@ -113,7 +113,7 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 	m.commandQuery = "definitely-no-command"
 	m.recomputeCommandPaletteResults()
 	out = stripAnsi(renderCommandPalette(m))
-	if !strings.Contains(out, `No commands match "definitely-no-command".`) {
+	if !strings.Contains(out, `No commands match "definitely-no-command" — backspace edits the query`) {
 		t.Fatalf("no-result text missing:\n%s", out)
 	}
 

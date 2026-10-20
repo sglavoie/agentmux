@@ -31,6 +31,10 @@ Results come newest first, with how many times the query matched and the first
 line it matched on. The conversation the search runs from comes last, since
 the query was typed there. The selector flags narrow the search the way they narrow
 ` + "`amx session list`" + `.`,
+	Example: `  amx session search daemon race
+  amx session search '"race condition"' --since 7d
+  amx session search --source user migrate plans --here
+  amx session search flaky test --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		query := strings.TrimSpace(strings.Join(args, " "))

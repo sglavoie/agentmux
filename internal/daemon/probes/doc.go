@@ -8,6 +8,8 @@
 // through the immutable snapshot cache that keeps ListWindows off the hook
 // path, the derived per-tab and per-pane freshness epochs, and the
 // producer/source/target probe binding with its receipt and epoch validation.
+// Which pane of an unmanaged tab the Codex screen-prompt probe reads is a
+// question about that tree too (CodexForegroundTarget, codex_target.go).
 //
 // A third kind is backend-neutral and applies to Kitty and tmux alike. A
 // backend.Screen observation is checked by CheckScreen before any classifier

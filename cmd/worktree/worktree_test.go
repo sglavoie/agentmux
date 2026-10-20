@@ -312,6 +312,7 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 			_ = command.Flags().Set("json", "false")
 		}
 		_ = worktreeReopenCmd.Flags().Set("session", "")
+		_ = worktreeReopenCmd.Flags().Set("live-session", "")
 		_ = worktreeReopenCmd.Flags().Set("profile", "")
 		_ = worktreeRemoveCmd.Flags().Set("yes", "false")
 		_ = worktreeRemoveCmd.Flags().Set("delete-branch", "false")
@@ -465,5 +466,34 @@ func TestWorktreeLandNeedsYesAndSaysWhatMoved(t *testing.T) {
 	}
 	if manager.landCalls != 1 || len(manager.removeOptions) != 1 || !manager.removeOptions[0].DeleteBranch {
 		t.Fatalf("landings = %d, removals = %+v; want one of each, deleting the branch", manager.landCalls, manager.removeOptions)
+	}
+}
+
+// --live-session picks one of the live sessions a reopen would focus, by the
+// candidate ID an ambiguous reopen lists; --session, its first name, is kept
+// as a deprecated hidden alias that still works.
+func TestWorktreeReopenLiveSessionFlagAndItsAlias(t *testing.T) {
+	resetWorktreeCommandsTestState(t)
+	if flag := worktreeReopenCmd.Flags().Lookup("session"); flag == nil || flag.Deprecated == "" || !flag.Hidden {
+		t.Fatalf("--session is not a hidden deprecated alias: %+v", flag)
+	}
+	for _, name := range []string{"live-session", "session"} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(func() { _ = worktreeReopenCmd.Flags().Set(name, "") })
+			if err := worktreeReopenCmd.Flags().Set(name, "99"); err != nil {
+				t.Fatal(err)
+			}
+			out, err := runWorktree(t, worktreeReopenCmd, true, "wt-1")
+			payload := decodeWorktreeJSONError(t, []byte(out), err)
+			if payload.Error.Code != "not_found" || !strings.Contains(payload.Error.Message, `"99"`) {
+				t.Fatalf("--%s 99: payload = %+v", name, payload)
+			}
+			if err := worktreeReopenCmd.Flags().Set(name, "42"); err != nil {
+				t.Fatal(err)
+			}
+			if out, err = runWorktree(t, worktreeReopenCmd, true, "wt-1"); err != nil || !strings.Contains(out, `"continuation":"focused"`) {
+				t.Fatalf("--%s 42: out = %s, err = %v", name, out, err)
+			}
+		})
 	}
 }

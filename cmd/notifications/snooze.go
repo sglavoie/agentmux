@@ -39,7 +39,12 @@ var notificationsSnoozeCmd = &cobra.Command{
 The snooze lives in the daemon's memory only: it never rewrites config.toml,
 and restarting the daemon forgets it. Quiet hours are configuration and are
 unaffected. The daemon is not started on your behalf, because a snooze in a
-daemon that was not running would change nothing.`,
+daemon that was not running would change nothing.
+
+With --json it reports {snoozed, indefinite, snoozed_until, until}.`,
+	Example: `  amx notifications snooze 1h
+  amx notifications snooze until 08:30
+  amx notifications snooze off --json`,
 	Args:              cobra.RangeArgs(0, 2),
 	ValidArgsFunction: completeSnoozeArgs,
 	RunE:              runNotificationsSnooze,

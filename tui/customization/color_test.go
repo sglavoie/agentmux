@@ -1,6 +1,7 @@
 package customization
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -294,4 +295,20 @@ func indexOfColor(name string) int {
 		}
 	}
 	return -1
+}
+
+// A failed apply reads as what the operator was doing, not as the call that
+// failed: no "set color:" or "set tab color:" plumbing, and the cause kept.
+func TestColorPicker_ApplyFailureIsOperatorWorded(t *testing.T) {
+	ctx := ColorContext{DefaultColor: "blue", Subject: "api", Apply: func(string) error {
+		return errors.New("daemon unreachable")
+	}}
+	updated, _ := newColorPickerModel(ctx).Update(cpKeyPress("enter"))
+	view := updated.(colorPickerModel).View().Content
+	if !strings.Contains(view, "Couldn't apply the color to this session: daemon unreachable") {
+		t.Fatalf("apply failure not explained:\n%s", view)
+	}
+	if strings.Contains(view, "set color") {
+		t.Fatalf("apply failure leaks the call name:\n%s", view)
+	}
 }

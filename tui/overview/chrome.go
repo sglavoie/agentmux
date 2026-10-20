@@ -3,6 +3,7 @@ package overview
 import (
 	"charm.land/lipgloss/v2"
 
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/theme"
 )
 
@@ -18,8 +19,8 @@ var (
 	styleTitle                = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 	styleDim                  = lipgloss.NewStyle().Foreground(theme.Color(theme.Muted))
 	styleFeedback             = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber))
-	styleFooterKey            = lipgloss.NewStyle().Foreground(theme.Color(theme.Primary)).Bold(true)
-	styleFooterUnavailableKey = lipgloss.NewStyle().Foreground(theme.Color(theme.Disabled)).Bold(true)
+	styleFooterKey            = chrome.FooterKey
+	styleFooterUnavailableKey = chrome.FooterUnavailableKey
 
 	// styleBorder is an unselected tile's quiet divider-colored box, so a screenful of them
 	// reads as a set of panes rather than as a drawing.

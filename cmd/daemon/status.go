@@ -25,6 +25,16 @@ var errDaemonNotRunning = &cli.ExitError{Code: 1, Err: errors.New("daemon not ru
 var daemonStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show daemon status, readiness, and build identity",
+	Long: `Reports whether the daemon answers on its socket and, when it does, its PID,
+uptime, readiness, build, notification backend, agent-session-loop bridge,
+and connected companion clients. It never starts a daemon. A daemon that is
+not running is reported and exits 1, quietly, so a script can test the
+command itself.
+
+With --json it reports {alive, socket, pid, uptime_seconds, ready,
+degraded_reason, build, notification, asl, asl_reconcile, companion}.`,
+	Example: `  amx daemon status
+  amx daemon status --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		out := cmd.OutOrStdout()
 		health := newDaemonExportClient().Health()

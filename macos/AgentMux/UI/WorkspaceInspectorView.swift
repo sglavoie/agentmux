@@ -953,11 +953,9 @@ final class WorkspaceInspectorFieldView: NSView {
         guard field.copies else { return }
         onCopy?(field.value)
         valueLabel.stringValue = Self.copied
-        NSAccessibility.post(element: self, notification: .announcementRequested,
-                             userInfo: [.announcement: Self.copied,
-                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        WorkspaceCopyNotice.announce(Self.copied, from: self)
         copies += 1
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + WorkspaceCopyNotice.seconds) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.copies -= 1

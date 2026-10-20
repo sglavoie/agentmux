@@ -20,8 +20,6 @@ test:
 vet:
     go vet ./...
 
-# Fail when any TRACKED Go file is not gofmt-clean.
-#
 # gofmt exits 0 whether or not it found anything, so the check is on its
 # output: any listed path is a file the formatter would rewrite. The paths are
 # printed before failing, because "run gofmt -w" is only actionable if the
@@ -31,6 +29,8 @@ vet:
 # checkout carries agent worktrees and other untracked Go sources under
 # .claude/, and a gate that failed on a stale copy of a file nobody is editing
 # would be a gate people learn to ignore.
+#
+# Fail when any tracked Go file is not gofmt-clean
 fmt-check:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -41,8 +41,8 @@ fmt-check:
         exit 1
     fi
 
-# Run the concurrency-sensitive filesystem persistence, continuity, Kitty
-# read-coordination, daemon, and TUI suites under the race detector.
+# The concurrency-sensitive filesystem persistence, continuity, Kitty
+# read-coordination, daemon, and TUI suites.
 #
 # `./tui` does not include its subpackages. `./tui/commands` owns the live
 # topology reads and the package-level seams tests swap, and `./tui/overview`
@@ -53,10 +53,12 @@ fmt-check:
 # fail here rather than in whichever goroutine happened to write to it.
 # `./internal/daemon/ipc` is likewise not inherited from `./internal/daemon`:
 # it owns the connection goroutines, their deadlines, and the ingress queue.
+#
+# Run the concurrency-sensitive suites under the race detector
 race-core:
     go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
 
-# Run every committed narrow/wide TUI acceptance scenario in isolation.
+# Run every committed narrow/wide TUI acceptance scenario in isolation
 tui-scenarios:
     go run . tui-test run docs/tui-testing/scenarios/*.json
 
@@ -71,6 +73,8 @@ tui-scenarios:
 # against a state corpus. internal/daemon drives real `asl run`s — one inside a
 # private tmux session, one inside a Kitty runtime session — through this
 # checkout's hook client and daemon handler, so it additionally needs tmux.
+#
+# Check the installed agent-session-loop bridge end to end (opt-in; needs asl and tmux)
 asl-integration:
     AMX_ASL_INTEGRATION=1 go test -count=1 -run TestInstalledBridge ./internal/aslbridge ./internal/daemon
 
@@ -90,12 +94,16 @@ asl-integration:
 # writes the documented `asl_root=/path/to/scripts` form hands the recipe that
 # whole string. The prefix is stripped here rather than refused, so the named
 # and bare forms both work and neither silently checks the wrong directory.
+#
+# Compare the vendored ASL contract corpus with an ASL checkout's (offline)
 asl-contract-sync asl_root:
     #!/usr/bin/env bash
     set -euo pipefail
 
     asl_root_arg="{{ asl_root }}"
     asl_root="${asl_root_arg#asl_root=}"
+    # zsh, unlike bash, leaves a ~ after = unexpanded, so expand it here.
+    case "$asl_root" in "~" | "~/"*) asl_root="$HOME${asl_root#\~}" ;; esac
     canonical="$asl_root/tests/fixtures/agent_mux_contract"
     vendored="{{ root }}/internal/aslcontract/corpus"
 
@@ -142,12 +150,16 @@ asl-contract-sync asl_root:
 # As with asl-contract-sync, `just` passes everything after the recipe name
 # positionally, so the documented `asl_root=/path/to/scripts` prefix is stripped
 # here rather than refused.
+#
+# Exercise the overseer against the installed amx and asl pair, in a throwaway world
 overseer-integration asl_root:
     #!/usr/bin/env bash
     set -euo pipefail
 
     asl_root_arg="{{ asl_root }}"
     asl_root="${asl_root_arg#asl_root=}"
+    # zsh, unlike bash, leaves a ~ after = unexpanded, so expand it here.
+    case "$asl_root" in "~" | "~/"*) asl_root="$HOME${asl_root#\~}" ;; esac
     amx="{{ prefix_bin }}/amx"
     suite="tests.test_asl_overseer_paired_smoke"
 
@@ -199,13 +211,14 @@ overseer-integration asl_root:
 # fault scenarios land.
 stress_scenarios := "TestRun_|TestServer_|TestHandler_Concurrent"
 
-# Reliability stress gate. Repeats the daemon lifecycle scenarios in isolation,
-# then again as concurrent shards while the full suite loads the machine, then
+# Repeats the daemon lifecycle scenarios in isolation, then again as concurrent shards while the full suite loads the machine, then
 # measures the latency budgets on a quiet machine.
 #
 # The correctness scenarios synchronize on signals the daemon publishes, so
 # contention must not change their outcome; the latency budgets are measured
 # separately and deliberately, because contention legitimately changes those.
+#
+# Run the reliability stress gate: lifecycle scenarios under contention, then latency budgets
 reliability-stress reps="20" shards="4":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -281,15 +294,14 @@ reliability-stress reps="20" shards="4":
 # assert the observable state afterwards.
 crash_restart_scenarios := "TestFault|TestFuzzReducerRestartEquivalence|TestTraceReplayRestartEquivalence|TestShadowReducerSurvivesRestart|TestInteractiveOwnershipSurvivesRestart"
 
-# Crash, restart, and degraded-start gate. Runs the fault-injection and
-# restart-equivalence scenarios under the race detector.
-#
 # The count guard is the point of the shell wrapper. `go test -run PATTERN`
 # exits 0 when the pattern matches nothing, so a renamed test silently converts
 # this gate into a green step that checked nothing -- the exact failure mode a
 # release gate must not have. The floor is deliberately below the current count
 # so deleting one scenario does not break the build, and far enough above zero
 # that a pattern which stopped matching fails here.
+#
+# Run the crash, restart, and degraded-start scenarios under the race detector
 crash-restart:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -319,8 +331,7 @@ crash-restart:
 
     echo "crash-restart: ok ($passed scenarios)"
 
-# Real-tmux cockpit smoke over the *installed* pair. Read-only: it observes,
-# it never mutates a session, a plan, or config.toml.
+# Read-only: it observes, it never mutates a session, a plan, or config.toml.
 #
 # Everything else in this repository runs tmux in a world of its own. This
 # recipe is the one place the installed amx, the tmux it would start agents
@@ -341,6 +352,8 @@ crash-restart:
 # intervention half -- fetching a question body, refusing a stale token,
 # accepting a mutation and getting a body-free receipt -- by the same recipe
 # against the installed ASL wrapper; the release gate runs it separately.
+#
+# Smoke the installed pair against a real tmux and daemon, from any terminal (read-only)
 cockpit-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -405,10 +418,11 @@ cockpit-smoke:
 
     echo "cockpit-smoke: ok"
 
-# Real-Kitty smoke over the installed amx, for an operator who launches into
-# Kitty. Opt-in: no gate runs it, since Kitty is an optional backend. Run it
-# from a Kitty window; like the cockpit smoke it observes and never mutates,
-# and it fails when there is no Kitty to observe.
+# For an operator who launches into Kitty. Opt-in: no gate runs it, since
+# Kitty is an optional backend. Like the cockpit smoke it observes and never
+# mutates, and it fails when there is no Kitty to observe.
+#
+# Smoke the installed amx against a real Kitty, from a Kitty window (opt-in)
 kitty-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -449,8 +463,6 @@ kitty-smoke:
 
     echo "kitty-smoke: ok"
 
-# Run the paired agent-session-loop / Agent Mux release gate.
-#
 #   just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release
 #   just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release tag=yes
 #
@@ -467,6 +479,8 @@ kitty-smoke:
 # write them would leave release provenance nobody can verify. The gate refuses
 # the combination itself; the recipe refuses it first so the operator hears it
 # immediately rather than after the toolchain starts.
+#
+# Run the paired agent-session-loop / Agent Mux release gate (installs both, restarts the daemon)
 paired-release-gate asl_root signing_key="" tag="no":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -495,6 +509,9 @@ paired-release-gate asl_root signing_key="" tag="no":
     esac
     asl_root="${asl_root#asl_root=}"
     signing_key="${signing_key#signing_key=}"
+    # zsh, unlike bash, leaves a ~ after = unexpanded, so expand it here.
+    case "$asl_root" in "~" | "~/"*) asl_root="$HOME${asl_root#\~}" ;; esac
+    case "$signing_key" in "~" | "~/"*) signing_key="$HOME${signing_key#\~}" ;; esac
     tag="${tag#tag=}"
 
     tag_requested=no
@@ -519,27 +536,29 @@ paired-release-gate asl_root signing_key="" tag="no":
 
     go run . "${args[@]}"
 
-# Product acceptance without the optional linter dependency.
-#
 # fmt-check leads because it is the cheapest gate here and the one whose
 # failure says the least about the change: a formatting drift found after a
 # twenty-minute race suite is a twenty-minute wait for a one-command fix.
+#
+# Run product acceptance: gofmt, tests, race suites, vet, TUI scenarios (no linter)
 acceptance: fmt-check test race-core vet tui-scenarios
 
-# Run linter.
 # golangci-lint's default lock is machine-wide, not repository-scoped, so a
 # linter running in an unrelated checkout would otherwise fail this gate.
+#
+# Run golangci-lint
 lint:
     golangci-lint run --allow-parallel-runners
 
-# Run the full repository gate.
+# Run the full repository gate: acceptance plus golangci-lint
 check: acceptance lint
 
-# Install binary and a starter app config if missing. Nothing of Kitty's is
-# created or linked; `just install-kitty` does that for the Kitty backend.
-# The binary is staged beside the destination and renamed into place so the
+# Nothing of Kitty's is created or linked; `just install-kitty` does that for
+# the Kitty backend. The binary is staged beside the destination and renamed into place so the
 # replacement is atomic: no window where amx is absent or half-copied, and a
 # running daemon keeps its already-open executable.
+#
+# Install amx atomically into ~/.local/bin, plus a starter config if missing
 install: build
     @mkdir -p "{{prefix_bin}}"
     cp amx "{{prefix_bin}}/.amx.staging"
@@ -553,9 +572,10 @@ install-kitty:
     ln -sf "{{root}}/agent-mux.conf" "{{prefix_kitty}}/agent-mux.conf"
     @echo "Symlinked {{prefix_kitty}}/agent-mux.conf"
 
-# Build, install atomically, restart the daemon, wait for it to report ready,
-# then gate on strict doctor (which verifies the CLI and daemon are the same
-# artifact by hash/revision and that no invariant is violated).
+# Strict doctor verifies the CLI and daemon are the same artifact by
+# hash/revision and that no invariant is violated.
+#
+# Install amx, restart the daemon onto it, and gate on strict doctor
 install-restart-smoke: install restart-verify
     @echo "install-restart-smoke: ok"
 
@@ -598,12 +618,13 @@ restart-verify:
     "{{prefix_bin}}/amx" daemon status
     "{{prefix_bin}}/amx" doctor --strict
 
-# Build macos/build/Agent Mux.app, the menu bar companion. Debug bundles amx
-# only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run
+# Debug bundles amx only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run
 # time; Release builds amx with `just build` and bundles that. Both bundle the
 # pinned tmux runtime. Like mac-test, mac-install, mac-ghosttykit, and
 # mac-release-gate it needs Xcode, so none of them is part of check,
 # acceptance, or paired-release-gate. See macos/README.md.
+#
+# Build macos/build/Agent Mux.app (Debug, or Release with a freshly built amx)
 mac-app configuration="Debug":
     #!/usr/bin/env bash
     set -euo pipefail

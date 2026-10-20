@@ -32,15 +32,22 @@ did. With no name, or an empty one, the session's name is removed.
 The name is kept on one line, without control characters, and no longer than
 64 characters.
 
+With no --runtime-session, a command that runs in a managed session
+(AMX_RUNTIME_SESSION_ID) names that session; elsewhere --runtime-session is
+required.
+
 With --json it reports {runtime_session_id, name, changed}: name is the name
 the session is left with, and changed is false when it already had it.`,
+	Example: `  amx name-session "billing fix"
+  amx name-session --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f "billing fix"
+  amx name-session --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runNameSession,
 }
 
 func init() {
 	nameSessionCmd.Flags().StringVar(&nameSessionRuntimeSession, "runtime-session", "",
-		"runtime session ID of the tmux session to name")
+		"runtime session ID of the tmux session to name (defaults to $AMX_RUNTIME_SESSION_ID)")
 	nameSessionCmd.Flags().BoolVar(&nameSessionJSON, "json", false, "emit schema-v1 JSON")
 }
 
@@ -58,12 +65,13 @@ type nameTerminal interface {
 	backend.MetadataWriter
 }
 
-// errNameNoSession reports that the runtime session named is not a running
-// tmux session.
-var errNameNoSession = errors.New("no running tmux session")
-
 func runNameSession(cmd *cobra.Command, args []string) error {
 	named := strings.TrimSpace(nameSessionRuntimeSession)
+	if named == "" {
+		// With nothing named, the session this command runs in is the one
+		// meant, as with mute-toggle.
+		named = currentRuntimeSession()
+	}
 	if named == "" {
 		return cli.MissingParameter(cmd, nameSessionJSON, "--runtime-session", "the runtime session ID of the tmux session to name")
 	}
@@ -84,7 +92,7 @@ func runNameSession(cmd *cobra.Command, args []string) error {
 		name = args[0]
 	}
 	result, err := nameRuntimeSession(term, id, name)
-	if errors.Is(err, errNameNoSession) {
+	if errors.Is(err, errNoRuntimeSession) {
 		return cli.CommandFailure(cmd, nameSessionJSON, "not_found", err)
 	}
 	if err != nil {
@@ -101,19 +109,14 @@ func runNameSession(cmd *cobra.Command, args []string) error {
 // runtime session is touched.
 func nameRuntimeSession(term nameTerminal, id runtimesession.ID, name string) (nameSessionResult, error) {
 	result := nameSessionResult{RuntimeSessionID: string(id), Name: session.CleanName(name)}
-	panes, err := term.Discover()
+	panes, err := runtimeSessionPanes(term, id)
 	if err != nil {
 		return result, err
 	}
-	for _, pane := range panes {
-		if pane.Vars[session.RuntimeSessionVar] != string(id) {
-			continue
-		}
-		if pane.Vars[session.NameVar] == result.Name {
-			return result, nil
-		}
-		result.Changed = true
-		return result, term.SetMetadata(pane.Ref, map[string]string{session.NameVar: result.Name})
+	pane := panes[0]
+	if pane.Vars[session.NameVar] == result.Name {
+		return result, nil
 	}
-	return result, fmt.Errorf("%w is %s", errNameNoSession, id)
+	result.Changed = true
+	return result, term.SetMetadata(pane.Ref, map[string]string{session.NameVar: result.Name})
 }

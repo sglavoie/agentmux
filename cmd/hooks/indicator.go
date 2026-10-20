@@ -40,7 +40,7 @@ The first argument must be a harness event name (e.g. Stop, PermissionRequest,
 UserPromptSubmit). Unknown events are recorded as permanent non-delivery
 evidence while legacy hook invocations remain fail-open.
 
-Agents launched by AgentMux inherit AMX_RUNTIME_SESSION_ID (or receive
+Agents launched by Agent Mux inherit AMX_RUNTIME_SESSION_ID (or receive
 --runtime-session), and their hooks route by that runtime session alone, on
 any terminal backend; Kitty variables are ignored for them.
 

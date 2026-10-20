@@ -85,7 +85,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
 		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
 		{commands.ResortTabs, commands.GroupApplication, "Resort Tabs", []string{"reorder", "tabs"}, ""},
-		{commands.UndoClose, commands.GroupApplication, "Relaunch Last Ended Session", []string{"restore", "reopen", "undo last close"}, keyUndoClose},
+		{commands.UndoClose, commands.GroupApplication, "Recover Ended Session (relaunch project)", []string{"restore", "reopen", "resume", "relaunch", "undo last close"}, keyUndoClose},
 		{commands.ShowFeedback, commands.GroupApplication, "Show Action Feedback", []string{"errors", "failures", "notices", "waiting"}, ""},
 		{commands.ShowHealth, commands.GroupApplication, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
 		{commands.DismissDeprecation, commands.GroupApplication, "Dismiss Deprecation Warning", []string{"banner", "warning"}, ""},

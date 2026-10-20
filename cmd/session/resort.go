@@ -22,6 +22,10 @@ var (
 var resortCmd = &cobra.Command{
 	Use:   "resort",
 	Short: "Reorder Kitty tabs to match the configured sort",
+	Long: `Moves the Agent Mux tabs in Kitty into the order [defaults] sort names.
+Only Kitty tabs are moved; tmux sessions have no tab order to change. It
+needs a reachable Kitty.`,
+	Example: `  amx resort`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := resortLoadConfig()
 		if err != nil {

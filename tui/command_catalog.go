@@ -68,6 +68,13 @@ func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	return m, m.refreshPreviewForPickerCursor()
 }
 
+// recoverEndedTitle is the palette's name for UndoClose; recoverEndedHint is
+// the same name as the footer and help spell it.
+const (
+	recoverEndedTitle = "Recover Ended Session"
+	recoverEndedHint  = "recover ended session"
+)
+
 // commandCatalog is the catalog every palette, footer, and dashboard key reads.
 //
 // The shortcut a palette row advertises is not written beside the command: it is
@@ -292,14 +299,17 @@ func applicationCommandDeclarations() []commands.Command[Model] {
 		},
 		{
 			ID: commands.UndoClose, Group: commands.GroupApplication,
+			// One action, one name: the footer's `u` hint, the help, and this
+			// title all call it "recover ended session". The suffix says which
+			// of the two recoveries it will perform for the latest close.
 			Title: func(m Model, _ commands.Context) string {
 				if snapshot, ok := m.recovery.Latest(modelNow(m)); ok && snapshot.Verb() == "resume" {
-					return "Resume Last Ended Conversation"
+					return recoverEndedTitle + " (resume conversation)"
 				}
-				return "Relaunch Last Ended Session"
+				return recoverEndedTitle + " (relaunch project)"
 			},
 			Description:  "Resume the exact conversation when known; otherwise relaunch its project. Available for 30 seconds after ending a session.",
-			Aliases:      []string{"restore", "reopen", "undo last close"},
+			Aliases:      []string{"restore", "reopen", "resume", "relaunch", "undo last close"},
 			Availability: undoCommandAvailability,
 			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
 				// Bound first: undoLastCmd claims the entry it relaunches, and

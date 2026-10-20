@@ -177,9 +177,9 @@ active-pane route policy rather than writing titles from the indicator:
   mode inside a *managed* pane is unaffected.
 
 For the acceptance record, required live-client transitions, and dogfood
-checklist, see [Daemon State Acceptance Evidence](daemon_state_acceptance.md).
+checklist, see [Daemon State Acceptance Evidence](acceptance/daemon-state.md).
 The hermetic process-exit fixture and optional installed drill are documented in
-[Process-Lifecycle Acceptance](acceptance-testing.md).
+[Process-Lifecycle Acceptance](process-lifecycle-fixture.md).
 
 ## Companion subscription
 

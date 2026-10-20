@@ -18,9 +18,9 @@ import (
 var worktreeLandCmd = &cobra.Command{
 	Use:   "land <selector>",
 	Short: "Fast-forward the source branch to a clean inactive worktree's branch",
-	Example: `  amx worktree diff wt-1a2b            # "lands: fast-forward onto main" means this will succeed
-  amx worktree land wt-1a2b --yes
-  amx worktree land wt-1a2b --yes --remove   # then remove the worktree and delete its branch`,
+	Example: `  amx worktree diff 3f9c2a1e           # "lands: fast-forward onto main" means this will succeed
+  amx worktree land 3f9c2a1e --yes
+  amx worktree land 3f9c2a1e --yes --remove   # then remove the worktree and delete its branch`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		selector, err := worktreeSelectorFromArgs(cmd, jsonOutput, "land", args)

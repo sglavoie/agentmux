@@ -161,10 +161,14 @@ func TestMuteToggleNamesATmuxSessionByRuntimeSession(t *testing.T) {
 	}
 
 	// A session named exactly and not running is an error, not a no-op.
-	out, err = run("rs-" + strings.Repeat("0", 32))
+	unknown := "rs-" + strings.Repeat("0", 32)
+	out, err = run(unknown)
 	var exit *cli.ExitError
 	if !errors.As(err, &exit) || !strings.Contains(out, `"code":"not_found"`) {
 		t.Fatalf("unknown runtime session: out = %s, err = %v", out, err)
+	}
+	if !strings.Contains(out, "no running tmux session with runtime session "+unknown) {
+		t.Fatalf("unknown runtime session message: %s", out)
 	}
 	if out, err = run("nonsense"); err == nil || !strings.Contains(out, `"code":"invalid_arguments"`) {
 		t.Fatalf("malformed runtime session: out = %s, err = %v", out, err)

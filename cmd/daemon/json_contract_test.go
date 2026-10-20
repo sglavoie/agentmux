@@ -3,6 +3,8 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,4 +71,68 @@ func TestDaemonStatusJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+// `daemon stop` and `daemon restart` answer a script with the envelope too;
+// `daemon start` is absent because it blocks until shutdown and has no answer.
+func TestDaemonLifecycleJSON(t *testing.T) {
+	for _, command := range []*cobra.Command{daemonStopCmd, daemonRestartCmd} {
+		if command.Flags().Lookup("json") == nil {
+			t.Errorf("%s does not declare --json", command.CommandPath())
+		}
+	}
+	run := func(t *testing.T, command *cobra.Command) (string, error) {
+		t.Helper()
+		if err := command.Flags().Set("json", "true"); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = command.Flags().Set("json", "false") })
+		var out bytes.Buffer
+		command.SetOut(&out)
+		err := command.RunE(command, nil)
+		return out.String(), err
+	}
+
+	t.Run("stop", func(t *testing.T) {
+		resetDaemonLifecycleTestState(t)
+		newDaemonLifecycleClient = func() daemonLifecycleClient {
+			return &fakeDaemonLifecycleClient{sendResp: protocol.Response{OK: true}}
+		}
+		out, err := run(t, daemonStopCmd)
+		if err != nil || out != `{"schema_version":1,"data":{"stopped":true}}`+"\n" {
+			t.Fatalf("out = %q, err = %v", out, err)
+		}
+	})
+	t.Run("stop with no daemon", func(t *testing.T) {
+		resetDaemonLifecycleTestState(t)
+		newDaemonLifecycleClient = func() daemonLifecycleClient {
+			return &fakeDaemonLifecycleClient{sendErr: errors.New("dial unix: no such file")}
+		}
+		out, err := run(t, daemonStopCmd)
+		var exit *cli.ExitError
+		if !errors.As(err, &exit) || !strings.Contains(out, `"code":"daemon_not_running"`) {
+			t.Fatalf("out = %q, err = %v", out, err)
+		}
+	})
+	t.Run("restart", func(t *testing.T) {
+		resetDaemonLifecycleTestState(t)
+		newDaemonLifecycleClient = func() daemonLifecycleClient {
+			return &fakeDaemonLifecycleClient{healths: []ipc.Health{{Alive: true, PID: 77, DegradedReason: "initial snapshot timed out"}}}
+		}
+		out, err := run(t, daemonRestartCmd)
+		if err != nil || out != `{"schema_version":1,"data":{"pid":77,"ready":false,"degraded_reason":"initial snapshot timed out"}}`+"\n" {
+			t.Fatalf("out = %q, err = %v", out, err)
+		}
+	})
+	t.Run("restart that never answers", func(t *testing.T) {
+		resetDaemonLifecycleTestState(t)
+		newDaemonLifecycleClient = func() daemonLifecycleClient {
+			return &fakeDaemonLifecycleClient{healths: []ipc.Health{{}}}
+		}
+		out, err := run(t, daemonRestartCmd)
+		var exit *cli.ExitError
+		if !errors.As(err, &exit) || !strings.Contains(out, `"code":"restart_timeout"`) {
+			t.Fatalf("out = %q, err = %v", out, err)
+		}
+	})
 }

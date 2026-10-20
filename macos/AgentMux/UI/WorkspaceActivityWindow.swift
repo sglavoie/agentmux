@@ -2,40 +2,29 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class WorkspaceActivityWindow: NSObject, NSWindowDelegate {
+final class WorkspaceActivityWindow: ReviewWindowController {
     let model: WorkspaceActivityModel
-    private(set) var window: NSWindow?
-    var onVisibilityChanged: (Bool) -> Void = { _ in }
-    init(model: WorkspaceActivityModel) { self.model = model }
-    func show() {
-        if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 650),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "Since Last Looked"
-            window.minSize = NSSize(width: 760, height: 480)
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            let host = WorkspaceReviewHost(rootView: WorkspaceActivityView(model: model))
-            host.closesWindow = true
-            window.contentView = host
-            ReviewWindowPlacement.restore(window, name: "WorkspaceActivity")
-            self.window = window
-        }
-        onVisibilityChanged(true)
-        model.refresh()
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate()
+    init(model: WorkspaceActivityModel) {
+        self.model = model
+        super.init(title: "Since Last Looked", autosaveName: "WorkspaceActivity", size: NSSize(width: 1000, height: 650))
     }
-    func windowWillClose(_ notification: Notification) { model.close(); onVisibilityChanged(false) }
+    func show() { present() }
+    override func makeContentView() -> NSView { Self.host(WorkspaceActivityView(model: model)) }
+    override func willPresent() { model.refresh() }
+    override func didClose() { model.close() }
 }
 
 struct WorkspaceActivityView: View {
     @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
     @ObservedObject var model: WorkspaceActivityModel
-    @FocusState private var listFocused: Bool
+    private enum Focus: Hashable { case list, details }
+    @FocusState private var focus: Focus?
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
+                Button(action: toggleEvents) { Image(systemName: "sidebar.left") }
+                    .help("Show or hide events (⌘⌥S)")
+                    .accessibilityLabel(model.layout.collapsed ? "Show events" : "Hide events")
                 Text("Since Last Looked").font(.title2).fixedSize()
                 Spacer(minLength: 0)
                 WorkspaceReviewStatus(reads: [
@@ -52,8 +41,8 @@ struct WorkspaceActivityView: View {
                     Text("1 day").tag(1); Text("7 days").tag(7); Text("30 days").tag(30); Text("90 days").tag(90)
                 }.frame(width: 180).onChange(of: model.days) { _, _ in model.refresh() }
                 Spacer()
-
-                Button("Refresh") { model.refresh() }.disabled(model.loading).help("Refresh activity (⌘R)")
+                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                    .help("Refresh activity (⌘R)").accessibilityLabel("Refresh activity").disabled(model.loading)
                 Menu("Mark read") {
                     Button("Mark selected read") { model.markSelectedRead() }.disabled(!model.canMarkSelectedRead)
                     Button("Mark all \(model.visible.count) results read") { model.markVisibleRead() }
@@ -73,12 +62,15 @@ struct WorkspaceActivityView: View {
             }.frame(height: 20)
             WorkspaceReadFailure(title: "Activity", error: model.error, retained: model.report != nil,
                                  loading: model.loading, retry: { model.refresh() })
-            HSplitView {
+            WorkspaceReviewSplit(layout: $model.layout, title: "Events", minimum: 220, detailMinimum: 360) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.visible) { entry in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                if model.readState.read[entry.id] == nil { Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.blue) }
+                                if model.readState.read[entry.id] == nil {
+                                    Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(WorkspaceReviewColors.unread)
+                                        .accessibilityLabel("Unread")
+                                }
                                 Text(entry.title).font(.headline)
                             }
                             Text(entry.date?.formatted() ?? entry.at).font(.caption).foregroundStyle(.secondary)
@@ -86,11 +78,12 @@ struct WorkspaceActivityView: View {
                             Text(entry.detail).font(.caption).lineLimit(2)
                         }.padding(.vertical, 3).tag(entry.id)
                     }
-                }.focused($listFocused).frame(minWidth: 220, idealWidth: 280, maxWidth: 340)
+                }.focused($focus, equals: .list)
                     .overlay { if model.visible.isEmpty && !model.loading && model.error == nil {
                         WorkspaceEmpty(title: model.unreadOnly ? "All caught up" : "No activity found",
                                        detail: "No \(model.unreadOnly ? "unread" : "recorded") events in this period. Try a longer look-back period.")
                     } }
+            } detail: {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         if let entry = model.selected {
@@ -104,10 +97,7 @@ struct WorkspaceActivityView: View {
                                 if entry.conversation != nil { Button("Open conversation") { model.openConversation() }.help("Open conversation (⌘⇧Return)") }
                             }
                             Divider()
-                            HStack {
-                                Text("Supporting output").font(.headline).fixedSize()
-
-                            }
+                            Text("Supporting output").font(.headline)
                             WorkspaceReadFailure(title: "Supporting output", error: model.transcriptError, retained: model.transcript != nil,
                                                  loading: model.reading, retry: { model.loadTranscript() })
                             if let excerpt = model.excerpt {
@@ -121,12 +111,19 @@ struct WorkspaceActivityView: View {
                             Text("Recorded event: \(entry.event)").font(.caption).textSelection(.enabled)
                             if !entry.runID.isEmpty { Text("Run: \(entry.runID)").font(.caption).textSelection(.enabled) }
                             if !entry.traceID.isEmpty { Text("Trace: \(entry.traceID)").font(.caption).textSelection(.enabled) }
-                        } else { Text("Select an event to inspect its recorded details and supporting output.").foregroundStyle(.secondary) }
+                        }
                     }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                }.frame(minWidth: 360, maxWidth: .infinity)
+                }.focusable().focused($focus, equals: .details)
+                    .overlay {
+                        if model.selected == nil && (!model.visible.isEmpty || model.layout.collapsed) {
+                            WorkspaceEmpty(title: "Event details", detail: "Select an event to inspect its recorded details and supporting output.",
+                                           symbol: "clock.arrow.circlepath")
+                        }
+                    }
+                    .frame(minWidth: 360, maxWidth: .infinity)
             }
         }.padding(12)
-            .onAppear { listFocused = true }
+            .onAppear { focus = model.layout.collapsed ? .details : .list }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
     }
     private var activityFeedback: WorkspaceFeedback? {
@@ -150,11 +147,16 @@ struct WorkspaceActivityView: View {
             }
         } else if modifiers == [.command, .shift] {
             switch key {
-            case "f": listFocused = true
+            case "f": model.layout.collapsed = false; focus = .list
             case "\r": model.openConversation()
             default: return false
             }
-        } else { return false }
+        } else if modifiers == [.command, .option], key == "s" { toggleEvents() }
+        else { return false }
         return true
+    }
+    private func toggleEvents() {
+        model.layout.collapsed.toggle()
+        focus = model.layout.collapsed ? .details : .list
     }
 }

@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -294,4 +295,47 @@ func mustLoadTestConfig(t *testing.T) *config.Config {
 		t.Fatalf("load config: %v", err)
 	}
 	return cfg
+}
+
+func TestConfigHooksStatusJSONCarriesTheReportAndHints(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	home := filepath.Join(t.TempDir(), "missing-home")
+	if err := os.WriteFile(path, []byte(validConfigBody(home)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+	hooksStatusJSON = true
+	oldOut := configHooksStatusCmd.OutOrStdout()
+	t.Cleanup(func() {
+		hooksStatusJSON = false
+		configHooksStatusCmd.SetOut(oldOut)
+	})
+	var out bytes.Buffer
+	configHooksStatusCmd.SetOut(&out)
+
+	if err := configHooksStatusCmd.RunE(configHooksStatusCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	var payload struct {
+		SchemaVersion int             `json:"schema_version"`
+		Data          hooksStatusData `json:"data"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("JSON = %v\n%s", err, out.String())
+	}
+	if payload.SchemaVersion != cli.JSONSchemaVersion {
+		t.Fatalf("schema_version = %d", payload.SchemaVersion)
+	}
+	if len(payload.Data.Profiles) == 0 || payload.Data.Profiles[0].Profile != "work" {
+		t.Fatalf("profiles = %+v; want the configured work profile", payload.Data.Profiles)
+	}
+	if payload.Data.Profiles[0].Sync != hooks.SyncMissing {
+		t.Fatalf("sync = %q; want missing", payload.Data.Profiles[0].Sync)
+	}
+	if len(payload.Data.Hints) == 0 || !strings.Contains(payload.Data.Hints[0], "amx config hooks-sync") {
+		t.Fatalf("hints = %q; want the hooks-sync remedy", payload.Data.Hints)
+	}
+	if strings.Contains(out.String(), "PROFILE") {
+		t.Fatalf("--json also printed the table:\n%s", out.String())
+	}
 }

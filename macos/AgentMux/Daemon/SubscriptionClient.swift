@@ -321,8 +321,11 @@ final class SubscriptionClient {
         } catch {
             return .failure(Self.lost(error))
         }
-        guard let response = try? JSONDecoder().decode(DaemonResponse.self, from: line) else {
-            Self.logger.notice("subscription: unreadable subscribe reply")
+        let response: DaemonResponse
+        do {
+            response = try JSONDecoder().decode(DaemonResponse.self, from: line)
+        } catch {
+            Self.logger.notice("subscription: unreadable subscribe reply: \(Self.describe(error), privacy: .public)")
             return .failure(.lost(DaemonPhrase.unreadable))
         }
         return Self.ackOutcome(response)
@@ -351,7 +354,8 @@ final class SubscriptionClient {
         let reason: Disconnect
     }
 
-    /// One stream line as a frame; nil when it is not one.
+    /// One stream line as a frame; nil when it is not one. For tests: the
+    /// stream itself reads lines through `decodeLine`, which logs why.
     static func decodeFrame(_ line: Data) -> StreamFrame? {
         try? decodeLine(line).get()
     }
@@ -387,7 +391,14 @@ final class SubscriptionClient {
         case "heartbeat":
             return .success(.heartbeat(seq: header.seq))
         case "bye":
-            let reason = (try? decoder.decode(StreamFramePayload<ByeFrame>.self, from: line))?.data.reason ?? ""
+            // A bye whose reason cannot be read still ends the stream.
+            let reason: String
+            do {
+                reason = try decoder.decode(StreamFramePayload<ByeFrame>.self, from: line).data.reason
+            } catch {
+                logger.notice("subscription: bye without a readable reason: \(describe(error), privacy: .public)")
+                reason = ""
+            }
             return .success(.bye(seq: header.seq, reason: reason))
         case "notification":
             // Only an object can be written back out: `data(withJSONObject:)`
@@ -411,7 +422,9 @@ final class SubscriptionClient {
 
     /// A decoding error as its kind and the path to the field, with no value
     /// from the line.
-    private static func describe(_ error: Error) -> String {
+    /// A decoding failure in words fit for the log: where it failed, never
+    /// the payload. DaemonClient logs its replies' failures the same way.
+    static func describe(_ error: Error) -> String {
         func path(_ keys: [CodingKey]) -> String {
             keys.isEmpty ? "the top level" : keys.map { $0.intValue.map(String.init) ?? $0.stringValue }.joined(separator: ".")
         }

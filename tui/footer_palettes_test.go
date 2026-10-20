@@ -9,6 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/asl"
+	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -67,7 +68,7 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 		{
 			name:    "session view",
 			palette: sessionViewFooterPalette,
-			wants: []string{"j/k move", "n/N match", "enter view message", "c continue", "f fork",
+			wants: []string{"j/k up/down", "n/N match", "enter view message", "c continue", "f fork",
 				"w worktree", "H handoff", "E edit handoff", "i ID", "y copy", "Y path", "esc back"},
 		},
 		{
@@ -208,7 +209,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   200,
 		want: []string{
-			"  / search · j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page",
+			"  / search · j/k up/down · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page",
 			"  g/G top/bot",
 		},
 	},
@@ -217,8 +218,8 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   90,
 		want: []string{
-			"  / search · j/k move · n/N match · enter view message · c continue · f fork · w worktree",
-			"  H handoff · E edit handoff · i ID · y copy · Y path · esc back · ctrl+d/u half · ? more",
+			"  / search · j/k up/down · n/N match · enter view message · c continue · f fork",
+			"  w worktree · H handoff · E edit handoff · i ID · y copy · Y path · esc back · ? more",
 		},
 	},
 	{
@@ -235,7 +236,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionViewFooterPalette,
 		width:   0,
 		want: []string{
-			"  / search · j/k move · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
+			"  / search · j/k up/down · n/N match · enter view message · c continue · f fork · w worktree · H handoff · E edit handoff · i ID · y copy · Y path · ? help · esc back · ctrl+d/u half · ctrl+f/b page · g/G top/bot",
 		},
 	},
 	{
@@ -521,10 +522,10 @@ func TestFooterHintAvailabilityChangesStyleOnly(t *testing.T) {
 					continue
 				}
 				styled++
-				if raw := strings.Join(available, "\n"); !strings.Contains(raw, renderFooterBinding(tc.key, tc.label)) {
+				if raw := strings.Join(available, "\n"); !strings.Contains(raw, chrome.Binding(tc.key, tc.label)) {
 					t.Fatalf("width %d: %q is available but not rendered in the available style", width, tc.key+" "+tc.label)
 				}
-				if raw := strings.Join(unavailable, "\n"); !strings.Contains(raw, renderUnavailableFooterBinding(tc.key, tc.label)) {
+				if raw := strings.Join(unavailable, "\n"); !strings.Contains(raw, chrome.UnavailableBinding(tc.key, tc.label)) {
 					t.Fatalf("width %d: %q is unavailable but not rendered in the muted style", width, tc.key+" "+tc.label)
 				}
 			}
@@ -552,10 +553,10 @@ func TestFooterHintASLRunsMixedAvailability(t *testing.T) {
 
 	lines := footerHintLines(m, aslRunsFooterPalette, footerHintMaxLines)
 	raw := strings.Join(lines, "\n")
-	if !strings.Contains(raw, renderFooterBinding("s", "stop")) {
+	if !strings.Contains(raw, chrome.Binding("s", "stop")) {
 		t.Fatalf("permitted stop is not rendered in the available style: %q", hintText(lines))
 	}
-	if !strings.Contains(raw, renderUnavailableFooterBinding("a", "abort")) {
+	if !strings.Contains(raw, chrome.UnavailableBinding("a", "abort")) {
 		t.Fatalf("refused abort is not rendered in the muted style: %q", hintText(lines))
 	}
 

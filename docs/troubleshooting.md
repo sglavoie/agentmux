@@ -18,6 +18,10 @@ For lifecycle behavior and confirmation preferences, see
   prints them). Use `amx transcripts status` to
   inspect the filesystem transcript cache and `amx transcripts rebuild --all`
   to reconstruct it from source transcripts.
+  Every failure and warning carries a remediation: the text report prints it
+  on its own `remediation:` line under the finding (unless the message already
+  says it), and `--json` carries it as the finding's optional `remediation`
+  field. The finding's `message` text is unchanged.
   `amx doctor --json` emits a structured report; `--strict` also evaluates the
   correctness invariants (reducer/renderer agreement, ASL visibility, subagent
   visibility, producer routing, acknowledged-fact pressure, persisted process
@@ -280,3 +284,96 @@ For lifecycle behavior and confirmation preferences, see
   `COPILOT_HOME`.
 - **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`
   socket setting are present, then restart Kitty.
+
+## The tmux backend
+
+Most tmux problems are answered by one command, which reads the setup itself
+and so works with the daemon down:
+
+```bash
+amx backend status          # launch backend, the tmux in use and where it came from, the server, and each problem with its fix
+amx backend status --check  # the same, and exit 1 when launching on tmux would not work
+```
+
+`--check` judges tmux whatever `launch_backend` says: a machine that launches
+in Kitty still exits 1 when it has no usable tmux (a server that does not
+answer fails it only where launches go to tmux). `amx doctor` raises the same
+problems under `backend_` plus the code `backend status` gives them, with that
+report's hint as the remediation, so the two never advise different things.
+[When tmux cannot be used](usage.md#when-tmux-cannot-be-used-and-what-doctor-reports)
+has the full table of what doctor reports.
+
+- **`backend_tmux_unavailable`**: no tmux 3.5 or newer could be used. The
+  message names each place tried. Install one (`brew install tmux`), point
+  `[defaults.tmux] path` at one, or run Agent Mux.app, which bundles one. A
+  server that is already running keeps the tmux it was started with, so its
+  agents keep working meanwhile.
+- **`backend_server_unreadable`**: the private server is listening but did not
+  answer. Run `amx backend status` again; a server that was only busy answers
+  the second time. If it keeps failing, `amx backend stop --yes` ends the
+  server **and every agent in it** (their conversations stay on disk and can be
+  resumed). Nothing else ends them: restarting the daemon, quitting the app, or
+  closing terminals leaves them running.
+- **`amx attach` refuses with `runtime_session_exited`**: the agent's process
+  ended where it ran, and the message carries its exit status or signal. It is
+  never restarted from here; resume the conversation instead (Past Sessions,
+  `s` or `S` in the dashboard, then `c`, or `amx session continue`).
+- **`amx attach` refuses with `runtime_session_lost`**: the pane or the whole
+  tmux server is gone (a reboot, a killed server), so what became of the agent
+  was not seen. Resume the conversation the same way. Both refusals are also
+  what F4, F7, and F9 return when the next session has stopped, and the daemon
+  stops listing such a session within a couple of seconds.
+- **`runtime_reconcile_failing` or `runtime_reconcile_stale`**: the daemon's
+  pass over the private server keeps failing, or has stopped. Until a pass
+  succeeds, agents that stop or lose their terminal are not noticed. Run
+  `amx backend status`: if the server answers there, `amx daemon restart`
+  restarts the daemon's maintenance loop; if it does not, follow the
+  `backend_server_unreadable` advice above. The `daemon.runtime_reconcile`
+  journal rows (`amx debug tail`) record when passes started failing and the
+  failure class.
+- **`screen_capture_failing`**: the daemon's last ten screen reads all failed,
+  so stuck-icon recovery has no evidence to work from. Check the server with
+  `amx backend status`; `amx debug probe --runtime-session <id>` reads one
+  session's screen the way the daemon does, and `amx daemon restart` resets its
+  readers.
+- **"Another terminal took the session"**: a session has one owner, the
+  terminal that attached to it last. Attaching from a second terminal (or the
+  workspace showing the session, or F4/F7/F9 arriving there) detaches the first,
+  which tmux reports as `[detached (from session …)]`. The agent is untouched.
+  Run `amx attach <runtime-session-id>` in the terminal you want to use to
+  take it back; `amx attach <id> --json` reports `clients`, how many
+  terminals are attached right now.
+
+## Doctor findings with no section of their own
+
+Each of these is a correctness invariant `--strict` and `amx daemon audit`
+evaluate, and each prints a remediation line. "The window's export" below is
+`amx daemon export-events --window <id> --last 50` for the window the finding
+names.
+
+- **`queue_saturation`** (failure): the daemon's ingress queue was full at
+  least once since it started, so some events were degraded. The counter is
+  cumulative: find the burst with `amx debug tail` and
+  `amx daemon audit --duration 10m`; `amx daemon restart` resets it.
+- **`active_after_terminal_churn`** (failure): three or more events from one
+  window were suppressed as `active_after_terminal` within fifteen minutes, so
+  the source is probably active and the terminal fact wrong. Inspect the
+  suppressed events in the window's export, then check
+  `amx config hooks-status` and resync with `amx config hooks-sync`.
+- **`subagent_visibility`** and **`asl_active_state`** (failures): a live
+  subagent, or an ASL run in its turn or verification phase, is shown with an
+  icon that hides it. Inspect the facts in the window's export, save
+  `amx debug bundle --mode share`, and run `amx daemon restart` to rebuild the
+  render state from the reducer; report it with the bundle if it returns.
+- **`render_causal_bound`** (failure): a render generation carries more causal
+  IDs than the protocol's bound, which only a daemon bug produces. Save a
+  bundle, restart the daemon, and report it.
+- **`render_generation_drift`** (failure): a window stayed dirty for more than
+  two render intervals (four seconds), so the render pipeline is not keeping
+  up or a write is stuck. Confirm the backend answers (`kitten @ ls` for
+  Kitty, `amx backend status` for tmux), then save a bundle and restart the
+  daemon.
+- **`shadow_current_mismatch`** (failure): the reducer's effective icon or
+  looping state disagrees with what the renderer intends, meaning some path
+  still writes the visible state directly. Save a bundle, restart the daemon,
+  and report it.

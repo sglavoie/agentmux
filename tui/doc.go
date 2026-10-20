@@ -4,7 +4,8 @@
 // deterministic in-process uitest harness that cmd/tuitest/tuitest.go drives.
 //
 // Domain leaves under tui/ own the vocabulary the model renders — terminal
-// geometry in tui/layout, the palette in tui/theme, session rows, the filter
+// geometry, list-state wording, and age labels in tui/layout, the palette in
+// tui/theme, footer key bindings in tui/chrome, session rows, the filter
 // DSL, and the inspector in tui/dashboard, event and transcript history in
 // tui/history, the launcher in tui/launch, plan rows in tui/plans, worktree
 // rows in tui/worktrees, the ASL Runs surface in tui/asl, command and
@@ -36,8 +37,20 @@
 // loop, and every message type declared here is unexported because it never
 // leaves the loop that raised it.
 //
-// The uitest files cannot become a child package because cmd reaches them
-// through this one.
+// The uitest harness (every uitest_*.go file: driver, scenario loader and
+// assertions, screen analysis, and fixtures) lives here rather than in a
+// child package, deliberately. It is the hidden `amx tui-test` command's
+// engine (cmd/tuitest), and it drives the real Model the way a terminal
+// would: it reads and seeds the mode, every surface's cursor, the palette's
+// results, the injected command seams (session, plan, worktree, and run
+// loads), the background-command queue, the clock, and the Kitty client, and
+// it asks each modal renderer for its box to check the overlay geometry.
+// Moving it out would mean exporting roughly forty of those Model internals,
+// which exist to be private, as a permanent API for a test harness; keeping
+// it here costs only binary size in a hidden command. The files share the
+// uitest_ prefix and nothing outside them names a uitest identifier, so the
+// harness is one group to read, and the exported UITest* names are the whole
+// surface cmd/tuitest uses.
 //
 // The whole TUI tree — this package included — depends on
 // internal/daemon/ipc, internal/daemon/process, and internal/daemon/protocol

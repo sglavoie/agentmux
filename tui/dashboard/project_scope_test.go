@@ -192,7 +192,7 @@ func TestRenderProjectSwitcherSearchRowAndNoMatch(t *testing.T) {
 	if !strings.Contains(out, "/zzz") {
 		t.Fatalf("search row missing: %q", out)
 	}
-	if !strings.Contains(out, "(no projects match)") {
+	if !strings.Contains(out, "(no projects match — backspace edits") {
 		t.Fatalf("empty scope list lacks its notice: %q", out)
 	}
 }

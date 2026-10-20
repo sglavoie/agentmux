@@ -156,13 +156,6 @@ func TestSessionsRefreshCmdPrunesOldEntries(t *testing.T) {
 	}
 }
 
-func TestFormatSessionWhenFutureClampsToZero(t *testing.T) {
-	future := time.Now().Add(5 * time.Second)
-	if got := formatSessionWhen(future); got != " 0m   ago" {
-		t.Fatalf("formatSessionWhen(future) = %q, want %q", got, " 0m   ago")
-	}
-}
-
 func TestRenderSessionViewCompactsSharedHomeProfiles(t *testing.T) {
 	meta := transcript.SessionMeta{
 		Harness:  harness.Claude,
