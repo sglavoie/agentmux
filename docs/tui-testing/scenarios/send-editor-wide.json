@@ -49,6 +49,10 @@
       "text": "Please Review this change"
     },
     {
+      "type": "contains_text",
+      "text": "Its screen: could not be read"
+    },
+    {
       "type": "no_layout_issues"
     }
   ]

@@ -148,24 +148,40 @@ type editorRow struct{ start, end int }
 
 // Rows retain byte offsets while wrapping whole graphemes. One cell is reserved
 // for the caret, including when it follows a full-width line.
+// editorRows soft-wraps the draft between words: a row that would overflow
+// breaks after its last space, and only a word wider than the row is broken
+// inside. Rows stay contiguous byte ranges (the space ends the row it follows),
+// so the caret arithmetic never has to account for characters that are not
+// drawn.
 func editorRows(text string, width int) []editorRow {
 	width = max(1, width-1)
 	rows := []editorRow{}
 	start, cells := 0, 0
+	// breakAt is the byte just past the last space in the current row, or -1.
+	breakAt := -1
 	g := uniseg.NewGraphemes(text)
 	for g.Next() {
 		a, b := g.Positions()
 		if g.Str() == "\n" {
 			rows = append(rows, editorRow{start, a})
-			start, cells = b, 0
+			start, cells, breakAt = b, 0, -1
 			continue
 		}
 		w := layout.Width(g.Str())
 		if cells > 0 && cells+w > width {
-			rows = append(rows, editorRow{start, a})
-			start, cells = a, 0
+			if breakAt > start {
+				rows = append(rows, editorRow{start, breakAt})
+				start, cells = breakAt, layout.Width(text[breakAt:a])
+			} else {
+				rows = append(rows, editorRow{start, a})
+				start, cells = a, 0
+			}
+			breakAt = -1
 		}
 		cells += w
+		if g.Str() == " " {
+			breakAt = b
+		}
 	}
 	return append(rows, editorRow{start, len(text)})
 }

@@ -154,12 +154,25 @@ func render(state State, width, height int) string {
 	available := max(2, height-fixed)
 	editorHeight := min(editorLines, max(1, available/2))
 	screenHeight := max(1, available-editorHeight)
-	screen := screenBlock(state, width)
-	if len(screen) > screenHeight {
-		screen = screen[len(screen)-screenHeight:]
+	// A screen that could not be shown is one sentence, so its label leads the
+	// sentence rather than sitting alone on a row above it, and a sentence cut
+	// to fit keeps its beginning. Real screen rows keep their own label row and
+	// keep their tail, which is where the agent's prompt is.
+	lines := []string{heading, ""}
+	if message, style, ok := screenMessage(state); ok {
+		screen := layoutLines(style, "Its screen: "+message, width)
+		if len(screen) > screenHeight+1 {
+			screen = screen[:screenHeight+1]
+		}
+		lines = append(lines, screen...)
+	} else {
+		screen := screenBlock(state, width)
+		if len(screen) > screenHeight {
+			screen = screen[len(screen)-screenHeight:]
+		}
+		lines = append(lines, styleDim.Render("Its screen"))
+		lines = append(lines, screen...)
 	}
-	lines := []string{heading, "", styleDim.Render("Its screen")}
-	lines = append(lines, screen...)
 	if state.FocusKeys {
 		lines = append(lines, styleHeader.Render("Keys ▌"), styleDim.Render(layout.Truncate("0-9 y n ↑↓←→ space enter · sent immediately", width, "…")), styleDim.Render("Text"))
 	} else {
@@ -168,6 +181,20 @@ func render(state State, width, height int) string {
 	lines = append(lines, editorBlockHeight(state, width, editorHeight)...)
 	lines = append(lines, notice...)
 	return strings.Join(lines, "\n")
+}
+
+// screenMessage is what the form says in place of the agent's screen when
+// there are no rows to show: still reading, unreadable, or blank.
+func screenMessage(state State) (string, lipgloss.Style, bool) {
+	switch {
+	case !state.ScreenLoaded:
+		return "(reading…)", styleDim, true
+	case state.ScreenErr != "":
+		return "could not be read: " + state.ScreenErr, styleWarning, true
+	case strings.TrimSpace(state.Screen) == "":
+		return "(blank)", styleDim, true
+	}
+	return "", styleDim, false
 }
 
 // screenBlock is the tail of the agent's screen, clipped to the form's width.
@@ -191,9 +218,11 @@ func screenBlock(state State, width int) []string {
 	return rows
 }
 
+// layoutLines wraps a sentence between words; only a word wider than the
+// form is broken inside.
 func layoutLines(style lipgloss.Style, text string, width int) []string {
 	var out []string
-	for _, line := range layout.WrapHard(text, width) {
+	for _, line := range layout.WrapWords(text, width) {
 		out = append(out, style.Render(line))
 	}
 	return out

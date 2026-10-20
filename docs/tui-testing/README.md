@@ -587,7 +587,7 @@ file. The exact inventory is:
 | [`setup-profile-wide.json`](scenarios/setup-profile-wide.json) | `setup_profile` | empty dashboard names the missing setup step and fits the viewport |
 | [`setup-project-narrow.json`](scenarios/setup-project-narrow.json) | `setup_project` | empty dashboard names the missing setup step and fits the viewport |
 | [`setup-project-wide.json`](scenarios/setup-project-wide.json) | `setup_project` | empty dashboard names the missing setup step and fits the viewport |
-| [`send-editor-narrow.json`](scenarios/send-editor-narrow.json) | `portable_tmux` | editing at 60×24 and reopening preserves the session draft and fits the overlay |
+| [`send-editor-narrow.json`](scenarios/send-editor-narrow.json) | `portable_tmux` | editing at 60×24 and reopening preserves the session draft and fits the overlay; the draft wraps between words and an unreadable screen is one sentence led by its label |
 | [`send-editor-wide.json`](scenarios/send-editor-wide.json) | `portable_tmux` | the same edit and draft recovery at 140×40 |
 | [`session-search-ending-narrow.json`](scenarios/session-search-ending-narrow.json) | `basic` | at 60 cells the summary yields room so the ending still shows, and the row fits |
 | [`session-view-hints-wide.json`](scenarios/session-view-hints-wide.json) | `basic` | transcript viewer advertises the full continuity palette including `c continue` |
