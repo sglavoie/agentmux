@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/config"
 )
 
 const (
@@ -307,7 +309,7 @@ func HasMatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTa
 // CanonicalizePath mirrors agent-session-loop's realpath(abs(expanduser(path)))
 // behavior without requiring the path to exist.
 func CanonicalizePath(path string) (string, error) {
-	expanded := expandUser(path)
+	expanded := config.ExpandTilde(path)
 	abs, err := filepath.Abs(expanded)
 	if err != nil {
 		return "", err
