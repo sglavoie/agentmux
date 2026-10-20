@@ -606,8 +606,11 @@ type Model struct {
 	planRefreshErr            error
 	planSearchErr             error
 	planSearchSeq             int
-	planSortMode              plans.SortMode // cycled with `o`; zero value = SortByMatches
-	planFilterProject         plans.ProjectFilter
+	// planScanSeq is the search seq of the source refresh still running, zero
+	// once it reported; the "Scanning plans…" notice is settled only after it.
+	planScanSeq       int
+	planSortMode      plans.SortMode // cycled with `o`; zero value = SortByMatches
+	planFilterProject plans.ProjectFilter
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines

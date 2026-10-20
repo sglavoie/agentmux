@@ -100,12 +100,17 @@ func (m Model) startPlanSearchRefresh() (tea.Model, tea.Cmd) {
 	m.planLoading = true
 	m.planSearchSeq++
 	seq := m.planSearchSeq
+	m.planScanSeq = seq
 	var cmds []tea.Cmd
 	cmds = append(cmds, m.runPlansRefreshCmd(m.plansIndex, m.cfg, seq))
-	if c := m.pushToast(Toast{
+	// The scan's notice is on its own channel and pending: the refresh and the
+	// search that follows it settle it (settlePlanScanToast), so it neither
+	// lingers into another view nor vanishes while the scan is still running.
+	if c := m.replaceToastByID(planScanToastID, Toast{
 		Severity: toastInfo,
 		Text:     "Scanning plans…",
-		Expires:  time.Now().Add(progressToastTTL),
+		Pending:  true,
+		Expires:  modelNow(m).Add(progressToastTTL),
 	}); c != nil {
 		cmds = append(cmds, c)
 	}

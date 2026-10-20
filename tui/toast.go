@@ -20,6 +20,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -102,6 +103,12 @@ func toastTickCmd() tea.Cmd {
 
 // prepareToast chooses persistence by severity while keeping close recovery
 // on its independent deadline.
+//
+// An error or warning with no deadline of its own is retained until dismissed
+// or replaced: an unresolved failure is what the operator most needs to see. A
+// caller that sets an explicit Expires has decided the notice is momentary (a
+// "terminal too small" refusal, say), and that decision is honoured rather than
+// overruled into a notice nothing ever clears.
 func (m *Model) prepareToast(t Toast) Toast {
 	if t.NoticeID == 0 {
 		m.nextNoticeID++
@@ -110,7 +117,7 @@ func (m *Model) prepareToast(t Toast) Toast {
 	if t.Occurred.IsZero() {
 		t.Occurred = modelNow(*m)
 	}
-	if t.id != undoCloseToastID && (t.Severity == toastError || t.Severity == toastWarning) {
+	if t.id != undoCloseToastID && t.Expires.IsZero() && (t.Severity == toastError || t.Severity == toastWarning) {
 		t.Persistent = true
 	}
 	if t.Persistent && !t.Pending {
@@ -222,6 +229,17 @@ func (m *Model) sweepToasts() tea.Cmd {
 // message via replaceToastByID.
 const undoCloseToastID = -1
 
+// The fixed channels below belong to one long-running operation each, so its
+// in-flight notice is replaced by its own outcome rather than lingering beside
+// it. They sit at the bottom of the int range, clear of the recovery channel,
+// the negative per-dispatch channels actionFeedbackToastID hands out (which
+// count down from -2), and the positive launch-batch ids.
+const (
+	previewNoticeToastID = math.MinInt + iota
+	planScanToastID
+	resortToastID
+)
+
 // undoWindow is how long a close remains undoable. It is the shared vocabulary's
 // window rather than a second declaration of it: the deadline the recovery stack
 // enforces and the lifetime of the toast advertising it have to be the same
@@ -303,13 +321,19 @@ func (m *Model) reportActionOutcome(result sessionactions.Result) tea.Cmd {
 		m.clearToastByID(id)
 		return nil
 	}
-	return m.replaceToastByID(id, Toast{
+	severity := outcomeSeverity(result.Outcome)
+	outcome := Toast{
 		Target:      result.Target,
-		Severity:    outcomeSeverity(result.Outcome),
+		Severity:    severity,
 		Unconfirmed: result.Outcome == sessionactions.OutcomeUnconfirmed,
 		Text:        text,
-		Expires:     modelNow(*m).Add(defaultToastTTL),
-	})
+	}
+	// A failed or unconfirmed outcome keeps no deadline, so prepareToast retains
+	// it; only a success fades on its own.
+	if severity != toastError && severity != toastWarning {
+		outcome.Expires = modelNow(*m).Add(defaultToastTTL)
+	}
+	return m.replaceToastByID(id, outcome)
 }
 
 // outcomeSeverity is how loudly each reportable outcome is drawn. It covers

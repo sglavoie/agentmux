@@ -5,8 +5,6 @@
 package tui
 
 import (
-	"time"
-
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
@@ -287,10 +285,11 @@ func applicationCommandDeclarations() []commands.Command[Model] {
 				if m.client == nil {
 					return m, cmds[0]
 				}
-				if cmd := m.pushToast(Toast{
+				if cmd := m.replaceToastByID(resortToastID, Toast{
 					Severity: toastInfo,
 					Text:     "Resorting tabs…",
-					Expires:  time.Now().Add(progressToastTTL),
+					Pending:  true,
+					Expires:  modelNow(m).Add(progressToastTTL),
 				}); cmd != nil {
 					cmds = append(cmds, cmd)
 				}

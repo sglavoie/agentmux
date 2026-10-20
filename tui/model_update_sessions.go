@@ -249,7 +249,9 @@ func (m Model) handleResortDone(msg commands.ResortDoneMsg) (tea.Model, tea.Cmd)
 	default:
 		t = Toast{Severity: toastSuccess, Text: "Tabs resorted"}
 	}
-	if c := m.pushToast(t); c != nil {
+	// The outcome replaces the "Resorting tabs…" notice on the same channel, so
+	// the pending one cannot outlive it and reappear as "Still waiting".
+	if c := m.replaceToastByID(resortToastID, t); c != nil {
 		cmds = append(cmds, c)
 	}
 	if c := m.requestTopologyRefresh(); c != nil {
@@ -505,10 +507,34 @@ func (m *Model) publishSessionResults(results []transcript.Result) {
 // error and follows up with a plan search dispatch.
 func (m Model) handlePlansRefreshDone(msg plansRefreshDoneMsg) (tea.Model, tea.Cmd) {
 	m.planRefreshErr = msg.err
+	if msg.seq == m.planScanSeq {
+		m.planScanSeq = 0
+	}
 	if msg.seq < m.planSearchSeq {
+		// A newer query superseded this refresh's search; the scan itself is
+		// over, so its notice is too.
+		if m.planScanSeq == 0 {
+			return m, m.settlePlanScanToast(msg.err)
+		}
 		return m, nil
 	}
+	if m.plansIndex == nil {
+		// No search follows a refresh with no index, so the scan ends here.
+		m.planLoading = false
+		return m, m.settlePlanScanToast(msg.err)
+	}
 	return m, m.runPlanSearchCmd(msg.seq, m.plansIndex, m.currentPlanQuery())
+}
+
+// settlePlanScanToast ends the "Scanning plans…" notice with what the scan
+// came to: it clears on success, since the list itself is the answer, and is
+// replaced by a retained failure when the refresh could not read the plans.
+func (m *Model) settlePlanScanToast(err error) tea.Cmd {
+	if err == nil {
+		m.clearToastByID(planScanToastID)
+		return nil
+	}
+	return m.replaceToastByID(planScanToastID, Toast{Severity: toastError, Text: "Plan scan failed: " + err.Error()})
 }
 
 // handlePlanCacheLoadDone publishes usable warm rows from the recovering
@@ -559,7 +585,11 @@ func (m Model) handlePlanSearchDone(msg planSearchDoneMsg) (tea.Model, tea.Cmd) 
 	if msg.err == nil {
 		m.publishPlanResults(msg.results)
 	}
-	return m, nil
+	if m.planScanSeq != 0 {
+		// A query's search landed while the source refresh still runs.
+		return m, nil
+	}
+	return m, m.settlePlanScanToast(m.planRefreshErr)
 }
 
 // publishPlanResults retains the selected plan across refresh reordering and

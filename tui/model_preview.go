@@ -557,16 +557,16 @@ func footerBudgetLines(m Model) int {
 	return listFooterBudgetLineCount(m)
 }
 
-const (
-	previewNoticeToastID = -2
-	previewNoticeTTL     = 2 * time.Second
-)
+const previewNoticeTTL = 2 * time.Second
 
+// pushPreviewNotice explains why the preview could not open. It is a warning
+// with its own short deadline, not an error: nothing failed, the terminal is
+// just too small, and the notice must clear on its own.
 func (m *Model) pushPreviewNotice(text string) tea.Cmd {
 	return m.replaceToastByID(previewNoticeToastID, Toast{
-		Severity: toastError,
+		Severity: toastWarning,
 		Text:     text,
-		Expires:  time.Now().Add(previewNoticeTTL),
+		Expires:  modelNow(*m).Add(previewNoticeTTL),
 	})
 }
 

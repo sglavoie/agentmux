@@ -131,13 +131,18 @@ func (m *Model) finishSendNotice(op sendOperation, err error, retained bool) tea
 	if err != nil {
 		notice.Severity, notice.Text = toastWarning, "Send to "+op.Title+": "+sendRefusalText(err)
 	}
-	for i, t := range m.toasts {
+	// Filter into a fresh array: the model is copied by value, and compacting
+	// the shared backing array would rewrite the toasts a stale copy holds
+	// (see sweepToasts).
+	kept := make([]Toast, 0, len(m.toasts))
+	for _, t := range m.toasts {
 		if t.NoticeID == op.NoticeID {
 			notice.Occurred = t.Occurred
-			m.toasts = append(m.toasts[:i], m.toasts[i+1:]...)
-			break
+			continue
 		}
+		kept = append(kept, t)
 	}
+	m.toasts = kept
 	return m.pushToast(notice)
 }
 
