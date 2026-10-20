@@ -226,13 +226,13 @@ only to hand the app to someone else.
 | Path | Holds |
 | --- | --- |
 | `project.yml` | The XcodeGen spec for the `AgentMux` app and the hosted `AgentMuxTests` target. |
-| `AgentMux/App/` | `main.swift`, `AppDelegate` (wiring), and the single-instance check. |
+| `AgentMux/App/` | `main.swift`, `AppDelegate` (wiring, with one `AppDelegate+….swift` extension per surface: workspace, function keys, actions, feed, amx, notifications, Settings, menu validation), the state it owns as types of their own (`DaemonConnection`: the feed, health polled only while it is not live, daemon start and restart; `AMXLookup`: resolving amx and its bounded retries; `SnoozeController`), and the single-instance check. |
 | `AgentMux/Daemon/` | The socket path, line-framed socket, request client, subscription client, and the wire and companion models. |
-| `AgentMux/CLI/` | Resolving, describing, and running `amx`: binary resolver, version, `--help` capabilities, action gating, login-shell environment, detached spawn. |
+| `AgentMux/CLI/` | Resolving, describing, and running `amx`: binary resolver, version, `--help` capabilities, action gating, login-shell environment, detached spawn, the shared wording for an amx not yet found or not found (`AMXWording`), and `QueueWorkRunner`, which runs blocking work on a queue and hands the result back on the main actor. |
 | `AgentMux/Kitty/` | Choosing a Kitty socket and bringing the owning Kitty forward. |
 | `AgentMux/Ghostty/` | The libghostty embedding: the app object and its runtime callbacks, layered configuration, per-surface configuration, the surface view, and its input handling. |
 | `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, the workspace sidebar and its selection, the Go to… list, project and recent catalogs, snooze, and the ASL response rules. |
-| `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter. |
+| `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter, and the `config.toml` watcher. |
 | `AgentMux/UI/` | The status item, menu builder, daemon line, workspace window and its main menu, Preferences window, and ASL answer panel. |
 | `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
 | `AgentMuxTests/` | XCTest suites, with a fake stream server standing in for the daemon. |
@@ -865,7 +865,7 @@ After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
 | --- | --- |
 | Open Dashboard | What the ⌃⌥⌘A shortcut does. |
 | Next Waiting Session | What the ⌃⌥⌘N shortcut does, and continues the same cycle. |
-| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch and refreshed in the background every ten seconds, so config edits reach an open workspace automatically. Opening the menu also refreshes a list older than ten seconds. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip, and its ⌥ `… in Folder…` alternate still launches it in a folder you choose. Choosing one runs `amx project launch --title T --profile P --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
+| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch and again whenever `config.toml` changes (the file `AMX_CONFIG` names for the amx in use, else `~/.config/agent-mux/config.toml`, watched with its directory so an editor's atomic save counts), so config edits reach an open workspace automatically. Opening the menu also refreshes a list older than ten seconds. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip, and its ⌥ `… in Folder…` alternate still launches it in a folder you choose. Choosing one runs `amx project launch --title T --profile P --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
 | Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
 | ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --runtime-session ID --json` for a session on tmux, or `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket for a Kitty one. |
 | Notifications ▸ | Snooze for 1 hour, until the next 08:00 (today's before 08:00, titled in the locale's time format and "Tomorrow" only when it is), or until resumed, and Resume Now, all through the daemon's `notification_snooze` request. Quiet hours are shown read-only with the config path they come from, because the app never rewrites `config.toml`. |
@@ -926,8 +926,9 @@ claims the role while it has never been asked, because the daemon sends frames
 only to a claimant. It asks for permission when the first frame arrives, not
 at launch. Turning the preference off, a denied prompt, or permission revoked
 in System Settings drops the claim, and the app subscribes again without it.
-The app reads the permission again every 10 seconds, whenever the menu
-opens, and when Settings opens, because macOS gives no notice of a change.
+The app reads the permission again whenever it comes to the front, whenever
+the menu opens, and when Settings opens, because macOS gives no notice of a
+change.
 While it is denied, Settings says so under Use app notifications, with an
 Open System Settings button for System Settings › Notifications.
 

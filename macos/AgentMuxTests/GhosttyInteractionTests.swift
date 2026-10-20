@@ -98,6 +98,13 @@ final class GhosttyInteractionTests: XCTestCase {
         let search = try XCTUnwrap(edit.items.first { $0.action == #selector(AppDelegate.searchConversation(_:)) })
         XCTAssertEqual(search.title, "Search Conversation…")
         XCTAssertFalse(delegate.validateMenuItem(search), "conversation search requires the focused workspace's session")
+        // The function keys about the shown session are greyed out with none
+        // shown, rather than beeping when pressed.
+        for action in [#selector(AppDelegate.pickSessionIcon(_:)), #selector(AppDelegate.pickSessionColor(_:)),
+                       #selector(AppDelegate.clearSessionState(_:)), #selector(AppDelegate.markSessionActive(_:)),
+                       #selector(AppDelegate.toggleSessionMute(_:))] {
+            XCTAssertFalse(delegate.validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: "")), "\(action)")
+        }
     }
 
     override func tearDownWithError() throws {

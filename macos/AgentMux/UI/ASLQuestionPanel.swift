@@ -24,31 +24,6 @@ extension DaemonClient: ASLService {
     func act(_ params: ASLRequestParams) -> Result<ASLOperation, ASLRequestError> { aslAction(params) }
 }
 
-/// Runs blocking work somewhere and hands its result back on the main thread.
-protocol ASLWorkRunner {
-    func run<T>(_ work: @escaping () -> T, then: @escaping (T) -> Void)
-}
-
-/// Work on a queue, results on main: serial unless the caller gives one that
-/// is not.
-struct QueueWorkRunner: ASLWorkRunner {
-    var queue = DispatchQueue(label: "io.github.sglavoie.agentmux.asl", qos: .userInitiated)
-
-    /// The answer panel's: a snapshot for another run never waits behind a
-    /// slow action, since every reply is matched by sequence and target.
-    static func concurrent() -> QueueWorkRunner {
-        QueueWorkRunner(queue: DispatchQueue(label: "io.github.sglavoie.agentmux.asl.panel", qos: .userInitiated,
-                                             attributes: .concurrent))
-    }
-
-    func run<T>(_ work: @escaping () -> T, then: @escaping (T) -> Void) {
-        queue.async {
-            let value = work()
-            DispatchQueue.main.async { then(value) }
-        }
-    }
-}
-
 /// Drives one panel's requests. Main-thread confined; replies for a form that
 /// has since closed, moved on, or been reopened are dropped by sequence.
 @MainActor
