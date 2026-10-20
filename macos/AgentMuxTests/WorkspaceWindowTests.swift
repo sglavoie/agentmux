@@ -1348,17 +1348,23 @@ final class WorkspaceWindowTests: XCTestCase {
         let holder = try XCTUnwrap(session.item(withTitle: WorkspaceWindowController.showInKittyTitle))
         let places = try XCTUnwrap(holder.submenu?.items)
         XCTAssertEqual(places.count, 10, "only the places are in the submenu; the steps are in Session")
-        XCTAssertNotNil(session.item(withTitle: WorkspaceMenu.nextSessionTitle))
+        let raising = try [WorkspaceMenu.nextSessionTitle, WorkspaceMenu.previousSessionTitle].map {
+            try XCTUnwrap(session.item(withTitle: $0))
+        }
+        XCTAssertTrue(raising.allSatisfy(\.allowsKeyEquivalentWhenHidden), "⌘} and ⌘{ keep their keys hidden")
 
         WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
         XCTAssertFalse(holder.isHidden)
         XCTAssertEqual(places.map(\.isHidden), [true, true, false, true, true, true, true, true, true, true])
         XCTAssertTrue(places.allSatisfy(\.allowsKeyEquivalentWhenHidden), "a hidden place keeps its key")
+        XCTAssertEqual(raising.map(\.isHidden), [false, false], "a Kitty session is listed")
 
         app.store.apply(snapshot: F.snapshot(Array(sessions.prefix(2))))
         XCTAssertFalse(workspace.digitsReachKitty)
+        XCTAssertFalse(workspace.listsKittySession)
         WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
         XCTAssertTrue(holder.isHidden, "nothing to show in Kitty")
+        XCTAssertEqual(raising.map(\.isHidden), [true, true], "with no Kitty session they would repeat F9 and F7")
         WorkspaceMenu.updateKittyItems(in: session, workspace: nil)
         XCTAssertTrue(holder.isHidden)
     }

@@ -214,9 +214,11 @@ terminals of their own beside the agents, and none of them needs Kitty.
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[
   (**Session › Next Session or Terminal** and **Previous Session or
   Terminal**, also ⌘⇧→ and ⌘⇧←) stop at every session and every terminal
-  under one, in sidebar order; ⌘⇧] and ⌘⇧[ (**Next Session (Kitty Sessions
-  in Kitty)** and its Previous twin) go from session to session, passing
-  over the terminals, as F9 and F7 do. The digits
+  under one, in sidebar order; F9 and F7 (**Next Session Only** and
+  **Previous Session Only**) go from session to session, passing over the
+  terminals, and ⌘⇧] and ⌘⇧[ do the same but bring a Kitty session forward
+  in Kitty (**Next Session, Raising Kitty**, shown while a Kitty session is
+  listed). The digits
   (⌘1 to ⌘0) count sessions only. It applies to sessions whose terminal
   is in the workspace, not to Kitty sessions; with no such session shown
   the item is greyed out. If the session ends first, the
@@ -343,7 +345,7 @@ pager, or a picker is about. F12 stays the key that detaches.
 | F4 | The next session needing attention |
 | F5 / F6 | Picks the session's harness icon, or its color; the pane goes back when the pick is made |
 | F7 / F9 | The previous or next session, passing over terminals and staying in the app |
-| F8 | Clears the session's state icon |
+| F8 | Clears the session's markers and state icon (**Clear Session Markers**) |
 | F10 | Mutes or unmutes the session's notifications |
 | F11 | Marks the session active (⚡) until its next real event |
 

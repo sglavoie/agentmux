@@ -604,6 +604,12 @@ extension WorkspaceWindowController {
         WorkspaceMenu.sessionKeys.indices.contains { sessionIsInKitty(at: $0) }
     }
 
+    /// Whether any listed session lives in Kitty: without one, ⌘} and ⌘{
+    /// would only repeat F9 and F7, so the menu hides them.
+    var listsKittySession: Bool {
+        state.rows.contains { if case .kitty = $0.target { return true } else { return false } }
+    }
+
     /// The name of the session at `index` in sidebar order, which ⌘ and
     /// that digit go to; nil when fewer sessions are listed.
     func sessionName(at index: Int) -> String? {

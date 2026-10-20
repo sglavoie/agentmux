@@ -337,7 +337,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.select(.embedded(F.runtimeID(2)))
         XCTAssertEqual(workspace.inspector.model.inspection?.title, "api — personal")
         var buttons = workspace.inspector.actionButtons
-        XCTAssertEqual(buttons.map(\.title), ["Name…", "Color…", "Icon…", "Mute", "Clear State", "Mark Active", "Changes…"])
+        XCTAssertEqual(buttons.map(\.title), ["Name…", "Color…", "Icon…", "Mute", "Clear Markers", "Mark Active", "Changes…"])
         XCTAssertTrue(buttons.allSatisfy(\.isEnabled))
         buttons[3].performClick(nil)
         buttons[0].performClick(nil)

@@ -92,7 +92,7 @@ enum WorkspaceInspectorAction: CaseIterable, Equatable {
         case .color: return "Color…"
         case .icon: return "Icon…"
         case .mute: return muted ? "Unmute" : "Mute"
-        case .clearState: return "Clear State"
+        case .clearState: return "Clear Markers"
         case .markActive: return "Mark Active"
         case .reviewChanges: return "Changes…"
         }
