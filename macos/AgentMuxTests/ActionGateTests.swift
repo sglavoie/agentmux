@@ -25,7 +25,7 @@ final class ActionGateTests: XCTestCase {
     }
 
     func testUnresolvedAmxGreysOutEverything() {
-        XCTAssertEqual(ActionGate().unavailableReason(.sessions), "amx is still being resolved")
+        XCTAssertEqual(ActionGate().unavailableReason(.sessions), AMXWording.resolving)
         let missing = ActionGate(capabilities: full, problem: "amx was not found")
         XCTAssertEqual(missing.unavailableReason(.project), "amx was not found")
         XCTAssertEqual(missing.unavailableReason(.sessions), "amx was not found")

@@ -176,8 +176,8 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     /// the list already says so.
     func choose() {
         guard let selected else { return }
-        guard selected.unavailableReason == nil else {
-            announce(selected.unavailableReason!, priority: .high)
+        if let reason = selected.unavailableReason {
+            announce(reason, priority: .high)
             return
         }
         onChoose?(selected)
@@ -204,8 +204,8 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     /// Goes to the place on the table's row `index`, as a click on it does.
     func click(row index: Int) {
         guard shown.indices.contains(index) else { return }
-        guard shown[index].unavailableReason == nil else {
-            announce(shown[index].unavailableReason!, priority: .high)
+        if let reason = shown[index].unavailableReason {
+            announce(reason, priority: .high)
             return
         }
         onChoose?(shown[index])

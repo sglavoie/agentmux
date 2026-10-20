@@ -36,6 +36,27 @@ final class WorkspaceWindowTests: XCTestCase {
         try XCTUnwrap(workspace.state.rows.first { $0.project == project && $0.label == label })
     }
 
+    /// A refusal is said at the top of the pane for a moment, where the
+    /// operator is looking; a failure is an alert that offers the fix.
+    func testNoticesShowInThePaneAndErrorsOfferAFix() {
+        XCTAssertNil(workspace.shownNotice)
+        workspace.showNotice(AppDelegate.noSessionShown)
+        XCTAssertEqual(workspace.shownNotice, AppDelegate.noSessionShown)
+        XCTAssertTrue(workspace.noticeBanner.isDescendant(of: workspace.pane))
+        XCTAssertNil(workspace.noticeBanner.hitTest(.zero), "clicks reach the terminal beneath")
+        workspace.showNotice("Kitty is not running.")
+        XCTAssertEqual(workspace.shownNotice, "Kitty is not running.", "a newer notice replaces it")
+        workspace.endNotice()
+        XCTAssertNil(workspace.shownNotice)
+
+        var errors: [WorkspaceError] = []
+        workspace.reportError = { errors.append($0) }
+        workspace.showError(title: "api could not be named", message: AMXWording.notFound)
+        workspace.showError(title: "api could not be ended", message: "exit status 1", details: "error: boom")
+        XCTAssertEqual(errors.map(\.recovery), [.openSettings, nil])
+        XCTAssertEqual(errors.last?.details, "error: boom")
+    }
+
     func testOptionZoomScalesBothSidebarsAndResetsWithoutChangingFocusOrPaneWidth() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.setInspectorCollapsed(false, animated: false)
@@ -1348,17 +1369,23 @@ final class WorkspaceWindowTests: XCTestCase {
         let holder = try XCTUnwrap(session.item(withTitle: WorkspaceWindowController.showInKittyTitle))
         let places = try XCTUnwrap(holder.submenu?.items)
         XCTAssertEqual(places.count, 10, "only the places are in the submenu; the steps are in Session")
-        XCTAssertNotNil(session.item(withTitle: WorkspaceMenu.nextSessionTitle))
+        let raising = try [WorkspaceMenu.nextSessionTitle, WorkspaceMenu.previousSessionTitle].map {
+            try XCTUnwrap(session.item(withTitle: $0))
+        }
+        XCTAssertTrue(raising.allSatisfy(\.allowsKeyEquivalentWhenHidden), "⌘} and ⌘{ keep their keys hidden")
 
         WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
         XCTAssertFalse(holder.isHidden)
         XCTAssertEqual(places.map(\.isHidden), [true, true, false, true, true, true, true, true, true, true])
         XCTAssertTrue(places.allSatisfy(\.allowsKeyEquivalentWhenHidden), "a hidden place keeps its key")
+        XCTAssertEqual(raising.map(\.isHidden), [false, false], "a Kitty session is listed")
 
         app.store.apply(snapshot: F.snapshot(Array(sessions.prefix(2))))
         XCTAssertFalse(workspace.digitsReachKitty)
+        XCTAssertFalse(workspace.listsKittySession)
         WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
         XCTAssertTrue(holder.isHidden, "nothing to show in Kitty")
+        XCTAssertEqual(raising.map(\.isHidden), [true, true], "with no Kitty session they would repeat F9 and F7")
         WorkspaceMenu.updateKittyItems(in: session, workspace: nil)
         XCTAssertTrue(holder.isHidden)
     }

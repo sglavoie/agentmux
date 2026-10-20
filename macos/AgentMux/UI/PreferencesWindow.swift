@@ -62,6 +62,13 @@ struct PreferencesSnapshot: Equatable {
 final class PreferencesModel: ObservableObject {
     let daemonSettings = DaemonSettingsModel()
     @Published var launchSettingsRequest = 0
+    /// Counts requests to show the amx binary setting (Advanced › Command
+    /// Line Tool), such as an alert's Open Settings when amx was not found.
+    @Published var amxBinarySettingsRequest = 0
+    /// Whether any Kitty is in use: a Kitty session is listed, or the daemon
+    /// knows a Kitty socket. The app sets it; Settings shows its Kitty-only
+    /// fields only then, or while a preference already names Kitty.
+    @Published var kittyInUse = false
     let defaults: UserDefaults
 
     @Published var preferences: AppPreferences {
@@ -241,6 +248,26 @@ final class PreferencesModel: ObservableObject {
         return FileManager.default.fileExists(atPath: path) ? nil : "No socket at \(path) right now."
     }
 
+    /// Whether Settings shows its Kitty-only fields (the socket override and
+    /// what the dashboard shortcut does in Kitty): while Kitty is in use, or
+    /// while a preference still names it, so a value set earlier can be seen
+    /// and undone.
+    nonisolated static func showsKittySettings(kittyInUse: Bool, preferences: AppPreferences) -> Bool {
+        kittyInUse
+            || !preferences.kittySocketOverride.trimmingCharacters(in: .whitespaces).isEmpty
+            || preferences.launchBackend == .kitty
+            || preferences.dashboardPlace == .kitty
+    }
+
+    var showsKittySettings: Bool {
+        Self.showsKittySettings(kittyInUse: kittyInUse, preferences: preferences)
+    }
+
+    /// The daemon's status as Settings' Daemon section shows it.
+    var daemonStatusLine: String {
+        DaemonStatusLine.text(for: snapshot.daemonStatus)
+    }
+
     /// The snooze as Preferences shows it: the daemon's when the feed is live,
     /// else what the app last asked for.
     var snoozeDescription: String {
@@ -331,6 +358,10 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     private(set) lazy var window: NSWindow = makeWindow()
     /// Kept clear between the window and the screen's visible edges.
     static let screenMargin: CGFloat = 60
+    /// The content's size: the width every tab is laid out at, and the
+    /// height the window opens at where the screen has room for it.
+    static let contentWidth: CGFloat = 560
+    static let contentHeight: CGFloat = 620
 
     init(model: PreferencesModel) {
         self.model = model
@@ -354,17 +385,19 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         let view = PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder, workspaceRecorder: workspaceRecorder)
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = "Settings"
-        window.styleMask = [.titled, .closable, .resizable]
+        // A fixed size, as a Mac Settings window is: every tab scrolls
+        // within it rather than the window growing or shrinking around it.
+        window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.delegate = self
         dashboardRecorder.window = window
         attentionRecorder.window = window
         workspaceRecorder.window = window
         // Keep a consistent size across tabs; each pane scrolls on smaller screens.
-        window.setContentSize(NSSize(width: 560, height: 620))
+        window.setContentSize(NSSize(width: Self.contentWidth, height: Self.contentHeight))
         if let visible = NSScreen.main?.visibleFrame {
             let chrome = window.frame.height - window.contentLayoutRect.height
-            let height = min(620 + chrome, visible.height - Self.screenMargin)
+            let height = min(Self.contentHeight + chrome, visible.height - Self.screenMargin)
             var frame = window.frame
             frame.size.height = max(height, window.minSize.height)
             window.setFrame(frame, display: false)
@@ -407,7 +440,6 @@ struct PreferencesView: View {
     @ObservedObject var attentionRecorder: HotKeyRecorder
     @ObservedObject var workspaceRecorder: HotKeyRecorder
     @FocusState private var launchFieldFocused: Bool
-    @State private var workspaceShortcut = WorkspaceShortcut.splitShell
     @FocusState private var binaryFieldFocused: Bool
     @FocusState private var environmentFieldFocused: String?
 
@@ -445,8 +477,8 @@ struct PreferencesView: View {
             }
             .frame(minHeight: 0, maxHeight: .infinity)
         }
-        .frame(width: 560)
-        .frame(minHeight: 320)
+        .frame(width: PreferencesWindowController.contentWidth)
+        .frame(minHeight: 320, maxHeight: .infinity)
         .onChange(of: selectedTab) { _, _ in
             model.commitBinaryPath()
             model.commitEnvironment()
@@ -456,6 +488,9 @@ struct PreferencesView: View {
         }
         .onChange(of: model.launchSettingsRequest, initial: true) { _, request in
             if request > 0 { selectedTab = .workspace }
+        }
+        .onChange(of: model.amxBinarySettingsRequest, initial: true) { _, request in
+            if request > 0 { selectedTab = .advanced }
         }
     }
 
@@ -527,7 +562,9 @@ struct PreferencesView: View {
                 Picker("Show the dashboard in", selection: $model.preferences.dashboardPlace) {
                     ForEach(DashboardPlacePreference.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
-                note("In Kitty, the shortcut brings Kitty forward on the Agent Mux dashboard tab, opening one when none is running.")
+                if model.showsKittySettings {
+                    note("In Kitty, the shortcut brings Kitty forward on the Agent Mux dashboard tab, opening one when none is running.")
+                }
                 LabeledContent(HotKeyPreference.nextAttention.label) {
                     HotKeyRecorderView(combo: $model.preferences.hotKeyNextAttention, model: model,
                                        recorder: attentionRecorder, other: dashboardRecorder,
@@ -539,25 +576,34 @@ struct PreferencesView: View {
             }
 
             Section("Workspace shortcuts") {
-                Picker("Command", selection: $workspaceShortcut) {
-                    ForEach(WorkspaceShortcut.allCases) { shortcut in Text(shortcut.title).tag(shortcut) }
-                }.onChange(of: workspaceShortcut) { _, _ in workspaceRecorder.stop() }
-                LabeledContent("Shortcut") {
-                    HotKeyRecorderView(
-                        combo: Binding(get: { workspaceShortcut.combo(in: model.preferences) },
-                                       set: { model.preferences.workspaceShortcuts[workspaceShortcut.rawValue] = $0?.string ?? "" }),
-                        model: model, recorder: workspaceRecorder, other: dashboardRecorder,
-                        defaultCombo: workspaceShortcut.defaultCombo, additionalOthers: [attentionRecorder],
-                        scope: .application,
-                        validate: { workspaceShortcut.problem(for: $0, preferences: model.preferences, menu: NSApp.mainMenu) })
+                ForEach(WorkspaceShortcut.allCases) { shortcut in
+                    workspaceShortcutRow(shortcut)
                 }
-                if let problem = workspaceShortcut.problem(for: workspaceShortcut.combo(in: model.preferences), preferences: model.preferences, menu: NSApp.mainMenu) {
-                    Text(problem + " This binding is inactive until the conflict is resolved.").font(.caption).foregroundStyle(WorkspaceReviewColors.warning)
-                }
-                note("Choose a command, click Record Shortcut, and press its keys. Changes apply immediately while Agent Mux is active. Esc cancels recording; Clear removes a binding.")
+                note("Click a command's shortcut and press its keys. Changes apply immediately while Agent Mux is active. "
+                    + "Esc cancels recording; Clear removes a binding.")
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// One command's row in Workspace shortcuts: its title, its recorder,
+    /// and why its binding is inactive when it is. Every row shares
+    /// `workspaceRecorder`, which records for one row at a time.
+    @ViewBuilder
+    private func workspaceShortcutRow(_ shortcut: WorkspaceShortcut) -> some View {
+        LabeledContent(shortcut.title) {
+            HotKeyRecorderView(
+                combo: Binding(get: { shortcut.combo(in: model.preferences) },
+                               set: { model.preferences.workspaceShortcuts[shortcut.rawValue] = $0?.string ?? "" }),
+                model: model, recorder: workspaceRecorder, other: dashboardRecorder,
+                defaultCombo: shortcut.defaultCombo, additionalOthers: [attentionRecorder],
+                scope: .application,
+                validate: { shortcut.problem(for: $0, preferences: model.preferences, menu: NSApp.mainMenu) },
+                owner: shortcut)
+        }
+        if let problem = shortcut.problem(for: shortcut.combo(in: model.preferences), preferences: model.preferences, menu: NSApp.mainMenu) {
+            note(problem + " This binding is inactive until the conflict is resolved.", warning: true)
+        }
     }
 
     private var appearanceSettings: some View {
@@ -642,7 +688,6 @@ struct PreferencesView: View {
                     ForEach(model.snapshot.backend.notes, id: \.text) { item in
                         note(item.text, warning: item.warning)
                     }
-                    DaemonSettingsView(model: model.daemonSettings)
                 }
             }
             .formStyle(.grouped)
@@ -658,65 +703,87 @@ struct PreferencesView: View {
     }
 
     private var advancedSettings: some View {
-        Form {
-            Section("Command Line Tool") {
-                LabeledContent("amx binary") {
-                    HStack {
-                        TextField("", text: $model.binaryPathDraft, prompt: Text("Automatic"))
-                            .labelsHidden()
-                            .frame(minWidth: 220)
-                            .focused($binaryFieldFocused)
-                            .onSubmit { model.commitBinaryPath() }
-                            .onChange(of: binaryFieldFocused) { _, focused in
-                                if !focused { model.commitBinaryPath() }
-                            }
-                        Button("Choose…", action: chooseBinary)
+        ScrollViewReader { proxy in
+            Form {
+                Section("Command Line Tool") {
+                    LabeledContent("amx binary") {
+                        HStack {
+                            TextField("", text: $model.binaryPathDraft, prompt: Text("Automatic"))
+                                .labelsHidden()
+                                .frame(minWidth: 220)
+                                .focused($binaryFieldFocused)
+                                .onSubmit { model.commitBinaryPath() }
+                                .onChange(of: binaryFieldFocused) { _, focused in
+                                    if !focused { model.commitBinaryPath() }
+                                }
+                            Button("Choose…", action: chooseBinary)
+                        }
+                    }.id(Self.amxBinaryAnchor)
+                    if let problem = model.binaryOverrideProblem {
+                        note(problem, warning: true)
+                    }
+                    if let running = model.runningBinaryNote {
+                        note(running)
+                    }
+                    note("Leave empty to use the bundled amx, ~/.local/bin/amx, then PATH.")
+                    ForEach(model.snapshot.lines.filter { $0.0 == "Missing commands" }, id: \.0) { row in
+                        LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
+                    }
+                    if model.showsKittySettings {
+                        LabeledContent("Kitty socket") {
+                            TextField("", text: $model.preferences.kittySocketOverride, prompt: Text("From the daemon"))
+                                .labelsHidden()
+                                .font(.system(.body, design: .monospaced))
+                                .frame(minWidth: 220)
+                        }
+                        if let problem = model.kittySocketProblem {
+                            note(problem, warning: true)
+                        }
+                        note("Tried first when focusing a session in Kitty or opening the dashboard there.")
                     }
                 }
-                if let problem = model.binaryOverrideProblem {
-                    note(problem, warning: true)
-                }
-                if let running = model.runningBinaryNote {
-                    note(running)
-                }
-                note("Leave empty to use the bundled amx, ~/.local/bin/amx, then PATH.")
-                ForEach(model.snapshot.lines.filter { $0.0 == "Daemon" || $0.0 == "Missing commands" }, id: \.0) { row in
-                    LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
-                }
-                LabeledContent("Kitty socket") {
-                    TextField("", text: $model.preferences.kittySocketOverride, prompt: Text("From the daemon"))
-                        .labelsHidden()
-                        .font(.system(.body, design: .monospaced))
-                        .frame(minWidth: 220)
-                }
-                if let problem = model.kittySocketProblem {
-                    note(problem, warning: true)
-                }
-                note("Tried first when focusing a session or opening the dashboard.")
-            }
 
-            Section("Environment") {
-                ForEach(EnvironmentOverrides.names(detected: model.snapshot.detectedEnvironment), id: \.self) { name in
-                    LabeledContent(name) {
-                        let detected = model.snapshot.detectedEnvironment?.value(of: name)
-                        TextField("", text: environmentBinding(name), prompt: Text(detected ?? "not set"))
-                            .labelsHidden()
-                            .font(.system(.body, design: .monospaced))
-                            .frame(minWidth: 260)
-                            .focused($environmentFieldFocused, equals: name)
-                            .onSubmit { model.commitEnvironment() }
-                            .help(detected.map { "From your login shell: \($0)" } ?? "Your login shell does not set \(name).")
+                Section("Daemon") {
+                    LabeledContent("Status") {
+                        Text(model.daemonStatusLine).foregroundStyle(.secondary).textSelection(.enabled)
                     }
+                    DaemonSettingsView(model: model.daemonSettings)
                 }
-                note("Gray values are what your login shell sets. Type one to give amx another; "
-                    + "clear it to go back. The next amx run uses it.")
+
+                Section("Environment") {
+                    ForEach(EnvironmentOverrides.names(detected: model.snapshot.detectedEnvironment), id: \.self) { name in
+                        LabeledContent(name) {
+                            let detected = model.snapshot.detectedEnvironment?.value(of: name)
+                            TextField("", text: environmentBinding(name), prompt: Text(detected ?? "not set"))
+                                .labelsHidden()
+                                .font(.system(.body, design: .monospaced))
+                                .frame(minWidth: 260)
+                                .focused($environmentFieldFocused, equals: name)
+                                .onSubmit { model.commitEnvironment() }
+                                .help(detected.map { "From your login shell: \($0)" } ?? "Your login shell does not set \(name).")
+                        }
+                    }
+                    note("Gray values are what your login shell sets. Type one to give amx another; "
+                        + "clear it to go back. The next amx run uses it.")
+                }
+                .onChange(of: environmentFieldFocused) { left, _ in
+                    if left != nil { model.commitEnvironment() }
+                }
             }
-            .onChange(of: environmentFieldFocused) { left, _ in
-                if left != nil { model.commitEnvironment() }
+            .formStyle(.grouped)
+            .task(id: selectedTab == .advanced ? model.amxBinarySettingsRequest : nil) {
+                guard selectedTab == .advanced, model.amxBinarySettingsRequest > 0 else { return }
+                // Let the pane lay out before revealing the binary field.
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                proxy.scrollTo(Self.amxBinaryAnchor, anchor: .center)
+                binaryFieldFocused = true
             }
         }
-        .formStyle(.grouped)
     }
+
+    /// Where `amxBinarySettingsRequest` scrolls to in Advanced.
+    static let amxBinaryAnchor = "amx-binary"
 
     @ViewBuilder
     private func problem(for hotKey: HotKeyPreference) -> some View {
@@ -754,18 +821,23 @@ struct PreferencesView: View {
     }
 }
 
-private struct DaemonSettingsView: View {
+struct DaemonSettingsView: View {
+    static let checkTitle = "Check Settings"
+    static let checkingTitle = "Checking…"
+    static let restartTitle = "Restart Daemon to Apply"
     @ObservedObject var model: DaemonSettingsModel
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Applied daemon settings").font(.headline)
-            Text(model.status?.message ?? "Check whether saved settings are applied.")
-                .textSelection(.enabled)
+            LabeledContent("Applied settings") {
+                Text(model.status?.message ?? "Check whether saved settings are applied.")
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
             if let error = model.error { Text(error).foregroundStyle(WorkspaceReviewColors.failure).textSelection(.enabled) }
             HStack {
-                Button(model.busy ? "Checking…" : "Check settings") { model.refresh() }.disabled(model.busy)
+                Button(model.busy ? Self.checkingTitle : Self.checkTitle) { model.refresh() }.disabled(model.busy)
                 if model.status?.changed.isEmpty == false {
-                    Button("Restart daemon to apply") { model.apply() }.disabled(!model.canRestart)
+                    Button(Self.restartTitle) { model.apply() }.disabled(!model.canRestart)
                 }
             }
             Text("Restarting the daemon leaves agent processes running. The app checks the applied settings again afterward.")
@@ -797,6 +869,12 @@ struct HotKeyRecorderView: View {
     var additionalOthers: [HotKeyRecorder] = []
     var scope: HotKeyCombo.Scope = .global
     var validate: (HotKeyCombo) -> String? = { _ in nil }
+    /// Which of the rows sharing `recorder` this one is: only the row the
+    /// recorder records for says so. Nil for a recorder of its own.
+    var owner: AnyHashable?
+
+    /// Whether `recorder` is recording for this row.
+    private var isRecording: Bool { recorder.isRecording && recorder.owner == owner }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
@@ -804,32 +882,32 @@ struct HotKeyRecorderView: View {
                 Button(action: toggleRecording) {
                     Text(label)
                         .frame(minWidth: 140)
-                        .foregroundStyle(recorder.isRecording ? Color.accentColor : Color.primary)
+                        .foregroundStyle(isRecording ? Color.accentColor : Color.primary)
                 }
-                if combo != nil, !recorder.isRecording {
+                if combo != nil, !isRecording {
                     Button("Clear") { combo = nil }
                 }
-                if combo != defaultCombo, !recorder.isRecording {
+                if combo != defaultCombo, !isRecording {
                     Button("Restore Default") { combo = defaultCombo }
                         .help(defaultCombo.map { "Use \($0.displayString) again" } ?? "Remove the custom shortcut")
                 }
             }
-            if recorder.isRecording, let hint = recorder.hint {
+            if isRecording, let hint = recorder.hint {
                 Text(hint).font(.caption).foregroundStyle(WorkspaceReviewColors.warning).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .onDisappear { recorder.stop() }
+        .onDisappear { if isRecording { recorder.stop() } }
     }
 
     private var label: String {
-        if recorder.isRecording {
+        if isRecording {
             return "Type a shortcut…"
         }
         return combo?.displayString ?? "Record Shortcut"
     }
 
     private func toggleRecording() {
-        if recorder.isRecording {
+        if isRecording {
             recorder.stop()
             return
         }
@@ -837,7 +915,7 @@ struct HotKeyRecorderView: View {
         additionalOthers.forEach { $0.stop() }
         let binding = $combo
         recorder.start(
-            scope: scope, validate: validate,
+            scope: scope, validate: validate, owner: owner,
             onStateChange: { [weak model] recording in model?.onRecordingChange?(recording) },
             onRecord: { binding.wrappedValue = $0 }
         )
@@ -848,6 +926,8 @@ struct HotKeyRecorderView: View {
 final class HotKeyRecorder: ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var hint: String?
+    /// The row recording, when several share this recorder.
+    @Published private(set) var owner: AnyHashable?
     /// The Settings window: the only one whose keys are recorded.
     weak var window: NSWindow?
     private var monitor: Any?
@@ -862,8 +942,11 @@ final class HotKeyRecorder: ObservableObject {
     }
     var removeMonitor: (Any) -> Void = { NSEvent.removeMonitor($0) }
 
-    func start(scope: HotKeyCombo.Scope = .global, validate: @escaping (HotKeyCombo) -> String? = { _ in nil }, onStateChange: @escaping (Bool) -> Void, onRecord: @escaping (HotKeyCombo) -> Void) {
+    func start(scope: HotKeyCombo.Scope = .global, validate: @escaping (HotKeyCombo) -> String? = { _ in nil },
+               owner: AnyHashable? = nil,
+               onStateChange: @escaping (Bool) -> Void, onRecord: @escaping (HotKeyCombo) -> Void) {
         stop()
+        self.owner = owner
         self.scope = scope
         self.validate = validate
         self.onStateChange = onStateChange
@@ -907,6 +990,7 @@ final class HotKeyRecorder: ObservableObject {
         guard isRecording else { return }
         isRecording = false
         hint = nil
+        owner = nil
         onRecord = nil
         validate = { _ in nil }
         onStateChange?(false)

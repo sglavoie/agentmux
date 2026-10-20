@@ -48,9 +48,9 @@ enum WorkspaceMenu {
         (4, "Next Needing Attention", #selector(AppDelegate.nextAttention(_:))),
         (5, "Set Session Icon…", #selector(AppDelegate.pickSessionIcon(_:))),
         (6, "Set Session Color…", #selector(AppDelegate.pickSessionColor(_:))),
-        (7, "Previous Session", #selector(AppDelegate.focusPreviousSession(_:))),
-        (8, "Clear Session State", #selector(AppDelegate.clearSessionState(_:))),
-        (9, "Next Session", #selector(AppDelegate.focusNextSession(_:))),
+        (7, "Previous Session Only", #selector(AppDelegate.focusPreviousSession(_:))),
+        (8, "Clear Session Markers", #selector(AppDelegate.clearSessionState(_:))),
+        (9, "Next Session Only", #selector(AppDelegate.focusNextSession(_:))),
         (10, "Toggle Session Mute", #selector(AppDelegate.toggleSessionMute(_:))),
         (11, "Mark Session Active", #selector(AppDelegate.markSessionActive(_:))),
     ]
@@ -199,8 +199,18 @@ enum WorkspaceMenu {
         }
         session.addItem(item("Next Tab in Project", #selector(AppDelegate.selectNextProjectTab(_:)), key(NSRightArrowFunctionKey), target: target))
         session.addItem(item("Previous Tab in Project", #selector(AppDelegate.selectPreviousProjectTab(_:)), key(NSLeftArrowFunctionKey), target: target))
-        session.addItem(item(nextSessionTitle, #selector(AppDelegate.showNextSessionInKitty(_:)), "}", target: target))
-        session.addItem(item(previousSessionTitle, #selector(AppDelegate.showPreviousSessionInKitty(_:)), "{", target: target))
+        // Hidden until a Kitty session is listed (`updateKittyItems`): with
+        // none they do what F9 and F7 do. Hidden, they keep their keys.
+        for (title, action, stepKey) in [
+            (nextSessionTitle, #selector(AppDelegate.showNextSessionInKitty(_:)), "}"),
+            (previousSessionTitle, #selector(AppDelegate.showPreviousSessionInKitty(_:)), "{"),
+        ] {
+            let step = item(title, action, stepKey, target: target)
+            step.identifier = raisingKittyIdentifier
+            step.isHidden = true
+            step.allowsKeyEquivalentWhenHidden = true
+            session.addItem(step)
+        }
         session.addItem(item("Back to Last Shown", #selector(AppDelegate.toggleRecentPlace(_:)), "l", target: target))
         session.addItem(.separator())
         let keys = submenu("Function Keys", in: session)
@@ -250,9 +260,11 @@ enum WorkspaceMenu {
     static let findTitle = "Find in Terminal…"
     static let nextStopTitle = "Next Session or Terminal"
     static let previousStopTitle = "Previous Session or Terminal"
-    static let nextSessionTitle = "Next Session (Kitty Sessions in Kitty)"
-    static let previousSessionTitle = "Previous Session (Kitty Sessions in Kitty)"
+    static let nextSessionTitle = "Next Session, Raising Kitty"
+    static let previousSessionTitle = "Previous Session, Raising Kitty"
     static let showInKittyIdentifier = NSUserInterfaceItemIdentifier("amx.session.showInKitty")
+    /// ⌘} and ⌘{, shown only while a session in Kitty is listed.
+    static let raisingKittyIdentifier = NSUserInterfaceItemIdentifier("amx.session.raisingKitty")
     /// The View menu's sidebar and inspector items, whose titles the app
     /// sets to Show or Hide as each is (`WorkspaceWindowController`'s
     /// `isSidebarCollapsed` and `isInspectorCollapsed`).
@@ -261,9 +273,13 @@ enum WorkspaceMenu {
 
     /// Shows the Session menu's Show in Kitty submenu only while one of the
     /// digits goes to a session in Kitty, and lists only those sessions in
-    /// it. The hidden items keep their keys.
+    /// it. ⌘} and ⌘{ are shown while any listed session is in Kitty. The
+    /// hidden items keep their keys.
     @MainActor
     static func updateKittyItems(in session: NSMenu, workspace: WorkspaceWindowController?) {
+        for step in session.items where step.identifier == raisingKittyIdentifier {
+            step.isHidden = workspace?.listsKittySession != true
+        }
         guard let holder = session.items.first(where: { $0.identifier == showInKittyIdentifier }) else { return }
         holder.isHidden = workspace?.digitsReachKitty != true
         for place in holder.submenu?.items ?? [] {

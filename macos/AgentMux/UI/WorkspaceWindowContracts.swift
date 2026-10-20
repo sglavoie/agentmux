@@ -91,6 +91,12 @@ protocol WorkspaceDelegate: AnyObject {
     func workspacePerform(_ command: WorkspaceCommand)
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void)
     func workspaceSearchConversation()
+    /// Opens Settings on the amx binary, from an error that says amx was not
+    /// found.
+    func workspaceOpenAMXSettings()
+    /// Whether the daemon is known to be down, so an error can offer Start
+    /// Daemon.
+    var workspaceDaemonIsDown: Bool { get }
 }
 
 extension WorkspaceDelegate {
@@ -100,6 +106,8 @@ extension WorkspaceDelegate {
     func workspaceLaunchProjects(from view: NSView) {}
     func workspacePerform(_ command: WorkspaceCommand) {}
     func workspaceSearchConversation() {}
+    func workspaceOpenAMXSettings() {}
+    var workspaceDaemonIsDown: Bool { false }
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void) {
         completion(.unavailable(SecretText("Context is unavailable.")))
     }

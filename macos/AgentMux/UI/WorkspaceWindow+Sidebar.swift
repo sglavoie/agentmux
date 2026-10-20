@@ -270,7 +270,7 @@ extension WorkspaceWindowController {
                 .first { $0.pinned == row.pinned && (row.pinned || $0.project == row.project) }
             let moved = Set(keys)
             var next = keys.makeIterator()
-            let saved = (base?.rows.map(\.key) ?? keys).map { moved.contains($0) ? next.next()! : $0 }
+            let saved = (base?.rows.map(\.key) ?? keys).map { moved.contains($0) ? next.next() ?? $0 : $0 }
             if row.pinned {
                 order.setPinned(saved)
             } else {

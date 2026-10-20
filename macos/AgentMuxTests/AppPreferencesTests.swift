@@ -479,4 +479,48 @@ final class AppPreferencesTests: XCTestCase {
         defer { controller.window.close() }
         XCTAssertEqual(reads, 2, "showing Settings re-reads it rather than showing the launch-time status")
     }
+
+    func testKittySettingsShowOnlyWhileKittyIsInUseOrNamed() {
+        var preferences = AppPreferences()
+        XCTAssertFalse(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences),
+                       "a tmux-only setup is not shown a Kitty socket")
+        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: true, preferences: preferences))
+        preferences.kittySocketOverride = "unix:/tmp/kitty-1"
+        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences),
+                      "a socket set earlier stays visible so it can be cleared")
+        preferences.kittySocketOverride = "  "
+        XCTAssertFalse(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences))
+        preferences.launchBackend = .kitty
+        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences))
+        preferences.launchBackend = .workspace
+        preferences.dashboardPlace = .kitty
+        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences))
+    }
+
+    func testDaemonSettingsButtonsAreTitleCase() {
+        XCTAssertEqual(DaemonSettingsView.checkTitle, "Check Settings")
+        XCTAssertEqual(DaemonSettingsView.restartTitle, "Restart Daemon to Apply")
+    }
+
+    @MainActor
+    func testSettingsWindowHasAFixedSize() {
+        let controller = PreferencesWindowController(model: PreferencesModel(defaults: freshDefaults()))
+        defer { controller.window.close() }
+        XCTAssertFalse(controller.window.styleMask.contains(.resizable),
+                       "the content is laid out at a fixed width, so the window does not resize")
+        XCTAssertEqual(controller.window.contentLayoutRect.width, PreferencesWindowController.contentWidth, accuracy: 1)
+    }
+
+    func testASharedRecorderRecordsForOneRowAtATime() {
+        let recorder = HotKeyRecorder()
+        recorder.addMonitor = { _ in NSObject() }
+        recorder.removeMonitor = { _ in }
+        recorder.start(scope: .application, owner: WorkspaceShortcut.runs, onStateChange: { _ in }, onRecord: { _ in })
+        XCTAssertEqual(recorder.owner, AnyHashable(WorkspaceShortcut.runs))
+        recorder.start(scope: .application, owner: WorkspaceShortcut.history, onStateChange: { _ in }, onRecord: { _ in })
+        XCTAssertEqual(recorder.owner, AnyHashable(WorkspaceShortcut.history), "starting another row moves the recording there")
+        recorder.stop()
+        XCTAssertNil(recorder.owner)
+        XCTAssertFalse(recorder.isRecording)
+    }
 }

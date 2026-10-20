@@ -92,7 +92,7 @@ Two grants matter:
   allowed, it claims the daemon's notification backend role; when it is denied
   or turned off in Preferences, the daemon uses Alerter as before. Change it
   later in System Settings › Notifications › Agent Mux. The app rereads the
-  permission every 10 seconds and whenever its menu opens.
+  permission whenever it comes to the front and whenever its menu opens.
 - **Login item.** Settings › Open at Login registers the app with
   `SMAppService`. It shows in System Settings › General › Login Items, and
   removing it there is respected: the app does not add it back.
@@ -214,9 +214,11 @@ terminals of their own beside the agents, and none of them needs Kitty.
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[
   (**Session › Next Session or Terminal** and **Previous Session or
   Terminal**, also ⌘⇧→ and ⌘⇧←) stop at every session and every terminal
-  under one, in sidebar order; ⌘⇧] and ⌘⇧[ (**Next Session (Kitty Sessions
-  in Kitty)** and its Previous twin) go from session to session, passing
-  over the terminals, as F9 and F7 do. The digits
+  under one, in sidebar order; F9 and F7 (**Next Session Only** and
+  **Previous Session Only**) go from session to session, passing over the
+  terminals, and ⌘⇧] and ⌘⇧[ do the same but bring a Kitty session forward
+  in Kitty (**Next Session, Raising Kitty**, shown while a Kitty session is
+  listed). The digits
   (⌘1 to ⌘0) count sessions only. It applies to sessions whose terminal
   is in the workspace, not to Kitty sessions; with no such session shown
   the item is greyed out. If the session ends first, the
@@ -343,12 +345,20 @@ pager, or a picker is about. F12 stays the key that detaches.
 | F4 | The next session needing attention |
 | F5 / F6 | Picks the session's harness icon, or its color; the pane goes back when the pick is made |
 | F7 / F9 | The previous or next session, passing over terminals and staying in the app |
-| F8 | Clears the session's state icon |
+| F8 | Clears the session's markers and state icon (**Clear Session Markers**) |
 | F10 | Mutes or unmutes the session's notifications |
 | F11 | Marks the session active (⚡) until its next real event |
 
 F5 and F6 are for sessions embedded here; a session that lives in Kitty has
-its pickers in Kitty. F8, F10, and F11 work for both.
+its pickers in Kitty. F8, F10, and F11 work for both. With no session shown
+the keys about one are greyed out in **Session › Function Keys**.
+
+A key or item that cannot act says why at the top of the pane for a few
+seconds, as well as on the menu bar's line. One that fails, such as F8 when
+the daemon does not take it, or naming or ending a session, opens an alert
+with amx's own error, **Copy Details**, and **Start Daemon** while the daemon
+is down or **Open Settings** (Advanced, at the amx binary) when amx was not
+found. amx still being found at launch is said as such: waiting fixes it.
 
 **History** belongs to the session, not to the window showing it, so it is
 all still there after the window was closed, the app was quit, or another

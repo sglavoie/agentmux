@@ -50,12 +50,8 @@ extension WorkspaceWindowController {
                 let title = row.displayName
                 if let report = self.reportNameProblem {
                     report(title, problem)
-                } else if !AppDelegate.isRunningTests {
-                    let alert = NSAlert()
-                    alert.alertStyle = .warning
-                    alert.messageText = "\(title) could not be named"
-                    alert.informativeText = problem
-                    self.sayLater(alert)
+                } else {
+                    self.showError(title: "\(title) could not be named", message: problem)
                 }
             }
         }
@@ -602,6 +598,12 @@ extension WorkspaceWindowController {
     /// one, the Session menu has nothing to show in Kitty.
     var digitsReachKitty: Bool {
         WorkspaceMenu.sessionKeys.indices.contains { sessionIsInKitty(at: $0) }
+    }
+
+    /// Whether any listed session lives in Kitty: without one, ⌘} and ⌘{
+    /// would only repeat F9 and F7, so the menu hides them.
+    var listsKittySession: Bool {
+        state.rows.contains { if case .kitty = $0.target { return true } else { return false } }
     }
 
     /// The name of the session at `index` in sidebar order, which ⌘ and

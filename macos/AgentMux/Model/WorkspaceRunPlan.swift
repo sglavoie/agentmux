@@ -134,7 +134,7 @@ final class WorkspaceRunPlanModel: ObservableObject {
 
     func loadChoices() {
         guard !loadingChoices else { return }
-        guard let command = command() else { choicesError = "amx is not available."; return }
+        guard let command = command() else { choicesError = AMXWording.current; return }
         loadingChoices = true
         runner.run({
             (ProjectCatalog.fetch(command), command.json([LaunchProfileChoice].self, ["config", "profiles"]).result)
@@ -153,7 +153,7 @@ final class WorkspaceRunPlanModel: ObservableObject {
 
     func check() {
         guard !checking, !launching, !selector.isEmpty, projectProblem == nil, profileProblem == nil else { return }
-        guard let command = command() else { feedback = WorkspaceFeedback(target: selector, message: "amx is not available.", nextStep: "Check Settings, then check readiness again.", recovery: .readiness); return }
+        guard let command = command() else { feedback = WorkspaceFeedback(target: selector, message: AMXWording.current, nextStep: "Check readiness again once amx is found.", recovery: .readiness); return }
         let args = arguments
         checking = true; feedback = nil; preview = nil; checkedArguments = nil
         var checkArgs = args

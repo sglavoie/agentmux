@@ -98,6 +98,13 @@ final class GhosttyInteractionTests: XCTestCase {
         let search = try XCTUnwrap(edit.items.first { $0.action == #selector(AppDelegate.searchConversation(_:)) })
         XCTAssertEqual(search.title, "Search Conversation…")
         XCTAssertFalse(delegate.validateMenuItem(search), "conversation search requires the focused workspace's session")
+        // The function keys about the shown session are greyed out with none
+        // shown, rather than beeping when pressed.
+        for action in [#selector(AppDelegate.pickSessionIcon(_:)), #selector(AppDelegate.pickSessionColor(_:)),
+                       #selector(AppDelegate.clearSessionState(_:)), #selector(AppDelegate.markSessionActive(_:)),
+                       #selector(AppDelegate.toggleSessionMute(_:))] {
+            XCTAssertFalse(delegate.validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: "")), "\(action)")
+        }
     }
 
     override func tearDownWithError() throws {
@@ -745,9 +752,9 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.function(NSF4FunctionKey, keyCode: 118), "Next Needing Attention"),
             (.function(NSF5FunctionKey, keyCode: 96), "Set Session Icon…"),
             (.function(NSF6FunctionKey, keyCode: 97), "Set Session Color…"),
-            (.function(NSF7FunctionKey, keyCode: 98), "Previous Session"),
-            (.function(NSF8FunctionKey, keyCode: 100), "Clear Session State"),
-            (.function(NSF9FunctionKey, keyCode: 101), "Next Session"),
+            (.function(NSF7FunctionKey, keyCode: 98), "Previous Session Only"),
+            (.function(NSF8FunctionKey, keyCode: 100), "Clear Session Markers"),
+            (.function(NSF9FunctionKey, keyCode: 101), "Next Session Only"),
             (.function(NSF10FunctionKey, keyCode: 109), "Toggle Session Mute"),
             (.function(NSF11FunctionKey, keyCode: 103), "Mark Session Active"),
             (.command("]", keyCode: 30, shifted: "}"), WorkspaceMenu.nextSessionTitle),
