@@ -68,20 +68,43 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	if code := execute(os.Stderr); code != 0 {
+	if code := execute(os.Args[1:], os.Stderr); code != 0 {
 		os.Exit(code)
 	}
 }
 
-// execute runs the root command and returns the process status, writing the
-// one stderr line a failure deserves. Cobra's own error printing is silenced
-// on rootCmd so that this is the only place that line comes from: left to
-// cobra, a JSON failure that had already written its envelope was still
-// followed by "Error: ...", and a non-quiet ExitError was printed twice.
-func execute(stderr io.Writer) int {
+// runArgs is the argument list execute is running, which the flag-error
+// handler reads to find a misspelled command and whether --json was asked
+// for.
+var runArgs []string
+
+func invocationArgs() []string { return runArgs }
+
+// execute runs the root command on args and returns the process status,
+// writing the one stderr line a failure deserves. Cobra's own error printing
+// is silenced on rootCmd so that this is the only place that line comes from:
+// left to cobra, a JSON failure that had already written its envelope was
+// still followed by "Error: ...", and a non-quiet ExitError was printed twice.
+func execute(args []string, stderr io.Writer) int {
+	runArgs = args
+	rootCmd.SetArgs(args)
 	command, err := rootCmd.ExecuteC()
 	if err == nil {
 		return 0
+	}
+	if code, ok := invocationFailure(err); ok && jsonRequested(args) {
+		message := err.Error()
+		var unknown *unknownCommandError
+		if errors.As(err, &unknown) {
+			message = unknown.summary()
+		}
+		if writeErr := cli.WriteJSONError(command, cli.JSONError{Code: code, Message: message, Candidates: unknownCommandCandidates(err)}); writeErr != nil {
+			var exitErr *cli.ExitError
+			if !errors.As(writeErr, &exitErr) {
+				_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), writeErr.Error())
+			}
+		}
+		return 1
 	}
 	var exitErr *cli.ExitError
 	if errors.As(err, &exitErr) {
@@ -97,9 +120,10 @@ func execute(stderr io.Writer) int {
 	_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), err.Error())
 	// Cobra adds this pointer only when it could not resolve the command;
 	// keep doing the same now that it no longer prints.
-	if strings.HasPrefix(err.Error(), "unknown command") {
-		if !strings.Contains(err.Error(), "Did you mean") {
-			if paths := nestedCommandPaths(command, err.Error()); len(paths) > 0 {
+	if _, ok := invocationFailure(err); ok {
+		var unknown *unknownCommandError
+		if errors.As(err, &unknown) && len(unknown.suggestions) == 0 {
+			if paths := nestedCommandPaths(command, unknown.name); len(paths) > 0 {
 				_, _ = fmt.Fprintf(stderr, "\nDid you mean this?\n\t%s\n\n", strings.Join(paths, "\n\t"))
 			}
 		}
@@ -113,9 +137,8 @@ func execute(stderr io.Writer) int {
 // with the full paths that name it. Cobra's own suggestions only catch
 // misspellings of the commands at the level typed, so a leaf typed without its
 // family otherwise got nothing but a pointer at --help.
-func nestedCommandPaths(command *cobra.Command, message string) []string {
-	var name string
-	if _, err := fmt.Sscanf(message, "unknown command %q", &name); err != nil || name == "" {
+func nestedCommandPaths(command *cobra.Command, name string) []string {
+	if name == "" {
 		return nil
 	}
 	var paths []string
@@ -170,7 +193,25 @@ func init() {
 	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.NameSessionCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
 	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.BackendCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
 	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), release.DesktopCommand(), tuitest.Command(), dashboard.WorkspaceViewCommand())
+	rootCmd.AddCommand(versionCmd)
+	rootCmd.SetFlagErrorFunc(flagError)
+	// Added now rather than lazily by Execute, so the guard covers it too.
+	rootCmd.InitDefaultCompletionCmd()
+	guardInvocations(rootCmd)
 	completeNoFilesByDefault(rootCmd)
+}
+
+// versionCmd answers `amx version` the way `amx --version` does, since both
+// spellings are commonly typed. It is hidden: --version is the documented one.
+var versionCmd = &cobra.Command{
+	Use:    "version",
+	Short:  "Print the amx build identity (same as --version)",
+	Hidden: true,
+	Args:   cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s version %s\n", rootCmd.Name(), rootCmd.Version)
+		return err
+	},
 }
 
 // completeNoFilesByDefault gives every command that does not say how its

@@ -20,7 +20,6 @@ func executeRootArgs(t *testing.T, leaf *cobra.Command, args ...string) (string,
 		t.Cleanup(func() { rootCmd.RemoveCommand(leaf) })
 	}
 	var stdout, stderr bytes.Buffer
-	rootCmd.SetArgs(args)
 	rootCmd.SetOut(&stdout)
 	rootCmd.SetErr(&stderr)
 	t.Cleanup(func() {
@@ -28,7 +27,7 @@ func executeRootArgs(t *testing.T, leaf *cobra.Command, args ...string) (string,
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
 	})
-	code := execute(&stderr)
+	code := execute(args, &stderr)
 	return stdout.String(), stderr.String(), code
 }
 
