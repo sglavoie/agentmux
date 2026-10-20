@@ -1,5 +1,9 @@
 package hooks
 
+// The atomic replacement itself (partial writes, chmod faults, unrelated .tmp
+// siblings) is tested in internal/atomicfile. These tests hold the merge to it:
+// the .bak lands first and a failed write leaves both files as they were.
+
 import (
 	"errors"
 	"os"
@@ -22,109 +26,13 @@ func readFileOrFatal(t *testing.T, path string) []byte {
 
 func assertNoAtomicTemp(t *testing.T, path string) {
 	t.Helper()
-	matches, err := filepath.Glob(path + ".tmp-*")
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp"))
 	if err != nil {
 		t.Fatalf("glob atomic temps: %v", err)
 	}
 	if len(matches) != 0 {
 		t.Fatalf("expected no leftover atomic temp files, got %v", matches)
 	}
-}
-
-// TestAtomicWriteFile_NoTempLeftOnSuccess verifies that after a successful
-// atomicWriteFile call, no generated temp sibling remains in the directory.
-func TestAtomicWriteFile_NoTempLeftOnSuccess(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "settings.json")
-
-	if err := atomicWriteFile(path, []byte(`{"hooks":{}}`), 0o644); err != nil {
-		t.Fatalf("atomicWriteFile: %v", err)
-	}
-
-	assertNoAtomicTemp(t, path)
-	if got := string(readFileOrFatal(t, path)); got != `{"hooks":{}}` {
-		t.Fatalf("unexpected content: %q", got)
-	}
-}
-
-func TestAtomicWriteFile_DoesNotClobberExistingTmpSibling(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "settings.json")
-	tmpPath := path + ".tmp"
-	tmpData := []byte("unrelated temp content")
-	if err := os.WriteFile(tmpPath, tmpData, 0o600); err != nil {
-		t.Fatalf("seed tmp sibling: %v", err)
-	}
-
-	if err := atomicWriteFile(path, []byte(`{"hooks":{}}`), 0o644); err != nil {
-		t.Fatalf("atomicWriteFile: %v", err)
-	}
-
-	if got := readFileOrFatal(t, tmpPath); string(got) != string(tmpData) {
-		t.Fatalf("existing tmp sibling was clobbered: got %q want %q", got, tmpData)
-	}
-	assertNoAtomicTemp(t, path)
-}
-
-// TestAtomicWriteFile_FaultDoesNotCorruptOriginal verifies that if the write
-// step fails partway through, the existing settings.json is left untouched
-// and the temp file does not linger.
-func TestAtomicWriteFile_FaultDoesNotCorruptOriginal(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "settings.json")
-
-	original := []byte(`{"hooks":{"original":true}}`)
-	if err := os.WriteFile(path, original, 0o644); err != nil {
-		t.Fatalf("seeding original: %v", err)
-	}
-
-	// Inject a fault that simulates a crash mid-write: the file handle
-	// receives some bytes, then a sentinel error.
-	prev := atomicWriteFn
-	t.Cleanup(func() { atomicWriteFn = prev })
-	atomicWriteFn = func(f *os.File, data []byte) (int, error) {
-		// Write a partial prefix so that a non-atomic implementation would
-		// be observable as truncation of the destination file.
-		half := len(data) / 2
-		if _, err := f.Write(data[:half]); err != nil {
-			return 0, err
-		}
-		return half, errInjectedFault
-	}
-
-	err := atomicWriteFile(path, []byte(`{"hooks":{"new":true}}`), 0o644)
-	if !errors.Is(err, errInjectedFault) {
-		t.Fatalf("expected injected-fault error, got: %v", err)
-	}
-
-	// Original must be intact.
-	if got := readFileOrFatal(t, path); string(got) != string(original) {
-		t.Fatalf("original corrupted: got %q want %q", got, original)
-	}
-	// Temp file must be cleaned up.
-	assertNoAtomicTemp(t, path)
-}
-
-func TestAtomicWriteFile_ChmodFaultRemovesTemp(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "settings.json")
-
-	chmodErr := errors.New("chmod fault")
-	prev := atomicChmodFn
-	t.Cleanup(func() { atomicChmodFn = prev })
-	atomicChmodFn = func(_ *os.File, _ os.FileMode) error {
-		return chmodErr
-	}
-
-	err := atomicWriteFile(path, []byte(`{"hooks":{}}`), 0o644)
-	if !errors.Is(err, chmodErr) {
-		t.Fatalf("expected chmod fault, got: %v", err)
-	}
-
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("expected destination not to be created, stat err=%v", err)
-	}
-	assertNoAtomicTemp(t, path)
 }
 
 // TestMergeViaContract_PreservesBackup is a regression guard: the .bak file
@@ -166,7 +74,7 @@ func TestMergeViaContract_PreservesBackup(t *testing.T) {
 }
 
 // TestMergeViaContract_FaultLeavesOriginalAndBackupIntact end-to-end check:
-// when the atomic write fails mid-flight, the original settings.json and the
+// when the atomic write fails, the original settings.json and the
 // freshly-created .bak must both retain their pre-merge content (note that
 // in this code path .bak is written before the rename, so a corrupted main
 // file could still be recovered from the backup).
@@ -186,10 +94,10 @@ func TestMergeViaContract_FaultLeavesOriginalAndBackupIntact(t *testing.T) {
 	}
 
 	// Fault-inject the write step.
-	prev := atomicWriteFn
-	t.Cleanup(func() { atomicWriteFn = prev })
-	atomicWriteFn = func(_ *os.File, _ []byte) (int, error) {
-		return 0, errInjectedFault
+	prev := writeSettings
+	t.Cleanup(func() { writeSettings = prev })
+	writeSettings = func(string, []byte, os.FileMode) error {
+		return errInjectedFault
 	}
 
 	cfg := makeConfig([]config.Account{

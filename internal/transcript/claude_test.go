@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 const claudeFixtureRoot = "testdata/claude"
@@ -311,22 +312,22 @@ func TestClaudeDiscover_CacheMissReparses(t *testing.T) {
 
 func TestTruncateSnippet(t *testing.T) {
 	short := "hello world"
-	if got := truncateSnippet(short); got != short {
+	if got := textutil.Snippet(short, snippetMaxLen); got != short {
 		t.Errorf("short pass-through = %q", got)
 	}
-	multi := truncateSnippet("line1\n\n   line2\tline3")
+	multi := textutil.Snippet("line1\n\n   line2\tline3", snippetMaxLen)
 	if multi != "line1 line2 line3" {
 		t.Errorf("whitespace collapse = %q", multi)
 	}
 	exact := strings.Repeat("a", snippetMaxLen)
-	if got := truncateSnippet(exact); got != exact {
+	if got := textutil.Snippet(exact, snippetMaxLen); got != exact {
 		t.Errorf("exact length snippet = %q, want no ellipsis", got)
 	}
 	long := make([]byte, 0, snippetMaxLen+50)
 	for i := 0; i < snippetMaxLen+50; i++ {
 		long = append(long, 'a')
 	}
-	got := truncateSnippet(string(long))
+	got := textutil.Snippet(string(long), snippetMaxLen)
 	// Truncated form ends with the ellipsis rune.
 	if got[len(got)-len("…"):] != "…" {
 		t.Errorf("long truncation missing ellipsis: %q", got)

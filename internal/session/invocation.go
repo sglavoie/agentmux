@@ -7,6 +7,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 // BuildInvocation resolves a configured project's effective arguments,
@@ -149,21 +150,21 @@ func renderInvocation(invocation harness.Invocation) string {
 	environment := make([]string, 0, 2)
 	if envVar := harness.EnvVar(invocation.Harness); envVar != "" {
 		if envValue, ok := invocation.Environment[envVar]; ok {
-			environment = append(environment, shellQuoteWord(envVar+"="+envValue))
+			environment = append(environment, shellquote.Quote(envVar+"="+envValue))
 		}
 	}
 	if harness.Normalize(invocation.Harness) == harness.Codex {
 		if rustLog, ok := invocation.Environment["RUST_LOG"]; ok {
-			environment = append(environment, shellQuoteWord("RUST_LOG="+rustLog))
+			environment = append(environment, shellquote.Quote("RUST_LOG="+rustLog))
 		}
 	}
 	if len(environment) > 0 {
 		parts = append(parts, "env")
 		parts = append(parts, environment...)
 	}
-	parts = append(parts, shellQuoteWord(invocation.Executable))
+	parts = append(parts, shellquote.Quote(invocation.Executable))
 	for _, arg := range invocation.Args {
-		parts = append(parts, shellQuoteWord(arg))
+		parts = append(parts, shellquote.Quote(arg))
 	}
 	return strings.Join(parts, " ")
 }

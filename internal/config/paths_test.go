@@ -34,6 +34,38 @@ func TestExpandTilde_NoTilde(t *testing.T) {
 	}
 }
 
+// Only a leading "~" or "~/" of the current user expands; everything else is
+// a literal the shell would not have expanded either.
+func TestExpandTilde_LeavesOtherTildesAlone(t *testing.T) {
+	for _, path := range []string{"~user", "~user/x", "a/~/b", "~x/y", "", "relative/path", "/~"} {
+		if got := config.ExpandTilde(path); got != path {
+			t.Errorf("ExpandTilde(%q) = %q, want it unchanged", path, got)
+		}
+	}
+}
+
+// Without a home directory the path comes back as written, never as "" or a
+// path relative to the working directory.
+func TestExpandTilde_NoHomeKeepsThePath(t *testing.T) {
+	t.Setenv("HOME", "")
+	for _, path := range []string{"~", "~/.codex"} {
+		if got := config.ExpandTilde(path); got != path {
+			t.Errorf("ExpandTilde(%q) with no HOME = %q, want it unchanged", path, got)
+		}
+	}
+}
+
+func TestExpandTilde_UsesHOME(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if got := config.ExpandTilde("~"); got != home {
+		t.Errorf("ExpandTilde(~) = %q, want %q", got, home)
+	}
+	if got, want := config.ExpandTilde("~/a/../b"), filepath.Join(home, "b"); got != want {
+		t.Errorf("ExpandTilde(~/a/../b) = %q, want %q", got, want)
+	}
+}
+
 func TestDefaultConfigDir(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	got := config.DefaultConfigDir()

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 // ClaudeReader parses transcripts written by the Claude harness.
@@ -263,19 +264,19 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 					command, withArgs, ok := claudeSlashCommand(text)
 					switch {
 					case !ok:
-						meta.Snippet = truncateSnippet(text)
+						meta.Snippet = textutil.Snippet(text, snippetMaxLen)
 					case withArgs:
-						meta.Snippet = truncateSnippet(command)
+						meta.Snippet = textutil.Snippet(command, snippetMaxLen)
 					case commandSnippet == "":
 						commandSnippet = command
 					}
 				}
 				if replySnippet == "" && rec.Type == "assistant" {
-					replySnippet = truncateSnippet(text)
+					replySnippet = textutil.Snippet(text, snippetMaxLen)
 				}
 				if rec.Type == "assistant" {
 					if prose := flattenClaudeHandoffContent(rec.Message.Content); strings.TrimSpace(prose) != "" {
-						meta.Ending = truncateSnippet(strings.TrimSpace(prose))
+						meta.Ending = textutil.Snippet(strings.TrimSpace(prose), snippetMaxLen)
 					}
 				}
 				if rec.Type == "user" {
@@ -296,13 +297,13 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 	case replySnippet != "":
 		meta.Snippet = replySnippet
 	case commandSnippet != "":
-		meta.Snippet = truncateSnippet(commandSnippet)
+		meta.Snippet = textutil.Snippet(commandSnippet, snippetMaxLen)
 		meta.Empty = true
 	}
 	// A name the operator chose outranks the one Claude Code generated.
-	meta.Title = truncateSnippet(customTitle)
+	meta.Title = textutil.Snippet(customTitle, snippetMaxLen)
 	if meta.Title == "" {
-		meta.Title = truncateSnippet(aiTitle)
+		meta.Title = textutil.Snippet(aiTitle, snippetMaxLen)
 	}
 	meta.SearchText = searchBuf.String()
 	meta.SessionClass = classEvidence.class()

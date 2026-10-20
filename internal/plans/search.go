@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/searchquery"
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 // SortMode selects the ordering applied to search results. Zero value is
@@ -195,9 +196,9 @@ func countMatchesInSearchText(searchText string, terms searchquery.Terms) (int, 
 func firstMatchLine(text string, pos int) string {
 	line, clipped := searchquery.MatchLine(text, pos)
 	if clipped {
-		return "…" + truncateSnippet(line)
+		return "…" + textutil.Snippet(line, snippetMaxLen)
 	}
-	return truncateSnippet(line)
+	return textutil.Snippet(line, snippetMaxLen)
 }
 
 // SortResults orders rs in place according to mode. Output is stable so

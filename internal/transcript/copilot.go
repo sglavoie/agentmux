@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 // CopilotReader parses transcripts written by the GitHub Copilot CLI
@@ -287,7 +288,7 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 			}
 			meta.MessageCount++
 			if meta.Snippet == "" {
-				meta.Snippet = truncateSnippet(p.Content)
+				meta.Snippet = textutil.Snippet(p.Content, snippetMaxLen)
 			}
 			appendSearchText(&searchBuf, p.Content)
 		case "assistant.message":
@@ -299,7 +300,7 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 				meta.MessageCount++
 				appendSearchText(&searchBuf, p.Content)
 				if strings.TrimSpace(p.Content) != "" {
-					meta.Ending = truncateSnippet(strings.TrimSpace(p.Content))
+					meta.Ending = textutil.Snippet(strings.TrimSpace(p.Content), snippetMaxLen)
 				}
 			}
 		case "tool.execution_start":

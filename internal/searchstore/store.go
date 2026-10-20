@@ -9,9 +9,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 )
 
 // Store wraps the on-disk directory that holds per-key search-text sidecars.
@@ -60,7 +63,7 @@ func (s *Store) Path(key string) string {
 
 // Write atomically writes the sidecar for key (tmp + rename, fsync before
 // rename so a crash mid-write never leaves a half-written sidecar in place).
-func (s *Store) Write(key, text string) (retErr error) {
+func (s *Store) Write(key, text string) error {
 	path := s.Path(key)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -77,28 +80,13 @@ func (s *Store) Write(key, text string) (retErr error) {
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	tf, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
+	// Sidecars are a disposable cache written in bulk: 0600 as before, and no
+	// directory fsync per entry, since a rename lost to a power cut only means
+	// the sidecar is reparsed from its source.
+	return atomicfile.WriteStream(path, 0o600, func(w io.Writer) error {
+		_, err := io.WriteString(w, text)
 		return err
-	}
-	tmp := tf.Name()
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tmp)
-		}
-	}()
-	if _, err := tf.WriteString(text); err != nil {
-		_ = tf.Close()
-		return err
-	}
-	if err := tf.Sync(); err != nil {
-		_ = tf.Close()
-		return err
-	}
-	if err := tf.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	}, atomicfile.WithDirSync(atomicfile.SyncDirNone))
 }
 
 // Readable reports whether key has a regular sidecar that can be opened for

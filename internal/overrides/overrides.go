@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 )
 
 // PathEnvVar is the environment variable that overrides the default file path (for testing).
@@ -88,11 +90,10 @@ func Load() (File, error) {
 	return f, nil
 }
 
-// Save writes the overrides file atomically: it serializes f to a unique
-// sibling temp file in the same directory, fsyncs and closes it, then renames
-// it over the destination. On any failure the temp file is removed so a
-// partial write never lingers as garbage on disk.
-func Save(f File) (retErr error) {
+// Save writes the overrides file atomically (internal/atomicfile): a unique
+// sibling temp, fsynced and renamed over the destination, removed on any
+// failure so a partial write never lingers as garbage on disk.
+func Save(f File) error {
 	path, err := Path()
 	if err != nil {
 		return err
@@ -117,34 +118,9 @@ func Save(f File) (retErr error) {
 	if err != nil {
 		return err
 	}
-	tf, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	tmp := tf.Name()
-	// On any failure path remove the temp file; the rename consumes it on
-	// success so the Remove becomes a no-op error we ignore.
-	defer func() {
-		if retErr != nil {
-			_ = os.Remove(tmp)
-		}
-	}()
-	if err := tf.Chmod(0o644); err != nil {
-		_ = tf.Close()
-		return err
-	}
-	if _, err := tf.Write(data); err != nil {
-		_ = tf.Close()
-		return err
-	}
-	if err := tf.Sync(); err != nil {
-		_ = tf.Close()
-		return err
-	}
-	if err := tf.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	// launch_overrides.json is a user asset, not a cache: it gets the same
+	// durability as config.toml, directory fsync included.
+	return atomicfile.Write(path, data, 0o644)
 }
 
 func validateVersion(version int) error {

@@ -59,15 +59,25 @@ func ReadDefault() ([]byte, error) {
 	return data, nil
 }
 
-// ExpandTilde replaces a leading ~ with the user's home directory.
+// ExpandTilde replaces a leading "~" or "~/" with the user's home directory.
+// It is the one tilde expansion in the tree (internal/agentloop's
+// CanonicalizePath uses it too, to mirror Python's expanduser).
+//
+// Only the current user's home is expanded: "~user" and a "~" anywhere but
+// the start are left as they are. When the home directory cannot be
+// determined the path is returned unchanged rather than turned into "" or a
+// path relative to the working directory, so an error that follows still
+// names the path the operator wrote.
 func ExpandTilde(path string) string {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
 	if path == "~" {
-		home, _ := os.UserHomeDir()
 		return home
 	}
-	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
-	}
-	return path
+	return filepath.Join(home, path[2:])
 }

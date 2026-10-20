@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/searchquery"
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 // Query describes a search request against the transcript index. Empty
@@ -521,9 +522,9 @@ func originalOffsetForFoldedByte(text string, foldedPos int) int {
 func firstMatchLine(text string, pos int) string {
 	line, clipped := searchquery.MatchLine(text, pos)
 	if clipped {
-		return "…" + truncateSnippet(line)
+		return "…" + textutil.Snippet(line, snippetMaxLen)
 	}
-	return truncateSnippet(line)
+	return textutil.Snippet(line, snippetMaxLen)
 }
 
 // sortResults orders results by LastAt desc, breaking ties with

@@ -305,32 +305,6 @@ type sessionClassifier interface {
 // snippetMaxLen caps the per-session snippet length stored in the index.
 const snippetMaxLen = 160
 
-// truncateSnippet collapses interior whitespace and trims to snippetMaxLen
-// runes, appending an ellipsis when truncated. Shared by the per-harness
-// readers so the index keeps a consistent look across harnesses.
-func truncateSnippet(s string) string {
-	out := make([]rune, 0, snippetMaxLen)
-	prevSpace := false
-	for _, r := range s {
-		if r == '\n' || r == '\r' || r == '\t' {
-			r = ' '
-		}
-		if r == ' ' {
-			if prevSpace {
-				continue
-			}
-			prevSpace = true
-		} else {
-			prevSpace = false
-		}
-		if len(out) >= snippetMaxLen {
-			return string(out) + "…"
-		}
-		out = append(out, r)
-	}
-	return string(out)
-}
-
 // appendSearchText concatenates one message body into the per-session
 // search buffer used by SessionMeta.SearchText. Messages are joined with
 // '\n' so the preview reconstruction in firstMatchLine can still extract

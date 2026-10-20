@@ -12,6 +12,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 // Execute the launch command against a stand-in CLI: capability selection,
@@ -46,8 +47,8 @@ func TestManagedCodexLaunchTransport(t *testing.T) {
 					status = "0"
 				}
 				script := "#!/bin/sh\nif [ \"$1\" = --help ]; then\n" +
-					"printf '%s' \"$CODEX_HOME\" > " + shellQuoteWord(probeLog) + "\n" +
-					"printf '%s\\n' " + shellQuoteWord(tc.help) + "\nexit " + status + "\nfi\n" +
+					"printf '%s' \"$CODEX_HOME\" > " + shellquote.Quote(probeLog) + "\n" +
+					"printf '%s\\n' " + shellquote.Quote(tc.help) + "\nexit " + status + "\nfi\n" +
 					"printf '%s\\n' \"$CODEX_HOME\" \"$AMX_RUNTIME_SESSION_ID\" \"$@\"\n"
 				if err := os.WriteFile(cli, []byte(script), 0o700); err != nil {
 					t.Fatal(err)

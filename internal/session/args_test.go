@@ -3,6 +3,8 @@ package session
 import (
 	"reflect"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 func TestShellQuoteArgs_RoundTripsThroughParseFlags(t *testing.T) {
@@ -15,10 +17,10 @@ func TestShellQuoteArgs_RoundTripsThroughParseFlags(t *testing.T) {
 		"",
 	}
 
-	serialized := shellQuoteArgs(args)
+	serialized := shellquote.Join(args)
 	got := parseFlags(serialized)
 	if !reflect.DeepEqual(got, args) {
-		t.Fatalf("parseFlags(shellQuoteArgs(args)) = %#v, want %#v (serialized %q)", got, args, serialized)
+		t.Fatalf("parseFlags(shellquote.Join(args)) = %#v, want %#v (serialized %q)", got, args, serialized)
 	}
 }
 

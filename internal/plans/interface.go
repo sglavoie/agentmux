@@ -81,28 +81,3 @@ var trailingHashRegex = regexp.MustCompile(`(?:-[0-9a-f]{12})+$`)
 func DisplayName(dirBase string) string {
 	return trailingHashRegex.ReplaceAllString(dirBase, "")
 }
-
-// truncateSnippet collapses interior whitespace and trims to
-// snippetMaxLen runes, appending an ellipsis when truncated. Behaviour
-// matches transcript.truncateSnippet; duplicated rather than imported to
-// keep the plans package free of transcript dependencies.
-func truncateSnippet(s string) string {
-	out := make([]rune, 0, snippetMaxLen)
-	prevSpace := false
-	for _, r := range s {
-		if r == '\n' || r == '\r' || r == '\t' {
-			r = ' '
-		}
-		if r == ' ' {
-			if prevSpace {
-				continue
-			}
-		}
-		if len(out) >= snippetMaxLen {
-			return string(out) + "…"
-		}
-		prevSpace = r == ' '
-		out = append(out, r)
-	}
-	return string(out)
-}

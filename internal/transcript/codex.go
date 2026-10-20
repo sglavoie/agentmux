@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 // CodexReader parses transcripts written by the Codex harness.
@@ -216,7 +217,7 @@ func applyCodexThreadNames(homeDir string, metas []SessionMeta) {
 		names[entry.ID] = strings.TrimSpace(entry.ThreadName)
 	}
 	for i := range metas {
-		metas[i].Title = truncateSnippet(names[metas[i].ID])
+		metas[i].Title = textutil.Snippet(names[metas[i].ID], snippetMaxLen)
 	}
 }
 
@@ -384,7 +385,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 					meta.MessageCount++
 				}
 				if meta.Snippet == "" && text != "" {
-					meta.Snippet = truncateSnippet(text)
+					meta.Snippet = textutil.Snippet(text, snippetMaxLen)
 				}
 				appendSearchText(&searchBuf, text)
 			}
@@ -402,7 +403,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 					appendSearchText(&searchBuf, text)
 					if strings.TrimSpace(text) != "" {
 						meta.MessageCount++
-						meta.Ending = truncateSnippet(strings.TrimSpace(text))
+						meta.Ending = textutil.Snippet(strings.TrimSpace(text), snippetMaxLen)
 					}
 				}
 			case "function_call":
