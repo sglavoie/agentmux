@@ -59,6 +59,10 @@ var (
 		}
 		return session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg), nil
 	}
+	// worktreeCommandsObservedTmux opens the private tmux server only to read
+	// what runs on it, when launches go to Kitty. Listing a server that is
+	// not running starts nothing.
+	worktreeCommandsObservedTmux = func() (backend.TargetLauncher, error) { return cli.NewTmuxBackend() }
 	// worktreeCommandsInsideKitty says the command was typed in a Kitty
 	// window, where Kitty's sessions count even for a tmux launch.
 	worktreeCommandsInsideKitty = func() bool {
@@ -410,26 +414,38 @@ func executeWorktreeAction(cmd *cobra.Command, actionID actions.ID, request acti
 		client = worktreeCommandsNewKitty()
 	}
 	server := deps.Tmux
+	if server == nil && tmuxErr == nil {
+		// Launches go to Kitty, but agents may still run on the private tmux
+		// server (started from the workspace or with --backend tmux). They
+		// count toward a worktree's use; a tmux that cannot be opened has
+		// none to count.
+		if observed, err := worktreeCommandsObservedTmux(); err == nil {
+			server = observed
+		}
+	}
+	// Each backend is read on its own, so a Kitty that does not answer still
+	// leaves the tmux sessions counted; the error says what is missing, and
+	// land and remove refuse on it.
 	deps.LiveSessions = func(current *config.Config) ([]session.RunningSession, error) {
 		var running []session.RunningSession
+		var problems []error
 		if client != nil {
 			listed, err := worktreeCommandsLiveSessions(client, current)
 			if err != nil {
-				return nil, err
+				problems = append(problems, fmt.Errorf("sessions in Kitty are not counted: %w", cli.PlainKittyError(err)))
 			}
 			running = listed
 		}
 		if tmuxErr != nil {
-			return nil, tmuxErr
-		}
-		if server != nil {
+			problems = append(problems, tmuxErr)
+		} else if server != nil {
 			onTmux, err := worktreeCommandsTmuxSessions(server, current)
 			if err != nil {
-				return nil, err
+				problems = append(problems, fmt.Errorf("sessions on tmux are not counted: %w", err))
 			}
 			running = append(running, onTmux...)
 		}
-		return running, nil
+		return running, joinProblems(problems)
 	}
 	deps.Utility = func(view actions.UtilityView) error {
 		request := protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewShell, Directory: view.Path, Title: filepath.Base(view.Path)}
@@ -615,6 +631,19 @@ func nonNilWorktreeViews(values []actions.WorktreeView) []actions.WorktreeView {
 		return []actions.WorktreeView{}
 	}
 	return values
+}
+
+// joinProblems is the probe failures as one warning line, or nil when there
+// are none.
+func joinProblems(problems []error) error {
+	if len(problems) == 0 {
+		return nil
+	}
+	messages := make([]string, 0, len(problems))
+	for _, problem := range problems {
+		messages = append(messages, problem.Error())
+	}
+	return errors.New(strings.Join(messages, "; "))
 }
 
 func nonNilStrings(values []string) []string {

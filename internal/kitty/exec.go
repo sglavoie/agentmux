@@ -22,6 +22,10 @@ var runTimeout = 10 * time.Second
 // reach.
 var ErrNoKittyTerminal = errors.New("no Kitty socket is named and this terminal is not a Kitty window")
 
+// UnreachableMessage is how a command words ErrNoKittyTerminal for a person,
+// instead of the kitten command line and its error.
+const UnreachableMessage = "Kitty is not reachable from this terminal (it is not a Kitty window and KITTY_LISTEN_ON is not set)"
+
 // CommandRunner abstracts exec.Command for testability.
 type CommandRunner interface {
 	Run(name string, args ...string) ([]byte, []byte, error)

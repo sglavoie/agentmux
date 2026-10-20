@@ -33,6 +33,9 @@ needs a reachable Kitty.`,
 		}
 		client := resortNewClient()
 		if err := resortSessions(client, cfg.Defaults.Sort); err != nil {
+			if cli.KittyUnreachable(err) {
+				return fmt.Errorf("resort reorders Kitty tabs, and %s", cli.KittyUnreachableMessage)
+			}
 			return fmt.Errorf("resort: %w", err)
 		}
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "tabs resorted")

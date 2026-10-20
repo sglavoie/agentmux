@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"strconv"
 
@@ -24,6 +25,25 @@ func NewKittyClient() kitty.KittyClient {
 // than the one in this process's environment.
 func NewKittyClientAt(socket string) kitty.KittyClient {
 	return kitty.NewClientWithSocket(kitty.NewRealRunner(), socket)
+}
+
+// KittyUnreachableMessage is how every command words a Kitty it cannot ask
+// from here, instead of the kitten command line and its error.
+const KittyUnreachableMessage = kitty.UnreachableMessage
+
+// KittyUnreachable reports whether err means that no Kitty could be reached
+// from this process at all, as opposed to a Kitty that answered with an error.
+func KittyUnreachable(err error) bool {
+	return errors.Is(err, kitty.ErrNoKittyTerminal)
+}
+
+// PlainKittyError rewrites a failure to reach Kitty in plain words and leaves
+// any other error alone.
+func PlainKittyError(err error) error {
+	if KittyUnreachable(err) {
+		return errors.New(KittyUnreachableMessage)
+	}
+	return err
 }
 
 // KittyWindowLister is the read-only slice of the Kitty client that the

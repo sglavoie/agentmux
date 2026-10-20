@@ -223,7 +223,11 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 			if err == nil {
 				kittyAvailable = true
 			} else {
-				report.add(VerdictWarning, "kitty_unavailable", err.Error())
+				message := err.Error()
+				if errors.Is(err, kitty.ErrNoKittyTerminal) {
+					message = kitty.UnreachableMessage
+				}
+				report.add(VerdictWarning, "kitty_unavailable", message)
 			}
 		}
 		report.Native = InspectNative(paths, policy, windows, kittyAvailable, options.Selector, options.Now)
