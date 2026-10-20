@@ -185,7 +185,7 @@ final class WorkspaceChangesModel: ObservableObject {
         reviewing = true
         worktreeError = nil
         guard !target.isEmpty else { reviewing = false; error = "Select a checkout to compare."; return }
-        guard let command = command() else { reviewing = false; error = "amx is not available. Check Settings and retry."; return }
+        guard let command = command() else { reviewing = false; error = AMXWording.current; return }
         loading = true
         let cancellation = ProcessCancellation()
         comparisonCancellation = cancellation
@@ -219,7 +219,7 @@ final class WorkspaceChangesModel: ObservableObject {
         truncated = false
         reading = false
         guard let file, let changes else { return }
-        guard let command = command() else { patchError = "amx is not available. Check Settings and retry."; return }
+        guard let command = command() else { patchError = AMXWording.current; return }
         reading = true
         let cancellation = ProcessCancellation()
         patchCancellation = cancellation

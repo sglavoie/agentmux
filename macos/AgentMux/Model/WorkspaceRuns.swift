@@ -302,7 +302,7 @@ final class WorkspaceRunsModel: ObservableObject {
 
     func readDetail() {
         guard let row = selected, !reading else { return }
-        guard let command = command() else { detailError = "amx is not available."; return }
+        guard let command = command() else { detailError = AMXWording.current; return }
         reading = true; detailError = nil
         detailGeneration += 1
         let seq = detailGeneration

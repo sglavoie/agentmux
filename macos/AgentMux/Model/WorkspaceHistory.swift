@@ -269,7 +269,7 @@ final class WorkspaceHistoryModel: ObservableObject {
         error = nil
         guard let command = command() else {
             loading = false; loadingMore = false
-            error = "amx is unavailable. Check Settings and try again."
+            error = AMXWording.current
             return
         }
         guard scope != .conversation || currentConversation != nil, scope != .project || !project.isEmpty else {
@@ -390,7 +390,7 @@ final class WorkspaceHistoryModel: ObservableObject {
         reading = false
         guard let selected else { return }
         guard let command = command() else {
-            transcriptError = "amx is unavailable. Check Settings and try again."
+            transcriptError = AMXWording.current
             return
         }
         reading = true

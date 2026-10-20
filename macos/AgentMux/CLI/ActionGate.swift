@@ -32,7 +32,7 @@ struct ActionGate: Equatable {
         self.resolved = resolved || capabilities != nil
     }
 
-    static let resolving = "amx is still being resolved"
+    static let resolving = AMXWording.resolving
     static let checking = "amx is still being checked"
 
     /// nil when `feature` is available.
@@ -144,6 +144,13 @@ enum KittyTargetedCommand {
 enum AMXConfigPath {
     static func resolve(_ environment: LaunchEnvironment?, home: String = NSHomeDirectory()) -> String {
         let home = environment?.home ?? home
+        let path = expanded(environment, home: home)
+        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+    }
+
+    /// The same path with `~` spelled out, for reading or watching the file.
+    static func expanded(_ environment: LaunchEnvironment?, home: String = NSHomeDirectory()) -> String {
+        let home = environment?.home ?? home
         var path = home + "/.config/agent-mux/config.toml"
         if let configured = environment?.value(of: "AMX_CONFIG"), !configured.isEmpty {
             if configured == "~" {
@@ -154,6 +161,6 @@ enum AMXConfigPath {
                 path = configured
             }
         }
-        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+        return path
     }
 }

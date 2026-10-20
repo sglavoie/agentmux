@@ -132,7 +132,7 @@ final class WorkspaceActivityModel: ObservableObject {
     func refresh() {
         generation += 1
         let expected = generation
-        guard let command = command() else { loading = false; error = "amx is unavailable. Check Settings."; return }
+        guard let command = command() else { loading = false; error = AMXWording.current; return }
         loading = true
         error = nil
         let args = ["session", "activity", "--json", "--days", String(days), "--limit", "1000"]

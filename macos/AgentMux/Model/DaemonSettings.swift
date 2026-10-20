@@ -22,7 +22,7 @@ final class DaemonSettingsModel: ObservableObject {
     func refresh() { guard !busy else { return }; read(verifying: false) }
 
     private func read(verifying: Bool) {
-        guard let amx = command() else { error = "amx is still being resolved."; busy = false; return }
+        guard let amx = command() else { error = AMXWording.current; busy = false; return }
         sequence += 1
         let request = sequence
         busy = true; error = nil

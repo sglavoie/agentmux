@@ -88,7 +88,7 @@ final class AMXBinaryResolverTests: XCTestCase {
         XCTAssertEqual(error.invalidOverride, missing)
         XCTAssertEqual(error.tried, [missing])
         XCTAssertTrue(error.message.contains("defaults delete io.github.sglavoie.agentmux amxBinaryPath"))
-        XCTAssertEqual(error.menuMessage, "The amx binary override is not an executable — fix it in Settings › amx binary")
+        XCTAssertEqual(error.menuMessage, AMXWording.invalidOverride)
         XCTAssertFalse(error.menuMessage.contains("\n"))
     }
 
@@ -119,7 +119,7 @@ final class AMXBinaryResolverTests: XCTestCase {
         XCTAssertNil(error.invalidOverride)
         XCTAssertEqual(error.tried, [bundled.path, localBin.path, pathA.appendingPathComponent("amx").path])
         XCTAssertTrue(error.message.contains("just install"))
-        XCTAssertEqual(error.menuMessage, "amx not found — set it in Settings › amx binary")
+        XCTAssertEqual(error.menuMessage, AMXWording.notFound)
         XCTAssertFalse(error.menuMessage.contains("\n"))
         XCTAssertFalse(error.menuMessage.contains(bundled.path), "the tried paths stay in Settings and the log")
     }
