@@ -96,7 +96,7 @@ class WorkspaceRowView: NSTableRowView {
     func syncCell() {
         guard numberOfColumns > 0 else { return }
         guard let cell = view(atColumn: 0) as? WorkspaceRowCellView else { return }
-        cell.setTabText(showsTabColor ? Self.tabText : nil)
+        cell.setTabText(showsTabColor ? Self.tabText : nil, selected: isSelected)
         cell.setStateGlyphOutsidePill((self as? WorkspaceSessionRowView)?.hasStateGlyph == true)
     }
 
@@ -382,7 +382,9 @@ final class WorkspaceRowCellView: NSTableCellView {
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
-        textField = titleLabel
+        // Not the cell's textField: the source list restyles that outlet,
+        // drawing it dark on the selected line's pill in a dark appearance
+        // and faded on a session's color, whatever color the line sets.
         let text = NSStackView(views: [nameLabel, titleLabel, detailLabel])
         text.orientation = .vertical
         text.alignment = .leading
@@ -471,14 +473,17 @@ final class WorkspaceRowCellView: NSTableCellView {
     }
 
     /// Draws the text in `color`, for a session's color behind it, or as the
-    /// list draws it when there is none.
-    func setTabText(_ color: NSColor?) {
+    /// list draws it when there is none. On the `selected` line's opaque pill
+    /// the list's secondary and tertiary grays are too faint to read, so the
+    /// detail, key, and × there are the label color, a little muted.
+    func setTabText(_ color: NSColor?, selected: Bool = false) {
         nameLabel.textColor = color == nil ? Self.nameColor : Self.nameOnTabColor
         glyphLabel.textColor = color ?? .labelColor
         titleLabel.textColor = color ?? .labelColor
-        detailLabel.textColor = color?.withAlphaComponent(0.8) ?? .secondaryLabelColor
-        closeButton.contentTintColor = color?.withAlphaComponent(0.8) ?? .tertiaryLabelColor
-        keyLabel.textColor = color?.withAlphaComponent(0.8) ?? .tertiaryLabelColor
+        let muted = (color ?? (selected ? .labelColor : nil))?.withAlphaComponent(0.8)
+        detailLabel.textColor = muted ?? .secondaryLabelColor
+        closeButton.contentTintColor = muted ?? .tertiaryLabelColor
+        keyLabel.textColor = muted ?? .tertiaryLabelColor
     }
 
     required init?(coder: NSCoder) {

@@ -237,6 +237,25 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertFalse(cell.titleClearsKey)
     }
 
+    /// The source list restyles a cell's textField, which drew the selected
+    /// line's title dark on its dark pill.
+    func testASessionTitleKeepsTheColorItsLineSets() {
+        let cell = WorkspaceRowCellView()
+        XCTAssertNil(cell.textField)
+        cell.setTabText(nil)
+        XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
+        XCTAssertEqual(cell.detailLabel.textColor, .secondaryLabelColor)
+    }
+
+    /// The list's grays are too faint on the selected line's opaque pill.
+    func testASelectedLineMutesItsDetailLessThanTheList() {
+        let cell = WorkspaceRowCellView()
+        cell.setTabText(nil, selected: true)
+        XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
+        XCTAssertEqual(cell.detailLabel.textColor, NSColor.labelColor.withAlphaComponent(0.8))
+        XCTAssertEqual(cell.keyLabel.textColor, NSColor.labelColor.withAlphaComponent(0.8))
+    }
+
     func testTheSidebarToggleIsTheSidebarSymbol() {
         XCTAssertEqual(workspace.sidebarToggle.image?.accessibilityDescription, "Toggle Sidebar")
         XCTAssertNotNil(NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: nil))
