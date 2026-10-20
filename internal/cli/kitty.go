@@ -41,7 +41,7 @@ func KittyUnreachable(err error) bool {
 // any other error alone.
 func PlainKittyError(err error) error {
 	if KittyUnreachable(err) {
-		return errors.New(KittyUnreachableMessage)
+		return errors.New(KittyUnreachableMessage) //nolint:staticcheck // it opens with the name Kitty
 	}
 	return err
 }

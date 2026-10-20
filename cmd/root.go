@@ -105,11 +105,11 @@ func execute(args []string, stderr io.Writer) int {
 		if errors.As(err, &unknown) {
 			message = unknown.summary()
 		}
-		if writeErr := cli.WriteJSONError(command, cli.JSONError{Code: code, Message: message, Candidates: unknownCommandCandidates(err)}); writeErr != nil {
-			var exitErr *cli.ExitError
-			if !errors.As(writeErr, &exitErr) {
-				_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), writeErr.Error())
-			}
+		// WriteJSONError returns its quiet exit once the envelope is written;
+		// any other error is the write itself failing.
+		writeErr := cli.WriteJSONError(command, cli.JSONError{Code: code, Message: message, Candidates: unknownCommandCandidates(err)})
+		if exitErr := (*cli.ExitError)(nil); !errors.As(writeErr, &exitErr) {
+			_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), writeErr.Error())
 		}
 		return 1
 	}
