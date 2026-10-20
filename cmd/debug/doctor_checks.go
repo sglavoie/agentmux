@@ -268,24 +268,34 @@ func formatDoctorBytes(value int64) string {
 }
 
 // writeDoctorFindings renders the structured findings grouped by severity.
+// The headings are the JSON severities (failure is "health failures"). The
+// ASL integration findings are left out: the integration section above
+// already printed each one with its remediation, and the verdict still
+// counts them.
 func writeDoctorFindings(out io.Writer, findings []doctorFinding, verbose bool) error {
+	shown := make([]doctorFinding, 0, len(findings))
+	for _, finding := range findings {
+		if !aslIntegrationFinding(finding.Check) {
+			shown = append(shown, finding)
+		}
+	}
 	for _, group := range []struct {
 		severity string
 		heading  string
 	}{
 		{severityFailure, "health failures:"},
 		{severityWarning, "warnings:"},
-		{severityInfo, "notes:"},
+		{severityInfo, "info:"},
 	} {
-		if countFindings(findings, group.severity) == 0 {
+		if countFindings(shown, group.severity) == 0 {
 			continue
 		}
 		if _, err := fmt.Fprintln(out, group.heading); err != nil {
 			return err
 		}
-		entries := doctorFindingEntries(findings, group.severity)
+		entries := doctorFindingEntries(shown, group.severity)
 		if !verbose {
-			entries = summarizeClosedTombstones(entries, findings, group.severity)
+			entries = summarizeClosedTombstones(entries, shown, group.severity)
 		}
 		for _, entry := range entries {
 			if _, err := fmt.Fprintln(out, entry.line); err != nil {
@@ -299,6 +309,17 @@ func writeDoctorFindings(out io.Writer, findings []doctorFinding, verbose bool) 
 		}
 	}
 	return nil
+}
+
+// aslIntegrationFinding reports whether check is raised by the ASL
+// integration section, which prints it itself.
+func aslIntegrationFinding(check string) bool {
+	for _, finding := range aslDimensionFinding {
+		if check == finding {
+			return true
+		}
+	}
+	return false
 }
 
 // doctorVerdict is the closing line of the text report. Its warning count is

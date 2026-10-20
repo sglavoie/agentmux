@@ -2,8 +2,10 @@ package debug
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"strings"
@@ -163,7 +165,23 @@ func DoctorCommand() *cobra.Command { return doctorCmd }
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Diagnose daemon, Kitty, backend, hook, renderer, and invariant health",
-	Args:  cobra.NoArgs,
+	Long: `Check every part of this installation and say what is wrong and what to run.
+
+Doctor reads the daemon (when one runs), the private tmux backend, Kitty (where
+it is in use), the configured harness hooks, project directories, the
+agent-session-loop pairing, and the daemon's own invariants. Each problem is a
+finding with a stable identifier and a severity: failure, warning, or info.
+The text report prints a remediation line under a finding that has one.
+
+Doctor changes nothing. With --strict it exits 2 when any failure is found,
+so a script or a release gate can depend on it; warnings and info never fail
+it. --json emits the report as a schema-versioned document (not the common
+envelope) whose finding identifiers are a stable contract.`,
+	Example: `  amx doctor
+  amx doctor --strict
+  amx doctor --json | jq '.findings[] | select(.severity == "failure")'
+  amx doctor --verbose`,
+	Args: cobra.NoArgs,
 	// A strict-mode health failure is a structured result (cli.ExitError), not a
 	// usage problem; Execute owns the stderr line and process status.
 	SilenceErrors: true,
@@ -264,7 +282,14 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	writeDoctorRunningBinary(func(format string, args ...any) {
 		addFinding(severityInfo, "uninstalled_binary", format, args...)
 	})
-	if err := writeDoctorSocketStatus(textOut, health.Build, reportIssue("socket")); err != nil {
+	// With no daemon, a missing socket is the same fact daemon_unreachable
+	// already reports, not a second failure. A socket left behind by a daemon
+	// that is gone is still checked.
+	if _, statErr := doctorStat(doctorSocketPath()); !health.Alive && errors.Is(statErr, fs.ErrNotExist) {
+		if _, err := fmt.Fprintln(textOut, "socket: none (the daemon is not running)"); err != nil {
+			return err
+		}
+	} else if err := writeDoctorSocketStatus(textOut, health.Build, reportIssue("socket")); err != nil {
 		return err
 	}
 
