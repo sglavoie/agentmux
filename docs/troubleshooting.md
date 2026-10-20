@@ -21,7 +21,10 @@ For lifecycle behavior and confirmation preferences, see
   Every failure and warning carries a remediation: the text report prints it
   on its own `remediation:` line under the finding (unless the message already
   says it), and `--json` carries it as the finding's optional `remediation`
-  field. The finding's `message` text is unchanged.
+  field. The finding's `message` text is unchanged. The text report groups
+  findings under `health failures:`, `warnings:`, and `info:` (the JSON
+  severities), and with the daemon down says so once, as `daemon_unreachable`:
+  the socket the daemon left no trace of is not a second failure.
   `amx doctor --json` emits a structured report; `--strict` also evaluates the
   correctness invariants (reducer/renderer agreement, ASL visibility, subagent
   visibility, producer routing, acknowledged-fact pressure, persisted process

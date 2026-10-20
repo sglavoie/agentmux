@@ -101,7 +101,7 @@ surfaced as the stable warning finding `hook_delivery_failures` and as a doctor
 summary line that says how long ago the latest one was. Failures that all
 predate the running daemon's start are the restart gap and are not a warning:
 `debug status` omits the finding (the hooks report still carries the count) and
-doctor reports `hook_delivery_failures` as a note. Each request is terminalized exactly once: `hook.delivery` is the
+doctor reports `hook_delivery_failures` under info. Each request is terminalized exactly once: `hook.delivery` is the
 authoritative terminal record and its outcome decides success or failure, while
 an error-outcome `hook.failure` marks a request failed only as a legacy fallback
 when no correlated `hook.delivery` exists. Intermediate error-outcome
