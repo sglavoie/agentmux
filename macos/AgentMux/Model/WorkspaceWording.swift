@@ -2,19 +2,23 @@ import Foundation
 
 /// Presentation only: protocol strings remain intact in models and decisions.
 enum WorkspaceWording {
+    /// Where a session's state came from, in the operator's words: who saw
+    /// or said it, never the wire's name for the source.
     static func evidence(_ evidence: CompanionStatusEvidence?) -> String {
-        guard let evidence else { return "No supporting observation available" }
+        guard let evidence else { return noEvidence }
         switch evidence.kind {
-        case "screen": return "Inferred from terminal screen"
-        case "transcript": return "Inferred from conversation transcript"
-        case "harness": return "Reported by harness or its process lifecycle"
-        case "subagent": return "Reported by subagent"
-        case "asl": return "Reported by ASL run"
-        case "probe": return "Recorded by daemon observation or user action"
-        case "legacy": return "Reported by a legacy event source"
-        default: return "Observation source not recognized"
+        case "screen": return "Read from the terminal screen"
+        case "transcript": return "Read from the conversation"
+        case "harness": return "Reported by the agent"
+        case "subagent": return "Reported by a subagent"
+        case "asl": return "Reported by the ASL run"
+        case "probe": return "Seen by Agent Mux or set by you"
+        case "legacy": return "Reported by an older hook"
+        default: return "From a source this app does not know"
         }
     }
+
+    static let noEvidence = "Nothing has reported it yet"
 
     static func status(_ value: String) -> String {
         let labels = [

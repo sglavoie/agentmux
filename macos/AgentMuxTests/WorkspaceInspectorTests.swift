@@ -157,7 +157,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual(idle.title, "api — work")
         XCTAssertTrue(idle.embedded)
         XCTAssertEqual(idle.sections.map(\.title), ["Status", "Identity"], "a session with no branch has no Git section")
-        XCTAssertEqual(idle.sections[0].fields, [.init(label: "State", value: "idle"), .init(label: "Evidence", value: "No supporting observation available")])
+        XCTAssertEqual(idle.sections[0].fields, [.init(label: "State", value: "idle"), .init(label: "Evidence", value: "Nothing has reported it yet")])
         XCTAssertEqual(idle.sections[1].fields, [
             .init(label: "Project", value: "api"),
             .init(label: "Profile", value: "work"),
@@ -184,7 +184,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual(inspection.sections[0].fields, [
             .init(label: "State", value: "working"),
             .init(label: "Reason", value: "Tool"),
-            .init(label: "Evidence", value: "No supporting observation available"),
+            .init(label: "Evidence", value: "Nothing has reported it yet"),
             .init(label: "Since", value: "5m"),
             .init(label: "Working for", value: "2m"),
             .init(label: "Last event", value: "<1m"),

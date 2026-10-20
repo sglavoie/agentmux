@@ -43,10 +43,12 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         let session = try JSONDecoder().decode(CompanionSession.self, from: Data(json.utf8))
         let fields = WorkspaceInspector.inspection(session).sections.flatMap(\.fields)
         XCTAssertEqual(fields.first { $0.label == "Reason" }?.value, "Needs permission")
-        XCTAssertEqual(fields.first { $0.label == "Evidence" }?.value, "Inferred from terminal screen")
+        XCTAssertEqual(fields.first { $0.label == "Evidence" }?.value, "Read from the terminal screen")
         XCTAssertNotNil(fields.first { $0.label == "Observed" })
-        XCTAssertEqual(WorkspaceWording.evidence(nil), "No supporting observation available")
-        XCTAssertEqual(WorkspaceWording.evidence(.init(kind: "future", at: 100)), "Observation source not recognized")
+        XCTAssertEqual(WorkspaceWording.evidence(nil), "Nothing has reported it yet")
+        XCTAssertEqual(WorkspaceWording.evidence(.init(kind: "future", at: 100)), "From a source this app does not know")
+        XCTAssertEqual(WorkspaceWording.evidence(.init(kind: "probe", at: 100)), "Seen by Agent Mux or set by you")
+        XCTAssertEqual(WorkspaceWording.evidence(.init(kind: "harness", at: 100)), "Reported by the agent")
     }
 
     func testTerminalQueryKeepsLiteralTextAndExactConversationScope() throws {
