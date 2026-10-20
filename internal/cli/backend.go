@@ -50,12 +50,19 @@ func ConfigureTmux(cfg *config.Config) {
 	tmux.SetConfiguredBinary(cfg.TmuxPath())
 }
 
+// BackendFlagUsage is --backend's help on a launch entrypoint.
+const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend, else kitty)"
+
 // AddBackendFlag registers --backend on a launch entrypoint.
 func AddBackendFlag(cmd *cobra.Command) {
-	cmd.Flags().String(BackendFlag, "", "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend, else kitty)")
-	_ = cmd.RegisterFlagCompletionFunc(BackendFlag, func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-		return []string{string(runtimesession.BackendKitty), string(runtimesession.BackendTmux)}, cobra.ShellCompDirectiveNoFileComp
-	})
+	AddBackendFlagUsage(cmd, BackendFlagUsage)
+}
+
+// AddBackendFlagUsage registers --backend with help of its own, for a command
+// where the backend decides something other than where an agent launches.
+func AddBackendFlagUsage(cmd *cobra.Command, usage string) {
+	cmd.Flags().String(BackendFlag, "", usage)
+	_ = cmd.RegisterFlagCompletionFunc(BackendFlag, CompleteBackends)
 }
 
 // SelectedBackend reads --backend, falling back to the configured launch

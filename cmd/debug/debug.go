@@ -58,6 +58,23 @@ type debugSelectorFlagValues struct {
 
 var debugSelectorFlags debugSelectorFlagValues
 
+// debugStageNames and debugOutcomeNames are what <Tab> offers for --stage and
+// --outcome: the stages and outcomes the journal records most, not a closed
+// vocabulary. A selector still matches any value.
+var (
+	debugStageNames = []string{
+		"hook.delivery", "hook.failure", "hook.ipc_attempt", "hook.rejection", "hook.validation",
+		"hook.window_resolution", "hook.runtime_session", "hook.acknowledgement",
+		"daemon.decision", "daemon.lifecycle", "daemon.process_lifecycle", "daemon.renderer.rendered",
+		"daemon.renderer.failed", "daemon.runtime_reconcile", "daemon.kitty_snapshot",
+		"session.launch", "asl.lifecycle.delivered", "maintenance.contention", "snapshot.consumer",
+	}
+	debugOutcomeNames = []string{
+		"accepted", "success", "error", "failed", "pending", "suppressed", "sent", "delivered",
+		"retryable_failure", "permanent_failure", "exhausted", "stale", "superseded",
+	}
+)
+
 // debugRuntimeSession is --runtime-session on the two commands that act on
 // one live session, probe and capture start.
 var debugRuntimeSession string
@@ -171,6 +188,8 @@ func init() {
 	flags.StringVar(&debugSelectorFlags.before, "before", "", "upper time bound (RFC3339, Unix seconds, or duration such as 30m)")
 	_ = debugCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
 	_ = debugCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	_ = debugCmd.RegisterFlagCompletionFunc("stage", cli.FixedCompletions(debugStageNames...))
+	_ = debugCmd.RegisterFlagCompletionFunc("outcome", cli.FixedCompletions(debugOutcomeNames...))
 
 	debugStatusCmd.Flags().BoolVar(&debugStatusJSON, "json", false, "write schema-versioned JSON")
 	debugTailCmd.Flags().BoolVar(&debugTailJSON, "json", false, "write schema-versioned JSON")

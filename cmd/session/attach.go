@@ -62,8 +62,9 @@ func outliveHangup() (restore func()) {
 var attachJSON bool
 
 var attachCmd = &cobra.Command{
-	Use:   "attach RUNTIME_SESSION_ID",
-	Short: "Attach this terminal to a running agent",
+	Use:               "attach RUNTIME_SESSION_ID",
+	ValidArgsFunction: cli.CompleteRuntimeSessionFirstArg,
+	Short:             "Attach this terminal to a running agent",
 	Long: `Attaches this terminal to the agent a runtime session runs, without
 restarting it. Attaching takes interactive ownership: any other terminal
 attached to the same agent is detached, and the agent's size follows this

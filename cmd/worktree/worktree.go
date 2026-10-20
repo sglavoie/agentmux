@@ -659,8 +659,9 @@ func init() {
 	}
 	// Where a reopen launches, and so whether a shell or an editor opens a
 	// Kitty tab or runs outside Kitty.
-	for _, command := range []*cobra.Command{worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd} {
-		cli.AddBackendFlag(command)
+	cli.AddBackendFlag(worktreeReopenCmd)
+	for _, command := range []*cobra.Command{worktreeShellCmd, worktreeEditCmd} {
+		cli.AddBackendFlagUsage(command, "where it opens: kitty for a new Kitty tab, tmux for the workspace or this terminal (default: [defaults] launch_backend, else kitty)")
 	}
 	worktreeReopenCmd.Flags().String("live-session", "", "live session to focus when several run in the worktree: a candidate ID from the ambiguous_live_sessions error (a Kitty tab ID)")
 	// --session was the flag's first name; it stays as a hidden alias so

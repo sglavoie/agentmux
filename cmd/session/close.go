@@ -24,8 +24,9 @@ var (
 )
 
 var closeCmd = &cobra.Command{
-	Use:   "close RUNTIME_SESSION_ID",
-	Short: "End a running agent and its tmux session",
+	Use:               "close RUNTIME_SESSION_ID",
+	ValidArgsFunction: cli.CompleteRuntimeSessionFirstArg,
+	Short:             "End a running agent and its tmux session",
 	Long: `Ends the agent a runtime session runs in Agent Mux's private tmux server,
 and the tmux session that holds it. It asks for --yes because the agent's
 work in progress is lost; its conversation stays on disk and can be resumed.

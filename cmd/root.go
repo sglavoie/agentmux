@@ -199,6 +199,29 @@ func init() {
 	rootCmd.InitDefaultCompletionCmd()
 	guardInvocations(rootCmd)
 	completeNoFilesByDefault(rootCmd)
+	completeSharedFlags(rootCmd)
+}
+
+// completeSharedFlags gives the flags that mean the same thing on every
+// command one completion each, wherever a family did not register its own:
+// --runtime-session completes the running runtime sessions and --backend the
+// two backends.
+func completeSharedFlags(command *cobra.Command) {
+	shared := map[string]cobra.CompletionFunc{
+		cli.RuntimeSessionFlag: cli.CompleteRuntimeSessions,
+		cli.BackendFlag:        cli.CompleteBackends,
+	}
+	for name, complete := range shared {
+		if command.NonInheritedFlags().Lookup(name) == nil {
+			continue
+		}
+		if _, ok := command.GetFlagCompletionFunc(name); !ok {
+			_ = command.RegisterFlagCompletionFunc(name, complete)
+		}
+	}
+	for _, child := range command.Commands() {
+		completeSharedFlags(child)
+	}
 }
 
 // versionCmd answers `amx version` the way `amx --version` does, since both

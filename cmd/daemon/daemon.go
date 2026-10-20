@@ -21,6 +21,7 @@ package daemon
 
 import (
 	"github.com/sglavoie/agentmux/cmd/debug"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +43,7 @@ func init() {
 	daemonExportEventsCmd.Flags().StringVar(&daemonExportEventsOutput, "output", "", "write JSON to this file instead of stdout")
 	daemonExportEventsCmd.Flags().BoolVar(&daemonExportEventsPretty, "pretty", true, "pretty-print JSON with 2-space indent")
 	daemonExportEventsCmd.Flags().IntVar(&daemonExportEventsSchema, "schema", protocol.EventsExportSchemaVersion, "export schema version (8, 9, 10, 11, 12, or 13)")
+	_ = daemonExportEventsCmd.RegisterFlagCompletionFunc("schema", cli.FixedCompletions("13", "12", "11", "10", "9", "8"))
 
 	daemonCmd.AddCommand(debug.AuditCommand())
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd, daemonRestartCmd, daemonExportEventsCmd)

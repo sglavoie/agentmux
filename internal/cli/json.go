@@ -12,6 +12,30 @@ import (
 // payloads may grow additively while this value remains stable for v1 clients.
 const JSONSchemaVersion = 1
 
+// JSONFlagUsage is the help of every --json flag whose output is the common
+// envelope, so `--help` says the same thing about it everywhere.
+const JSONFlagUsage = "emit schema-v1 JSON"
+
+// AddJSONFlag registers --json with JSONFlagUsage on cmd, bound to value when
+// it is not nil; a command that reads the flag by name passes nil.
+func AddJSONFlag(cmd *cobra.Command, value *bool) {
+	if value == nil {
+		value = new(bool)
+	}
+	cmd.Flags().BoolVar(value, "json", false, JSONFlagUsage)
+}
+
+// AddReportJSONFlag registers --json on a command that emits its own
+// versioned document rather than the common envelope (a diagnostic report, an
+// evidence record), naming that document in the help: "emit <what> as
+// schema-versioned JSON".
+func AddReportJSONFlag(cmd *cobra.Command, value *bool, what string) {
+	if value == nil {
+		value = new(bool)
+	}
+	cmd.Flags().BoolVar(value, "json", false, "emit "+what+" as schema-versioned JSON")
+}
+
 // jsonEnvelope wraps successful non-interactive command output. Unlike the
 // error envelope it is unexported: `Data any` makes it useless as a decode
 // target, so every consumer decodes the schema-v1 success shape into a struct

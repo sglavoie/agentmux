@@ -50,8 +50,9 @@ var (
 )
 
 var sendCmd = &cobra.Command{
-	Use:   "send RUNTIME_SESSION_ID [TEXT]",
-	Short: "Answer or prompt a running agent without attaching",
+	Use:               "send RUNTIME_SESSION_ID [TEXT]",
+	ValidArgsFunction: cli.CompleteRuntimeSessionFirstArg,
+	Short:             "Answer or prompt a running agent without attaching",
 	Long: `Writes input to the agent a runtime session runs in Agent Mux's private
 tmux server, with no terminal attached and without taking the session from
 whoever has it.
@@ -103,6 +104,7 @@ func init() {
 	sendCmd.Flags().BoolVar(&sendJSON, "json", false, "emit schema-v1 JSON")
 	sendCmd.Flags().BoolVar(&sendStdin, "stdin", false, "read the text from standard input")
 	sendCmd.Flags().StringArrayVar(&sendKeys, "key", nil, "press this key instead of sending text (repeatable)")
+	_ = sendCmd.RegisterFlagCompletionFunc("key", cli.FixedCompletions(backend.KeyNames()...))
 	sendCmd.Flags().BoolVar(&sendNoEnter, "no-enter", false, "leave the text typed without entering it")
 	sendCmd.Flags().BoolVar(&sendAnyScreen, "any-screen", false, "send without reading the agent's screen first")
 	sendCmd.Flags().BoolVar(&sendYes, "yes", false, "confirm sending into a session that runs an agent-session-loop run")
