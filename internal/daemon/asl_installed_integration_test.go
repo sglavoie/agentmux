@@ -25,6 +25,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
 
@@ -370,18 +371,6 @@ func (d *aslDaemon) notificationsFor(slot int) []notifyCall {
 func (d *aslDaemon) boundSlot(id runtimesession.ID) (int, bool) {
 	return boundSlot(d.h, id)
 }
-
-func waitUntil(t *testing.T, what string, timeout time.Duration, ok func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for !ok() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out after %s waiting for %s", timeout, what)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
 func liveLeases(h *Handler, slot int) []string {
 	var runs []string
 	for _, fact := range slotFacts(h, slot) {
@@ -470,11 +459,11 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	}
 
 	var tmuxSlot int
-	waitUntil(t, "the tmux run's lifecycle hooks to bind its runtime session", 60*time.Second, func() bool {
+	testutil.Eventually(t, "the tmux run's lifecycle hooks to bind its runtime session", func() bool {
 		slot, ok := first.boundSlot(onTmux)
 		tmuxSlot = slot
 		return ok && len(liveLeases(first.h, slot)) == 1
-	})
+	}, testutil.Within(60*time.Second), testutil.Every(50*time.Millisecond))
 	if !isRuntimeSyntheticSlot(tmuxSlot) {
 		t.Fatalf("the tmux run landed on Kitty-range slot %d", tmuxSlot)
 	}
@@ -498,10 +487,10 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 
 	// The worker asks; the supervisor in the same session surfaces it.
 	tmuxQuestion := w.surfaceQuestion(onTmux, tmuxPlan)
-	waitUntil(t, "the tmux session to show the supervisor question", 30*time.Second, func() bool {
+	testutil.Eventually(t, "the tmux session to show the supervisor question", func() bool {
 		_, icon, _ := slotState(first.h, tmuxSlot)
 		return icon == "question" && len(first.notificationsFor(tmuxSlot)) >= 1
-	})
+	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
 	if clients := w.tmuxClients(); clients != "" {
 		t.Fatalf("the private tmux server has attached clients:\n%s", clients)
 	}
@@ -548,12 +537,12 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	defer cancelBridge()
 	manager.Start(bridgeCtx)
 	defer manager.Close()
-	waitUntil(t, "the installed bridge to accept mutations", 60*time.Second, func() bool {
+	testutil.Eventually(t, "the installed bridge to accept mutations", func() bool {
 		return manager.Status().MutationsEnabled
-	})
+	}, testutil.Within(60*time.Second), testutil.Every(50*time.Millisecond))
 	first.h.SetASLBridge(manager)
 	var row aslbridge.Row
-	waitUntil(t, "the bridge to project the tmux run", 30*time.Second, func() bool {
+	testutil.Eventually(t, "the bridge to project the tmux run", func() bool {
 		snapshot, _, err := manager.Snapshot()
 		if err != nil {
 			return false
@@ -565,7 +554,7 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 			}
 		}
 		return false
-	})
+	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
 	if row.ActionToken == "" {
 		t.Fatalf("bridge row for the tmux run carries no action token: %+v", row)
 	}
@@ -624,10 +613,10 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 		t.Fatalf("question after restart = %s; want %s", again, tmuxQuestion)
 	}
 	second.h.maintenanceTick(time.Now().Add(11 * time.Second))
-	waitUntil(t, "the restarted daemon to show the still-open question", 30*time.Second, func() bool {
+	testutil.Eventually(t, "the restarted daemon to show the still-open question", func() bool {
 		_, icon, _ := slotState(second.h, restoredSlot)
 		return icon == "question"
-	})
+	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
 	time.Sleep(500 * time.Millisecond)
 	afterRestart := len(second.notificationsFor(restoredSlot))
 	if afterRestart != 0 {
@@ -674,18 +663,18 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 		_ = kittyRunCmd.Process.Kill()
 	})
 
-	waitUntil(t, "the Kitty run's lifecycle hooks to reach window 43", 60*time.Second, func() bool {
+	testutil.Eventually(t, "the Kitty run's lifecycle hooks to reach window 43", func() bool {
 		return len(liveLeases(second.h, 43)) == 1
-	})
+	}, testutil.Within(60*time.Second), testutil.Every(50*time.Millisecond))
 	kittyRun := liveLeases(second.h, 43)[0]
 	if slot, ok := second.boundSlot(onKitty); !ok || slot != 43 {
 		t.Fatalf("the Kitty runtime session is bound to %d (bound %v); want window 43", slot, ok)
 	}
 	kittyQuestion := w.surfaceQuestion(onKitty, kittyPlan)
-	waitUntil(t, "window 43 to show the Kitty run's question", 30*time.Second, func() bool {
+	testutil.Eventually(t, "window 43 to show the Kitty run's question", func() bool {
 		_, icon, _ := slotState(second.h, 43)
 		return icon == "question" && len(second.notificationsFor(43)) >= 1
-	})
+	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
 	second.h.maintenanceTick(time.Now().Add(22 * time.Second))
 	time.Sleep(500 * time.Millisecond)
 	kittyTarget := second.h.notificationTarget(43, "work")
@@ -726,18 +715,18 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 
 	// --- Replies route by run: each clears only its own session's question.
 	w.supervise(onTmux, "inbox", "reply", tmuxPlan.dir, "--to", tmuxQuestion, "--text", "Go ahead.", "--state-dir", w.stateRoot, "--json")
-	waitUntil(t, "the tmux session's question to clear after its reply", 30*time.Second, func() bool {
+	testutil.Eventually(t, "the tmux session's question to clear after its reply", func() bool {
 		_, icon, _ := slotState(second.h, restoredSlot)
 		return icon != "question"
-	})
+	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
 	if _, icon, _ := slotState(second.h, 43); icon != "question" {
 		t.Fatalf("replying to the tmux run cleared the Kitty session's question (icon %q)", icon)
 	}
 	w.supervise(onKitty, "inbox", "reply", kittyPlan.dir, "--to", kittyQuestion, "--text", "Go ahead.", "--state-dir", w.stateRoot, "--json")
-	waitUntil(t, "the Kitty session's question to clear after its reply", 30*time.Second, func() bool {
+	testutil.Eventually(t, "the Kitty session's question to clear after its reply", func() bool {
 		_, icon, _ := slotState(second.h, 43)
 		return icon != "question"
-	})
+	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
 
 	// Both workers finish their sessions; each run's end releases its lease.
 	select {
@@ -745,12 +734,12 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	case <-time.After(120 * time.Second):
 		t.Fatalf("the Kitty session's run did not exit; log:\n%s", w.readLog("run-plan-kitty.out"))
 	}
-	waitUntil(t, "the Kitty run's lease to be released", 30*time.Second, func() bool {
+	testutil.Eventually(t, "the Kitty run's lease to be released", func() bool {
 		return len(liveLeases(second.h, 43)) == 0
-	})
-	waitUntil(t, "the tmux run's lease to be released", 120*time.Second, func() bool {
+	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
+	testutil.Eventually(t, "the tmux run's lease to be released", func() bool {
 		return len(liveLeases(second.h, restoredSlot)) == 0
-	})
+	}, testutil.Within(120*time.Second), testutil.Every(50*time.Millisecond))
 	t.Logf("OBSERVED misrouting check: replies cleared each session's question independently; both runs ended and released their leases on their own slots (tmux harness log: %q; kitty harness log: %q)",
 		strings.TrimSpace(w.readLog("harness-plan-tmux.log")), strings.TrimSpace(w.readLog("harness-plan-kitty.log")))
 }

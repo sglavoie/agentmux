@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // companionWindows is a Kitty tree of n managed windows, IDs 1..n, one per tab.
@@ -236,10 +237,10 @@ func TestCompanionSubscribeAckReplayAndHealth(t *testing.T) {
 	}
 
 	_ = sub.Close()
-	waitFor(t, func() bool {
+	testutil.Eventually(t, "the subscriber to leave the hub after closing", func() bool {
 		resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 		return resp.Companion != nil && resp.Companion.Subscribers == 0
-	}, "subscriber never left the hub after closing")
+	})
 }
 
 // TestCompanionHeartbeat: the hub sends heartbeats at its advertised cadence.
@@ -355,7 +356,7 @@ func TestFaultSubscriberKilledMidWrite(t *testing.T) {
 	if _, err := io.ReadAtLeast(conn, buf, 1); err != nil {
 		t.Fatalf("read ack: %v", err)
 	}
-	waitFor(t, func() bool { return h.companionHealth().Subscribers == 1 }, "subscriber never registered")
+	testutil.Eventually(t, "the subscriber to register", func() bool { return h.companionHealth().Subscribers == 1 })
 	// Keep the writer busy with fresh snapshots, then kill the peer.
 	for i := range 5 {
 		companionStateUpdate(h, 1+i, "subagent", "SubagentStart")
@@ -366,7 +367,7 @@ func TestFaultSubscriberKilledMidWrite(t *testing.T) {
 	}
 	_ = conn.Close()
 
-	waitFor(t, func() bool { return h.companionHealth().Subscribers == 0 }, "killed subscriber was never removed from the hub")
+	testutil.Eventually(t, "the killed subscriber to leave the hub", func() bool { return h.companionHealth().Subscribers == 0 })
 
 	// The daemon is healthy: ordinary requests and a fresh subscription work.
 	client := ipc.NewClientWithSocket(sock)
@@ -418,16 +419,5 @@ func nextFrameOfType(t *testing.T, sub *ipc.Subscription, typ protocol.StreamFra
 		_ = sub.Close()
 		t.Fatalf("no %s frame within 5s", typ)
 		return protocol.StreamFrame{}
-	}
-}
-
-func waitFor(t *testing.T, cond func() bool, msg string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal(msg)
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }

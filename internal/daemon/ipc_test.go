@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 func startTestServer(t *testing.T) string {
@@ -306,8 +307,8 @@ func TestIPC_ShutdownRequest(t *testing.T) {
 	// After shutdown, subsequent connects should fail. Shutdown runs
 	// asynchronously through cancel, so wait for it rather than guessing how
 	// long a loaded machine needs.
-	waitFor(t, func() bool {
+	testutil.Eventually(t, "connections to fail after shutdown", func() bool {
 		_, err := c.Send(protocol.Request{Type: protocol.TypeStateQuery})
 		return err != nil
-	}, "connections still succeed after shutdown")
+	})
 }

@@ -8,6 +8,7 @@ package aslbridge
 import (
 	"context"
 	"errors"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"sync"
 	"testing"
 	"time"
@@ -132,10 +133,10 @@ func TestDisconnectServesStaleDataThenClearsIt(t *testing.T) {
 		Mode: ModeAuto, Command: "asl", Launcher: fake.launcher(), Now: clock.Now,
 		Sleep: func(context.Context, time.Duration) bool { return false },
 	})
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	fake.exit()
-	waitFor(t, "disconnect", func() bool { return !m.Status().Available })
+	testutil.Eventually(t, "disconnect", func() bool { return !m.Status().Available })
 
 	// Mutations are disabled at once, but the last projection survives as
 	// visibly stale read-only data.
@@ -175,7 +176,7 @@ func TestActionsRequireAFreshSnapshotAfterReconnect(t *testing.T) {
 		Mode: ModeAuto, Command: "asl", Launcher: fake.launcher(),
 		Sleep: func(context.Context, time.Duration) bool { return false },
 	})
-	waitFor(t, "connection", func() bool { return m.Status().Available })
+	testutil.Eventually(t, "connection", func() bool { return m.Status().Available })
 
 	if m.Status().MutationsEnabled {
 		t.Fatal("a handshake alone must not re-enable mutations")
@@ -191,7 +192,7 @@ func TestCloseJoinsSupervisionAndIsIdempotent(t *testing.T) {
 	fake := newFakeBridge(t, serveSnapshots)
 	m := New(Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher(), Logger: discardLogger()})
 	m.Start(context.Background())
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	done := make(chan struct{})
 	go func() {

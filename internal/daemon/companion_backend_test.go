@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // alerterCalls counts Alerter dispatches made by a test notifier.
@@ -120,14 +121,14 @@ func TestAppNotificationReachesASubscriberAndSettles(t *testing.T) {
 	if resp := dispose(h, notice.NotificationID, protocol.DispositionDelivered); !resp.OK {
 		t.Fatalf("delivered: %+v", resp)
 	}
-	waitFor(t, func() bool {
+	testutil.Eventually(t, "the app's delivered report to record send_success", func() bool {
 		d, ok := notificationEffect(h, "dispatch")
 		return ok && d.Outcome == "sent" && d.Backend == notification.BackendApp
-	}, "the app's delivered report never recorded send_success")
+	})
 	if resp := dispose(h, notice.NotificationID, protocol.DispositionDismissed); !resp.OK {
 		t.Fatalf("dismissed: %+v", resp)
 	}
-	waitFor(t, func() bool { return h.companion.pendingDeliveries() == 0 }, "the settled delivery was not forgotten")
+	testutil.Eventually(t, "the settled delivery to be forgotten", func() bool { return h.companion.pendingDeliveries() == 0 })
 	if alerter.count() != 0 {
 		t.Fatalf("alerter ran %d times although the app delivered", alerter.count())
 	}
@@ -147,7 +148,7 @@ func TestNoSubscriberUsesAlerter(t *testing.T) {
 		t.Fatal("a subscriber that did not claim the role holds it")
 	}
 	h.notifier.MaybeNotify(7, "W:api", "work", "stop", false)
-	waitFor(t, func() bool { return alerter.count() == 1 }, "alerter was not used with no backend subscriber")
+	testutil.Eventually(t, "the alerter to be used with no backend subscriber", func() bool { return alerter.count() == 1 })
 	if _, ok := notificationEffect(h, "dispatch"); !ok {
 		t.Fatal("no dispatch disposition recorded")
 	}
@@ -288,7 +289,7 @@ func TestNewestBackendClaimantHoldsTheRole(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("a delivery bound to a departed subscriber never ended")
 	}
-	waitFor(t, func() bool { return h.companionHealth().Subscribers == 1 }, "the departed subscriber stayed registered")
+	testutil.Eventually(t, "the departed subscriber to unregister", func() bool { return h.companionHealth().Subscribers == 1 })
 	if !h.companion.Ready() {
 		t.Fatal("the remaining claimant did not inherit the role")
 	}
@@ -300,7 +301,7 @@ func TestNewestBackendClaimantHoldsTheRole(t *testing.T) {
 	}
 
 	_ = older.Close()
-	waitFor(t, func() bool { return !h.companion.Ready() }, "the role outlived every claimant")
+	testutil.Eventually(t, "the role to end with its last claimant", func() bool { return !h.companion.Ready() })
 	if _, err := h.companion.Deliver(ctx, notification.AppNotice{NotificationID: "n-none"}); err == nil {
 		t.Fatal("Deliver succeeded with no backend")
 	}

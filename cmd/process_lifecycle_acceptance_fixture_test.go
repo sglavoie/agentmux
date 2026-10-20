@@ -20,6 +20,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 const (
@@ -214,7 +215,7 @@ func (f *processLifecycleAcceptanceFixture) startDaemon() {
 	f.cancel = cancel
 	f.done = make(chan error, 1)
 	go func() { f.done <- daemon.Run(ctx, f.cfg) }()
-	waitForAcceptance(f.t, "process lifecycle daemon readiness", func() bool {
+	testutil.Eventually(f.t, "process lifecycle daemon readiness", func() bool {
 		health := ipc.NewClient().Health()
 		return health.Alive && health.Ready
 	})
@@ -361,7 +362,7 @@ func (f *processLifecycleAcceptanceFixture) enableProcessBlock(pid int) {
 
 func (f *processLifecycleAcceptanceFixture) waitForProcessBlock() {
 	f.t.Helper()
-	waitForAcceptance(f.t, "process inspection block", func() bool {
+	testutil.Eventually(f.t, "process inspection block", func() bool {
 		_, err := os.Stat(f.psBlock + ".entered")
 		return err == nil
 	})
@@ -381,7 +382,7 @@ func (f *processLifecycleAcceptanceFixture) waitForExport(
 ) protocol.EventsExport {
 	f.t.Helper()
 	var last protocol.EventsExport
-	waitForAcceptance(f.t, description, func() bool {
+	testutil.Eventually(f.t, description, func() bool {
 		export, err := ipc.NewClient().ExportEvents(0)
 		if err != nil {
 			return false
@@ -457,7 +458,7 @@ func (f *processLifecycleAcceptanceFixture) journalRecords() []diagnostics.Trace
 		f.t.Fatal(err)
 	}
 	var records []diagnostics.TraceEnvelope
-	waitForAcceptance(f.t, "process lifecycle journal availability", func() bool {
+	testutil.Eventually(f.t, "process lifecycle journal availability", func() bool {
 		if _, err = journal.PromoteSpool(f.t.Context()); err != nil {
 			return false
 		}

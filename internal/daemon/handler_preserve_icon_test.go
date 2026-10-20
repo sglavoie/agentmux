@@ -40,28 +40,31 @@ func TestHandler_PreserveCurrentRestoresPreviousState(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			guard := activity.NewStateGuard(50 * time.Millisecond)
-			notifier := notification.NewNotifier(&config.NotificationConfig{})
-			notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
-				return false, nil
+			// The guard window passes on the bubble's clock, not the wall's.
+			synctest.Test(t, func(t *testing.T) {
+				guard := activity.NewStateGuard(50 * time.Millisecond)
+				notifier := notification.NewNotifier(&config.NotificationConfig{})
+				notifier.SetBackend(func(_ context.Context, _ int, _, _, _ string) (bool, error) {
+					return false, nil
+				})
+				h := NewHandler(guard, notifier)
+
+				resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
+				if !resp.OK || !resp.Allowed {
+					t.Fatalf("seed %s: want allowed=true, got %+v", tc.prevAction, resp)
+				}
+				time.Sleep(60 * time.Millisecond)
+
+				resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "TaskCompleted", PreservesIcon: true})
+				if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
+					t.Fatalf("preserve-current after %s: want icon_state=%q, got %+v", tc.prevAction, protocol.IconStatePreserve, resp)
+				}
+
+				resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
+				if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIdle {
+					t.Fatalf("idle after preserve-current and %s: want icon_state=%q, got %+v", tc.prevAction, tc.wantIdle, resp)
+				}
 			})
-			h := NewHandler(guard, notifier)
-
-			resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: tc.prevAction})
-			if !resp.OK || !resp.Allowed {
-				t.Fatalf("seed %s: want allowed=true, got %+v", tc.prevAction, resp)
-			}
-			time.Sleep(60 * time.Millisecond)
-
-			resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "TaskCompleted", PreservesIcon: true})
-			if !resp.OK || !resp.Allowed || resp.IconState != protocol.IconStatePreserve {
-				t.Fatalf("preserve-current after %s: want icon_state=%q, got %+v", tc.prevAction, protocol.IconStatePreserve, resp)
-			}
-
-			resp = h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "idle"})
-			if !resp.OK || !resp.Allowed || resp.IconState != tc.wantIdle {
-				t.Fatalf("idle after preserve-current and %s: want icon_state=%q, got %+v", tc.prevAction, tc.wantIdle, resp)
-			}
 		})
 	}
 }

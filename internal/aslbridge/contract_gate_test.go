@@ -8,6 +8,7 @@ package aslbridge
 import (
 	"context"
 	"errors"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -103,7 +104,7 @@ func TestAHandshakeAgainstAnOlderDigestIsReadOnlyNotFatal(t *testing.T) {
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
-	waitFor(t, "the stale-handshake reason", func() bool {
+	testutil.Eventually(t, "the stale-handshake reason", func() bool {
 		return m.Status().Reason == reasonHandshakeStale
 	})
 	status := m.Status()
@@ -156,7 +157,7 @@ func TestAWithheldGrantLeavesTheDaemonReadOnly(t *testing.T) {
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
-	waitFor(t, "the withheld grant", func() bool {
+	testutil.Eventually(t, "the withheld grant", func() bool {
 		status := m.Status()
 		return status.Available && status.Reason == reasonHandshakeStale
 	})
@@ -165,7 +166,7 @@ func TestAWithheldGrantLeavesTheDaemonReadOnly(t *testing.T) {
 	}
 	// The daemon keeps asking, so the grant is re-earned without a restart.
 	granting.Store(true)
-	waitFor(t, "the grant to be re-earned", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "the grant to be re-earned", func() bool { return m.Status().MutationsEnabled })
 	if restarts := m.Status().RestartCount; restarts != 0 {
 		t.Errorf("restart count = %d; a withheld grant is not a child failure", restarts)
 	}
@@ -184,7 +185,7 @@ func TestAnUndecodableReceiptDisablesMutationsAsAmbiguous(t *testing.T) {
 		Mode: ModeAuto, Command: "asl", Launcher: fake.launcher(),
 		Sleep: func(context.Context, time.Duration) bool { return false },
 	})
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	_, err := m.Act(context.Background(), ActionRequest{
 		Method: MethodRunAbort, PlanDir: "/p", RunID: "r", OperationID: "op-ambiguous", ActionToken: "tok",

@@ -23,6 +23,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/indicator"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"github.com/spf13/cobra"
 )
 
@@ -73,7 +74,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 			t.Error("daemon did not stop")
 		}
 	})
-	waitForAcceptance(t, "daemon readiness", func() bool {
+	testutil.Eventually(t, "daemon readiness", func() bool {
 		health := ipc.NewClient().Health()
 		return health.Alive && health.Ready
 	})
@@ -120,7 +121,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 	}
 	client := ipc.NewClient()
 	var exported protocol.EventsExport
-	waitForAcceptance(t, "large-payload reducer source isolation", func() bool {
+	testutil.Eventually(t, "large-payload reducer source isolation", func() bool {
 		var exportErr error
 		exported, exportErr = client.ExportEvents(42)
 		if exportErr != nil {
@@ -151,7 +152,7 @@ func TestAcceptanceDiagnosticPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	var records []diagnostics.TraceEnvelope
-	waitForAcceptance(t, "causal journal and async effects", func() bool {
+	testutil.Eventually(t, "causal journal and async effects", func() bool {
 		if _, promoteErr := journal.PromoteSpool(t.Context()); promoteErr != nil {
 			return false
 		}
@@ -385,18 +386,6 @@ func acceptanceFactsByKey(facts []protocol.SourceFactSnapshot) map[string]protoc
 	}
 	return result
 }
-
-func waitForAcceptance(t *testing.T, description string, ready func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for !ready() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", description)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 func hasAcceptanceStage(records []diagnostics.TraceEnvelope, stage, outcome, reason string) bool {
 	for _, record := range records {
 		if record.Stage != stage {

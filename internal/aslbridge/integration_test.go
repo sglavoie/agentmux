@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslcontract"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // This file is the only place Agent Mux talks to a real agent-session-loop. It
@@ -44,7 +45,7 @@ func TestInstalledBridgeServesTheContractSet(t *testing.T) {
 	defer cancel()
 	manager.Start(ctx)
 
-	waitFor(t, "the installed bridge to become mutable", func() bool {
+	testutil.Eventually(t, "the installed bridge to become mutable", func() bool {
 		return manager.Status().MutationsEnabled
 	})
 

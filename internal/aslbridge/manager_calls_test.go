@@ -7,6 +7,7 @@ package aslbridge
 import (
 	"context"
 	"errors"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"sync"
 	"testing"
 )
@@ -32,7 +33,7 @@ func TestActionIsSentExactlyOnceOnRefusal(t *testing.T) {
 		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	_, err := m.Act(context.Background(), ActionRequest{
 		Method: MethodRunAbort, PlanDir: "/p", RunID: "r", OperationID: "op", ActionToken: "tok",
@@ -79,7 +80,7 @@ func TestOperationEventsRecordBoundedBodyFreeReceipts(t *testing.T) {
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
-	waitFor(t, "receipt window to fill", func() bool { return len(m.Receipts()) == maxReceipts })
+	testutil.Eventually(t, "receipt window to fill", func() bool { return len(m.Receipts()) == maxReceipts })
 	for _, op := range m.Receipts() {
 		if op.Status != OperationConsumed {
 			t.Fatalf("receipt = %+v", op)
@@ -116,7 +117,7 @@ func TestRunsChangedTriggersRefresh(t *testing.T) {
 	fake.emit(1, EventRunsChanged, map[string]any{"digest": "d2", "row_count": 0})
 	<-digests
 
-	waitFor(t, "second snapshot", func() bool {
+	testutil.Eventually(t, "second snapshot", func() bool {
 		_, meta, err := m.Snapshot()
 		return err == nil && meta.Generation >= 2
 	})
@@ -142,7 +143,7 @@ func TestQuestionBodyIsFetchedAndNeverRetained(t *testing.T) {
 		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	got, err := m.QuestionBody(context.Background(), QuestionRequest{PlanDir: "/p", QuestionID: "q1"})
 	if err != nil {

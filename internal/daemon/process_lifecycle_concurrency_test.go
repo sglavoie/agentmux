@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
@@ -163,37 +164,29 @@ func TestProcessLifecycleSlowInspectorDoesNotBlockDaemonWork(t *testing.T) {
 func TestRunHarnessProcessLifecycleConvergesOnPollingPass(t *testing.T) {
 	t.Parallel()
 
-	h := newTestHandler()
-	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5951, StartToken: "Thu Jul 16 10:20:30 2026"}
-	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing}})
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		h.runHarnessProcessLifecycleWithInterval(ctx, 5*time.Millisecond)
-		close(done)
-	}()
-	deadline := time.Now().Add(time.Second)
-	for {
+	synctest.Test(t, func(t *testing.T) {
+		h := newTestHandler()
+		identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5951, StartToken: "Thu Jul 16 10:20:30 2026"}
+		applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
+		h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: probes.HarnessProcessMissing}})
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			h.runHarnessProcessLifecycleWithInterval(ctx, 5*time.Millisecond)
+			close(done)
+		}()
+		// One interval passes and every goroutine settles before the check.
+		time.Sleep(5 * time.Millisecond)
+		synctest.Wait()
 		h.stateMu.Lock()
 		settled := h.store[42].Effective.Icon == "stop" && len(lifecycleEvents(h.store[42])) == 1
 		h.stateMu.Unlock()
-		if settled {
-			break
+		cancel()
+		<-done
+		if !settled {
+			t.Fatal("lifecycle polling did not converge on its first pass")
 		}
-		if time.Now().After(deadline) {
-			cancel()
-			<-done
-			t.Fatal("lifecycle polling did not converge")
-		}
-		time.Sleep(time.Millisecond)
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("lifecycle polling loop did not stop")
-	}
+	})
 }
 
 func TestSetHarnessProcessInspectorWhileLifecycleLoopRuns(t *testing.T) {
