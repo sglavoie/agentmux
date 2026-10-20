@@ -270,23 +270,34 @@ func TestASLResponseEnterInsertsANewlineAndTabMovesFocus(t *testing.T) {
 	}
 }
 
-func TestASLResponseEscapeClearsTheBodyAndEveryDraft(t *testing.T) {
+// Esc closes the form and drops its fetched body, but keeps the typed reply
+// for that question, the way the send form keeps its drafts: reopening the same
+// question restores it, and nothing is submitted on the way.
+func TestASLResponseEscapeKeepsTheDraftAndDropsTheBody(t *testing.T) {
 	d := openASLResponseDriver(t, "row-reply")
 	typeASLAnswer(t, d, "secret answer text")
 	if err := d.Key(keyEsc); err != nil {
-		t.Fatalf("cancelling: %v", err)
+		t.Fatalf("closing: %v", err)
 	}
 	m := d.Model()
 	if m.mode != ModeASLRuns {
-		t.Fatalf("mode after cancel = %v, want ModeASLRuns", m.mode)
+		t.Fatalf("mode after esc = %v, want ModeASLRuns", m.mode)
 	}
 	if m.aslResponse.Active || len(m.aslResponse.Drafts) != 0 || m.aslResponse.Body != "" {
-		t.Fatalf("cancel left form state behind: %+v", m.aslResponse)
+		t.Fatalf("esc left form state behind: %+v", m.aslResponse)
 	}
 	if actions := d.ASLActions(); len(actions) != 0 {
-		t.Fatalf("cancel submitted something: %+v", actions)
+		t.Fatalf("esc submitted something: %+v", actions)
 	}
 	assertNoASLTextLeak(t, d, "secret answer text")
+
+	if err := d.Key(keyASLRespond); err != nil {
+		t.Fatalf("reopening: %v", err)
+	}
+	if state := d.Model().aslResponse; state.Draft().Reveal() != "secret answer text" {
+		got := state.Draft().Reveal()
+		t.Fatalf("reopened draft = %q, want the kept reply", got)
+	}
 }
 
 func TestASLResponseRedactsDraftsAndBodiesInFormattedOutput(t *testing.T) {

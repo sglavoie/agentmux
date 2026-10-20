@@ -4,7 +4,7 @@
   "size": { "width": 80, "height": 24 },
   "actions": [
     { "type": "command", "command_id": "explore.show-runs" },
-    { "type": "key", "key": "a" }
+    { "type": "key", "key": "X" }
   ],
   "assertions": [
     { "type": "mode_equals", "mode": "confirm" },

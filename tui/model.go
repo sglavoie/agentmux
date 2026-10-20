@@ -549,9 +549,12 @@ type Model struct {
 	// ambiguity choice cannot be retargeted by a refresh landing mid-detour.
 	aslFocusTarget string
 	// aslResponse is the answer form (ModeASLResponse). It owns the fetched
-	// question body and the operator's drafts and is zeroed wholesale on cancel,
-	// success, and mode exit.
-	aslResponse asl.ResponseState
+	// question body and is zeroed wholesale on close, success, and mode exit.
+	// The drafts typed into it outlive the form in aslReplyDrafts, keyed by plan
+	// and question, the way unsent send drafts do: esc keeps a reply and the next
+	// open of the same question restores it. An accepted answer drops its draft.
+	aslResponse    asl.ResponseState
+	aslReplyDrafts aslDraftStore
 	// send is the send form (ModeSend). It holds the operator's draft and is
 	// cleared when the form closes; unsent drafts and pending sends outlive it.
 	send           sendform.State
@@ -608,9 +611,16 @@ type Model struct {
 	planSearchSeq             int
 	// planScanSeq is the search seq of the source refresh still running, zero
 	// once it reported; the "Scanning plans…" notice is settled only after it.
-	planScanSeq       int
-	planSortMode      plans.SortMode // cycled with `o`; zero value = SortByMatches
-	planFilterProject plans.ProjectFilter
+	planScanSeq int
+	// The *Saved fields hold each list's query as it was when `/` opened it, so
+	// esc inside the prompt restores it the way the dashboard's filter prompt
+	// does (savedFilter) and enter keeps what was typed.
+	planQuerySaved      string
+	sessionQuerySaved   string
+	worktreeFilterSaved string
+	pickerFilterSaved   string
+	planSortMode        plans.SortMode // cycled with `o`; zero value = SortByMatches
+	planFilterProject   plans.ProjectFilter
 
 	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
 	// user opened with Enter; nil when the viewer is closed. planViewerLines

@@ -62,7 +62,7 @@ const (
 	keyASLWorkbench         = "w" // ModeASLRuns: open the run's Workbench deep link
 	keyASLRespond           = "r" // ModeASLRuns: open the response/resume form for the run
 	keyASLStop              = "s" // ModeASLRuns: confirm stop after the current session
-	keyASLAbort             = "a" // ModeASLRuns: confirm aborting the in-flight turn
+	keyASLAbort             = "X" // ModeASLRuns: confirm aborting the in-flight turn (the dashboard's end-session letter, so `a` keeps meaning actions)
 	keyDeleteWorktreeBranch = "D" // ModeWorktrees: remove checkout and safely delete merged branch
 	keyForgetWorktree       = "F" // ModeWorktrees: forget missing or invalid sidecar metadata
 	keyReviewWorktree       = "v" // ModeWorktrees: page what the worktree changed and how it would land

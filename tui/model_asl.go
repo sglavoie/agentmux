@@ -377,6 +377,11 @@ func (m Model) openASLResponse() (tea.Model, tea.Cmd) {
 		Buttons:     asl.ResponseButtons(kind),
 		Drafts:      map[string]aslbridge.SecretText{},
 	}
+	for _, id := range ids {
+		if draft := m.aslReplyDrafts.get(row.PlanDir, id); draft != "" {
+			state.Drafts[id] = draft
+		}
+	}
 	if row.Question != nil {
 		state.ContextKind = row.Question.ContextKind
 		state.AskedAt = row.Question.AskedAt
@@ -406,11 +411,61 @@ func (m *Model) startASLQuestionFetch() tea.Cmd {
 	return m.runASLQuestionCmd(m.aslResponse.FetchSeq, m.aslResponse.Target.PlanDir, m.aslResponse.Target.QuestionID)
 }
 
-// closeASLResponse returns to the Runs list and drops the whole form state, so
-// the fetched body and every draft go with it.
+// closeASLResponse returns to the Runs list and drops the form state. The
+// fetched body goes with it; the drafts are kept per question (keepASLDrafts)
+// so esc never discards a half-written reply.
 func (m *Model) closeASLResponse() {
+	m.keepASLDrafts()
 	m.aslResponse = asl.ResponseState{}
 	m.mode = ModeASLRuns
+}
+
+// aslDraftStore keeps unsent replies per question after the form closes. The
+// values are pointers for the reason sendform.Drafts' are: fmt never calls a
+// String method on an unexported field, so a plain SecretText value would be
+// printed verbatim by any %+v of the model.
+type aslDraftStore struct {
+	values map[string]*aslbridge.SecretText
+}
+
+func (aslDraftStore) String() string     { return "aslDraftStore{redacted}" }
+func (s aslDraftStore) GoString() string { return s.String() }
+
+// aslReplyDraftKey names one question's draft. Question IDs are a run's own,
+// so the plan directory keeps two plans' questions apart.
+func aslReplyDraftKey(planDir, questionID string) string {
+	return planDir + "\x00" + questionID
+}
+
+func (s aslDraftStore) get(planDir, questionID string) aslbridge.SecretText {
+	if value := s.values[aslReplyDraftKey(planDir, questionID)]; value != nil {
+		return *value
+	}
+	return ""
+}
+
+// put stores a draft; an empty one removes it, so clearing a reply sticks.
+func (s *aslDraftStore) put(planDir, questionID string, text aslbridge.SecretText) {
+	key := aslReplyDraftKey(planDir, questionID)
+	if text == "" {
+		delete(s.values, key)
+		return
+	}
+	if s.values == nil {
+		s.values = map[string]*aslbridge.SecretText{}
+	}
+	s.values[key] = &text
+}
+
+// keepASLDrafts moves the open form's drafts into the store that outlives it.
+func (m *Model) keepASLDrafts() {
+	state := m.aslResponse
+	if !state.Active {
+		return
+	}
+	for _, id := range state.QuestionIDs {
+		m.aslReplyDrafts.put(state.Target.PlanDir, id, state.Drafts[id])
+	}
 }
 
 // invalidateASLResponse tears the form down when the bridge reports that the
@@ -629,6 +684,7 @@ func (m Model) handleASLActionDone(msg aslActionDoneMsg) (tea.Model, tea.Cmd) {
 func (m Model) advanceASLResponse() (tea.Model, tea.Cmd) {
 	answered := m.aslResponse.Target.QuestionID
 	delete(m.aslResponse.Drafts, answered)
+	m.aslReplyDrafts.put(m.aslResponse.Target.PlanDir, answered, "")
 	m.aslResponse.Pending = asl.PendingSubmission{}
 
 	remaining := make([]string, 0, len(m.aslResponse.QuestionIDs))
