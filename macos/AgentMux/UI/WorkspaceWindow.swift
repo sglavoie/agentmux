@@ -234,6 +234,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The link under the pointer in the terminal shown, at the pane's
     /// bottom corner. Clicks go through it to the terminal beneath.
     let linkLabel = WorkspaceLinkLabel(labelWithString: "")
+    /// Why something the operator asked for here did not happen, at the top
+    /// of the pane for a moment (`showNotice`): the menu bar's line is not
+    /// where the operator is looking while the workspace has the keyboard.
+    let noticeBanner = WorkspaceNoticeBanner()
+    var noticeEnd: DispatchWorkItem?
     /// The search open in each utility view, by view id, shown in the find
     /// bar while the pane is on that view.
     var searches: [String: Ghostty.Search] = [:]
@@ -280,6 +285,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var askTerminalName: ((_ view: WorkspaceUtilityView, _ answer: @escaping @MainActor (String?) -> Void) -> Void)?
     /// Stands in for the sheet that says why a session could not be named.
     var reportNameProblem: ((_ name: String, _ message: String) -> Void)?
+    /// Takes an error `showError` would show in an alert; nil shows it.
+    /// Tests set it.
+    var reportError: ((WorkspaceError) -> Void)?
 
     /// The utility views listed above the projects.
     var views = WorkspaceViews()

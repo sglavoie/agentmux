@@ -36,6 +36,27 @@ final class WorkspaceWindowTests: XCTestCase {
         try XCTUnwrap(workspace.state.rows.first { $0.project == project && $0.label == label })
     }
 
+    /// A refusal is said at the top of the pane for a moment, where the
+    /// operator is looking; a failure is an alert that offers the fix.
+    func testNoticesShowInThePaneAndErrorsOfferAFix() {
+        XCTAssertNil(workspace.shownNotice)
+        workspace.showNotice(AppDelegate.noSessionShown)
+        XCTAssertEqual(workspace.shownNotice, AppDelegate.noSessionShown)
+        XCTAssertTrue(workspace.noticeBanner.isDescendant(of: workspace.pane))
+        XCTAssertNil(workspace.noticeBanner.hitTest(.zero), "clicks reach the terminal beneath")
+        workspace.showNotice("Kitty is not running.")
+        XCTAssertEqual(workspace.shownNotice, "Kitty is not running.", "a newer notice replaces it")
+        workspace.endNotice()
+        XCTAssertNil(workspace.shownNotice)
+
+        var errors: [WorkspaceError] = []
+        workspace.reportError = { errors.append($0) }
+        workspace.showError(title: "api could not be named", message: AMXWording.notFound)
+        workspace.showError(title: "api could not be ended", message: "exit status 1", details: "error: boom")
+        XCTAssertEqual(errors.map(\.recovery), [.openSettings, nil])
+        XCTAssertEqual(errors.last?.details, "error: boom")
+    }
+
     func testOptionZoomScalesBothSidebarsAndResetsWithoutChangingFocusOrPaneWidth() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.setInspectorCollapsed(false, animated: false)

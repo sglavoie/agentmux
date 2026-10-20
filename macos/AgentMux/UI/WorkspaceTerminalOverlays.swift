@@ -321,3 +321,59 @@ final class WorkspaceScrollbarView: NSView {
         if let terminal { terminal.scrollWheel(with: event) } else { super.scrollWheel(with: event) }
     }
 }
+
+/// A notice at the top of the pane, for a moment: why a key or an item that
+/// acts on the shown session did nothing. Like the link line's "Copied",
+/// it never takes the keyboard or a click, which reach the terminal beneath.
+@MainActor
+final class WorkspaceNoticeBanner: NSView {
+    let label = NSTextField(wrappingLabelWithString: "")
+
+    /// How long a notice stays.
+    static let duration: TimeInterval = 6
+
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.borderWidth = 1
+        isHidden = true
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+
+        label.font = .systemFont(ofSize: NSFont.systemFontSize)
+        label.textColor = .labelColor
+        label.maximumNumberOfLines = 3
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.refusesFirstResponder = true
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    var text: String {
+        get { label.stringValue }
+        set {
+            label.stringValue = newValue
+            setAccessibilityLabel(newValue)
+        }
+    }
+
+    override func updateLayer() {
+        layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
+        layer?.borderColor = NSColor.separatorColor.cgColor
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}

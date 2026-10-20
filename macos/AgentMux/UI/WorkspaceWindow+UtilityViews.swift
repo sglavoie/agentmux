@@ -211,24 +211,10 @@ extension WorkspaceWindowController {
         }
     }
 
+    /// Says why a session could not be ended: an alert on the window while
+    /// it is open, or on its own when it was closed meanwhile (`showError`).
     private func sayCloseFailed(_ name: String, _ message: String) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "\(name) could not be ended"
-        alert.informativeText = message
-        sayLater(alert)
-    }
-
-    /// Shows a failure that answered after the operator asked: on the window
-    /// while it is open, or on its own when the window was closed meanwhile,
-    /// since a sheet on a closed window is never seen.
-    func sayLater(_ alert: NSAlert) {
-        if isOpen {
-            alert.beginSheetModal(for: window)
-        } else {
-            NSApp.activate()
-            alert.runModal()
-        }
+        showError(title: "\(name) could not be ended", message: message)
     }
 
     private func endSession(_ row: WorkspaceRow, _ id: String) {
