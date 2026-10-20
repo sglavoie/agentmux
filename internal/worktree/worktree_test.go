@@ -17,6 +17,8 @@ import (
 )
 
 func TestCreateReturnsGitAuthoritativeWorktreeAndRemoveUnusedCleansIt(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	destinationRoot := filepath.Join(t.TempDir(), "worktrees")
 	workflow := testWorkflow(destinationRoot)
@@ -92,6 +94,8 @@ func TestCreateReturnsGitAuthoritativeWorktreeAndRemoveUnusedCleansIt(t *testing
 }
 
 func TestCreateAcceptsUnconfiguredRepositoryAndUsesExplicitTranscriptLabel(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 
@@ -111,6 +115,8 @@ func TestCreateAcceptsUnconfiguredRepositoryAndUsesExplicitTranscriptLabel(t *te
 }
 
 func TestCreateUsesRepositoryBasenameWithoutProjectHints(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 
@@ -127,6 +133,8 @@ func TestCreateUsesRepositoryBasenameWithoutProjectHints(t *testing.T) {
 }
 
 func TestCreateMatchesConfiguredProjectFromLinkedWorktree(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	linked := filepath.Join(t.TempDir(), "linked")
 	gitRun(t, repo, "worktree", "add", "-b", "linked-source", linked, "HEAD")
@@ -153,6 +161,8 @@ func TestCreateMatchesConfiguredProjectFromLinkedWorktree(t *testing.T) {
 }
 
 func TestCreateRefusesDirtySourceUnlessExplicitlyAllowed(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 	if err := os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("not committed\n"), 0o644); err != nil {
@@ -175,6 +185,8 @@ func TestCreateRefusesDirtySourceUnlessExplicitlyAllowed(t *testing.T) {
 }
 
 func TestCreateResolvesBranchAndPathCollisionsDeterministically(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 	request := Request{Config: testConfig(repo), SourceCWD: repo, SessionID: "source-1"}
@@ -201,6 +213,8 @@ func TestCreateResolvesBranchAndPathCollisionsDeterministically(t *testing.T) {
 }
 
 func TestCreateChecksPathAndBranchCollisionsIndependently(t *testing.T) {
+	t.Parallel()
+
 	const (
 		leaf       = "source-1-20260711T120000Z"
 		baseBranch = "amx/api/" + leaf
@@ -254,6 +268,8 @@ func TestCreateChecksPathAndBranchCollisionsIndependently(t *testing.T) {
 }
 
 func TestCreateReportsNonGitCheckout(t *testing.T) {
+	t.Parallel()
+
 	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 	_, err := workflow.Create(context.Background(), Request{SourceCWD: t.TempDir(), SessionID: "source-1"})
 	if !errors.Is(err, ErrNotGitCheckout) {
@@ -262,6 +278,8 @@ func TestCreateReportsNonGitCheckout(t *testing.T) {
 }
 
 func TestCreateCapturesProfileHarnessGitIdentityAndDetachedSource(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	baseCommit := strings.TrimSpace(gitOutput(t, repo, "rev-parse", "HEAD"))
 	gitRun(t, repo, "checkout", "--detach", baseCommit)
@@ -290,6 +308,8 @@ func TestCreateCapturesProfileHarnessGitIdentityAndDetachedSource(t *testing.T) 
 }
 
 func TestCreateRollsBackCheckoutBranchAndMetadataWhenSidecarWriteFails(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	destinationRoot := filepath.Join(t.TempDir(), "worktrees")
 	workflow := testWorkflow(destinationRoot)
@@ -320,6 +340,8 @@ func TestCreateRollsBackCheckoutBranchAndMetadataWhenSidecarWriteFails(t *testin
 }
 
 func TestCreatePreservesMetadataAndRollbackErrors(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 	workflow.writeMetadata = func(string, Metadata) error { return errors.New("metadata unavailable") }
@@ -340,6 +362,8 @@ func TestCreatePreservesMetadataAndRollbackErrors(t *testing.T) {
 }
 
 func TestRemoveUnusedDeletesMetadataWhenGitCleanupFails(t *testing.T) {
+	t.Parallel()
+
 	metadataPath := filepath.Join(t.TempDir(), "unused"+MetadataSuffix)
 	if err := os.WriteFile(metadataPath, []byte("metadata"), 0o600); err != nil {
 		t.Fatal(err)
@@ -358,6 +382,8 @@ func TestRemoveUnusedDeletesMetadataWhenGitCleanupFails(t *testing.T) {
 }
 
 func TestConcurrentCreateSerializesCollisionAllocationAndMetadata(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	workflow := testWorkflow(filepath.Join(t.TempDir(), "worktrees"))
 	request := Request{ProjectLabel: "api", SourceCWD: repo, SessionID: "source-1", Profile: "work", Harness: "codex"}

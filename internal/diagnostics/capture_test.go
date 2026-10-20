@@ -10,6 +10,8 @@ import (
 )
 
 func TestCaptureRequiresExplicitScopedAuthorizationAndSurvivesRestart(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	store, err := NewCaptureStore(paths, CaptureOptions{Now: func() time.Time { return now }})
@@ -78,6 +80,8 @@ func TestCaptureRequiresExplicitScopedAuthorizationAndSurvivesRestart(t *testing
 }
 
 func TestCaptureDedupeUsesEventAwareLocalHMACIdentity(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	newActiveStore := func(t *testing.T) *CaptureStore {
 		t.Helper()
@@ -123,6 +127,8 @@ func TestCaptureDedupeUsesEventAwareLocalHMACIdentity(t *testing.T) {
 }
 
 func TestCaptureQuotaStopsWithoutPartialWriteAndPurgesAfterDay(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	store, err := NewCaptureStore(paths, CaptureOptions{Now: func() time.Time { return now }})
@@ -186,6 +192,8 @@ func TestCaptureQuotaStopsWithoutPartialWriteAndPurgesAfterDay(t *testing.T) {
 }
 
 func TestCaptureQuarantinesUnsafeDescriptorOnRestart(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	store, err := NewCaptureStore(paths, CaptureOptions{})
 	if err != nil {
@@ -231,6 +239,8 @@ func TestCaptureQuarantinesUnsafeDescriptorOnRestart(t *testing.T) {
 // other's: a hook from another session, or a Kitty hook that carries none, is
 // outside it. A scope cannot name a window and a runtime session at once.
 func TestCaptureScopedToARuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	const scoped, other = "rs-0123456789abcdef0123456789abcdef", "rs-ffffffffffffffffffffffffffffffff"
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	store, err := NewCaptureStore(PathsForRoot(filepath.Join(t.TempDir(), "state")), CaptureOptions{Now: func() time.Time { return now }})

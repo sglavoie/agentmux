@@ -15,6 +15,8 @@ import (
 )
 
 func TestJournalSpoolsOnLockTimeoutAndReconciles(t *testing.T) {
+	t.Parallel()
+
 	// This test exercises fallback and reconciliation rather than the precise
 	// lock-wait budget. Leave enough scheduling headroom for the repository-wide
 	// package gate while still forcing the held journal lock to time out.
@@ -55,6 +57,8 @@ func TestJournalSpoolsOnLockTimeoutAndReconciles(t *testing.T) {
 }
 
 func TestReconcileSpoolSkipsIdentityScanWhenSpoolEmpty(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	segment := filepath.Join(paths.JournalDir, "events-oversized.jsonl")
 	file, err := os.OpenFile(segment, os.O_CREATE|os.O_WRONLY, fileMode)
@@ -79,6 +83,8 @@ func TestReconcileSpoolSkipsIdentityScanWhenSpoolEmpty(t *testing.T) {
 }
 
 func TestAppendSpoolLockIsBounded(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 20 * time.Millisecond})
 	spoolPath := filepath.Join(paths.SpoolDir, fmt.Sprintf("journal-%d.jsonl", os.Getpid()))
 	lockFile, err := os.OpenFile(spoolPath, os.O_CREATE|os.O_RDWR, fileMode)
@@ -110,6 +116,8 @@ func TestAppendSpoolLockIsBounded(t *testing.T) {
 }
 
 func TestPromoteSpoolSkipsBusyActiveWriter(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
 	record, err := json.Marshal(testEnvelope("spool.busy", "busy"))
@@ -152,6 +160,8 @@ func TestPromoteSpoolSkipsBusyActiveWriter(t *testing.T) {
 }
 
 func TestSpoolPromotionIsAtomicForConcurrentSnapshots(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
 	record, _ := json.Marshal(testEnvelope("spool.snapshot", "atomic"))
@@ -212,6 +222,8 @@ func TestSpoolPromotionIsAtomicForConcurrentSnapshots(t *testing.T) {
 }
 
 func TestSpoolPromotionQuarantinesCorruptAndPartialLines(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	record, _ := json.Marshal(testEnvelope("spool.corrupt", "valid"))
 	spoolPath := filepath.Join(paths.SpoolDir, "journal-4242.jsonl")
@@ -243,6 +255,8 @@ func TestSpoolPromotionQuarantinesCorruptAndPartialLines(t *testing.T) {
 }
 
 func TestSpoolPromotionKeepsRewrittenClaimLockedThroughPublish(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	competitor, err := NewJournal(paths, JournalOptions{})
 	if err != nil {
@@ -303,6 +317,8 @@ func TestSpoolPromotionKeepsRewrittenClaimLockedThroughPublish(t *testing.T) {
 }
 
 func TestSpoolAppendSurvivesConcurrentPromotion(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 2 * time.Second})
 	firstJSON, err := json.Marshal(testEnvelope("spool.concurrent", "before-claim"))
 	if err != nil {
@@ -381,6 +397,8 @@ func TestSpoolAppendSurvivesConcurrentPromotion(t *testing.T) {
 }
 
 func TestSpoolPromotionRestartBoundariesAreRetrySafe(t *testing.T) {
+	t.Parallel()
+
 	injectedFailure := errors.New("injected crash")
 	tests := []struct {
 		name  string
@@ -428,6 +446,8 @@ func TestSpoolPromotionRestartBoundariesAreRetrySafe(t *testing.T) {
 }
 
 func TestLegacySpoolClaimDeduplicatesPartialCopies(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	first := testEnvelope("spool.legacy", "already-copied")
 	second := testEnvelope("spool.legacy", "not-yet-copied")
@@ -458,6 +478,8 @@ func TestLegacySpoolClaimDeduplicatesPartialCopies(t *testing.T) {
 }
 
 func TestPromotionCancellationLeavesClaimForRestart(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	record, _ := json.Marshal(testEnvelope("spool.cancel", "preserved"))
 	if err := os.WriteFile(filepath.Join(paths.SpoolDir, "journal-4242.jsonl"), append(record, '\n'), fileMode); err != nil {

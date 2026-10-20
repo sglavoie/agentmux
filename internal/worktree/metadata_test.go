@@ -10,6 +10,8 @@ import (
 )
 
 func TestMetadataRoundTripPermissionsAndAtomicReplacement(t *testing.T) {
+	t.Parallel()
+
 	directory := t.TempDir()
 	path := filepath.Join(directory, "checkout"+MetadataSuffix)
 	metadata := validTestMetadata(directory)
@@ -47,6 +49,8 @@ func TestMetadataRoundTripPermissionsAndAtomicReplacement(t *testing.T) {
 }
 
 func TestMetadataStrictlyRejectsUnsupportedVersionsAndFields(t *testing.T) {
+	t.Parallel()
+
 	directory := t.TempDir()
 	for _, tc := range []struct {
 		name string
@@ -70,6 +74,8 @@ func TestMetadataStrictlyRejectsUnsupportedVersionsAndFields(t *testing.T) {
 }
 
 func TestWriteMetadataRejectsInvalidVersionWithoutPublishing(t *testing.T) {
+	t.Parallel()
+
 	directory := t.TempDir()
 	path := filepath.Join(directory, "invalid"+MetadataSuffix)
 	metadata := validTestMetadata(directory)

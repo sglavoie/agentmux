@@ -14,6 +14,8 @@ import (
 )
 
 func TestJournalCompactThousandsOfTinySegmentsInChronologicalOrder(t *testing.T) {
+	t.Parallel()
+
 	// A lowered per-commit bound gives a few dozen segments the same
 	// multi-pass drain that thousands meet against the production default.
 	const inputBound = 8
@@ -101,6 +103,8 @@ func TestJournalCompactThousandsOfTinySegmentsInChronologicalOrder(t *testing.T)
 }
 
 func TestJournalCompactBoundsInputAndSizesOutputs(t *testing.T) {
+	t.Parallel()
+
 	t.Run("oldest-input-prefix-is-capped-at-64-MiB", func(t *testing.T) {
 		journal, paths := testJournal(t, JournalOptions{})
 		base := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
@@ -201,6 +205,8 @@ func TestJournalCompactBoundsInputAndSizesOutputs(t *testing.T) {
 }
 
 func TestJournalCompactAdvancesPastPackedPrefix(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < int(maxCompactionInputBytes/MaxSegmentBytes); i++ {
@@ -256,6 +262,8 @@ func TestJournalCompactAdvancesPastPackedPrefix(t *testing.T) {
 }
 
 func TestJournalCompactUsesSnapshotDuplicateIdentities(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
 	firstSource := compactionTestEnvelope("compaction.dedupe", "source-first", "same-source", 7, base)
@@ -287,6 +295,8 @@ func TestJournalCompactUsesSnapshotDuplicateIdentities(t *testing.T) {
 }
 
 func TestJournalCompactPublishesValidRecordsBeforeQuarantiningCorruptInput(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
 	first := marshalCompactionRecord(t, compactionTestEnvelope("compaction.corrupt", "first", "corrupt-source", 1, base))
@@ -323,6 +333,8 @@ func TestJournalCompactPublishesValidRecordsBeforeQuarantiningCorruptInput(t *te
 }
 
 func TestJournalCompactAbandonsPreparedOutputOnRaceAndCancellation(t *testing.T) {
+	t.Parallel()
+
 	for _, race := range []string{"candidate-size-race", "candidate-inode-race"} {
 		t.Run(race, func(t *testing.T) {
 			journal, paths := compactionJournalWithRecords(t, "compaction.race", 2)

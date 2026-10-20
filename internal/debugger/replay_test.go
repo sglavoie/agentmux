@@ -170,6 +170,8 @@ func (fixture *replayFixture) appendRender(t *testing.T, generation uint64, sour
 }
 
 func TestReplayGoldenJournalCoversOrderingRestartsFallbackASLAndCoalescing(t *testing.T) {
+	t.Parallel()
+
 	fixture, paths := newReplayFixture(t)
 	legacy := fixture.appendDecision(t, "trace-fallback", "request-fallback", "PreToolUse", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceLegacy, Key: "window:42"}, Action: "active", Seq: 1, At: 100, OriginWindowID: 42,
@@ -226,6 +228,8 @@ func TestReplayGoldenJournalCoversOrderingRestartsFallbackASLAndCoalescing(t *te
 }
 
 func TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence(t *testing.T) {
+	t.Parallel()
+
 	fixture, paths := newReplayFixture(t)
 	fixture.appendDecision(t, "trace-portable", "request-portable", "UserPromptSubmit", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:portable"}, Action: "active", Seq: 1,
@@ -264,6 +268,8 @@ func TestReplayShareBundleIsPortableAndPreservesReplaySafeEvidence(t *testing.T)
 }
 
 func TestReplayASLRecordsExtractedFromV2Bundle(t *testing.T) {
+	t.Parallel()
+
 	fixture, paths := newReplayFixture(t)
 	fixture.appendDecision(t, "trace-asl-standalone", "request-asl-standalone", "AgentSessionLoopTurnStarted", protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-standalone"}, Seq: 1, At: 200,

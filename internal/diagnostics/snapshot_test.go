@@ -33,6 +33,8 @@ func snapshotJSONLine(t *testing.T, envelope TraceEnvelope) []byte {
 }
 
 func TestJournalSnapshotTracksObservedHorizonAndPromotedSpoolCounts(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 16, 1, 0, 0, 0, time.UTC)
 
@@ -82,6 +84,8 @@ func TestJournalSnapshotTracksObservedHorizonAndPromotedSpoolCounts(t *testing.T
 }
 
 func TestJournalSnapshotVisitorRunsAfterLocksAreReleased(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 100 * time.Millisecond})
 	base := time.Date(2026, 7, 16, 1, 0, 0, 0, time.UTC)
 	var data bytes.Buffer
@@ -162,6 +166,8 @@ func TestJournalSnapshotVisitorRunsAfterLocksAreReleased(t *testing.T) {
 }
 
 func TestJournalSnapshotMergesOrdersAndAdvancesIncompleteCursor(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 16, 2, 0, 0, 0, time.UTC)
 	early := snapshotEnvelope("source-c", 3, "early", base)
@@ -281,6 +287,8 @@ func TestJournalSnapshotMergesOrdersAndAdvancesIncompleteCursor(t *testing.T) {
 }
 
 func TestJournalSnapshotVisitorErrorsDoNotAdvanceCursor(t *testing.T) {
+	t.Parallel()
+
 	t.Run("visitor error", func(t *testing.T) {
 		journal, _ := testJournal(t, JournalOptions{})
 		base := time.Date(2026, 7, 16, 2, 30, 0, 0, time.UTC)

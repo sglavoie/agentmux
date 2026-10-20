@@ -13,6 +13,8 @@ import (
 )
 
 func TestTailSelectsLatestRecordsAfterMergedEventTimeOrdering(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
@@ -44,6 +46,8 @@ func TestTailSelectsLatestRecordsAfterMergedEventTimeOrdering(t *testing.T) {
 }
 
 func TestFollowUsesCursorAndOrdersDelayedEvidenceOnce(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
@@ -93,6 +97,8 @@ func TestFollowUsesCursorAndOrdersDelayedEvidenceOnce(t *testing.T) {
 }
 
 func TestFollowDoesNotReplayPromotionOrRotation(t *testing.T) {
+	t.Parallel()
+
 	t.Run("promotion", func(t *testing.T) {
 		base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 		paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
@@ -125,6 +131,8 @@ func TestFollowDoesNotReplayPromotionOrRotation(t *testing.T) {
 }
 
 func TestFollowLimitDoesNotReplayHistoryAfterInodeReplacingTailRepair(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
@@ -189,6 +197,8 @@ func TestFollowLimitDoesNotReplayHistoryAfterInodeReplacingTailRepair(t *testing
 }
 
 func TestFollowLimitDoesNotReplayHistoryAfterLegacyCorruptClaimPromotion(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})

@@ -15,6 +15,8 @@ import (
 )
 
 func TestJournalCompactInterruptionPointsNeverLoseUniqueRecords(t *testing.T) {
+	t.Parallel()
+
 	injected := errors.New("injected crash")
 	points := []string{"after-preparation", "after-output-rename", "after-publication", "after-input-cleanup"}
 	for _, point := range points {
@@ -59,6 +61,8 @@ func TestJournalCompactInterruptionPointsNeverLoseUniqueRecords(t *testing.T) {
 }
 
 func TestJournalCompactIsAtomicForConcurrentReadersAndWriters(t *testing.T) {
+	t.Parallel()
+
 	journal, _ := compactionJournalWithRecords(t, "compaction.concurrent", 3)
 	published := make(chan struct{})
 	release := make(chan struct{})
@@ -92,6 +96,8 @@ func TestJournalCompactIsAtomicForConcurrentReadersAndWriters(t *testing.T) {
 }
 
 func TestJournalCompactConcurrentCompactorsDoNotDuplicateRecords(t *testing.T) {
+	t.Parallel()
+
 	options := JournalOptions{LockTimeout: 5 * time.Second}
 	first, paths := testJournal(t, options)
 	base := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
@@ -154,6 +160,8 @@ func TestJournalCompactConcurrentCompactorsDoNotDuplicateRecords(t *testing.T) {
 }
 
 func TestJournalCompactCleansOnlyAbandonedCompactionTemps(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	abandoned := filepath.Join(paths.JournalDir, compactionTempPrefix+"abandoned.tmp")
 	active := filepath.Join(paths.JournalDir, compactionTempPrefix+"active.tmp")
@@ -191,6 +199,8 @@ func TestJournalCompactCleansOnlyAbandonedCompactionTemps(t *testing.T) {
 }
 
 func TestJournalCompactLeavesOtherStorageNamespacesUntouched(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := compactionJournalWithRecords(t, "compaction.namespaces", 2)
 	active := []byte("active-journal\n")
 	spool := []byte("spool-evidence\n")
@@ -218,6 +228,8 @@ func TestJournalCompactLeavesOtherStorageNamespacesUntouched(t *testing.T) {
 }
 
 func TestJournalMaintainDoesNotScheduleCompaction(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := compactionJournalWithRecords(t, "compaction.unscheduled", 2)
 	report, err := journal.Maintain(context.Background())
 	if err != nil {

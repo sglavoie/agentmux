@@ -1,6 +1,8 @@
 package release
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +19,10 @@ import (
 // So the whole procedure runs here against a stand-in world: two throwaway Git
 // repositories, an ephemeral SSH signing key, a fake `just`, a `kitty` that fails, a
 // fake `sw_vers`, and a fake ASL wrapper, all under t.TempDir() with the fakes
-// staged ahead of everything else on PATH.
+// staged ahead of everything else on the PATH of every command the gate runs.
+// That PATH, and the FAKE_* switches the fakes read, travel through the
+// fixture's CommandRunner rather than the process environment, so fixtures
+// never see each other and the tests run in parallel.
 //
 // What is real matters as much as what is faked. Git is real, so revision
 // reading, cleanliness, and annotated tagging are genuinely exercised.
@@ -35,6 +40,9 @@ type fixture struct {
 	fakeBin      string
 	signingKey   string
 	publicKey    string
+	// env is appended to the environment of every command the gate runs
+	// through f.exec; setenv adds to it.
+	env []string
 }
 
 const fakeOSVersion = "26.6"
@@ -74,8 +82,47 @@ func newFixture(t *testing.T) *fixture {
 	// The fakes go first so they shadow any real `just`, `kitty`, or `sw_vers`
 	// on the developer's machine; the rest of PATH is kept because `git` and
 	// `ssh-keygen` are deliberately real.
-	t.Setenv("PATH", f.fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	f.setenv("PATH", f.fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return f
+}
+
+// setenv sets key for every command the gate runs from now on. It stands in
+// for t.Setenv, which would serialize the package's tests.
+func (f *fixture) setenv(key, value string) {
+	f.env = append(f.env, key+"="+value)
+}
+
+// exec is the fixture's CommandRunner: ExecRunner, with f.env applied and a
+// bare command name resolved against the fixture's PATH rather than the
+// process's, so the fakes shadow the real tools for this fixture alone.
+func (f *fixture) exec(ctx context.Context, dir string, argv []string) (string, int, error) {
+	if len(argv) == 0 {
+		return "", -1, errors.New("release: empty command")
+	}
+	name := argv[0]
+	if !strings.Contains(name, string(os.PathSeparator)) {
+		if candidate := filepath.Join(f.fakeBin, name); isExecutable(candidate) {
+			name = candidate
+		}
+	}
+	cmd := exec.CommandContext(ctx, name, argv[1:]...)
+	cmd.Dir = dir
+	// Later entries win, so f.env overrides the inherited PATH.
+	cmd.Env = append(os.Environ(), f.env...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return string(output), exitErr.ExitCode(), nil
+		}
+		return string(output), -1, err
+	}
+	return string(output), 0, nil
+}
+
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0
 }
 
 func (f *fixture) stageASLCheckout(t *testing.T) {
@@ -161,6 +208,7 @@ func (f *fixture) options() Options {
 		ASLRoot:      f.aslRoot,
 		SigningKey:   f.signingKey,
 		EvidenceDir:  f.evidenceDir,
+		Run:          f.exec,
 		Now:          steppingClock(),
 	}
 }

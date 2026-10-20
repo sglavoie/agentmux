@@ -26,6 +26,8 @@ import (
 // attests provenance, `result` attests approval), and it is the outcome an
 // operator is most likely to be reading a record for.
 func TestSignedUntaggedEvidencePersistsSignedMetadata(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name       string
 		failRecipe string
@@ -39,7 +41,7 @@ func TestSignedUntaggedEvidencePersistsSignedMetadata(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
 			if tc.failRecipe != "" {
-				t.Setenv("FAKE_JUST_FAIL", tc.failRecipe)
+				f.setenv("FAKE_JUST_FAIL", tc.failRecipe)
 			}
 
 			opts := f.options()
@@ -97,6 +99,8 @@ func TestSignedUntaggedEvidencePersistsSignedMetadata(t *testing.T) {
 // signature before it exists: when `ssh-keygen` fails, the record must not be
 // left claiming a signature that was never produced.
 func TestSigningFailureLeavesNoOverstatedRecord(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	// A signing key that exists (newGate insists on that) but that ssh-keygen
 	// cannot sign with.
@@ -129,6 +133,8 @@ func TestSigningFailureLeavesNoOverstatedRecord(t *testing.T) {
 }
 
 func TestGateRefusesToOverwriteAnExistingRecord(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 
 	first, err := Run(context.Background(), f.options())
@@ -164,6 +170,8 @@ func TestGateRefusesToOverwriteAnExistingRecord(t *testing.T) {
 }
 
 func TestGateRefusesToRetagAReleasedPair(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	opts := f.options()
 	opts.Tag = true
@@ -198,6 +206,8 @@ func TestGateRefusesToRetagAReleasedPair(t *testing.T) {
 }
 
 func TestGateLeavesAnUnsignedRecordWhenNoKeyIsGiven(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	opts := f.options()
 	opts.SigningKey = ""
@@ -227,9 +237,11 @@ func TestGateLeavesAnUnsignedRecordWhenNoKeyIsGiven(t *testing.T) {
 // has to come before the gate does anything at all, not after a twenty-minute
 // procedure that has already installed both programs.
 func TestTaggingRequiresSigningKey(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	log := filepath.Join(t.TempDir(), "recipes.log")
-	t.Setenv("FAKE_JUST_LOG", log)
+	f.setenv("FAKE_JUST_LOG", log)
 
 	opts := f.options()
 	opts.SigningKey = ""
@@ -291,6 +303,8 @@ func TestTaggingRequiresSigningKey(t *testing.T) {
 }
 
 func TestGateRefusesADirectoryThatIsNotAnASLCheckout(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	opts := f.options()
 	opts.ASLRoot = f.agentMuxRoot // a real directory, and the wrong one
@@ -303,6 +317,8 @@ func TestGateRefusesADirectoryThatIsNotAnASLCheckout(t *testing.T) {
 }
 
 func TestPairIDFoldsBothRevisionsInAFixedOrder(t *testing.T) {
+	t.Parallel()
+
 	amx, asl := "a1b2c3", "d4e5f6"
 	id := PairID(amx, asl, aslcontract.ContractSetID)
 
@@ -326,6 +342,8 @@ func TestPairIDFoldsBothRevisionsInAFixedOrder(t *testing.T) {
 }
 
 func TestVerifyCommandNamesTheReleaseNamespace(t *testing.T) {
+	t.Parallel()
+
 	argv := VerifyCommand("/allowed", "me", "/evidence/pair.json")
 	joined := strings.Join(argv, " ")
 	if !strings.Contains(joined, "-n "+SigningNamespace) {
@@ -341,6 +359,8 @@ func TestVerifyCommandNamesTheReleaseNamespace(t *testing.T) {
 // byte-identical. A map anywhere in Evidence would encode in Go's randomized
 // order and quietly make signed records unreproducible.
 func TestEvidenceEncodesAsOrderedJSON(t *testing.T) {
+	t.Parallel()
+
 	ev := &Evidence{
 		SchemaVersion: SchemaVersion,
 		PairID:        "amx-asl-1.0000000000000000",
@@ -362,5 +382,26 @@ func TestEvidenceEncodesAsOrderedJSON(t *testing.T) {
 		if string(again) != string(first) {
 			t.Fatalf("evidence encoding is not stable across encodes:\n%s\n---\n%s", first, again)
 		}
+	}
+}
+
+// The fixture runs the gate through its own CommandRunner, so ExecRunner's
+// contract is held here: a command that ran and failed is a step result with
+// its exit status, and only a command that could not start is an error.
+func TestExecRunnerSeparatesAFailedCommandFromOneThatCouldNotStart(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	output, code, err := ExecRunner(context.Background(), dir, []string{"sh", "-c", "pwd -P; echo oops >&2; exit 3"})
+	if err != nil || code != 3 || !strings.Contains(output, "oops") {
+		t.Fatalf("failed command = (%q, %d, %v), want its output and exit 3", output, code, err)
+	}
+	if resolved, _ := filepath.EvalSymlinks(dir); !strings.Contains(output, resolved) {
+		t.Fatalf("output %q does not show the command ran in %s", output, resolved)
+	}
+	if _, code, err := ExecRunner(context.Background(), dir, []string{filepath.Join(dir, "missing")}); err == nil || code != -1 {
+		t.Fatalf("missing executable = (%d, %v), want -1 and an error", code, err)
+	}
+	if _, _, err := ExecRunner(context.Background(), dir, nil); err == nil {
+		t.Fatal("empty argv was accepted")
 	}
 }

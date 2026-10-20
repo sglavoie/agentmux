@@ -19,6 +19,8 @@ import (
 // So the failure has to take the first tag back, and the refs plus the persisted
 // record have to agree afterwards.
 func TestSecondRepositoryTagFailureLeavesNoPairTag(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 
 	// An unrelated tag that predates the run, in both repositories. The rollback
@@ -36,7 +38,7 @@ func TestSecondRepositoryTagFailureLeavesNoPairTag(t *testing.T) {
 		if dir == f.aslRoot && isGitTagCreate(argv) {
 			return "fatal: injected second-repository tag failure", 128, nil
 		}
-		return ExecRunner(ctx, dir, argv)
+		return f.exec(ctx, dir, argv)
 	}
 
 	ev, err := Run(context.Background(), opts)
@@ -136,6 +138,8 @@ func TestSecondRepositoryTagFailureLeavesNoPairTag(t *testing.T) {
 // which the test proves by running the recorded recovery command and watching
 // the ref go away.
 func TestUnremovablePairTagIsRecordedAsRecoverablePartialState(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 
 	opts := f.options()
@@ -147,7 +151,7 @@ func TestUnremovablePairTagIsRecordedAsRecoverablePartialState(t *testing.T) {
 		if len(argv) > 1 && argv[0] == "git" && argv[1] == "update-ref" {
 			return "fatal: injected rollback failure", 128, nil
 		}
-		return ExecRunner(ctx, dir, argv)
+		return f.exec(ctx, dir, argv)
 	}
 
 	ev, err := Run(context.Background(), opts)
@@ -223,6 +227,8 @@ func TestUnremovablePairTagIsRecordedAsRecoverablePartialState(t *testing.T) {
 // the returned error -- may contain a deletion by name, and running everything it
 // does publish must leave a replacement ref exactly where it was.
 func TestUnreadableCreatedTagDoesNotOfferNameOnlyDeletion(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 
 	// A tag that predates the run, in both repositories. Nothing this run
@@ -249,7 +255,7 @@ func TestUnreadableCreatedTagDoesNotOfferNameOnlyDeletion(t *testing.T) {
 		if dir == f.aslRoot && isGitTagReadBack(argv) {
 			return "fatal: injected tag read-back failure", 128, nil
 		}
-		return ExecRunner(ctx, dir, argv)
+		return f.exec(ctx, dir, argv)
 	}
 
 	ev, err := Run(context.Background(), opts)

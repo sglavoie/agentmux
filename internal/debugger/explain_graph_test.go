@@ -13,6 +13,8 @@ import (
 )
 
 func TestExplanationTraversalAppliesDepthNodeAndEdgeLimitsDeterministically(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	root := diagnostics.NewEnvelope("root")
 	root.ObservedAt = base
@@ -80,6 +82,8 @@ func TestExplanationTraversalAppliesDepthNodeAndEdgeLimitsDeterministically(t *t
 }
 
 func TestExplanationGraphJoinsAllStableIdentities(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	hookRecord := explanationRecord("hook.delivery", "accepted", "accepted")
 	hookRecord.ObservedAt = base
@@ -154,6 +158,8 @@ func TestExplanationGraphJoinsAllStableIdentities(t *testing.T) {
 }
 
 func TestExpectedSequenceDiagnosticsUseStableScopesAndPreserveUncertainty(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	makeEvent := func(offset int, event, sourceEvent string, evidence map[string]string) diagnostics.TraceEnvelope {
 		record := explanationRecord("daemon.decision", "applied", "")
@@ -200,6 +206,8 @@ func TestExpectedSequenceDiagnosticsUseStableScopesAndPreserveUncertainty(t *tes
 }
 
 func TestExplainReadsSourceEventGraphOffline(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -224,6 +232,8 @@ func TestExplainReadsSourceEventGraphOffline(t *testing.T) {
 }
 
 func TestExplainSampledJournalStillReachesTerminalCause(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -262,6 +272,8 @@ func TestExplainSampledJournalStillReachesTerminalCause(t *testing.T) {
 }
 
 func TestExplainCorrelatesASLSourceDeliveryDaemonAndRenderEvidence(t *testing.T) {
+	t.Parallel()
+
 	delivery := explanationRecord("hook.delivery", "accepted", "accepted")
 	delivery.TraceID = "trace-asl-delivery"
 	delivery.RequestID = "df487220-3ef5-5d50-b7a4-d1b79756f8a5"

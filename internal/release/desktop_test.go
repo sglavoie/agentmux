@@ -66,6 +66,7 @@ func (f *fixture) desktopOptions() DesktopOptions {
 	return DesktopOptions{
 		AgentMuxRoot: f.agentMuxRoot,
 		EvidenceDir:  f.evidenceDir,
+		Run:          f.exec,
 		Now:          steppingClock(),
 	}
 }
@@ -91,9 +92,11 @@ func fact(facts []Fact, name string) string {
 }
 
 func TestDesktopGatePassesAndRecordsWhatItBuilt(t *testing.T) {
+	t.Parallel()
+
 	f := newDesktopFixture(t)
 	justLog := filepath.Join(t.TempDir(), "just.log")
-	t.Setenv("FAKE_JUST_LOG", justLog)
+	f.setenv("FAKE_JUST_LOG", justLog)
 
 	ev, err := RunDesktop(context.Background(), f.desktopOptions())
 	if err != nil {
@@ -162,10 +165,12 @@ func TestDesktopGatePassesAndRecordsWhatItBuilt(t *testing.T) {
 }
 
 func TestDesktopGateReportsMissingInfrastructureAsPending(t *testing.T) {
+	t.Parallel()
+
 	f := newDesktopFixture(t)
 	justLog := filepath.Join(t.TempDir(), "just.log")
-	t.Setenv("FAKE_JUST_LOG", justLog)
-	t.Setenv("FAKE_TOOLCHAIN_MISSING", "no Xcode on the Mac that builds")
+	f.setenv("FAKE_JUST_LOG", justLog)
+	f.setenv("FAKE_TOOLCHAIN_MISSING", "no Xcode on the Mac that builds")
 
 	ev, err := RunDesktop(context.Background(), f.desktopOptions())
 	if !errors.Is(err, ErrDesktopGatePending) {
@@ -201,9 +206,11 @@ func TestDesktopGateReportsMissingInfrastructureAsPending(t *testing.T) {
 }
 
 func TestDesktopGateRefusesADirtyTreeUnlessRehearsing(t *testing.T) {
+	t.Parallel()
+
 	f := newDesktopFixture(t)
 	gateLog := filepath.Join(t.TempDir(), "gate.log")
-	t.Setenv("FAKE_GATE_LOG", gateLog)
+	f.setenv("FAKE_GATE_LOG", gateLog)
 	writeFile(t, filepath.Join(f.agentMuxRoot, "untracked.go"), "package main\n")
 
 	ev, err := RunDesktop(context.Background(), f.desktopOptions())
@@ -246,8 +253,10 @@ func TestDesktopGateRefusesADirtyTreeUnlessRehearsing(t *testing.T) {
 }
 
 func TestDesktopGateStopsAtTheFirstFailedStep(t *testing.T) {
+	t.Parallel()
+
 	f := newDesktopFixture(t)
-	t.Setenv("FAKE_JUST_FAIL", "mac-app")
+	f.setenv("FAKE_JUST_FAIL", "mac-app")
 
 	ev, err := RunDesktop(context.Background(), f.desktopOptions())
 	if !errors.Is(err, ErrDesktopGateFailed) {
@@ -268,6 +277,8 @@ func TestDesktopGateStopsAtTheFirstFailedStep(t *testing.T) {
 }
 
 func TestDesktopGateSignsUnderItsOwnNamespace(t *testing.T) {
+	t.Parallel()
+
 	f := newDesktopFixture(t)
 	opts := f.desktopOptions()
 	opts.SigningKey = f.signingKey
@@ -288,6 +299,8 @@ func TestDesktopGateSignsUnderItsOwnNamespace(t *testing.T) {
 }
 
 func TestDesktopPlanAsksForNotarizationOnlyWhenTold(t *testing.T) {
+	t.Parallel()
+
 	joined := func(steps []Step) string {
 		var b strings.Builder
 		for _, step := range steps {
@@ -307,6 +320,8 @@ func TestDesktopPlanAsksForNotarizationOnlyWhenTold(t *testing.T) {
 // paired gate never needs Xcode, and the desktop gate never does what only a
 // paired release may do to a machine.
 func TestTheTwoGatesStayApart(t *testing.T) {
+	t.Parallel()
+
 	for _, step := range Plan("/amx", "/asl") {
 		argv := strings.Join(step.Argv, " ")
 		for _, forbidden := range []string{"mac-", "macos/", "xcodebuild", "desktop"} {

@@ -48,6 +48,8 @@ func (c *testProbeClient) SendWithAutoStartObserved(request protocol.Request, _ 
 }
 
 func TestSelectorNormalizesHarnessAndParsesTimeBounds(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	after, err := ParseTimeBound("30m", now)
 	if err != nil || !after.Equal(now.Add(-30*time.Minute)) {
@@ -67,6 +69,8 @@ func TestSelectorNormalizesHarnessAndParsesTimeBounds(t *testing.T) {
 }
 
 func TestTailWorksOfflineReadsSpoolAndToleratesCorruptRecords(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -114,6 +118,8 @@ func TestTailWorksOfflineReadsSpoolAndToleratesCorruptRecords(t *testing.T) {
 }
 
 func TestCollectStatusRemainsUsefulWithDaemonAndKittyUnavailable(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -149,6 +155,8 @@ func TestCollectStatusRemainsUsefulWithDaemonAndKittyUnavailable(t *testing.T) {
 }
 
 func TestCollectStatusEmitsEmptyLastSeenEventsWhenJournalUnavailable(t *testing.T) {
+	t.Parallel()
+
 	disabled := false
 	enabled := true
 	openFailurePaths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
@@ -210,6 +218,8 @@ func TestCollectStatusEmitsEmptyLastSeenEventsWhenJournalUnavailable(t *testing.
 }
 
 func TestCollectStatusEmitsEmptyLastSeenEventsWhenJournalHealthyButEmpty(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -248,6 +258,8 @@ func TestCollectStatusEmitsEmptyLastSeenEventsWhenJournalHealthyButEmpty(t *test
 }
 
 func TestCollectStatusReportsHookDeliveryFailuresInTrailingHour(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -338,6 +350,8 @@ func TestCollectStatusReportsHookDeliveryFailuresInTrailingHour(t *testing.T) {
 }
 
 func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	if err := paths.Ensure(); err != nil {
 		t.Fatal(err)
@@ -355,6 +369,8 @@ func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
 }
 
 func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
+	t.Parallel()
+
 	client := &testProbeClient{}
 	report := Probe(client, ProbeOptions{WindowID: 43, KittyListenOn: "unix:/kitty-a", Harness: "Claude", RequestID: "request-1", TraceID: "trace-1", AMXBin: "/tmp/amx"})
 	if !report.Success || len(report.Stages) != 2 || report.Stages[0].Stage != ipc.DeliveryStageIPCAttempt || report.Stages[1].Stage != "daemon_acknowledgement" {
@@ -369,6 +385,8 @@ func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
 }
 
 func TestProbeRefusesKittyWindowWithoutSocket(t *testing.T) {
+	t.Parallel()
+
 	client := &testProbeClient{}
 	report := Probe(client, ProbeOptions{WindowID: 43})
 	if report.Success || !strings.Contains(report.Error, "Kitty socket") || client.request.Type != "" {

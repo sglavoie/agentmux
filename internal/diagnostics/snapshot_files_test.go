@@ -12,6 +12,8 @@ import (
 )
 
 func TestJournalSnapshotVisitorFailureAcrossFilesDoesNotAdvanceCursor(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 16, 2, 55, 0, 0, time.UTC)
 	firstFileRecords := []TraceEnvelope{
@@ -66,6 +68,8 @@ func TestJournalSnapshotVisitorFailureAcrossFilesDoesNotAdvanceCursor(t *testing
 }
 
 func TestJournalSnapshotReadsOpenedFilesAfterRenameAndRemoval(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 16, 3, 0, 0, 0, time.UTC)
 	segment := snapshotEnvelope("segment", 1, "segment", base)
@@ -95,6 +99,8 @@ func TestJournalSnapshotReadsOpenedFilesAfterRenameAndRemoval(t *testing.T) {
 }
 
 func TestJournalSnapshotCarriesAndPrunesCursorOffsetsForMissingFiles(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	spoolPath := filepath.Join(paths.SpoolDir, "journal-5151.jsonl")
 	write := snapshotJSONLine(t, snapshotEnvelope("spool", 1, "spool", time.Date(2026, 7, 16, 3, 15, 0, 0, time.UTC)))
@@ -164,6 +170,8 @@ func TestJournalSnapshotCarriesAndPrunesCursorOffsetsForMissingFiles(t *testing.
 }
 
 func TestJournalSnapshotResetsMisalignedReusedInodeCursor(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 16, 3, 20, 0, 0, time.UTC)
 	data := append(
@@ -196,6 +204,8 @@ func TestJournalSnapshotResetsMisalignedReusedInodeCursor(t *testing.T) {
 }
 
 func TestJournalSnapshotDefersTrailingLineUntilActiveSpoolIsSealed(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 16, 3, 30, 0, 0, time.UTC)
 	trailing := snapshotJSONLine(t, snapshotEnvelope("spool", 1, "sealed-tail", base))
@@ -226,6 +236,8 @@ func TestJournalSnapshotDefersTrailingLineUntilActiveSpoolIsSealed(t *testing.T)
 }
 
 func TestJournalSnapshotReadPathDoesNotChmodOrQuarantine(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	base := time.Date(2026, 7, 16, 4, 0, 0, 0, time.UTC)
 	if err := os.WriteFile(paths.JournalFile, snapshotJSONLine(t, snapshotEnvelope("segment", 1, "segment", base)), 0o640); err != nil {

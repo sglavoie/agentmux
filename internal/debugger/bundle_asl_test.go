@@ -13,6 +13,8 @@ import (
 )
 
 func TestForensicBundleCorrelatesTheCausalPathAcrossBothSystems(t *testing.T) {
+	t.Parallel()
+
 	document := aslExportFixture()
 	options, _ := aslBundleFixture(t, BundleModeForensic, aslexport.Result{
 		Availability: aslexport.Availability{Available: true, Reason: aslexport.ReasonOK},
@@ -115,6 +117,8 @@ func hasNote(correlation ASLCorrelation, code string) bool {
 }
 
 func TestBundleDoesNotReadASLPrivateStateFormats(t *testing.T) {
+	t.Parallel()
+
 	options, _ := aslBundleFixture(t, BundleModeForensic, aslexport.Result{
 		Availability: aslexport.Availability{Available: true, Reason: aslexport.ReasonOK},
 		Document:     aslExportFixture(),
@@ -138,6 +142,8 @@ func TestBundleDoesNotReadASLPrivateStateFormats(t *testing.T) {
 }
 
 func TestASLBundleMembersAreDeterministicAndCanaryFree(t *testing.T) {
+	t.Parallel()
+
 	for _, mode := range []BundleMode{BundleModeShare, BundleModeForensic} {
 		t.Run(string(mode), func(t *testing.T) {
 			document := aslExportFixture()
@@ -198,6 +204,8 @@ func TestASLBundleMembersAreDeterministicAndCanaryFree(t *testing.T) {
 }
 
 func TestShareBundleKeepsTheASLCorrelationReadable(t *testing.T) {
+	t.Parallel()
+
 	// Share mode drops every key it does not know, so the correlation is only
 	// useful there if its whole vocabulary is allowlisted. This is the test
 	// that fails when a new field is added without extending the allowlist.
@@ -258,6 +266,8 @@ func TestShareBundleKeepsTheASLCorrelationReadable(t *testing.T) {
 }
 
 func TestBundleSurvivesEveryASLUnavailableCondition(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name         string
 		requested    bool
@@ -328,6 +338,8 @@ func TestBundleSurvivesEveryASLUnavailableCondition(t *testing.T) {
 }
 
 func TestCorrelationFlagsContractSetDisagreement(t *testing.T) {
+	t.Parallel()
+
 	document := aslExportFixture()
 	document.ContractSetID = "asl-amx-9.deadbeefdeadbeef"
 	correlation := buildASLCorrelation(
@@ -346,6 +358,8 @@ func TestCorrelationFlagsContractSetDisagreement(t *testing.T) {
 }
 
 func TestCorrelationCapsTheJoinAndSaysSo(t *testing.T) {
+	t.Parallel()
+
 	document := aslExportFixture()
 	template := document.Runs[0]
 	document.Runs = make([]aslexport.Run, 0, maxCorrelatedRuns+5)
@@ -370,6 +384,8 @@ func TestCorrelationCapsTheJoinAndSaysSo(t *testing.T) {
 }
 
 func TestCorrelationJoinsRunsRecordedUnderEitherIdentityField(t *testing.T) {
+	t.Parallel()
+
 	byField := diagnostics.NewEnvelope("asl.lifecycle.delivered")
 	byField.RunID = "run-alpha"
 	byField.Stage = "bridge_dispatch"

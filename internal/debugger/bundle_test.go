@@ -18,6 +18,8 @@ import (
 )
 
 func TestShareBundleExcludesSecretCorpusRawSourcesAndIsDeterministic(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 34, 56, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
@@ -143,6 +145,8 @@ func TestShareBundleExcludesSecretCorpusRawSourcesAndIsDeterministic(t *testing.
 }
 
 func TestShareBundleScopeIdentifiersAreHMACRedacted(t *testing.T) {
+	t.Parallel()
+
 	const rawScope = "session-sensitive/turn:turn-sensitive"
 	const hashedScope = "hmac-sha256:scope-redacted"
 	redactor := newBundleRedactor(BundleModeShare, func(value string) string {
@@ -166,6 +170,8 @@ func TestShareBundleScopeIdentifiersAreHMACRedacted(t *testing.T) {
 }
 
 func TestShareBundlePreservesControlledExplanationTruncation(t *testing.T) {
+	t.Parallel()
+
 	redactor := newBundleRedactor(BundleModeShare, func(string) string {
 		return "hmac-sha256:identifier-redacted"
 	}, nil)
@@ -185,6 +191,8 @@ func TestShareBundlePreservesControlledExplanationTruncation(t *testing.T) {
 }
 
 func TestShareBundleProfileIdentifiersAreNotEmbeddedInChecks(t *testing.T) {
+	t.Parallel()
+
 	const profile = "personal-profile-sensitive"
 	report := StatusReport{Findings: make([]Finding, 0)}
 	report.addHookProfileFinding(HookProfile{
@@ -207,6 +215,8 @@ func TestShareBundleProfileIdentifiersAreNotEmbeddedInChecks(t *testing.T) {
 }
 
 func TestBundleRedactionAllowsOnlySafeProcessLifecycleEvidence(t *testing.T) {
+	t.Parallel()
+
 	input := map[string]any{"evidence": map[string]string{
 		"event":                  "HarnessProcessExited",
 		"process_harness":        "claude",
@@ -263,6 +273,8 @@ func TestBundleRedactionAllowsOnlySafeProcessLifecycleEvidence(t *testing.T) {
 }
 
 func TestForensicBundleRemainsRedactedAndCarriesLocalOnlyWarning(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 13, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
@@ -299,6 +311,8 @@ func TestForensicBundleRemainsRedactedAndCarriesLocalOnlyWarning(t *testing.T) {
 }
 
 func TestBundleRejectsSymlinkTargetWithoutPartialPublication(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {

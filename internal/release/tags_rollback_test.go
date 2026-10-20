@@ -27,6 +27,8 @@ import (
 // returns an error and retracts both tags may not persist a record that says it
 // passed.
 func TestFinalEvidenceSigningFailureRollsBackPairTags(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 
 	// A tag that predates the run, in both repositories. The rollback must
@@ -57,7 +59,7 @@ func TestFinalEvidenceSigningFailureRollsBackPairTags(t *testing.T) {
 				return "sign_and_send_pubkey: signing failed for ED25519 key", 255, nil
 			}
 		}
-		return ExecRunner(ctx, dir, argv)
+		return f.exec(ctx, dir, argv)
 	}
 
 	ev, err := Run(context.Background(), opts)
@@ -211,6 +213,8 @@ func TestFinalEvidenceSigningFailureRollsBackPairTags(t *testing.T) {
 // record, the signature on disk, the returned error, and what the operator was
 // told while it happened.
 func TestFinalEvidenceWriteFailureRollsBackPairTags(t *testing.T) {
+	t.Parallel()
+
 	if os.Geteuid() == 0 {
 		t.Skip("the injected write failures are filesystem permissions, which root ignores")
 	}
@@ -310,7 +314,7 @@ func runUnpublishableTagging(t *testing.T, sealRecord bool) unpublishableTagging
 	opts.Progress = &progress
 	sealed := false
 	opts.Run = func(ctx context.Context, dir string, argv []string) (string, int, error) {
-		output, code, err := ExecRunner(ctx, dir, argv)
+		output, code, err := f.exec(ctx, dir, argv)
 		// The moment both refs exist and the only record for the pair is the
 		// provisional one: close the medium. Nothing else in the run writes there.
 		if dir == f.aslRoot && isGitTagCreate(argv) && err == nil && code == 0 && !sealed {

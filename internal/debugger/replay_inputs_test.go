@@ -24,6 +24,8 @@ import (
 )
 
 func TestReplaySchemaV8UsesOnlySufficientEvidenceAndReportsLimits(t *testing.T) {
+	t.Parallel()
+
 	input := filepath.Join(t.TempDir(), "events-v8.json")
 	data := []byte(`{"schema_version":8,"windows":[{"window_id":42,"events":[{"at":100,"event":"PreToolUse","action":"active","result_icon_state":"bolt","source_kind":"harness","source_key":"claude:legacy","source_seq":1}]}]}`)
 	if err := os.WriteFile(input, data, 0o600); err != nil {
@@ -43,6 +45,8 @@ func TestReplaySchemaV8UsesOnlySufficientEvidenceAndReportsLimits(t *testing.T) 
 }
 
 func TestReplayAcceptsCompleteEventsExportSchemasV9AndNewer(t *testing.T) {
+	t.Parallel()
+
 	payload := protocol.ExportEventsPayload{Windows: []protocol.ExportWindow{{
 		WindowID: 42,
 		Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
@@ -94,6 +98,8 @@ func TestReplayAcceptsCompleteEventsExportSchemasV9AndNewer(t *testing.T) {
 }
 
 func TestReplayRejectsUnsupportedEventsExportSchema(t *testing.T) {
+	t.Parallel()
+
 	input := filepath.Join(t.TempDir(), "events.json")
 	if err := os.WriteFile(input, []byte(`{"schema_version":14,"windows":[]}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -104,6 +110,8 @@ func TestReplayRejectsUnsupportedEventsExportSchema(t *testing.T) {
 }
 
 func TestReplayRejectsLiveAndUnsupportedInputsWithoutMutation(t *testing.T) {
+	t.Parallel()
+
 	if _, err := Replay(t.Context(), filepath.Join(t.TempDir(), "missing"), ReplayOptions{}); err == nil {
 		t.Fatal("missing input was accepted")
 	}
@@ -131,6 +139,8 @@ func TestReplayRejectsLiveAndUnsupportedInputsWithoutMutation(t *testing.T) {
 }
 
 func TestReplayRejectsExcessiveMembers(t *testing.T) {
+	t.Parallel()
+
 	var archive bytes.Buffer
 	gzipWriter := gzip.NewWriter(&archive)
 	tarWriter := tar.NewWriter(gzipWriter)

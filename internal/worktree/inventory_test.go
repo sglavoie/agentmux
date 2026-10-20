@@ -16,6 +16,8 @@ import (
 )
 
 func TestInventoryValidDirtyLockedAndMergeFacts(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	workflow := testWorkflow(root)
@@ -85,6 +87,8 @@ func TestInventoryValidDirtyLockedAndMergeFacts(t *testing.T) {
 }
 
 func TestInventoryMissingSourceRefLeavesNullableMergeFacts(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	workflow := testWorkflow(root)
@@ -113,6 +117,8 @@ func TestInventoryMissingSourceRefLeavesNullableMergeFacts(t *testing.T) {
 }
 
 func TestInventoryMissingRootIsEmptyAndDoesNotCreateIt(t *testing.T) {
+	t.Parallel()
+
 	root := filepath.Join(t.TempDir(), "absent")
 	entries, err := testInventory(root).List(context.Background())
 	if err != nil {
@@ -127,6 +133,8 @@ func TestInventoryMissingRootIsEmptyAndDoesNotCreateIt(t *testing.T) {
 }
 
 func TestInventoryLegacyStableIDAndExternalWorktreeExcluded(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	managed := filepath.Join(root, "api", "legacy")
@@ -174,6 +182,8 @@ func TestInventoryLegacyStableIDAndExternalWorktreeExcluded(t *testing.T) {
 }
 
 func TestInventoryClassifiesRetainedAndInvalidMetadata(t *testing.T) {
+	t.Parallel()
+
 	root := filepath.Join(t.TempDir(), "worktrees")
 	project := filepath.Join(root, "api")
 	if err := os.MkdirAll(project, 0o700); err != nil {
@@ -235,6 +245,8 @@ func TestInventoryClassifiesRetainedAndInvalidMetadata(t *testing.T) {
 }
 
 func TestInventoryRejectsSymlinkEscapeAndPerformsNoManagedRootWrites(t *testing.T) {
+	t.Parallel()
+
 	root := filepath.Join(t.TempDir(), "worktrees")
 	project := filepath.Join(root, "api")
 	if err := os.MkdirAll(project, 0o700); err != nil {
@@ -259,6 +271,8 @@ func TestInventoryRejectsSymlinkEscapeAndPerformsNoManagedRootWrites(t *testing.
 }
 
 func TestInventoryPartialGitFailureAndBoundedConcurrency(t *testing.T) {
+	t.Parallel()
+
 	root := filepath.Join(t.TempDir(), "worktrees")
 	project := filepath.Join(root, "api")
 	common := filepath.Join(t.TempDir(), "common")
@@ -325,6 +339,8 @@ func TestInventoryPartialGitFailureAndBoundedConcurrency(t *testing.T) {
 }
 
 func TestInventoryCancellationStopsWorkers(t *testing.T) {
+	t.Parallel()
+
 	root := filepath.Join(t.TempDir(), "worktrees")
 	project := filepath.Join(root, "api")
 	common := filepath.Join(t.TempDir(), "common")
@@ -381,6 +397,8 @@ func TestInventoryCancellationStopsWorkers(t *testing.T) {
 }
 
 func TestResolveSelectorExactPrefixBranchPathAndAmbiguity(t *testing.T) {
+	t.Parallel()
+
 	pathRoot := t.TempDir()
 	canonicalRoot, err := canonicalDirectory(pathRoot)
 	if err != nil {
@@ -416,6 +434,8 @@ func TestResolveSelectorExactPrefixBranchPathAndAmbiguity(t *testing.T) {
 }
 
 func TestResolveSelectorOffersNearMissBranchesWhenNothingMatches(t *testing.T) {
+	t.Parallel()
+
 	entries := []Entry{
 		{ID: "cccccccc-1111", Branch: "amx/fix-plans-footer", Path: "/tmp/one"},
 		{ID: "bbbbbbbb-2222", Branch: "amx/fix-dashboard", Path: "/tmp/two"},
@@ -448,6 +468,8 @@ func TestResolveSelectorOffersNearMissBranchesWhenNothingMatches(t *testing.T) {
 }
 
 func TestSortEntriesAttentionAndTieBreakers(t *testing.T) {
+	t.Parallel()
+
 	when := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	entries := []Entry{
 		{ID: "clean", Classification: ClassificationValid, GitAvailable: true, CreatedAt: when},

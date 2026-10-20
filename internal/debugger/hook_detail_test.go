@@ -3,6 +3,8 @@ package debugger
 import "testing"
 
 func TestHookProfileDetailSummarizesARepeatedIssue(t *testing.T) {
+	t.Parallel()
+
 	profile := HookProfile{Issues: []HookIssue{{Code: "cli_newer", Message: "CLI is newer"}}}
 	for _, project := range []string{"a", "b", "c", "d", "e"} {
 		profile.Issues = append(profile.Issues, HookIssue{Code: "codex_hook_untrusted", Message: project + ": Stop has no exact-definition trust record"})

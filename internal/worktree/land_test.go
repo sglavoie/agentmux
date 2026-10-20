@@ -15,6 +15,8 @@ func revision(t *testing.T, directory, rev string) string {
 }
 
 func TestLandFastForwardsTheSourceCheckoutAndLeavesTheWorktreeAlone(t *testing.T) {
+	t.Parallel()
+
 	repo, inventory, entry := reviewFixture(t)
 	commitFile(t, entry.Path, "feature.txt", "one\n", "feature")
 	commitFile(t, entry.Path, "more.txt", "two\n", "more")
@@ -55,6 +57,8 @@ func TestLandFastForwardsTheSourceCheckoutAndLeavesTheWorktreeAlone(t *testing.T
 }
 
 func TestLandAdvancesASourceBranchNoWorktreeHasCheckedOut(t *testing.T) {
+	t.Parallel()
+
 	repo, inventory, entry := reviewFixture(t)
 	source := entry.SourceBranch
 	gitRun(t, repo, "checkout", "-b", "elsewhere")
@@ -77,6 +81,8 @@ func TestLandAdvancesASourceBranchNoWorktreeHasCheckedOut(t *testing.T) {
 }
 
 func TestLandRefusesWithoutMovingAnything(t *testing.T) {
+	t.Parallel()
+
 	for name, tc := range map[string]struct {
 		arrange func(t *testing.T, repo string, entry Entry)
 		want    error

@@ -125,6 +125,8 @@ func assertCompactionRequests(t *testing.T, journal *Journal, stage string, coun
 }
 
 func TestJournalCompactCommitWindowDoesNotBlockAppend(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := compactionJournalWithRecords(t, "compaction.commitwindow", 2)
 	appended := false
 	hooks := compactionHooks{
@@ -165,6 +167,8 @@ func TestJournalCompactCommitWindowDoesNotBlockAppend(t *testing.T) {
 }
 
 func TestJournalCompactionOutlastsSharedReaderBeyondAppendTimeout(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := compactionJournalWithRecords(t, "compaction.sharedreader", 2)
 	reader, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_RDWR, fileMode)
 	if err != nil {

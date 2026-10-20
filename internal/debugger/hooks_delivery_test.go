@@ -6,6 +6,8 @@ import (
 )
 
 func TestHookDeliveryFailuresSummaryPlacesFailuresAgainstDaemonStart(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	latest := now.Add(-5 * time.Minute)
 	failures := &HookDeliveryFailures{Count: 2, LatestAt: &latest}

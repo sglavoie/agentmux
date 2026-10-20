@@ -12,6 +12,8 @@ import (
 )
 
 func TestManagerRemoveRetainsBranchByDefault(t *testing.T) {
+	t.Parallel()
+
 	repo, root, workflow, created := cleanupFixture(t)
 	manager := testInventory(root)
 
@@ -32,6 +34,8 @@ func TestManagerRemoveRetainsBranchByDefault(t *testing.T) {
 }
 
 func TestManagerRemoveSafelyDeletesMergedBranch(t *testing.T) {
+	t.Parallel()
+
 	repo, root, _, created := cleanupFixture(t)
 	manager := testInventory(root)
 
@@ -50,6 +54,8 @@ func TestManagerRemoveSafelyDeletesMergedBranch(t *testing.T) {
 }
 
 func TestManagerRemoveLegacyCheckoutRetainsBranchAndRejectsBranchDeletion(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	path := filepath.Join(root, "api", "legacy")
@@ -82,6 +88,8 @@ func TestManagerRemoveLegacyCheckoutRetainsBranchAndRejectsBranchDeletion(t *tes
 }
 
 func TestManagerRemoveRefusesUnsafeCheckoutStates(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		prepare   func(*testing.T, string, Result)
@@ -163,6 +171,8 @@ func TestManagerRemoveRefusesUnsafeCheckoutStates(t *testing.T) {
 }
 
 func TestManagerRemoveExcludesExternalWorktreeInsideManagedRoot(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	external := filepath.Join(root, "api", "external")
@@ -185,6 +195,8 @@ func TestManagerRemoveExcludesExternalWorktreeInsideManagedRoot(t *testing.T) {
 }
 
 func TestManagerRemoveRefreshesStateUnderMutationLock(t *testing.T) {
+	t.Parallel()
+
 	_, root, _, created := cleanupFixture(t)
 	manager := testInventory(root)
 	entries, err := manager.List(context.Background())
@@ -202,6 +214,8 @@ func TestManagerRemoveRefreshesStateUnderMutationLock(t *testing.T) {
 }
 
 func TestManagerRemoveRejectsSidecarGitMismatch(t *testing.T) {
+	t.Parallel()
+
 	_, root, _, created := cleanupFixture(t)
 	metadata, err := ReadMetadata(created.MetadataPath)
 	if err != nil {
@@ -219,6 +233,8 @@ func TestManagerRemoveRejectsSidecarGitMismatch(t *testing.T) {
 }
 
 func TestManagerRemovePartialBranchFailureIsRetryable(t *testing.T) {
+	t.Parallel()
+
 	repo, root, _, created := cleanupFixture(t)
 	manager := testInventory(root)
 	var failed atomic.Bool
@@ -250,6 +266,8 @@ func TestManagerRemovePartialBranchFailureIsRetryable(t *testing.T) {
 }
 
 func TestManagerRemovePartialMetadataFailureIsRetryable(t *testing.T) {
+	t.Parallel()
+
 	_, root, _, created := cleanupFixture(t)
 	manager := testInventory(root)
 	var failed atomic.Bool
@@ -277,6 +295,8 @@ func TestManagerRemovePartialMetadataFailureIsRetryable(t *testing.T) {
 }
 
 func TestManagerForgetEligibility(t *testing.T) {
+	t.Parallel()
+
 	t.Run("healthy present metadata is refused", func(t *testing.T) {
 		_, root, _, created := cleanupFixture(t)
 		_, err := testInventory(root).Forget(context.Background(), created.ID)
@@ -336,6 +356,8 @@ func TestManagerForgetEligibility(t *testing.T) {
 }
 
 func TestManagerPlainRemoveOfMissingCheckoutRequiresForget(t *testing.T) {
+	t.Parallel()
+
 	repo, root, _, created := cleanupFixture(t)
 	gitRun(t, repo, "worktree", "remove", created.Path)
 
@@ -350,6 +372,8 @@ func TestManagerPlainRemoveOfMissingCheckoutRequiresForget(t *testing.T) {
 }
 
 func TestManagerDeleteBranchRefusesExternallyMissingRegisteredCheckout(t *testing.T) {
+	t.Parallel()
+
 	_, root, _, created := cleanupFixture(t)
 	if err := os.RemoveAll(created.Path); err != nil {
 		t.Fatal(err)
@@ -365,6 +389,8 @@ func TestManagerDeleteBranchRefusesExternallyMissingRegisteredCheckout(t *testin
 }
 
 func TestCreateRemoveAndForgetShareMutationLock(t *testing.T) {
+	t.Parallel()
+
 	repo := testRepository(t)
 	root := filepath.Join(t.TempDir(), "worktrees")
 	workflow := testWorkflow(root)
@@ -469,6 +495,8 @@ func assertPathMissing(t *testing.T, path string) {
 }
 
 func TestPartialMutationErrorCarriesCause(t *testing.T) {
+	t.Parallel()
+
 	cause := errors.New("cause")
 	err := &PartialMutationError{Err: cause}
 	if !errors.Is(err, cause) || !strings.Contains(err.Error(), "completed partially") {

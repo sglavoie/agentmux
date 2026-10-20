@@ -16,6 +16,8 @@ import (
 )
 
 func TestCollectStatusUsesOneSnapshotForHealthAndLatestEvents(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
@@ -253,6 +255,8 @@ func TestAcceptanceSinglePassStatusSurvivesTinySegmentCompaction(t *testing.T) {
 }
 
 func TestCollectStatusWarnsForStaleOrLegacySpoolAndCountsSpoolQuota(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	for _, test := range []struct {
 		name        string

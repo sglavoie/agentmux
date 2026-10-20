@@ -11,6 +11,8 @@ import (
 // tell a timeout from a broken repository with errors.Is instead of parsing
 // the message.
 func TestGitFailureKeepsItsCauseBehindTheSentinel(t *testing.T) {
+	t.Parallel()
+
 	inventory := &Inventory{git: func(context.Context, string, time.Duration, ...string) ([]byte, error) {
 		return nil, context.DeadlineExceeded
 	}}

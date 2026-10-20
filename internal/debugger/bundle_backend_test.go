@@ -19,6 +19,8 @@ import (
 // backend and runtime blocks survive share mode; every free-form string in
 // them, and every path, does not.
 func TestShareBundleKeepsBackendHealthAndDropsWhatItCouldCarry(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
