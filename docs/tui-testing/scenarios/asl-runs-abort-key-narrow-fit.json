@@ -1,0 +1,40 @@
+{
+  "name": "asl-runs-abort-key-narrow-fit",
+  "fixture": "asl_runs",
+  "size": {
+    "width": 60,
+    "height": 18
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "explore.show-runs"
+    },
+    {
+      "type": "key",
+      "key": "a"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "asl_runs"
+    },
+    {
+      "type": "contains_text",
+      "text": "X abort"
+    },
+    {
+      "type": "excludes_text",
+      "text": "a abort"
+    },
+    {
+      "type": "kitty_calls",
+      "op": "FocusTab",
+      "count": 0
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

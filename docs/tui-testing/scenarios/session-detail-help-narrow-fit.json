@@ -1,0 +1,36 @@
+{
+  "name": "session-detail-help-narrow-fit",
+  "fixture": "basic",
+  "size": {
+    "width": 60,
+    "height": 18
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "session.show-details"
+    },
+    {
+      "type": "key",
+      "key": "?"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "help"
+    },
+    {
+      "type": "contains_text",
+      "text": "Session detail"
+    },
+    {
+      "type": "excludes_layout_issue",
+      "value": "modal_height_overflow"
+    },
+    {
+      "type": "excludes_layout_issue",
+      "value": "modal_clipped_by_root"
+    }
+  ]
+}

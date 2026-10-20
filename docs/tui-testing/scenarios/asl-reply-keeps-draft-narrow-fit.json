@@ -1,0 +1,56 @@
+{
+  "name": "asl-reply-keeps-draft-narrow-fit",
+  "fixture": "asl_runs",
+  "size": {
+    "width": 60,
+    "height": 18
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "explore.show-runs"
+    },
+    {
+      "type": "key",
+      "key": "r"
+    },
+    {
+      "type": "text",
+      "text": "after the cutover"
+    },
+    {
+      "type": "key",
+      "key": "esc"
+    },
+    {
+      "type": "key",
+      "key": "r"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "asl_response"
+    },
+    {
+      "type": "contains_text",
+      "text": "keep & close"
+    },
+    {
+      "type": "excludes_text",
+      "text": "? more"
+    },
+    {
+      "type": "contains_text",
+      "text": "after the cutover"
+    },
+    {
+      "type": "kitty_calls",
+      "op": "FocusTab",
+      "count": 0
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

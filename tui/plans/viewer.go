@@ -72,7 +72,7 @@ func (in ViewerInput) Render() string {
 		if name == "" {
 			name = "(unnamed)"
 		}
-		header = fmt.Sprintf("Plan: %s  [project: %s]  (%d file%s)",
+		header = fmt.Sprintf("Plan: %s · project: %s · %d file%s",
 			layout.RenderTitleIcon(name), projectLabel(*in.Plan), len(in.Plan.Files), plural(len(in.Plan.Files)))
 	}
 	if in.Loading {

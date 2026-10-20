@@ -129,6 +129,12 @@ func (in ListInput) RenderList(height int) string {
 		if len(in.Entries) > 0 {
 			return styleDim.Render(layout.ClampLine("  "+layout.Placeholder(layout.NoMatchText("worktrees", layout.ClearFilterHint)), in.Width)) + "\n"
 		}
+		if in.RefreshErr != nil {
+			// Nothing loaded and the load failed: the list is empty because it
+			// could not be read, not because there is nothing to show, so the
+			// advice is the retry rather than how to make a worktree.
+			return styleDim.Render(layout.ClampLine("  "+layout.Placeholder(layout.LoadFailedText("worktrees", "r retries")), in.Width)) + "\n"
+		}
 		return styleDim.Render(layout.ClampLine("  "+layout.Placeholder(layout.EmptyText("managed worktrees", "w in Past Sessions forks a conversation into one")), in.Width)) + "\n"
 	}
 

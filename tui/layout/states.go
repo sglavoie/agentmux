@@ -44,6 +44,13 @@ func EmptyText(things, next string) string {
 	return WithHint("no "+things, next)
 }
 
+// LoadFailedText says a list is empty because it could not be read, which is
+// not the same as there being nothing to list: "could not load <things> —
+// <retry>", where retry names how to try again.
+func LoadFailedText(things, retry string) string {
+	return WithHint("could not load "+things, retry)
+}
+
 // WithHint appends the way out to a state that needs its own wording:
 // "<text> — <hint>", or text alone when there is no hint.
 func WithHint(text, hint string) string {

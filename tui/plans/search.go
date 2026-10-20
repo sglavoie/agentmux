@@ -161,6 +161,13 @@ func (in SearchInput) emptyHint() string {
 func (in SearchInput) emptyText() string {
 	hint := in.emptyHint()
 	if hint == "" {
+		// A failed load with nothing on the list is neither: the plans could
+		// not be read, so the line says that and how to retry (reopening Plans
+		// rescans; `r` here is the project filter) instead of advising where
+		// plans live.
+		if in.RefreshErr != nil || in.SearchErr != nil {
+			return layout.Placeholder(layout.LoadFailedText("plans", "esc, then reopen Plans to retry"))
+		}
 		return layout.Placeholder(layout.EmptyText("saved plans found", "plans_directory in config.toml says where to look"))
 	}
 	return layout.Placeholder(layout.NoMatchText("plans", hint))

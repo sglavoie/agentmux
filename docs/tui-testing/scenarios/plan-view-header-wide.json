@@ -1,0 +1,35 @@
+{
+  "name": "plan-view-header-wide",
+  "fixture": "basic",
+  "size": {
+    "width": 132,
+    "height": 34
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "explore.search-plans"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "plan_view"
+    },
+    {
+      "type": "contains_text",
+      "text": "· project: "
+    },
+    {
+      "type": "excludes_text",
+      "text": "[project:"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

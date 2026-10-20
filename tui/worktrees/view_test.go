@@ -1,6 +1,7 @@
 package worktrees
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,15 @@ func TestWorktreeListUsesNormalizedRenderer(t *testing.T) {
 	}
 	if strings.Contains(text, "styleSelected.Render(") {
 		t.Fatalf("%s directly wraps a styled row with styleSelected", name)
+	}
+}
+
+// A first load that failed leaves nothing on the list, and that is not the
+// same as having no worktrees: the line says so and names the retry key.
+func TestFailedFirstLoadSaysHowToRetry(t *testing.T) {
+	got := (ListInput{RefreshErr: errors.New("permission denied")}).RenderList(10)
+	if !strings.Contains(got, "could not load worktrees — r retries") || strings.Contains(got, "w in Past Sessions") {
+		t.Fatalf("RenderList = %q, want the load failure and its retry key", got)
 	}
 }
 

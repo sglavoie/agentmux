@@ -449,6 +449,10 @@ file. The exact inventory is:
 | [`actions-menu-nested-picker-fit.json`](scenarios/actions-menu-nested-picker-fit.json) | `basic` | the profile picker the menu opens for a restart-with-another-profile fits 80×24 — the menu's own fit is only half the claim, since every nested surface it raises has to fit the same terminal |
 | [`actions-menu-nested-confirmation-fit.json`](scenarios/actions-menu-nested-confirmation-fit.json) | `paused_queue` | the close confirmation the menu raises fits 80×24 with a Unicode subject, names that subject, and carries its whole consequence sentence; nothing was closed, because the prompt is still up |
 | [`asl-abort-confirmation-fit.json`](scenarios/asl-abort-confirmation-fit.json) | `asl_runs` | `X` confirms an abort against the captured run and states the 120-second grace and its degrade-to-stop behavior |
+| [`asl-runs-abort-key-wide.json`](scenarios/asl-runs-abort-key-wide.json) | `asl_runs` | `a` is inert in Runs (it means actions elsewhere) and the wide footer offers `X abort` |
+| [`asl-runs-abort-key-narrow-fit.json`](scenarios/asl-runs-abort-key-narrow-fit.json) | `asl_runs` | the same at 60 columns: `a` changes nothing and `X abort` survives the narrow footer |
+| [`asl-reply-keeps-draft-wide.json`](scenarios/asl-reply-keeps-draft-wide.json) | `asl_runs` | esc closes the reply form with its draft kept: reopening the same question shows the typed reply, and the footer says `esc keep & close` without a `? more` marker |
+| [`asl-reply-keeps-draft-narrow-fit.json`](scenarios/asl-reply-keeps-draft-narrow-fit.json) | `asl_runs` | the same at 60 columns, where the form footer wraps rather than shedding entries |
 | [`asl-question-pending-narrow-fit.json`](scenarios/asl-question-pending-narrow-fit.json) | `asl_question` | a human-actionable ASL handoff leads Needs you in a compact pane, reading `Awaiting reply` in its Status column while the `🔁` supervision marker is off screen entirely — 30 cells is below the split floor, so there is no inspector to carry it — and the `awaiting response` gloss is gone with the rest of the wide footer |
 | [`asl-question-pending-wide.json`](scenarios/asl-question-pending-wide.json) | `asl_question` | `n` walks back from an unrelated row to the human-actionable ASL handoff, whose row carries only its name, `Awaiting reply`, and a time — the `🔁` belongs to the strip and the `❓` gloss to the footer |
 | [`asl-response-live-wide.json`](scenarios/asl-response-live-wide.json) | `asl_runs` | `r` opens the live response form with an answer editor, the Reply/Continue/Pause buttons, and the multiple-question counter |
@@ -554,6 +558,8 @@ file. The exact inventory is:
 | [`plan-search-sort-rebind.json`](scenarios/plan-search-sort-rebind.json) | `basic` | `o` cycles the Plans sort order and the footer advertises `o sort`, not `s sort` |
 | [`plan-view-fit.json`](scenarios/plan-view-fit.json) | `basic` | plan viewer read-error line wraps to width after Plans is opened by name and `enter` selects a row |
 | [`plan-view-narrow-fit.json`](scenarios/plan-view-narrow-fit.json) | `basic` | plan viewer remains bounded at narrow width |
+| [`plan-view-header-wide.json`](scenarios/plan-view-header-wide.json) | `basic` | the plan viewer header spells the project `· project: …` like the Plans chips, not as a bracketed tag |
+| [`plan-view-header-narrow-fit.json`](scenarios/plan-view-header-narrow-fit.json) | `basic` | the same header at 60 columns |
 | [`round-trip-actions-to-inspector.json`](scenarios/round-trip-actions-to-inspector.json) | `paused_queue` | `a` then `esc` closes the actions menu back onto the inspector without having acted: the overlay is gone, the row is still selected, and no tab was closed |
 | [`round-trip-confirmation-cancel-to-inspector.json`](scenarios/round-trip-confirmation-cancel-to-inspector.json) | `paused_queue` | a cancelled close confirmation returns the same way — the prompt is gone, the inspector is back on the same row, and the tab the prompt named is still open |
 | [`round-trip-health-to-family-card.json`](scenarios/round-trip-health-to-family-card.json) | `family_unread` | the health details overlay over a selected family summary, dismissed, restores the family card whole |
@@ -574,6 +580,8 @@ file. The exact inventory is:
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after Past Sessions is opened by name |
 | [`project-session-shortcut.json`](scenarios/project-session-shortcut.json) | `basic` | dashboard `s` opens Past Sessions with the selected project filter |
 | [`session-search-header-narrow-fit.json`](scenarios/session-search-header-narrow-fit.json) | `basic` | Past Sessions header and filters fit at narrow width |
+| [`session-detail-help-wide.json`](scenarios/session-detail-help-wide.json) | `basic` | `?` in session detail opens help at its Session detail section |
+| [`session-detail-help-narrow-fit.json`](scenarios/session-detail-help-narrow-fit.json) | `basic` | the same at 60 columns, where the help box is clamped but neither clipped nor taller than the screen |
 | [`session-search-ending-wide.json`](scenarios/session-search-ending-wide.json) | `basic` | an unfiltered Past Sessions row follows its summary with `→` and how the conversation ended |
 | [`setup-profile-narrow.json`](scenarios/setup-profile-narrow.json) | `setup_profile` | empty dashboard names the missing setup step and fits the viewport |
 | [`setup-profile-wide.json`](scenarios/setup-profile-wide.json) | `setup_profile` | empty dashboard names the missing setup step and fits the viewport |
