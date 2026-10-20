@@ -153,6 +153,7 @@ enum WorkspaceMenu {
         // The digits are all the sessions'.
         view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
         view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
+        view.addItem(item("Past Sessions", #selector(AppDelegate.openPastSessionsFromMenu(_:)), "y", target: target))
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
         // The review windows: ⌘⇧ and a letter by default
         // (`WorkspaceShortcut.defaultCombo`), reassignable in Settings.

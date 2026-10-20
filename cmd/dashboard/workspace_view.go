@@ -113,10 +113,14 @@ func init() {
 			},
 		},
 		&cobra.Command{
-			Use:   "history HARNESS:SESSION_ID",
-			Short: "Past Sessions with one conversation selected, to continue or fork it",
-			Args:  cobra.ExactArgs(1),
+			Use:   "history [HARNESS:SESSION_ID]",
+			Short: "Past Sessions, with one conversation selected when named, to continue or fork it",
+			Args:  cobra.MaximumNArgs(1),
 			RunE: func(_ *cobra.Command, args []string) error {
+				if len(args) == 0 {
+					hostedByWorkspace()
+					return workspaceViewHistory(conversation.Identity{})
+				}
 				harnessName, sessionID, _ := strings.Cut(strings.TrimSpace(args[0]), ":")
 				wanted, ok := conversation.New(harnessName, sessionID)
 				if !ok {

@@ -21,6 +21,7 @@ var Tmux = []Action{
 	{Key: "f1", Section: "Overlays", Description: "show this keybinding reference", AmxCommand: "keybindings", LaunchType: tmuxPopup},
 	{Key: "f2", Section: "Overlays", Description: "open the live session overview", AmxCommand: "overview --popup", LaunchType: tmuxPopup},
 	{Key: "ctrl+shift+d", Section: "Overlays", Description: "open the Agent Mux dashboard", AmxCommand: "--popup", LaunchType: tmuxPopup},
+	{Key: "ctrl+shift+y", Section: "Overlays", Description: "open Past Sessions directly", AmxCommand: "past-sessions --popup", LaunchType: tmuxPopup},
 	// Session management
 	{Key: "f5", Section: "Sessions", Description: "set session harness icon (picker)", AmxCommand: "icon-picker", LaunchType: tmuxPopup},
 	{Key: "f6", Section: "Sessions", Description: "set session color (picker)", AmxCommand: "color-picker", LaunchType: tmuxPopup},

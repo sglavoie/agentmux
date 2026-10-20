@@ -85,3 +85,20 @@ final class WorkspaceReviewStateTests: XCTestCase {
         XCTAssertEqual(state.position("any"), NSPoint(x: 8, y: 9))
     }
 }
+
+final class WorkspacePastSessionsViewTests: XCTestCase {
+    /// ⌘Y's view runs Past Sessions over every conversation: the history
+    /// view with no target, which amx opens selecting nothing.
+    func testPastSessionsIsTheHistoryViewWithNoConversation() {
+        let view = WorkspaceUtilityView.pastSessions
+        XCTAssertEqual(view.kind, .history)
+        XCTAssertEqual(view.arguments, ["workspace-view", "history"])
+        XCTAssertEqual(view.id, "history")
+        XCTAssertNil(view.aboutRuntimeSessionID)
+        XCTAssertFalse(view.isPermanent)
+        XCTAssertFalse(view.asksBeforeClosing)
+        let one = WorkspaceUtilityView(kind: .history, target: "claude:abc", title: "Past Sessions")
+        XCTAssertEqual(one.arguments, ["workspace-view", "history", "claude:abc"])
+        XCTAssertNotEqual(one.id, view.id)
+    }
+}

@@ -24,7 +24,7 @@ func RunFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID 
 }
 
 // RunHistory launches the TUI in Past Sessions with the conversation wanted
-// selected once it is listed. It has no session list to return to: leaving
+// selected once it is listed; the zero identity selects nothing. It has no session list to return to: leaving
 // Past Sessions quits.
 func RunHistory(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity) error {
 	m := NewHistoryModel(cfg, client, wanted)

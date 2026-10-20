@@ -144,8 +144,31 @@ func TestWorkspaceHistoryRefusesAMalformedConversation(t *testing.T) {
 			t.Errorf("workspace-view history %q was accepted", selector)
 		}
 	}
-	if err := runWorkspaceView(t, "history"); err == nil {
-		t.Error("workspace-view history with no conversation was accepted")
+}
+
+// With no conversation named, the history view is Past Sessions over every
+// conversation, the workspace's ⌘Y: hosted like any surface, selecting nothing.
+func TestWorkspaceHistoryWithNoConversationOpensAllPastSessions(t *testing.T) {
+	restoreWorkspaceViewSeams(t)
+	insideKitty = func() bool { return false }
+	tmuxServerPresent = func() bool { return false }
+	openTmux = func() (backend.TargetLauncher, error) { return stubTmux{}, nil }
+	ran := 0
+	workspaceViewHistory = func(wanted conversation.Identity) error {
+		ran++
+		if wanted != (conversation.Identity{}) {
+			t.Errorf("history view opened on %+v, want no conversation", wanted)
+		}
+		if desktopViews == nil {
+			t.Error("the surface does not know it is hosted by the workspace")
+		}
+		return nil
+	}
+	if err := runWorkspaceView(t, "history"); err != nil {
+		t.Fatalf("workspace-view history: %v", err)
+	}
+	if ran != 1 {
+		t.Fatalf("history view ran %d time(s), want once", ran)
 	}
 }
 

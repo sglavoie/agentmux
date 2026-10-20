@@ -41,7 +41,10 @@ func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWind
 func NewHistoryModel(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity) Model {
 	m := newModel(cfg, client, 0, ModeSessionSearch)
 	m.historyOnly = true
-	m.sessionWantedKey = transcript.IndexKey(wanted.Harness, wanted.SessionID)
+	// The zero identity is Past Sessions with nothing to select.
+	if wanted.Harness != "" && wanted.SessionID != "" {
+		m.sessionWantedKey = transcript.IndexKey(wanted.Harness, wanted.SessionID)
+	}
 	// The entry every other route takes, for its loading state. Its command
 	// is dropped: it is the cache load Init dispatches, and marking that load
 	// in flight here keeps a second one from starting beside it.

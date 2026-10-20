@@ -63,7 +63,8 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 struct WorkspaceUtilityView: Equatable, Codable {
     enum Kind: String, Equatable, Codable {
         case dashboard, overview, shell, editor, pager, terminal
-        /// Past Sessions on one conversation, `harness:session_id`.
+        /// Past Sessions on one conversation, `harness:session_id`, or on
+        /// every conversation when the target is empty.
         case history
         case keybindings
         case iconPicker = "icon-picker"
@@ -135,7 +136,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
         case .editor: return ["workspace-view", "edit", target]
         case .pager: return ["workspace-view", "pager", target]
         case .terminal: return ["workspace-view", "session-shell", target]
-        case .history: return ["workspace-view", "history", target]
+        case .history: return target.isEmpty ? ["workspace-view", "history"] : ["workspace-view", "history", target]
         case .keybindings: return ["workspace-view", "keybindings"]
         case .iconPicker: return ["workspace-view", "icon-picker", target]
         case .colorPicker: return ["workspace-view", "color-picker", target]
@@ -164,7 +165,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
         case .editor: return "Editor · \(Self.abbreviated(target))"
         case .pager: return "Scrollback"
         case .terminal: return "Shell"
-        case .history: return "Continue or fork a conversation"
+        case .history: return target.isEmpty ? "Every conversation, to continue or fork" : "Continue or fork a conversation"
         case .keybindings: return "What the function keys do"
         case .iconPicker: return "Harness icon"
         case .colorPicker: return "Session color"
@@ -198,6 +199,8 @@ struct WorkspaceUtilityView: Equatable, Codable {
     static let dashboard = WorkspaceUtilityView(kind: .dashboard, target: "", title: "Dashboard")
     static let overview = WorkspaceUtilityView(kind: .overview, target: "", title: "Overview")
     static let keybindings = WorkspaceUtilityView(kind: .keybindings, target: "", title: "Keybindings")
+    /// Past Sessions over every conversation (⌘Y), without the Dashboard.
+    static let pastSessions = WorkspaceUtilityView(kind: .history, target: "", title: "Past Sessions")
 
     /// Past Sessions on a conversation, where the operator continues or
     /// forks it. The workspace only opens the list: it resumes nothing.

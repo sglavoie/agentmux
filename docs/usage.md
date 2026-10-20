@@ -33,7 +33,9 @@ to suggest adding a profile, adding a project, checking connection health, or
 pressing `l` to launch.
 
 This opens the dashboard, or focuses the existing dashboard tab if one is
-already running. When opened with the bundled `Ctrl+Shift+D` binding, the
+already running. To go straight to Past Sessions with no dashboard behind it,
+run `amx past-sessions` or press `Ctrl+Shift+Y` (`⌘Y` in Agent Mux.app);
+leaving Past Sessions then closes it. When opened with the bundled `Ctrl+Shift+D` binding, the
 dashboard selects the session it was opened from: the attached tmux session
 or the Kitty tab. An unmanaged source leaves the current/default selection alone.
 
@@ -948,14 +950,15 @@ What changes for a tmux session, and only for it:
   configuration binds what `agent-mux.conf` binds in Kitty, so a plain
   terminal attached to a session has the same keys: **F1** the keybinding
   reference, **F2** the overview, **F5** and **F6** the icon and color
-  pickers, and **ctrl+shift+d** the dashboard, each as a popup over the
-  terminal; **F7** and **F9** the previous and next session, and **F4** the
-  next one waiting on you; **F8** clear, **F10** mute, **F11** mark active;
-  **F3** the scrollback markers; **F12** detach. A key acts on the session
-  the terminal is on. In Agent Mux.app the main menu takes these keys first,
-  as before. ctrl+shift+d needs a terminal that reports modified keys (the
-  kitty keyboard protocol or xterm's modifyOtherKeys); `amx open-dashboard`
-  opens the same popup from anywhere.
+  pickers, **ctrl+shift+d** the dashboard, and **ctrl+shift+y** Past
+  Sessions, each as a popup over the terminal; **F7** and **F9** the
+  previous and next session, and **F4** the next one waiting on you; **F8**
+  clear, **F10** mute, **F11** mark active; **F3** the scrollback markers;
+  **F12** detach. A key acts on the session the terminal is on. In Agent
+  Mux.app the main menu takes these keys first, as before. ctrl+shift+d and
+  ctrl+shift+y need a terminal that reports modified keys (the kitty
+  keyboard protocol or xterm's modifyOtherKeys); `amx open-dashboard` opens
+  the dashboard popup from anywhere.
 - **Going to another session switches the terminal.** F7, F9, and F4 (and
   `amx focus-prev-managed`, `focus-next-managed`, and `focus-next`, which
   they run) take the sessions in the order the dashboard lists them and

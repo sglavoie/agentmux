@@ -132,7 +132,7 @@ enum WorkspaceCommand: Equatable {
     case launch(ProjectEntry)
     case resume(RecentConversation)
     case runs, runPlan, activity
-    case newTerminal, newShell, dashboard, overview, nextWaiting, settings, history, changes
+    case newTerminal, newShell, dashboard, overview, pastSessions, nextWaiting, settings, history, changes
 }
 
 
@@ -143,6 +143,7 @@ extension WorkspaceCommand {
         case .settings: return ["preferences", "configuration"]
         case .newShell, .newTerminal, .splitShell: return ["terminal", "shell", "console"]
         case .history: return ["transcript", "conversation", "search"]
+        case .pastSessions: return ["history", "resume", "continue", "fork"]
         case .activity: return ["unread", "activity", "recent"]
         case .nextWaiting: return ["attention", "inbox", "question", "permission"]
         default: return []

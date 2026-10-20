@@ -195,6 +195,10 @@ terminals of their own beside the agents, and none of them needs Kitty.
   New agents launch on tmux.
 - **Overview** (⌘O) is the live session overview. Enter on a tile goes to the
   session's view the same way.
+- **Past Sessions** (⌘Y, **View › Past Sessions**, or *Open Past Sessions* in
+  the palette) is the dashboard's Past Sessions over every conversation, with
+  no Dashboard behind it. Continuing, resuming, or forking goes to the
+  session's view; leaving it closes the view.
 - **Shell**, **editor**, and **scrollback** views open when the Dashboard asks
   for them (*Open shell*, *Open editor*, *Peek scrollback*, the plan and
   worktree editors) and from **View › New Shell** (⌘T). Each is listed while

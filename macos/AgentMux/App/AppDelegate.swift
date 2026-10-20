@@ -755,6 +755,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// global shortcut, which goes where `amxDashboardPlace` says.
     @objc func openDashboardFromMenu(_ sender: Any?) { showWorkspaceView(.dashboard) }
     @objc func openOverviewFromMenu(_ sender: Any?) { showWorkspaceView(.overview) }
+    /// ⌘Y: Past Sessions over every conversation, with no Dashboard behind it.
+    @objc func openPastSessionsFromMenu(_ sender: Any?) { showWorkspaceView(.pastSessions) }
     @objc func newShellFromMenu(_ sender: Any?) {
         let home = command?.launchEnvironment.home ?? NSHomeDirectory()
         let controller = workspaceController()
@@ -1049,6 +1051,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             entry(.changes, "Checkout Changes", key(.changes)),
             entry(.dashboard, "Open Dashboard", "⌘D"),
             entry(.overview, "Open Overview", "⌘O"),
+            entry(.pastSessions, "Open Past Sessions", "⌘Y"),
             entry(.nextWaiting, "Next Waiting Session", "⌘⇧A", reason: store.feed != .live ? "Waiting for a live session list" : (AttentionCycler.ordered(store.sessions).isEmpty ? "No sessions are waiting" : nil)),
             entry(.settings, "Settings…", "⌘,"),
         ]
@@ -1132,6 +1135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         case .newShell: newShellFromMenu(nil)
         case .dashboard: openDashboardFromMenu(nil)
         case .overview: openOverviewFromMenu(nil)
+        case .pastSessions: openPastSessionsFromMenu(nil)
         case .nextWaiting: nextAttention(nil)
         case .settings: showPreferences(nil)
         case .activity: showActivity(nil)

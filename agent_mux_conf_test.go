@@ -143,3 +143,24 @@ func hasActiveConfigLine(text, want string) bool {
 	}
 	return false
 }
+
+func TestAgentMuxConfShipsThePastSessionsBindingTheCatalogGenerates(t *testing.T) {
+	conf, err := os.ReadFile("agent-mux.conf")
+	if err != nil {
+		t.Fatalf("ReadFile(agent-mux.conf): %v", err)
+	}
+	const binding = "map ctrl+shift+y launch --type=overlay --allow-remote-control amx past-sessions"
+	for _, action := range kittykeys.Actions {
+		if action.Key != "ctrl+shift+y" {
+			continue
+		}
+		if got := action.ConfigLine(); got != binding {
+			t.Fatalf("catalog ctrl+shift+y ConfigLine() = %q, want %q", got, binding)
+		}
+		if !hasActiveConfigLine(string(conf), binding) {
+			t.Fatalf("agent-mux.conf missing active Past Sessions binding %q", binding)
+		}
+		return
+	}
+	t.Fatal("the shared binding catalog has no ctrl+shift+y Past Sessions binding")
+}

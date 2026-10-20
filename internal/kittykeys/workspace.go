@@ -13,6 +13,7 @@ var Workspace = []Action{
 	{Key: "f1", Section: "Views", Description: "show this keybinding reference"},
 	{Key: "f2", Section: "Views", Description: "show the live session overview"},
 	{Key: "cmd+d", Section: "Views", Description: "show the Agent Mux dashboard"},
+	{Key: "cmd+y", Section: "Views", Description: "show Past Sessions"},
 	// Session management
 	{Key: "f5", Section: "Sessions", Description: "set session harness icon (picker)"},
 	{Key: "f6", Section: "Sessions", Description: "set session color (picker)"},

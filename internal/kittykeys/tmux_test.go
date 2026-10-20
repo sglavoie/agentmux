@@ -36,7 +36,7 @@ func amxSubcommand(command string) string {
 func TestTmuxFunctionKeysMatchKitty(t *testing.T) {
 	kitty := map[string]kittykeys.Action{}
 	for _, action := range kittykeys.Actions {
-		if functionKey.MatchString(action.Key) || action.Key == "ctrl+shift+d" {
+		if functionKey.MatchString(action.Key) || strings.HasPrefix(action.Key, "ctrl+shift+") {
 			kitty[action.Key] = action
 		}
 	}

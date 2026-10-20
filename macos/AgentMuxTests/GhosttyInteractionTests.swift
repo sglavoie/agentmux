@@ -672,6 +672,7 @@ final class WorkspaceShortcutTests: XCTestCase {
         let opening: [(TestKey, String)] = [
             (.command("d", keyCode: 2), "Dashboard"),
             (.command("o", keyCode: 31), "Overview"),
+            (.command("y", keyCode: 16), "Past Sessions"),
             (.command("t", keyCode: 17), "New Shell"),
             (.command("a", keyCode: 0, shifted: "A"), "Next Needing Attention"),
             (.command("l", keyCode: 37, shifted: "L"), "Session List"),
@@ -717,6 +718,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("b", keyCode: 11, shifted: "B"), "Toggle Inspector"),
             (.command("d", keyCode: 2), "Dashboard"),
             (.command("o", keyCode: 31), "Overview"),
+            (.command("y", keyCode: 16), "Past Sessions"),
             (.command("t", keyCode: 17), "New Shell"),
             (.command("w", keyCode: 13), "Close"),
             (.command("r", keyCode: 15, shifted: "R"), "ASL Runs…"),

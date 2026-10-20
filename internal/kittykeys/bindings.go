@@ -18,6 +18,7 @@ var Actions = []Action{
 	{Key: "f1", Section: "Overlays", Description: "show this keybinding reference", AmxCommand: "keybindings", LaunchType: "overlay"},
 	{Key: "f2", Section: "Overlays", Description: "open or focus the live session overview", AmxCommand: "overview --window-id @active-kitty-window-id", LaunchType: "overlay"},
 	{Key: "ctrl+shift+d", Section: "Overlays", Description: "open or focus Agent Mux dashboard", AmxCommand: "--window-id @active-kitty-window-id", LaunchType: "overlay"},
+	{Key: "ctrl+shift+y", Section: "Overlays", Description: "open Past Sessions directly", AmxCommand: "past-sessions", LaunchType: "overlay"},
 	// Session management
 	{Key: "f5", Section: "Sessions", Description: "set tab harness icon (overlay picker)", AmxCommand: "icon-picker", LaunchType: "overlay"},
 	{Key: "f6", Section: "Sessions", Description: "set tab color (overlay picker)", AmxCommand: "color-picker", LaunchType: "overlay"},
