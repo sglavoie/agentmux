@@ -101,7 +101,7 @@ gone or a screen that cannot be read.`,
 }
 
 func init() {
-	sendCmd.Flags().BoolVar(&sendJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(sendCmd, &sendJSON)
 	sendCmd.Flags().BoolVar(&sendStdin, "stdin", false, "read the text from standard input")
 	sendCmd.Flags().StringArrayVar(&sendKeys, "key", nil, "press this key instead of sending text (repeatable)")
 	_ = sendCmd.RegisterFlagCompletionFunc("key", cli.FixedCompletions(backend.KeyNames()...))
@@ -163,7 +163,7 @@ func runSend(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return cli.MissingParameter(cmd, sendJSON, "runtime-session-id", "the runtime session to send to (rs-...)")
 	}
-	id, err := runtimesession.ParseID(strings.TrimSpace(args[0]))
+	id, err := cli.ParseRuntimeSessionID(strings.TrimSpace(args[0]))
 	if err != nil {
 		return cli.CommandFailure(cmd, sendJSON, "invalid_arguments", err)
 	}

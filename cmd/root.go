@@ -37,6 +37,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 const version = "0.8.0"
@@ -50,7 +51,13 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "amx",
 	Short: "Agent Mux multi-harness session manager",
-	Long:  "Agent Mux is a multi-harness session manager. It manages Claude Code, Copilot, Codex, and other supported harness sessions with an interactive dashboard, on its own tmux server from any terminal or Agent Mux.app, or as color-coded Kitty tabs.",
+	Long: `Agent Mux is a multi-harness session manager. It manages Claude Code,
+Copilot, Codex, and other supported harness sessions with an interactive
+dashboard, on its own tmux server from any terminal or Agent Mux.app, or as
+color-coded Kitty tabs.
+
+Run with no command to open the dashboard. It takes the flags ` + "`amx overview`" + `
+documents (--backend, --select, --client, --popup, --window-id).`,
 	// A failed command reports its error; it does not reprint its own usage.
 	// The usage block is longer than most errors and pushed the one line that
 	// says what went wrong — and how to answer it — off the top of the screen.
@@ -200,6 +207,78 @@ func init() {
 	guardInvocations(rootCmd)
 	completeNoFilesByDefault(rootCmd)
 	completeSharedFlags(rootCmd)
+	aliasWindowFlags(rootCmd)
+	wrapLongHelp(rootCmd)
+	// The dashboard's own flags are accepted as before but left out of
+	// `amx --help`, where they read as flags of every command; the
+	// description names them, and `amx overview --help` documents the same
+	// ones.
+	for _, name := range []string{cli.BackendFlag, "window-id", "select", "client", "popup"} {
+		_ = rootCmd.Flags().MarkHidden(name)
+	}
+}
+
+// helpWidth is the column a command description is wrapped at.
+const helpWidth = 80
+
+// wrapLongHelp wraps every description line wider than helpWidth at word
+// boundaries, so `--help` reads in a terminal of ordinary width whichever way
+// a family wrote its description (some build it from one-line strings).
+// Indented lines (lists, aligned tables, commands) are kept as written.
+func wrapLongHelp(command *cobra.Command) {
+	command.Long = wrapHelpText(command.Long, helpWidth)
+	for _, child := range command.Commands() {
+		wrapLongHelp(child)
+	}
+}
+
+func wrapHelpText(text string, width int) string {
+	lines := strings.Split(text, "\n")
+	wrapped := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if len(line) <= width || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			wrapped = append(wrapped, line)
+			continue
+		}
+		current := ""
+		for _, word := range strings.Fields(line) {
+			if current != "" && len(current)+1+len(word) > width {
+				wrapped = append(wrapped, current)
+				current = word
+				continue
+			}
+			if current == "" {
+				current = word
+			} else {
+				current += " " + word
+			}
+		}
+		wrapped = append(wrapped, current)
+	}
+	return strings.Join(wrapped, "\n")
+}
+
+// aliasWindowFlags makes --window and --window-id, which name the same Kitty
+// window on different commands, both work wherever either does: the other
+// spelling is a hidden flag sharing the same value, so help shows one name and
+// scripts written with either keep working.
+func aliasWindowFlags(command *cobra.Command) {
+	for _, flags := range []*pflag.FlagSet{command.LocalNonPersistentFlags(), command.PersistentFlags()} {
+		for name, alias := range map[string]string{"window-id": "window", "window": "window-id"} {
+			flag := flags.Lookup(name)
+			if flag == nil || command.Flags().Lookup(alias) != nil || command.InheritedFlags().Lookup(alias) != nil {
+				continue
+			}
+			target := command.Flags()
+			if flags == command.PersistentFlags() {
+				target = command.PersistentFlags()
+			}
+			target.AddFlag(&pflag.Flag{Name: alias, Value: flag.Value, DefValue: flag.DefValue, Usage: "same as --" + name, Hidden: true})
+		}
+	}
+	for _, child := range command.Commands() {
+		aliasWindowFlags(child)
+	}
 }
 
 // completeSharedFlags gives the flags that mean the same thing on every

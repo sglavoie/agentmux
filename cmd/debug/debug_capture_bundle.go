@@ -17,6 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslcontract"
 	"github.com/sglavoie/agentmux/internal/aslexport"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
@@ -55,11 +56,24 @@ var (
 var debugCaptureCmd = &cobra.Command{
 	Use:   "capture",
 	Short: "Manage an explicitly authorized temporary raw hook-payload capture",
+	Long: `Keep the raw hook payloads of one session or harness for a while, to see
+exactly what a harness sent. Payloads can hold prompts, tool arguments, and
+credentials, so a capture is opt-in (--include-hook-payloads), confirmed,
+private to this machine, bounded by a quota, and ends on its own.`,
+	Example: `  amx debug capture start --include-hook-payloads --duration 10m
+  amx debug capture status
+  amx debug capture stop`,
 }
 
 var debugCaptureStartCmd = &cobra.Command{
-	Use:          "start",
-	Short:        "Start a scoped, quota-bound raw hook-payload capture",
+	Use:   "start",
+	Short: "Start a scoped, quota-bound raw hook-payload capture",
+	Long: `Start a raw hook-payload capture for --duration (at most 60m). It is scoped
+to --runtime-session or --window, else to --harness alone, else to the session
+this is typed in; no other selector applies. It asks for confirmation, and
+needs --yes when there is no terminal to ask in.`,
+	Example: `  amx debug capture start --include-hook-payloads
+  amx debug capture start --include-hook-payloads --harness codex --duration 30m --yes`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugCaptureStart,
@@ -68,22 +82,37 @@ var debugCaptureStartCmd = &cobra.Command{
 var debugCaptureStopCmd = &cobra.Command{
 	Use:          "stop",
 	Short:        "Stop the current raw hook-payload capture",
+	Long:         "Stop the capture that is running and report what it kept. It takes no selector.",
+	Example:      "  amx debug capture stop",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugCaptureStop,
+	Annotations:  map[string]string{debugNoSelectorsAnnotation: "true"},
 }
 
 var debugCaptureStatusCmd = &cobra.Command{
 	Use:          "status",
 	Short:        "Show capture scope, expiry, quota, and payload counts",
+	Long:         "Report the current capture, or that none is running. It takes no selector.",
+	Example:      "  amx debug capture status --json",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugCaptureStatus,
+	Annotations:  map[string]string{debugNoSelectorsAnnotation: "true"},
 }
 
 var debugBundleCmd = &cobra.Command{
-	Use:          "bundle",
-	Short:        "Create an atomic always-redacted diagnostic archive",
+	Use:   "bundle",
+	Short: "Create an atomic always-redacted diagnostic archive",
+	Long: `Write a .tar.gz of the journal records the selectors match, the same live
+health status reports, and a doctor snapshot, for attaching to a report or
+replaying later. It may ask the daemon and Kitty, and changes neither.
+
+Either mode is redacted. --mode share (the default) can be passed on;
+--mode forensic keeps broader diagnostic text and is for this machine only.
+--include-asl adds agent-session-loop's own sanitized export.`,
+	Example: `  amx debug bundle -o agent-mux-debug.tar.gz
+  amx debug bundle --after 2h --include-asl --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugBundle,
@@ -93,15 +122,15 @@ func init() {
 	debugCaptureStartCmd.Flags().DurationVar(&debugCaptureDuration, "duration", diagnostics.CaptureDefaultTTL, "capture lifetime (maximum 60m)")
 	debugCaptureStartCmd.Flags().BoolVar(&debugCaptureInclude, "include-hook-payloads", false, "authorize temporary raw hook-payload storage")
 	debugCaptureStartCmd.Flags().BoolVar(&debugCaptureYes, "yes", false, "confirm raw capture without an interactive prompt (required non-interactively)")
-	debugCaptureStartCmd.Flags().BoolVar(&debugCaptureJSON, "json", false, "write schema-versioned JSON")
+	cli.AddReportJSONFlag(debugCaptureStartCmd, &debugCaptureJSON, "the report")
 	addDebugRuntimeSessionFlag(debugCaptureStartCmd)
-	debugCaptureStopCmd.Flags().BoolVar(&debugCaptureJSON, "json", false, "write schema-versioned JSON")
-	debugCaptureStatusCmd.Flags().BoolVar(&debugCaptureJSON, "json", false, "write schema-versioned JSON")
+	cli.AddReportJSONFlag(debugCaptureStopCmd, &debugCaptureJSON, "the report")
+	cli.AddReportJSONFlag(debugCaptureStatusCmd, &debugCaptureJSON, "the report")
 	debugCaptureCmd.AddCommand(debugCaptureStartCmd, debugCaptureStopCmd, debugCaptureStatusCmd)
 
 	debugBundleCmd.Flags().StringVar(&debugBundleMode, "mode", string(debugger.BundleModeShare), "redaction mode: share or forensic")
 	debugBundleCmd.Flags().StringVarP(&debugBundleOutput, "output", "o", "", "output .tar.gz path")
-	debugBundleCmd.Flags().BoolVar(&debugBundleJSON, "json", false, "write schema-versioned JSON")
+	cli.AddReportJSONFlag(debugBundleCmd, &debugBundleJSON, "the report")
 	debugBundleCmd.Flags().BoolVar(&debugBundleIncludeASL, "include-asl", false,
 		"include agent-session-loop's public sanitized diagnostics export and correlate it with this bundle's journal window")
 	debugCmd.AddCommand(debugCaptureCmd, debugBundleCmd)

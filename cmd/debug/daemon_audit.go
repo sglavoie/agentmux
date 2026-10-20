@@ -162,5 +162,5 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 
 func init() {
 	daemonAuditCmd.Flags().DurationVar(&auditDuration, "duration", 10*time.Second, "how long to sample (e.g. 30s, 2m)")
-	daemonAuditCmd.Flags().BoolVar(&auditJSON, "json", false, "emit a structured JSON report instead of text")
+	cli.AddReportJSONFlag(daemonAuditCmd, &auditJSON, "the audit report")
 }

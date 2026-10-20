@@ -57,7 +57,7 @@ earliest_available, truncated, corrupt_lines, matched}.`,
 			return nil
 		},
 	}
-	cmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(cmd, nil)
 	cmd.Flags().Int("days", 7, "look back this many days within retained journal history")
 	cmd.Flags().Int("limit", 500, "maximum activity records (1–1000)")
 	return cmd

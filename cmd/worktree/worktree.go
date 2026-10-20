@@ -655,7 +655,7 @@ func nonNilStrings(values []string) []string {
 
 func init() {
 	for _, command := range []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeShellCmd, worktreeEditCmd} {
-		command.Flags().Bool("json", false, "emit schema-v1 JSON")
+		cli.AddJSONFlag(command, nil)
 	}
 	// Where a reopen launches, and so whether a shell or an editor opens a
 	// Kitty tab or runs outside Kitty.
@@ -670,12 +670,12 @@ func init() {
 	_ = worktreeReopenCmd.Flags().MarkDeprecated("session", "use --live-session")
 	worktreeReopenCmd.Flags().String("profile", "", "replacement profile for a fresh launch")
 	_ = worktreeReopenCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
-	worktreeReopenCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeReopenCmd, nil)
 	worktreeRemoveCmd.Flags().Bool("yes", false, "confirm worktree removal")
 	worktreeRemoveCmd.Flags().Bool("delete-branch", false, "also safely delete the merged worktree branch")
-	worktreeRemoveCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeRemoveCmd, nil)
 	worktreeForgetCmd.Flags().Bool("yes", false, "confirm deleting the worktree's Agent Mux metadata")
-	worktreeForgetCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeForgetCmd, nil)
 	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
 		command.ValidArgsFunction = completeWorktreeSelectors
 	}

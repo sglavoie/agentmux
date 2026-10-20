@@ -49,6 +49,6 @@ With --json it reports an array of {name, harness}.`,
 }
 
 func init() {
-	configProfilesCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(configProfilesCmd, nil)
 	configCmd.AddCommand(configProfilesCmd)
 }

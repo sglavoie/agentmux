@@ -18,6 +18,12 @@ func KeybindingsCommand() *cobra.Command { return keybindingsCmd }
 var keybindingsCmd = &cobra.Command{
 	Use:   "keybindings",
 	Short: "Show the Kitty keybinding reference as an overlay",
+	Long: `Show the reference of the keys Agent Mux binds. In Kitty it opens as an
+overlay (or focuses the one already open), listing Kitty's bindings. In any
+other terminal it opens here and lists the keys the private tmux server binds
+for a terminal attached to a session.`,
+	Example: "  amx keybindings",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Outside Kitty there is no other instance to find: the reference
 		// simply opens in this terminal, and the keys it lists are the ones

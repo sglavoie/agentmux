@@ -41,9 +41,17 @@ func init() {
 	}
 }
 
+// debugNoSelectorsAnnotation marks a debug leaf that reads no record
+// selector (capture stop and status, subscribe): its help lists none, since
+// it would ignore every one.
+const debugNoSelectorsAnnotation = "amx_debug_no_selectors"
+
 // inheritedFlagUsages renders the visible flags cmd inherits, keeping either
 // the selectors `amx debug` declares or everything else.
 func inheritedFlagUsages(cmd *cobra.Command, selectors bool) string {
+	if selectors && cmd.Annotations[debugNoSelectorsAnnotation] != "" {
+		return ""
+	}
 	kept := pflag.NewFlagSet(cmd.Name(), pflag.ContinueOnError)
 	cmd.InheritedFlags().VisitAll(func(flag *pflag.Flag) {
 		if (debugCmd.PersistentFlags().Lookup(flag.Name) != nil) == selectors {

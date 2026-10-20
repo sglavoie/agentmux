@@ -208,5 +208,5 @@ func companionStatusLine(c *protocol.CompanionHealth) string {
 }
 
 func init() {
-	daemonStatusCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(daemonStatusCmd, nil)
 }

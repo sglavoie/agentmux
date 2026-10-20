@@ -94,7 +94,7 @@ profile supervising it.`,
 
 func init() {
 	flags := planRunCmd.Flags()
-	flags.Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(planRunCmd, nil)
 	flags.Bool("check", false, "report whether the plan may be started and start nothing")
 	flags.String("project", "", "configured project the supervising session launches from")
 	_ = planRunCmd.RegisterFlagCompletionFunc("project", cli.CompleteProjects)

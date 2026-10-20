@@ -112,6 +112,13 @@ func TestFlagErrorsHonorJSONAndReadPlainly(t *testing.T) {
 }
 
 func TestVersionCommandMatchesTheVersionFlag(t *testing.T) {
+	// A --help or --version an earlier test parsed stays set on rootCmd.
+	reset := func() {
+		_ = rootCmd.Flags().Set("help", "false")
+		_ = rootCmd.Flags().Set("version", "false")
+	}
+	reset()
+	t.Cleanup(reset)
 	flagOut, _, code := executeRootArgs(t, nil, "--version")
 	if code != 0 {
 		t.Fatalf("--version exit = %d", code)

@@ -241,6 +241,6 @@ func init() {
 	releaseGateCmd.Flags().StringVar(&releaseGateEvidenceDir, "evidence-dir", "", "where to write the evidence record (overrides [defaults.release] evidence_dir)")
 	releaseGateCmd.Flags().BoolVar(&releaseGateTag, "tag", false, "write the annotated pair tag into both repositories after a passing run; requires --signing-key")
 	releaseGateCmd.Flags().BoolVar(&releaseGateForce, "force", false, "replace an existing evidence record for the same pair")
-	releaseGateCmd.Flags().BoolVar(&releaseGateJSON, "json", false, "emit the evidence record as JSON")
+	cli.AddReportJSONFlag(releaseGateCmd, &releaseGateJSON, "the evidence record")
 	_ = releaseGateCmd.MarkFlagRequired("asl-root")
 }

@@ -17,6 +17,11 @@ import (
 var worktreeDiffCmd = &cobra.Command{
 	Use:   "diff <selector>",
 	Short: "Review what a managed worktree changed and how it would land",
+	Long: `Show what a managed worktree changed since it left its source branch: its
+commits ahead and behind, the files it touched (uncommitted changes too,
+unless --committed), and whether ` + "`amx worktree land`" + ` would fast-forward
+the source branch or refuse, and why. It reads and never writes, so it is as
+safe on a worktree an agent is working in as on an idle one.`,
 	Example: `  amx worktree diff 3f9c2a1e             # summary, files, and landing verdict
   amx worktree diff 3f9c2a1e --patch      # followed by the unified diff
   amx worktree diff 3f9c2a1e --committed  # leave uncommitted changes out
@@ -58,7 +63,7 @@ type worktreeDiffData struct {
 func init() {
 	worktreeDiffCmd.Flags().Bool("committed", false, "leave uncommitted changes out")
 	worktreeDiffCmd.Flags().Bool("patch", false, "also print the unified diff")
-	worktreeDiffCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeDiffCmd, nil)
 	worktreeDiffCmd.ValidArgsFunction = completeWorktreeSelectors
 	worktreeCmd.AddCommand(worktreeDiffCmd)
 }

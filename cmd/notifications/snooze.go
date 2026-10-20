@@ -61,7 +61,7 @@ func completeSnoozeArgs(_ *cobra.Command, args []string, _ string) ([]string, co
 }
 
 func init() {
-	notificationsSnoozeCmd.Flags().BoolVar(&snoozeJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(notificationsSnoozeCmd, &snoozeJSON)
 }
 
 // snoozePayload is the `notifications snooze --json` data. SnoozedUntil is a

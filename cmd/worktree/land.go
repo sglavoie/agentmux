@@ -18,6 +18,11 @@ import (
 var worktreeLandCmd = &cobra.Command{
 	Use:   "land <selector>",
 	Short: "Fast-forward the source branch to a clean inactive worktree's branch",
+	Long: `Bring a worktree's committed work onto the source branch it was forked from,
+by fast-forward only. The worktree must be clean and in use by no live session
+or loop, and --yes confirms moving the branch. A source branch that has moved
+on is refused with the way forward; nothing is merged or rebased. --remove then
+removes the worktree and deletes its landed branch.`,
 	Example: `  amx worktree diff 3f9c2a1e           # "lands: fast-forward onto main" means this will succeed
   amx worktree land 3f9c2a1e --yes
   amx worktree land 3f9c2a1e --yes --remove   # then remove the worktree and delete its branch`,
@@ -55,7 +60,7 @@ func shortRevision(revision string) string {
 func init() {
 	worktreeLandCmd.Flags().Bool("yes", false, "confirm moving the source branch")
 	worktreeLandCmd.Flags().Bool("remove", false, "then remove the worktree and delete its landed branch")
-	worktreeLandCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeLandCmd, nil)
 	worktreeLandCmd.ValidArgsFunction = completeWorktreeSelectors
 	worktreeCmd.AddCommand(worktreeLandCmd)
 }
