@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/searchstore"
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 // IndexPath returns the on-disk JSON path for the plans index. It
@@ -326,7 +327,7 @@ func extractSnippet(contents string) string {
 		if line == "" {
 			continue
 		}
-		return truncateSnippet(line)
+		return textutil.Snippet(line, snippetMaxLen)
 	}
 	return ""
 }

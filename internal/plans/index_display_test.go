@@ -3,6 +3,8 @@ package plans
 import (
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/textutil"
 )
 
 func TestDisplayName(t *testing.T) {
@@ -29,13 +31,13 @@ func TestDisplayName(t *testing.T) {
 
 func TestTruncateSnippetBoundary(t *testing.T) {
 	exact := strings.Repeat("a", snippetMaxLen)
-	if got := truncateSnippet(exact); got != exact {
-		t.Errorf("truncateSnippet(exact length) = %q, want %q", got, exact)
+	if got := textutil.Snippet(exact, snippetMaxLen); got != exact {
+		t.Errorf("Snippet(exact length) = %q, want %q", got, exact)
 	}
 
 	over := exact + "b"
 	want := exact + "…"
-	if got := truncateSnippet(over); got != want {
-		t.Errorf("truncateSnippet(over length) = %q, want %q", got, want)
+	if got := textutil.Snippet(over, snippetMaxLen); got != want {
+		t.Errorf("Snippet(over length) = %q, want %q", got, want)
 	}
 }
