@@ -14,7 +14,10 @@ import (
 )
 
 func TestJournalCompactThousandsOfTinySegmentsInChronologicalOrder(t *testing.T) {
-	journal, paths := testJournal(t, JournalOptions{})
+	// A lowered per-commit bound gives a few dozen segments the same
+	// multi-pass drain that thousands meet against the production default.
+	const inputBound = 8
+	journal, paths := testJournal(t, JournalOptions{CompactionInputFiles: inputBound})
 	active := testEnvelope("compaction.tiny", "active")
 	active.ObservedAt = time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
 	if err := journal.Append(context.Background(), active); err != nil {
@@ -25,18 +28,19 @@ func TestJournalCompactThousandsOfTinySegmentsInChronologicalOrder(t *testing.T)
 		t.Fatal(err)
 	}
 
-	const segmentCount = 2000
+	const segmentCount = 5*inputBound + 3
 	base := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < segmentCount; i++ {
 		record := compactionTestEnvelope("compaction.tiny", fmt.Sprintf("%04d", i), "tiny-source", uint64(i+1), base.Add(time.Duration(segmentCount-i)*time.Second))
 		writeCompactionSegment(t, paths, fmt.Sprintf("events-tiny-%04d.jsonl", i), marshalCompactionRecord(t, record))
 	}
 
-	// The per-commit input bound (maxCompactionInputFiles) keeps each exclusive
-	// unlink loop short, so a large backlog drains across multiple passes.
+	// The per-commit input bound keeps each exclusive unlink loop short, so a
+	// large backlog drains across multiple passes.
 	totalInputFiles := 0
+	passes := 0
 	for pass := 0; ; pass++ {
-		if pass > 2*segmentCount/maxCompactionInputFiles+4 {
+		if pass > 2*segmentCount/inputBound+4 {
 			t.Fatalf("compaction did not converge after %d passes", pass)
 		}
 		report, err := journal.Compact(context.Background())
@@ -46,13 +50,17 @@ func TestJournalCompactThousandsOfTinySegmentsInChronologicalOrder(t *testing.T)
 		if report.CompactionInputFiles == 0 {
 			break
 		}
-		if report.CompactionInputFiles > maxCompactionInputFiles {
+		if report.CompactionInputFiles > inputBound {
 			t.Fatalf("compaction pass exceeded input bound: %+v", report)
 		}
 		if report.CompactionDuplicatesOmitted != 0 {
 			t.Fatalf("compaction report = %+v", report)
 		}
 		totalInputFiles += report.CompactionInputFiles
+		passes++
+	}
+	if passes < segmentCount/inputBound {
+		t.Fatalf("compaction drained %d segments in %d passes, want the bound to force at least %d", segmentCount, passes, segmentCount/inputBound)
 	}
 	if totalInputFiles < segmentCount {
 		t.Fatalf("compaction consumed %d input files, want at least %d", totalInputFiles, segmentCount)

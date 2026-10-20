@@ -13,6 +13,7 @@ const (
 	maxCompactionInputBytes int64 = 64 << 20
 	// maxCompactionInputFiles bounds the per-commit unlink loop executed under
 	// the exclusive events.lock window; larger backlogs drain across passes.
+	// It is the default of JournalOptions.CompactionInputFiles.
 	maxCompactionInputFiles = 512
 )
 
@@ -202,7 +203,7 @@ func (j *Journal) captureCompactionCandidatesAfter(ctx context.Context, after *c
 		}
 		selected = append(selected, candidate)
 		selectedBytes += candidate.size
-		if len(selected) == maxCompactionInputFiles {
+		if len(selected) == j.opts.CompactionInputFiles {
 			break
 		}
 	}
