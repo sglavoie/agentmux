@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // TestBackendMigrationMatrixAssignsEveryWorkflow guards the workflow
@@ -41,6 +43,10 @@ func TestBackendMigrationMatrixAssignsEveryWorkflow(t *testing.T) {
 		}
 	}
 
+	// Session 1 is this contract itself, so an owner is a later session, and
+	// no later than the latest session the document records.
+	latest := latestSession(t, string(data))
+
 	rows := markdownTable(t, string(data), "| ID | Workflow | Area |")
 	if len(rows) == 0 {
 		t.Fatal("workflow acceptance matrix has no rows")
@@ -67,8 +73,8 @@ func TestBackendMigrationMatrixAssignsEveryWorkflow(t *testing.T) {
 			t.Errorf("%s: baseline %q must be pass or pending", id, baseline)
 		}
 		n, err := strconv.Atoi(owner)
-		if err != nil || n < 3 || n > 20 {
-			t.Errorf("%s: owner %q must be an implementation session between 3 and 20", id, owner)
+		if err != nil || n < 2 || n > latest {
+			t.Errorf("%s: owner %q must be an implementation session after the Session 1 baseline, at most Session %d", id, owner, latest)
 		}
 	}
 	for _, a := range areas {
@@ -78,31 +84,13 @@ func TestBackendMigrationMatrixAssignsEveryWorkflow(t *testing.T) {
 	}
 }
 
-// markdownTable returns the trimmed body cells of the first table whose header
-// line starts with headerPrefix.
+// markdownTable returns the body cells of the first table whose header line
+// starts with headerPrefix, read by the repository's one Markdown table reader.
 func markdownTable(t *testing.T, doc, headerPrefix string) [][]string {
 	t.Helper()
-	lines := strings.Split(doc, "\n")
-	start := -1
-	for i, line := range lines {
-		if strings.HasPrefix(line, headerPrefix) {
-			start = i
-			break
-		}
-	}
-	if start < 0 {
-		t.Fatalf("table with header %q not found", headerPrefix)
-	}
-	var rows [][]string
-	for _, line := range lines[start+2:] {
-		if !strings.HasPrefix(line, "|") {
-			break
-		}
-		cells := strings.Split(strings.Trim(strings.TrimSpace(line), "|"), " | ")
-		for i := range cells {
-			cells[i] = strings.TrimSpace(cells[i])
-		}
-		rows = append(rows, cells)
+	_, rows, err := testutil.MarkdownTable(doc, headerPrefix)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return rows
 }
@@ -169,6 +157,21 @@ func TestBackendMigrationSession19RecordCoversEveryWorkflow(t *testing.T) {
 			t.Errorf("%s: the record has no row", id)
 		}
 	}
+}
+
+// latestSession is the highest "Session N" the document names.
+func latestSession(t *testing.T, doc string) int {
+	t.Helper()
+	latest := 0
+	for _, m := range regexp.MustCompile(`\bSession (\d+)\b`).FindAllStringSubmatch(doc, -1) {
+		if n, err := strconv.Atoi(m[1]); err == nil && n > latest {
+			latest = n
+		}
+	}
+	if latest < 2 {
+		t.Fatalf("the document names no implementation session after Session 1")
+	}
+	return latest
 }
 
 // backticked returns the code spans of a table cell.

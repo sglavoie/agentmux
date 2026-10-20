@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // TestDaemonStateAcceptanceDoc_CodexUsesNativeHookSpellings guards the exact
@@ -83,15 +85,14 @@ func codexExactStateCells(t *testing.T, text string) map[string]string {
 			continue
 		}
 
-		fields := splitTableRow(line)
+		fields := testutil.SplitTableRow(line)
 		if !seenHeader {
 			if len(fields) >= 4 && fields[0] == "Scenario" && fields[1] == "Codex" {
 				seenHeader = true
 			}
 			continue
 		}
-		// Skip the delimiter row (| --- | --- | ...).
-		if strings.HasPrefix(fields[0], "---") {
+		if testutil.IsDelimiterRow(fields) {
 			continue
 		}
 		if len(fields) >= 2 {
@@ -105,22 +106,4 @@ func codexExactStateCells(t *testing.T, text string) map[string]string {
 		t.Fatalf("could not find the Codex exact-state table header in the acceptance doc")
 	}
 	return cells
-}
-
-// splitTableRow splits a Markdown table row on unescaped pipes and trims each
-// cell, dropping the empty leading/trailing fields produced by the border pipes.
-func splitTableRow(line string) []string {
-	raw := strings.Split(line, "|")
-	fields := make([]string, 0, len(raw))
-	for _, f := range raw {
-		fields = append(fields, strings.TrimSpace(f))
-	}
-	// Drop empty border fields from the leading/trailing pipes.
-	for len(fields) > 0 && fields[0] == "" {
-		fields = fields[1:]
-	}
-	for len(fields) > 0 && fields[len(fields)-1] == "" {
-		fields = fields[:len(fields)-1]
-	}
-	return fields
 }
