@@ -21,6 +21,10 @@ test `amx daemon status` directly instead of matching its first line.
 names its pid (`daemon restarted (pid 4242)`), adding the degraded reason when
 it came up not ready. A daemon that has not answered within 10 seconds fails
 the restart, so a command run right after it never meets a missing socket.
+It also starts a daemon when none is running, which is why every command that
+finds no daemon names `amx daemon restart` (`amx daemon start` runs one in the
+foreground). `amx daemon stop` with no daemon running succeeds and says
+`daemon is not running; nothing to stop`.
 
 For delivery and state problems, the first-line workflow is offline-first:
 

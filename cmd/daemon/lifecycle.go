@@ -103,22 +103,30 @@ watch its log in a terminal (add --debug for verbose logging). It has no
 
 var daemonStopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop the running daemon",
+	Short: "Stop the running daemon (succeeds when none is running)",
 	Long: `Asks the running daemon to shut down. Agents keep running: they live in
 their Kitty tabs or on Agent Mux's private tmux server, not in the daemon, and
-the next command that needs a daemon starts one again. A daemon that is not
-running is an error.
+the next command that needs a daemon starts one again. Stopping a daemon that
+is not running succeeds and says so, so a script can stop one unconditionally.
 
-With --json it reports {stopped}; a failure is a structured error
-(daemon_not_running, daemon_error).`,
+With --json it reports {stopped}, false when no daemon was running; a daemon
+that answers but cannot be stopped is a structured error (daemon_error).`,
 	Example: `  amx daemon stop
   amx daemon stop --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		c := newDaemonLifecycleClient()
 		resp, err := c.Send(protocol.Request{Type: protocol.TypeShutdown})
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "daemon_not_running", fmt.Errorf("daemon not running: %w", err))
+			if !c.Health().Alive {
+				if jsonOutput {
+					return cli.WriteJSON(cmd, daemonStopData{Stopped: false})
+				}
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon is not running; nothing to stop")
+				return err
+			}
+			return cli.CommandFailure(cmd, jsonOutput, "daemon_error", fmt.Errorf("stopping the daemon: %w", err))
 		}
 		if !resp.OK {
 			return cli.CommandFailure(cmd, jsonOutput, "daemon_error", fmt.Errorf("daemon error: %s", resp.Error))

@@ -273,8 +273,8 @@ func TestDaemonExportEventsCommand_ErrorMessageReflectsDaemonState(t *testing.T)
 			name:        "dead daemon reports not running",
 			alive:       false,
 			exportErr:   fmt.Errorf("dial unix: connect: no such file or directory"),
-			wantPrefix:  "daemon not running:",
-			wantContain: "dial unix",
+			wantPrefix:  "the daemon is not running;",
+			wantContain: "amx daemon restart",
 		},
 		{
 			name:        "live daemon reports export failure",

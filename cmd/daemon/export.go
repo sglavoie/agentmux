@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -249,7 +250,7 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 		snapshot, requestedWindowID, err := exportDaemonEvents(c, target)
 		if err != nil {
 			if !c.Health().Alive {
-				return fmt.Errorf("daemon not running: %w", err)
+				return errors.New(cli.DaemonNotRunningMessage)
 			}
 			return fmt.Errorf("export events: %w", err)
 		}
