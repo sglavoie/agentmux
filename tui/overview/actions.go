@@ -125,6 +125,14 @@ type actionState struct {
 	// messages, so the newest replaces the previous one and expires on its own.
 	report      string
 	reportUntil time.Time
+	// reportSticky marks a failure: like a dashboard error toast it stays on the
+	// row until something newer replaces it, because a failure that vanishes
+	// after four seconds is easy to miss and impossible to read back.
+	reportSticky bool
+	// reportPending marks an in-flight sentence. Past its window it is not
+	// blanked, which would read as the action having finished, but reworded as
+	// still waiting until the outcome replaces it.
+	reportPending bool
 	// retryUntil is set only on the report of a FAILED relaunch, and holds the
 	// deadline the released entry kept rather than the report's own expiry. It
 	// is what makes that report the one ABOUT the recovery offer — taking its
@@ -564,7 +572,23 @@ func (m model) withReport(text string, ttl time.Duration) model {
 	m.acts.report = text
 	m.acts.reportUntil = m.deps.now().Add(ttl)
 	m.acts.retryUntil = time.Time{}
+	m.acts.reportSticky = false
+	m.acts.reportPending = false
 	m.focusErr = nil
+	return m
+}
+
+// withFailureReport is withReport for a failure, which stays until replaced.
+func (m model) withFailureReport(text string) model {
+	m = m.withReport(text, reportWindow)
+	m.acts.reportSticky = true
+	return m
+}
+
+// withPendingReport is withReport for an operation still in flight.
+func (m model) withPendingReport(text string) model {
+	m = m.withReport(text, reportPendingWindow)
+	m.acts.reportPending = true
 	return m
 }
 
@@ -589,8 +613,8 @@ func (m model) withReport(text string, ttl time.Duration) model {
 // drops the retry and stops displacing the offer, which by then may name only
 // OTHER closes that are still recoverable. It does not extend the window: the
 // deadline is carried in, never recomputed here.
-func (m model) withRecoveryReport(text string, ttl time.Duration, retryUntil time.Time) model {
-	m = m.withReport(text, ttl)
+func (m model) withRecoveryReport(text string, retryUntil time.Time) model {
+	m = m.withFailureReport(text)
 	m.acts.retryUntil = retryUntil
 	return m
 }
@@ -599,6 +623,8 @@ func (m model) clearReport() model {
 	m.acts.report = ""
 	m.acts.reportUntil = time.Time{}
 	m.acts.retryUntil = time.Time{}
+	m.acts.reportSticky = false
+	m.acts.reportPending = false
 	return m
 }
 
@@ -652,11 +678,21 @@ func retryWindowText(remaining time.Duration) string {
 // rather than swept by a timer of its own: the interval and capture tickers
 // already repaint this surface several times a second, so a third ticker would
 // buy nothing but a third thing to stop on shutdown.
+//
+// A failure is retained and an in-flight sentence outlives its window as
+// "still waiting: …", so the row never goes blank under an operator whose
+// action has not answered or did not work.
 func (m model) activeReport() string {
-	if m.acts.report == "" || !m.deps.now().Before(m.acts.reportUntil) {
+	switch {
+	case m.acts.report == "":
+		return ""
+	case m.acts.reportSticky || m.deps.now().Before(m.acts.reportUntil):
+		return m.acts.report
+	case m.acts.reportPending:
+		return "still waiting: " + m.acts.report
+	default:
 		return ""
 	}
-	return m.acts.report
 }
 
 // beginActionReport says that a dispatched action is in flight, for the four
@@ -669,7 +705,7 @@ func (m model) beginActionReport(d sessionactions.Dispatch) model {
 	if !ok {
 		return m
 	}
-	return m.withReport(wording.Pending, reportPendingWindow)
+	return m.withPendingReport(wording.Pending)
 }
 
 // reportActionOutcome replaces the in-flight sentence with what became of it.
@@ -683,6 +719,9 @@ func (m model) reportActionOutcome(result sessionactions.Result) model {
 	label := sessionLabel(result.Target)
 	if wording, ok := sessionactions.FeedbackFor(result.Action, label, result.Profile); ok {
 		if text, said := wording.Outcome(result.Outcome, result.Detail); said {
+			if result.Outcome == sessionactions.OutcomeFailed || result.Outcome == sessionactions.OutcomeUnconfirmed {
+				return m.withFailureReport(text)
+			}
 			return m.withReport(text, reportWindow)
 		}
 		return m.clearReport()
@@ -694,9 +733,8 @@ func (m model) reportActionOutcome(result sessionactions.Result) model {
 	if definition, found := sessionactions.Lookup(result.Action); found && definition.MenuLabel != "" {
 		verb = definition.MenuLabel
 	}
-	return m.withReport(
-		sessionactions.FailureText(fmt.Sprintf("%s failed for %s", verb, label), result.Detail),
-		reportWindow)
+	return m.withFailureReport(
+		sessionactions.FailureText(fmt.Sprintf("%s failed for %s", verb, label), result.Detail))
 }
 
 // handleActionDone settles one correlated completion and refreshes the topology,
@@ -725,7 +763,7 @@ func (m model) handleActionDone(msg commands.ActionDoneMsg) (tea.Model, tea.Cmd)
 // only state from which retrying makes sense.
 func (m model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
-		return m.withReport("open failed: "+msg.Err.Error(), reportWindow), nil
+		return m.withFailureReport("open failed: " + msg.Err.Error()), nil
 	}
 	if msg.Stay {
 		return m, nil
@@ -737,7 +775,7 @@ func (m model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, 
 // own window and the operator returns from it to this grid.
 func (m model) handlePeekDone(msg commands.PeekDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
-		return m.withReport("peek failed: "+msg.Err.Error(), reportWindow), nil
+		return m.withFailureReport("peek failed: " + msg.Err.Error()), nil
 	}
 	return m, nil
 }

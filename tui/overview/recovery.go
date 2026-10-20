@@ -150,7 +150,7 @@ func (m *model) undoLastClose() tea.Cmd {
 	// claimed again and is off the offer while this relaunch is in flight, so a
 	// sentence still naming `u retry` would be advertising a key that now takes
 	// the close below it.
-	*m = m.withReport(fmt.Sprintf("restoring %s…", claimed.Snapshot.Label), reportPendingWindow)
+	*m = m.withPendingReport(fmt.Sprintf("restoring %s…", claimed.Snapshot.Label))
 	return m.deps.relaunch(claimed.Request, claimed.Snapshot)
 }
 
@@ -176,7 +176,6 @@ func (m model) handleRecoveryDone(msg recoveryDoneMsg) (tea.Model, tea.Cmd) {
 		// thing this sentence displaces.
 		m = m.withRecoveryReport(
 			fmt.Sprintf("restore failed for %s: %v", msg.label, msg.err),
-			reportWindow,
 			retryUntil,
 		)
 	} else {
