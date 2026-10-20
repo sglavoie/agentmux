@@ -95,18 +95,17 @@ asl-integration:
 #
 # `just` passes everything after the recipe name positionally, so a caller who
 # writes the documented `asl_root=/path/to/scripts` form hands the recipe that
-# whole string. The prefix is stripped here rather than refused, so the named
-# and bare forms both work and neither silently checks the wrong directory.
+# whole string. scripts/named-arg strips the prefix (and expands a leading ~,
+# which zsh, unlike bash, leaves unexpanded after =) rather than refusing it, so
+# the named and bare forms both work and neither silently checks the wrong
+# directory.
 #
 # Compare the vendored ASL contract corpus with an ASL checkout's (offline)
 asl-contract-sync asl_root:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    asl_root_arg="{{ asl_root }}"
-    asl_root="${asl_root_arg#asl_root=}"
-    # zsh, unlike bash, leaves a ~ after = unexpanded, so expand it here.
-    case "$asl_root" in "~" | "~/"*) asl_root="$HOME${asl_root#\~}" ;; esac
+    asl_root="$("{{ root }}/scripts/named-arg" asl_root "{{ asl_root }}")"
     canonical="$asl_root/tests/fixtures/agent_mux_contract"
     vendored="{{ root }}/internal/aslcontract/corpus"
 
@@ -150,26 +149,17 @@ asl-contract-sync asl_root:
 # turns the suite's "no installed pair here" skip into a failure, because a
 # silent skip would report a compatible pair that was never actually checked.
 #
-# As with asl-contract-sync, `just` passes everything after the recipe name
-# positionally, so the documented `asl_root=/path/to/scripts` prefix is stripped
-# here rather than refused.
+# As with asl-contract-sync, the documented `asl_root=/path/to/scripts` prefix
+# is stripped by scripts/named-arg rather than refused.
 #
 # Exercise the overseer against the installed amx and asl pair, in a throwaway world
-overseer-integration asl_root:
+overseer-integration asl_root: installed-amx
     #!/usr/bin/env bash
     set -euo pipefail
 
-    asl_root_arg="{{ asl_root }}"
-    asl_root="${asl_root_arg#asl_root=}"
-    # zsh, unlike bash, leaves a ~ after = unexpanded, so expand it here.
-    case "$asl_root" in "~" | "~/"*) asl_root="$HOME${asl_root#\~}" ;; esac
+    asl_root="$("{{ root }}/scripts/named-arg" asl_root "{{ asl_root }}")"
     amx="{{ prefix_bin }}/amx"
     suite="tests.test_asl_overseer_paired_smoke"
-
-    if [ ! -x "$amx" ]; then
-        echo "no installed amx at $amx; run just install-restart-smoke first" >&2
-        exit 1
-    fi
 
     if [ ! -d "$asl_root/agent_session_loop" ]; then
         echo "no ASL checkout at $asl_root" >&2
@@ -214,8 +204,9 @@ overseer-integration asl_root:
 # fault scenarios land.
 stress_scenarios := "TestRun_|TestServer_|TestHandler_Concurrent"
 
-# Repeats the daemon lifecycle scenarios in isolation, then again as concurrent shards while the full suite loads the machine, then
-# measures the latency budgets on a quiet machine.
+# Repeats the daemon lifecycle scenarios in isolation, then again as concurrent
+# shards while the full suite loads the machine (both the shards and the loaded
+# suite must pass), then measures the latency budgets on a quiet machine.
 #
 # The correctness scenarios synchronize on signals the daemon publishes, so
 # contention must not change their outcome; the latency budgets are measured
@@ -235,11 +226,11 @@ reliability-stress reps="20" shards="4":
     echo "== isolated repetitions under -race (x{{ reps }}) =="
     go test -race -count={{ reps }} -run '{{ stress_scenarios }}' ./internal/daemon
 
-    # The full suite runs here to saturate the machine, and this gate judges only
-    # the daemon scenarios racing against it. `just test` is the suite's own gate
-    # and runs it unloaded. Its outcome is still reported rather than swallowed: a
-    # regression that only the loaded run reveals should be visible here even
-    # though it does not fail this recipe.
+    # The full suite runs here to saturate the machine while the daemon shards
+    # race against it, and it is gated too: a test that fails only when the
+    # machine is loaded is a reliability failure, which is what this recipe is
+    # for. Both outcomes are printed before either fails the recipe, so a
+    # failure says which half broke.
     echo "== {{ shards }} concurrent shards (x{{ reps }}) under full-suite load =="
     go test -count=1 ./... > "$log_dir/suite.log" 2>&1 &
     suite_pid=$!
@@ -256,16 +247,24 @@ reliability-stress reps="20" shards="4":
     suite_status=0
     wait "$suite_pid" || suite_status=$?
     if [ "$failed" -ne 0 ]; then
-        for log in "$log_dir"/*.log; do
+        echo "-- daemon shards under load: FAILED"
+        for log in "$log_dir"/shard-*.log; do
             echo "--- $log"
             cat "$log"
         done
-        exit 1
+    else
+        echo "-- daemon shards under load: ok"
     fi
     if [ "$suite_status" -ne 0 ]; then
-        echo "-- background load suite exited $suite_status (reported, not gated):"
+        echo "-- full suite under load: FAILED (exit $suite_status)"
+        grep -E '^(--- FAIL|FAIL|panic:)' "$log_dir/suite.log" || true
+        echo "--- last 40 lines of the suite log"
         tail -n 40 "$log_dir/suite.log"
-        echo "-- gate on it with: just test"
+    else
+        echo "-- full suite under load: ok"
+    fi
+    if [ "$failed" -ne 0 ] || [ "$suite_status" -ne 0 ]; then
+        exit 1
     fi
 
     # Budgets last and alone: everything above has finished, so the machine is
@@ -300,9 +299,10 @@ crash_restart_scenarios := "TestFault|TestFuzzReducerRestartEquivalence|TestTrac
 # The count guard is the point of the shell wrapper. `go test -run PATTERN`
 # exits 0 when the pattern matches nothing, so a renamed test silently converts
 # this gate into a green step that checked nothing -- the exact failure mode a
-# release gate must not have. The floor is deliberately below the current count
-# so deleting one scenario does not break the build, and far enough above zero
-# that a pattern which stopped matching fails here.
+# release gate must not have. The expected count is not written down: it is
+# however many top-level tests `go test -list` finds for the same pattern, so
+# adding or removing a scenario needs no edit here, and every one it lists has
+# to pass rather than skip.
 #
 # Run the crash, restart, and degraded-start scenarios under the race detector
 crash-restart:
@@ -311,6 +311,12 @@ crash-restart:
 
     log="$(mktemp)"
     trap 'rm -f "$log"' EXIT
+
+    expected=$(go test -list '{{ crash_restart_scenarios }}' ./internal/daemon | grep -c '^Test' || true)
+    if [ "$expected" -eq 0 ]; then
+        echo "crash-restart's pattern lists no tests: the -run pattern is stale" >&2
+        exit 1
+    fi
 
     go test -race -count=1 -v -run '{{ crash_restart_scenarios }}' ./internal/daemon 2>&1 | tee "$log"
 
@@ -325,10 +331,10 @@ crash-restart:
     # The tmux scenarios skip when tmux is not installed, which leaves the
     # count short: a fault gate that passes without them proves nothing about
     # the agents the desktop app keeps alive.
-    if [ "$passed" -lt 19 ]; then
+    if [ "$passed" -ne "$expected" ]; then
         echo >&2
-        echo "crash-restart ran only $passed top-level scenarios (expected at least 19; the tmux scenarios need tmux)" >&2
-        echo "update crash_restart_scenarios if a scenario was intentionally renamed" >&2
+        echo "crash-restart passed $passed of the $expected top-level scenarios its pattern lists (the tmux scenarios need tmux)" >&2
+        grep '^--- SKIP' "$log" >&2 || true
         exit 1
     fi
 
@@ -357,16 +363,11 @@ crash-restart:
 # against the installed ASL wrapper; the release gate runs it separately.
 #
 # Smoke the installed pair against a real tmux and daemon, from any terminal (read-only)
-cockpit-smoke:
+cockpit-smoke: installed-amx daemon-ready
     #!/usr/bin/env bash
     set -euo pipefail
 
     amx="{{ prefix_bin }}/amx"
-
-    if [ ! -x "$amx" ]; then
-        echo "no installed amx at $amx; run just install-restart-smoke first" >&2
-        exit 1
-    fi
 
     echo "== tmux backend =="
     "$amx" backend status
@@ -399,12 +400,8 @@ cockpit-smoke:
     esac
     "$tmux_bin" -S "$socket" kill-server
 
+    # daemon-ready, a dependency, has already required `ready: true`.
     echo "== daemon =="
-    "$amx" daemon status | grep -q '^ready: true' || {
-        echo "daemon is not ready" >&2
-        "$amx" daemon status >&2
-        exit 1
-    }
     "$amx" daemon status
 
     # Proves the daemon answers for the sessions it holds, not merely that
@@ -426,16 +423,11 @@ cockpit-smoke:
 # mutates, and it fails when there is no Kitty to observe.
 #
 # Smoke the installed amx against a real Kitty, from a Kitty window (opt-in)
-kitty-smoke:
+kitty-smoke: installed-amx daemon-ready
     #!/usr/bin/env bash
     set -euo pipefail
 
     amx="{{ prefix_bin }}/amx"
-
-    if [ ! -x "$amx" ]; then
-        echo "no installed amx at $amx; run just install-restart-smoke first" >&2
-        exit 1
-    fi
 
     if [ -z "${KITTY_WINDOW_ID:-}" ]; then
         echo "KITTY_WINDOW_ID is unset: run the Kitty smoke from a Kitty window" >&2
@@ -447,12 +439,8 @@ kitty-smoke:
     kitten @ ls > /dev/null
     echo "kitten @ ls: ok"
 
+    # daemon-ready, a dependency, has already required `ready: true`.
     echo "== daemon =="
-    "$amx" daemon status | grep -q '^ready: true' || {
-        echo "daemon is not ready" >&2
-        "$amx" daemon status >&2
-        exit 1
-    }
     "$amx" daemon status
 
     # Proves the daemon is reducing facts for this real window, not merely
@@ -472,7 +460,8 @@ kitty-smoke:
 # The gate itself lives in internal/release and is documented there; this recipe
 # only translates the `key=value` invocation into flags. As with
 # asl-contract-sync, `just` hands everything after the recipe name to the recipe
-# positionally, so the prefixes are stripped here rather than refused.
+# positionally, so scripts/named-arg strips the prefixes rather than refusing
+# them, after the checks below have used them to catch arguments out of order.
 #
 # This has real side effects. It installs both programs, restarts the running
 # daemon, and (with tag=yes) writes annotated tags into both repositories.
@@ -510,12 +499,10 @@ paired-release-gate asl_root signing_key="" tag="no":
             exit 1
             ;;
     esac
-    asl_root="${asl_root#asl_root=}"
-    signing_key="${signing_key#signing_key=}"
-    # zsh, unlike bash, leaves a ~ after = unexpanded, so expand it here.
-    case "$asl_root" in "~" | "~/"*) asl_root="$HOME${asl_root#\~}" ;; esac
-    case "$signing_key" in "~" | "~/"*) signing_key="$HOME${signing_key#\~}" ;; esac
-    tag="${tag#tag=}"
+    named_arg="{{ root }}/scripts/named-arg"
+    asl_root="$("$named_arg" asl_root "$asl_root")"
+    signing_key="$("$named_arg" signing_key "$signing_key")"
+    tag="$("$named_arg" tag "$tag")"
 
     tag_requested=no
     case "$tag" in
@@ -609,24 +596,64 @@ sync-hooks:
     "{{prefix_bin}}/amx" config hooks-sync
 
 # Restart the daemon onto the installed binary, wait for it to report ready,
-# and gate on strict doctor.
+# and gate on strict doctor. The waiting and the judging are subsequent
+# dependencies, so they run after the restart, in order.
 [private]
-restart-verify:
+restart-verify: && (daemon-ready "50") verify-daemon
     "{{prefix_bin}}/amx" daemon restart
-    @for i in $(seq 1 50); do \
-        if "{{prefix_bin}}/amx" daemon status | grep -q '^ready: true'; then break; fi; \
-        if [ "$i" = "50" ]; then echo "daemon never became ready" >&2; "{{prefix_bin}}/amx" daemon status >&2; exit 1; fi; \
-        sleep 0.2; \
+
+# Fail unless the installed amx exists. Every recipe that judges the installed
+# pair rather than these sources starts here.
+[private]
+installed-amx:
+    @if [ ! -x "{{prefix_bin}}/amx" ]; then \
+        echo "no installed amx at {{prefix_bin}}/amx; run just install-restart-smoke first" >&2; \
+        exit 1; \
+    fi
+
+# Fail unless the installed daemon reports `ready: true`, asking up to `tries`
+# times 0.2s apart: once for a daemon that should already be up, fifty after a
+# restart. The status is read whole before it is matched, so a reader that
+# stops early cannot fail the pipeline under pipefail.
+[private]
+daemon-ready tries="1": installed-amx
+    #!/usr/bin/env bash
+    set -euo pipefail
+    amx="{{ prefix_bin }}/amx"
+    ready=no
+    for i in $(seq 1 {{ tries }}); do
+        status="$("$amx" daemon status 2>&1 || true)"
+        if grep -q '^ready: true' <<< "$status"; then
+            ready=yes
+            break
+        fi
+        if [ "$i" -lt {{ tries }} ]; then
+            sleep 0.2
+        fi
     done
-    @# The ASL bridge handshakes after the daemon reports ready. In required mode,
-    @# give it the same bounded window before doctor judges it; if it never
-    @# connects, doctor --strict reports the real failure.
-    @for i in $(seq 1 50); do \
-        if ! "{{prefix_bin}}/amx" daemon status | grep -Eq '^asl: (unavailable|read-only) \(mode required'; then break; fi; \
-        sleep 0.2; \
+    if [ "$ready" != yes ]; then
+        echo "daemon is not ready after {{ tries }} check(s)" >&2
+        "$amx" daemon status >&2 || true
+        exit 1
+    fi
+
+# Judge a daemon that has just reported ready: give a required ASL bridge the
+# same bounded window to handshake (it does so after readiness), then strict
+# doctor. A bridge that never connects is doctor's to report, not this wait's.
+[private]
+verify-daemon:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    amx="{{ prefix_bin }}/amx"
+    for _ in $(seq 1 50); do
+        status="$("$amx" daemon status 2>&1 || true)"
+        if ! grep -Eq '^asl: (unavailable|read-only) \(mode required' <<< "$status"; then
+            break
+        fi
+        sleep 0.2
     done
-    "{{prefix_bin}}/amx" daemon status
-    "{{prefix_bin}}/amx" doctor --strict
+    "$amx" daemon status
+    "$amx" doctor --strict
 
 # Debug bundles amx only when AMX_BINARY names one and otherwise finds ~/.local/bin/amx at run
 # time; Release builds amx with `just build` and bundles that. Both bundle the

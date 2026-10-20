@@ -74,9 +74,12 @@ suite does not have:
 | `just cockpit-smoke` | tmux and an installed pair, from any terminal | Does the installed `amx` resolve a tmux that runs, is the real daemon ready and answering for its sessions, and do its invariants hold? |
 | `just kitty-smoke` | a real Kitty window and an installed `amx` | Opt-in, in no gate: does the daemon observe a live Kitty window? |
 
-`crash-restart` counts the scenarios that ran and fails if the count collapses.
-`go test -run PATTERN` exits 0 when the pattern matches nothing, so a renamed
-scenario would otherwise turn the gate into a green step that checked nothing.
+`crash-restart` counts the scenarios that passed and fails unless that is every
+top-level test `go test -list` finds for its pattern, so a skipped tmux scenario
+fails it too. `go test -run PATTERN` exits 0 when the pattern matches nothing,
+so a renamed scenario would otherwise turn the gate into a green step that
+checked nothing. `reliability-stress` gates on both halves of its loaded run:
+the daemon shards and the full suite that loads the machine.
 
 `cockpit-smoke` is read-only and fails rather than skips. It requires a clean
 `amx backend status --check`, a round trip of the tmux that names (a session

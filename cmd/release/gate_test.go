@@ -71,6 +71,11 @@ func TestJustCrashRestartCannotPassWithoutRunning(t *testing.T) {
 	if !strings.Contains(recipe, "--- PASS") {
 		t.Error("crash-restart does not count the scenarios that actually ran")
 	}
+	// The count it holds them to is the pattern's own, not a number written
+	// down beside it that goes stale when a scenario is added.
+	if !strings.Contains(recipe, "go test -list '{{ crash_restart_scenarios }}'") {
+		t.Error("crash-restart does not derive its expected count from its -run pattern")
+	}
 	if !strings.Contains(recipe, "-race") {
 		t.Error("crash-restart must run the fault and restart scenarios under the race detector")
 	}
@@ -92,7 +97,7 @@ func TestJustCrashRestartCannotPassWithoutRunning(t *testing.T) {
 // is worse than no smoke: it reports a boundary as exercised that was never
 // touched.
 func TestJustCockpitSmokeFailsRatherThanSkips(t *testing.T) {
-	recipe := justfileParameterizedRecipe(t, readJustfile(t), "cockpit-smoke")
+	recipe := justfileRecipeClosure(t, readJustfile(t), "cockpit-smoke")
 
 	for _, want := range []string{
 		"{{ prefix_bin }}/amx",    // the installed amx, not a build
@@ -139,7 +144,7 @@ func TestJustCockpitSmokeFailsRatherThanSkips(t *testing.T) {
 // optional backend, so nothing an operator without it runs may depend on it.
 func TestJustKittySmokeIsOptInAndFailsRatherThanSkips(t *testing.T) {
 	justfile := readJustfile(t)
-	recipe := justfileParameterizedRecipe(t, justfile, "kitty-smoke")
+	recipe := justfileRecipeClosure(t, justfile, "kitty-smoke")
 
 	for _, want := range []string{
 		"kitten @ ls",                    // a real Kitty remote-control round trip
@@ -209,14 +214,14 @@ func TestJustInstallCreatesNothingOfKittys(t *testing.T) {
 // supposed to be one, so the skip has to become a failure here or the step is a
 // green report about two programs nobody checked against each other.
 func TestJustOverseerIntegrationFailsRatherThanSkips(t *testing.T) {
-	recipe := justfileParameterizedRecipe(t, readJustfile(t), "overseer-integration")
+	recipe := justfileRecipeClosure(t, readJustfile(t), "overseer-integration")
 
 	for _, want := range []string{
 		"AMX_ASL_OVERSEER_SMOKE=1",             // the suite's skip becomes a failure
 		"AMX_INSTALLED_BINARY=",                // and it judges the installed binary
 		"{{ prefix_bin }}/amx",                 // which is the installed one, not a build
 		"tests.test_asl_overseer_paired_smoke", // the paired smoke suite itself
-		"${asl_root_arg#asl_root=}",            // `just` hands key=value positionally
+		`scripts/named-arg" asl_root`,          // `just` hands key=value positionally
 		"command -v asl",                       // the ASL half is the one on PATH
 	} {
 		if !strings.Contains(recipe, want) {
@@ -276,8 +281,9 @@ func TestJustPairedReleaseGatePassesTheCheckoutThrough(t *testing.T) {
 	recipe := justfileParameterizedRecipe(t, readJustfile(t), "paired-release-gate")
 
 	for _, want := range []string{
-		"${asl_root#asl_root=}",
-		"${signing_key#signing_key=}",
+		`"$named_arg" asl_root`,
+		`"$named_arg" signing_key`,
+		`"$named_arg" tag`,
 		"release-gate",
 		"--asl-root",
 		"--signing-key",
