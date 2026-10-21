@@ -43,9 +43,9 @@ struct WorkspaceActivityView: View {
                 Spacer()
                 Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .help("Refresh activity (⌘R)").accessibilityLabel("Refresh activity").disabled(model.loading)
-                Menu("Mark read") {
-                    Button("Mark selected read") { model.markSelectedRead() }.disabled(!model.canMarkSelectedRead)
-                    Button("Mark all \(model.visible.count) results read") { model.markVisibleRead() }
+                Menu("Mark Read") {
+                    Button("Mark Selected Read") { model.markSelectedRead() }.disabled(!model.canMarkSelectedRead)
+                    Button("Mark All \(model.visible.count) Results Read") { model.markVisibleRead() }
                         .disabled(model.unreadResultCount == 0 || model.loading || model.error != nil)
                 }.fixedSize()
                 Button("Undo") { model.undoMarkRead() }.disabled(!model.canUndoRead).help("Undo the last activity read acknowledgement")
@@ -54,7 +54,7 @@ struct WorkspaceActivityView: View {
                 Text(model.report.map { "\(model.visible.count) shown · \($0.entries.count) loaded" } ?? "Recorded activity")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Menu("About this activity") {
+                Menu("About This Activity") {
                     Text("Opening this view does not mark events read.")
                     Text(model.readState.lastMarkedAt.map { "Last marked read: " + $0.formatted() } ?? "No events marked read yet")
                     Text("Retained history starts " + (model.report.flatMap { WorkspaceActivityEntry.date($0.earliestAvailable) }?.formatted() ?? "at an unknown time"))
@@ -69,7 +69,7 @@ struct WorkspaceActivityView: View {
                             HStack {
                                 if model.readState.read[entry.id] == nil {
                                     Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(WorkspaceReviewColors.unread)
-                                        .accessibilityLabel("Unread")
+                                        .help("Unread").accessibilityLabel("Unread")
                                 }
                                 Text(entry.title).font(.headline)
                             }
@@ -92,9 +92,9 @@ struct WorkspaceActivityView: View {
                             Text(entry.detail).font(.system(size: preferences.effectiveProseSize)).textSelection(.enabled)
                             HStack {
                                 if entry.conversation != nil || !entry.runtimeSessionID.isEmpty {
-                                    Button("Focus live session") { model.onFocus?(entry) }.help("Focus live session (⌘Return)")
+                                    Button("Focus Live Session") { model.onFocus?(entry) }.help("Focus Live Session (⌘Return)")
                                 }
-                                if entry.conversation != nil { Button("Open conversation") { model.openConversation() }.help("Open conversation (⌘⇧Return)") }
+                                if entry.conversation != nil { Button("Open Conversation") { model.openConversation() }.help("Open Conversation (⌘⇧Return)") }
                             }
                             Divider()
                             Text("Supporting output").font(.headline)
@@ -106,7 +106,7 @@ struct WorkspaceActivityView: View {
                             } else if !model.reading && model.transcriptError == nil {
                                 Text(entry.conversation == nil ? "This event has no recorded conversation identity." : "No timestamped assistant output at or before this event is available in the loaded messages.").foregroundStyle(.secondary)
                             }
-                            if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier() } }
+                            if model.canLoadEarlier { Button("Load Earlier Messages") { model.loadEarlier() } }
                             Divider()
                             Text("Recorded event: \(entry.event)").font(.caption).textSelection(.enabled)
                             if !entry.runID.isEmpty { Text("Run: \(entry.runID)").font(.caption).textSelection(.enabled) }

@@ -187,7 +187,7 @@ final class WorkspaceInspectorTests: XCTestCase {
             .init(label: "Evidence", value: "Nothing has reported it yet"),
             .init(label: "Since", value: "5m"),
             .init(label: "Working for", value: "2m"),
-            .init(label: "Last event", value: "<1m"),
+            .init(label: "Last event", value: "now"),
             .init(label: "Flags", value: "waiting on you, unseen, muted, looping"),
         ])
         XCTAssertTrue(inspection.sections[1].fields.contains(.init(label: "Conversation", value: "c-1", copies: true)))

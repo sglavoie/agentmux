@@ -114,9 +114,9 @@ struct WorkspaceHistoryView: View {
                         if model.entries.isEmpty && !model.loading && model.error == nil {
                             WorkspaceEmpty(title: "No conversations found", detail: emptyResultsDetail, symbol: "magnifyingglass") {
                                 VStack(spacing: 6) {
-                                    if !model.resultsQuery.isEmpty { Button("Clear search") { model.query = "" } }
-                                    if model.scope != .all { Button("Search all history") { model.scope = .all } }
-                                    if !model.includeAutomated { Button("Include automated sessions") { model.includeAutomated = true } }
+                                    if !model.resultsQuery.isEmpty { Button("Clear Search") { model.query = "" } }
+                                    if model.scope != .all { Button("Search All History") { model.scope = .all } }
+                                    if !model.includeAutomated { Button("Include Automated Sessions") { model.includeAutomated = true } }
                                 }.padding(.top, 2)
                             }
                         }
@@ -148,7 +148,7 @@ struct WorkspaceHistoryView: View {
                         HStack {
                             Text(selected.conversation.displayName).font(.headline).lineLimit(1).help(selected.conversation.displayName + "\n" + selected.conversation.cwd)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            Button(model.liveConversations.contains(selected.id) ? "Focus live session" : "Resume") { model.act(fork: false) }
+                            Button(model.liveConversations.contains(selected.id) ? "Focus Live Session" : "Resume") { model.act(fork: false) }
                                 .buttonStyle(.borderedProminent).fixedSize()
                                 .help("Resume or focus the selected session (⌘Return)").disabled(!model.canAct)
                             Button("Fork") { model.act(fork: true) }.fixedSize().help("Fork the selected conversation (⌘⇧Return)").disabled(!model.canAct)
@@ -165,8 +165,8 @@ struct WorkspaceHistoryView: View {
                             HStack(spacing: 4) {
                                 Menu {
                                     Text(transcript.total == 0 ? "No messages" : "Messages \(transcript.start + 1)–\(transcript.end) of \(transcript.total)")
-                                    Button("Load earlier messages") { model.loadEarlier(anchor: visibleMessage) }.disabled(!model.canLoadEarlier)
-                                    Button("Load later messages") { model.loadLater(anchor: visibleMessage) }.disabled(!model.canLoadLater)
+                                    Button("Load Earlier Messages") { model.loadEarlier(anchor: visibleMessage) }.disabled(!model.canLoadEarlier)
+                                    Button("Load Later Messages") { model.loadLater(anchor: visibleMessage) }.disabled(!model.canLoadLater)
                                 } label: { Image(systemName: "ellipsis") }
                                     .menuStyle(.borderlessButton).fixedSize().help("Message navigation").accessibilityLabel("Message navigation")
                                 if model.newMessages > 0 {

@@ -64,8 +64,6 @@ enum WorkspaceWording {
 
     static func relativeTime(_ raw: String, now: Date) -> String {
         guard let date = WorkspaceActivityEntry.date(raw) else { return "Time unavailable" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: now)
+        return AgeFormatter.string(since: date, now: now, style: .sentence)
     }
 }

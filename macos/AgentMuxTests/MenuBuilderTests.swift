@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import AgentMux
 
@@ -30,6 +31,11 @@ final class MenuBuilderTests: XCTestCase {
         let row = MenuBuilder.row(s, showReason: true, input: input([s]))
         XCTAssertEqual(row.title, "🔑 api · claude · 4m · Needs permission")
         XCTAssertEqual(row.windowID, 1)
+        XCTAssertTrue(row.accessibilityLabel.contains("needs attention"), row.accessibilityLabel)
+        XCTAssertFalse(row.accessibilityLabel.contains("🔑"), "VoiceOver says the state, not the glyph")
+        let item = MenuBuilder.items(for: [.session(row)], target: NSObject(), sessionAction: #selector(NSObject.description),
+                                     actionSelector: #selector(NSObject.hash)).first
+        XCTAssertEqual(item?.accessibilityLabel(), row.accessibilityLabel, "the menu item carries the spoken label")
 
         s.muted = true
         s.iconState = ""
@@ -41,12 +47,12 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(MenuBuilder.name(of: CompanionSession(windowID: 9)), "window 9")
     }
 
-    func testAges() {
-        XCTAssertEqual(MenuBuilder.age(since: now.addingTimeInterval(-5), now: now), "<1m")
-        XCTAssertEqual(MenuBuilder.age(since: now.addingTimeInterval(-240), now: now), "4m")
-        XCTAssertEqual(MenuBuilder.age(since: now.addingTimeInterval(-7300), now: now), "2h")
-        XCTAssertEqual(MenuBuilder.age(since: now.addingTimeInterval(-3 * 86400), now: now), "3d")
-        XCTAssertEqual(MenuBuilder.age(since: now.addingTimeInterval(60), now: now), "<1m", "a clock skew is not negative")
+    func testRowAgesAreTheSharedCompactAges() {
+        for (ago, label) in [(5, "now"), (240, "4m"), (7300, "2h"), (3 * 86400, "3d"), (-60, "now")] {
+            let s = session(1, "", project: "api", changedSecondsAgo: ago)
+            XCTAssertEqual(MenuBuilder.row(s, showReason: false, input: input([s])).title, "api · claude · \(label)",
+                           "the menu says ages as the sidebar and the TUI do")
+        }
     }
 
     func testSectionsFromASnapshot() {

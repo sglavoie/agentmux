@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// What Preferences reports about the running app: which amx it runs, why
@@ -51,6 +52,39 @@ struct PreferencesSnapshot: Equatable {
     }
 }
 
+/// One of Settings' toolbar tabs, in the order the toolbar shows them.
+enum PreferencesTab: String, CaseIterable {
+    case general
+    case shortcuts
+    case appearance
+    case workspace
+    case advanced
+
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .shortcuts: return "Shortcuts"
+        case .appearance: return "Appearance"
+        case .workspace: return "Workspace"
+        case .advanced: return "Advanced"
+        }
+    }
+
+    /// The SF Symbol the toolbar shows above the title.
+    var symbolName: String {
+        switch self {
+        case .general: return "gearshape"
+        case .shortcuts: return "keyboard"
+        case .appearance: return "paintpalette"
+        case .workspace: return "macwindow"
+        case .advanced: return "gearshape.2"
+        }
+    }
+
+    /// Where the tab last shown is remembered, so Settings opens on it again.
+    static let defaultsKey = "amxSettingsTab"
+}
+
 /// Everything Preferences edits. Each change is saved to `UserDefaults` as it
 /// is made, and `onChange` hands the app the old and new values so it can
 /// apply the live ones at once. The amx binary path and the environment are
@@ -61,10 +95,24 @@ struct PreferencesSnapshot: Equatable {
 @MainActor
 final class PreferencesModel: ObservableObject {
     let daemonSettings = DaemonSettingsModel()
-    @Published var launchSettingsRequest = 0
+    /// The tab Settings shows, remembered across launches.
+    @Published var selectedTab: PreferencesTab {
+        didSet {
+            guard selectedTab != oldValue else { return }
+            defaults.set(selectedTab.rawValue, forKey: PreferencesTab.defaultsKey)
+        }
+    }
+    /// Counts requests to show the launch destination (Workspace › Launch
+    /// projects in); each one selects Workspace.
+    @Published var launchSettingsRequest = 0 {
+        didSet { if launchSettingsRequest > oldValue { selectedTab = .workspace } }
+    }
     /// Counts requests to show the amx binary setting (Advanced › Command
-    /// Line Tool), such as an alert's Open Settings when amx was not found.
-    @Published var amxBinarySettingsRequest = 0
+    /// Line Tool), such as an alert's Open Settings when amx was not found;
+    /// each one selects Advanced.
+    @Published var amxBinarySettingsRequest = 0 {
+        didSet { if amxBinarySettingsRequest > oldValue { selectedTab = .advanced } }
+    }
     /// Whether any Kitty is in use: a Kitty session is listed, or the daemon
     /// knows a Kitty socket. The app sets it; Settings shows its Kitty-only
     /// fields only then, or while a preference already names Kitty.
@@ -125,6 +173,7 @@ final class PreferencesModel: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let stored = AppPreferences.load(from: defaults)
+        selectedTab = defaults.string(forKey: PreferencesTab.defaultsKey).flatMap(PreferencesTab.init(rawValue:)) ?? .general
         preferences = stored
         binaryPathDraft = stored.binaryPath
         environmentDrafts = stored.environment
@@ -348,7 +397,10 @@ final class PreferencesModel: ObservableObject {
     }
 }
 
-/// The Preferences window: SwiftUI hosted in an NSWindow.
+/// The Settings window: a toolbar tab per `PreferencesTab`, as a Mac Settings
+/// window has, each hosting its SwiftUI pane. The window keeps one width and
+/// takes the height of the pane it shows, up to what the screen has room for;
+/// a pane taller than that scrolls.
 @MainActor
 final class PreferencesWindowController: NSObject, NSWindowDelegate {
     let model: PreferencesModel
@@ -356,12 +408,17 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     let attentionRecorder = HotKeyRecorder()
     let workspaceRecorder = HotKeyRecorder()
     private(set) lazy var window: NSWindow = makeWindow()
+    /// The toolbar tabs, made with the window.
+    private(set) var tabViewController: PreferencesTabViewController?
+    private var selection: AnyCancellable?
     /// Kept clear between the window and the screen's visible edges.
     static let screenMargin: CGFloat = 60
-    /// The content's size: the width every tab is laid out at, and the
-    /// height the window opens at where the screen has room for it.
+    /// The width every pane is laid out at.
     static let contentWidth: CGFloat = 560
-    static let contentHeight: CGFloat = 620
+    /// The height a pane is given when its own cannot be measured.
+    static let fallbackContentHeight: CGFloat = 620
+    /// The shortest a pane is made, so a short one still reads as a window.
+    static let minimumContentHeight: CGFloat = 160
 
     init(model: PreferencesModel) {
         self.model = model
@@ -378,32 +435,119 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
         // An accessory app is not active by default; bring it forward so the
         // window takes key focus.
         NSApp.activate()
+        fitToSelectedPane(animate: false)
         window.makeKeyAndOrderFront(nil)
+        // The toolbar is in place once the window is on screen; the pane
+        // keeps its height under it.
+        fitToSelectedPane(animate: false)
     }
 
     private func makeWindow() -> NSWindow {
-        let view = PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder, workspaceRecorder: workspaceRecorder)
-        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "Settings"
-        // A fixed size, as a Mac Settings window is: every tab scrolls
-        // within it rather than the window growing or shrinking around it.
+        let tabs = PreferencesTabViewController()
+        tabs.tabStyle = .toolbar
+        tabs.transitionOptions = []
+        for tab in PreferencesTab.allCases {
+            let pane = NSHostingController(rootView: pane(tab))
+            // The pane fills what the window gives it and asks nothing of
+            // the window's size: the controller sets that, from `idealHeight`.
+            pane.sizingOptions = []
+            pane.title = tab.title
+            let item = NSTabViewItem(viewController: pane)
+            item.identifier = tab.rawValue
+            item.label = tab.title
+            item.image = NSImage(systemSymbolName: tab.symbolName, accessibilityDescription: tab.title)
+            tabs.addTabViewItem(item)
+        }
+        tabs.selectedTabViewItemIndex = PreferencesTab.allCases.firstIndex(of: model.selectedTab) ?? 0
+        tabs.onSelect = { [weak self] tab in self?.didSelect(tab) }
+        tabViewController = tabs
+
+        let window = NSWindow(contentViewController: tabs)
+        // A fixed width, as a Mac Settings window has; the height follows
+        // the pane, set by `fitToSelectedPane` rather than by dragging.
         window.styleMask = [.titled, .closable]
+        window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
         window.delegate = self
         dashboardRecorder.window = window
         attentionRecorder.window = window
         workspaceRecorder.window = window
-        // Keep a consistent size across tabs; each pane scrolls on smaller screens.
-        window.setContentSize(NSSize(width: Self.contentWidth, height: Self.contentHeight))
-        if let visible = NSScreen.main?.visibleFrame {
-            let chrome = window.frame.height - window.contentLayoutRect.height
-            let height = min(Self.contentHeight + chrome, visible.height - Self.screenMargin)
-            var frame = window.frame
-            frame.size.height = max(height, window.minSize.height)
-            window.setFrame(frame, display: false)
-        }
+        window.setContentSize(NSSize(width: Self.contentWidth, height: Self.fallbackContentHeight))
+        fit(window, to: model.selectedTab, animate: false)
         window.center()
+        // A request to show a tab (Open Settings at the amx binary, the
+        // launch destination) selects it here, open or not.
+        selection = model.$selectedTab.removeDuplicates().sink { [weak self] tab in
+            self?.select(tab)
+        }
         return window
+    }
+
+    private func pane(_ tab: PreferencesTab) -> PreferencesView {
+        PreferencesView(model: model, dashboardRecorder: dashboardRecorder, attentionRecorder: attentionRecorder,
+                        workspaceRecorder: workspaceRecorder, tab: tab)
+    }
+
+    /// The tab the toolbar shows.
+    var selectedTab: PreferencesTab? {
+        guard let tabs = tabViewController, tabs.tabViewItems.indices.contains(tabs.selectedTabViewItemIndex) else { return nil }
+        return (tabs.tabViewItems[tabs.selectedTabViewItemIndex].identifier as? String).flatMap(PreferencesTab.init(rawValue:))
+    }
+
+    private func select(_ tab: PreferencesTab) {
+        guard let tabs = tabViewController, let index = PreferencesTab.allCases.firstIndex(of: tab),
+              tabs.selectedTabViewItemIndex != index else { return }
+        tabs.selectedTabViewItemIndex = index
+    }
+
+    /// The operator, or a request, chose another tab: it is remembered, what
+    /// was being typed or recorded on the last one ends, and the window takes
+    /// the new pane's height.
+    private func didSelect(_ tab: PreferencesTab) {
+        if model.selectedTab != tab { model.selectedTab = tab }
+        model.commitBinaryPath()
+        model.commitEnvironment()
+        dashboardRecorder.stop()
+        attentionRecorder.stop()
+        workspaceRecorder.stop()
+        fitToSelectedPane(animate: tabViewController?.view.window?.isVisible ?? false)
+    }
+
+    private func fitToSelectedPane(animate: Bool) {
+        guard let tab = selectedTab, let window = tabViewController?.view.window else { return }
+        fit(window, to: tab, animate: animate)
+    }
+
+    /// Gives the window the height `tab`'s pane lays out at, keeping its top
+    /// edge where it is.
+    private func fit(_ window: NSWindow, to tab: PreferencesTab, animate: Bool) {
+        let chrome = window.frame.height - (window.contentView?.frame.height ?? window.contentLayoutRect.height)
+        let visible = (window.screen ?? NSScreen.main)?.visibleFrame
+        let height = Self.contentHeight(ideal: idealHeight(of: tab),
+                                        available: visible.map { $0.height - Self.screenMargin - chrome })
+        var frame = window.frame
+        let newHeight = height + chrome
+        guard abs(frame.height - newHeight) > 0.5 || abs(window.contentLayoutRect.width - Self.contentWidth) > 0.5 else { return }
+        frame.origin.y = frame.maxY - newHeight
+        frame.size.height = newHeight
+        frame.size.width = Self.contentWidth + (window.frame.width - (window.contentView?.frame.width ?? Self.contentWidth))
+        window.setFrame(frame, display: true, animate: animate)
+    }
+
+    /// The height `tab`'s pane lays out at with nothing to scroll, measured
+    /// on a copy so the pane on screen keeps its scroll position.
+    func idealHeight(of tab: PreferencesTab) -> CGFloat {
+        NSHostingView(rootView: pane(tab)).fittingSize.height
+    }
+
+    /// The height a pane is given: its own, at least `minimumContentHeight`,
+    /// at most what `available` leaves; `fallbackContentHeight` when its own
+    /// could not be measured.
+    nonisolated static func contentHeight(ideal: CGFloat, available: CGFloat?) -> CGFloat {
+        var height = ideal.isFinite && ideal > 0 ? ideal.rounded(.up) : fallbackContentHeight
+        height = max(height, minimumContentHeight)
+        if let available { height = min(height, max(available.rounded(.down), minimumContentHeight)) }
+        return height
     }
 
     /// A closed window records nothing, and ends any editing of the binary
@@ -434,64 +578,48 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     }
 }
 
+/// Settings' toolbar tabs, telling its window controller which one the
+/// operator picked.
+final class PreferencesTabViewController: NSTabViewController {
+    var onSelect: ((PreferencesTab) -> Void)?
+
+    override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
+        super.tabView(tabView, didSelect: tabViewItem)
+        guard let id = tabViewItem?.identifier as? String, let tab = PreferencesTab(rawValue: id) else { return }
+        onSelect?(tab)
+    }
+}
+
+/// One Settings pane, or with no `tab` the one the model selects.
 struct PreferencesView: View {
     @ObservedObject var model: PreferencesModel
     @ObservedObject var dashboardRecorder: HotKeyRecorder
     @ObservedObject var attentionRecorder: HotKeyRecorder
     @ObservedObject var workspaceRecorder: HotKeyRecorder
+    /// The pane shown; nil follows `model.selectedTab`.
+    var tab: PreferencesTab?
     @FocusState private var launchFieldFocused: Bool
     @FocusState private var binaryFieldFocused: Bool
     @FocusState private var environmentFieldFocused: String?
+    /// The last request to reveal a field this pane acted on, so coming back
+    /// to the tab later does not scroll to it again.
+    @State private var handledLaunchRequest = 0
+    @State private var handledBinaryRequest = 0
 
-    private enum Tab: String, CaseIterable {
-        case general = "General"
-        case shortcuts = "Shortcuts"
-        case appearance = "Appearance"
-        case workspace = "Workspace"
-        case advanced = "Advanced"
-    }
-
-    @State private var selectedTab = Tab.general
+    private var shownTab: PreferencesTab { tab ?? model.selectedTab }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Settings tab", selection: $selectedTab) {
-                ForEach(Tab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
-                }
+        Group {
+            switch shownTab {
+            case .general: generalSettings
+            case .shortcuts: shortcutSettings
+            case .appearance: appearanceSettings
+            case .workspace: workspaceSettings
+            case .advanced: advancedSettings
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(16)
-
-            Divider()
-
-            Group {
-                switch selectedTab {
-                case .general: generalSettings
-                case .shortcuts: shortcutSettings
-                case .appearance: appearanceSettings
-                case .workspace: workspaceSettings
-                case .advanced: advancedSettings
-                }
-            }
-            .frame(minHeight: 0, maxHeight: .infinity)
         }
         .frame(width: PreferencesWindowController.contentWidth)
-        .frame(minHeight: 320, maxHeight: .infinity)
-        .onChange(of: selectedTab) { _, _ in
-            model.commitBinaryPath()
-            model.commitEnvironment()
-            dashboardRecorder.stop()
-            attentionRecorder.stop()
-            workspaceRecorder.stop()
-        }
-        .onChange(of: model.launchSettingsRequest, initial: true) { _, request in
-            if request > 0 { selectedTab = .workspace }
-        }
-        .onChange(of: model.amxBinarySettingsRequest, initial: true) { _, request in
-            if request > 0 { selectedTab = .advanced }
-        }
+        .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
     }
 
     private var generalSettings: some View {
@@ -691,11 +819,13 @@ struct PreferencesView: View {
                 }
             }
             .formStyle(.grouped)
-            .task(id: selectedTab == .workspace ? model.launchSettingsRequest : nil) {
-                guard selectedTab == .workspace, model.launchSettingsRequest > 0 else { return }
+            .task(id: model.selectedTab == .workspace ? model.launchSettingsRequest : nil) {
+                let request = model.launchSettingsRequest
+                guard model.selectedTab == .workspace, request > handledLaunchRequest else { return }
                 // Let the selected pane lay out before revealing the launch field.
                 await Task.yield()
                 guard !Task.isCancelled else { return }
+                handledLaunchRequest = request
                 proxy.scrollTo("launch-destination", anchor: .center)
                 launchFieldFocused = true
             }
@@ -771,11 +901,13 @@ struct PreferencesView: View {
                 }
             }
             .formStyle(.grouped)
-            .task(id: selectedTab == .advanced ? model.amxBinarySettingsRequest : nil) {
-                guard selectedTab == .advanced, model.amxBinarySettingsRequest > 0 else { return }
+            .task(id: model.selectedTab == .advanced ? model.amxBinarySettingsRequest : nil) {
+                let request = model.amxBinarySettingsRequest
+                guard model.selectedTab == .advanced, request > handledBinaryRequest else { return }
                 // Let the pane lay out before revealing the binary field.
                 await Task.yield()
                 guard !Task.isCancelled else { return }
+                handledBinaryRequest = request
                 proxy.scrollTo(Self.amxBinaryAnchor, anchor: .center)
                 binaryFieldFocused = true
             }

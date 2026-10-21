@@ -13,6 +13,9 @@ struct MenuSessionRow: Equatable {
     /// Set for a session the workspace embeds: focusing it shows its terminal
     /// there, and it has no Kitty window to name.
     var runtimeSessionID = ""
+    /// What VoiceOver says of the item: the workspace sidebar's words for the
+    /// same session, so the state glyph is said as a state, not an emoji name.
+    var accessibilityLabel = ""
 
     /// The row a click on `session` focuses, with nothing to display.
     static func focusing(_ session: CompanionSession, title: String? = nil) -> MenuSessionRow {
@@ -292,7 +295,7 @@ enum MenuBuilder {
     static func row(_ session: CompanionSession, showReason: Bool, input: Input) -> MenuSessionRow {
         var parts: [String] = [name(of: session)]
         if !session.harness.isEmpty { parts.append(session.harness) }
-        if let changed = session.changedAt { parts.append(age(since: changed, now: input.now)) }
+        if let changed = session.changedAt { parts.append(AgeFormatter.string(since: changed, now: input.now, style: .compact)) }
         if showReason, !session.reason.isEmpty { parts.append(WorkspaceWording.status(session.reason)) }
         var title = parts.joined(separator: " · ")
         let glyph = input.glyphs.glyph(for: session.iconState)
@@ -313,7 +316,9 @@ enum MenuBuilder {
             toolTip: tip.joined(separator: " · "),
             muted: session.muted,
             muteUnavailable: input.gate.unavailableReason(.muteToggle),
-            runtimeSessionID: embedded ?? ""
+            runtimeSessionID: embedded ?? "",
+            accessibilityLabel: WorkspaceRowCellView.accessibilityLabel(
+                WorkspaceSidebar.row(session, snapshotSocket: input.snapshot?.kitty.socket ?? "", now: input.now, glyphs: input.glyphs))
         )
     }
 
@@ -329,17 +334,6 @@ enum MenuBuilder {
             return "window \(session.windowID)"
         }
         return runtime.pane.isEmpty ? runtime.backend : "\(runtime.backend) \(runtime.pane)"
-    }
-
-    /// `<1m`, `4m`, `2h`, `3d`.
-    static func age(since date: Date, now: Date) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(date)))
-        switch seconds {
-        case ..<60: return "<1m"
-        case ..<3600: return "\(seconds / 60)m"
-        case ..<86400: return "\(seconds / 3600)h"
-        default: return "\(seconds / 86400)d"
-        }
     }
 
     // MARK: Actions
@@ -471,7 +465,7 @@ enum MenuBuilder {
         if live {
             parts.append("live")
         } else if let lastAt = conversation.lastAt {
-            parts.append(age(since: lastAt, now: now))
+            parts.append(AgeFormatter.string(since: lastAt, now: now, style: .compact))
         }
         let snippet = conversation.snippet
             .split(whereSeparator: \.isNewline).first.map(String.init)?
@@ -557,6 +551,7 @@ enum MenuBuilder {
             let item = NSMenuItem(title: row.title, action: sessionAction, keyEquivalent: "")
             item.target = target
             item.toolTip = row.toolTip
+            if !row.accessibilityLabel.isEmpty { item.setAccessibilityLabel(row.accessibilityLabel) }
             item.representedObject = RowBox(row)
             guard let muteAction else { return [item] }
             // An alternate pairs with the item before it when both share a

@@ -74,14 +74,14 @@ struct WorkspaceReadingMenu: View {
     var body: some View {
         Menu {
             Text("Reading text: \(Int(preferences.effectiveProseSize)) pt")
-            Button("Larger reading text") { preferences.proseSize = min(24, preferences.effectiveProseSize + 1) }.disabled(preferences.effectiveProseSize >= 24)
-            Button("Smaller reading text") { preferences.proseSize = max(11, preferences.effectiveProseSize - 1) }.disabled(preferences.effectiveProseSize <= 11)
-            Button("Reset reading text size") { preferences.proseSize = 13 }
+            Button("Larger Reading Text") { preferences.proseSize = min(24, preferences.effectiveProseSize + 1) }.disabled(preferences.effectiveProseSize >= 24)
+            Button("Smaller Reading Text") { preferences.proseSize = max(11, preferences.effectiveProseSize - 1) }.disabled(preferences.effectiveProseSize <= 11)
+            Button("Reset Reading Text Size") { preferences.proseSize = 13 }
             Divider()
             Text("Code and terminal output: \(Int(preferences.effectiveFontSize)) pt")
-            Button("Larger monospace text") { preferences.fontSize = min(24, preferences.effectiveFontSize + 1) }.disabled(preferences.effectiveFontSize >= 24)
-            Button("Smaller monospace text") { preferences.fontSize = max(10, preferences.effectiveFontSize - 1) }.disabled(preferences.effectiveFontSize <= 10)
-            Button("Reset monospace text size") { preferences.fontSize = 12 }
+            Button("Larger Monospace Text") { preferences.fontSize = min(24, preferences.effectiveFontSize + 1) }.disabled(preferences.effectiveFontSize >= 24)
+            Button("Smaller Monospace Text") { preferences.fontSize = max(10, preferences.effectiveFontSize - 1) }.disabled(preferences.effectiveFontSize <= 10)
+            Button("Reset Monospace Text Size") { preferences.fontSize = 12 }
             Toggle("Wrap code and diff lines", isOn: $preferences.wrapLines)
         } label: { Image(systemName: "textformat.size") }
             .menuStyle(.borderlessButton).fixedSize().help("Reading text size").accessibilityLabel("Reading text size")
@@ -325,13 +325,11 @@ struct WorkspaceFreshness: View {
     var compact = false
     @State private var showing = false
     static func text(at: Date, now: Date, retained: Bool) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(at)))
-        let age = seconds < 60 ? "just now" : seconds < 3600 ? "\(seconds / 60)m ago" : "\(seconds / 3600)h ago"
+        let age = AgeFormatter.string(since: at, now: now, style: .sentence)
         return retained ? "Showing results from \(age)" : "Refreshed \(age)"
     }
     static func age(at: Date, now: Date) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(at)))
-        return seconds < 60 ? "now" : seconds < 3600 ? "\(seconds / 60)m" : "\(seconds / 3600)h"
+        AgeFormatter.string(since: at, now: now, style: .compact)
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
