@@ -228,7 +228,9 @@ only says where to look and which rules cross package lines.
 Command tree (`cmd/...`; every user-facing command lives in a child package):
 
 - `cmd`: `rootCmd`, version, exit mapping, and registration of every family —
-  nothing else. No other `cmd` package may import it.
+  nothing else, except the release build's hidden `tui-test` stand-in
+  (`harness_stub.go`), which lives here because importing `cmd/tuitest` is
+  what the `tuitest` tag keeps out. No other `cmd` package may import it.
   `TestCommandFamiliesAreRegisteredUnderRoot` is the one registration check.
 - `cmd/daemon` (`amx daemon`), `cmd/dashboard` (dashboard, overview,
   `open-dashboard`, overlays; the singleton rule), `cmd/project`,
@@ -237,7 +239,7 @@ Command tree (`cmd/...`; every user-facing command lives in a child package):
   `cmd/worktree`, `cmd/plans` (`amx plans run`; the family is never `plan`,
   a retired name), `cmd/transcripts`, `cmd/notifications`, `cmd/overseer`
   (authorization surface for the ASL overseer), `cmd/release` and `cmd/tuitest`
-  (hidden).
+  (hidden; `cmd/tuitest` builds only with `-tags tuitest`).
 
 Shared and domain packages (`internal/...`):
 
@@ -504,8 +506,15 @@ TUI scenarios are isolated from the operator's config, data, daemon, and Kitty.
 Add narrow and wide scenarios for layout changes and run:
 
 ```bash
-go run . tui-test run docs/tui-testing/scenarios/*.json
+go run -tags tuitest . tui-test run docs/tui-testing/scenarios/*.json
 ```
+
+The harness (`tui`'s `uitest_*.go`, `cmd/tuitest`, and every test that drives
+the dashboard through them) builds only with the `tuitest` tag, so release
+builds carry none of it; without the tag, root registers a hidden `tui-test`
+stand-in (`cmd/harness_stub.go`) that only says which build has it. Pass
+`-tags tuitest` to `go test`, `go vet`, and `go run` when touching the
+dashboard; the `just` gates already pass it, and lint both builds.
 
 The acceptance map is in `docs/acceptance.md`. Operational troubleshooting
 starts with:

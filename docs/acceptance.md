@@ -6,10 +6,14 @@ The AgentMux 0.8.0 product acceptance gate is:
 just check
 ```
 
-It runs `gofmt -l` over every tracked Go file, `go test ./...`, the
-race-sensitive transcript, plan, handoff, worktree, daemon, and TUI suites,
-`go vet ./...`, every committed TUI scenario (inside `go test ./...`, through
-both the CLI and the in-package runner), and `golangci-lint`. `just
+It runs `gofmt -l` over every tracked Go file, `go test -tags tuitest ./...`,
+the race-sensitive transcript, plan, handoff, worktree, daemon, and TUI suites,
+`go vet` and `golangci-lint` over both the release and the `tuitest` builds,
+and every committed TUI scenario (inside the tagged `go test`, through both the
+CLI and the in-package runner). The scenario harness builds only with the
+`tuitest` tag, so a release `amx` carries none of it and a plain
+`go test ./...` runs no scenario; the recipes always pass the tag
+(`TestGatesBuildTheScenarioHarness`). `just
 acceptance` is the same gate without the optional linter dependency. The
 formatting check leads because it is the cheapest of them: a formatting drift
 reported after the race suite is a long wait for a one-command fix.

@@ -79,7 +79,9 @@ func TestRootHelp(t *testing.T) {
 // thing that can silently break here: a child package can register its own
 // leaves perfectly and still be invisible if root forgets to add it. This is
 // the single root-owned registration test for that, rather than one file per
-// family.
+// family. It holds in both builds: tui-test is the scenario harness with the
+// tuitest tag and the release build's stand-in without it, and `just test`
+// runs this package both ways (harness_stub_test.go covers the stand-in).
 func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 	registered := make(map[string]bool)
 	for _, command := range rootCmd.Commands() {

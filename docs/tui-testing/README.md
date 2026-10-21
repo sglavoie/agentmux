@@ -10,8 +10,8 @@ never reads or writes the operator's real config or data. Every run is
 deterministic and isolated, so it is safe to run in CI or from an agent.
 
 The repository acceptance gate runs every committed wide and narrow layout
-scenario inside `go test ./...` (`cmd/tuitest` through the CLI, `tui`
-in-package); `just tui-scenarios` runs the same set by hand:
+scenario inside `go test -tags tuitest ./...` (`cmd/tuitest` through the CLI,
+`tui` in-package); `just tui-scenarios` runs the same set by hand:
 
 ```bash
 just tui-scenarios
@@ -23,6 +23,24 @@ coverage matrix.
 
 The command is hidden from `amx --help` on purpose: it is a testing tool, not
 part of the normal user workflow.
+
+## Building the harness
+
+The harness and the command build only with the `tuitest` build tag, so a
+release `amx` (`just build`, `just install`, the app's bundled binary) carries
+none of it; its `tui-test` is a hidden stand-in that runs nothing, says which
+build has the harness, and exits `3`. Every `amx tui-test` below means a binary
+built with the tag, or `go run` with it from the repository root:
+
+```bash
+go run -tags tuitest . tui-test run docs/tui-testing/scenarios/*.json
+go build -tags tuitest -o amx-tuitest . && ./amx-tuitest tui-test list-fixtures
+```
+
+The same goes for the tests: `tui`'s `uitest_*.go` files, the tests that drive
+the dashboard through them, and `cmd/tuitest`'s tests carry the tag, so a plain
+`go test ./...` passes without running any of them. `just test`, `race-core`,
+`vet`, and `lint` pass the tag, which is how the gates keep every scenario.
 
 Its subject is the **dashboard** model and stays that way. The F2 live session
 overview is a separate Bubble Tea program with its own `Update`/`View` loop, so
@@ -437,7 +455,7 @@ single reason line.
 
 The [`scenarios/`](scenarios) directory is the complete committed acceptance
 inventory. `just tui-scenarios` passes `scenarios/*.json` to the harness, as
-`cmd/tuitest`'s end-to-end test does under `go test`, and the in-package
+`cmd/tuitest`'s end-to-end test does under `go test -tags tuitest`, and the in-package
 scenario test independently discovers and executes every JSON file and holds
 the directory to the table below, which it reads as the inventory. The exact
 inventory is:
@@ -644,7 +662,7 @@ inventory is:
 Run them all:
 
 ```bash
-amx tui-test run docs/tui-testing/scenarios/*.json
+go run -tags tuitest . tui-test run docs/tui-testing/scenarios/*.json
 ```
 
 These scenarios are exercised in-package by

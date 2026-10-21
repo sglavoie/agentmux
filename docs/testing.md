@@ -12,14 +12,20 @@ handoff, worktree, daemon, and TUI tests, `go vet`, and every committed TUI
 scenario. The scenarios run inside the Go suite, twice over: `cmd/tuitest`
 runs them through the CLI as `just tui-scenarios` does, in parallel shards that
 each run under a sentinel `HOME` that must come back untouched, and `tui` runs
-them in-package, as parallel subtests, against the README inventory. `just check` adds the repository linter and is the final local/CI
-gate. The end-to-end coverage map is documented in
+them in-package, as parallel subtests, against the README inventory. Both
+runners, and every test that drives the dashboard through the harness, build
+only with the `tuitest` tag, which `just test`, `race-core`, `vet`, and `lint`
+pass; a plain `go test ./...` still passes but runs none of them, so use the
+recipes (or `go test -tags tuitest`) when the dashboard is what changed. `just
+check` adds the repository linter, run once per build, and is the final
+local/CI gate. The end-to-end coverage map is documented in
 [`docs/acceptance.md`](acceptance.md).
 
 Two of acceptance's steps are cheap enough to run on their own while iterating:
 `just fmt-check` fails on any tracked Go file that is not gofmt-clean and
 prints the paths (it leads `acceptance`, so a formatting slip fails in seconds
-rather than after the race suites), and `just vet` runs `go vet ./...`.
+rather than after the race suites), and `just vet` runs `go vet` over the
+release build and the `tuitest` build.
 
 ### Running the suite from inside an agent session
 
@@ -46,7 +52,7 @@ bogus values set:
 
 ```bash
 AMX_RUNTIME_SESSION_ID=rs-bogus TMUX=/tmp/x,1,0 TMUX_PANE=%9 KITTY_WINDOW_ID=7 \
-  go test ./cmd/... ./internal/... ./tui/...
+  go test -tags tuitest ./cmd/... ./internal/... ./tui/...
 ```
 
 ### Which install or smoke recipe
@@ -192,8 +198,12 @@ surface, scenario schema, and committed example scenarios, or run the examples
 directly:
 
 ```bash
-amx tui-test run docs/tui-testing/scenarios/*.json
+go run -tags tuitest . tui-test run docs/tui-testing/scenarios/*.json
 ```
+
+The harness builds only with the `tuitest` tag, so a release `amx` carries none
+of it: its `tui-test` is a hidden stand-in that says which build has the
+harness and exits `3`.
 
 It drives the **dashboard** model, and deliberately only that one. The F2
 overview is a separate Bubble Tea program with its own `Update`/`View` loop, so
