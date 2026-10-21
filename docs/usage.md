@@ -662,7 +662,7 @@ Inside the runs view:
 - `j`/`k`, `g`/`G`, `Ctrl+d`/`Ctrl+u`, `Ctrl+f`/`Ctrl+b`: move the cursor
 - `r`: open the response form for the selected run
 - `s`: stop the run after the current session, after confirmation
-- `a`: abort the run, after confirmation
+- `X`: abort the run, after confirmation (`a` opens actions elsewhere and does nothing here)
 - `w`: open the run's Workbench page in your browser
 - `Enter` or `f`: focus the Kitty window bound to the run
 - `Y`: copy the run's workspace root
