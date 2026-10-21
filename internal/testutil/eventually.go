@@ -9,7 +9,7 @@ import (
 // changes them. The timeout only matters to a failing test, so it is generous:
 // a loaded machine must not turn a slow pass into a failure.
 const (
-	DefaultTimeout  = 10 * time.Second
+	DefaultTimeout  = 30 * time.Second
 	DefaultInterval = 10 * time.Millisecond
 )
 
