@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
@@ -84,30 +85,34 @@ func TestClientGateNeverAdmitsMoreThanItsLimit(t *testing.T) {
 func TestClientGateTimesOutAQueuedCaller(t *testing.T) {
 	t.Parallel()
 
-	gate := newClientGate(1)
-	finish, err := gate.acquire(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-	defer cancel()
-	if _, err := gate.acquire(ctx); !errors.Is(err, ErrClientQueueTimeout) {
-		t.Fatalf("acquire with every slot taken = %v; want ErrClientQueueTimeout", err)
-	}
-	finish(true, false)
+	// On the bubble's clock the wait is exactly the caller's timeout, so the
+	// recorded queue time can be held to it on a machine of any load.
+	synctest.Test(t, func(t *testing.T) {
+		gate := newClientGate(1)
+		finish, err := gate.acquire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+		defer cancel()
+		if _, err := gate.acquire(ctx); !errors.Is(err, ErrClientQueueTimeout) {
+			t.Fatalf("acquire with every slot taken = %v; want ErrClientQueueTimeout", err)
+		}
+		finish(true, false)
 
-	stats := gate.snapshot()
-	if stats.Commands != 1 || stats.Timeouts != 1 || stats.Failures != 2 || stats.Queued != 1 || stats.InFlight != 0 {
-		t.Errorf("stats = %+v; want one command run, one queued caller timed out, two failures", stats)
-	}
-	if stats.MaxQueue < 30*time.Millisecond {
-		t.Errorf("max queue = %s; want the timed-out wait counted", stats.MaxQueue)
-	}
-	// The slot it was waiting for is free again.
-	if finish, err = gate.acquire(context.Background()); err != nil {
-		t.Fatalf("acquire after release: %v", err)
-	}
-	finish(false, false)
+		stats := gate.snapshot()
+		if stats.Commands != 1 || stats.Timeouts != 1 || stats.Failures != 2 || stats.Queued != 1 || stats.InFlight != 0 {
+			t.Errorf("stats = %+v; want one command run, one queued caller timed out, two failures", stats)
+		}
+		if stats.MaxQueue < 30*time.Millisecond {
+			t.Errorf("max queue = %s; want the timed-out wait counted", stats.MaxQueue)
+		}
+		// The slot it was waiting for is free again.
+		if finish, err = gate.acquire(context.Background()); err != nil {
+			t.Fatalf("acquire after release: %v", err)
+		}
+		finish(false, false)
+	})
 }
 
 // The same ceiling against a real server: thirty panes read at once start at
