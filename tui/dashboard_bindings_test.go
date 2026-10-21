@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -526,7 +527,7 @@ func TestBindingsShareOneCapturedTarget(t *testing.T) {
 	// this claim. The command it reaches focuses the captured tab; running the
 	// returned cmd against a recording client is what shows which row the
 	// execution actually got.
-	client := newUITestKittyClient(nil)
+	client := kittytest.NewClient(nil)
 	m.client = client
 
 	updated, cmd := m.Update(dashboardKeyPress(keyEnter))

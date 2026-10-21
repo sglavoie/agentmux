@@ -4,11 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
-func lifecycleDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
+func lifecycleDriver(t *testing.T) (*uitestDriver, *kittytest.Client) {
 	t.Helper()
 	driver, client := newUITestFixtureDriver(worktreeLifecycleFixture(), UITestSize{})
 	cleanupUITestDriver(t, driver)

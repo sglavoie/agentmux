@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
@@ -227,7 +228,7 @@ func TestWorktreeNavigationFilterAndReturn(t *testing.T) {
 
 func TestWorktreeShellEditorAndCopyActions(t *testing.T) {
 	fx := worktreesFixture()
-	client := newUITestKittyClient(fx.Windows)
+	client := kittytest.NewClient(fx.Windows)
 	m := NewModel(fx.Config, client)
 	m.width, m.height = 120, 30
 	m.mode = ModeWorktrees

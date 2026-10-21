@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 )
 
 // The two dashboard edge cases the committed scenarios cannot reach, and why
@@ -25,7 +26,7 @@ import (
 // the ListWindows a refresh runs on, stays exactly what every other harness run
 // gets, so a difference in the rendered list can only have come from the focus.
 type uitestFocusFailureClient struct {
-	*uitestKittyClient
+	*kittytest.Client
 	err error
 }
 
@@ -34,7 +35,7 @@ type uitestFocusFailureClient struct {
 // dashboard never tried", and a test that could not tell them apart would keep
 // passing against a build that had silently stopped dispatching.
 func (c *uitestFocusFailureClient) FocusTab(matchExpr string) error {
-	c.Calls = append(c.Calls, uitestKittyCall{Op: "FocusTab", Match: matchExpr})
+	c.Calls = append(c.Calls, kittytest.Call{Op: "FocusTab", Match: matchExpr})
 	return c.err
 }
 
@@ -55,7 +56,7 @@ func TestAFailedFocusLeavesTheRowUnacknowledged(t *testing.T) {
 	defer func() { _ = d.Close() }()
 
 	refused := errors.New("kitty: no matching tab")
-	d.model.client = &uitestFocusFailureClient{uitestKittyClient: client, err: refused}
+	d.model.client = &uitestFocusFailureClient{Client: client, err: refused}
 
 	if before := uitestScreenText(d.Observe()); !strings.Contains(before, "• ▌ unread") {
 		t.Fatalf("fixture did not start with the unread row marked:\n%s", before)

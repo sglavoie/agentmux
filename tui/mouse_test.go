@@ -6,11 +6,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
-func mouseFixture(t *testing.T) (*uitestDriver, *uitestKittyClient) {
+func mouseFixture(t *testing.T) (*uitestDriver, *kittytest.Client) {
 	t.Helper()
 	fx, err := uitestFixtureByName("project_families")
 	if err != nil {

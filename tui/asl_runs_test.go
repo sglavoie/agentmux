@@ -6,20 +6,21 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-func aslRunsDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
+func aslRunsDriver(t *testing.T) (*uitestDriver, *kittytest.Client) {
 	t.Helper()
 	d, client := newUITestFixtureDriver(aslRunsFixture(), UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
 	return d, client
 }
 
-func enterASLRunsDriver(t *testing.T) (*uitestDriver, *uitestKittyClient) {
+func enterASLRunsDriver(t *testing.T) (*uitestDriver, *kittytest.Client) {
 	t.Helper()
 	d, client := aslRunsDriver(t)
 	// Named rather than typed: this helper's callers are about what the Runs

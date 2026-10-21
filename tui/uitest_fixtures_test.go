@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -277,7 +278,7 @@ func TestUITestKittyClientReturnsFixtureWindowsAndRecordsCalls(t *testing.T) {
 	windows := []kitty.OSWindow{uitestOSWindow(
 		uitestTab(1, 11, "🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 	)}
-	client := newUITestKittyClient(windows)
+	client := kittytest.NewClient(windows)
 
 	got, err := client.ListWindows()
 	if err != nil {

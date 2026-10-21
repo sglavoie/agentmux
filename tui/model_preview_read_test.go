@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -465,7 +466,7 @@ func firstPreviewLine(s string) string {
 func TestConcurrentPreviewReadsAreRaceFree(t *testing.T) {
 	t.Parallel()
 
-	client := newUITestKittyClient(nil)
+	client := kittytest.NewClient(nil)
 	var reads, concurrent, overlaps atomic.Int64
 	client.SetReadBehavior(func(string) (string, error) {
 		if concurrent.Add(1) > 1 {
@@ -540,7 +541,7 @@ func TestConcurrentPreviewReadsAreRaceFree(t *testing.T) {
 func TestASlowReadNeverBlocksTheUpdateLoop(t *testing.T) {
 	t.Parallel()
 
-	client := newUITestKittyClient(nil)
+	client := kittytest.NewClient(nil)
 	release := make(chan struct{})
 	client.SetReadBehavior(func(string) (string, error) {
 		<-release

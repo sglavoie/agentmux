@@ -18,6 +18,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
@@ -274,7 +275,7 @@ func RunUITestScenario(sc UITestScenario, env UITestScenarioEnv) (UITestScenario
 // recording client it drives. Fixture sources build directly; config sources
 // stage an isolated environment under env.Root using env.Setenv so no real user
 // data is touched.
-func scenarioDriver(sc UITestScenario, env UITestScenarioEnv) (*uitestDriver, *uitestKittyClient, error) {
+func scenarioDriver(sc UITestScenario, env UITestScenarioEnv) (*uitestDriver, *kittytest.Client, error) {
 	switch {
 	case sc.Fixture != "":
 		fx, err := uitestFixtureByName(sc.Fixture)
@@ -304,7 +305,7 @@ func scenarioDriver(sc UITestScenario, env UITestScenarioEnv) (*uitestDriver, *u
 
 // evaluateUITestAssertions runs every assertion in order and collects the
 // failures, preserving scenario order for deterministic output.
-func evaluateUITestAssertions(sc UITestScenario, obs []UITestObservation, m Model, client *uitestKittyClient) []UITestAssertionFailure {
+func evaluateUITestAssertions(sc UITestScenario, obs []UITestObservation, m Model, client *kittytest.Client) []UITestAssertionFailure {
 	final := obs[len(obs)-1]
 	var failures []UITestAssertionFailure
 	for _, a := range sc.Assertions {
@@ -318,7 +319,7 @@ func evaluateUITestAssertions(sc UITestScenario, obs []UITestObservation, m Mode
 // evaluateUITestAssertion checks one assertion against the final observation,
 // model, and recording client. It returns nil when the assertion holds, or a
 // populated failure describing the mismatch.
-func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model, client *uitestKittyClient) *UITestAssertionFailure {
+func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model, client *kittytest.Client) *UITestAssertionFailure {
 	switch a.Type {
 	case UITestAssertNoLayoutIssues:
 		if n := len(final.Screen.Issues); n > 0 {

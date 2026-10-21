@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
@@ -176,7 +177,7 @@ func TestReviewLifecycleDispatchSingleFlight(t *testing.T) {
 		if got := m.activeUndoEntries(); len(got) != 1 {
 			t.Fatalf("undo entries = %d, want exactly one recovery for one closed session", len(got))
 		}
-		client := m.client.(*uitestKittyClient)
+		client := m.client.(*kittytest.Client)
 		if calls := client.CallsFor("CloseTab"); len(calls) != 1 {
 			t.Fatalf("CloseTab calls = %+v, want exactly one close to have reached Kitty", calls)
 		}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -33,7 +34,7 @@ func mustConsequence(id commands.ID) string {
 // as the case asks for it.
 func sessionActionModel(confirms bool, rows ...session.RunningSession) Model {
 	m := testModelWithSessions()
-	m.client = newUITestKittyClient(nil)
+	m.client = kittytest.NewClient(nil)
 	m.width = 160
 	m.height = 50
 	m.cfg.Defaults.ConfirmDestructive = confirms
@@ -364,7 +365,7 @@ func TestStaleTargetIsRefusedRatherThanRetargeted(t *testing.T) {
 
 	if cmd != nil {
 		// A refusal may still carry the toast ticker, but it must not carry work.
-		if len(m.client.(*uitestKittyClient).CallsFor("CloseWindow")) != 0 {
+		if len(m.client.(*kittytest.Client).CallsFor("CloseWindow")) != 0 {
 			t.Fatal("a stale confirmation closed a window")
 		}
 	}

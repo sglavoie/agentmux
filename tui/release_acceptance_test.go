@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
@@ -274,7 +275,7 @@ func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext
 
 	for _, key := range []string{"c", "f"} {
 		t.Run(key, func(t *testing.T) {
-			client := newUITestKittyClient(nil)
+			client := kittytest.NewClient(nil)
 			m := Model{
 				mode:              ModeSessionSearch,
 				cfg:               cfg,

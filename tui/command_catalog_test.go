@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -23,8 +24,8 @@ func commandByID(t *testing.T, id commands.ID) commands.Command[Model] {
 	return commands.Command[Model]{}
 }
 
-func commandTestModel(target session.RunningSession) (Model, commands.Context, *uitestKittyClient) {
-	client := newUITestKittyClient(nil)
+func commandTestModel(target session.RunningSession) (Model, commands.Context, *kittytest.Client) {
+	client := kittytest.NewClient(nil)
 	m := testModelWithSessions()
 	m.client = client
 	m.width = 160

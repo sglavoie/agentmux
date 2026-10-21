@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/tui/commands"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
@@ -67,7 +68,7 @@ func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
 	t.Parallel()
 
 	fx := worktreesFixture()
-	client := newUITestKittyClient(fx.Windows)
+	client := kittytest.NewClient(fx.Windows)
 	d := newUITestDriver(fx.Config, client, UITestSize{Width: 120, Height: 30})
 	cleanupUITestDriver(t, d)
 

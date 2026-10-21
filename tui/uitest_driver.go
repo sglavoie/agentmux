@@ -22,6 +22,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/planrun"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -527,15 +528,15 @@ func uitestFlattenCmds(msg tea.Msg) ([]tea.Cmd, bool) {
 // independently to the fixture's own default for that dimension, so a caller can
 // override width alone (or height alone) without zeroing the other. The recording
 // client is returned so callers can assert on the Kitty calls the model attempted.
-func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *uitestKittyClient) {
+func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *kittytest.Client) {
 	if size.Width == 0 {
 		size.Width = fx.Size.Width
 	}
 	if size.Height == 0 {
 		size.Height = fx.Size.Height
 	}
-	client := newUITestKittyClient(fx.Windows)
-	client.text = fx.Text
+	client := kittytest.NewClient(fx.Windows)
+	client.SetText(fx.Text)
 	if fx.TextFailures > 0 {
 		// Installed rather than counted inside GetText so the plain path stays
 		// exactly what it was: a fixture with no failures never reaches this.
@@ -677,7 +678,7 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 	return d, client
 }
 
-func fixtureWorktreeActionCmd(client *uitestKittyClient, entries *[]actions.WorktreeView, id actions.ID, request actions.Request) tea.Cmd {
+func fixtureWorktreeActionCmd(client *kittytest.Client, entries *[]actions.WorktreeView, id actions.ID, request actions.Request) tea.Cmd {
 	return func() tea.Msg {
 		entry := request.Worktree
 		if entry == nil {
@@ -991,7 +992,7 @@ func hermeticModelBackgroundCommands() modelBackgroundCommands {
 // vars (pass t.Setenv in tests, os.Setenv in the CLI). It returns the driver,
 // the recording client, and the staged environment description so callers can
 // assert that no real user paths are used.
-func newUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow, size UITestSize, setenv func(string, string) error) (*uitestDriver, *uitestKittyClient, uitestConfigEnv, error) {
+func newUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow, size UITestSize, setenv func(string, string) error) (*uitestDriver, *kittytest.Client, uitestConfigEnv, error) {
 	env, err := stageUITestConfigEnv(root, srcConfigPath, setenv)
 	if err != nil {
 		return nil, nil, uitestConfigEnv{}, err
@@ -1000,7 +1001,7 @@ func newUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow,
 	if err != nil {
 		return nil, nil, env, fmt.Errorf("uitest: loading staged config: %w", err)
 	}
-	client := newUITestKittyClient(windows)
+	client := kittytest.NewClient(windows)
 	d, err := newUITestDriverUnder(NewModel(cfg, client), size, root)
 	if err != nil {
 		return nil, nil, env, err

@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
@@ -39,7 +40,7 @@ func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
 func TestCommandExecutionUsesCapturedTarget(t *testing.T) {
 	t.Parallel()
 
-	client := newUITestKittyClient(nil)
+	client := kittytest.NewClient(nil)
 	m := testModelWithSessions()
 	m.client = client
 	m = loadSessions(m, []session.RunningSession{

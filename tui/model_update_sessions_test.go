@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
@@ -163,7 +164,7 @@ func TestSessionsMsg_DuplicateSelectionRequestDoesNotStealCursorAgain(t *testing
 func TestRefreshCmdConsumesExistingDashboardSelectionRequest(t *testing.T) {
 	stubUnreachableDaemon(t)
 
-	client := newUITestKittyClient([]kitty.OSWindow{{
+	client := kittytest.NewClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{
 			{
 				ID:    7,
@@ -194,7 +195,7 @@ func TestRefreshCmdConsumesExistingDashboardSelectionRequest(t *testing.T) {
 func TestRefreshCmdResolvesSourcePaneToContainingTab(t *testing.T) {
 	stubUnreachableDaemon(t)
 
-	client := newUITestKittyClient([]kitty.OSWindow{{
+	client := kittytest.NewClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    7,
 			Title: "api",
@@ -230,7 +231,7 @@ func TestRefreshCmdRemovesClosedSessionInsteadOfReanchoringDashboardOverlay(t *t
 			{Title: "Pulse", Account: "work", Directory: pulseDir},
 		},
 	}
-	client := newUITestKittyClient([]kitty.OSWindow{{
+	client := kittytest.NewClient([]kitty.OSWindow{{
 		ID:       1,
 		IsActive: true,
 		Tabs: []kitty.Tab{
@@ -311,7 +312,7 @@ func TestRefreshCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 	})
 	stubLocalKittySocket(t, socket)
 
-	client := newUITestKittyClient(tree)
+	client := kittytest.NewClient(tree)
 
 	msg, ok := commands.Refresh(client, &config.Config{Defaults: config.Defaults{Sort: "alpha"}}, "alpha", 1, 0)().(commands.SessionsMsg)
 	if !ok {
@@ -328,7 +329,7 @@ func TestRefreshCmdUsesDaemonBulkStateOverTitleParsing(t *testing.T) {
 func TestRefreshCmdFallsBackToTitleStateWhenDaemonIsUnreachable(t *testing.T) {
 	stubUnreachableDaemon(t)
 
-	client := newUITestKittyClient([]kitty.OSWindow{{
+	client := kittytest.NewClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    7,
 			Title: palette.BuildTitleParts(palette.TitleParts{Base: "api", State: "stop", Looping: true}),
@@ -350,7 +351,7 @@ func TestRefreshCmdPreservesRuntimeProfileOverrideInConfigPicker(t *testing.T) {
 	stubUnreachableDaemon(t)
 
 	const projectDir = "/projects/sis"
-	client := newUITestKittyClient([]kitty.OSWindow{{
+	client := kittytest.NewClient([]kitty.OSWindow{{
 		Tabs: []kitty.Tab{{
 			ID:    68,
 			Title: "sis",
