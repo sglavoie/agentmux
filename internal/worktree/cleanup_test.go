@@ -153,6 +153,7 @@ func TestManagerRemoveRefusesUnsafeCheckoutStates(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			repo, root, workflow, created := cleanupFixture(t)
 			tc.prepare(t, repo, created)
 			if tc.unlock {
@@ -298,6 +299,7 @@ func TestManagerForgetEligibility(t *testing.T) {
 	t.Parallel()
 
 	t.Run("healthy present metadata is refused", func(t *testing.T) {
+		t.Parallel()
 		_, root, _, created := cleanupFixture(t)
 		_, err := testInventory(root).Forget(context.Background(), created.ID)
 		if !errors.Is(err, ErrForgetRefused) {
@@ -309,6 +311,7 @@ func TestManagerForgetEligibility(t *testing.T) {
 	})
 
 	t.Run("invalid present metadata is forgotten", func(t *testing.T) {
+		t.Parallel()
 		_, root, _, created := cleanupFixture(t)
 		if err := os.WriteFile(created.MetadataPath, []byte("{invalid"), 0o600); err != nil {
 			t.Fatal(err)
@@ -324,6 +327,7 @@ func TestManagerForgetEligibility(t *testing.T) {
 	})
 
 	t.Run("mismatched present metadata is forgotten", func(t *testing.T) {
+		t.Parallel()
 		_, root, _, created := cleanupFixture(t)
 		metadata, err := ReadMetadata(created.MetadataPath)
 		if err != nil {
@@ -344,6 +348,7 @@ func TestManagerForgetEligibility(t *testing.T) {
 	})
 
 	t.Run("valid metadata for a missing checkout is forgotten", func(t *testing.T) {
+		t.Parallel()
 		repo, root, _, created := cleanupFixture(t)
 		gitRun(t, repo, "worktree", "remove", created.Path)
 		result, err := testInventory(root).Forget(context.Background(), created.ID)

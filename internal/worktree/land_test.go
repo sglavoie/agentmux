@@ -112,6 +112,7 @@ func TestLandRefusesWithoutMovingAnything(t *testing.T) {
 		}, ErrSourceBusy},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			repo := testRepository(t)
 			commitFile(t, repo, "second.txt", "2\n", "second")
 			root := filepath.Join(t.TempDir(), "worktrees")

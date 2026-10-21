@@ -246,6 +246,7 @@ func TestCreateChecksPathAndBranchCollisionsIndependently(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			repo := testRepository(t)
 			destinationRoot := filepath.Join(t.TempDir(), "worktrees")
 			tc.occupy(t, repo, destinationRoot)
