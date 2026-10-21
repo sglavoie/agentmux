@@ -259,3 +259,48 @@ func TestNamedArgReadsTheDocumentedForms(t *testing.T) {
 		}
 	}
 }
+
+// TestGatesBuildTheScenarioHarness keeps the gates on the build that has the
+// TUI scenario harness. The harness and every test that drives the dashboard
+// through it build only with the tuitest tag, and an untagged `go test`,
+// `go vet`, or golangci-lint run passes without them, so a recipe that loses
+// the tag stays green while it stops checking every committed scenario. The
+// release build is the other half: `build` (and so `install`) must not carry
+// the tag, or the harness ships again.
+func TestGatesBuildTheScenarioHarness(t *testing.T) {
+	justfile := readJustfile(t)
+	constraint, err := os.ReadFile(filepath.Join("..", "harness_tuitest.go"))
+	if err != nil {
+		t.Fatalf("read the harness registration: %v", err)
+	}
+	tag, _, _ := strings.Cut(strings.TrimPrefix(string(constraint), "//go:build "), "\n")
+	if !strings.Contains(justfile, "\nharness_tags := \""+tag+"\"\n") {
+		t.Fatalf("Justfile's harness_tags does not name the %q tag cmd/harness_tuitest.go builds under", tag)
+	}
+
+	for _, tc := range []struct{ recipe, want string }{
+		{"test", "go test -tags {{ harness_tags }} ./...\n"},
+		{"test", "go test ./cmd\n"},
+		{"vet", "go vet ./...\n"},
+		{"vet", "go vet -tags {{ harness_tags }} ./...\n"},
+		{"race-core", "go test -race -tags {{ harness_tags }} "},
+		{"tui-scenarios", "go run -tags {{ harness_tags }} . tui-test run docs/tui-testing/scenarios/*.json"},
+		{"lint", "golangci-lint run --allow-parallel-runners\n"},
+		{"lint", "golangci-lint run --allow-parallel-runners --build-tags {{ harness_tags }}\n"},
+	} {
+		if body := justfileRecipe(t, justfile, tc.recipe); !strings.Contains(body, tc.want) {
+			t.Errorf("recipe %q does not run %q:\n%s", tc.recipe, strings.TrimSpace(tc.want), body)
+		}
+	}
+	if body := justfileRecipe(t, justfile, "build"); strings.Contains(body, "-tags") {
+		t.Errorf("build must produce the release binary, without the harness tag:\n%s", body)
+	}
+
+	check := justfileRecipeClosure(t, justfile, "check")
+	for _, recipe := range []string{"test", "vet", "race-core", "lint"} {
+		header, _ := justfileRecipeWithHeader(t, justfile, recipe)
+		if !strings.Contains(check, header) {
+			t.Errorf("check does not reach %q, so the tagged build goes unchecked there", recipe)
+		}
+	}
+}

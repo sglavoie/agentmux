@@ -7,13 +7,16 @@ manages Claude Code and GitHub Copilot CLI sessions as Kitty tabs.
 
 - Prefer the `Justfile` targets for normal local checks:
   - `just build` — build `./amx`
-  - `just test` — run `go test ./...`
-  - `just vet` — run `go vet ./...`
-  - `just lint` — run `golangci-lint run`
+  - `just test` — run `go test -tags tuitest ./...` (plus `go test ./cmd`)
+  - `just vet` — run `go vet ./...` for the release and the `tuitest` builds
+  - `just lint` — run `golangci-lint run` for both builds
   - `just check` — run test + vet + lint
 - Run a single test with Go directly, for example:
   - `go test ./internal/session -run '^TestLaunch_DedupSkipsExisting$'`
   - Replace the package path and test name as needed.
+- The TUI scenario harness (`tui/uitest_*.go`, `cmd/tuitest`) and the tests
+  that drive the dashboard through it build only with `-tags tuitest`; pass it
+  to `go test`, `go vet`, and `go run . tui-test` when working on them.
 
 ## High-level architecture
 

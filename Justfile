@@ -8,17 +8,37 @@ prefix_kitty := home_directory() / ".config/kitty"
 prefix_config := home_directory() / ".config/agent-mux"
 root := justfile_directory()
 
-# Build the amx binary
+# The TUI scenario harness (tui's uitest_*.go files and cmd/tuitest) builds
+# only with this tag, so a release amx carries none of it. Every recipe that
+# tests, vets, races, lints, or runs scenarios passes it; `build` and
+# `install` never do. Plain `go test ./...` still passes but skips the harness
+# and the tests that drive the dashboard through it, so the gates never run it
+# that way. cmd/release's TestGatesBuildTheScenarioHarness holds the recipes
+# to this.
+harness_tags := "tuitest"
+
+# Build the amx binary (release build: no scenario harness)
 build:
     go build -o amx .
 
-# Run all tests
+# The suite runs once with the harness tag, which is a superset of the
+# untagged suite everywhere except root's command assembly: there the tag
+# swaps the hidden tui-test stand-in for the real harness, so `./cmd` runs once
+# more without the tag to keep the release build's tui-test covered.
+#
+# Run all tests, including the TUI scenario harness
 test:
-    go test ./...
+    go test -tags {{ harness_tags }} ./...
+    go test ./cmd
 
-# Run go vet
+# Vetting both builds is what keeps each side of a build constraint compiled:
+# the tagged harness files on one side, the release build's tui-test stand-in
+# on the other.
+#
+# Run go vet over the release and the harness builds
 vet:
     go vet ./...
+    go vet -tags {{ harness_tags }} ./...
 
 # gofmt exits 0 whether or not it found anything, so the check is on its
 # output: any listed path is a file the formatter would rewrite. The paths are
@@ -56,14 +76,14 @@ fmt-check:
 #
 # Run the concurrency-sensitive suites under the race detector
 race-core:
-    go test -race ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
+    go test -race -tags {{ harness_tags }} ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
 
 # `just test` already runs the same set through the same CLI path (see the
 # acceptance recipe), so this is for running them by hand.
 #
 # Run every committed narrow/wide TUI acceptance scenario in isolation
 tui-scenarios:
-    go run . tui-test run docs/tui-testing/scenarios/*.json
+    go run -tags {{ harness_tags }} . tui-test run docs/tui-testing/scenarios/*.json
 
 # Exercise the installed agent-session-loop bridge end to end against a
 # throwaway plan and state root. Every other recipe stays hermetic and needs no
@@ -232,7 +252,7 @@ reliability-stress reps="20" shards="4":
     # for. Both outcomes are printed before either fails the recipe, so a
     # failure says which half broke.
     echo "== {{ shards }} concurrent shards (x{{ reps }}) under full-suite load =="
-    go test -count=1 ./... > "$log_dir/suite.log" 2>&1 &
+    go test -count=1 -tags {{ harness_tags }} ./... > "$log_dir/suite.log" 2>&1 &
     suite_pid=$!
     shard_pids=()
     for shard in $(seq 1 {{ shards }}); do
@@ -530,8 +550,9 @@ paired-release-gate asl_root signing_key="" tag="no":
 # failure says the least about the change: a formatting drift found after a
 # twenty-minute race suite is a twenty-minute wait for a one-command fix.
 #
-# Every committed TUI scenario runs inside `test`, so tui-scenarios is not
-# repeated here: cmd/tuitest's TestTUITestRunCommittedScenariosEndToEnd runs
+# Every committed TUI scenario runs inside `test` (which passes the harness
+# tag; an untagged `go test` would build neither runner), so tui-scenarios is
+# not repeated here: cmd/tuitest's TestTUITestRunCommittedScenariosEndToEnd runs
 # the same files through the same CLI path that recipe does (in parallel
 # shards, each under a sentinel HOME that must come back untouched), and tui's
 # TestExampleScenariosParseAndPass runs them in-package against the README
@@ -543,9 +564,14 @@ acceptance: fmt-check test race-core vet
 # golangci-lint's default lock is machine-wide, not repository-scoped, so a
 # linter running in an unrelated checkout would otherwise fail this gate.
 #
-# Run golangci-lint
+# A build constraint hides a file from every run that does not satisfy it, so
+# one run per build is what lints both the harness files and the release
+# build's tui-test stand-in.
+#
+# Run golangci-lint over the release and the harness builds
 lint:
     golangci-lint run --allow-parallel-runners
+    golangci-lint run --allow-parallel-runners --build-tags {{ harness_tags }}
 
 # Run the full repository gate: acceptance plus golangci-lint
 check: acceptance lint

@@ -61,6 +61,14 @@ jobs:
         with:
           version: latest
 
+      # A second run for the build with the TUI scenario harness: its files
+      # carry the tuitest build tag, which the first run never satisfies.
+      - name: Lint (scenario harness build)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --build-tags tuitest
+
   macos-full:
     name: macOS (full)
     runs-on: macos-latest
@@ -76,7 +84,8 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
 
-      # `just acceptance` is `test race-core vet tui-scenarios`. No Kitty is
+      # `just acceptance` is `fmt-check test race-core vet`, with the TUI
+      # scenarios inside `test` (which builds the harness with -tags tuitest). No Kitty is
       # installed on this runner and none is needed: the acceptance suites
       # stage their own `kitten` script and `kitty.json` fixture on PATH, and
       # the TUI scenarios run the dashboard in-process against recorded state.
@@ -90,6 +99,14 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
+
+      # A second run for the build with the TUI scenario harness: its files
+      # carry the tuitest build tag, which the first run never satisfies.
+      - name: Lint (scenario harness build)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --build-tags tuitest
 
   cross-repository-contract:
     name: Cross-repository contract
