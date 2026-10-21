@@ -22,6 +22,8 @@ import (
 // error rootCmd.Execute produced.
 func runRootArgs(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
+	resetRootBoolFlags()
+	t.Cleanup(resetRootBoolFlags)
 
 	var stdout, stderr bytes.Buffer
 	rootCmd.SetArgs(args)

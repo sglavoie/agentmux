@@ -336,7 +336,7 @@ func printTranscriptWarnings(cmd *cobra.Command, warnings []string) {
 func init() {
 	transcriptsRebuildCmd.Flags().BoolVar(&transcriptsRebuildAll, "all", false, "ignore configured transcript scan age and rebuild every discoverable sidecar")
 	for _, command := range []*cobra.Command{transcriptsStatusCmd, transcriptsCompactCmd, transcriptsRebuildCmd} {
-		command.Flags().Bool("json", false, "emit schema-v1 JSON")
+		cli.AddJSONFlag(command, nil)
 	}
 	transcriptsCmd.AddCommand(transcriptsStatusCmd, transcriptsCompactCmd, transcriptsRebuildCmd)
 }

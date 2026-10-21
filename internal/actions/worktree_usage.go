@@ -57,20 +57,22 @@ func probeWorktreeUsage(deps Dependencies, entries []worktree.Entry) usageSnapsh
 			return running, err
 		}
 	}
+	// A probe that failed may still return what it could read (the tmux
+	// sessions when Kitty did not answer). Those are counted; the warning
+	// says the count is incomplete, and land and remove refuse on it.
 	running, liveErr := liveProbe(deps.Config)
 	if liveErr != nil {
 		snapshot.warnings = append(snapshot.warnings, "live-session probe: "+liveErr.Error())
-	} else {
-		for _, entry := range entries {
-			for _, candidate := range running {
-				if pathAtOrBelow(entry.Path, candidate.Directory) {
-					snapshot.live[entryKey(entry)] = append(snapshot.live[entryKey(entry)], candidate)
-				}
+	}
+	for _, entry := range entries {
+		for _, candidate := range running {
+			if pathAtOrBelow(entry.Path, candidate.Directory) {
+				snapshot.live[entryKey(entry)] = append(snapshot.live[entryKey(entry)], candidate)
 			}
-			sort.Slice(snapshot.live[entryKey(entry)], func(i, j int) bool {
-				return snapshot.live[entryKey(entry)][i].TabID < snapshot.live[entryKey(entry)][j].TabID
-			})
 		}
+		sort.Slice(snapshot.live[entryKey(entry)], func(i, j int) bool {
+			return snapshot.live[entryKey(entry)][i].TabID < snapshot.live[entryKey(entry)][j].TabID
+		})
 	}
 
 	loopProbe := deps.ActiveLoops

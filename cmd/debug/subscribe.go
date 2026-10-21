@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/spf13/cobra"
@@ -47,9 +48,12 @@ var debugSubscribeJSON bool
 var debugSubscribeCmd = &cobra.Command{
 	Use:   "subscribe",
 	Short: "Open a companion stream and print the frames the daemon publishes",
-	Long: "Subscribe to the daemon exactly as a companion app does and print each frame: " +
-		"snapshots as a one-line session summary, heartbeats, and the bye that ends the stream. " +
-		"--frames N stops after N frames; without it the command runs until the stream ends or is interrupted.",
+	Long: `Subscribe to the daemon exactly as a companion app does and print each frame:
+snapshots as a one-line session summary, heartbeats, and the bye that ends
+the stream. --frames N stops after N frames; without it the command runs until
+the stream ends or is interrupted. It takes no selector.`,
+	Example:      "  amx debug subscribe --frames 3\n  amx debug subscribe --json",
+	Annotations:  map[string]string{debugNoSelectorsAnnotation: "true"},
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugSubscribe,
@@ -57,7 +61,7 @@ var debugSubscribeCmd = &cobra.Command{
 
 func init() {
 	debugSubscribeCmd.Flags().IntVar(&debugSubscribeFrames, "frames", 0, "stop after N frames (0 means until the stream ends)")
-	debugSubscribeCmd.Flags().BoolVar(&debugSubscribeJSON, "json", false, "write one schema-versioned JSON record per line")
+	cli.AddReportJSONFlag(debugSubscribeCmd, &debugSubscribeJSON, "one record per line")
 	debugCmd.AddCommand(debugSubscribeCmd)
 }
 

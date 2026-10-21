@@ -106,11 +106,22 @@ func TestDaemonLifecycleJSON(t *testing.T) {
 	t.Run("stop with no daemon", func(t *testing.T) {
 		resetDaemonLifecycleTestState(t)
 		newDaemonLifecycleClient = func() daemonLifecycleClient {
-			return &fakeDaemonLifecycleClient{sendErr: errors.New("dial unix: no such file")}
+			return &fakeDaemonLifecycleClient{sendErr: errors.New("dial unix: no such file"), healths: []ipc.Health{{Alive: false}}}
+		}
+		// Nothing to stop is what was asked for: success, stopped false.
+		out, err := run(t, daemonStopCmd)
+		if err != nil || out != `{"schema_version":1,"data":{"stopped":false}}`+"\n" {
+			t.Fatalf("out = %q, err = %v", out, err)
+		}
+	})
+	t.Run("stop that a running daemon refuses", func(t *testing.T) {
+		resetDaemonLifecycleTestState(t)
+		newDaemonLifecycleClient = func() daemonLifecycleClient {
+			return &fakeDaemonLifecycleClient{sendErr: errors.New("write: broken pipe")}
 		}
 		out, err := run(t, daemonStopCmd)
 		var exit *cli.ExitError
-		if !errors.As(err, &exit) || !strings.Contains(out, `"code":"daemon_not_running"`) {
+		if !errors.As(err, &exit) || !strings.Contains(out, `"code":"daemon_error"`) {
 			t.Fatalf("out = %q, err = %v", out, err)
 		}
 	})

@@ -37,6 +37,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 const version = "0.8.0"
@@ -50,7 +51,13 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "amx",
 	Short: "Agent Mux multi-harness session manager",
-	Long:  "Agent Mux is a multi-harness session manager. It manages Claude Code, Copilot, Codex, and other supported harness sessions with an interactive dashboard, on its own tmux server from any terminal or Agent Mux.app, or as color-coded Kitty tabs.",
+	Long: `Agent Mux is a multi-harness session manager. It manages Claude Code,
+Copilot, Codex, and other supported harness sessions with an interactive
+dashboard, on its own tmux server from any terminal or Agent Mux.app, or as
+color-coded Kitty tabs.
+
+Run with no command to open the dashboard. It takes the flags ` + "`amx overview`" + `
+documents (--backend, --select, --client, --popup, --window-id).`,
 	// A failed command reports its error; it does not reprint its own usage.
 	// The usage block is longer than most errors and pushed the one line that
 	// says what went wrong — and how to answer it — off the top of the screen.
@@ -68,20 +75,43 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	if code := execute(os.Stderr); code != 0 {
+	if code := execute(os.Args[1:], os.Stderr); code != 0 {
 		os.Exit(code)
 	}
 }
 
-// execute runs the root command and returns the process status, writing the
-// one stderr line a failure deserves. Cobra's own error printing is silenced
-// on rootCmd so that this is the only place that line comes from: left to
-// cobra, a JSON failure that had already written its envelope was still
-// followed by "Error: ...", and a non-quiet ExitError was printed twice.
-func execute(stderr io.Writer) int {
+// runArgs is the argument list execute is running, which the flag-error
+// handler reads to find a misspelled command and whether --json was asked
+// for.
+var runArgs []string
+
+func invocationArgs() []string { return runArgs }
+
+// execute runs the root command on args and returns the process status,
+// writing the one stderr line a failure deserves. Cobra's own error printing
+// is silenced on rootCmd so that this is the only place that line comes from:
+// left to cobra, a JSON failure that had already written its envelope was
+// still followed by "Error: ...", and a non-quiet ExitError was printed twice.
+func execute(args []string, stderr io.Writer) int {
+	runArgs = args
+	rootCmd.SetArgs(args)
 	command, err := rootCmd.ExecuteC()
 	if err == nil {
 		return 0
+	}
+	if code, ok := invocationFailure(err); ok && jsonRequested(args) {
+		message := err.Error()
+		var unknown *unknownCommandError
+		if errors.As(err, &unknown) {
+			message = unknown.summary()
+		}
+		// WriteJSONError returns its quiet exit once the envelope is written;
+		// any other error is the write itself failing.
+		writeErr := cli.WriteJSONError(command, cli.JSONError{Code: code, Message: message, Candidates: unknownCommandCandidates(err)})
+		if exitErr := (*cli.ExitError)(nil); !errors.As(writeErr, &exitErr) {
+			_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), writeErr.Error())
+		}
+		return 1
 	}
 	var exitErr *cli.ExitError
 	if errors.As(err, &exitErr) {
@@ -97,9 +127,10 @@ func execute(stderr io.Writer) int {
 	_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), err.Error())
 	// Cobra adds this pointer only when it could not resolve the command;
 	// keep doing the same now that it no longer prints.
-	if strings.HasPrefix(err.Error(), "unknown command") {
-		if !strings.Contains(err.Error(), "Did you mean") {
-			if paths := nestedCommandPaths(command, err.Error()); len(paths) > 0 {
+	if _, ok := invocationFailure(err); ok {
+		var unknown *unknownCommandError
+		if errors.As(err, &unknown) && len(unknown.suggestions) == 0 {
+			if paths := nestedCommandPaths(command, unknown.name); len(paths) > 0 {
 				_, _ = fmt.Fprintf(stderr, "\nDid you mean this?\n\t%s\n\n", strings.Join(paths, "\n\t"))
 			}
 		}
@@ -113,9 +144,8 @@ func execute(stderr io.Writer) int {
 // with the full paths that name it. Cobra's own suggestions only catch
 // misspellings of the commands at the level typed, so a leaf typed without its
 // family otherwise got nothing but a pointer at --help.
-func nestedCommandPaths(command *cobra.Command, message string) []string {
-	var name string
-	if _, err := fmt.Sscanf(message, "unknown command %q", &name); err != nil || name == "" {
+func nestedCommandPaths(command *cobra.Command, name string) []string {
+	if name == "" {
 		return nil
 	}
 	var paths []string
@@ -170,7 +200,120 @@ func init() {
 	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.NameSessionCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
 	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.BackendCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
 	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), release.DesktopCommand(), tuitest.Command(), dashboard.WorkspaceViewCommand())
+	rootCmd.AddCommand(versionCmd)
+	rootCmd.SetFlagErrorFunc(flagError)
+	// Added now rather than lazily by Execute, so the guard covers it too.
+	rootCmd.InitDefaultCompletionCmd()
+	guardInvocations(rootCmd)
 	completeNoFilesByDefault(rootCmd)
+	completeSharedFlags(rootCmd)
+	aliasWindowFlags(rootCmd)
+	wrapLongHelp(rootCmd)
+	// The dashboard's own flags are accepted as before but left out of
+	// `amx --help`, where they read as flags of every command; the
+	// description names them, and `amx overview --help` documents the same
+	// ones.
+	for _, name := range []string{cli.BackendFlag, "window-id", "select", "client", "popup"} {
+		_ = rootCmd.Flags().MarkHidden(name)
+	}
+}
+
+// helpWidth is the column a command description is wrapped at.
+const helpWidth = 80
+
+// wrapLongHelp wraps every description line wider than helpWidth at word
+// boundaries, so `--help` reads in a terminal of ordinary width whichever way
+// a family wrote its description (some build it from one-line strings).
+// Indented lines (lists, aligned tables, commands) are kept as written.
+func wrapLongHelp(command *cobra.Command) {
+	command.Long = wrapHelpText(command.Long, helpWidth)
+	for _, child := range command.Commands() {
+		wrapLongHelp(child)
+	}
+}
+
+func wrapHelpText(text string, width int) string {
+	lines := strings.Split(text, "\n")
+	wrapped := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if len(line) <= width || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			wrapped = append(wrapped, line)
+			continue
+		}
+		current := ""
+		for _, word := range strings.Fields(line) {
+			if current != "" && len(current)+1+len(word) > width {
+				wrapped = append(wrapped, current)
+				current = word
+				continue
+			}
+			if current == "" {
+				current = word
+			} else {
+				current += " " + word
+			}
+		}
+		wrapped = append(wrapped, current)
+	}
+	return strings.Join(wrapped, "\n")
+}
+
+// aliasWindowFlags makes --window and --window-id, which name the same Kitty
+// window on different commands, both work wherever either does: the other
+// spelling is a hidden flag sharing the same value, so help shows one name and
+// scripts written with either keep working.
+func aliasWindowFlags(command *cobra.Command) {
+	for _, flags := range []*pflag.FlagSet{command.LocalNonPersistentFlags(), command.PersistentFlags()} {
+		for name, alias := range map[string]string{"window-id": "window", "window": "window-id"} {
+			flag := flags.Lookup(name)
+			if flag == nil || command.Flags().Lookup(alias) != nil || command.InheritedFlags().Lookup(alias) != nil {
+				continue
+			}
+			target := command.Flags()
+			if flags == command.PersistentFlags() {
+				target = command.PersistentFlags()
+			}
+			target.AddFlag(&pflag.Flag{Name: alias, Value: flag.Value, DefValue: flag.DefValue, Usage: "same as --" + name, Hidden: true})
+		}
+	}
+	for _, child := range command.Commands() {
+		aliasWindowFlags(child)
+	}
+}
+
+// completeSharedFlags gives the flags that mean the same thing on every
+// command one completion each, wherever a family did not register its own:
+// --runtime-session completes the running runtime sessions and --backend the
+// two backends.
+func completeSharedFlags(command *cobra.Command) {
+	shared := map[string]cobra.CompletionFunc{
+		cli.RuntimeSessionFlag: cli.CompleteRuntimeSessions,
+		cli.BackendFlag:        cli.CompleteBackends,
+	}
+	for name, complete := range shared {
+		if command.NonInheritedFlags().Lookup(name) == nil {
+			continue
+		}
+		if _, ok := command.GetFlagCompletionFunc(name); !ok {
+			_ = command.RegisterFlagCompletionFunc(name, complete)
+		}
+	}
+	for _, child := range command.Commands() {
+		completeSharedFlags(child)
+	}
+}
+
+// versionCmd answers `amx version` the way `amx --version` does, since both
+// spellings are commonly typed. It is hidden: --version is the documented one.
+var versionCmd = &cobra.Command{
+	Use:    "version",
+	Short:  "Print the amx build identity (same as --version)",
+	Hidden: true,
+	Args:   cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s version %s\n", rootCmd.Name(), rootCmd.Version)
+		return err
+	},
 }
 
 // completeNoFilesByDefault gives every command that does not say how its

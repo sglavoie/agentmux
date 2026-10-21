@@ -148,9 +148,10 @@ func newPolicyCommand() *cobra.Command {
 		RunE:          runPolicy,
 	}
 	flags := policyCmd.Flags()
-	flags.Bool("json", false, "emit the schema-v1 envelope carrying the versioned overseer policy payload")
+	flags.Bool("json", false, "emit schema-v1 JSON carrying the versioned overseer_policy payload")
 	flags.String("plan", "", "identifier of the plan being authorized, echoed back into the decision")
 	flags.String("access", "", "access category being requested: "+strings.Join(accessCategoryNames(), ", "))
+	_ = policyCmd.RegisterFlagCompletionFunc("access", cli.FixedCompletions(accessCategoryNames()...))
 	flags.StringArray("repository", nil, "repository the plan participates in, as alias=path or path (repeatable); the path must be absolute or start with ~")
 	flags.Int("contract-version", contractVersion, "overseer policy contract version the caller understands")
 	return policyCmd

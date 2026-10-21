@@ -22,6 +22,12 @@ import (
 var worktreePruneCmd = &cobra.Command{
 	Use:   "prune",
 	Short: "Remove every clean, inactive managed worktree (preview without --yes)",
+	Long: `Remove every managed worktree that ` + "`amx worktree remove`" + ` would accept: present,
+valid, clean, unlocked, and in use by no live session or loop. Without --yes it
+lists them and removes nothing. Each one is checked again as it is removed, so
+a worktree that became active meanwhile is kept. --merged keeps those whose
+branch is not yet reachable from its source branch, and --delete-branch also
+deletes each removed worktree's merged branch.`,
 	Example: `  amx worktree prune                    # preview
   amx worktree prune --merged --yes     # remove only worktrees whose branch is merged
   amx worktree prune --yes --delete-branch`,
@@ -144,6 +150,6 @@ func init() {
 	worktreePruneCmd.Flags().Bool("yes", false, "remove the candidates instead of previewing them")
 	worktreePruneCmd.Flags().Bool("merged", false, "only worktrees whose branch is reachable from its source branch")
 	worktreePruneCmd.Flags().Bool("delete-branch", false, "also safely delete each removed worktree's merged branch")
-	worktreePruneCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreePruneCmd, nil)
 	worktreeCmd.AddCommand(worktreePruneCmd)
 }

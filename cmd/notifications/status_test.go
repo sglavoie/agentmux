@@ -26,7 +26,7 @@ func TestNotificationsStatusNamesTheBackendAndTheSnooze(t *testing.T) {
 		health ipc.Health
 		want   []string
 	}{
-		{"daemon down", ipc.Health{}, []string{"The daemon is not running, so no notification is delivered; `amx daemon start` starts it."}},
+		{"daemon down", ipc.Health{}, []string{"The daemon is not running, so no notification is delivered; run `amx daemon restart` to start it in the background."}},
 		{"old daemon", ipc.Health{Alive: true}, []string{"The running daemon is too old to report notifications; `amx daemon restart` updates it."}},
 		{"all kinds off", ipc.Health{Alive: true, Notification: &protocol.NotificationCapability{Backend: "alerter", Reason: "disabled"}}, []string{
 			"Notifications are off: every kind under [defaults.notifications] is turned off; `amx config edit` turns one back on."}},

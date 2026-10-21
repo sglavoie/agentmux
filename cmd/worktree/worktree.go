@@ -59,6 +59,10 @@ var (
 		}
 		return session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg), nil
 	}
+	// worktreeCommandsObservedTmux opens the private tmux server only to read
+	// what runs on it, when launches go to Kitty. Listing a server that is
+	// not running starts nothing.
+	worktreeCommandsObservedTmux = func() (backend.TargetLauncher, error) { return cli.NewTmuxBackend() }
 	// worktreeCommandsInsideKitty says the command was typed in a Kitty
 	// window, where Kitty's sessions count even for a tmux launch.
 	worktreeCommandsInsideKitty = func() bool {
@@ -410,26 +414,38 @@ func executeWorktreeAction(cmd *cobra.Command, actionID actions.ID, request acti
 		client = worktreeCommandsNewKitty()
 	}
 	server := deps.Tmux
+	if server == nil && tmuxErr == nil {
+		// Launches go to Kitty, but agents may still run on the private tmux
+		// server (started from the workspace or with --backend tmux). They
+		// count toward a worktree's use; a tmux that cannot be opened has
+		// none to count.
+		if observed, err := worktreeCommandsObservedTmux(); err == nil {
+			server = observed
+		}
+	}
+	// Each backend is read on its own, so a Kitty that does not answer still
+	// leaves the tmux sessions counted; the error says what is missing, and
+	// land and remove refuse on it.
 	deps.LiveSessions = func(current *config.Config) ([]session.RunningSession, error) {
 		var running []session.RunningSession
+		var problems []error
 		if client != nil {
 			listed, err := worktreeCommandsLiveSessions(client, current)
 			if err != nil {
-				return nil, err
+				problems = append(problems, fmt.Errorf("sessions in Kitty are not counted: %w", cli.PlainKittyError(err)))
 			}
 			running = listed
 		}
 		if tmuxErr != nil {
-			return nil, tmuxErr
-		}
-		if server != nil {
+			problems = append(problems, tmuxErr)
+		} else if server != nil {
 			onTmux, err := worktreeCommandsTmuxSessions(server, current)
 			if err != nil {
-				return nil, err
+				problems = append(problems, fmt.Errorf("sessions on tmux are not counted: %w", err))
 			}
 			running = append(running, onTmux...)
 		}
-		return running, nil
+		return running, joinProblems(problems)
 	}
 	deps.Utility = func(view actions.UtilityView) error {
 		request := protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewShell, Directory: view.Path, Title: filepath.Base(view.Path)}
@@ -617,6 +633,19 @@ func nonNilWorktreeViews(values []actions.WorktreeView) []actions.WorktreeView {
 	return values
 }
 
+// joinProblems is the probe failures as one warning line, or nil when there
+// are none.
+func joinProblems(problems []error) error {
+	if len(problems) == 0 {
+		return nil
+	}
+	messages := make([]string, 0, len(problems))
+	for _, problem := range problems {
+		messages = append(messages, problem.Error())
+	}
+	return errors.New(strings.Join(messages, "; "))
+}
+
 func nonNilStrings(values []string) []string {
 	if values == nil {
 		return []string{}
@@ -626,12 +655,13 @@ func nonNilStrings(values []string) []string {
 
 func init() {
 	for _, command := range []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeShellCmd, worktreeEditCmd} {
-		command.Flags().Bool("json", false, "emit schema-v1 JSON")
+		cli.AddJSONFlag(command, nil)
 	}
 	// Where a reopen launches, and so whether a shell or an editor opens a
 	// Kitty tab or runs outside Kitty.
-	for _, command := range []*cobra.Command{worktreeReopenCmd, worktreeShellCmd, worktreeEditCmd} {
-		cli.AddBackendFlag(command)
+	cli.AddBackendFlag(worktreeReopenCmd)
+	for _, command := range []*cobra.Command{worktreeShellCmd, worktreeEditCmd} {
+		cli.AddBackendFlagUsage(command, "where it opens: kitty for a new Kitty tab, tmux for the workspace or this terminal (default: [defaults] launch_backend, else kitty)")
 	}
 	worktreeReopenCmd.Flags().String("live-session", "", "live session to focus when several run in the worktree: a candidate ID from the ambiguous_live_sessions error (a Kitty tab ID)")
 	// --session was the flag's first name; it stays as a hidden alias so
@@ -640,12 +670,12 @@ func init() {
 	_ = worktreeReopenCmd.Flags().MarkDeprecated("session", "use --live-session")
 	worktreeReopenCmd.Flags().String("profile", "", "replacement profile for a fresh launch")
 	_ = worktreeReopenCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
-	worktreeReopenCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeReopenCmd, nil)
 	worktreeRemoveCmd.Flags().Bool("yes", false, "confirm worktree removal")
 	worktreeRemoveCmd.Flags().Bool("delete-branch", false, "also safely delete the merged worktree branch")
-	worktreeRemoveCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeRemoveCmd, nil)
 	worktreeForgetCmd.Flags().Bool("yes", false, "confirm deleting the worktree's Agent Mux metadata")
-	worktreeForgetCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(worktreeForgetCmd, nil)
 	for _, command := range []*cobra.Command{worktreeShowCmd, worktreeShellCmd, worktreeEditCmd, worktreeReopenCmd, worktreeRemoveCmd, worktreeForgetCmd} {
 		command.ValidArgsFunction = completeWorktreeSelectors
 	}

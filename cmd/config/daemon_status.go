@@ -42,7 +42,7 @@ daemon is not running or cannot report its settings.`,
 		status := daemonSettingsStatus{Changed: []string{}}
 		switch {
 		case !health.Alive:
-			status.Message = "Daemon is not running. Start it to apply saved settings."
+			status.Message = "The daemon is not running, so no saved setting is applied; " + cli.DaemonRestartAdvice + "."
 		case len(health.DaemonSettings) == 0:
 			status.Message = "This daemon cannot report its applied settings. Update and restart it, then check again."
 		default:

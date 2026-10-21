@@ -94,9 +94,10 @@ profile supervising it.`,
 
 func init() {
 	flags := planRunCmd.Flags()
-	flags.Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(planRunCmd, nil)
 	flags.Bool("check", false, "report whether the plan may be started and start nothing")
 	flags.String("project", "", "configured project the supervising session launches from")
+	_ = planRunCmd.RegisterFlagCompletionFunc("project", cli.CompleteProjects)
 	flags.String("profile", "", "configured profile the supervising session launches under")
 	flags.String("harness", "", "harness that implements the plan's sessions (default: agent-session-loop's)")
 	flags.String("review-harness", "", "harness for a final review of the run (default: none)")

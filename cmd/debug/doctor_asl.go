@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 
@@ -94,6 +95,10 @@ type doctorASLIntegration struct {
 	// under a different configuration.
 	Mode       string               `json:"mode"`
 	Dimensions []doctorASLDimension `json:"dimensions"`
+	// daemonDown folds, in the text section only, the dimensions only a
+	// daemon can answer into one line: with no daemon each of them says the
+	// same thing.
+	daemonDown bool
 }
 
 // doctorASLDimension is one answerable question about the pairing.
@@ -188,7 +193,8 @@ func evaluateASLIntegration(in aslIntegrationInputs) doctorASLIntegration {
 		return doctorASLIntegration{Mode: in.Mode, Dimensions: dimensions}
 	}
 	return doctorASLIntegration{
-		Mode: in.Mode,
+		Mode:       in.Mode,
+		daemonDown: !in.DaemonAlive,
 		Dimensions: []doctorASLDimension{
 			aslShellResolutionDimension(in),
 			aslDaemonResolutionDimension(in),
@@ -261,8 +267,25 @@ func writeDoctorASLIntegration(out io.Writer, integration doctorASLIntegration, 
 	for _, dim := range integration.Dimensions {
 		statusWidth = max(statusWidth, len(dim.Status))
 	}
+	var unanswered []string
+	if integration.daemonDown {
+		for _, dim := range integration.Dimensions {
+			if dim.Name != aslDimensionShellResolution && dim.Status == aslStatusUnknown {
+				unanswered = append(unanswered, dim.Name)
+			}
+		}
+		if len(unanswered) < 2 {
+			unanswered = nil
+		}
+	}
 	for _, dim := range integration.Dimensions {
-		if _, err := fmt.Fprintf(out, "  %-19s %-*s %s\n", dim.Name, statusWidth, dim.Status, dim.Detail); err != nil {
+		if slices.Contains(unanswered, dim.Name) {
+			if dim.Name == unanswered[0] {
+				if _, err := fmt.Fprintf(out, "  %-19s %-*s the daemon is unreachable, so %s cannot be answered\n", "daemon-side", statusWidth, aslStatusUnknown, joinWithAnd(unanswered)); err != nil {
+					return err
+				}
+			}
+		} else if _, err := fmt.Fprintf(out, "  %-19s %-*s %s\n", dim.Name, statusWidth, dim.Status, dim.Detail); err != nil {
 			return err
 		}
 		if dim.Remediation != "" && dim.Status != aslStatusUnknown {
@@ -282,6 +305,19 @@ func writeDoctorASLIntegration(out io.Writer, integration doctorASLIntegration, 
 		}
 	}
 	return nil
+}
+
+// joinWithAnd lists names as prose: "a", "a and b", "a, b, and c".
+func joinWithAnd(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
 }
 
 // Seams for the two environment reads this section makes. They are separate

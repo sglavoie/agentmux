@@ -32,7 +32,7 @@ func TestDaemonExportEventsRejectsPositionalArgs(t *testing.T) {
 	if err == nil {
 		t.Fatal("Execute error = nil; want positional argument error")
 	}
-	if got := err.Error(); !strings.Contains(got, `unknown command "events.json" for "amx daemon export-events"`) {
+	if got := err.Error(); !strings.Contains(got, `amx daemon export-events accepts no arguments, got "events.json"`) {
 		t.Fatalf("Execute error = %q; want unknown positional argument error", got)
 	}
 }

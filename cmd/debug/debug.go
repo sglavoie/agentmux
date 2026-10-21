@@ -58,6 +58,23 @@ type debugSelectorFlagValues struct {
 
 var debugSelectorFlags debugSelectorFlagValues
 
+// debugStageNames and debugOutcomeNames are what <Tab> offers for --stage and
+// --outcome: the stages and outcomes the journal records most, not a closed
+// vocabulary. A selector still matches any value.
+var (
+	debugStageNames = []string{
+		"hook.delivery", "hook.failure", "hook.ipc_attempt", "hook.rejection", "hook.validation",
+		"hook.window_resolution", "hook.runtime_session", "hook.acknowledgement",
+		"daemon.decision", "daemon.lifecycle", "daemon.process_lifecycle", "daemon.renderer.rendered",
+		"daemon.renderer.failed", "daemon.runtime_reconcile", "daemon.kitty_snapshot",
+		"session.launch", "asl.lifecycle.delivered", "maintenance.contention", "snapshot.consumer",
+	}
+	debugOutcomeNames = []string{
+		"accepted", "success", "error", "failed", "pending", "suppressed", "sent", "delivered",
+		"retryable_failure", "permanent_failure", "exhausted", "stale", "superseded",
+	}
+)
+
 // debugRuntimeSession is --runtime-session on the two commands that act on
 // one live session, probe and capture start.
 var debugRuntimeSession string
@@ -96,7 +113,7 @@ func debugSessionTarget(windowID int) (int, string, error) {
 	}
 	id, err := runtimesession.ParseID(named)
 	if err != nil {
-		return 0, "", fmt.Errorf("%s requires a valid runtime session ID, got %q", source, named)
+		return 0, "", fmt.Errorf("%s requires a valid runtime session ID, got %q; %s", source, named, cli.RuntimeSessionHint)
 	}
 	return 0, string(id), nil
 }
@@ -120,35 +137,83 @@ func Command() *cobra.Command { return debugCmd }
 var debugCmd = &cobra.Command{
 	Use:   "debug",
 	Short: "Inspect Agent Mux delivery, health, and persisted diagnostic traces",
+	Long: `Investigate an icon, notification, or hook problem after the fact.
+
+Agent Mux keeps a private causal journal and native harness logs. tail and
+explain read them without the daemon; status asks the daemon for its health
+without starting it; probe sends one side-effect-free diagnostic request.
+Nothing here changes a session, the reducer, or Kitty. bundle packs the
+evidence into a redacted archive and replay recomputes it offline.
+
+The commands that read records take the same selectors (--harness, --trace,
+--stage, --after, ...), listed under Selectors in their help. Their --json
+output is a report with its own schema version, not the common envelope.
+docs/debugging.md walks through the workflow.`,
+	Example: `  amx debug status
+  amx debug tail --last 50 --harness claude
+  amx debug explain --request <request-id>
+  amx debug bundle --mode share -o agent-mux-debug.tar.gz`,
 }
 
 var debugStatusCmd = &cobra.Command{
-	Use:          "status",
-	Short:        "Report contracts, activation, journal, native-log, and daemon health",
+	Use:   "status",
+	Short: "Report contracts, activation, journal, native-log, and daemon health",
+	Long: `Report the health of everything diagnostics depend on: the daemon (asked
+read-only, never started), the tmux backend, hook installation and last-seen
+hook evidence per profile, the journal, and native logs, followed by findings
+with stable identifiers. Selectors narrow the last-seen events it lists.`,
+	Example: `  amx debug status
+  amx debug status --profile work --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugStatus,
 }
 
 var debugTailCmd = &cobra.Command{
-	Use:          "tail",
-	Short:        "Read or follow persisted diagnostic records without requiring the daemon",
+	Use:   "tail",
+	Short: "Read or follow persisted diagnostic records without requiring the daemon",
+	Long: `Print the newest journal records that match the selectors, oldest first, in
+event-time order. --follow keeps printing new records as they are persisted
+and needs no running daemon.
+
+-n is short for --last here, as in tail(1); in ` + "`amx session list`" + ` -n is --limit.`,
+	Example: `  amx debug tail -n 20
+  amx debug tail --stage hook.delivery --outcome error --after 30m
+  amx debug tail --follow --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugTail,
 }
 
 var debugProbeCmd = &cobra.Command{
-	Use:          "probe",
-	Short:        "Probe Agent Mux transport and routing without changing session state",
+	Use:   "probe",
+	Short: "Probe Agent Mux transport and routing without changing session state",
+	Long: `Send one diagnostic request through the daemon the way a hook would, and
+report each stage it passed, the route it took, and whether it succeeded. The
+target is --runtime-session, or --window with --kitty-socket outside that
+Kitty, and otherwise the session this is typed in. Nothing is delivered to the
+session. It exits 2 when the probe fails.`,
+	Example: `  amx debug probe
+  amx debug probe --runtime-session rs-0123456789abcdef0123456789abcdef
+  amx debug probe --window 12 --kitty-socket unix:/tmp/kitty-1234`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugProbe,
 }
 
 var debugExplainCmd = &cobra.Command{
-	Use:          "explain",
-	Short:        "Reconstruct an evidence-linked causal timeline and supported root cause",
+	Use:   "explain",
+	Short: "Reconstruct an evidence-linked causal timeline and supported root cause",
+	Long: `Rebuild what happened to the matching records from the journal alone: a
+causal timeline per history, the root cause the evidence supports and how
+certain it is, and with --json the evidence graph behind it. An exact ID
+selector (--request, --trace, --source-event) seeds the graph, which follows
+links up to --graph-depth hops within --max-nodes and --max-edges.
+
+-n is short for --last here; in ` + "`amx session list`" + ` -n is --limit.`,
+	Example: `  amx debug explain --source-event <source-event-id>
+  amx debug explain --harness codex --after 1h -n 3
+  amx debug explain --request <request-id> --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         runDebugExplain,
@@ -171,15 +236,17 @@ func init() {
 	flags.StringVar(&debugSelectorFlags.before, "before", "", "upper time bound (RFC3339, Unix seconds, or duration such as 30m)")
 	_ = debugCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
 	_ = debugCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	_ = debugCmd.RegisterFlagCompletionFunc("stage", cli.FixedCompletions(debugStageNames...))
+	_ = debugCmd.RegisterFlagCompletionFunc("outcome", cli.FixedCompletions(debugOutcomeNames...))
 
-	debugStatusCmd.Flags().BoolVar(&debugStatusJSON, "json", false, "write schema-versioned JSON")
-	debugTailCmd.Flags().BoolVar(&debugTailJSON, "json", false, "write schema-versioned JSON")
+	cli.AddReportJSONFlag(debugStatusCmd, &debugStatusJSON, "the report")
+	cli.AddReportJSONFlag(debugTailCmd, &debugTailJSON, "the report")
 	debugTailCmd.Flags().BoolVarP(&debugTailFollow, "follow", "f", false, "continue following new persisted records")
 	debugTailCmd.Flags().IntVarP(&debugTailLimit, "last", "n", 50, "show the last N matching records (0 means all)")
-	debugProbeCmd.Flags().BoolVar(&debugProbeJSON, "json", false, "write schema-versioned JSON")
+	cli.AddReportJSONFlag(debugProbeCmd, &debugProbeJSON, "the report")
 	debugProbeCmd.Flags().StringVar(&debugProbeKittySocket, "kitty-socket", "", "Kitty socket for --window (defaults to KITTY_LISTEN_ON)")
 	addDebugRuntimeSessionFlag(debugProbeCmd)
-	debugExplainCmd.Flags().BoolVar(&debugExplainJSON, "json", false, "write the complete schema-versioned evidence graph as JSON")
+	cli.AddReportJSONFlag(debugExplainCmd, &debugExplainJSON, "the complete evidence graph")
 	debugExplainCmd.Flags().IntVarP(&debugExplainLast, "last", "n", 10, "explain the last N matching causal histories")
 	debugExplainCmd.Flags().IntVar(&debugExplainGraphDepth, "graph-depth", debugger.DefaultExplainGraphDepth, "follow causal links up to N hops (1-4)")
 	debugExplainCmd.Flags().IntVar(&debugExplainMaxNodes, "max-nodes", debugger.DefaultExplainMaxNodes, "limit the evidence graph to N nodes (1-2000)")

@@ -23,6 +23,12 @@ every file as drifted. `hooks-sync` from such a build refuses, naming the
 installed binary to run instead; pass `--this-binary` to point every hook at
 the build deliberately.
 
+`amx config hooks-sync --json` reports `{binary, profiles: [{profile, path,
+status, error}]}` in the schema-v1 envelope, where `status` is `created`,
+`updated`, `skipped` (already up to date), or `error`. A profile that failed
+keeps the others' results and exits nonzero; a refusal (`foreign_binary`,
+`transient_binary`, `config_error`) is the structured error envelope.
+
 Hook installation is harness-aware:
 
 - **Claude**: merges Agent Mux hook commands into that profile's

@@ -139,7 +139,7 @@ func TestDoctorFindingsSummarizeClosedTombstonesUnlessVerbose(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := strings.Join([]string{
-		"notes:",
+		"info:",
 		"- [companion_app] companion app connected",
 		"- [closed_tombstone] 3 closed windows (6, 7, 20) retained for post-mortem export; `amx doctor --verbose` lists them",
 		"- [acknowledged_state] window 9: acknowledged",

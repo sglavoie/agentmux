@@ -19,6 +19,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 	"github.com/spf13/cobra"
 )
 
@@ -301,7 +302,7 @@ func setupTmuxRecommendation() string {
 }
 
 func setupHookCommand(profile string) string {
-	return "amx config hooks-sync -- '" + strings.ReplaceAll(profile, "'", "'\\''") + "'"
+	return "amx config hooks-sync -- " + shellquote.Quote(profile)
 }
 
 func setupPrompt(reader *bufio.Reader, out io.Writer, label, fallback string) (string, error) {

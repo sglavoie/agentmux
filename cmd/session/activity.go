@@ -49,6 +49,10 @@ earliest_available, truncated, corrupt_lines, matched}.`,
 			if jsonOutput {
 				return cli.WriteJSON(cmd, report)
 			}
+			if len(report.Entries) == 0 {
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "No activity was recorded in the last %s; --days looks further back within the retained journal.\n", cli.CountOf(days, "day", "days"))
+				return err
+			}
 			for _, entry := range report.Entries {
 				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s  %s  %s  %s\n", entry.At.Format(time.RFC3339), entry.Harness, entry.Title, entry.Detail); err != nil {
 					return err
@@ -57,7 +61,7 @@ earliest_available, truncated, corrupt_lines, matched}.`,
 			return nil
 		},
 	}
-	cmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(cmd, nil)
 	cmd.Flags().Int("days", 7, "look back this many days within retained journal history")
 	cmd.Flags().Int("limit", 500, "maximum activity records (1–1000)")
 	return cmd

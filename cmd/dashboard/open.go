@@ -63,7 +63,7 @@ this command is typed in.`,
 }
 
 func init() {
-	openDashboardCmd.Flags().BoolVar(&openDashboardJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(openDashboardCmd, &openDashboardJSON)
 	openDashboardCmd.Flags().IntVar(&openDashboardSourceWindowID, "window-id", 0, "Kitty window ID whose tab the dashboard should select")
 }
 

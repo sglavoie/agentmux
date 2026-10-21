@@ -55,7 +55,7 @@ func init() {
 		"Kitty window ID of the target tab (defaults to $KITTY_WINDOW_ID)")
 	muteToggleCmd.Flags().StringVar(&muteToggleRuntimeSession, "runtime-session", "",
 		"runtime session ID of a tmux session to mute instead of a Kitty tab")
-	muteToggleCmd.Flags().BoolVar(&muteToggleJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(muteToggleCmd, &muteToggleJSON)
 }
 
 // muteToggleResult is the `mute-toggle --json` data. Muted is the state the
@@ -90,7 +90,7 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 		named = currentRuntimeSession()
 	}
 	if named != "" {
-		id, parseErr := runtimesession.ParseID(named)
+		id, parseErr := cli.ParseRuntimeSessionID(named)
 		if parseErr != nil {
 			return cli.CommandFailure(cmd, muteToggleJSON, "invalid_arguments", parseErr)
 		}
@@ -115,7 +115,7 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 		return cli.WriteJSONPartial(cmd, result, fmt.Errorf("toggle mute: update tab title: %w", err))
 	}
 	if err != nil {
-		return cli.CommandFailure(cmd, muteToggleJSON, "mute_toggle_failed", fmt.Errorf("toggle mute: %w", err))
+		return cli.CommandFailure(cmd, muteToggleJSON, "mute_toggle_failed", fmt.Errorf("toggle mute: %w", cli.PlainKittyError(err)))
 	}
 	if muteToggleJSON {
 		return cli.WriteJSON(cmd, result)

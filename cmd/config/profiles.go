@@ -39,16 +39,33 @@ With --json it reports an array of {name, harness}.`,
 		if jsonOutput {
 			return cli.WriteJSON(cmd, rows)
 		}
-		for _, row := range rows {
-			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", row.Name, row.Harness); err != nil {
-				return err
+		out := cmd.OutOrStdout()
+		// A pipe gets the tab-separated rows scripts read, and nothing when
+		// there are none; a person gets a table, or says so.
+		if !profilesIsTerminal(out) {
+			for _, row := range rows {
+				if _, err := fmt.Fprintf(out, "%s\t%s\n", row.Name, row.Harness); err != nil {
+					return err
+				}
 			}
+			return nil
 		}
-		return nil
+		if len(rows) == 0 {
+			_, err := fmt.Fprintln(out, "No profiles are configured; `amx config setup` sets up the first one.")
+			return err
+		}
+		table := make([][]string, 0, len(rows))
+		for _, row := range rows {
+			table = append(table, []string{row.Name, row.Harness})
+		}
+		return cli.WriteTable(out, []string{"PROFILE", "HARNESS"}, table)
 	},
 }
 
+// profilesIsTerminal decides between the table and the tab-separated rows.
+var profilesIsTerminal = cli.IsTerminal
+
 func init() {
-	configProfilesCmd.Flags().Bool("json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(configProfilesCmd, nil)
 	configCmd.AddCommand(configProfilesCmd)
 }

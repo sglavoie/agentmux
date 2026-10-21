@@ -147,5 +147,5 @@ func init() {
 	desktopGateCmd.Flags().BoolVar(&desktopGateNotarized, "notarized", false, "require a Developer ID signature and a stapled notarization ticket")
 	desktopGateCmd.Flags().BoolVar(&desktopGateRehearsal, "rehearsal", false, "run over uncommitted changes and mark the record as a rehearsal, not a release")
 	desktopGateCmd.Flags().BoolVar(&desktopGateForce, "force", false, "replace an existing evidence record for the same revision")
-	desktopGateCmd.Flags().BoolVar(&desktopGateJSON, "json", false, "emit the evidence record as JSON")
+	cli.AddReportJSONFlag(desktopGateCmd, &desktopGateJSON, "the evidence record")
 }

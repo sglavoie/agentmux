@@ -358,6 +358,13 @@ every managed session at once as a grid of live pane previews.
 The same workflows are scriptable. Machine-readable commands use one
 `{"schema_version":1,"data":...}` success envelope; failures use a structured
 `error` envelope and ambiguous selectors return candidates instead of guessing.
+An invocation the CLI cannot parse fails the same way in every command, and
+under `--json` as that envelope too: a name that is no command of its group
+(`amx session lst`) is `unknown_command`, with the commands it may have meant
+as candidates, and a flag that does not parse or an argument a command does
+not take is `invalid_arguments`. A bare group (`amx worktree`) prints its help.
+`--window` and `--window-id` both name a Kitty window wherever either is
+accepted, and `amx version` prints what `amx --version` does.
 
 ```bash
 amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls or the background-task notices Claude Code writes as prompts), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or Kitty could not be asked), and that last reply (empty when there was none) when piped
@@ -400,10 +407,12 @@ reasoning is not exposed. `--match` is one-based; `--from` and the JSON
 Window size defaults to 50 and is limited to 500; `--last` remains a separate
 way to request the tail. JSON includes `match_terms` for highlighting.
 
-`continue`, `fork`, and `fork-worktree` also accept the single
-`<harness>:<session-id>` selector that `handoff` takes, so
-`amx session continue codex:<session-id>` works too. All four also accept a
-bare `<session-id>`: it resolves when exactly one indexed conversation carries
+`continue`, `fork`, `fork-worktree`, `handoff`, and `show` read their
+conversation with one parser, so each accepts `<harness> <session-id>`, the
+single `<harness>:<session-id>` selector (`amx session continue
+codex:<session-id>`), and a bare `<session-id>`, and a conversation that is
+not indexed is reported in the same words by all of them. A bare
+`<session-id>`: it resolves when exactly one indexed conversation carries
 that ID, and an ID shared across harnesses is refused with the
 harness-qualified candidates rather than guessed. Any of these forms may give
 just the start of the ID, at least four characters, the way a short Git hash
@@ -854,6 +863,12 @@ amx close ID --yes          # end one agent and its tmux session, by runtime-ses
 amx send ID "run the tests" # prompt one agent without attaching; --key answers a prompt it is showing
 ```
 
+A runtime-session ID is `rs-` followed by 32 hex digits. <Tab> completes the
+running ones for `attach`, `close`, `send`, and every `--runtime-session` flag,
+read from the runtime-session registry alone (no daemon, no tmux), and
+`amx session list --live --json` reports each one as
+`live.runtime_session_id`. A value that is not one is refused with that hint.
+
 `amx close` kills only the pane its launch tagged with that runtime session,
 on the server generation it was registered on. Closing a session whose agent
 already stopped cleans up what is left of it, and closing one that is already
@@ -1227,7 +1242,7 @@ amx worktree list [--json]
 amx worktree show <selector> [--json]
 amx worktree diff <selector> [--committed] [--patch] [--json]
 amx worktree land <selector> --yes [--remove] [--json]
-amx worktree reopen <selector> [--session <candidate>] [--profile <name>] [--backend kitty|tmux] [--json]
+amx worktree reopen <selector> [--live-session <candidate>] [--profile <name>] [--backend kitty|tmux] [--json]
 amx worktree shell <selector> [--backend kitty|tmux] [--json]
 amx worktree edit <selector> [--backend kitty|tmux] [--json]
 amx worktree remove <selector> --yes [--delete-branch] [--json]
@@ -1243,6 +1258,12 @@ worktree, and `shell` and `edit` open a workspace view when Agent Mux.app
 hosts the terminal and otherwise run the shell or the editor in the terminal
 the command was typed in. With `--json` they run nothing there and report
 `"continuation": "here"` with the path, for the caller to open.
+
+`list` and `show` count a worktree's live sessions from each backend on its
+own: agents on the private tmux server are counted even when launches go to
+Kitty, and a Kitty that cannot be asked from this terminal leaves them
+counted, with a warning that the sessions in Kitty are not (`land` and
+`remove` refuse while any count is incomplete).
 
 `prune` selects every worktree `remove` would accept on its own — present,
 valid, clean, unlocked, and used by no live session or loop — and with

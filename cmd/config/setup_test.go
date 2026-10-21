@@ -55,7 +55,7 @@ func TestSetupSyncsOnlyChosenProfileAfterSavingAndReportsFailure(t *testing.T) {
 			}
 			want := "Hooks: synced for this profile"
 			if fails {
-				want = "Retry: amx config hooks-sync -- 'codex-local'"
+				want = "Retry: amx config hooks-sync -- codex-local"
 			}
 			if !strings.Contains(out, want) || !strings.Contains(out, "Dashboard in this terminal: tmux") {
 				t.Fatalf("missing outcome: %s", out)
@@ -120,7 +120,7 @@ func TestSetupCreatesFirstProfileAndProjectWithoutLosingStarter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "Next: amx config hooks-sync -- 'codex-local'") ||
+	if !strings.Contains(out, "Next: amx config hooks-sync -- codex-local") ||
 		!strings.Contains(out, "CLI: kitty (compatibility default") || !strings.Contains(out, "Launch checks") {
 		t.Fatalf("next step missing: %q", out)
 	}

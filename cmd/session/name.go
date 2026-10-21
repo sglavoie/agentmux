@@ -48,7 +48,7 @@ the session is left with, and changed is false when it already had it.`,
 func init() {
 	nameSessionCmd.Flags().StringVar(&nameSessionRuntimeSession, "runtime-session", "",
 		"runtime session ID of the tmux session to name (defaults to $AMX_RUNTIME_SESSION_ID)")
-	nameSessionCmd.Flags().BoolVar(&nameSessionJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(nameSessionCmd, &nameSessionJSON)
 }
 
 // nameSessionResult is the `name-session --json` data. Name is the name the
@@ -75,7 +75,7 @@ func runNameSession(cmd *cobra.Command, args []string) error {
 	if named == "" {
 		return cli.MissingParameter(cmd, nameSessionJSON, "--runtime-session", "the runtime session ID of the tmux session to name")
 	}
-	id, err := runtimesession.ParseID(named)
+	id, err := cli.ParseRuntimeSessionID(named)
 	if err != nil {
 		return cli.CommandFailure(cmd, nameSessionJSON, "invalid_arguments", err)
 	}

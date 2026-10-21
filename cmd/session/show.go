@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -53,7 +54,7 @@ fields are present only when messages were read.`,
 		last, _ := cmd.Flags().GetInt("last")
 		query, _ := cmd.Flags().GetString("find")
 		match, _ := cmd.Flags().GetInt("match")
-		from, _ := cmd.Flags().GetInt("from")
+		from := int(sessionShowFrom)
 		count, _ := cmd.Flags().GetInt("count")
 		atText, _ := cmd.Flags().GetString("at")
 		var at time.Time
@@ -323,3 +324,33 @@ func liveLine(live *liveConversation) string {
 	}
 	return fmt.Sprintf("open in Kitty window %d (continue focuses it)", live.WindowID)
 }
+
+// sessionShowFrom is --from. It is unset (-1) by default, which --help does
+// not print: "(default -1)" reads as an index.
+var sessionShowFrom messageIndex = -1
+
+// messageIndex is a message index flag that may be unset. Unset prints as ""
+// and setting "" unsets it, so a flag reset to its default unsets it too.
+type messageIndex int
+
+func (m *messageIndex) String() string {
+	if *m < 0 {
+		return ""
+	}
+	return strconv.Itoa(int(*m))
+}
+
+func (m *messageIndex) Set(value string) error {
+	if value == "" {
+		*m = -1
+		return nil
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return errors.New("want a whole number")
+	}
+	*m = messageIndex(n)
+	return nil
+}
+
+func (m *messageIndex) Type() string { return "int" }

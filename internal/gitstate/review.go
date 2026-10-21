@@ -62,10 +62,30 @@ func reviewGit(ctx context.Context, dir string, args ...string) ([]byte, bool, e
 		return nil, false, ctx.Err()
 	}
 	if err != nil {
-		return out.Bytes(), out.truncated, fmt.Errorf("git: %s: %w", strings.TrimSpace(stderr.String()), err)
+		return out.Bytes(), out.truncated, newReviewGitError(stderr.String(), err)
 	}
 	return out.Bytes(), out.truncated, nil
 }
+
+// reviewGitError is a git invocation that failed, worded by git's own first
+// line of complaint rather than the process's exit status, which the operator
+// can do nothing with. The exit error stays reachable through Unwrap.
+type reviewGitError struct {
+	message string
+	err     error
+}
+
+func newReviewGitError(stderr string, err error) *reviewGitError {
+	line, _, _ := strings.Cut(strings.TrimSpace(stderr), "\n")
+	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "fatal:"), "error:"))
+	if line == "" {
+		line = err.Error()
+	}
+	return &reviewGitError{message: "git: " + line, err: err}
+}
+
+func (e *reviewGitError) Error() string { return e.message }
+func (e *reviewGitError) Unwrap() error { return e.err }
 
 // ReadChanges compares tracked content (including staged and unstaged changes)
 // to base, and lists untracked paths. Only the selected file's patch is loaded.
@@ -74,6 +94,9 @@ func ReadChanges(ctx context.Context, directory, base, file string) (Changes, er
 	result := Changes{Files: []ChangedFile{}}
 	root, _, err := reviewGit(ctx, directory, "rev-parse", "--show-toplevel")
 	if err != nil {
+		if strings.Contains(err.Error(), "not a git repository") {
+			return result, fmt.Errorf("%s is not inside a Git checkout, so it has no changes to review", directory)
+		}
 		return result, err
 	}
 	result.Root = strings.TrimSuffix(string(root), "\n")

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -111,7 +112,7 @@ type runtimeSessionExporter interface {
 func daemonExportRuntimeSession(raw, source string) (daemonExportTarget, error) {
 	id, err := runtimesession.ParseID(raw)
 	if err != nil {
-		return daemonExportTarget{}, fmt.Errorf("%s requires a valid runtime session ID, got %q", source, raw)
+		return daemonExportTarget{}, fmt.Errorf("%s requires a valid runtime session ID, got %q; %s", source, raw, cli.RuntimeSessionHint)
 	}
 	return daemonExportTarget{runtime: string(id)}, nil
 }
@@ -249,7 +250,7 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 		snapshot, requestedWindowID, err := exportDaemonEvents(c, target)
 		if err != nil {
 			if !c.Health().Alive {
-				return fmt.Errorf("daemon not running: %w", err)
+				return errors.New(cli.DaemonNotRunningMessage)
 			}
 			return fmt.Errorf("export events: %w", err)
 		}

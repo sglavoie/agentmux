@@ -130,7 +130,7 @@ func runFocusRuntime(cmd *cobra.Command, named string, choose focusChoice) error
 	if named == "" {
 		return cli.MissingParameter(cmd, false, "--"+focusRuntimeSessionFlag, "the runtime session ID of the tmux session to start from")
 	}
-	id, err := runtimesession.ParseID(named)
+	id, err := cli.ParseRuntimeSessionID(named)
 	if err != nil {
 		return cli.CommandFailure(cmd, false, "invalid_arguments", err)
 	}

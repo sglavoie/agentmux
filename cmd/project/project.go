@@ -71,6 +71,9 @@ func Command() *cobra.Command { return projectCmd }
 var projectCmd = &cobra.Command{
 	Use:   "project",
 	Short: "List configured projects and launch sessions from them",
+	Long: `A project is a launch template from config.toml: a title, a directory, and
+the profile it launches with. ` + "`amx config setup`" + ` sets up the first one, and
+` + "`amx config edit`" + ` opens the file to add more.`,
 }
 
 var (
@@ -89,8 +92,16 @@ var (
 var projectListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List configured projects",
-	Args:  cobra.NoArgs,
-	RunE:  runProjectList,
+	Long: `List the projects config.toml configures: profile, title, harness, directory,
+and groups, as a table in a terminal and as tab-separated rows in a pipe.
+Archived projects (archived = true) are left out unless --archived asks for
+them alone. --missing lists only projects whose directory is unusable, and
+--profile, --harness, and --group narrow the list; each is repeatable.`,
+	Example: `  amx project list
+  amx project list --missing
+  amx project list --harness codex --group work --json`,
+	Args: cobra.NoArgs,
+	RunE: runProjectList,
 }
 
 var projectLaunchCmd = &cobra.Command{
@@ -115,13 +126,16 @@ profile, and its configuration are unchanged.
 
 Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket
 (a tmux launch needs no Kitty).`,
+	Example: `  amx project launch api
+  amx project launch amx --profile claude-work --backend tmux --json
+  amx project launch api --directory ../api-hotfix`,
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: completeProjectTitleArg,
 	RunE:              runProjectLaunch,
 }
 
 func init() {
-	projectListCmd.Flags().BoolVar(&projectListJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(projectListCmd, &projectListJSON)
 	projectListCmd.Flags().BoolVar(&projectListMissing, "missing", false, "list only projects whose directory is unusable")
 	projectListCmd.Flags().BoolVar(&projectListArchived, "archived", false, "list only projects marked archived = true, which are otherwise left out")
 	projectListCmd.Flags().StringSliceVar(&projectListProfiles, "profile", nil, "only projects that launch with this profile (repeatable)")
@@ -130,7 +144,7 @@ func init() {
 	_ = projectListCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	_ = projectListCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
 	_ = projectListCmd.RegisterFlagCompletionFunc("group", completeProjectGroups)
-	projectLaunchCmd.Flags().BoolVar(&projectLaunchJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(projectLaunchCmd, &projectLaunchJSON)
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchDir, "directory", "", "working directory for this launch, instead of the project's configured one")
@@ -204,7 +218,7 @@ func runProjectList(cmd *cobra.Command, _ []string) error {
 	}
 	note := archivedNote(cfg, filter)
 	if len(views) == 0 {
-		message := "No projects are configured."
+		message := "No projects are configured; `amx config setup` sets up the first one."
 		if note != "" {
 			message = "Every configured project is archived."
 		}

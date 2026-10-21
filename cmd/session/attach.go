@@ -62,8 +62,9 @@ func outliveHangup() (restore func()) {
 var attachJSON bool
 
 var attachCmd = &cobra.Command{
-	Use:   "attach RUNTIME_SESSION_ID",
-	Short: "Attach this terminal to a running agent",
+	Use:               "attach RUNTIME_SESSION_ID",
+	ValidArgsFunction: cli.CompleteRuntimeSessionFirstArg,
+	Short:             "Attach this terminal to a running agent",
 	Long: `Attaches this terminal to the agent a runtime session runs, without
 restarting it. Attaching takes interactive ownership: any other terminal
 attached to the same agent is detached, and the agent's size follows this
@@ -138,7 +139,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return cli.MissingParameter(cmd, attachJSON, "runtime-session-id", "the runtime session to attach (rs-...)")
 	}
-	id, err := runtimesession.ParseID(strings.TrimSpace(args[0]))
+	id, err := cli.ParseRuntimeSessionID(strings.TrimSpace(args[0]))
 	if err != nil {
 		return cli.CommandFailure(cmd, attachJSON, "invalid_arguments", err)
 	}

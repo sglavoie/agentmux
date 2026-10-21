@@ -24,8 +24,9 @@ var (
 )
 
 var closeCmd = &cobra.Command{
-	Use:   "close RUNTIME_SESSION_ID",
-	Short: "End a running agent and its tmux session",
+	Use:               "close RUNTIME_SESSION_ID",
+	ValidArgsFunction: cli.CompleteRuntimeSessionFirstArg,
+	Short:             "End a running agent and its tmux session",
 	Long: `Ends the agent a runtime session runs in Agent Mux's private tmux server,
 and the tmux session that holds it. It asks for --yes because the agent's
 work in progress is lost; its conversation stays on disk and can be resumed.
@@ -41,7 +42,7 @@ runtime session is closed by closing its tab.`,
 }
 
 func init() {
-	closeCmd.Flags().BoolVar(&closeJSON, "json", false, "emit schema-v1 JSON")
+	cli.AddJSONFlag(closeCmd, &closeJSON)
 	closeCmd.Flags().BoolVar(&closeYes, "yes", false, "confirm ending the agent")
 }
 
@@ -71,7 +72,7 @@ func runClose(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return cli.MissingParameter(cmd, closeJSON, "runtime-session-id", "the runtime session to end (rs-...)")
 	}
-	id, err := runtimesession.ParseID(strings.TrimSpace(args[0]))
+	id, err := cli.ParseRuntimeSessionID(strings.TrimSpace(args[0]))
 	if err != nil {
 		return cli.CommandFailure(cmd, closeJSON, "invalid_arguments", err)
 	}

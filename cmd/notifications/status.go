@@ -69,7 +69,7 @@ func notificationsStatusDataFrom(health ipc.Health) notificationsStatusData {
 // daemon chooses — and the snooze in force.
 func notificationsStatusLines(health ipc.Health) []string {
 	if !health.Alive {
-		return []string{"The daemon is not running, so no notification is delivered; `amx daemon start` starts it."}
+		return []string{"The daemon is not running, so no notification is delivered; " + cli.DaemonRestartAdvice + "."}
 	}
 	n := health.Notification
 	if n == nil {

@@ -82,6 +82,12 @@ mismatch, which always fails, and projection errors, which always warn. Disabled
 mode and a machine with no ASL configured or installed report every dimension
 `not_applicable` and raise nothing.
 
+In the text report each dimension's finding is printed in this section, with
+its remediation, and is not repeated under `warnings:` or `health failures:`
+(the closing verdict still counts it). With the daemon down, the five
+dimensions only a daemon can answer share one `daemon-side unknown` line; the
+JSON report keeps all six.
+
 These dimensions arrived in `doctor --json` schema v2. `asl_unavailable` and
 `asl_read_only` keep their exact names and meanings; the six dimension findings
 (`asl_shell_resolution`, `asl_daemon_resolution`, `asl_contract_mismatch`,

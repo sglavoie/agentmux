@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/spf13/cobra"
@@ -13,9 +14,14 @@ import (
 var debugReplayJSON bool
 
 var debugReplayCmd = &cobra.Command{
-	Use:          "replay <journal-or-bundle>",
-	Short:        "Recompute recorded routing and reducer outcomes entirely offline",
-	Long:         "Recompute recorded routing, reducer, reset, duplicate, and render-cause outcomes from an immutable journal, diagnostic bundle, or events export. Replay never connects to Kitty or the daemon and has no live-apply mode.",
+	Use:   "replay <journal-or-bundle>",
+	Short: "Recompute recorded routing and reducer outcomes entirely offline",
+	Long: `Recompute recorded routing, reducer, reset, duplicate, and render-cause
+outcomes from an immutable journal directory, a diagnostic bundle, or an
+` + "`amx daemon export-events`" + ` file, and compare them with what was recorded.
+Replay never connects to Kitty or the daemon and has no live-apply mode.`,
+	Example: `  amx debug replay agent-mux-debug.tar.gz
+  amx debug replay ~/.local/state/agent-mux/journal --trace <trace-id> --json`,
 	Args:         cobra.ExactArgs(1),
 	SilenceUsage: true,
 	RunE:         runDebugReplay,
@@ -30,7 +36,7 @@ var debugReplayCmd = &cobra.Command{
 }
 
 func init() {
-	debugReplayCmd.Flags().BoolVar(&debugReplayJSON, "json", false, "write complete schema-versioned comparisons as JSON")
+	cli.AddReportJSONFlag(debugReplayCmd, &debugReplayJSON, "the complete comparisons")
 	debugCmd.AddCommand(debugReplayCmd)
 }
 
