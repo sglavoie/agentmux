@@ -36,6 +36,18 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         return amx
     }
 
+    /// Text as the captures are compared: without whitespace, in lower case,
+    /// and with the glyphs text recognition confuses in caption-size text
+    /// (i, l, I, 1, |) read as one. On a 1x display Vision reads a correctly
+    /// drawn "Refresh failed" as "Refresh falled", and "Previous" as
+    /// "Prevlous", so an exact match would fail on what the window shows.
+    nonisolated static func ocrFolded(_ text: String) -> String {
+        String(text.lowercased().compactMap { character -> Character? in
+            if character.isWhitespace { return nil }
+            return "l1|!".contains(character) ? "i" : character
+        })
+    }
+
     private func render<V: View>(_ view: V, name: String, width: CGFloat = 1000, height: CGFloat = 680,
                                  dark: Bool = false, highContrast: Bool = false, expected: [String] = []) async throws {
         guard #available(macOS 14.4, *) else { throw XCTSkip("Own-window capture requires macOS 14.4") }
@@ -81,7 +93,8 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         try VNImageRequestHandler(cgImage: capture).perform([recognition])
         let visible = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         XCTAssertGreaterThan(visible.count, 40, "Capture must contain rendered content, not just a window frame")
-        for text in expected { XCTAssertTrue(visible.filter { !$0.isWhitespace }.localizedCaseInsensitiveContains(text.filter { !$0.isWhitespace }), "Missing visible \(text) in \(name): \(visible)") }
+        let read = Self.ocrFolded(visible)
+        for text in expected { XCTAssertTrue(read.contains(Self.ocrFolded(text)), "Missing visible \(text) in \(name): \(visible)") }
         let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
         attachment.name = name
         attachment.lifetime = .keepAlways
