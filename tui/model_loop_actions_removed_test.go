@@ -9,6 +9,8 @@ import (
 )
 
 func TestListModeLoopRunKeyIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{{
 		WindowID:  10,
 		Directory: t.TempDir(),
@@ -29,6 +31,8 @@ func TestListModeLoopRunKeyIsNoOp(t *testing.T) {
 }
 
 func TestListModeLoopTailKeyIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{{
 		WindowID:  10,
 		Directory: t.TempDir(),
@@ -52,6 +56,8 @@ func TestListModeLoopTailKeyIsNoOp(t *testing.T) {
 // retired with the rest of them — but what it opens is unchanged: the detail
 // view for the row under the cursor, already switched to the phase timeline.
 func TestTimelineCommandOpensDetailTimeline(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{{
 		WindowID:  42,
 		Directory: t.TempDir(),
@@ -73,6 +79,8 @@ func TestTimelineCommandOpensDetailTimeline(t *testing.T) {
 }
 
 func TestListModeTimelineKeyIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{{
 		WindowID:  42,
 		Directory: t.TempDir(),

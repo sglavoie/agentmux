@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // alerterCalls counts Alerter dispatches made by a test notifier.
@@ -104,6 +105,8 @@ func notificationEffect(h *Handler, stage string) (notification.NotificationDisp
 // arrives as a notification frame, and the app's dispositions settle it
 // without Alerter ever running.
 func TestAppNotificationReachesASubscriberAndSettles(t *testing.T) {
+	t.Parallel()
+
 	sock, h, alerter := newNotifyingTestServer(t)
 	sub := subscribeBackend(t, sock, "fake-app")
 	if !h.companion.Ready() {
@@ -118,14 +121,14 @@ func TestAppNotificationReachesASubscriberAndSettles(t *testing.T) {
 	if resp := dispose(h, notice.NotificationID, protocol.DispositionDelivered); !resp.OK {
 		t.Fatalf("delivered: %+v", resp)
 	}
-	waitFor(t, func() bool {
+	testutil.Eventually(t, "the app's delivered report to record send_success", func() bool {
 		d, ok := notificationEffect(h, "dispatch")
 		return ok && d.Outcome == "sent" && d.Backend == notification.BackendApp
-	}, "the app's delivered report never recorded send_success")
+	})
 	if resp := dispose(h, notice.NotificationID, protocol.DispositionDismissed); !resp.OK {
 		t.Fatalf("dismissed: %+v", resp)
 	}
-	waitFor(t, func() bool { return h.companion.pendingDeliveries() == 0 }, "the settled delivery was not forgotten")
+	testutil.Eventually(t, "the settled delivery to be forgotten", func() bool { return h.companion.pendingDeliveries() == 0 })
 	if alerter.count() != 0 {
 		t.Fatalf("alerter ran %d times although the app delivered", alerter.count())
 	}
@@ -133,6 +136,8 @@ func TestAppNotificationReachesASubscriberAndSettles(t *testing.T) {
 
 // TestNoSubscriberUsesAlerter: with nobody holding the role, nothing changes.
 func TestNoSubscriberUsesAlerter(t *testing.T) {
+	t.Parallel()
+
 	sock, h, alerter := newNotifyingTestServer(t)
 	plain, err := ipc.NewClientWithSocket(sock).Subscribe(context.Background(), protocol.SubscribeRequest{Protocol: 1})
 	if err != nil {
@@ -143,7 +148,7 @@ func TestNoSubscriberUsesAlerter(t *testing.T) {
 		t.Fatal("a subscriber that did not claim the role holds it")
 	}
 	h.notifier.MaybeNotify(7, "W:api", "work", "stop", false)
-	waitFor(t, func() bool { return alerter.count() == 1 }, "alerter was not used with no backend subscriber")
+	testutil.Eventually(t, "the alerter to be used with no backend subscriber", func() bool { return alerter.count() == 1 })
 	if _, ok := notificationEffect(h, "dispatch"); !ok {
 		t.Fatal("no dispatch disposition recorded")
 	}
@@ -152,6 +157,8 @@ func TestNoSubscriberUsesAlerter(t *testing.T) {
 // TestAppNotificationRetractedOnSupersede: a newer event for the window sends
 // notification_retract for the notice still showing.
 func TestAppNotificationRetractedOnSupersede(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	sub := subscribeBackend(t, sock, "fake-app")
 
@@ -182,6 +189,8 @@ func TestAppNotificationRetractedOnSupersede(t *testing.T) {
 // TestNotificationDispositionIsIdempotent: delivered once, the first terminal
 // disposition wins, and reports about unknown notifications are ok.
 func TestNotificationDispositionIsIdempotent(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	sub := subscribeBackend(t, sock, "fake-app")
 
@@ -219,6 +228,8 @@ func TestNotificationDispositionIsIdempotent(t *testing.T) {
 // TestNotificationDispositionTerminalImpliesDelivered: a click that overtakes
 // its delivered report still counts as a delivery.
 func TestNotificationDispositionTerminalImpliesDelivered(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	subscribeBackend(t, sock, "fake-app")
 	ctx, cancel := context.WithCancel(context.Background())
@@ -234,6 +245,8 @@ func TestNotificationDispositionTerminalImpliesDelivered(t *testing.T) {
 }
 
 func TestNotificationDispositionRejectsMalformedRequests(t *testing.T) {
+	t.Parallel()
+
 	_, h, _ := newNotifyingTestServer(t)
 	for name, req := range map[string]protocol.Request{
 		"no block":       {Type: protocol.TypeNotificationDisposition},
@@ -251,6 +264,8 @@ func TestNotificationDispositionRejectsMalformedRequests(t *testing.T) {
 // notifications, and the previous one inherits the role when it leaves; a
 // delivery bound to the leaver ends instead of moving.
 func TestNewestBackendClaimantHoldsTheRole(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	older := subscribeBackend(t, sock, "older")
 	newer := subscribeBackend(t, sock, "newer")
@@ -274,7 +289,7 @@ func TestNewestBackendClaimantHoldsTheRole(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("a delivery bound to a departed subscriber never ended")
 	}
-	waitFor(t, func() bool { return h.companionHealth().Subscribers == 1 }, "the departed subscriber stayed registered")
+	testutil.Eventually(t, "the departed subscriber to unregister", func() bool { return h.companionHealth().Subscribers == 1 })
 	if !h.companion.Ready() {
 		t.Fatal("the remaining claimant did not inherit the role")
 	}
@@ -286,13 +301,15 @@ func TestNewestBackendClaimantHoldsTheRole(t *testing.T) {
 	}
 
 	_ = older.Close()
-	waitFor(t, func() bool { return !h.companion.Ready() }, "the role outlived every claimant")
+	testutil.Eventually(t, "the role to end with its last claimant", func() bool { return !h.companion.Ready() })
 	if _, err := h.companion.Deliver(ctx, notification.AppNotice{NotificationID: "n-none"}); err == nil {
 		t.Fatal("Deliver succeeded with no backend")
 	}
 }
 
 func TestNotificationTestRequestReportsTheApp(t *testing.T) {
+	t.Parallel()
+
 	sock, h, _ := newNotifyingTestServer(t)
 	if resp := h.Handle(protocol.Request{Type: protocol.TypeNotificationTest}); !resp.OK || resp.NotificationTest == nil || resp.NotificationTest.Delivered || resp.NotificationTest.Reason != "app_unavailable" {
 		t.Fatalf("without an app: %+v", resp)

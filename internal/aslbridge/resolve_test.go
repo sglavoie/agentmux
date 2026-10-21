@@ -9,6 +9,7 @@ package aslbridge
 import (
 	"context"
 	"errors"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -238,7 +239,7 @@ func TestAutoModeReprobesAMissingExecutable(t *testing.T) {
 		},
 	})
 	<-done
-	waitFor(t, "the bridge to come up once installed", func() bool { return m.Status().Available })
+	testutil.Eventually(t, "the bridge to come up once installed", func() bool { return m.Status().Available })
 
 	mu.Lock()
 	got := append([]time.Duration(nil), delays...)
@@ -284,7 +285,7 @@ func TestRequiredModeStopsProbingAMissingExecutable(t *testing.T) {
 			return false
 		},
 	})
-	waitFor(t, "the integration to be reported unavailable", func() bool {
+	testutil.Eventually(t, "the integration to be reported unavailable", func() bool {
 		return !m.Status().Available && m.Status().Reason != ""
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -310,7 +311,7 @@ func TestStatusReportsHowTheExecutableWasFound(t *testing.T) {
 			return child, nil
 		},
 	})
-	waitFor(t, "connection", func() bool { return m.Status().Available })
+	testutil.Eventually(t, "connection", func() bool { return m.Status().Available })
 
 	status := m.Status()
 	if status.Executable != "/opt/asl/bin/asl" || status.ExecutableSource != SourceSibling {

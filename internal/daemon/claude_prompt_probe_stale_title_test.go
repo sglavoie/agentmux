@@ -25,6 +25,8 @@ import (
 // again, or the window cycles through ⚡ forever with a restarting busy anchor.
 // A real hook event re-arms promotion even when the title text is identical.
 func TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	const staleTitle = "⠐ Repair advisor calibration"
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
@@ -89,6 +91,8 @@ func TestProbeClaudeScreenStop_StaleBusyTitlePromotesOnce(t *testing.T) {
 // phantom's origin: Claude's generic resting title can retain a Braille marker
 // after the turn ends, but that stale frame must never recover an empty tab to ⚡.
 func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	const restingTitle = "\u2802 " + activity.ClaudeRestingTitleText
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
@@ -127,6 +131,8 @@ func TestProbeClaudeScreenStop_RestingBrailleDoesNotPromoteEmptyWindow(t *testin
 // stale description, so a raw-title key would re-arm promotion on every frame
 // change and cycle the window through ⚡ forever.
 func TestProbeClaudeScreenStop_StaleDescriptionSurvivesMarkerRotation(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
 		Profile: "work",
@@ -173,6 +179,8 @@ func TestProbeClaudeScreenStop_StaleDescriptionSurvivesMarkerRotation(t *testing
 // clear entry points are covered: the direct state update the dashboard sends
 // and the F8 hook event that routes through handleUserClearHookEvent.
 func TestProbeClaudeScreenStop_UserClearHoldsStaleTitlePromotion(t *testing.T) {
+	t.Parallel()
+
 	clears := map[string]protocol.Request{
 		"state_update": {Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_clear", Harness: harness.Claude},
 		"hook_event":   {Type: protocol.TypeHookEvent, WindowID: 42, Event: "user_clear"},
@@ -249,6 +257,8 @@ func TestProbeClaudeScreenStop_UserClearHoldsStaleTitlePromotion(t *testing.T) {
 // may recover from its title), but it must not re-arm it either: a ⚡ the probe
 // promoted from a stale title and the operator then cleared stays cleared.
 func TestProbeClaudeScreenStop_UserClearOfPromotedBoltStaysSpent(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
 		Profile: "work",

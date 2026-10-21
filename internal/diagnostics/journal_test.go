@@ -91,6 +91,8 @@ func TestJournalProcessHelper(t *testing.T) {
 }
 
 func TestJournalConcurrentProcessesDoNotCorruptJSONL(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 2 * time.Second})
 	const processes = 4
 	const recordsPerProcess = 12
@@ -131,6 +133,8 @@ func TestJournalConcurrentProcessesDoNotCorruptJSONL(t *testing.T) {
 }
 
 func TestJournalConcurrentGoroutinesDoNotCorruptJSONL(t *testing.T) {
+	t.Parallel()
+
 	journal, _ := testJournal(t, JournalOptions{})
 	const writers = 8
 	const each = 10
@@ -163,6 +167,8 @@ func TestJournalConcurrentGoroutinesDoNotCorruptJSONL(t *testing.T) {
 }
 
 func TestJournalRestartAndCrashTailRecovery(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	if err := journal.Append(context.Background(), testEnvelope("restart", "before")); err != nil {
 		t.Fatal(err)
@@ -202,6 +208,8 @@ func TestJournalRestartAndCrashTailRecovery(t *testing.T) {
 }
 
 func TestJournalPrivatePermissionsHMACAndFailOpen(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	payload := []byte("raw secret payload")
 	envelope := testEnvelope("privacy", "one")
@@ -253,6 +261,8 @@ func TestJournalPrivatePermissionsHMACAndFailOpen(t *testing.T) {
 }
 
 func TestDaemonLogWriterRotatesStructuredRecordsAndBootstrapIsPrivate(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	writer, err := NewDaemonLogWriter(paths, DaemonLogOptions{SegmentBytes: 500, MaxBytes: 1 << 20})
 	if err != nil {
@@ -298,6 +308,8 @@ func TestDaemonLogWriterRotatesStructuredRecordsAndBootstrapIsPrivate(t *testing
 }
 
 func TestAppendDoesNotWaitOnSealedNamespaceLock(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	sealed, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_RDWR, fileMode)
 	if err != nil {
@@ -326,6 +338,8 @@ func TestAppendDoesNotWaitOnSealedNamespaceLock(t *testing.T) {
 }
 
 func TestReadTakesSealedThenAppendLockAndReleasesOnFailure(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{LockTimeout: 50 * time.Millisecond})
 	if err := journal.Append(context.Background(), testEnvelope("read.ordering", "seed")); err != nil {
 		t.Fatal(err)
@@ -375,6 +389,8 @@ func TestReadTakesSealedThenAppendLockAndReleasesOnFailure(t *testing.T) {
 }
 
 func TestMaintenanceLockTimeoutIsNormalized(t *testing.T) {
+	t.Parallel()
+
 	normalized := normalizeJournalOptions(JournalOptions{})
 	if normalized.MaintenanceLockTimeout != 2*time.Second {
 		t.Fatalf("default MaintenanceLockTimeout = %v, want 2s", normalized.MaintenanceLockTimeout)

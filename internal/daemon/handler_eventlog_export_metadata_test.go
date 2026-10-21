@@ -7,6 +7,8 @@ import (
 )
 
 func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -58,6 +60,8 @@ func TestHandler_EventsExport_CopilotCompactCleanupSynthesizesStop(t *testing.T)
 }
 
 func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "failure", KittyListenOn: "unix:/tmp/kitty-7"})
 	// The legacy failure guard refuses the permission (logged as guard_blocked),
@@ -91,6 +95,8 @@ func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *te
 // window that has never produced an event returns a non-nil empty slice. The
 // TUI relies on this to distinguish "no daemon error" from "no events".
 func TestHandler_SessionDetail_UnknownWindow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{Type: protocol.TypeSessionDetail, WindowID: 99})
@@ -110,6 +116,8 @@ func TestHandler_SessionDetail_UnknownWindow(t *testing.T) {
 // with the right per-window count. This pins the multi-window aggregation that
 // the new `amx daemon export-events` CLI depends on.
 func TestHandler_EventsExport_ReturnsAllWindows(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
@@ -141,6 +149,8 @@ func TestHandler_EventsExport_ReturnsAllWindows(t *testing.T) {
 }
 
 func TestHandler_EventsExport_WindowFilterReturnsOneWindow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active", Event: "PreToolUse", SessionTitle: "W:one"})
@@ -188,6 +198,8 @@ func TestHandler_EventsExport_WindowFilterReturnsOneWindow(t *testing.T) {
 // no events have ever been buffered. The map may be nil or empty — both
 // encode the same "no investigation surface yet" semantics on the wire.
 func TestHandler_EventsExport_EmptyWhenNoEvents(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport})
@@ -208,6 +220,8 @@ func TestHandler_EventsExport_EmptyWhenNoEvents(t *testing.T) {
 // `make+copy`, the returned slice header would alias the buffer and any
 // in-place write would leak back into subsequent exports.
 func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -246,6 +260,8 @@ func TestHandler_EventsExport_DoesNotMutateOriginal(t *testing.T) {
 }
 
 func TestHandler_EventsExport_CarriesSource(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -270,6 +286,8 @@ func TestHandler_EventsExport_CarriesSource(t *testing.T) {
 }
 
 func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -340,6 +358,8 @@ func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
 }
 
 func TestHandler_EventsExport_DurableActiveMetadataSurvivesIdleCleanup(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{
@@ -375,6 +395,8 @@ func TestHandler_EventsExport_DurableActiveMetadataSurvivesIdleCleanup(t *testin
 }
 
 func TestHandler_EventsExport_DurableSubagentCountPreservedOnTerminalCleanup(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "subagent", Event: "SubagentStart", SessionTitle: "W:api"})

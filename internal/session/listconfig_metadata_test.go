@@ -9,6 +9,8 @@ import (
 )
 
 func TestListWithConfig_AnchoredWindow_NoGhostEmitted(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -63,6 +65,8 @@ func TestListWithConfig_AnchoredWindow_NoGhostEmitted(t *testing.T) {
 }
 
 func TestList_PrefersActiveManagedWindowMetadata(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -126,6 +130,8 @@ func TestList_PrefersActiveManagedWindowMetadata(t *testing.T) {
 }
 
 func TestList_PreservesMuteIconWithoutMuteUserVar(t *testing.T) {
+	t.Parallel()
+
 	title := palette.BuildTitleFull("api", "", false, true)
 	fixture := []byte(`[
   {

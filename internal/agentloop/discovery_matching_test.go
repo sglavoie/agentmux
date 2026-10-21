@@ -8,6 +8,8 @@ import (
 )
 
 func TestMatchingCWDMatchesCanonicalCWD(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	realDir := filepath.Join(base, "real")
 	if err := os.MkdirAll(realDir, 0o755); err != nil {
@@ -48,6 +50,8 @@ func TestMatchingCWDMatchesCanonicalCWD(t *testing.T) {
 }
 
 func TestMatchingWorkspacePrefersSameHarnessWhenTargetIsOpen(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	workspace := filepath.Join(base, "project")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
@@ -80,6 +84,8 @@ func TestMatchingWorkspacePrefersSameHarnessWhenTargetIsOpen(t *testing.T) {
 }
 
 func TestMatchingWorkspaceFallsBackToCWDWhenNoSameHarnessTargetIsOpen(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	workspace := filepath.Join(base, "project")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
@@ -102,6 +108,8 @@ func TestMatchingWorkspaceFallsBackToCWDWhenNoSameHarnessTargetIsOpen(t *testing
 }
 
 func TestMatchingWorkspaceLegacyCandidateMatchesByCWD(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	workspace := filepath.Join(base, "project")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
@@ -134,6 +142,8 @@ func TestMatchingWorkspaceLegacyCandidateMatchesByCWD(t *testing.T) {
 }
 
 func TestMatchingWorkspaceUsesWindowIDBeforeCWD(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	workspace := filepath.Join(base, "project")
 	worktree := filepath.Join(base, "project--ws14")
@@ -189,6 +199,8 @@ func TestMatchingWorkspaceUsesWindowIDBeforeCWD(t *testing.T) {
 }
 
 func TestMatchingWorkspaceFallsBackWhenCandidateWindowIDIsUnmanaged(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	workspace := filepath.Join(base, "project")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
@@ -221,6 +233,8 @@ func TestMatchingWorkspaceFallsBackWhenCandidateWindowIDIsUnmanaged(t *testing.T
 }
 
 func TestMatchingWorkspaceDoesNotFallBackWhenCandidateWindowIDIsAnotherManagedWindow(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	workspace := filepath.Join(base, "project")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
@@ -249,6 +263,8 @@ func TestMatchingWorkspaceDoesNotFallBackWhenCandidateWindowIDIsAnotherManagedWi
 }
 
 func TestMatchingWorkspaceLegacyNoWindowIDStillFallsBack(t *testing.T) {
+	t.Parallel()
+
 	base := t.TempDir()
 	workspace := filepath.Join(base, "project")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
@@ -275,6 +291,8 @@ func TestMatchingWorkspaceLegacyNoWindowIDStillFallsBack(t *testing.T) {
 }
 
 func TestSortCandidatesNewestFirstWithTieBreaks(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 	candidates := []Candidate{
 		{PlanDir: "/plans/a", RunStartedAt: base, UpdatedAt: base},

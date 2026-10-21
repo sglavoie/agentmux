@@ -111,6 +111,8 @@ func TestSweepStale_ClearsActiveSessionAndNotifies(t *testing.T) {
 }
 
 func TestSweepStale_WithoutNotifierStillClearsStateAndTitle(t *testing.T) {
+	t.Parallel()
+
 	guard := activity.NewStateGuard(time.Hour)
 	h := NewHandler(guard, nil)
 	fake := &fakeKittyClient{}

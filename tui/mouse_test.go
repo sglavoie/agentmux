@@ -45,6 +45,8 @@ func clickHit(t *testing.T, d *uitestDriver, hit mouseHitRegion) {
 }
 
 func TestViewEnablesMouseOnlyForLiveDashboard(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	view := m.View()
 	if view.MouseMode != tea.MouseModeCellMotion || view.OnMouse == nil {
@@ -74,6 +76,8 @@ func TestViewEnablesMouseOnlyForLiveDashboard(t *testing.T) {
 }
 
 func TestMouseSessionSelectionDoubleClickAndInterveningTarget(t *testing.T) {
+	t.Parallel()
+
 	d, client := mouseFixture(t)
 	notes := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
 	clickHit(t, d, notes)
@@ -98,6 +102,8 @@ func TestMouseSessionSelectionDoubleClickAndInterveningTarget(t *testing.T) {
 }
 
 func TestMouseDoubleClickBoundary(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		gap  time.Duration
@@ -119,6 +125,8 @@ func TestMouseDoubleClickBoundary(t *testing.T) {
 }
 
 func TestMouseStaleAndReorderedSessionTargets(t *testing.T) {
+	t.Parallel()
+
 	d, _ := mouseFixture(t)
 	hit := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
 	view := d.model.View()
@@ -161,6 +169,8 @@ func TestMouseStaleAndReorderedSessionTargets(t *testing.T) {
 }
 
 func TestMouseSummaryBodyAndChevronHaveDistinctActions(t *testing.T) {
+	t.Parallel()
+
 	d, _ := mouseFixture(t)
 	d.model.setListView(dashboard.ViewProjects)
 	body := findMouseHit(t, d.model, mouseHitFamily, func(hit mouseHitRegion) bool { return hit.identity.FamilyKey == "git:api" })
@@ -194,6 +204,8 @@ func findRootMouseHit(t *testing.T, m Model, kind mouseHitKind, match func(mouse
 // whole scope path: the header control opens the overlay, a scope row applies
 // itself, and the chip the apply produced removes it again.
 func TestMouseProjectSwitcherHeaderChipAndScopeRow(t *testing.T) {
+	t.Parallel()
+
 	d, _ := mouseFixture(t)
 	d.Resize(240, 32)
 
@@ -237,6 +249,8 @@ func TestMouseProjectSwitcherHeaderChipAndScopeRow(t *testing.T) {
 // regions are behind it: a click landing where a session row used to be must do
 // nothing rather than reach through the dimmed base.
 func TestMouseProjectSwitcherIgnoresEverythingButItsOwnRows(t *testing.T) {
+	t.Parallel()
+
 	d, _ := mouseFixture(t)
 	d.Resize(240, 32)
 	sessionHit := findMouseHit(t, d.model, mouseHitSession, nil)
@@ -258,6 +272,8 @@ func TestMouseProjectSwitcherIgnoresEverythingButItsOwnRows(t *testing.T) {
 }
 
 func TestMouseGeometryWrappedChipsAndPreview(t *testing.T) {
+	t.Parallel()
+
 	d, _ := mouseFixture(t)
 	d.model.activeFilter = dashboard.Parse(`界界 alpha beta gamma #"wide project" @personal`)
 	d.model.width = 36
@@ -309,6 +325,8 @@ func TestMouseGeometryWrappedChipsAndPreview(t *testing.T) {
 }
 
 func TestMouseIgnoresUnsupportedEventsAndOutsideCoordinates(t *testing.T) {
+	t.Parallel()
+
 	d, _ := mouseFixture(t)
 	hit := findMouseHit(t, d.model, mouseHitSession, nil)
 	view := d.model.View()
@@ -334,6 +352,8 @@ func TestMouseIgnoresUnsupportedEventsAndOutsideCoordinates(t *testing.T) {
 // leaving the queue, so the next click on a row starts a new chain rather than
 // completing the old one and focusing a terminal nobody asked for.
 func TestMouseInspectorClickTakesTheKeysAndBreaksAPendingDoubleClick(t *testing.T) {
+	t.Parallel()
+
 	d, client := mouseFixture(t)
 	requireInspector(t, d.model)
 
@@ -372,6 +392,8 @@ func TestMouseInspectorClickTakesTheKeysAndBreaksAPendingDoubleClick(t *testing.
 // occupied before the pane took the body would otherwise select whatever the
 // hit map still remembered being there.
 func TestMouseOverAFullScreenInspectorReachesNoQueueRow(t *testing.T) {
+	t.Parallel()
+
 	d, client := mouseFixture(t)
 	requireInspector(t, d.model)
 	row := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })

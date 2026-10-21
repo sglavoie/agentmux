@@ -35,6 +35,8 @@ func filterLifecycleWorktree(t *testing.T, driver *uitestDriver, id string) {
 }
 
 func TestWorktreeReopenFocusedResumeAndFreshOutcomes(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		id      string
 		message string
@@ -68,6 +70,8 @@ func TestWorktreeReopenFocusedResumeAndFreshOutcomes(t *testing.T) {
 }
 
 func TestWorktreeAmbiguousLiveSessionPickerFocusAndCancel(t *testing.T) {
+	t.Parallel()
+
 	driver, client := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-multi")
 	selected := driver.Model().worktreeSelectedID
@@ -105,6 +109,8 @@ func TestWorktreeAmbiguousLiveSessionPickerFocusAndCancel(t *testing.T) {
 }
 
 func TestWorktreeReplacementProfilePurposeReturnsToWorktrees(t *testing.T) {
+	t.Parallel()
+
 	driver, client := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-profile")
 	if err := driver.Key("enter"); err != nil {
@@ -123,6 +129,8 @@ func TestWorktreeReplacementProfilePurposeReturnsToWorktrees(t *testing.T) {
 }
 
 func TestWorktreeCleanupSnapshotRefusalsAndConfirmationText(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		id, key, reason string
 	}{
@@ -157,6 +165,8 @@ func TestWorktreeCleanupSnapshotRefusalsAndConfirmationText(t *testing.T) {
 }
 
 func TestWorktreeRemoveForgetAndPartialRecoveryRefreshSelection(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		id, key string
 	}{
@@ -202,6 +212,8 @@ func TestWorktreeRemoveForgetAndPartialRecoveryRefreshSelection(t *testing.T) {
 }
 
 func TestWorktreeSessionPickerResponsiveLayouts(t *testing.T) {
+	t.Parallel()
+
 	driver, _ := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-multi")
 	if err := driver.Key("enter"); err != nil {
@@ -218,6 +230,8 @@ func TestWorktreeSessionPickerResponsiveLayouts(t *testing.T) {
 }
 
 func TestWorktreeReviewPagesTheReviewAndReturnsWithoutAToast(t *testing.T) {
+	t.Parallel()
+
 	driver, _ := lifecycleDriver(t)
 	// A live worktree is reviewable: the review reads and never writes.
 	filterLifecycleWorktree(t, driver, "wt-live")
@@ -242,6 +256,8 @@ func TestWorktreeReviewPagesTheReviewAndReturnsWithoutAToast(t *testing.T) {
 }
 
 func TestWorktreeLandOffersOnlyWhatTheSnapshotAllowsAndKeepsTheRow(t *testing.T) {
+	t.Parallel()
+
 	for id, reason := range map[string]string{
 		"wt-cleanup":  "nothing to land",
 		"wt-dirty":    "worktree is dirty",

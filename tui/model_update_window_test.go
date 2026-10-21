@@ -13,6 +13,8 @@ import (
 )
 
 func TestWindowSizeMsg_ResizeKeepsSessionSearchCursorVisible(t *testing.T) {
+	t.Parallel()
+
 	results := make([]transcript.Result, 60)
 	for i := range results {
 		results[i] = transcript.Result{
@@ -44,6 +46,8 @@ func TestWindowSizeMsg_ResizeKeepsSessionSearchCursorVisible(t *testing.T) {
 }
 
 func TestWindowSizeMsg_ResizeKeepsPlanSearchCursorVisible(t *testing.T) {
+	t.Parallel()
+
 	results := make([]plans.Result, 60)
 	for i := range results {
 		name := indexedRowName(i)
@@ -75,6 +79,8 @@ func TestWindowSizeMsg_ResizeKeepsPlanSearchCursorVisible(t *testing.T) {
 }
 
 func TestWindowSizeMsg_ResizeClampsPlanViewerVisualScroll(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:   ModePlanView,
 		width:  8,

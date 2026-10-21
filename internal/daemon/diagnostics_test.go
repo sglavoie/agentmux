@@ -49,6 +49,8 @@ func (m *testJournalMaintainer) RotateAndRetain(ctx context.Context) (diagnostic
 }
 
 func TestJournalMaintenanceScheduleAndPassBudget(t *testing.T) {
+	t.Parallel()
+
 	if journalPromotionInterval != 60*time.Second || journalRetentionInterval != 15*time.Minute || journalMaintenanceBudget != 5*time.Second {
 		t.Fatalf("production maintenance schedule = promotion %v retention %v budget %v",
 			journalPromotionInterval, journalRetentionInterval, journalMaintenanceBudget)
@@ -124,6 +126,8 @@ func TestJournalMaintenanceScheduleAndPassBudget(t *testing.T) {
 }
 
 func TestJournalMaintenanceContinuesAfterCompactionFailure(t *testing.T) {
+	t.Parallel()
+
 	maintainer := &testJournalMaintainer{
 		calls: make(chan string, 16),
 		compact: func(context.Context) (diagnostics.MaintenanceReport, error) {
@@ -183,6 +187,8 @@ func TestJournalMaintenanceContinuesAfterCompactionFailure(t *testing.T) {
 }
 
 func TestJournalMaintenanceRecordsOnlyAfterTimedPassReturns(t *testing.T) {
+	t.Parallel()
+
 	var insidePass atomic.Bool
 	maintainer := &testJournalMaintainer{
 		calls: make(chan string, 2),
@@ -224,6 +230,8 @@ func TestJournalMaintenanceRecordsOnlyAfterTimedPassReturns(t *testing.T) {
 }
 
 func TestJournalMaintenanceDoesNotRecordLifecycleCancellationAsError(t *testing.T) {
+	t.Parallel()
+
 	maintainer := &testJournalMaintainer{
 		calls: make(chan string, 2),
 		promote: func(ctx context.Context) (diagnostics.MaintenanceReport, error) {

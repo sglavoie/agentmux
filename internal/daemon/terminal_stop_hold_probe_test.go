@@ -70,6 +70,8 @@ func TestTerminalStopHold_ProbeConfirmsHeldStop(t *testing.T) {
 // the reset-class debounce armed, the probe's evidence is not claimed and the
 // probe settles its own stop exactly as it did before the gate existed.
 func TestConfirmStopHoldLocked_OnlyTerminalHoldsClaimProbeEvidence(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		arm  func(*testing.T, *Handler)
@@ -127,6 +129,8 @@ func TestConfirmStopHoldLocked_OnlyTerminalHoldsClaimProbeEvidence(t *testing.T)
 // renamed probe source must not silently start writing an unknown
 // StopConfirmedBy value into diagnostics.
 func TestStopConfirmedByProbeCoversEveryIdleProbeSource(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		source protocol.SourceID
 		want   protocol.StopConfirmedBy

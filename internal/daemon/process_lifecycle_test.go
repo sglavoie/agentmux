@@ -118,6 +118,8 @@ func lifecycleExitEvent(t *testing.T, h *Handler, windowID int) protocol.Session
 }
 
 func TestProcessLifecycleAliveAndUnknownPreserveState(t *testing.T) {
+	t.Parallel()
+
 	for _, status := range []probes.HarnessProcessInspection{probes.HarnessProcessAliveSameInstance, probes.HarnessProcessUnknown} {
 		t.Run(string(status), func(t *testing.T) {
 			h := newTestHandler()
@@ -153,6 +155,8 @@ func TestProcessLifecycleAliveAndUnknownPreserveState(t *testing.T) {
 }
 
 func TestProcessLifecycleMissingAndReplacedSettleInteractiveSilently(t *testing.T) {
+	t.Parallel()
+
 	for _, status := range []probes.HarnessProcessInspection{probes.HarnessProcessMissing, probes.HarnessProcessReplacedInstance} {
 		t.Run(string(status), func(t *testing.T) {
 			notifier, calls := newTestNotifier(&config.NotificationConfig{Stop: true})
@@ -190,6 +194,8 @@ func TestProcessLifecycleMissingAndReplacedSettleInteractiveSilently(t *testing.
 }
 
 func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(t.TempDir())
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -263,6 +269,8 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 }
 
 func TestProcessLifecycleInspectionFailuresAreRateLimitedAndHealthyPollsSilent(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(t.TempDir())
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -305,6 +313,8 @@ func TestProcessLifecycleInspectionFailuresAreRateLimitedAndHealthyPollsSilent(t
 }
 
 func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
+	t.Parallel()
+
 	notifier, calls := newTestNotifier(&config.NotificationConfig{Permission: true, PermissionDebounceMs: 60_000})
 	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5251, StartToken: "Thu Jul 16 10:20:30 2026"}
@@ -326,6 +336,8 @@ func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 }
 
 func TestProcessLifecyclePipeExitRevealsParentAndQueuesRender(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	parent := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5301, StartToken: "Thu Jul 16 10:20:30 2026"}
 	pipe := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5302, StartToken: "Thu Jul 16 10:21:30 2026"}
@@ -353,6 +365,8 @@ func TestProcessLifecyclePipeExitRevealsParentAndQueuesRender(t *testing.T) {
 }
 
 func TestProcessLifecycleResetClearsWithoutSynthesizingStop(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5401, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
@@ -377,6 +391,8 @@ func TestProcessLifecycleResetClearsWithoutSynthesizingStop(t *testing.T) {
 }
 
 func TestProcessLifecycleLeavesASLFactUntouched(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5501, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)

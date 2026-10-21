@@ -10,6 +10,8 @@ import (
 // TestRenderConfirmClose locks in the two-line layout for the close prompt:
 // line 1 carries the question, line 2 carries the explicit consequence.
 func TestRenderConfirmClose(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:               ModeConfirm,
 		confirmAction:      "close",
@@ -36,6 +38,8 @@ func TestRenderConfirmClose(t *testing.T) {
 // must survive: a warning cut in half is a different warning, and the operator
 // answers y or n to whichever one they read.
 func TestRenderConfirmRestart(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:               ModeConfirm,
 		confirmAction:      "restart",
@@ -63,6 +67,8 @@ func TestRenderConfirmRestart(t *testing.T) {
 // the layout to a single line (defensive: keeps callers free to omit the
 // consequence rather than passing a placeholder).
 func TestRenderConfirmNoConsequence(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:          ModeConfirm,
 		confirmAction: "close",

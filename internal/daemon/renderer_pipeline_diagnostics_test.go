@@ -24,6 +24,8 @@ import (
 )
 
 func TestRendererDiagnosticsTrackGenerations(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -92,6 +94,8 @@ func TestRendererDiagnosticsTrackGenerations(t *testing.T) {
 }
 
 func TestRenderGenerationJournalDoesNotBlockStateLock(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(t.TempDir())
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{LockTimeout: 2 * time.Second})
 	if err != nil {
@@ -139,6 +143,8 @@ func TestRenderGenerationJournalDoesNotBlockStateLock(t *testing.T) {
 }
 
 func TestRenderQueuePurgePersistsQueuedStageTrace(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
 	if err != nil {
@@ -175,6 +181,8 @@ func TestRenderQueuePurgePersistsQueuedStageTrace(t *testing.T) {
 }
 
 func TestRenderWorkerShutdownPersistsQueuedStageTraces(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
 	if err != nil {
@@ -214,6 +222,8 @@ func TestRenderWorkerShutdownPersistsQueuedStageTraces(t *testing.T) {
 }
 
 func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
+	t.Parallel()
+
 	h, notifyCfg := newTestHandlerWithNotificationConfig()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -314,6 +324,8 @@ func TestRendererCoalescesBoundedCausalIDsAndPersistsFailure(t *testing.T) {
 }
 
 func TestRendererMaintenanceFlushRetriesFailedTitleFromPersistedState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{setTitleErr: errors.New("kitty unavailable")}
 	h.SetKittyClient(fake)

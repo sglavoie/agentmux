@@ -177,6 +177,8 @@ func TestInitSessionWarmupLoadsCacheAndProducesResults(t *testing.T) {
 }
 
 func TestSessionWarmRefreshDoneUpdatesResults(t *testing.T) {
+	t.Parallel()
+
 	refreshed := transcript.Result{
 		Meta: transcript.SessionMeta{ID: "refreshed", Harness: harness.Claude, LastAt: time.Now()},
 	}

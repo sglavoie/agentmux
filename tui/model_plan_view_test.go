@@ -51,6 +51,8 @@ func planViewTestModel(t *testing.T) (Model, plans.PlanMeta) {
 // sets ModePlanView, copies the meta into viewerPlan, bumps the load seq,
 // and returns a non-nil tea.Cmd that produces a planFilesLoadedMsg.
 func TestEnterPlanView_TransitionsModeAndDispatchesLoad(t *testing.T) {
+	t.Parallel()
+
 	m, meta := planViewTestModel(t)
 
 	updated, cmd := m.enterPlanView(meta)
@@ -91,6 +93,8 @@ func TestEnterPlanView_TransitionsModeAndDispatchesLoad(t *testing.T) {
 // populates planViewerLines, computes planViewerMatchLines, and places the
 // cursor on the first match.
 func TestPlanFilesLoadedMsg_PopulatesLinesAndMatches(t *testing.T) {
+	t.Parallel()
+
 	m, meta := planViewTestModel(t)
 	updated, cmd := m.enterPlanView(meta)
 	m = updated.(Model)
@@ -124,6 +128,8 @@ func TestPlanFilesLoadedMsg_PopulatesLinesAndMatches(t *testing.T) {
 // TestPlanViewer_MatchNavigationWrapsAround drives n/N over a model with
 // multiple matches and verifies the index wraps in both directions.
 func TestPlanViewer_MatchNavigationWrapsAround(t *testing.T) {
+	t.Parallel()
+
 	m, meta := planViewTestModel(t)
 	updated, cmd := m.enterPlanView(meta)
 	m = updated.(Model)
@@ -159,6 +165,8 @@ func TestPlanViewer_MatchNavigationWrapsAround(t *testing.T) {
 }
 
 func TestPlanViewerPageKeysScrollWrappedRowsWithinOneLogicalLine(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:             ModePlanView,
 		width:            8,
@@ -196,6 +204,8 @@ func TestPlanViewerPageKeysScrollWrappedRowsWithinOneLogicalLine(t *testing.T) {
 }
 
 func TestPlanViewerMatchJumpScrollsToFirstWrappedRow(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:   ModePlanView,
 		width:  8,
@@ -224,6 +234,8 @@ func TestPlanViewerMatchJumpScrollsToFirstWrappedRow(t *testing.T) {
 }
 
 func TestPlanViewerNavigationEmptyAndInvalidSelectionsClampSafely(t *testing.T) {
+	t.Parallel()
+
 	empty := Model{
 		mode:             ModePlanView,
 		width:            8,
@@ -271,6 +283,8 @@ func TestPlanViewerNavigationEmptyAndInvalidSelectionsClampSafely(t *testing.T) 
 // viewer transitions back to ModePlanSearch and zeroes the viewer-local
 // state so the picker view renders cleanly.
 func TestPlanViewer_EscReturnsToPlanSearch(t *testing.T) {
+	t.Parallel()
+
 	m, meta := planViewTestModel(t)
 	updated, cmd := m.enterPlanView(meta)
 	m = updated.(Model)
@@ -303,6 +317,8 @@ func TestPlanViewer_EscReturnsToPlanSearch(t *testing.T) {
 // the user already exited (or opened a different plan) is silently ignored
 // rather than re-entering the viewer.
 func TestPlanViewer_StaleLoadIsDropped(t *testing.T) {
+	t.Parallel()
+
 	m, meta := planViewTestModel(t)
 	updated, cmd := m.enterPlanView(meta)
 	m = updated.(Model)
@@ -331,6 +347,8 @@ func TestPlanViewer_StaleLoadIsDropped(t *testing.T) {
 // TestPlanViewer_OpenEditorInvokesLaunch exercises the `e` keybinding from
 // inside the viewer.
 func TestPlanViewer_OpenEditorInvokesLaunch(t *testing.T) {
+	t.Parallel()
+
 	m, meta := planViewTestModel(t)
 	runner := kitty.NewMockRunner(nil)
 	m.client = kitty.NewClientWithSocket(runner, "")
@@ -372,6 +390,8 @@ func TestPlanViewer_OpenEditorInvokesLaunch(t *testing.T) {
 // Files slice is empty: the load must complete with err=nil and an empty
 // lines slice so the viewer renders the (no content) placeholder cleanly.
 func TestReadPlanFilesCmd_NoFiles(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	meta := plans.PlanMeta{Name: "empty", DirPath: dir, Files: nil}
 	msg := readPlanFilesCmd(1, meta)()
@@ -391,6 +411,8 @@ func TestReadPlanFilesCmd_NoFiles(t *testing.T) {
 // meta.Files surfaces the read error rather than silently truncating the
 // output. The seq is propagated unchanged.
 func TestReadPlanFilesCmd_MissingFileSurfacesError(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "ok.md"), []byte("hello\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -413,6 +435,8 @@ func TestReadPlanFilesCmd_MissingFileSurfacesError(t *testing.T) {
 // q in the Plans viewer backs out one level, as esc does and as q does in the
 // Past Sessions viewer, rather than leaving Plans altogether.
 func TestPlanViewerQReturnsToThePlanList(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{keyQ, keyEsc} {
 		m := Model{mode: ModePlanView, width: 100, height: 30, viewerPlan: &plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"}, planViewerLines: []string{"body"}}
 		m = pressKey(m, key)

@@ -204,6 +204,8 @@ func TestSummaryItemRefusesEveryPaletteCommand(t *testing.T) {
 // handlers: every row-section entry renders unavailable, so the operator is not
 // invited to press a key that will refuse.
 func TestSummaryItemFooterOffersNoRowAction(t *testing.T) {
+	t.Parallel()
+
 	m, _, _ := summaryModel(t)
 
 	if hasRow(m) {
@@ -224,6 +226,8 @@ func TestSummaryItemFooterOffersNoRowAction(t *testing.T) {
 // fetchPreviewCmd short-circuits, so the pane paints its placeholder instead of
 // whichever member happened to be first.
 func TestSummaryItemPreviewTracksNoWindow(t *testing.T) {
+	t.Parallel()
+
 	m, runner, setupCalls := summaryModel(t)
 	m.previewWindowID = 11 // as if the cursor had just left the first member
 
@@ -250,6 +254,8 @@ func TestSummaryItemPreviewTracksNoWindow(t *testing.T) {
 // acting, not about moving: the cursor still steps off the summary onto the
 // sessions it speaks for, and those sessions still resolve and still act.
 func TestSummaryItemNavigationReachesItsMembers(t *testing.T) {
+	t.Parallel()
+
 	m, _, _ := summaryModel(t)
 
 	if got, want := m.listItemCount(), 3; got != want {
@@ -291,6 +297,8 @@ func TestSummaryItemNavigationReachesItsMembers(t *testing.T) {
 // does not have to encode how many lines the group labels and separators around
 // the rows happen to cost.
 func TestSummaryItemRendersOneLine(t *testing.T) {
+	t.Parallel()
+
 	m, _, _ := summaryModel(t)
 
 	withSummary := stripAnsi(renderListAt(m, m.width, 0))

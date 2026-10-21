@@ -17,6 +17,8 @@ import (
 // the box width clamps to m.width-4 on narrow terminals.
 
 func TestRenderActionsBox(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "a")
 	if m.mode != ModeActions {
@@ -46,6 +48,8 @@ func TestRenderActionsBox(t *testing.T) {
 }
 
 func TestRenderActionsBoxExpandsForActionRows(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "a")
 	m.width, m.height = 120, 40
@@ -88,6 +92,8 @@ func TestRenderActionsBoxExpandsForActionRows(t *testing.T) {
 }
 
 func TestRenderActionsBoxNarrowClamps(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "a")
 	m.width, m.height = 30, 20
@@ -101,6 +107,8 @@ func TestRenderActionsBoxNarrowClamps(t *testing.T) {
 }
 
 func TestRenderConfirmBox(t *testing.T) {
+	t.Parallel()
+
 	m := modalConfirmModel()
 	m = loadSessions(m, makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
@@ -123,6 +131,8 @@ func TestRenderConfirmBox(t *testing.T) {
 }
 
 func TestRenderConfigPickerBox(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	m.configPickerAccounts = m.cfg.Accounts
@@ -144,6 +154,8 @@ func TestRenderConfigPickerBox(t *testing.T) {
 }
 
 func TestRenderConfigPickerBoxLaunchHeader(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	m.configPickerAccounts = m.cfg.Accounts
@@ -159,6 +171,8 @@ func TestRenderConfigPickerBoxLaunchHeader(t *testing.T) {
 }
 
 func TestRenderConfigPickerBoxDashboardLaunchHeader(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.targetSession = session.RunningSession{TabID: 1, Base: "api", Account: "work"}
 	m.configPickerAccounts = m.cfg.Accounts
@@ -174,6 +188,8 @@ func TestRenderConfigPickerBoxDashboardLaunchHeader(t *testing.T) {
 }
 
 func TestRenderConfigPickerSeparatesSelectedHomeFromRows(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.cfg.HarnessEmojis = map[string]string{
 		"claude":  "⭕",
@@ -225,6 +241,8 @@ func TestRenderConfigPickerSeparatesSelectedHomeFromRows(t *testing.T) {
 }
 
 func TestRenderConfigPickerBoxNarrowClamps(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.cfg.HarnessEmojis = map[string]string{"claude": "⭕"}
 	m.cfg.Accounts = []config.Account{
@@ -248,6 +266,8 @@ func TestRenderConfigPickerBoxNarrowClamps(t *testing.T) {
 }
 
 func TestRenderHelpBox(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.width, m.height = 100, 40
@@ -263,6 +283,8 @@ func TestRenderHelpBox(t *testing.T) {
 }
 
 func TestRenderHelpBoxNarrowClamps(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.width, m.height = 30, 20
@@ -282,6 +304,8 @@ func TestRenderHelpBoxNarrowClamps(t *testing.T) {
 // change reintroduces a fixed-width cap that clips the widest row, the detector's
 // natural-vs-rendered width comparison fails here.
 func TestOverlayBoxesFitAtWidthViaModalDetector(t *testing.T) {
+	t.Parallel()
+
 	actions := loadSessions(testModelWithSessions(), makeSessions())
 	actions = pressKey(actions, "a")
 	actions.width, actions.height = 140, 50
@@ -296,6 +320,8 @@ func TestOverlayBoxesFitAtWidthViaModalDetector(t *testing.T) {
 }
 
 func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
+	t.Parallel()
+
 	actions := loadSessions(testModelWithSessions(), makeSessions())
 	actions = pressKey(actions, "a")
 
@@ -368,6 +394,8 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 }
 
 func TestDashboardOverlayTinyTerminalDoesNotOverflowStatusBar(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "a")
 	m.width = 50

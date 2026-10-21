@@ -36,6 +36,8 @@ func reviewFixture(t *testing.T) (string, func(...string) string, func(string, s
 }
 
 func TestReviewIncludesStagedUnstagedUntrackedAndLiteralPaths(t *testing.T) {
+	t.Parallel()
+
 	dir, git, write := reviewFixture(t)
 	write("tracked", "after\nsecond\n")
 	write("staged", "staged\n")
@@ -68,6 +70,8 @@ func TestReviewIncludesStagedUnstagedUntrackedAndLiteralPaths(t *testing.T) {
 }
 
 func TestReviewBaseChangesAndRejectsUnknownOrOptionLikeReferences(t *testing.T) {
+	t.Parallel()
+
 	dir, git, write := reviewFixture(t)
 	base := git("rev-parse", "HEAD")
 	write("tracked", "committed\n")
@@ -92,6 +96,8 @@ func TestReviewBaseChangesAndRejectsUnknownOrOptionLikeReferences(t *testing.T) 
 }
 
 func TestReviewNeverRunsExternalDiffOrTextconv(t *testing.T) {
+	t.Parallel()
+
 	dir, git, write := reviewFixture(t)
 	marker := filepath.Join(dir, "driver-ran")
 	git("config", "diff.external", "touch "+marker)
@@ -108,6 +114,8 @@ func TestReviewNeverRunsExternalDiffOrTextconv(t *testing.T) {
 }
 
 func TestReviewBinaryAndUntrackedSymlinkDoNotExposeTarget(t *testing.T) {
+	t.Parallel()
+
 	dir, git, write := reviewFixture(t)
 	write("binary", "\x00old")
 	git("add", "binary")
@@ -129,6 +137,8 @@ func TestReviewBinaryAndUntrackedSymlinkDoNotExposeTarget(t *testing.T) {
 }
 
 func TestReviewOutputIsBounded(t *testing.T) {
+	t.Parallel()
+
 	var b reviewBuffer
 	input := []byte(strings.Repeat("x", reviewOutputLimit+100))
 	if n, err := b.Write(input); err != nil || n != len(input) {

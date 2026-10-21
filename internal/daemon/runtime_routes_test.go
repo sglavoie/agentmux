@@ -190,6 +190,8 @@ func requireRefused(t *testing.T, resp protocol.Response, reason string, retryab
 }
 
 func TestSocketStampedHookDoesNotBorrowSnapshotWithUnknownSocket(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: hookEventWindows("first", []kitty.Window{{
 		ID: 7, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
@@ -205,6 +207,8 @@ func TestSocketStampedHookDoesNotBorrowSnapshotWithUnknownSocket(t *testing.T) {
 }
 
 func TestSessionDetailSelectsTheKittySocketAndWindowPair(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "PermissionRequest", hookevent.HookPayload{SessionID: "second"})))
@@ -235,6 +239,8 @@ func TestSessionDetailSelectsTheKittySocketAndWindowPair(t *testing.T) {
 }
 
 func TestSessionDetailSelectsRuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	first, second := newRuntimeID(t), newRuntimeID(t)
 	directory.put(first, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
@@ -260,6 +266,8 @@ func TestSessionDetailSelectsRuntimeSession(t *testing.T) {
 }
 
 func TestEventsExportSelectsTheKittySocketAndWindowPair(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "PermissionRequest", hookevent.HookPayload{SessionID: "second"})))
@@ -279,6 +287,8 @@ func TestEventsExportSelectsTheKittySocketAndWindowPair(t *testing.T) {
 }
 
 func TestManagedHooksRouteByRuntimeSessionAcrossMixedBackends(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	onKittyA, onKittyB := newRuntimeID(t), newRuntimeID(t)
 	onTmuxT, onTmuxU, onTmuxTRestarted := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
@@ -348,6 +358,8 @@ func TestManagedHooksRouteByRuntimeSessionAcrossMixedBackends(t *testing.T) {
 }
 
 func TestLegacyKittyHooksFromAnotherInstanceUseIndependentWindowState(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newRuntimeTestHandler(t)
 	first := legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})
 	requireAccepted(t, h.Handle(first))
@@ -373,6 +385,8 @@ func TestLegacyKittyHooksFromAnotherInstanceUseIndependentWindowState(t *testing
 }
 
 func TestDirectStateUpdateRequiresInstanceWhenKittyNumbersCollide(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newRuntimeTestHandler(t)
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "UserPromptSubmit", hookevent.HookPayload{SessionID: "second"})))
@@ -385,6 +399,8 @@ func TestDirectStateUpdateRequiresInstanceWhenKittyNumbersCollide(t *testing.T) 
 }
 
 func TestHookContextUsesTheSnapshotInstancesSlot(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newRuntimeTestHandler(t)
 	h.stateMu.Lock()
 	h.kittySlotLocked(kittyA, 7)
@@ -404,6 +420,8 @@ func TestHookContextUsesTheSnapshotInstancesSlot(t *testing.T) {
 }
 
 func TestNotificationTargetUsesTheRealKittyWindowNumber(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.stateMu.Lock()
 	h.kittySlotLocked(kittyA, 7)
@@ -417,6 +435,8 @@ func TestNotificationTargetUsesTheRealKittyWindowNumber(t *testing.T) {
 }
 
 func TestScreenProbeBindingTargetsTheCollidingKittySlot(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newRuntimeTestHandler(t)
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyA, "UserPromptSubmit", hookevent.HookPayload{SessionID: "first"})))
 	requireAccepted(t, h.Handle(legacyHook(t, 7, kittyB, "UserPromptSubmit", hookevent.HookPayload{SessionID: "second"})))
@@ -438,6 +458,8 @@ func TestScreenProbeBindingTargetsTheCollidingKittySlot(t *testing.T) {
 }
 
 func TestManagedHookAcknowledgementNamesTheRuntimeNotASlot(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	runtime := newRuntimeID(t)
 	directory.put(runtime, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%3")
@@ -458,6 +480,8 @@ func TestManagedHookAcknowledgementNamesTheRuntimeNotASlot(t *testing.T) {
 }
 
 func TestManagedHookTranslationRefusals(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	pending, ended, stale, abandoned, badKitty := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(pending, runtimesession.StatePending, runtimesession.BackendTmux, tmuxT, "g", "%1")
@@ -502,6 +526,8 @@ func TestManagedHookTranslationRefusals(t *testing.T) {
 }
 
 func TestManagedHooksWithoutRegistryAreRetryableAndLegacyStillRoutes(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: fakeOSWindowsWithTab(42, "W:api")})
 	requireRefused(t, h.Handle(runtimeHook(t, newRuntimeID(t), "Stop", hookevent.HookPayload{SessionID: "s1"})),
@@ -524,6 +550,8 @@ func TestManagedHooksWithoutRegistryAreRetryableAndLegacyStillRoutes(t *testing.
 }
 
 func TestDuplicateAndReorderedHooksStayInsideTheirRuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	first, second := newRuntimeID(t), newRuntimeID(t)
 	directory.put(first, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%1")
@@ -554,6 +582,8 @@ func TestDuplicateAndReorderedHooksStayInsideTheirRuntimeSession(t *testing.T) {
 }
 
 func TestPipeChildAndSubagentsStayWithTheirRuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	parent, neighbour := newRuntimeID(t), newRuntimeID(t)
 	directory.put(parent, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%1")
@@ -579,6 +609,8 @@ func TestPipeChildAndSubagentsStayWithTheirRuntimeSession(t *testing.T) {
 }
 
 func TestPostTerminationHooksCannotReachASuccessorOnTheSameTarget(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	old, successor := newRuntimeID(t), newRuntimeID(t)
 	directory.put(old, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%1")
@@ -615,6 +647,8 @@ func TestPostTerminationHooksCannotReachASuccessorOnTheSameTarget(t *testing.T) 
 }
 
 func TestSuccessorInTheSameKittyWindowStartsClean(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	old, successor := newRuntimeID(t), newRuntimeID(t)
 	directory.put(old, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
@@ -657,6 +691,8 @@ func TestSuccessorInTheSameKittyWindowStartsClean(t *testing.T) {
 }
 
 func TestMaintenanceClosesNonKittySlotsOfEndedSessions(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	ending, staying := newRuntimeID(t), newRuntimeID(t)
 	directory.put(ending, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%1")
@@ -689,6 +725,8 @@ func TestMaintenanceClosesNonKittySlotsOfEndedSessions(t *testing.T) {
 // reads the registry cache and daemon memory only, so a wedged Kitty listing
 // cannot delay a managed hook any more than a legacy one.
 func TestManagedHookAcknowledgementNeverWaitsOnBackendDiscovery(t *testing.T) {
+	t.Parallel()
+
 	h, directory := newRuntimeTestHandler(t)
 	runtimes := []runtimesession.ID{newRuntimeID(t), newRuntimeID(t)}
 	directory.put(runtimes[0], runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%1")

@@ -12,6 +12,8 @@ import (
 // TestSortKey_Alpha verifies that alpha mode sorts by project title and treats
 // legacy prefixed titles the same as project-only titles for the same account.
 func TestSortKey_Alpha(t *testing.T) {
+	t.Parallel()
+
 	kAPI := session.SortKey("work", "api", false, "alpha")
 	kDash := session.SortKey("work", "dashboard", false, "alpha")
 	if kAPI >= kDash {
@@ -25,6 +27,8 @@ func TestSortKey_Alpha(t *testing.T) {
 
 // TestSortKey_Account verifies that account mode groups by account then title.
 func TestSortKey_Account(t *testing.T) {
+	t.Parallel()
+
 	// personal < work, so dotfiles comes first in account mode.
 	kPersonal := session.SortKey("personal", "dotfiles", false, "account")
 	kWork := session.SortKey("work", "api", false, "account")
@@ -46,6 +50,8 @@ func TestSortKey_Account(t *testing.T) {
 
 // TestSortKey_StarredFirst verifies pinned tabs sort before unpinned.
 func TestSortKey_StarredFirst(t *testing.T) {
+	t.Parallel()
+
 	pinned := session.SortKey("work", "api", true, "alpha")
 	unpinned := session.SortKey("work", "api", false, "alpha")
 	if pinned >= unpinned {
@@ -58,6 +64,8 @@ func TestSortKey_StarredFirst(t *testing.T) {
 // alphabetic rune, and personal < tools < vtacyber must hold across
 // the whole tab set so accounts stay grouped.
 func TestSortKey_AccountEmojiOrdering(t *testing.T) {
+	t.Parallel()
+
 	ordered := []struct {
 		account, base string
 	}{
@@ -83,6 +91,8 @@ func TestSortKey_AccountEmojiOrdering(t *testing.T) {
 // [📝tt, Katana, sis, 🎵muse] must land before P:📝tt (tab id 2), not between
 // the vtacyber tabs.
 func TestComputeInsertLocation_EmojiScreenshot(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_emoji.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "account", "personal", "🐱amx")
 	if err != nil {
@@ -101,6 +111,8 @@ func TestComputeInsertLocation_EmojiScreenshot(t *testing.T) {
 // project title: api (id=4), dashboard (id=6), dotfiles (id=2). Inserting
 // backend should go after W:api (id=4).
 func TestComputeInsertLocation_Alpha(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "work", "backend")
 	if err != nil {
@@ -117,6 +129,8 @@ func TestComputeInsertLocation_Alpha(t *testing.T) {
 // TestComputeInsertLocation_Account verifies sorted insertion in account mode.
 // backend (work) should still go after W:api (id=4) in account mode.
 func TestComputeInsertLocation_Account(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "account", "work", "backend")
 	if err != nil {
@@ -134,6 +148,8 @@ func TestComputeInsertLocation_Account(t *testing.T) {
 // new tab's sort key equals an existing entry's key, insertion lands AFTER the
 // equal entry rather than before it.
 func TestComputeInsertLocation_DuplicateKeyInsertsAfter(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "work", "api")
 	if err != nil {
@@ -151,6 +167,8 @@ func TestComputeInsertLocation_DuplicateKeyInsertsAfter(t *testing.T) {
 // existing ones returns location "before" with the first sorted session tab's
 // ID. In alpha mode, aardvark sorts before api.
 func TestComputeInsertLocation_Before(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "personal", "aardvark")
 	if err != nil {
@@ -167,6 +185,8 @@ func TestComputeInsertLocation_Before(t *testing.T) {
 // TestComputeInsertLocation_EmptyKitty verifies first insertion into empty Kitty
 // uses default Kitty placement (no --location flag).
 func TestComputeInsertLocation_EmptyKitty(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_empty.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "work", "api")
 	if err != nil {
@@ -181,6 +201,8 @@ func TestComputeInsertLocation_EmptyKitty(t *testing.T) {
 }
 
 func TestComputeInsertLocation_UsesFocusedWindow(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_two_windows.json")
 	loc, tabID, err := session.ComputeInsertLocation(client, "alpha", "work", "beta")
 	if err != nil {
@@ -196,6 +218,8 @@ func TestComputeInsertLocation_UsesFocusedWindow(t *testing.T) {
 
 // TestSortRunning_Alpha verifies alphabetical sort by project title.
 func TestSortRunning_Alpha(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	sessions, _ := session.List(client)
 	sorted := session.SortRunning(sessions, "alpha")
@@ -216,6 +240,8 @@ func TestSortRunning_Alpha(t *testing.T) {
 // TestSortRunning_Account verifies account-grouped sort.
 // personal (P:dotfiles) comes before work (W:api, W:dashboard).
 func TestSortRunning_Account(t *testing.T) {
+	t.Parallel()
+
 	client := newClientWithFixture(t, "kitty_ls_multi.json")
 	sessions, _ := session.List(client)
 	sorted := session.SortRunning(sessions, "account")
@@ -234,6 +260,8 @@ func TestSortRunning_Account(t *testing.T) {
 // the sessions, the same profile, base title, and pin sort the same way
 // SortRunning sorts them, and equal sessions keep their places.
 func TestOrderMatchesSortRunningForAnyCarrier(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{WindowID: 1, Account: "work", Base: "🤖 dashboard"},
 		{WindowID: 2, Account: "personal", Base: "dotfiles"},
@@ -271,6 +299,8 @@ func TestOrderMatchesSortRunningForAnyCarrier(t *testing.T) {
 // runtime-session ID, whatever order their backend lists them in, and follow
 // the Kitty tabs they tie with.
 func TestSortRunningBreaksTiesByRuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	tmux := func(id string) session.RunningSession {
 		return session.RunningSession{Account: "work", Base: "api", Backend: runtimesession.BackendTmux, RuntimeSessionID: runtimesession.ID(id)}
 	}

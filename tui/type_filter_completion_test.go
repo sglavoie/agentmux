@@ -11,6 +11,8 @@ import (
 // ---- Completion popup from explicit dashboard search ----
 
 func TestTypingSigilDoesNotOpenCompletionInListMode(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "@")
 	if m.completion.Visible {
@@ -25,6 +27,8 @@ func TestTypingSigilDoesNotOpenCompletionInListMode(t *testing.T) {
 }
 
 func TestCompletionEnterInsertsFromExplicitSearch(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = pressKey(m, "@")
@@ -51,6 +55,8 @@ func TestCompletionEnterInsertsFromExplicitSearch(t *testing.T) {
 // width the footer does; a second spelling in the header was the duplication the
 // quiet header exists to remove.
 func TestRenderHeaderDoesNotRepeatTheFilterBinding(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width = 100
 	m.daemonAlive = true
@@ -68,6 +74,8 @@ func TestRenderHeaderDoesNotRepeatTheFilterBinding(t *testing.T) {
 }
 
 func TestRenderHeaderSpacerIsOneBlankLine(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	out := stripAnsi(renderHeaderSpacer(m))
 	if out != "\n" {
@@ -76,6 +84,8 @@ func TestRenderHeaderSpacerIsOneBlankLine(t *testing.T) {
 }
 
 func TestRenderHeaderSpacerSuppressedOutsideModeList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeSearch
 	out := renderHeaderSpacer(m)
@@ -90,6 +100,8 @@ func TestRenderHeaderSpacerSuppressedOutsideModeList(t *testing.T) {
 // focus is retired, so this is the whole keyboard route, and it is the reason
 // entering the editor stopped clearing the thing being edited.
 func TestBackspaceInTheFilterEditorRemovesOneChip(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = typeString(m, "@work api")
@@ -136,6 +148,8 @@ func TestBackspaceInTheFilterEditorRemovesOneChip(t *testing.T) {
 // chips by position, and a list that no longer numbers them must not act on one
 // either.
 func TestDigitsAreInertAtTheDashboard(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = typeString(m, "@work")

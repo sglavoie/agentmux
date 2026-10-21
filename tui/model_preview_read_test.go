@@ -89,6 +89,8 @@ func previewReadModel(t *testing.T) Model {
 // subprocess; here a burst of moves costs one read and the memory that it owes
 // exactly one more.
 func TestOnlyOnePreviewReadIsEverInFlight(t *testing.T) {
+	t.Parallel()
+
 	m := previewReadModel(t)
 
 	m = selectLine(t, m, "session:web")
@@ -148,6 +150,8 @@ func TestOnlyOnePreviewReadIsEverInFlight(t *testing.T) {
 // and is still the settlement the controller is waiting on; treating it as
 // neither is how the pane starves.
 func TestAStaleReplySettlesWithoutPainting(t *testing.T) {
+	t.Parallel()
+
 	m := previewReadModel(t)
 	m = selectLine(t, m, "session:web")
 	read := m.refreshPreviewForCursor()
@@ -188,6 +192,8 @@ func TestAStaleReplySettlesWithoutPainting(t *testing.T) {
 // reply, and a controller that released its slot only on success would stop
 // reading the moment one read failed.
 func TestAFailedReadSettlesLikeAnyOther(t *testing.T) {
+	t.Parallel()
+
 	m := previewReadModel(t)
 	m = selectLine(t, m, "session:web")
 	read := m.refreshPreviewForCursor()
@@ -226,6 +232,8 @@ func TestAFailedReadSettlesLikeAnyOther(t *testing.T) {
 // the polling chain itself: the chain died the first time a tick found the pane
 // hidden, and nothing else would ever open another.
 func TestHidingThePaneDoesNotStrandTheSlot(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		hide func(*testing.T, *Model)
 		show func(*testing.T, *Model) tea.Cmd
@@ -312,6 +320,8 @@ func TestHidingThePaneDoesNotStrandTheSlot(t *testing.T) {
 // the way to get two is to show a pane twice inside one refresh interval — which
 // a hide/show, a launcher round trip, and a resize that re-fits all do.
 func TestARetiredTickChainNeverSchedulesAgain(t *testing.T) {
+	t.Parallel()
+
 	m := previewReadModel(t)
 	if m.previewPollSeq != 0 {
 		t.Fatalf("setup: the model already owns chain %d", m.previewPollSeq)
@@ -367,6 +377,8 @@ func TestARetiredTickChainNeverSchedulesAgain(t *testing.T) {
 // again regardless, so the pane ran several subprocesses at once and each was
 // superseded before it landed.
 func TestATickCoalescesWithTheReadAlreadyOut(t *testing.T) {
+	t.Parallel()
+
 	m := previewReadModel(t)
 	m = selectLine(t, m, "session:web")
 	read := m.refreshPreviewForCursor()
@@ -402,6 +414,8 @@ func TestATickCoalescesWithTheReadAlreadyOut(t *testing.T) {
 // reading. Nothing accumulates, so a session that has printed for an hour costs
 // the same two captures as one that just started.
 func TestThePaneRetainsOnlyTwoSnapshots(t *testing.T) {
+	t.Parallel()
+
 	m := previewReadModel(t)
 	m = selectLine(t, m, "session:web")
 	settlePreviewRead(t, &m, m.refreshPreviewForCursor())
@@ -449,6 +463,8 @@ func firstPreviewLine(s string) string {
 // steady stream of moves is allowed to cost many reads over a run and is never
 // allowed to have two of them in the terminal at once.
 func TestConcurrentPreviewReadsAreRaceFree(t *testing.T) {
+	t.Parallel()
+
 	client := newUITestKittyClient(nil)
 	var reads, concurrent, overlaps atomic.Int64
 	client.SetReadBehavior(func(string) (string, error) {
@@ -522,6 +538,8 @@ func TestConcurrentPreviewReadsAreRaceFree(t *testing.T) {
 // mid-flight the dashboard still navigates, filters, and renders, and the pane
 // keeps showing what it last had.
 func TestASlowReadNeverBlocksTheUpdateLoop(t *testing.T) {
+	t.Parallel()
+
 	client := newUITestKittyClient(nil)
 	release := make(chan struct{})
 	client.SetReadBehavior(func(string) (string, error) {

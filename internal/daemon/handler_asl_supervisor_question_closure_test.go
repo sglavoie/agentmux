@@ -14,6 +14,8 @@ import (
 )
 
 func TestASLSupervisorMailboxReplyClearsMatchingProbeImmediately(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
@@ -46,6 +48,8 @@ func TestASLSupervisorMailboxReplyClearsMatchingProbeImmediately(t *testing.T) {
 }
 
 func TestASLSupervisorMailboxResolutionClearsMatchingProbeImmediately(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
@@ -69,6 +73,8 @@ func TestASLSupervisorMailboxResolutionClearsMatchingProbeImmediately(t *testing
 }
 
 func TestASLSupervisorMailboxReplyRejectsMismatchedEvidence(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		mutate func(*hookevent.HookPayload)
@@ -97,6 +103,8 @@ func TestASLSupervisorMailboxReplyRejectsMismatchedEvidence(t *testing.T) {
 }
 
 func TestASLSupervisorMailboxReplyClearsAuthoritativelyClosedMultipleQuestionSet(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	projection := supervisorProjection(now, 7)
@@ -115,6 +123,8 @@ func TestASLSupervisorMailboxReplyClearsAuthoritativelyClosedMultipleQuestionSet
 }
 
 func TestASLSupervisorMailboxReplyCutoffBlocksStaleProjection(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 
@@ -142,6 +152,8 @@ func TestASLSupervisorMailboxReplyCutoffBlocksStaleProjection(t *testing.T) {
 }
 
 func TestASLSupervisorStaleMailboxClosureDoesNotClearNewerQuestion(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	newQuestion := supervisorProjection(now.Add(time.Second), 9)
@@ -159,6 +171,8 @@ func TestASLSupervisorStaleMailboxClosureDoesNotClearNewerQuestion(t *testing.T)
 }
 
 func TestASLSupervisorMailboxReplyLeavesRunnerWaitingLoopBare(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
@@ -186,6 +200,8 @@ func TestASLSupervisorMailboxReplyLeavesRunnerWaitingLoopBare(t *testing.T) {
 }
 
 func TestASLSupervisorQuestionUserClearIsNotReassertedBySameProjection(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	projection := supervisorProjection(now, 7)
 	applySupervisorStop(h, now)
@@ -211,6 +227,8 @@ func TestASLSupervisorQuestionUserClearIsNotReassertedBySameProjection(t *testin
 }
 
 func TestASLSupervisorQuestionRunFinishRetiresProbeAndTarget(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))

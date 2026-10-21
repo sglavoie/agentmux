@@ -9,6 +9,8 @@ import (
 // TestUITestObservationCapturesModeSizeAndScreen verifies that observeUITest
 // records the mode, size, and a normalized non-empty screen for a sized model.
 func TestUITestObservationCapturesModeSizeAndScreen(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -44,6 +46,8 @@ func TestUITestObservationCapturesModeSizeAndScreen(t *testing.T) {
 // TestUITestObservationTracksModeCursor verifies the observation reports the
 // cursor relevant to the active mode: the picker cursor once the picker is open.
 func TestUITestObservationTracksModeCursor(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -67,6 +71,8 @@ func TestUITestObservationTracksModeCursor(t *testing.T) {
 // TestUITestObservationModeNames pins the stable mode-name strings so scenario
 // output never regresses to bare integers or drifts silently.
 func TestUITestObservationModeNames(t *testing.T) {
+	t.Parallel()
+
 	cases := map[Mode]string{
 		ModeList:              "list",
 		ModeSearch:            "search",
@@ -104,6 +110,8 @@ func TestUITestObservationModeNames(t *testing.T) {
 // about, which is that a modal issue reaches the observation and fails
 // no_layout_issues rather than being invisible to a scenario.
 func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 
 	// Too short: the body area cannot hold the menu's box at all, which is the
@@ -147,6 +155,8 @@ func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
 
 // The profile picker remains readable with selected-home details at both sizes.
 func TestUITestConfigPickerModalFitPinsWidthFix(t *testing.T) {
+	t.Parallel()
+
 	fx := wideProfilesFixture()
 
 	// Narrow: responsive rows and wrapped details fit.

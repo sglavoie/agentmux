@@ -12,6 +12,8 @@ import (
 )
 
 func TestRenderHelpNoHeightShowsAll(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 0
@@ -35,6 +37,8 @@ func TestRenderHelpNoHeightShowsAll(t *testing.T) {
 // end. Both directions are asserted — no binding missing from help, and no
 // generated line the overlay does not actually render.
 func TestDashboardHelpDocumentsEveryFooterBinding(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 0
@@ -74,6 +78,8 @@ func TestDashboardHelpDocumentsEveryFooterBinding(t *testing.T) {
 // compete with the bindings for footer space, but they bind nothing: a keymap
 // row for either would advertise a keystroke that does not exist.
 func TestDashboardHelpOmitsNonBindingCandidates(t *testing.T) {
+	t.Parallel()
+
 	metadata := 0
 	for _, c := range listFooterPalette() {
 		if c.textFor == nil {
@@ -93,6 +99,8 @@ func TestDashboardHelpOmitsNonBindingCandidates(t *testing.T) {
 }
 
 func TestRenderHelpReflectsDashboardRemap(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	out := stripAnsi(renderHelp(m))
@@ -161,6 +169,8 @@ func helpPaletteLineFor(lines []string, key string) (string, bool) {
 // Narrow terminals drop the low-priority footer hints, so the overlay is the
 // only place those keymaps are guaranteed to be complete.
 func TestHelpDocumentsEveryPaletteKey(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 0
@@ -202,6 +212,8 @@ func TestHelpDocumentsEveryPaletteKey(t *testing.T) {
 // both meanings and name the scope each belongs to. Dropping either one would
 // tell the user the viewer key does something it does not.
 func TestHelpPreservesModeSpecificMeaning(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 0
@@ -271,6 +283,8 @@ func TestHelpPreservesModeSpecificMeaning(t *testing.T) {
 // Keys every palette declares with the same label must stay bare so scoping the
 // exclusives does not turn the common case into noise.
 func TestHelpScopesModeExclusiveKeys(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 0
@@ -375,6 +389,8 @@ func contextualHelpModel(mode Mode) Model {
 // a glyph, not reading prose. It was the last surface in the dashboard where a
 // key was not the footer's teal.
 func TestHelpKeymapPaintsItsKeysLikeKeys(t *testing.T) {
+	t.Parallel()
+
 	lines := helpContentLines()
 	joined := strings.Join(lines, "\n")
 
@@ -437,6 +453,8 @@ func TestHelpKeymapPaintsItsKeysLikeKeys(t *testing.T) {
 // label and description the menu itself draws, in menu order, and Enter is
 // described for both backends rather than as a Kitty tab focus.
 func TestHelpActOnRowFollowsTheSessionActionTable(t *testing.T) {
+	t.Parallel()
+
 	var section []string
 	for _, sec := range helpSections {
 		if sec.name == "Act on row" {

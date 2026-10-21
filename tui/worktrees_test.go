@@ -35,6 +35,8 @@ func enterLoadedWorktrees(t *testing.T, m Model) Model {
 }
 
 func TestWorktreesEntryRefreshStaleSuppressionAndCachedRows(t *testing.T) {
+	t.Parallel()
+
 	m := worktreeTestModel()
 	updated, first := m.enterWorktrees()
 	m = updated.(Model)
@@ -78,6 +80,8 @@ func TestWorktreesEntryRefreshStaleSuppressionAndCachedRows(t *testing.T) {
 }
 
 func TestWorktreesDropsResponsesAfterExitAndRetainsCacheOnError(t *testing.T) {
+	t.Parallel()
+
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	updated, cmd := m.startWorktreeRefresh()
 	m = updated.(Model)
@@ -98,6 +102,8 @@ func TestWorktreesDropsResponsesAfterExitAndRetainsCacheOnError(t *testing.T) {
 }
 
 func TestWorktreeRefreshSelectsNearestRowWhenSelectedEntryDisappears(t *testing.T) {
+	t.Parallel()
+
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	m.worktreeFilter = ""
 	m.worktreeCursor = 3
@@ -117,6 +123,8 @@ func TestWorktreeRefreshSelectsNearestRowWhenSelectedEntryDisappears(t *testing.
 }
 
 func TestWorktreeAttentionOrderingAndWhitespaceANDFilter(t *testing.T) {
+	t.Parallel()
+
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	classes := make([]string, len(m.worktreeEntries))
 	for i, entry := range m.worktreeEntries {
@@ -157,6 +165,8 @@ func TestWorktreeAttentionOrderingAndWhitespaceANDFilter(t *testing.T) {
 }
 
 func TestWorktreeHomeAndEndJumpToTheEnds(t *testing.T) {
+	t.Parallel()
+
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	if len(m.worktreeFiltered) < 2 {
 		t.Fatalf("fixture needs two worktrees, has %d", len(m.worktreeFiltered))
@@ -172,6 +182,8 @@ func TestWorktreeHomeAndEndJumpToTheEnds(t *testing.T) {
 }
 
 func TestWorktreeNavigationFilterAndReturn(t *testing.T) {
+	t.Parallel()
+
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	for _, key := range []string{"j", "down", "k", "up", "G", "g", "ctrl+d", "ctrl+u", "pgdown", "pgup", "ctrl+f", "ctrl+b"} {
 		updated, _ := m.Update(keyPress(key))
@@ -260,6 +272,8 @@ func TestWorktreeShellEditorAndCopyActions(t *testing.T) {
 }
 
 func TestWorktreeMissingRowDoesNotExposeOpenCommand(t *testing.T) {
+	t.Parallel()
+
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	for i, entry := range m.worktreeFiltered {
 		if entry.ID == "wt-missing" {
@@ -280,6 +294,8 @@ func TestWorktreeMissingRowDoesNotExposeOpenCommand(t *testing.T) {
 }
 
 func TestWorktreeRenderingStatusFooterHelpAndWidths(t *testing.T) {
+	t.Parallel()
+
 	m := enterLoadedWorktrees(t, worktreeTestModel())
 	for _, width := range []int{24, 60, 120, 180} {
 		for _, height := range []int{8, 16, 36} {
@@ -336,6 +352,8 @@ func TestWorktreeRenderingStatusFooterHelpAndWidths(t *testing.T) {
 // is retired with the rest of them; the browser itself, including its own full
 // keymap, is unchanged.
 func TestCommandPaletteEntersWorktreesWithLifecycleControls(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(worktreeTestModel(), makeSessions())
 	updated, cmd := m.Update(keyPress("W"))
 	if got := updated.(Model); got.mode != ModeList || cmd != nil {

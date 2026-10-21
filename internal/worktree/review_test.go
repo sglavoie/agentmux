@@ -34,6 +34,8 @@ func commitFile(t *testing.T, directory, name, content, message string) {
 }
 
 func TestReviewOfAnUntouchedWorktreeHasNothingToLand(t *testing.T) {
+	t.Parallel()
+
 	_, inventory, entry := reviewFixture(t)
 
 	review, err := inventory.Review(context.Background(), entry, ReviewOptions{})
@@ -49,6 +51,8 @@ func TestReviewOfAnUntouchedWorktreeHasNothingToLand(t *testing.T) {
 }
 
 func TestReviewCoversCommittedUncommittedAndUntrackedWork(t *testing.T) {
+	t.Parallel()
+
 	_, inventory, entry := reviewFixture(t)
 	commitFile(t, entry.Path, "feature.txt", "one\ntwo\n", "feature")
 	if err := os.WriteFile(filepath.Join(entry.Path, "README.md"), []byte("# test\nedited\n"), 0o644); err != nil {
@@ -89,6 +93,8 @@ func TestReviewCoversCommittedUncommittedAndUntrackedWork(t *testing.T) {
 }
 
 func TestReviewLeavesOutWhatTheSourceGainedMeanwhile(t *testing.T) {
+	t.Parallel()
+
 	repo, inventory, entry := reviewFixture(t)
 	commitFile(t, entry.Path, "feature.txt", "one\n", "feature")
 	commitFile(t, repo, "upstream.txt", "theirs\n", "upstream")
@@ -106,6 +112,8 @@ func TestReviewLeavesOutWhatTheSourceGainedMeanwhile(t *testing.T) {
 }
 
 func TestReviewNamesConflictsWithoutTouchingEitherCheckout(t *testing.T) {
+	t.Parallel()
+
 	repo, inventory, entry := reviewFixture(t)
 	commitFile(t, entry.Path, "README.md", "# ours\n", "ours")
 	commitFile(t, repo, "README.md", "# theirs\n", "theirs")
@@ -127,6 +135,8 @@ func TestReviewNamesConflictsWithoutTouchingEitherCheckout(t *testing.T) {
 }
 
 func TestReviewReportsABinaryFileWithoutCounts(t *testing.T) {
+	t.Parallel()
+
 	_, inventory, entry := reviewFixture(t)
 	commitFile(t, entry.Path, "blob.bin", "a\x00b\x00", "binary")
 
@@ -140,6 +150,8 @@ func TestReviewReportsABinaryFileWithoutCounts(t *testing.T) {
 }
 
 func TestReviewRefusesWhatItCannotCompare(t *testing.T) {
+	t.Parallel()
+
 	_, inventory, entry := reviewFixture(t)
 
 	missing := entry
@@ -160,6 +172,8 @@ func TestReviewRefusesWhatItCannotCompare(t *testing.T) {
 }
 
 func TestPredictMergeNeverCallsAnUnpredictedMergeClean(t *testing.T) {
+	t.Parallel()
+
 	failing := func(context.Context, string, time.Duration, ...string) ([]byte, error) {
 		return nil, errors.New("git merge-tree failed: usage")
 	}

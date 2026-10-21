@@ -95,6 +95,8 @@ func recoveryWith(at time.Time, labels ...string) sessionactions.Recovery {
 // stash for undo captures the launchable identity (title, directory,
 // profile, env, groups) of the running session.
 func TestSessionFromRunningSnapshotMatchesRunning(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{
 		Base:      "api",
 		Project:   "api",
@@ -128,6 +130,8 @@ func TestSessionFromRunningSnapshotMatchesRunning(t *testing.T) {
 // the dashboard: the dispatch says what it is doing, and only the confirmed
 // completion says it is done and offers the undo.
 func TestCloseIsAnnouncedBeforeItIsRecoverable(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	label := selectedLabel(t, m)
@@ -169,6 +173,8 @@ func TestCloseIsAnnouncedBeforeItIsRecoverable(t *testing.T) {
 // whose tab was never observed to go may still be running, and relaunching it
 // would produce a second copy rather than an undo.
 func TestUnconfirmedCloseOffersNoRecovery(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := reportClose(t, pressRowAction(t, undoTestModel(&at), keyClose), commands.ActionDoneMsg{Unconfirmed: true})
 
@@ -190,6 +196,8 @@ func TestUnconfirmedCloseOffersNoRecovery(t *testing.T) {
 // TestFailedCloseOffersNoRecovery is the other half: an attempt that reached
 // Kitty and failed names the failure and leaves nothing to undo.
 func TestFailedCloseOffersNoRecovery(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := reportClose(t, pressRowAction(t, undoTestModel(&at), keyClose), commands.ActionDoneMsg{Err: errors.New("no such tab")})
 
@@ -206,6 +214,8 @@ func TestFailedCloseOffersNoRecovery(t *testing.T) {
 // route: the operator opted into the modal, answered it, and the close that
 // followed is as recoverable as one dispatched straight away.
 func TestCloseIsRecoverableWithConfirmationEnabled(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := loadSessions(frozenClock(modalConfirmModel(), &at), makeSessions())
 
@@ -227,6 +237,8 @@ func TestCloseIsRecoverableWithConfirmationEnabled(t *testing.T) {
 // TestTheWindowStartsWhenTheCloseIsConfirmed: a close that takes two seconds to
 // report back still offers the operator thirty seconds of undo.
 func TestTheWindowStartsWhenTheCloseIsConfirmed(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	dispatched := pressRowAction(t, m, keyClose)
@@ -248,6 +260,8 @@ func TestTheWindowStartsWhenTheCloseIsConfirmed(t *testing.T) {
 // closes stack behind the addressable recovery toast rather than pushing fresh
 // ones.
 func TestMultipleClosesAggregateToSingleToast(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	for range 3 {
@@ -276,6 +290,8 @@ func TestMultipleClosesAggregateToSingleToast(t *testing.T) {
 // entry and produces a launch cmd, and that the entry is gone only once the
 // relaunch reports success.
 func TestUndoLastConsumesNewestEntry(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	m.recovery = recoveryWith(at, "first", "second")
@@ -311,6 +327,8 @@ func TestUndoLastConsumesNewestEntry(t *testing.T) {
 // second `u` while the first relaunch is still in flight takes the close below
 // it rather than launching the same session twice.
 func TestRepeatedUndoWalksBackThroughRepeatedCloses(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	m.recovery = recoveryWith(at, "first", "second")
@@ -333,6 +351,8 @@ func TestRepeatedUndoWalksBackThroughRepeatedCloses(t *testing.T) {
 // puts the entry back with the time it already had. Retrying is allowed; buying
 // more time is not, because the window is about how recent the close is.
 func TestFailedRelaunchIsRetryableUntilTheOriginalDeadline(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	m.recovery = recoveryWith(at, "api")
@@ -364,6 +384,8 @@ func TestFailedRelaunchIsRetryableUntilTheOriginalDeadline(t *testing.T) {
 // TestUndoLastWithoutEntriesIsOfferedDisabled verifies that with nothing to
 // undo the palette says so before the keystroke rather than after.
 func TestUndoLastWithoutEntriesIsOfferedDisabled(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := pressKey(undoTestModel(&at), keyColon)
 	if m.mode != ModeCommandPalette {
@@ -384,6 +406,8 @@ func TestUndoLastWithoutEntriesIsOfferedDisabled(t *testing.T) {
 // the affordance lasts thirty seconds — long enough to press one letter, not long
 // enough to open a palette and type a name.
 func TestUndoKeyAndPaletteAgree(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	m.recovery = recoveryWith(at, "api")
@@ -409,6 +433,8 @@ func TestUndoKeyAndPaletteAgree(t *testing.T) {
 // close while the operator was typing a filter would be the worst possible
 // place to spend a letter.
 func TestUndoKeyIsOrdinaryTextInsideSearchControls(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	base := undoTestModel(&at)
 	base.recovery = recoveryWith(at, "api")
@@ -441,6 +467,8 @@ func TestUndoKeyIsOrdinaryTextInsideSearchControls(t *testing.T) {
 // TestExpiredRecoveryIsSwept verifies the tick prunes entries past their
 // deadline so the in-memory stack stays bounded.
 func TestExpiredRecoveryIsSwept(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := frozenClock(testModelWithSessions(), &at)
 	m.recovery = recoveryWith(at, "expired")
@@ -466,6 +494,8 @@ func TestExpiredRecoveryIsSwept(t *testing.T) {
 // that expires between the paint and the enter must still be refused rather
 // than relaunching a session minutes after it was closed.
 func TestExpiredRecoveryIsNeitherOfferedNorRevived(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	m.recovery = recoveryWith(at, "stale")
@@ -488,6 +518,8 @@ func TestExpiredRecoveryIsNeitherOfferedNorRevived(t *testing.T) {
 // from the loaded config still closes but omits the undo affordance —
 // there's no relaunch path without the account.
 func TestTransientCloseSkipsUndo(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := loadSessions(frozenClock(testModelWithSessions(), &at), []session.RunningSession{
 		{TabID: 99, Base: "orphan", Account: "unknown", Profile: "unknown"},
@@ -512,6 +544,8 @@ func TestTransientCloseSkipsUndo(t *testing.T) {
 // tab, so the surface that would show the undo — and the thirty seconds it would
 // last — end with the close.
 func TestClosingTheHostingTabOffersNoRecovery(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	selected, ok := m.selectedSession()
@@ -541,6 +575,8 @@ func TestClosingTheHostingTabOffersNoRecovery(t *testing.T) {
 // entry — TestActionsOverlayRestartStillFiresToastByDefault is the default-config
 // half of the pair.
 func TestRestartConfirmsUnderConfirmDestructive(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := loadSessions(frozenClock(modalConfirmModel(), &at), makeSessions())
 	m2, cmd := runRowAction(t, m, keyR)
@@ -567,6 +603,8 @@ func TestRestartConfirmsUnderConfirmDestructive(t *testing.T) {
 // TestActionsOverlayCloseFiresToast verifies the same close path dispatches when
 // the user reaches `X` via the actions overlay (a → X).
 func TestActionsOverlayCloseFiresToast(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	m = openActionsOverlay(t, m)
@@ -587,6 +625,8 @@ func TestActionsOverlayCloseFiresToast(t *testing.T) {
 // default confirm_destructive=false the overlay's restart dispatches straight
 // away, says so while it is in flight, and reports the result when it lands.
 func TestActionsOverlayRestartStillFiresToastByDefault(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := openActionsOverlay(t, undoTestModel(&at))
 	updated, cmd := m.Update(keyPress("r"))
@@ -619,6 +659,8 @@ func TestActionsOverlayRestartStillFiresToastByDefault(t *testing.T) {
 // so the dashboard never learns whether the icon changed. It says what it asked
 // for rather than claiming a state it cannot see.
 func TestClearStatusDescribesTheRequest(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	// Every row carries the attention badge, because clear icon is dimmed on a
 	// row with nothing to clear and the overlay helper refuses a dimmed entry.
@@ -646,6 +688,8 @@ func TestClearStatusDescribesTheRequest(t *testing.T) {
 // TestUndoCloseRunsFromTheCommandPalette verifies the by-name route reaches a
 // live entry from the dashboard: `:` then the command, no close required first.
 func TestUndoCloseRunsFromTheCommandPalette(t *testing.T) {
+	t.Parallel()
+
 	at := undoTestNow
 	m := undoTestModel(&at)
 	m.recovery = recoveryWith(at, "phantom")

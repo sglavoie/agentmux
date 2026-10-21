@@ -60,6 +60,8 @@ func armedModel(t *testing.T) (Model, *topologyRefreshRecorder, int) {
 // however many ticks arrive during one slow refresh, they cost exactly one
 // follow-up.
 func TestTicksCoalesceIntoOnePendingRefresh(t *testing.T) {
+	t.Parallel()
+
 	m, recorder, startupSeq := armedModel(t)
 
 	for range 3 {
@@ -88,6 +90,8 @@ func TestTicksCoalesceIntoOnePendingRefresh(t *testing.T) {
 // through the same controller as the tick. An action taken during a refresh is
 // the realistic way two refreshes would otherwise overlap.
 func TestPostActionRefreshCoalescesWithTicks(t *testing.T) {
+	t.Parallel()
+
 	m, recorder, startupSeq := armedModel(t)
 
 	m = send(m, commands.TickMsg{})
@@ -106,6 +110,8 @@ func TestPostActionRefreshCoalescesWithTicks(t *testing.T) {
 // TestActionRefreshesWhenNothingIsInFlight is the control for the test above:
 // an action still refreshes promptly when it is not competing with one.
 func TestActionRefreshesWhenNothingIsInFlight(t *testing.T) {
+	t.Parallel()
+
 	m, recorder, startupSeq := armedModel(t)
 	m = send(m, commands.SessionsMsg{Seq: startupSeq, Sessions: makeSessions()})
 	if recorder.count() != 0 {
@@ -125,6 +131,8 @@ func TestActionRefreshesWhenNothingIsInFlight(t *testing.T) {
 // Kitty that are both down stay down for more than a moment; retrying the
 // instant the failure lands would spin against them at message speed.
 func TestFailedRefreshWaitsForTheNextTick(t *testing.T) {
+	t.Parallel()
+
 	m, recorder, startupSeq := armedModel(t)
 	m = send(m, commands.TickMsg{})
 	if !m.topologyRefreshPending {
@@ -154,6 +162,8 @@ func TestFailedRefreshWaitsForTheNextTick(t *testing.T) {
 // TestFailedRefreshRetainsTheLastSessionList is the completion contract's third
 // clause: a read that failed must not empty a dashboard that was working.
 func TestFailedRefreshRetainsTheLastSessionList(t *testing.T) {
+	t.Parallel()
+
 	m, _, startupSeq := armedModel(t)
 	m = send(m, commands.SessionsMsg{Seq: startupSeq, Sessions: makeSessions()})
 	before := len(m.filtered)
@@ -174,6 +184,8 @@ func TestFailedRefreshRetainsTheLastSessionList(t *testing.T) {
 // obsolete: it carries a superseded sequence, or it arrives when the controller
 // is waiting on nothing at all.
 func TestObsoleteCompletionsAreIgnored(t *testing.T) {
+	t.Parallel()
+
 	m, _, startupSeq := armedModel(t)
 	m = send(m, commands.SessionsMsg{Seq: startupSeq, Sessions: makeSessions()})
 	m = send(m, commands.TickMsg{})
@@ -215,6 +227,8 @@ func TestObsoleteCompletionsAreIgnored(t *testing.T) {
 // dashboard opened from a tab must still land on that tab when the first
 // refresh fails.
 func TestStartupSelectionSurvivesAnInitialFailure(t *testing.T) {
+	t.Parallel()
+
 	base := testModel()
 	base.initialSourceWindowID = 42
 	m, recorder := recordTopologyRefreshes(base)
@@ -255,6 +269,8 @@ func TestStartupSelectionSurvivesAnInitialFailure(t *testing.T) {
 // reaches the model, which is what lets later work tell a daemon snapshot from
 // a listing this process ran.
 func TestSessionsMsgStoresTopologyFreshness(t *testing.T) {
+	t.Parallel()
+
 	m, _, startupSeq := armedModel(t)
 	m = send(m, commands.SessionsMsg{
 		Seq:      startupSeq,

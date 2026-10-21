@@ -8,6 +8,8 @@ import (
 )
 
 func TestOverviewPreferenceSurvivesClientsButNotDaemonLifetime(t *testing.T) {
+	t.Parallel()
+
 	sock := startTestServer(t)
 	query := func(socket string, set *bool, want, explicit bool) {
 		t.Helper()

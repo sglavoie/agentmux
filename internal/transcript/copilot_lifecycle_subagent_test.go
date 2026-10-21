@@ -9,6 +9,8 @@ import (
 )
 
 func TestCopilotLifecycle_SubagentTurnEndIsNotMainTerminal(t *testing.T) {
+	t.Parallel()
+
 	// A subagent runs its own nested turns; each emits an assistant.turn_end
 	// that is indistinguishable, per-record, from the main turn's terminal.
 	// While the subagent.started span is open the tail must NOT classify those
@@ -34,6 +36,8 @@ func TestCopilotLifecycle_SubagentTurnEndIsNotMainTerminal(t *testing.T) {
 }
 
 func TestCopilotLifecycle_MainTerminalAfterSubagentCompletes(t *testing.T) {
+	t.Parallel()
+
 	// Once the subagent.completed closes the span, a genuine main-session
 	// assistant.turn_end must still settle the session to terminal.
 	path := filepath.Join(t.TempDir(), "events.jsonl")
@@ -57,6 +61,8 @@ func TestCopilotLifecycle_MainTerminalAfterSubagentCompletes(t *testing.T) {
 }
 
 func TestCopilotLifecycle_UserAbortInsideSubagentSpanIsTerminal(t *testing.T) {
+	t.Parallel()
+
 	// A user-initiated abort cancels the whole session, subagents included, so
 	// it is terminal even while a subagent.started span is still open.
 	path := filepath.Join(t.TempDir(), "events.jsonl")
@@ -76,6 +82,8 @@ func TestCopilotLifecycle_UserAbortInsideSubagentSpanIsTerminal(t *testing.T) {
 }
 
 func TestCopilotLifecycle_SubagentStartedBeforeTailIsNotMainTerminal(t *testing.T) {
+	t.Parallel()
+
 	// A subagent span whose in-span tool output is larger than the classification
 	// tail but still fits the enlarged window: the opening subagent.started is
 	// visible from the file-start boundary, so span depth is counted directly and
@@ -100,6 +108,8 @@ func TestCopilotLifecycle_SubagentStartedBeforeTailIsNotMainTerminal(t *testing.
 }
 
 func TestCopilotLifecycle_MainTerminalAfterSpanBeganOutsideTail(t *testing.T) {
+	t.Parallel()
+
 	// Same large-in-window span, but a genuine main assistant.turn_end follows the
 	// span's close: once the span (opened from the file-start boundary) is closed
 	// by its subagent.completed, the trailing main-session turn_end must still
@@ -125,6 +135,8 @@ func TestCopilotLifecycle_MainTerminalAfterSpanBeganOutsideTail(t *testing.T) {
 }
 
 func TestCopilotLifecycle_OpenSubagentSpanOutsideTailRemainsOpenIsNotMainTerminal(t *testing.T) {
+	t.Parallel()
+
 	// The worst boundary case: a subagent.started whose opening record falls off
 	// the top of the whole bounded window (more than a window's worth of in-span
 	// output separates it from the nested assistant.turn_end) and whose span
@@ -153,6 +165,8 @@ func TestCopilotLifecycle_OpenSubagentSpanOutsideTailRemainsOpenIsNotMainTermina
 }
 
 func TestCopilotLifecycle_MidFileWindowWithVisibleAnchorSettlesTerminal(t *testing.T) {
+	t.Parallel()
+
 	// The window begins mid-file (a huge in-span record pushed all earlier history
 	// off the top), but a user.message anchor is visible inside the window. That
 	// anchor re-establishes a trustworthy zero-depth main boundary, so a following
@@ -179,6 +193,8 @@ func TestCopilotLifecycle_MidFileWindowWithVisibleAnchorSettlesTerminal(t *testi
 }
 
 func TestCopilotLifecycle_HugeAndPartialLines(t *testing.T) {
+	t.Parallel()
+
 	// A huge tool-output record larger than the classification tail (but within
 	// the window) must not break parsing, and the trailing incomplete write must
 	// be ignored, leaving the real terminal event as the verdict. The window still
@@ -201,6 +217,8 @@ func TestCopilotLifecycle_HugeAndPartialLines(t *testing.T) {
 }
 
 func TestCopilotLifecycle_MalformedJSONFailsClosed(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeTranscript(t, path, copilotEvents(
 		`{"type":"assistant.turn_end","timestamp":"2026-05-24T13:00:03.000Z","data":{}}`,
@@ -217,6 +235,8 @@ func TestCopilotLifecycle_MalformedJSONFailsClosed(t *testing.T) {
 }
 
 func TestCopilotLifecycle_MissingFileFailsClosed(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "nope", "events.jsonl")
 	ev, err := ReadCopilotLifecycle(path)
 	if !errors.Is(err, os.ErrNotExist) {
@@ -228,6 +248,8 @@ func TestCopilotLifecycle_MissingFileFailsClosed(t *testing.T) {
 }
 
 func TestCopilotLifecycle_EmptyFileIsUnknown(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeTranscript(t, path, "")
 	ev, err := ReadCopilotLifecycle(path)
@@ -240,6 +262,8 @@ func TestCopilotLifecycle_EmptyFileIsUnknown(t *testing.T) {
 }
 
 func TestCopilotResolveTranscript_ProfileHomeMatch(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	homeA := filepath.Join(root, "profile-a")
 	homeB := filepath.Join(root, "profile-b")
@@ -260,6 +284,8 @@ func TestCopilotResolveTranscript_ProfileHomeMatch(t *testing.T) {
 }
 
 func TestCopilotResolveTranscript_ProfileHomeFallbackDefault(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	homeA := filepath.Join(root, "profile-a")
 	defaultHome := filepath.Join(root, "default")
@@ -278,6 +304,8 @@ func TestCopilotResolveTranscript_ProfileHomeFallbackDefault(t *testing.T) {
 }
 
 func TestCopilotResolveTranscript_ProfileHomePrefersFirstMatch(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	homeA := filepath.Join(root, "profile-a")
 	homeB := filepath.Join(root, "profile-b")
@@ -300,6 +328,8 @@ func TestCopilotResolveTranscript_ProfileHomePrefersFirstMatch(t *testing.T) {
 }
 
 func TestCopilotResolveTranscript_InvalidSessionID(t *testing.T) {
+	t.Parallel()
+
 	defaultHome := t.TempDir()
 	cases := []string{
 		"",
@@ -325,6 +355,8 @@ func TestCopilotResolveTranscript_InvalidSessionID(t *testing.T) {
 }
 
 func TestCopilotResolveTranscript_SkipsEmptyProfileHomes(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	defaultHome := filepath.Join(root, "default")
 	id := "dddddddd-dddd-dddd-dddd-dddddddddddd"

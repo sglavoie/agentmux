@@ -15,6 +15,8 @@ import (
 // carried hit regions — so a committed scenario could assert a screen no
 // operator would ever be shown.
 func TestRootFrameIsTheOnlyComposition(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		frame := renderRootFrame(m)
 		if got := m.render(); got != frame.text {
@@ -45,6 +47,8 @@ func TestRootFrameIsTheOnlyComposition(t *testing.T) {
 // footer; now both read one rootChrome, and this asserts that the number it
 // reports is the number the composition actually leaves for the body.
 func TestRootChromeBodyHeightMatchesTheComposedBody(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		chrome := newRootChrome(m)
 		lines := strings.Split(chrome.compose(renderDashboardFrame(m).text), "\n")
@@ -66,6 +70,8 @@ func TestRootChromeBodyHeightMatchesTheComposedBody(t *testing.T) {
 // outside the terminal. Both are only reachable if the clip and the composition
 // disagree about the body rectangle.
 func TestDashboardHitsStayInsideTheComposedBody(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		frame := renderRootFrame(m)
 		bodyHeight := newRootChrome(m).bodyHeight()
@@ -98,6 +104,8 @@ func TestDashboardHitsStayInsideTheComposedBody(t *testing.T) {
 // The divider is the witness, because it is the one glyph whose column is
 // decided by the join rather than by the content.
 func TestSplitPanesAreDrawnWhereTheHitMapSaysTheyAre(t *testing.T) {
+	t.Parallel()
+
 	check := func(t *testing.T, m Model) {
 		t.Helper()
 		frame := renderRootFrame(m)
@@ -165,6 +173,8 @@ func cellAt(line string, col int) string {
 // wide. A region reconstructed from the finished string instead of emitted
 // beside it is exactly what drifts here.
 func TestDashboardHitRowsNameTheRowTheyLandOn(t *testing.T) {
+	t.Parallel()
+
 	for _, inspector := range []bool{false, true} {
 		m := responsiveModel(160, 40, dashboard.ViewUrgency, inspector)
 		m.activeFilter = dashboard.Parse("@personal busy")
@@ -220,6 +230,8 @@ func rowPrefix(base string) string {
 // measurement the footer fixpoint takes. A term added to one of them and not
 // the others is what this catches.
 func TestDashboardChromeIsOneVerticalBudget(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		chrome := dashboardChromeFor(m)
 		if got, want := chrome.total()+chrome.paneRows(m.height), m.height; got != want {
@@ -244,6 +256,8 @@ func TestDashboardChromeIsOneVerticalBudget(t *testing.T) {
 // budget rather than against a re-derivation of it, in the plain-list case where
 // the pane rows and the list rows are the same number.
 func TestDashboardGeometryReadsTheSharedChrome(t *testing.T) {
+	t.Parallel()
+
 	responsiveCases(t, func(t *testing.T, m Model) {
 		g := dashboardGeometry(m)
 		if g.split {
@@ -261,6 +275,8 @@ func TestDashboardGeometryReadsTheSharedChrome(t *testing.T) {
 // rail that was responsively suppressed had to be taught to it separately from
 // the frame the operator was actually looking at.
 func TestOverlayBackdropIsTheCanonicalDashboardFrame(t *testing.T) {
+	t.Parallel()
+
 	for _, mode := range []Mode{ModeActions, ModeConfirm, ModeDetail, ModeCommandPalette, ModeLiveSessionPicker} {
 		m := testModelWithSessions()
 		m.width, m.height = 120, 40
@@ -280,6 +296,8 @@ func TestOverlayBackdropIsTheCanonicalDashboardFrame(t *testing.T) {
 // dispatch, and this asserts they agree for every mode either can return to —
 // and that a non-dashboard mode really does keep its own view.
 func TestOverlayBackdropOwnershipIsOneDispatch(t *testing.T) {
+	t.Parallel()
+
 	for _, mode := range []Mode{
 		ModeList, ModePicker, ModeSessionSearch, ModeSessionView,
 		ModePlanSearch, ModePlanView, ModeWorktrees, ModeASLRuns,
@@ -322,6 +340,8 @@ func TestOverlayBackdropOwnershipIsOneDispatch(t *testing.T) {
 // unification bought, stated in terms an operator would recognize: an overlay
 // raised from Worktrees dims Worktrees no matter which overlay it is.
 func TestOverlayBackdropRetainsTheViewItWasRaisedFrom(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m.width, m.height = 120, 40
 	m.mode = ModeConfirm

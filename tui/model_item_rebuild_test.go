@@ -70,6 +70,8 @@ func rebuildTestModel() Model {
 // window tree replaces every row, so a projection left over from the previous
 // tree would name windows that are already gone.
 func TestItemsRebuildOnTopologyRefresh(t *testing.T) {
+	t.Parallel()
+
 	m := rebuildTestModel()
 	assertItemsMatchFiltered(t, m, "the initial load")
 
@@ -86,6 +88,8 @@ func TestItemsRebuildOnTopologyRefresh(t *testing.T) {
 // restores the snapshot, and the Enter commit — each of which reapplies the
 // filter to m.sessions and so rewrites m.filtered.
 func TestItemsRebuildOnFilterChange(t *testing.T) {
+	t.Parallel()
+
 	m := rebuildTestModel()
 
 	m = pressKey(m, "/")
@@ -108,6 +112,8 @@ func TestItemsRebuildOnFilterChange(t *testing.T) {
 // TestItemsRebuildOnProfileFilterCycle covers the @profile chip cycle, which
 // swaps one filter component and reapplies the rest.
 func TestItemsRebuildOnProfileFilterCycle(t *testing.T) {
+	t.Parallel()
+
 	m := rebuildTestModel()
 	seen := map[int]bool{}
 	// One full lap plus one, so the wrap back to "all profiles" is covered too.
@@ -125,6 +131,8 @@ func TestItemsRebuildOnProfileFilterCycle(t *testing.T) {
 // in place, and a projection built before the reorder names the wrong line for
 // every row the sort moved.
 func TestItemsRebuildOnResort(t *testing.T) {
+	t.Parallel()
+
 	m := rebuildTestModel()
 
 	// Reverse the rows behind the projection's back, then resort. If the
@@ -145,6 +153,8 @@ func TestItemsRebuildOnResort(t *testing.T) {
 // identity, so a row that is still visible stays selected even when the refresh
 // reorders the list around it.
 func TestSelectedSessionSurvivesRefresh(t *testing.T) {
+	t.Parallel()
+
 	m := rebuildTestModel()
 	m = pressKey(m, keyEnd)
 	before, ok := m.selectedSession()
@@ -174,6 +184,8 @@ func TestSelectedSessionSurvivesRefresh(t *testing.T) {
 // is no longer visible cannot be preserved, and what replaces it must still be
 // a valid item rather than a dangling index.
 func TestSelectedSessionClearedWhenFilteredOut(t *testing.T) {
+	t.Parallel()
+
 	m := rebuildTestModel()
 	m = pressKey(m, keyEnd)
 	gone, _ := m.selectedSession()

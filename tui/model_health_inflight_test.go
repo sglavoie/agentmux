@@ -27,6 +27,8 @@ func recordHealthChecks(m Model) (Model, *[]healthDispatch) {
 // hooks scan from being joined by another every tick: a check that has not
 // answered yet is the only one of its kind, however overdue the next one is.
 func TestTicksStartNoHealthCheckWhileOneIsOut(t *testing.T) {
+	t.Parallel()
+
 	m, dispatches := recordHealthChecks(testModel())
 
 	m = send(m, commands.TickMsg{})

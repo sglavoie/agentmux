@@ -26,6 +26,8 @@ func makeCopilotAccount(name, dir string) config.Account {
 }
 
 func TestCopilotHookContract_InstallPath(t *testing.T) {
+	t.Parallel()
+
 	contract := harness.Lookup(harness.Copilot).HookContract()
 	homeDir := "/home/user/.copilot"
 	want := filepath.Join(homeDir, "hooks", "agent-mux.json")
@@ -213,6 +215,8 @@ func TestMergeCopilotDisabledEvents(t *testing.T) {
 }
 
 func TestCopilotParseInstalledEvents_NonExistent(t *testing.T) {
+	t.Parallel()
+
 	contract := harness.Lookup(harness.Copilot).HookContract()
 	events, err := contract.ParseInstalledEvents("/nonexistent/path/agent-mux.json")
 	if err != nil {
@@ -254,6 +258,8 @@ func TestCopilotParseInstalledEvents_AfterMerge(t *testing.T) {
 }
 
 func TestCopilotStatusMissing(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "copilot")
 

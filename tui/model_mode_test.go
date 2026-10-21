@@ -12,6 +12,8 @@ import (
 // ---- Mode transition tests ----
 
 func TestModeListToSearch(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	if m.mode != ModeList {
 		t.Fatal("expected ModeList initially")
@@ -23,6 +25,8 @@ func TestModeListToSearch(t *testing.T) {
 }
 
 func TestModeSearchEscReturnsToList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = pressKey(m, "esc")
@@ -32,6 +36,8 @@ func TestModeSearchEscReturnsToList(t *testing.T) {
 }
 
 func TestModeSearchEnterAppliesAndReturnsToList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = pressKey(m, "a")
@@ -47,6 +53,8 @@ func TestModeSearchEnterAppliesAndReturnsToList(t *testing.T) {
 }
 
 func TestModeSearchLiveAppliesEachKeystroke(t *testing.T) {
+	t.Parallel()
+
 	// Each keystroke should narrow the list before Enter is pressed.
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
@@ -62,6 +70,8 @@ func TestModeSearchLiveAppliesEachKeystroke(t *testing.T) {
 }
 
 func TestFKeyRemainsTextInFilterInput(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = pressKey(m, "f")
@@ -77,6 +87,8 @@ func TestFKeyRemainsTextInFilterInput(t *testing.T) {
 }
 
 func TestVKeyDoesNotLeaveLiveList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "v")
 	if m.mode != ModeList {
@@ -85,6 +97,8 @@ func TestVKeyDoesNotLeaveLiveList(t *testing.T) {
 }
 
 func TestFilterEscRestoresSavedFilter(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// Commit a filter first.
 	m = pressKey(m, "/")
@@ -105,6 +119,8 @@ func TestFilterEscRestoresSavedFilter(t *testing.T) {
 }
 
 func TestSlashTypingNarrowsByAccount(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = pressKey(m, "@")
@@ -125,6 +141,8 @@ func TestSlashTypingNarrowsByAccount(t *testing.T) {
 // ---- Vim navigation tests ----
 
 func TestNavJK(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	if m.cursor != 0 {
 		t.Fatal("expected cursor=0 initially")
@@ -145,6 +163,8 @@ func TestNavJK(t *testing.T) {
 // They survive inside the project switcher, the health overlay, and the detail
 // timeline, which have their own handlers and their own scroll geometry.
 func TestNavHomeGoesToTop(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "j")
 	m = pressKey(m, "j")
@@ -155,6 +175,8 @@ func TestNavHomeGoesToTop(t *testing.T) {
 }
 
 func TestNavEndGoesToBottom(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, keyEnd)
 	want := len(m.filtered) - 1
@@ -164,6 +186,8 @@ func TestNavEndGoesToBottom(t *testing.T) {
 }
 
 func TestNavGAndCapitalGReachListEnds(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{keyG, keyGG} {
 		t.Run(key, func(t *testing.T) {
 			m := loadSessions(testModel(), makeSessions())
@@ -185,6 +209,8 @@ func TestNavGAndCapitalGReachListEnds(t *testing.T) {
 }
 
 func TestNavClampAtBounds(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// Pressing k at top should stay at 0.
 	m = pressKey(m, "k")
@@ -203,6 +229,8 @@ func TestNavClampAtBounds(t *testing.T) {
 // ---- Search filtering tests ----
 
 func TestSearchFilterByTitle(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.activeFilter = dashboard.Parse("api")
 	m.filtered = dashboard.ApplyFilter(m.sessions, m.activeFilter, m.lastActivity, m.idleThreshold)
@@ -216,6 +244,8 @@ func TestSearchFilterByTitle(t *testing.T) {
 }
 
 func TestSearchFilterByDirectory(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.filtered = dashboard.ApplyFilter(m.sessions, dashboard.Parse("dotfiles"), m.lastActivity, m.idleThreshold)
 	m.rebuildItems()
@@ -225,6 +255,8 @@ func TestSearchFilterByDirectory(t *testing.T) {
 }
 
 func TestSearchFilterByAccountSubstring(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// Bare-token 'work' matches the Account field, so both work sessions survive
 	// even though the visible title column is project-only.
@@ -236,6 +268,8 @@ func TestSearchFilterByAccountSubstring(t *testing.T) {
 }
 
 func TestAccountFilterNarrowsList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.filtered = dashboard.ApplyFilter(m.sessions, dashboard.Parse("@personal"), m.lastActivity, m.idleThreshold)
 	m.rebuildItems()
@@ -245,6 +279,8 @@ func TestAccountFilterNarrowsList(t *testing.T) {
 }
 
 func TestSearchCombinedWithAccountFilter(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.filtered = dashboard.ApplyFilter(m.sessions, dashboard.Parse("api @work"), m.lastActivity, m.idleThreshold)
 	m.rebuildItems()
@@ -256,6 +292,8 @@ func TestSearchCombinedWithAccountFilter(t *testing.T) {
 // ---- Refresh tick test ----
 
 func TestTickTriggersRefetch(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	updated, cmd := m.Update(commands.TickMsg{})
 	if updated.(Model).err != nil {
@@ -269,6 +307,8 @@ func TestTickTriggersRefetch(t *testing.T) {
 // ---- Error display test ----
 
 func TestErrMsgSetsErr(t *testing.T) {
+	t.Parallel()
+
 	m := applyRefreshErr(testModel(), errors.New("kitty offline"))
 	if m.err == nil {
 		t.Fatal("expected err to be set after commands.ErrMsg")
@@ -276,6 +316,8 @@ func TestErrMsgSetsErr(t *testing.T) {
 }
 
 func TestSessionsMsgClearsErr(t *testing.T) {
+	t.Parallel()
+
 	m := applyRefreshErr(testModel(), errors.New("kitty offline"))
 	m = loadSessions(m, makeSessions())
 	if m.err != nil {
@@ -286,6 +328,8 @@ func TestSessionsMsgClearsErr(t *testing.T) {
 // ---- Footer content test ----
 
 func TestFooterChangesWithMode(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width, m.height = 120, 40
 
@@ -314,6 +358,8 @@ func TestFooterChangesWithMode(t *testing.T) {
 // overlay, and the operator who backs out of it has not said they are done with
 // the row — they have said they are done with this one action.
 func TestConfirmNReturnsToTheActionsOverlay(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressRowAction(t, m, keyClose) // → ModeConfirm (close)
 	m = pressKey(m, "n")               // cancel
@@ -327,6 +373,8 @@ func TestConfirmNReturnsToTheActionsOverlay(t *testing.T) {
 }
 
 func TestConfirmEscReturnsToTheActionsOverlay(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressRowAction(t, m, keyClose) // → ModeConfirm
 	m = pressKey(m, "esc")
@@ -339,6 +387,8 @@ func TestConfirmEscReturnsToTheActionsOverlay(t *testing.T) {
 }
 
 func TestConfirmYEmitsCloseCmd(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressRowAction(t, m, keyClose) // → ModeConfirm (close)
 	updated, cmd := m.Update(keyPress("y"))
@@ -351,6 +401,8 @@ func TestConfirmYEmitsCloseCmd(t *testing.T) {
 }
 
 func TestConfirmYEmitsRestartCmd(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(modalConfirmModel(), makeSessions())
 	m = pressRowAction(t, m, keyR) // → ModeConfirm (restart)
 	updated, cmd := m.Update(keyPress("y"))

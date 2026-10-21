@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // companionWindows is a Kitty tree of n managed windows, IDs 1..n, one per tab.
@@ -59,6 +60,8 @@ func sessionIcon(snap protocol.CompanionSnapshot, windowID int) string {
 // stateMu on every publish path, so it must return however many times it is
 // rung with nobody draining it.
 func TestCompanionDirtyNeverBlocksUnderStateMu(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	done := make(chan struct{})
 	go func() {
@@ -86,6 +89,8 @@ func TestCompanionDirtyNeverBlocksUnderStateMu(t *testing.T) {
 // TestCompanionDirtyRungByPublishPaths pins the wiring: a state change, a
 // snapshot publication, and a readiness transition each ring the doorbell.
 func TestCompanionDirtyRungByPublishPaths(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]func(h *Handler){
 		"state update": func(h *Handler) { companionStateUpdate(h, 7, "subagent", "SubagentStart") },
 		"snapshot":     func(h *Handler) { h.publishSnapshot(companionWindows(1), time.Now()) },
@@ -110,6 +115,8 @@ func TestCompanionDirtyRungByPublishPaths(t *testing.T) {
 // itself, which would deadlock (and fail TryLock) if the build held it. The
 // concurrent writers make the race detector check the copy is a real copy.
 func TestCompanionHubBuildsOutsideStateMu(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.publishSnapshot(companionWindows(4), time.Now())
 	var projected, lockFree atomic.Int32
@@ -155,6 +162,8 @@ func TestCompanionHubBuildsOutsideStateMu(t *testing.T) {
 // TestCompanionHubSkipsUnchangedDigest: republishing an unchanged world hands
 // subscribers nothing new.
 func TestCompanionHubSkipsUnchangedDigest(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.publishSnapshot(companionWindows(2), time.Now())
 	h.publishCompanionSnapshot(time.Now())
@@ -228,10 +237,10 @@ func TestCompanionSubscribeAckReplayAndHealth(t *testing.T) {
 	}
 
 	_ = sub.Close()
-	waitFor(t, func() bool {
+	testutil.Eventually(t, "the subscriber to leave the hub after closing", func() bool {
 		resp := h.Handle(protocol.Request{Type: protocol.TypeHealth})
 		return resp.Companion != nil && resp.Companion.Subscribers == 0
-	}, "subscriber never left the hub after closing")
+	})
 }
 
 // TestCompanionHeartbeat: the hub sends heartbeats at its advertised cadence.
@@ -259,6 +268,8 @@ func TestCompanionHeartbeat(t *testing.T) {
 // TestCompanionNotificationBackendRequiresAuthorization: a backend claim
 // without OS authorization is not reported as a connected backend.
 func TestCompanionNotificationBackendRequiresAuthorization(t *testing.T) {
+	t.Parallel()
+
 	sock, _, h := newTestServerWithRef(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -283,6 +294,8 @@ func TestCompanionNotificationBackendRequiresAuthorization(t *testing.T) {
 // TestFaultDaemonRestartSendsByeShutdown: a daemon going down tells every
 // subscriber why, so a companion reconnects instead of reporting a crash.
 func TestFaultDaemonRestartSendsByeShutdown(t *testing.T) {
+	t.Parallel()
+
 	sock, server, h := newTestServerWithRef(t)
 	h.publishSnapshot(companionWindows(1), time.Now())
 	h.publishCompanionSnapshot(time.Now())
@@ -315,6 +328,8 @@ func TestFaultDaemonRestartSendsByeShutdown(t *testing.T) {
 // nothing — the writer unwinds, the hub forgets the sink, and both a new
 // subscriber and ordinary requests are served afterwards.
 func TestFaultSubscriberKilledMidWrite(t *testing.T) {
+	t.Parallel()
+
 	sock, _, h := newTestServerWithRef(t)
 	// Enough windows that one snapshot frame is far larger than a Unix socket
 	// buffer, so the writer is parked mid-frame when the peer dies.
@@ -341,7 +356,7 @@ func TestFaultSubscriberKilledMidWrite(t *testing.T) {
 	if _, err := io.ReadAtLeast(conn, buf, 1); err != nil {
 		t.Fatalf("read ack: %v", err)
 	}
-	waitFor(t, func() bool { return h.companionHealth().Subscribers == 1 }, "subscriber never registered")
+	testutil.Eventually(t, "the subscriber to register", func() bool { return h.companionHealth().Subscribers == 1 })
 	// Keep the writer busy with fresh snapshots, then kill the peer.
 	for i := range 5 {
 		companionStateUpdate(h, 1+i, "subagent", "SubagentStart")
@@ -352,7 +367,7 @@ func TestFaultSubscriberKilledMidWrite(t *testing.T) {
 	}
 	_ = conn.Close()
 
-	waitFor(t, func() bool { return h.companionHealth().Subscribers == 0 }, "killed subscriber was never removed from the hub")
+	testutil.Eventually(t, "the killed subscriber to leave the hub", func() bool { return h.companionHealth().Subscribers == 0 })
 
 	// The daemon is healthy: ordinary requests and a fresh subscription work.
 	client := ipc.NewClientWithSocket(sock)
@@ -404,16 +419,5 @@ func nextFrameOfType(t *testing.T, sub *ipc.Subscription, typ protocol.StreamFra
 		_ = sub.Close()
 		t.Fatalf("no %s frame within 5s", typ)
 		return protocol.StreamFrame{}
-	}
-}
-
-func waitFor(t *testing.T, cond func() bool, msg string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatal(msg)
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }

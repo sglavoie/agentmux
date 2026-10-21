@@ -186,6 +186,8 @@ func findWithheld(result HistoryResult, id string) (Withheld, bool) {
 }
 
 func TestHistoryReadsOnlyAuthorizedTranscripts(t *testing.T) {
+	t.Parallel()
+
 	corpus := stageClaudeCorpus(t)
 	reader := newGuardedReader(t, NewClaudeReader(), corpus.excludedPath)
 	readers := map[string]Reader{harness.Claude: reader}
@@ -234,6 +236,8 @@ func TestHistoryReadsOnlyAuthorizedTranscripts(t *testing.T) {
 // locates it. Reporting the path, the working directory, or the project would
 // hand back under "why" precisely what the exclusion withheld.
 func TestHistoryWithheldEntriesCarryNoLocation(t *testing.T) {
+	t.Parallel()
+
 	corpus := stageClaudeCorpus(t)
 	readers := map[string]Reader{harness.Claude: newGuardedReader(t, NewClaudeReader(), corpus.excludedPath)}
 
@@ -258,6 +262,8 @@ func TestHistoryWithheldEntriesCarryNoLocation(t *testing.T) {
 // be able to reach it: the admission path never consults the index, and the
 // guarded reader proves the source file is not reopened either.
 func TestHistoryDoesNotServeContentCachedByIndexRefresh(t *testing.T) {
+	t.Parallel()
+
 	corpus := stageClaudeCorpus(t)
 	realReaders := map[string]Reader{harness.Claude: NewClaudeReader()}
 
@@ -307,6 +313,8 @@ func TestHistoryDoesNotServeContentCachedByIndexRefresh(t *testing.T) {
 // Authorization is asked again on every request, so withdrawing an opt-in stops
 // the next read rather than the next process.
 func TestHistoryRevocationStopsSubsequentReads(t *testing.T) {
+	t.Parallel()
+
 	corpus := stageClaudeCorpus(t)
 	authorizer := newDirectoryAuthorizer(corpus.allowedDir)
 	reader := newGuardedReader(t, NewClaudeReader(), corpus.excludedPath)
@@ -350,6 +358,8 @@ func TestHistoryRevocationStopsSubsequentReads(t *testing.T) {
 // messages from two projects, and identity alone cannot say which is which.
 // Deciding would require the content the decision gates, so it stays closed.
 func TestHistoryWithholdsAmbiguousAndUnidentifiedConversations(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	home := filepath.Join(root, "claude-home")
 	first := filepath.Join(root, "projects", "first")
@@ -387,6 +397,8 @@ func TestHistoryWithholdsAmbiguousAndUnidentifiedConversations(t *testing.T) {
 }
 
 func TestHistoryWithholdsConversationsWithNoWorkingDirectory(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	home := filepath.Join(root, "codex-home")
 	// A Codex rollout whose session_meta carries no cwd: there is no directory
@@ -420,6 +432,8 @@ func TestHistoryWithholdsConversationsWithNoWorkingDirectory(t *testing.T) {
 // nothing. Falling back to Discover would be the content-reading path this
 // boundary exists to precede.
 func TestHistorySkipsHarnessThatCannotEnumerateMetadata(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	home := filepath.Join(root, "claude-home")
 	path := filepath.Join(home, "projects", "-any", "session.jsonl")
@@ -450,6 +464,8 @@ func TestHistorySkipsHarnessThatCannotEnumerateMetadata(t *testing.T) {
 }
 
 func TestHistoryRequiresAnAuthorizer(t *testing.T) {
+	t.Parallel()
+
 	corpus := stageClaudeCorpus(t)
 	readers := map[string]Reader{harness.Claude: newGuardedReader(t, NewClaudeReader(), corpus.allowedPath, corpus.excludedPath)}
 	if _, err := History(corpus.cfg, readers, nil, HistoryRequest{}); err == nil {
@@ -461,6 +477,8 @@ func TestHistoryRequiresAnAuthorizer(t *testing.T) {
 }
 
 func TestHistoryBoundsExcerptsAndReportsLocation(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	home := filepath.Join(root, "claude-home")
 	dir := filepath.Join(root, "projects", "bounded")
@@ -527,6 +545,8 @@ func TestHistoryBoundsExcerptsAndReportsLocation(t *testing.T) {
 }
 
 func TestHistoryLimitsNormalizeAndClamp(t *testing.T) {
+	t.Parallel()
+
 	zero := HistoryLimits{}.Normalized()
 	if zero.Conversations != DefaultHistoryConversations || zero.Messages != DefaultHistoryMessages || zero.ExcerptChars != DefaultHistoryExcerptChars {
 		t.Fatalf("zero limits normalized to %+v, want the defaults", zero)
@@ -538,6 +558,8 @@ func TestHistoryLimitsNormalizeAndClamp(t *testing.T) {
 }
 
 func TestHistoryTruncatesAtTheConversationBoundWithoutReadingTheRest(t *testing.T) {
+	t.Parallel()
+
 	corpus := stageClaudeCorpus(t)
 	// Both conversations are authorized; only one fits the bound. The one that
 	// does not fit must not be opened.
@@ -566,6 +588,8 @@ func TestHistoryTruncatesAtTheConversationBoundWithoutReadingTheRest(t *testing.
 }
 
 func TestHistoryFiltersByHarnessAndSince(t *testing.T) {
+	t.Parallel()
+
 	corpus := stageClaudeCorpus(t)
 	readers := map[string]Reader{harness.Claude: newGuardedReader(t, NewClaudeReader(), corpus.allowedPath, corpus.excludedPath)}
 
@@ -596,6 +620,8 @@ func TestHistoryFiltersByHarnessAndSince(t *testing.T) {
 // This asserts the whole serialized candidate rather than a chosen field, so a
 // future field that happened to carry content would fail here.
 func TestDiscoverMetadataYieldsNoMessageContent(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	claudeHome := filepath.Join(root, "claude-home")
@@ -663,6 +689,8 @@ func TestDiscoverMetadataYieldsNoMessageContent(t *testing.T) {
 // identity record would report a mixed-project conversation as single-project
 // and authorize it against a directory covering only part of its content.
 func TestDiscoverMetadataSeesEveryWorkingDirectory(t *testing.T) {
+	t.Parallel()
+
 	home := filepath.Join(t.TempDir(), "codex-home")
 	writeTranscript(t, filepath.Join(home, "sessions", "2026", "08", "01",
 		"rollout-2026-08-01T10-00-00-moved-session.jsonl"), strings.Join([]string{
@@ -687,6 +715,8 @@ func TestDiscoverMetadataSeesEveryWorkingDirectory(t *testing.T) {
 }
 
 func TestClaudeDiscoverMetadataFallsBackToTheEncodedDirectory(t *testing.T) {
+	t.Parallel()
+
 	home := filepath.Join(t.TempDir(), "claude-home")
 	// No record carries a cwd, so the encoded project directory name is the only
 	// identity available.
@@ -710,6 +740,8 @@ func TestClaudeDiscoverMetadataFallsBackToTheEncodedDirectory(t *testing.T) {
 }
 
 func TestDiscoverMetadataOnAbsentHomeIsEmpty(t *testing.T) {
+	t.Parallel()
+
 	missing := filepath.Join(t.TempDir(), "absent")
 	for name, discoverer := range map[string]MetadataDiscoverer{
 		"claude":  NewClaudeReader(),
@@ -731,6 +763,8 @@ func TestDiscoverMetadataOnAbsentHomeIsEmpty(t *testing.T) {
 }
 
 func TestClipRunesDoesNotSplitMultiByteCharacters(t *testing.T) {
+	t.Parallel()
+
 	text, truncated := clipRunes("héllo wörld", 5)
 	if !truncated || text != "héllo" {
 		t.Fatalf("clipRunes = %q,%v, want héllo,true", text, truncated)

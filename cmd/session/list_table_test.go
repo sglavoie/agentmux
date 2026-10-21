@@ -11,6 +11,8 @@ import (
 )
 
 func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	views := []sessionView{
 		{Harness: "claude", Profile: "personal-claude", Project: "🐱amx", LastAt: now.Add(-3 * time.Minute), ID: "b03c41a5", Snippet: "Fix the parser"},
@@ -35,6 +37,8 @@ func TestSessionTableHasAHeaderAndRelativeAges(t *testing.T) {
 // The summary fills what a known terminal width leaves it, and falls back to
 // the fixed cut when the width is unknown or leaves too little to read.
 func TestSessionTableFitsTheSummaryToTheTerminal(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	long := strings.Repeat("word ", 40)
 	views := []sessionView{{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "b03c41a5", Snippet: long}}
@@ -78,6 +82,8 @@ func TestSessionTableCutsLongPathsInTheSummary(t *testing.T) {
 }
 
 func TestSessionTableSaysSoWhenEmpty(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	if err := writeSessionTable(&out, nil, nil, time.Now(), 0, false); err != nil {
 		t.Fatal(err)
@@ -88,6 +94,8 @@ func TestSessionTableSaysSoWhenEmpty(t *testing.T) {
 }
 
 func TestFormatAgo(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {
 		at   time.Time
@@ -110,6 +118,8 @@ func TestFormatAgo(t *testing.T) {
 // abbreviated against every indexed ID, grows past the minimum where IDs share
 // a prefix, and stays whole where no prefix can tell two sessions apart.
 func TestSessionIDAbbreviationsStayResolvable(t *testing.T) {
+	t.Parallel()
+
 	metas := []transcript.SessionMeta{
 		{Harness: "claude", ID: "b03c41a5-1111-4c07-b626-b4f973e40310"},
 		{Harness: "codex", ID: "01a11272-2fca-72f2-a888-05539236fe3c"},
@@ -147,6 +157,8 @@ func TestSessionIDAbbreviationsStayResolvable(t *testing.T) {
 // The harness's title names a conversation better than its opening prompt,
 // which several sessions often share; the prompt stands in when there is none.
 func TestSessionTableSummaryPrefersTheTitle(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	views := []sessionView{
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "b03c41a5", Snippet: "Look at the project", Title: "Parser cleanup"},
@@ -166,6 +178,8 @@ func TestSessionTableSummaryPrefersTheTitle(t *testing.T) {
 // field a script already reads by position keeps it, and a conversation the
 // harness named nothing ends in an empty field rather than a placeholder.
 func TestSessionLinesEndWithTheTitleAfterThePrompt(t *testing.T) {
+	t.Parallel()
+
 	last := time.Date(2026, 10, 6, 15, 21, 0, 0, time.UTC)
 	views := []sessionView{
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "b03c41a5", Snippet: "Look at\tthe project", Title: "Parser cleanup"},
@@ -190,6 +204,8 @@ func TestSessionLinesEndWithTheTitleAfterThePrompt(t *testing.T) {
 // Conversations that opened with the same prompt are told apart by how many
 // messages each holds, which the table shows in its own column.
 func TestSessionTableShowsMessageCounts(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	views := []sessionView{
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "aaaa1111", Snippet: "same prompt", MessageCount: 343},
@@ -209,6 +225,8 @@ func TestSessionTableShowsMessageCounts(t *testing.T) {
 // after the title so no earlier field moves, and say "?" rather than closed
 // when nobody could be asked which tabs are open.
 func TestSessionLinesEndWithMessagesAndLive(t *testing.T) {
+	t.Parallel()
+
 	last := time.Date(2026, 10, 6, 15, 21, 0, 0, time.UTC)
 	views := []sessionView{
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "aaaa1111", Snippet: "s", MessageCount: 343, Live: &liveConversation{WindowID: 7, Here: true}},
@@ -242,6 +260,8 @@ func TestSessionLinesEndWithMessagesAndLive(t *testing.T) {
 // the ending stays in view, and a piped row appends the ending as its last
 // field so every earlier field keeps its position.
 func TestSessionListShowsHowEachConversationEnded(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	views := []sessionView{
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "aaaa1111", Title: "Project improvement ideas for the whole repository", Ending: "Committed 0cf268c3 and installed it."},

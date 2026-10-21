@@ -13,6 +13,8 @@ import (
 // so a leading pictograph occupies the 2-cell title-icon column without
 // gaining a phantom space.
 func TestDetailHeaderPadsEmojiTitleIconColumn(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, WindowID: 10, Base: "🗣commscoach", Project: "🗣commscoach", Account: "work", State: "bolt"},
 	})
@@ -27,6 +29,8 @@ func TestDetailHeaderPadsEmojiTitleIconColumn(t *testing.T) {
 }
 
 func TestActionsHeaderPadsEmojiTitleIcon(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, WindowID: 10, Base: "🗣commscoach", Project: "🗣commscoach", Account: "work", State: "bolt"},
 	})
@@ -42,6 +46,8 @@ func TestActionsHeaderPadsEmojiTitleIcon(t *testing.T) {
 // through layout.RenderTitleIcon so leading pictographs use the title-icon
 // width policy.
 func TestConfirmHeaderPadsEmojiTitleIcon(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:               ModeConfirm,
 		confirmAction:      "close",
@@ -60,6 +66,8 @@ func TestConfirmHeaderPadsEmojiTitleIcon(t *testing.T) {
 // TestDeleteChoiceHeaderPadsEmojiTitleIcon mirrors the confirm test for
 // the delete-choice overlay header.
 func TestDeleteChoiceHeaderPadsEmojiTitleIcon(t *testing.T) {
+	t.Parallel()
+
 	target := transcript.SessionMeta{
 		ID:      "abc123",
 		Harness: "claude",

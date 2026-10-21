@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -20,6 +21,8 @@ import (
 )
 
 func TestRendererWritesStateBeforeTitle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -44,6 +47,8 @@ func TestRendererWritesStateBeforeTitle(t *testing.T) {
 }
 
 func TestRendererPersistFailureWithholdsTitle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{setUserVarsErr: errors.New("kitty unavailable")}
 	h.SetKittyClient(fake)
@@ -94,6 +99,8 @@ func TestRendererPersistFailureWithholdsTitle(t *testing.T) {
 }
 
 func TestRendererSupersededGenerationNeverLandsAfterNewerState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)
@@ -149,6 +156,8 @@ func TestRendererSupersededGenerationNeverLandsAfterNewerState(t *testing.T) {
 }
 
 func TestRendererGenerationRevalidationRequeuesSupersededWindow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.stateMu.Lock()
 	st := h.ensureWindowStateLocked(42)
@@ -168,90 +177,90 @@ func TestRendererGenerationRevalidationRequeuesSupersededWindow(t *testing.T) {
 }
 
 func TestRendererSlowWindowDoesNotDelayEventIngestion(t *testing.T) {
-	h := newTestHandler()
-	fake := &fakeKittyClient{}
-	fake.windows = []kitty.OSWindow{
-		{
-			ID: 1,
-			Tabs: []kitty.Tab{
-				{
-					ID:    100,
-					Title: "W:slow",
-					Windows: []kitty.Window{
-						{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "codex"}},
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		h := newTestHandler()
+		fake := &fakeKittyClient{}
+		fake.windows = []kitty.OSWindow{
+			{
+				ID: 1,
+				Tabs: []kitty.Tab{
+					{
+						ID:    100,
+						Title: "W:slow",
+						Windows: []kitty.Window{
+							{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "codex"}},
+						},
 					},
-				},
-				{
-					ID:    101,
-					Title: "W:fast",
-					Windows: []kitty.Window{
-						{ID: 43, UserVars: kitty.UserVars{Profile: "work", Harness: "codex"}},
+					{
+						ID:    101,
+						Title: "W:fast",
+						Windows: []kitty.Window{
+							{ID: 43, UserVars: kitty.UserVars{Profile: "work", Harness: "codex"}},
+						},
 					},
 				},
 			},
-		},
-	}
-
-	started := make(chan struct{}, 16)
-	release := make(chan struct{})
-	fake.beforeSetTitle = func(match, _ string) {
-		if match == kitty.MatchTabByWindowID(42) {
-			started <- struct{}{}
-			<-release // blocks until released; a closed channel passes retries through
 		}
-	}
-	h.SetKittyClient(fake)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go h.runRenderWorker(ctx)
+		started := make(chan struct{}, 16)
+		release := make(chan struct{})
+		fake.beforeSetTitle = func(match, _ string) {
+			if match == kitty.MatchTabByWindowID(42) {
+				started <- struct{}{}
+				<-release // blocks until released; a closed channel passes retries through
+			}
+		}
+		h.SetKittyClient(fake)
 
-	// Window 42's visual change reaches the worker, which wedges on the title
-	// write.
-	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop"})
-	if !resp.OK {
-		t.Fatalf("state update for slow window failed: %v", resp.Error)
-	}
-	select {
-	case <-started:
-	case <-time.After(5 * time.Second):
-		t.Fatalf("render worker never reached the slow title write")
-	}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go h.runRenderWorker(ctx)
 
-	// Event ingestion must complete while the Kitty write is wedged.
-	done := make(chan protocol.Response, 1)
-	go func() {
-		done <- h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 43, Action: "stop", Event: "Stop"})
-	}()
-	select {
-	case resp := <-done:
+		// Window 42's visual change reaches the worker, which wedges on the title
+		// write.
+		resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "stop", Event: "Stop"})
 		if !resp.OK {
-			t.Fatalf("state update during wedged render failed: %v", resp.Error)
+			t.Fatalf("state update for slow window failed: %v", resp.Error)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatalf("a wedged Kitty write delayed event ingestion")
-	}
+		select {
+		case <-started:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("render worker never reached the slow title write")
+		}
 
-	close(release)
-	deadline := time.Now().Add(5 * time.Second)
-	for {
+		// Event ingestion must complete while the Kitty write is wedged.
+		done := make(chan protocol.Response, 1)
+		go func() {
+			done <- h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 43, Action: "stop", Event: "Stop"})
+		}()
+		select {
+		case resp := <-done:
+			if !resp.OK {
+				t.Fatalf("state update during wedged render failed: %v", resp.Error)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("a wedged Kitty write delayed event ingestion")
+		}
+
+		close(release)
+		synctest.Wait()
 		rendered := false
 		for _, call := range fake.titleCalls() {
 			if call.match == kitty.MatchTabByWindowID(43) {
 				rendered = true
 			}
 		}
-		if rendered {
-			break
-		}
-		if time.Now().After(deadline) {
+		if !rendered {
 			t.Fatalf("window enqueued during the wedge never rendered after release")
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	})
 }
 
 func TestRendererActivityOnlyEventsBatchPersistence(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{}
 	h.SetKittyClient(fake)

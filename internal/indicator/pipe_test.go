@@ -21,6 +21,8 @@ func fakeSnapshots(snapshots map[int]processSnapshot) processSnapshotFunc {
 }
 
 func TestDiscoverHarnessProcessInteractiveHarnesses(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name    string
 		harness string
@@ -49,6 +51,8 @@ func TestDiscoverHarnessProcessInteractiveHarnesses(t *testing.T) {
 }
 
 func TestDiscoverHarnessProcessPipeVariants(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name    string
 		harness string
@@ -92,6 +96,8 @@ func TestDiscoverHarnessProcessPipeVariants(t *testing.T) {
 }
 
 func TestDiscoverHarnessProcessLiteralQuotesInArgv(t *testing.T) {
+	t.Parallel()
+
 	const startToken = "Thu Jul 16 10:00:00 2026"
 	for _, tc := range []struct {
 		name    string
@@ -122,6 +128,8 @@ func TestDiscoverHarnessProcessLiteralQuotesInArgv(t *testing.T) {
 }
 
 func TestCommandFieldsQuotesOnlyAtFieldBoundaries(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name    string
 		command string
@@ -157,6 +165,8 @@ func TestCommandFieldsQuotesOnlyAtFieldBoundaries(t *testing.T) {
 }
 
 func TestDiscoverHarnessProcessNestedSelectsDeclaredProducer(t *testing.T) {
+	t.Parallel()
+
 	snapshots := fakeSnapshots(map[int]processSnapshot{
 		30: {ParentPID: 20, StartToken: "Thu Jul 16 10:03:00 2026", CommandLine: "amx hook-indicator Stop --harness=claude"},
 		20: {ParentPID: 10, StartToken: "Thu Jul 16 10:02:00 2026", CommandLine: "claude -p nested"},
@@ -176,6 +186,8 @@ func TestDiscoverHarnessProcessNestedSelectsDeclaredProducer(t *testing.T) {
 }
 
 func TestDiscoverHarnessProcessIgnoresOwnAndWrapperArguments(t *testing.T) {
+	t.Parallel()
+
 	const startToken = "Thu Jul 16 10:00:00 2026"
 	for _, tc := range []struct {
 		name          string
@@ -276,6 +288,8 @@ func TestDiscoverHarnessProcessLegacyDeliveryPreservesPipeModeWithoutIdentity(t 
 }
 
 func TestHarnessProcessDiscoveryDoesNotTransportCommandText(t *testing.T) {
+	t.Parallel()
+
 	const secretPrompt = "super-secret-command-line-prompt"
 	discovery := discoverHarnessProcess(10, "claude", fakeSnapshots(map[int]processSnapshot{
 		10: {
@@ -295,6 +309,8 @@ func TestHarnessProcessDiscoveryDoesNotTransportCommandText(t *testing.T) {
 }
 
 func TestDiscoverHarnessProcessIncompleteAndFailureCases(t *testing.T) {
+	t.Parallel()
+
 	t.Run("missing start token still classifies pipe mode", func(t *testing.T) {
 		discovery := discoverHarnessProcess(10, "claude", fakeSnapshots(map[int]processSnapshot{
 			10: {ParentPID: 1, CommandLine: "claude -p secret-prompt"},
@@ -326,6 +342,8 @@ func TestDiscoverHarnessProcessIncompleteAndFailureCases(t *testing.T) {
 }
 
 func TestParseProcessSnapshot(t *testing.T) {
+	t.Parallel()
+
 	got, ok := parseProcessSnapshot("  99 Thu Jul 16 10:20:30 2026 /usr/local/bin/claude -p secret prompt\n")
 	if !ok || got.ParentPID != 99 || got.StartToken != "Thu Jul 16 10:20:30 2026" ||
 		got.CommandLine != "/usr/local/bin/claude -p secret prompt" {

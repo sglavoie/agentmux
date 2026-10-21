@@ -25,6 +25,8 @@ func scrollModel() Model {
 }
 
 func TestListChromeLines_BaselineModeList(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	footerLines := footerBudgetLines(m)
 	if renderedLines := len(rootFooterLines(m)); footerLines != renderedLines {
@@ -49,6 +51,8 @@ func TestListChromeLines_BaselineModeList(t *testing.T) {
 // The budget must therefore measure the same capped output the renderer emits —
 // at every width, because the cap only binds once the palette overflows.
 func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{0, 79, 80, 119, 120, 160} {
 		base := scrollModel()
 		base.width = width
@@ -100,6 +104,8 @@ func TestListFooterBudgetMatchesRenderedRowsAcrossStates(t *testing.T) {
 // row of the list, so a degrading daemon reflowed the thing the operator was
 // reading.
 func TestListChromeLines_HeaderIsOneLineInEveryHealthState(t *testing.T) {
+	t.Parallel()
+
 	base := scrollModel()
 	base.width = 120
 	baseline := listChromeLines(base)
@@ -141,6 +147,8 @@ func TestListChromeLines_HeaderIsOneLineInEveryHealthState(t *testing.T) {
 }
 
 func TestListChromeLines_ChipsAddOneLine(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	base := listChromeLines(m)
 	m.activeFilter = dashboard.Filter{Substrings: []string{"api"}}
@@ -151,6 +159,8 @@ func TestListChromeLines_ChipsAddOneLine(t *testing.T) {
 }
 
 func TestListChromeLines_SpacerDropsOutsideModeList(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	listFooterLines := footerBudgetLines(m)
 	base := listChromeLines(m)
@@ -166,6 +176,8 @@ func TestListChromeLines_SpacerDropsOutsideModeList(t *testing.T) {
 }
 
 func TestListVisibleHeight_PreviewOffSubtractsChrome(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	chrome := listChromeLines(m)
 	want := m.height - chrome
@@ -180,6 +192,8 @@ func TestListVisibleHeight_PreviewOffSubtractsChrome(t *testing.T) {
 // beside an inspector is exactly the budget it has without one. A split that
 // shortened the list would be the vertical preview this replaced.
 func TestListVisibleHeight_SplitInspectorKeepsTheWholePaneHeight(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.width = 160
 	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "horizontal", Ratio: 0.5}
@@ -206,6 +220,8 @@ func TestListVisibleHeight_SplitInspectorKeepsTheWholePaneHeight(t *testing.T) {
 // dimensions untouched rather than clamping them to zero — which is what lets
 // the cursor and the scroll offset survive the round trip.
 func TestListVisibleHeight_FullScreenInspectorLeavesTheListNothing(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.width = 160
 	m.filtered = makeRowsForScroll(20)
@@ -235,6 +251,8 @@ func TestListVisibleHeight_FullScreenInspectorLeavesTheListNothing(t *testing.T)
 }
 
 func TestListVisibleHeight_FloorAtListMinVisible(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.height = 2 // chrome wildly exceeds the height
 	if got := listVisibleHeight(m); got != listMinVisible {
@@ -243,6 +261,8 @@ func TestListVisibleHeight_FloorAtListMinVisible(t *testing.T) {
 }
 
 func TestClampListOffset_PinsToValidRange(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.height = 15 // small enough that total > visible budget
 	m.filtered = makeRowsForScroll(40)
@@ -271,6 +291,8 @@ func TestClampListOffset_PinsToValidRange(t *testing.T) {
 }
 
 func TestClampListOffset_ZeroWhenTotalFits(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(2) // fewer rows than the visible budget
 	m.rebuildItems()
@@ -282,6 +304,8 @@ func TestClampListOffset_ZeroWhenTotalFits(t *testing.T) {
 }
 
 func TestClampListOffset_ShrinkPullsOffsetBack(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(40)
 	m.rebuildItems()
@@ -298,6 +322,8 @@ func TestClampListOffset_ShrinkPullsOffsetBack(t *testing.T) {
 }
 
 func TestScrollListToCursor_CursorBeforeWindowMovesOffsetDown(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.height = 15 // small enough that the visible budget is bounded
 	m.filtered = makeRowsForScroll(30)
@@ -312,6 +338,8 @@ func TestScrollListToCursor_CursorBeforeWindowMovesOffsetDown(t *testing.T) {
 }
 
 func TestScrollListToCursor_CursorAfterWindowAdvancesOffset(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.height = 15 // tight visible budget so the cursor lands past the window
 	m.filtered = makeRowsForScroll(50)
@@ -335,6 +363,8 @@ func TestScrollListToCursor_CursorAfterWindowAdvancesOffset(t *testing.T) {
 }
 
 func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	// Two groups: group 0 (state="stop", needs attention) then group 1
 	// (state="bolt", active). With multiGroup=true the renderer emits a
@@ -402,6 +432,8 @@ func TestScrollListToCursor_GroupLabelChargedCorrectly(t *testing.T) {
 // `m.height - 1 - 1 - footerLines` formula and passes after the chrome is
 // subtracted properly.
 func TestScrollListToCursor_InspectorShownKeepsCursorVisible(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.width = 160
 	m.cfg.Defaults.Preview = config.PreviewConfig{Direction: "horizontal", Ratio: 0.5}
@@ -458,6 +490,8 @@ func TestScrollListToCursor_InspectorShownKeepsCursorVisible(t *testing.T) {
 }
 
 func TestScrollListToCursor_ReservesBottomIndicatorWhenRowsRemain(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.height = 15 // short-terminal chrome leaves a 7-line list pane
 	m.filtered = makeRowsForScroll(20)

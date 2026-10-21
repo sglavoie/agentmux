@@ -8,6 +8,8 @@ import (
 // TestParseUITestSize covers well-formed size specs, including case-insensitive
 // separators and surrounding whitespace.
 func TestParseUITestSize(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		spec string
 		want UITestSize
@@ -31,6 +33,8 @@ func TestParseUITestSize(t *testing.T) {
 
 // TestParseUITestSizeErrors confirms malformed or non-positive sizes fail.
 func TestParseUITestSizeErrors(t *testing.T) {
+	t.Parallel()
+
 	for _, spec := range []string{"", "80", "80x", "x24", "0x24", "80x-1", "axb", "80x24x2"} {
 		t.Run(spec, func(t *testing.T) {
 			if _, err := parseUITestSize(spec); err == nil {
@@ -44,6 +48,8 @@ func TestParseUITestSizeErrors(t *testing.T) {
 // widest line drives Width, Height is the line count, and a trailing newline
 // does not create a phantom empty final line.
 func TestNormalizeUITestScreenStripsAnsiAndMeasures(t *testing.T) {
+	t.Parallel()
+
 	raw := "\x1b[31mred\x1b[0m\nwiderline\n"
 	screen := normalizeUITestScreen(raw, UITestSize{Width: 80, Height: 24})
 
@@ -64,6 +70,8 @@ func TestNormalizeUITestScreenStripsAnsiAndMeasures(t *testing.T) {
 // TestNormalizeUITestScreenEmojiWidth confirms wide glyphs are measured by
 // display cells via the shared layout.Width helper, not by rune count.
 func TestNormalizeUITestScreenEmojiWidth(t *testing.T) {
+	t.Parallel()
+
 	screen := normalizeUITestScreen("⚡bolt", UITestSize{Width: 80, Height: 24})
 	// ⚡ is 2 cells + "bolt" (4) = 6.
 	if screen.Width != 6 {
@@ -74,6 +82,8 @@ func TestNormalizeUITestScreenEmojiWidth(t *testing.T) {
 // TestNormalizeUITestScreenLineWidthOverflow flags a line wider than the
 // declared terminal width and records the measured cells and limit.
 func TestNormalizeUITestScreenLineWidthOverflow(t *testing.T) {
+	t.Parallel()
+
 	screen := normalizeUITestScreen("okay\ntoo-wide-line", UITestSize{Width: 8, Height: 24})
 	var found *UITestLayoutIssue
 	for i := range screen.Issues {
@@ -95,6 +105,8 @@ func TestNormalizeUITestScreenLineWidthOverflow(t *testing.T) {
 // TestNormalizeUITestScreenHeightOverflow flags a view taller than the
 // terminal height.
 func TestNormalizeUITestScreenHeightOverflow(t *testing.T) {
+	t.Parallel()
+
 	screen := normalizeUITestScreen("a\nb\nc\nd", UITestSize{Width: 80, Height: 2})
 	var found *UITestLayoutIssue
 	for i := range screen.Issues {
@@ -112,6 +124,8 @@ func TestNormalizeUITestScreenHeightOverflow(t *testing.T) {
 
 // TestNormalizeUITestScreenInvalidUTF8 flags lines that are not valid UTF-8.
 func TestNormalizeUITestScreenInvalidUTF8(t *testing.T) {
+	t.Parallel()
+
 	raw := "good\n" + string([]byte{0xff, 0xfe})
 	screen := normalizeUITestScreen(raw, UITestSize{Width: 80, Height: 24})
 	var found *UITestLayoutIssue
@@ -131,6 +145,8 @@ func TestNormalizeUITestScreenInvalidUTF8(t *testing.T) {
 // TestNormalizeUITestScreenZeroSizeSkipsOverflow confirms an unset (zero)
 // terminal size disables overflow reporting while still normalizing content.
 func TestNormalizeUITestScreenZeroSizeSkipsOverflow(t *testing.T) {
+	t.Parallel()
+
 	screen := normalizeUITestScreen("a very wide line indeed\nsecond", UITestSize{})
 	if len(screen.Issues) != 0 {
 		t.Errorf("zero size should not report overflow, got %+v", screen.Issues)

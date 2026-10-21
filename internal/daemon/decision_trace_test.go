@@ -18,6 +18,8 @@ import (
 )
 
 func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetKittyClient(&fakeKittyClient{windows: unmanagedRouteWindows("api", harness.Codex, true)})
 	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(t.TempDir()), diagnostics.JournalOptions{})
@@ -114,6 +116,8 @@ func TestHookDecisionTraceCorrelatesRoutingNormalizationAndReducer(t *testing.T)
 }
 
 func TestHookDecisionTraceDistinguishesQuarantineAndUntrustedFallback(t *testing.T) {
+	t.Parallel()
+
 	t.Run("unreadable payload is quarantined without reduction", func(t *testing.T) {
 		h := newTestHandler()
 		resp := h.Handle(protocol.Request{
@@ -171,6 +175,8 @@ func TestHookDecisionTraceDistinguishesQuarantineAndUntrustedFallback(t *testing
 }
 
 func TestHookDecisionTraceRecordsResetRewrite(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{
 		Type: protocol.TypeHookEvent, WindowID: 42, Event: "SessionEnd", Harness: harness.Claude,
@@ -192,6 +198,8 @@ func TestHookDecisionTraceRecordsResetRewrite(t *testing.T) {
 }
 
 func TestDecisionTraceDistinguishesReducerDuplicateAndReorder(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:session-1"}
 	apply := func(traceID string, seq uint64) {
@@ -256,6 +264,8 @@ func TestDecisionTraceRecordsRejectedOwnerAlternative(t *testing.T) {
 }
 
 func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testing.T) {
+	t.Parallel()
+
 	sock, _, handler := newTestServerWithRef(t)
 	client := ipc.NewClientWithSocket(sock)
 	payload := hookPayloadJSON(t, hookevent.HookPayload{SessionID: "session-1"})
@@ -314,6 +324,8 @@ func TestDuplicateReplayClearsDownstreamCausalityWithoutReducerMutation(t *testi
 }
 
 func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
+	t.Parallel()
+
 	sock, _, handler := newTestServerWithRef(t)
 	client := ipc.NewClientWithSocket(sock)
 	request := protocol.Request{
@@ -366,6 +378,8 @@ func TestDuplicateReplayExportOmitsNotificationCausality(t *testing.T) {
 }
 
 func TestProbeLinkSkipsDuplicateReplayRows(t *testing.T) {
+	t.Parallel()
+
 	sock, _, handler := newTestServerWithRef(t)
 	client := ipc.NewClientWithSocket(sock)
 	request := protocol.Request{

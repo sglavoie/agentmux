@@ -13,6 +13,8 @@ import (
 )
 
 func TestHandler_HookEventAgentSessionLoopStartedTargetsWorkspace(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: hookEventWindows(
@@ -63,6 +65,8 @@ func TestHandler_HookEventAgentSessionLoopStartedTargetsWorkspace(t *testing.T) 
 // managed panes share a workspace, but only the active title owner should carry
 // the loop marker.
 func TestHandler_HookEventLoopLifecycleTargetsActiveTitleOwner(t *testing.T) {
+	t.Parallel()
+
 	projectDir := t.TempDir()
 	h := newTestHandler()
 	// Window 42 comes first in Kitty order but is inactive; window 44 is the

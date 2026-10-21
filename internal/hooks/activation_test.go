@@ -56,6 +56,8 @@ func hasActivationIssue(status AccountStatus, code string) bool {
 }
 
 func TestCodexDefinitionHashMatchesExactCodexTrustIdentity(t *testing.T) {
+	t.Parallel()
+
 	timeout := uint64(5)
 	handler := codexRawHookEntry{
 		Type:    "command",
@@ -298,6 +300,8 @@ func TestActivationCopilotReadsRepositoryLocalSettingsLayer(t *testing.T) {
 }
 
 func TestCopilotWorkingDirectoryResolvesRelativeLaunchOverride(t *testing.T) {
+	t.Parallel()
+
 	want := filepath.Join("/repo", "nested")
 	if got := copilotWorkingDirectory("/repo", []string{"-C", "nested"}); got != want {
 		t.Fatalf("copilotWorkingDirectory = %q, want %q", got, want)

@@ -11,6 +11,8 @@ import (
 // audit explicit prevents a new leaf command from silently printing an
 // unversioned ad-hoc object.
 func TestSessionJSONCommandSurfaceIsVersioned(t *testing.T) {
+	t.Parallel()
+
 	commands := []*cobra.Command{
 		sessionListCmd, sessionSearchCmd, sessionShowCmd, sessionContinueCmd, sessionForkCmd,
 		sessionForkWorktreeCmd, sessionHandoffCmd, muteToggleCmd, nameSessionCmd, backendStatusCmd, backendStopCmd, closeCmd, sendCmd,

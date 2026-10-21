@@ -53,6 +53,8 @@ func assertNoASLTextLeak(t *testing.T, d *uitestDriver, text string) {
 }
 
 func TestASLResponseLiveReplySubmitsCapturedTarget(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-reply")
 	m := d.Model()
 	if m.aslResponse.Kind != asl.ResponseLive {
@@ -86,6 +88,8 @@ func TestASLResponseLiveReplySubmitsCapturedTarget(t *testing.T) {
 }
 
 func TestASLResponseContinueAndPauseNeedNoAnswer(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name       string
 		presses    int
@@ -121,6 +125,8 @@ func TestASLResponseContinueAndPauseNeedNoAnswer(t *testing.T) {
 }
 
 func TestASLResponsePausedRunOffersOnlyReplyAndResume(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-paused")
 	m := d.Model()
 	if m.aslResponse.Kind != asl.ResponsePaused {
@@ -147,6 +153,8 @@ func TestASLResponsePausedRunOffersOnlyReplyAndResume(t *testing.T) {
 }
 
 func TestASLResponseNavigatesQuestionsAndFetchesEachBodySeparately(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-reply")
 	first := d.Model().aslResponse.Body.Reveal()
 	typeASLAnswer(t, d, "draft for one")
@@ -173,6 +181,8 @@ func TestASLResponseNavigatesQuestionsAndFetchesEachBodySeparately(t *testing.T)
 }
 
 func TestASLResponseAdvancesToTheRemainingQuestionAfterClosure(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-reply")
 	typeASLAnswer(t, d, "answered")
 	if err := d.Key(keyCtrlS); err != nil {
@@ -191,6 +201,8 @@ func TestASLResponseAdvancesToTheRemainingQuestionAfterClosure(t *testing.T) {
 }
 
 func TestASLResponseSubmitsTwoQuestionsEndToEnd(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-reply")
 	typeASLAnswer(t, d, "answer for one")
 	if err := d.Key(keyCtrlS); err != nil {
@@ -242,6 +254,8 @@ func TestASLResponseSubmitsTwoQuestionsEndToEnd(t *testing.T) {
 }
 
 func TestASLResponseEnterInsertsANewlineAndTabMovesFocus(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-reply")
 	typeASLAnswer(t, d, "one")
 	if err := d.Key(keyEnter); err != nil {
@@ -274,6 +288,8 @@ func TestASLResponseEnterInsertsANewlineAndTabMovesFocus(t *testing.T) {
 // for that question, the way the send form keeps its drafts: reopening the same
 // question restores it, and nothing is submitted on the way.
 func TestASLResponseEscapeKeepsTheDraftAndDropsTheBody(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-reply")
 	typeASLAnswer(t, d, "secret answer text")
 	if err := d.Key(keyEsc); err != nil {
@@ -301,6 +317,8 @@ func TestASLResponseEscapeKeepsTheDraftAndDropsTheBody(t *testing.T) {
 }
 
 func TestASLResponseRedactsDraftsAndBodiesInFormattedOutput(t *testing.T) {
+	t.Parallel()
+
 	d := openASLResponseDriver(t, "row-reply")
 	typeASLAnswer(t, d, "confidential-answer")
 	dump := fmt.Sprintf("%+v", d.Model().aslResponse)
@@ -319,6 +337,8 @@ func TestASLResponseRedactsDraftsAndBodiesInFormattedOutput(t *testing.T) {
 }
 
 func TestASLResponseDoubleSubmitIsRefusedWhileInFlight(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
@@ -337,6 +357,8 @@ func TestASLResponseDoubleSubmitIsRefusedWhileInFlight(t *testing.T) {
 }
 
 func TestASLResponseRetryReusesTheOperationIDForTheSameCall(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
@@ -369,6 +391,8 @@ func TestASLResponseRetryReusesTheOperationIDForTheSameCall(t *testing.T) {
 }
 
 func TestASLResponseFitsNarrowTerminals(t *testing.T) {
+	t.Parallel()
+
 	for _, size := range []UITestSize{{Width: 60, Height: 20}, {Width: 80, Height: 24}, {Width: 132, Height: 34}} {
 		d, _ := newUITestFixtureDriver(aslRunsFixture(), size)
 		if err := d.Command(commands.ShowRuns); err != nil {

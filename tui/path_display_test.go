@@ -12,6 +12,8 @@ import (
 )
 
 func TestPathRowsRenderInPathAwareModes(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		out  string
@@ -66,6 +68,8 @@ func TestPathRowsRenderInPathAwareModes(t *testing.T) {
 }
 
 func TestRenderPathRowTruncatesToViewportWidth(t *testing.T) {
+	t.Parallel()
+
 	const width = 28
 	row := stripAnsi(renderPathRow("session path", "/very/long/transcript/path/that/does/not/fit.jsonl", width))
 	if got := runewidth.StringWidth(row); got > width {

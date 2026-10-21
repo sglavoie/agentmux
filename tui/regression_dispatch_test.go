@@ -20,6 +20,8 @@ import (
 // launchProgressMsg via the existing helper still works because flattenMsg
 // walks both Batch and Sequence shapes.
 func TestDispatchPickerLaunch_ToastTickNotInSequence(t *testing.T) {
+	t.Parallel()
+
 	m := launchDispatchModel(t, nil)
 	selectByTitle(&m, "api", "backend")
 
@@ -53,6 +55,8 @@ func TestDispatchPickerLaunch_ToastTickNotInSequence(t *testing.T) {
 // tick is needed), dispatch returns the bare launch sequence — there is
 // no Batch wrapper to consume an extra reflect step in callers.
 func TestDispatchPickerLaunch_NoToastWhenAlreadyAlive(t *testing.T) {
+	t.Parallel()
+
 	m := launchDispatchModel(t, nil)
 	// Seed an unrelated toast so the strip is non-empty when dispatch fires.
 	if c := m.pushToast(Toast{Severity: toastInfo, Text: "seed"}); c == nil {
@@ -79,6 +83,8 @@ func TestDispatchPickerLaunch_NoToastWhenAlreadyAlive(t *testing.T) {
 // opening the picker and pressing enter) must not panic — it should be
 // treated as a no-op that returns the user to the return mode.
 func TestConfigPickerEnterProjectIdxOOBSafe(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -123,6 +129,8 @@ func TestConfigPickerEnterProjectIdxOOBSafe(t *testing.T) {
 }
 
 func TestConfigPickerEnterNegativeCursorSafe(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		Accounts: []config.Account{

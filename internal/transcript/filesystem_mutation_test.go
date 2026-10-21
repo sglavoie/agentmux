@@ -15,6 +15,8 @@ import (
 )
 
 func TestFilesystemTranscriptConcurrentLoadRefreshDelete(t *testing.T) {
+	t.Parallel()
+
 	cfg, readers, _ := filesystemTranscriptFixture(t)
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	seed, err := LoadIndexAt(path)
@@ -59,6 +61,8 @@ func TestFilesystemTranscriptConcurrentLoadRefreshDelete(t *testing.T) {
 }
 
 func TestFilesystemTranscriptDeleteSidecarFailureKeepsSourceAndCleanState(t *testing.T) {
+	t.Parallel()
+
 	cfg, readers, sourcePath := filesystemTranscriptFixture(t)
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	idx, err := LoadIndexAt(path)
@@ -157,6 +161,8 @@ func TestFilesystemTranscriptDeleteReportsSourceRemovedWhenPersistFails(t *testi
 }
 
 func TestFilesystemSaveRetainsInlineSearchWhenSidecarMigrationFails(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
 	key := IndexKey(harness.Claude, "legacy")
@@ -226,6 +232,8 @@ func loadRawTranscriptIndex(path string) (indexFile, error) {
 }
 
 func TestFilesystemTranscriptAtomicReplacementLeavesNoTemporaryFiles(t *testing.T) {
+	t.Parallel()
+
 	cfg, readers, _ := filesystemTranscriptFixture(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcripts.json")
@@ -250,6 +258,8 @@ func TestFilesystemTranscriptAtomicReplacementLeavesNoTemporaryFiles(t *testing.
 }
 
 func TestFilesystemTranscriptPruneReloadsLatestSnapshot(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	idx, err := LoadIndexAt(path)
 	if err != nil {
@@ -277,6 +287,8 @@ func TestFilesystemTranscriptPruneReloadsLatestSnapshot(t *testing.T) {
 }
 
 func TestFilesystemTranscriptUnreadableCacheAbortsMutations(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		mutate func(*Index, *config.Config, map[string]Reader, string) error

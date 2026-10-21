@@ -71,6 +71,8 @@ func TestUITestDriverDoesNotCreateDefaultDatabase(t *testing.T) {
 }
 
 func TestUITestDriverTickUsesDeterministicDaemonAndDiscoveryDependencies(t *testing.T) {
+	t.Parallel()
+
 	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
 	cleanupUITestDriver(t, d)
 	d.model.mode = ModeDetail
@@ -99,6 +101,8 @@ func TestUITestDriverActionDaemonFailsFast(t *testing.T) {
 }
 
 func TestUITestScenariosRepeatWithoutFilesystemCleanupFaults(t *testing.T) {
+	t.Parallel()
+
 	for i := 0; i < 12; i++ {
 		for _, actions := range [][]UITestAction{
 			{{Type: UITestActionKey, Key: "P"}, {Type: UITestActionKey, Key: "enter"}},

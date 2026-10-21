@@ -11,6 +11,8 @@ import (
 )
 
 func TestProbeCodexScreenPrompts_EditPromptReplacesKeyWithQuestion(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "key", false), kitty.UserVars{
@@ -65,6 +67,8 @@ func TestProbeCodexScreenPrompts_EditPromptReplacesKeyWithQuestion(t *testing.T)
 }
 
 func TestProbeCodexScreenPrompts_CommandPromptStaysKey(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
@@ -97,6 +101,8 @@ func TestProbeCodexScreenPrompts_CommandPromptStaysKey(t *testing.T) {
 }
 
 func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
@@ -136,6 +142,8 @@ func TestProbeCodexScreenPrompts_RequestUserInputReplacesBoltWithQuestion(t *tes
 }
 
 func TestProbeCodexScreenPrompts_RequestUserInputOnlyWhileVisibleWithoutPostToolUse(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -194,6 +202,8 @@ func TestProbeCodexScreenPrompts_RequestUserInputOnlyWhileVisibleWithoutPostTool
 }
 
 func TestProbeCodexScreenPrompts_MissedPromptKeepsQuestionState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "question", false), kitty.UserVars{

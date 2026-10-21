@@ -1,6 +1,7 @@
 package tmux_test
 
 import (
+	"fmt"
 	"os/exec"
 	"slices"
 	"syscall"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
@@ -41,17 +43,14 @@ func survey(t *testing.T, f *tmuxtest.Fixture) tmux.Survey {
 // eventually polls the server until ok, failing with the last survey.
 func eventually(t *testing.T, f *tmuxtest.Fixture, what string, ok func(tmux.Survey) bool) tmux.Survey {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		s := survey(t, f)
-		if ok(s) {
-			return s
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s: clients=%+v sizes=%+v", what, s.Clients, s.Sizes)
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
+	var s tmux.Survey
+	testutil.Eventually(t, what, func() bool {
+		s = survey(t, f)
+		return ok(s)
+	}, testutil.Every(25*time.Millisecond), testutil.Detail(func() string {
+		return fmt.Sprintf("clients=%+v sizes=%+v", s.Clients, s.Sizes)
+	}))
+	return s
 }
 
 func attach(t *testing.T, f *tmuxtest.Fixture, pane backend.Ref, cols, rows int) *tmuxtest.Viewer {

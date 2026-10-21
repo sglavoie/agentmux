@@ -89,6 +89,8 @@ func TestBusySinceSurvivesActiveClassChurn(t *testing.T) {
 }
 
 func TestBusySinceClearedByEveryNonActiveIcon(t *testing.T) {
+	t.Parallel()
+
 	for _, icon := range []string{"stop", "key", "question", "warning", "error", ""} {
 		name := icon
 		if name == "" {
@@ -143,6 +145,8 @@ func TestBusySinceNotRestampedByIdenticalRepublish(t *testing.T) {
 // a skipReduce request is icon-preserving, never reaches
 // publishEffectiveLocked, and must leave a live stretch running.
 func TestBusySinceUntouchedBySkipReduceUpdate(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	if resp := h.handleStateUpdate(protocol.Request{
 		Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", Event: "UserPromptSubmit", IsPrompt: true,

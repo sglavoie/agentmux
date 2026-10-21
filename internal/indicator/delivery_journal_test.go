@@ -10,6 +10,8 @@ import (
 )
 
 func TestHookProcessDetectionJournalsCompleteDegradedAndAbsentIdentity(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(t.TempDir())
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {
@@ -103,6 +105,8 @@ func TestDeliverFullDetailPersistsEveryOutsideKittyExitStage(t *testing.T) {
 }
 
 func TestHookRecorderStandardDetailKeepsEveryNonSuccessOutcome(t *testing.T) {
+	t.Parallel()
+
 	paths := diagnostics.PathsForRoot(t.TempDir())
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
 	if err != nil {

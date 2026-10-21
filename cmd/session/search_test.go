@@ -274,6 +274,8 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 // with an example query and the command to use instead, rather than only
 // naming the missing parameter.
 func TestSessionSearchWithoutAQueryShowsOne(t *testing.T) {
+	t.Parallel()
+
 	err := sessionSearchCmd.RunE(sessionSearchCmd, nil)
 	if err == nil {
 		t.Fatal("RunE error = nil; want a missing query error")

@@ -9,6 +9,8 @@ import (
 )
 
 func TestPaneTarget(t *testing.T) {
+	t.Parallel()
+
 	kittySession := RunningSession{WindowID: 42, TabID: 7}
 	if got := kittySession.PaneTarget(); got != KittyPaneTarget(42) || got.KittyWindowID() != 42 ||
 		got.Backend != runtimesession.BackendKitty || got.Pane != kitty.PaneRef(42) || got.IsZero() {

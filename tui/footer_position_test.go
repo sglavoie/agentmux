@@ -97,6 +97,8 @@ func renderedItemWindow(t *testing.T, m Model) (start, end int, top, bottom bool
 // fragment names the window the renderer painted, and it is absent exactly when
 // that window is the whole list.
 func TestListFooterPositionFragmentAccountsForGroupChrome(t *testing.T) {
+	t.Parallel()
+
 	t.Run("multi-group window is smaller than the line budget", func(t *testing.T) {
 		m := positionFixtureModel(positionFixtureRows(), 120, 15)
 		total := m.listItemCount()

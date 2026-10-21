@@ -13,6 +13,8 @@ import (
 // each state_update is recorded so the future stale-active sweep can fall
 // back to it when the live kitten lookup fails.
 func TestHandler_TracksLastSessionTitle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", SessionTitle: "W:api"})
 
@@ -28,6 +30,8 @@ func TestHandler_TracksLastSessionTitle(t *testing.T) {
 // state_update is recorded so stale notifications can honor the same
 // silence rule used by other notifyable actions.
 func TestHandler_TracksPipeMode(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", PipeMode: true})
 
@@ -43,6 +47,8 @@ func TestHandler_TracksPipeMode(t *testing.T) {
 // event for a window resets the single-shot stale-notification guard so a
 // later stall produces a new notification.
 func TestHandler_NotifiedStaleClearedOnFreshEvent(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -62,6 +68,8 @@ func TestHandler_NotifiedStaleClearedOnFreshEvent(t *testing.T) {
 // TestHandler_CleanupOnTerminalAction verifies that terminal actions clear
 // selected per-window state fields that should not outlive the session.
 func TestHandler_CleanupOnTerminalAction(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -95,6 +103,8 @@ func TestHandler_CleanupOnTerminalAction(t *testing.T) {
 // TestHandler_TracksLastAccount verifies that handleStateUpdate records the
 // account name so the sweep can resolve per-account threshold overrides.
 func TestHandler_TracksLastAccount(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
@@ -109,6 +119,8 @@ func TestHandler_TracksLastAccount(t *testing.T) {
 // TestHandler_LastAccountClearedOnTerminal verifies that terminal actions
 // clear the per-window account field.
 func TestHandler_LastAccountClearedOnTerminal(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -130,6 +142,8 @@ func TestHandler_LastAccountClearedOnTerminal(t *testing.T) {
 // is configured. Both the action name and the resolved threshold are
 // included so the TUI can render an age column without re-reading config.
 func TestHandler_StateQueryPopulatesWatchdogGlobalDefault(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetStaleThresholds(map[string]time.Duration{
 		"active":   10 * time.Minute,
@@ -161,6 +175,8 @@ func TestHandler_StateQueryPopulatesWatchdogGlobalDefault(t *testing.T) {
 // per-account override wins over the global default, matching SweepStale's
 // resolution logic.
 func TestHandler_StateQueryWatchdogHonorsPerAccountOverride(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetStaleThresholds(
 		map[string]time.Duration{"active": 10 * time.Minute},
@@ -185,6 +201,8 @@ func TestHandler_StateQueryWatchdogHonorsPerAccountOverride(t *testing.T) {
 // watchdog map. Stop/permission/failure-class windows are tracked in
 // lastAction but should not surface here — they don't have an age budget.
 func TestHandler_StateQueryWatchdogSkipsNonActiveActions(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Minute}, nil)
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "permission"})
@@ -203,6 +221,8 @@ func TestHandler_StateQueryWatchdogSkipsNonActiveActions(t *testing.T) {
 // the most recent event timestamp per account. The hook-silence sweep (S6)
 // will compare this against the configured threshold.
 func TestHandler_TracksLastSeenEventAt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	before := time.Now()
@@ -224,6 +244,8 @@ func TestHandler_TracksLastSeenEventAt(t *testing.T) {
 // account A does not touch account B's timestamp. The hook-silence detector
 // needs strict per-account isolation to detect single-account hook drift.
 func TestHandler_LastSeenEventAtIsolatedPerAccount(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
@@ -251,6 +273,8 @@ func TestHandler_LastSeenEventAtIsolatedPerAccount(t *testing.T) {
 // without an account name (e.g. synthetic probes) do not seed the per-account
 // map. The map is keyed by real account names only.
 func TestHandler_LastSeenEventAtSkippedWhenAccountEmpty(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"})
 
@@ -272,6 +296,8 @@ func TestHandler_LastSeenEventAtSkippedWhenAccountEmpty(t *testing.T) {
 // stop/failure/idle/clear, but the per-account map must persist so the
 // hook-silence detector can still observe activity from the account.
 func TestHandler_LastSeenEventAtSurvivesTerminal(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Account: "work"})
 
@@ -299,6 +325,8 @@ func TestHandler_LastSeenEventAtSurvivesTerminal(t *testing.T) {
 // an account clears the one-shot hook-silence latch so a future silence
 // stretch can produce another notification.
 func TestHandler_NotifiedHookSilenceLatchReArmed(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -319,6 +347,8 @@ func TestHandler_NotifiedHookSilenceLatchReArmed(t *testing.T) {
 // fresh event for one account does not re-arm the latch for another. The
 // latch is strictly per-account.
 func TestHandler_NotifiedHookSilenceUntouchedByOtherAccount(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()

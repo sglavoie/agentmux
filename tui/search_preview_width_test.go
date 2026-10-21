@@ -45,6 +45,8 @@ func narrowFixtureMeta(project string, snippet string) transcript.SessionMeta {
 }
 
 func TestFormatSessionRowNarrowWidthStaysWithinBounds(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		project string
@@ -69,6 +71,8 @@ func TestFormatSessionRowNarrowWidthStaysWithinBounds(t *testing.T) {
 }
 
 func TestFormatSessionRowEmojiProjectReservesIconColumn(t *testing.T) {
+	t.Parallel()
+
 	meta := narrowFixtureMeta("🗣commscoach", "snippet")
 	row := stripAnsi(history.FormatRow(transcript.Result{Meta: meta, Preview: "snippet", Matches: 1}, map[string]string{}, 120))
 	if !strings.Contains(row, "🗣commscoach") {
@@ -77,6 +81,8 @@ func TestFormatSessionRowEmojiProjectReservesIconColumn(t *testing.T) {
 }
 
 func TestFormatPlanRowNarrowWidthStaysWithinBounds(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		planRes plans.Result
@@ -121,6 +127,8 @@ func TestFormatPlanRowNarrowWidthStaysWithinBounds(t *testing.T) {
 }
 
 func TestSearchRowsStyledTruncationPreservesAnsi(t *testing.T) {
+	t.Parallel()
+
 	sessionRow := history.FormatRow(transcript.Result{
 		Meta:    narrowFixtureMeta("api", strings.Repeat("alpha ", 20)),
 		Preview: strings.Repeat("alpha ", 20),
@@ -169,6 +177,8 @@ func assertStyledTruncatedLine(t *testing.T, label, line string, maxWidth int) {
 }
 
 func TestRenderSessionSearchLinesStayWithinWidth(t *testing.T) {
+	t.Parallel()
+
 	results := []transcript.Result{
 		{Meta: narrowFixtureMeta("api", "alpha beta gamma delta"), Preview: strings.Repeat("alpha beta ", 12), Matches: 2},
 		{Meta: narrowFixtureMeta("🗣commscoach", "voice notes from the team meeting"), Preview: "voice notes from the team meeting", Matches: 1},
@@ -192,6 +202,8 @@ func TestRenderSessionSearchLinesStayWithinWidth(t *testing.T) {
 }
 
 func TestRenderPlanSearchLinesStayWithinWidth(t *testing.T) {
+	t.Parallel()
+
 	results := []plans.Result{
 		{
 			Meta:    plans.PlanMeta{Name: "alpha", DirPath: "/tmp/alpha-aabb112233cc", Files: []string{"manifest.md", "session-1.md"}, ModTime: time.Now()},
@@ -219,6 +231,8 @@ func TestRenderPlanSearchLinesStayWithinWidth(t *testing.T) {
 }
 
 func TestRenderInspectorLinesStayWithinWidth(t *testing.T) {
+	t.Parallel()
+
 	sess := session.RunningSession{
 		WindowID:  7,
 		Base:      "a-very-long-project-name-with-noise",
@@ -261,6 +275,8 @@ func TestRenderInspectorLinesStayWithinWidth(t *testing.T) {
 }
 
 func TestRenderInspectorEmojiTitleReservesIconColumn(t *testing.T) {
+	t.Parallel()
+
 	emojiSess := session.RunningSession{
 		WindowID: 1,
 		Base:     "🗣commscoach",

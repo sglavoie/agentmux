@@ -19,6 +19,8 @@ import (
 )
 
 func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
+	t.Parallel()
+
 	m, _, _ := commandTestModel(session.RunningSession{
 		TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work", Locked: true,
 	})
@@ -35,6 +37,8 @@ func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
 }
 
 func TestCommandExecutionUsesCapturedTarget(t *testing.T) {
+	t.Parallel()
+
 	client := newUITestKittyClient(nil)
 	m := testModelWithSessions()
 	m.client = client
@@ -57,6 +61,8 @@ func TestCommandExecutionUsesCapturedTarget(t *testing.T) {
 }
 
 func TestCommandRowSideEffects(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{
 		TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work", State: "bolt",
 	}
@@ -132,6 +138,8 @@ func TestCommandCopyAndClearStatusEffects(t *testing.T) {
 }
 
 func TestCommandConfiguredProjectExecutions(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{
 		TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work",
 	}
@@ -150,6 +158,8 @@ func TestCommandConfiguredProjectExecutions(t *testing.T) {
 }
 
 func TestCommandRowTransitions(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{
 		TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work", State: "bolt",
 	}
@@ -377,6 +387,8 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 // preference off both dispatch immediately and with it on both stop at the same
 // prompt.
 func TestPaletteRestartMatchesActionsOverlay(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work"}
 	m, ctx, _ := commandTestModel(target)
 	m.cfg.Defaults.ConfirmDestructive = false

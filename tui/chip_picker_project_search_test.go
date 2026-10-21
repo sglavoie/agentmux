@@ -115,6 +115,8 @@ func assertChipPickerOptions(t *testing.T, got, want []string) {
 }
 
 func TestChipPickerSlashStartsSearchWithoutSessionDispatch(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enterChipPickerForTest(t, chipPickerSearchModel(t), tc.key, tc.kind)
@@ -143,6 +145,8 @@ func TestChipPickerSlashStartsSearchWithoutSessionDispatch(t *testing.T) {
 }
 
 func TestChipPickerQueryFiltersCaseInsensitivelyAndHidesAny(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enterChipPickerForTest(t, chipPickerSearchModel(t), tc.key, tc.kind)
@@ -166,6 +170,8 @@ func TestChipPickerQueryFiltersCaseInsensitivelyAndHidesAny(t *testing.T) {
 }
 
 func TestChipPickerSearchExitKeysPreserveFilteredOptions(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, key := range []string{"esc", "enter"} {
@@ -198,6 +204,8 @@ func TestChipPickerSearchExitKeysPreserveFilteredOptions(t *testing.T) {
 }
 
 func TestChipPickerSecondEnterSelectsAndDispatchesSearch(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enterChipPickerForTest(t, chipPickerSearchModel(t), tc.key, tc.kind)

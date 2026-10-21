@@ -17,6 +17,8 @@ import (
 // — if a future msg type is added without a handler, this test still
 // passes but the new type's bug becomes visible elsewhere.
 func TestUpdateUnknownMsgIsNoop(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	type unknownMsg struct{}
 	before := m
@@ -38,6 +40,8 @@ func TestUpdateUnknownMsgIsNoop(t *testing.T) {
 // documented exit keys. Catches regressions where an exit key stops
 // restoring ModeList for any single mode.
 func TestModeRoundTripBackToList(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		// openKeys is the whole sequence that reaches the mode. The
@@ -79,6 +83,8 @@ func TestModeRoundTripBackToList(t *testing.T) {
 // the picker: first Esc clears a non-empty filter, second Esc exits to
 // ModeList. Regression guard against either stage swallowing the wrong key.
 func TestPickerEscClearsThenExits(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -128,6 +134,8 @@ func TestPickerEscClearsThenExits(t *testing.T) {
 // in the picker when the live filter has produced zero matches does not
 // panic on an out-of-range pickerCursor and does not mutate selection.
 func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -172,6 +180,8 @@ func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
 // gone, so with one pane the key must be spent on nothing and the filter it used
 // to walk must come through untouched.
 func TestHandleListKeyTabDoesNotReachTheFilterChips(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// Apply a filter with three components directly so the assertion is
 	// independent of search input details.
@@ -207,6 +217,8 @@ func TestHandleListKeyTabDoesNotReachTheFilterChips(t *testing.T) {
 // is the one that resolves its destination through a search rather than by
 // arithmetic: an empty list is the case where that search finds nothing.
 func TestNavOnEmptyListIsSafe(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), nil)
 	if len(m.filtered) != 0 {
 		t.Fatalf("expected empty filtered, got %d", len(m.filtered))
@@ -229,6 +241,8 @@ func TestNavOnEmptyListIsSafe(t *testing.T) {
 }
 
 func TestDashboardHalfPageAliasesRespectFocusedPane(t *testing.T) {
+	t.Parallel()
+
 	m := heldInspectorModel(t)
 	cursor := m.cursor
 	before := inspectorWindow(m)
@@ -265,6 +279,8 @@ func TestDashboardHalfPageAliasesRespectFocusedPane(t *testing.T) {
 // no text typed (or after deleting every char) keeps every session
 // visible. Recurring case-sensitivity / empty-input class of bugs.
 func TestSearchEmptyInputMatchesAll(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	full := len(m.filtered)
 	m = pressKey(m, "/")
@@ -286,6 +302,8 @@ func TestSearchEmptyInputMatchesAll(t *testing.T) {
 // escape syntax lets a leading sigil character pass through to the
 // substring matcher. Recurring DSL parsing class of bugs.
 func TestSearchSpecialCharLeadingSigilLiteral(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{
 		{TabID: 1, Base: "@oddly-named", Account: "work", Directory: "/x"},
 		{TabID: 2, Base: "ordinary", Account: "work", Directory: "/y"},
@@ -308,6 +326,8 @@ func TestSearchSpecialCharLeadingSigilLiteral(t *testing.T) {
 // mode to the handler it routes to, sanity-checking that no mode falls
 // through to the default (ModeList) branch by accident.
 func TestHandleKeyDispatchByMode(t *testing.T) {
+	t.Parallel()
+
 	for _, mode := range []Mode{
 		ModeList,
 		ModeSearch,
@@ -339,6 +359,8 @@ func TestHandleKeyDispatchByMode(t *testing.T) {
 // (empty for ctrl combos) fell through to the default branch and the
 // keystroke was silently swallowed — leaving the user stuck.
 func TestCtrlCQuitsFromSearchMode(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	if m.mode != ModeSearch {
@@ -353,6 +375,8 @@ func TestCtrlCQuitsFromSearchMode(t *testing.T) {
 // TestCtrlCQuitsFromPickerSearchMode pins the same fix for the picker's
 // search submode. Same handler shape, same bug, same fix.
 func TestCtrlCQuitsFromPickerSearchMode(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},

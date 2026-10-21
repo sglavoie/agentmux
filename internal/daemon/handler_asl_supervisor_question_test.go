@@ -285,6 +285,8 @@ func TestASLSupervisorQuestionProjectionBeforeStopRaisesQuestionAndNotifiesOnce(
 }
 
 func TestASLSupervisorQuestionStopBeforeProjectionRaisesQuestion(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	if got := supervisorVisibleState(t, h); got.Icon != "bolt" || !got.Looping {
@@ -298,6 +300,8 @@ func TestASLSupervisorQuestionStopBeforeProjectionRaisesQuestion(t *testing.T) {
 }
 
 func TestASLSupervisorQuestionRejectsActiveAndPredatingStops(t *testing.T) {
+	t.Parallel()
+
 	t.Run("supervisor still active", func(t *testing.T) {
 		h, target, now := supervisorQuestionFixture(t, nil)
 		h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
@@ -319,6 +323,8 @@ func TestASLSupervisorQuestionRejectsActiveAndPredatingStops(t *testing.T) {
 }
 
 func TestASLSupervisorQuestionRejectsUntrustedWorkerStops(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		event protocol.ReducerEvent
@@ -377,6 +383,8 @@ func TestASLSupervisorQuestionRejectsUntrustedWorkerStops(t *testing.T) {
 }
 
 func TestASLSupervisorQuestionAcceptsAuthoritativeStopProbe(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	h.stateMu.Lock()
 	st := h.store[42]
@@ -396,6 +404,8 @@ func TestASLSupervisorQuestionAcceptsAuthoritativeStopProbe(t *testing.T) {
 }
 
 func TestASLSupervisorQuestionSurvivesHeartbeatAndClearsOnReply(t *testing.T) {
+	t.Parallel()
+
 	h, target, now := supervisorQuestionFixture(t, nil)
 	applySupervisorStop(h, now)
 	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))

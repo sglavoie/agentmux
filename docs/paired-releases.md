@@ -28,7 +28,8 @@ runs, no record is written, and neither repository's refs are touched.
 
 As with `just asl-contract-sync`, `just` hands everything after the recipe name
 to the recipe positionally, so `asl_root=` and `signing_key=` are stripped by the
-recipe rather than parsed by `just`. Bare paths work too. Because the arguments
+recipe (`scripts/named-arg`, which also expands a leading `~`) rather than parsed
+by `just`. Bare paths work too. Because the arguments
 are positional, `tag=` has to come third: `asl_root=… tag=yes` puts `tag=yes` in
 the signing-key slot, and the recipe refuses that rather than reading it as a key
 path and quietly dropping the tag request.

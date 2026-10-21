@@ -12,6 +12,8 @@ import (
 // height<=0 path: every row is rendered (matching the pre-windowing behavior)
 // and neither ▲ nor ▼ indicators appear.
 func TestRenderListAt_UnboundedHeightRendersAllRowsNoIndicators(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(30)
 	m.rebuildItems()
@@ -37,6 +39,8 @@ func TestRenderListAt_UnboundedHeightRendersAllRowsNoIndicators(t *testing.T) {
 // "everything fits" case: when offset=0 and the row count is well within the
 // height budget, no indicators are emitted.
 func TestRenderListAt_OffsetZeroFullBudgetRendersAllNoIndicators(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(5)
 	m.rebuildItems()
@@ -59,6 +63,8 @@ func TestRenderListAt_OffsetZeroFullBudgetRendersAllNoIndicators(t *testing.T) {
 // non-zero listOffset skips the leading rows and prepends the ▲ indicator,
 // and that the skipped rows are absent from the output.
 func TestRenderListAt_OffsetGreaterThanZeroEmitsTopIndicator(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(20)
 	m.rebuildItems()
@@ -93,6 +99,8 @@ func TestRenderListAt_OffsetGreaterThanZeroEmitsTopIndicator(t *testing.T) {
 // TestRenderListAt_OverflowEmitsBottomIndicator verifies that when more rows
 // remain past the visible window the renderer reserves a line and emits ▼.
 func TestRenderListAt_OverflowEmitsBottomIndicator(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.filtered = makeRowsForScroll(40)
 	m.rebuildItems()
@@ -119,6 +127,8 @@ func TestRenderListAt_OverflowEmitsBottomIndicator(t *testing.T) {
 // begins inside group 1 still renders the group-1 label as its first row
 // (renderListAt's walk initializes prevGroup=-1 at startIdx).
 func TestRenderListAt_GroupLabelEmittedAtWindowStart(t *testing.T) {
+	t.Parallel()
+
 	m := scrollModel()
 	m.filtered = []session.RunningSession{
 		{WindowID: 1, Base: "attn1", Account: "w", State: "stop"}, // group 0

@@ -17,6 +17,8 @@ import (
 )
 
 func TestBundleSnapshotsSpoolAndCapsAfterEventTimeOrdering(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})

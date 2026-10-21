@@ -46,6 +46,8 @@ func TestPlanViewerYCopiesRawLineNotRenderedTruncation(t *testing.T) {
 }
 
 func TestPlanViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -109,6 +111,8 @@ func TestPlanSearchCopyPathCopiesSelectedPlanPath(t *testing.T) {
 }
 
 func TestPlanSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -158,6 +162,8 @@ func TestPlanSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
 }
 
 func TestPlanSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		mode:           ModePlanSearch,
 		planSearchMode: true,
@@ -199,6 +205,8 @@ func TestPlanViewerCopyPathCopiesPlanPath(t *testing.T) {
 }
 
 func TestPlanViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model

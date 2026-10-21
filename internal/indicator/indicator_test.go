@@ -140,6 +140,8 @@ func TestRunWithDeps_ForwardsUnsupportedProducerAsUnknown(t *testing.T) {
 }
 
 func TestNewRequestID_UniqueAndWellFormed(t *testing.T) {
+	t.Parallel()
+
 	seen := make(map[string]bool)
 	for i := 0; i < 1000; i++ {
 		id := newRequestID()

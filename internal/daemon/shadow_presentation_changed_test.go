@@ -85,6 +85,8 @@ func TestPresentationChangedAtStampsUnseenOnlyPublicationChange(t *testing.T) {
 }
 
 func TestFocusClearUsesSnapshotObservationTimeAndDoesNotRestamp(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	publishIcon(h, 7, "bolt")
 	h.publishSnapshot(unseenTree(7, false), time.Now())
@@ -103,6 +105,8 @@ func TestFocusClearUsesSnapshotObservationTimeAndDoesNotRestamp(t *testing.T) {
 }
 
 func TestLegacySameStateRestoreDoesNotFabricatePresentationRecency(t *testing.T) {
+	t.Parallel()
+
 	var restored state.WindowState
 	if err := restored.UnmarshalUserVar(`{"v":4,"a":"stop","f":[{"k":"harness","y":"claude:s1","a":"stop","i":"stop","q":1,"t":1710000100,"tm":true,"ta":1710000100}],"ei":"stop","sq":1}`); err != nil {
 		t.Fatalf("UnmarshalUserVar() error: %v", err)

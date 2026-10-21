@@ -28,6 +28,8 @@ func planProjectFilterTestModel() Model {
 }
 
 func TestPlanSearchProjectPickerOffersAliasesAndUnknown(t *testing.T) {
+	t.Parallel()
+
 	m := planProjectFilterTestModel()
 	updated, cmd := m.Update(keyPress("r"))
 	m = updated.(Model)
@@ -52,6 +54,8 @@ func TestPlanSearchProjectPickerOffersAliasesAndUnknown(t *testing.T) {
 }
 
 func TestPlanSearchProjectPickerCancelReturnsToPlans(t *testing.T) {
+	t.Parallel()
+
 	m := planProjectFilterTestModel()
 	m = pressKey(m, "r")
 	m = pressKey(m, "esc")
@@ -61,6 +65,8 @@ func TestPlanSearchProjectPickerCancelReturnsToPlans(t *testing.T) {
 }
 
 func TestPlanSearchAndViewerRenderProjectLabels(t *testing.T) {
+	t.Parallel()
+
 	known := plans.PlanMeta{Name: "known", Project: "Primary", Projects: []string{"Primary", "Alias"}, Files: []string{"manifest.md"}}
 	if got := stripAnsi(tuiplans.FormatRow(plans.Result{Meta: known}, 100)); !strings.Contains(got, "[Primary]") {
 		t.Fatalf("known row missing project label: %q", got)

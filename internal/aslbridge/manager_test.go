@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -21,7 +22,7 @@ import (
 // observed reason rather than on having closed the manager.
 func waitForReason(t *testing.T, m *Manager, want string) {
 	t.Helper()
-	waitFor(t, "reason containing "+want, func() bool {
+	testutil.Eventually(t, "reason containing "+want, func() bool {
 		return strings.Contains(m.Status().Reason, want)
 	})
 	if m.Status().Available {
@@ -105,7 +106,7 @@ func TestStartPublishesStartingUntilTheFirstHandshake(t *testing.T) {
 		t.Fatalf("status before the first handshake = %+v; want reason %q", status, ReasonStarting)
 	}
 	close(release)
-	waitFor(t, "available", func() bool { return m.Status().Available })
+	testutil.Eventually(t, "available", func() bool { return m.Status().Available })
 	if reason := m.Status().Reason; reason == ReasonStarting {
 		t.Fatalf("reason after the handshake = %q; want the starting reason cleared", reason)
 	}
@@ -115,7 +116,7 @@ func TestHandshakePublishesAvailabilityAndMutations(t *testing.T) {
 	fake := newFakeBridge(t, serveSnapshots)
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	status := m.Status()
 	if status.Protocol != ProtocolVersion || status.Version != "9.9.9" {

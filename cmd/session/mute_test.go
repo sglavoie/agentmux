@@ -9,6 +9,8 @@ import (
 )
 
 func TestMuteToggle_UnmutedToMuted(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeMuteClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -46,6 +48,8 @@ func TestMuteToggle_UnmutedToMuted(t *testing.T) {
 }
 
 func TestMuteToggle_MutedToUnmuted(t *testing.T) {
+	t.Parallel()
+
 	tabTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "🦊api",
 		State:   "bolt",
@@ -93,6 +97,8 @@ func TestMuteToggle_MutedToUnmuted(t *testing.T) {
 }
 
 func TestMuteToggle_UnmanagedIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeMuteClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -115,6 +121,8 @@ func TestMuteToggle_UnmanagedIsNoOp(t *testing.T) {
 }
 
 func TestMuteToggle_WindowIDZeroIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeMuteClient{}
 
 	if _, err := muteToggle(client, 0); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"strconv"
 	"sync"
 	"testing"
@@ -79,19 +80,6 @@ func (c *scriptClock) now() time.Time {
 	c.next++
 	return c.base.Add(off)
 }
-
-func waitFor(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(time.Millisecond)
-	}
-	t.Fatalf("timed out waiting for %s", what)
-}
-
 func TestListCoordinator_SameSocketRunsOnceAndFansOut(t *testing.T) {
 	const waiters = 8
 
@@ -123,7 +111,7 @@ func TestListCoordinator_SameSocketRunsOnceAndFansOut(t *testing.T) {
 			results[i], errs[i] = client.ListWindows()
 		}(i)
 	}
-	waitFor(t, "waiters to join the in-flight read", func() bool {
+	testutil.Eventually(t, "waiters to join the in-flight read", func() bool {
 		st, _ := client.ListStatus()
 		return st.CoalescedWaiters == waiters
 	})
@@ -240,7 +228,7 @@ func TestListCoordinator_SharedByWithSocketClones(t *testing.T) {
 			t.Errorf("second clone: %v", err)
 		}
 	}()
-	waitFor(t, "the second clone to join the first clone's read", func() bool {
+	testutil.Eventually(t, "the second clone to join the first clone's read", func() bool {
 		st, _ := second.ListStatus()
 		return st.CoalescedWaiters == 1
 	})
@@ -285,7 +273,7 @@ func TestListCoordinator_CallersOwnIndependentCopies(t *testing.T) {
 			t.Errorf("waiter: %v", err)
 		}
 	}()
-	waitFor(t, "the waiter to join", func() bool {
+	testutil.Eventually(t, "the waiter to join", func() bool {
 		st, _ := client.ListStatus()
 		return st.CoalescedWaiters == 1
 	})

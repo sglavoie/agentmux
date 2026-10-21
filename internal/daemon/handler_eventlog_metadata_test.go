@@ -8,6 +8,8 @@ import (
 )
 
 func TestHandler_EventsExport_PreservesMetadataAfterClosedWindowGC(t *testing.T) {
+	t.Parallel()
+
 	h, fake, _ := newSweepTestHandler(0)
 	fake.mu.Lock()
 	fake.windows = fakeOSWindowsWithTab(1, "W:api")

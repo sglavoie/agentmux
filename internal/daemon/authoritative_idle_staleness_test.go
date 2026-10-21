@@ -18,6 +18,8 @@ import (
 // per-window adapter starts, then verifies the stale snapshot causes neither
 // external I/O nor any state-family mutation.
 func TestScreenProbesDiscardSnapshotPredatingReducerEvent(t *testing.T) {
+	t.Parallel()
+
 	base := time.Unix(1_700_000_000, 0)
 	t.Run("codex prompt and idle preserve protected terminal", func(t *testing.T) {
 		h := newTestHandler()

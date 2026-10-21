@@ -24,6 +24,8 @@ import (
 // are constants, so this holds for every payload rather than for the ones a test
 // happens to build.
 func TestALifecyclePayloadIsTooSmallToEverBeCompacted(t *testing.T) {
+	t.Parallel()
+
 	schema, err := aslcontract.ReadSchema(aslcontract.FixturesLifecycleHook)
 	if err != nil {
 		t.Fatalf("read lifecycle schema: %v", err)

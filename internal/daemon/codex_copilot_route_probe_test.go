@@ -13,6 +13,8 @@ import (
 )
 
 func TestProbeCodexScreenPrompts_RoutedPromptReadsProducerAndPreservesTargetOwner(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	windows := routedHarnessProbeWindows("bolt", harness.Claude, true)
@@ -44,6 +46,8 @@ func TestProbeCodexScreenPrompts_RoutedPromptReadsProducerAndPreservesTargetOwne
 }
 
 func TestProbeCodexScreenPrompts_RoutedPromptSurvivesUnrelatedTabPublication(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	windows := routedCodexProbeWithEarlierTab(
@@ -111,6 +115,8 @@ func TestProbeCodexScreenPrompts_RoutedPromptSurvivesUnrelatedTabPublication(t *
 // command in the plain split must not invalidate a probe already reading the
 // routed producer pane beside it.
 func TestProbeCodexScreenPrompts_RoutedPromptSurvivesSiblingPaneChurn(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Unix(1_700_000_000, 0)
 	windows := routedCodexProbeWithPlainSibling(
@@ -228,6 +234,8 @@ func routedCodexProbeWithEarlierTab(earlierTitle, routedTitle string) []kitty.OS
 }
 
 func TestProbeCodexScreenPrompts_RoutedClearReadsProducerAndClearsTarget(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	windows := routedHarnessProbeWindows("stop", harness.Claude, true)
@@ -261,6 +269,8 @@ func TestProbeCodexScreenPrompts_RoutedClearReadsProducerAndClearsTarget(t *test
 }
 
 func TestProbeCodexScreenPrompts_RoutedIdleReadsProducerAndSettlesTarget(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	windows := routedHarnessProbeWindows("bolt", harness.Copilot, true)
@@ -302,6 +312,8 @@ func TestProbeCodexScreenPrompts_RoutedIdleReadsProducerAndSettlesTarget(t *test
 }
 
 func TestProbeCopilotTranscriptStop_RoutedProducerSettlesAndRecoversManagedTarget(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "copilot-route", copilotTurnEndTranscript)
 	h := newTestHandler()
@@ -338,6 +350,8 @@ func TestProbeCopilotTranscriptStop_RoutedProducerSettlesAndRecoversManagedTarge
 }
 
 func TestProbeCopilotTranscriptStop_RoutedSourceReceiptInvalidatesBinding(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	windows := routedHarnessProbeWindows("bolt", harness.Codex, true)

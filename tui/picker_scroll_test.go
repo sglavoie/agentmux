@@ -48,6 +48,8 @@ func pickerScrollFixtureModel(t *testing.T, rows, height int) Model {
 }
 
 func TestPickerVisibleHeight_FloorAtListMinVisible(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.height = 2
 	if got := pickerVisibleHeight(m); got != listMinVisible {
@@ -56,6 +58,8 @@ func TestPickerVisibleHeight_FloorAtListMinVisible(t *testing.T) {
 }
 
 func TestClampPickerOffset_PinsToValidRange(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 30, 15)
 	visible := pickerVisibleHeight(m)
 	maxOffset := len(m.pickerFilteredIdx) - visible
@@ -78,6 +82,8 @@ func TestClampPickerOffset_PinsToValidRange(t *testing.T) {
 }
 
 func TestScrollPickerToCursor_CursorAfterWindowAdvancesOffset(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	visible := pickerVisibleHeight(m)
 	m.pickerOffset = 0
@@ -92,6 +98,8 @@ func TestScrollPickerToCursor_CursorAfterWindowAdvancesOffset(t *testing.T) {
 }
 
 func TestHandlePickerKey_JAdvancesOffsetPastVisibleWindow(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	visible := pickerVisibleHeight(m)
 
@@ -113,6 +121,8 @@ func TestHandlePickerKey_JAdvancesOffsetPastVisibleWindow(t *testing.T) {
 }
 
 func TestHandlePickerKey_JReachesLastRow(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	total := len(m.pickerFilteredIdx)
 	for i := 0; i < total; i++ {
@@ -129,6 +139,8 @@ func TestHandlePickerKey_JReachesLastRow(t *testing.T) {
 }
 
 func TestHandlePickerKey_KFollowsCursorBackUp(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	visible := pickerVisibleHeight(m)
 
@@ -150,6 +162,8 @@ func TestHandlePickerKey_KFollowsCursorBackUp(t *testing.T) {
 }
 
 func TestHandlePickerKey_GAndShiftGJumpToBounds(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	last := len(m.pickerFilteredIdx) - 1
 
@@ -174,6 +188,8 @@ func TestHandlePickerKey_GAndShiftGJumpToBounds(t *testing.T) {
 }
 
 func TestHandlePickerKey_CtrlDAdvancesByHalfPage(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	visible := pickerVisibleHeight(m)
 	step := visible / 2
@@ -190,6 +206,8 @@ func TestHandlePickerKey_CtrlDAdvancesByHalfPage(t *testing.T) {
 }
 
 func TestHandlePickerKey_PgDownAdvancesByPage(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	visible := pickerVisibleHeight(m)
 	step := visible - 1
@@ -209,6 +227,8 @@ func TestHandlePickerKey_PgDownAdvancesByPage(t *testing.T) {
 }
 
 func TestRenderPickerList_OffsetEmitsTopIndicator(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 30, 15)
 	m.pickerOffset = 5
 
@@ -234,6 +254,8 @@ func TestRenderPickerList_OffsetEmitsTopIndicator(t *testing.T) {
 }
 
 func TestRenderPickerList_OverflowEmitsBottomIndicator(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	m.pickerOffset = 0
 
@@ -244,6 +266,8 @@ func TestRenderPickerList_OverflowEmitsBottomIndicator(t *testing.T) {
 }
 
 func TestRenderPickerList_UnboundedRendersAllRows(t *testing.T) {
+	t.Parallel()
+
 	// Build a small picker directly (the scroll fixture fatals when rows fit
 	// in the budget; we want the opposite here).
 	sessions := make([]config.Session, 12)
@@ -274,6 +298,8 @@ func TestRenderPickerList_UnboundedRendersAllRows(t *testing.T) {
 }
 
 func TestPickerWindowSizeMsg_ResizeKeepsCursorVisible(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 60, 40)
 	for i := 0; i < 50; i++ {
 		m = pressKey(m, "j")
@@ -300,6 +326,8 @@ func TestPickerWindowSizeMsg_ResizeKeepsCursorVisible(t *testing.T) {
 }
 
 func TestListFooterPositionFragment_PresentWhenOverflow(t *testing.T) {
+	t.Parallel()
+
 	m := scrollFixtureModel(t, 40, 15)
 	out := stripAnsi(renderFooter(m))
 	// Format: `start–end of total`. With cursor=0 and visible<total, start=1.
@@ -309,6 +337,8 @@ func TestListFooterPositionFragment_PresentWhenOverflow(t *testing.T) {
 }
 
 func TestListFooterPositionFragment_AbsentWhenAllFits(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width = 100
 	m.height = 40
@@ -323,6 +353,8 @@ func TestListFooterPositionFragment_AbsentWhenAllFits(t *testing.T) {
 // g/G, as they are on the dashboard, so the keys a user learns there keep
 // working once a view opens from it.
 func TestHandlePickerKey_HomeAndEndMatchGAndShiftG(t *testing.T) {
+	t.Parallel()
+
 	m := pickerScrollFixtureModel(t, 40, 15)
 	last := len(m.pickerFilteredIdx) - 1
 

@@ -8,6 +8,8 @@ import (
 )
 
 func TestDisplayProjectResolvesRenamesWithoutGuessingAliases(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	project := func(title, profile string) config.Session {
 		return config.Session{Title: title, Profile: profile, Directory: dir}

@@ -33,6 +33,8 @@ func subagentHookEvent(t *testing.T, h *Handler, windowID int, event string, pay
 // parent activity cannot overwrite 🤖, and the last stop yields to the parent
 // session's own activity.
 func TestHandler_SubagentIdentifiedConcurrentChildren(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	subagentHookEvent(t, h, 1, "UserPromptSubmit", hookevent.HookPayload{SessionID: "s1"})
@@ -63,6 +65,8 @@ func TestHandler_SubagentIdentifiedConcurrentChildren(t *testing.T) {
 // legacy counter's inflation cannot leak into the visible state — and a
 // duplicate stop replay changes nothing.
 func TestHandler_SubagentDuplicateStartsAndStopsIdempotent(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	subagentHookEvent(t, h, 1, "UserPromptSubmit", hookevent.HookPayload{SessionID: "s1"})
@@ -85,6 +89,8 @@ func TestHandler_SubagentDuplicateStartsAndStopsIdempotent(t *testing.T) {
 // tombstone that absorbs the late start, so 🤖 never strands on an agent that
 // already finished.
 func TestHandler_SubagentStopBeforeStartDoesNotStrandRobot(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	subagentHookEvent(t, h, 1, "UserPromptSubmit", hookevent.HookPayload{SessionID: "s1"})
@@ -100,6 +106,8 @@ func TestHandler_SubagentStopBeforeStartDoesNotStrandRobot(t *testing.T) {
 // ids aggregates on the balanced per-session bucket — intermediate stops keep
 // 🤖 while any agent remains, and the last stop yields to parent activity.
 func TestHandler_SubagentIdentityLessLegacyMultiset(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	subagentHookEvent(t, h, 1, "UserPromptSubmit", hookevent.HookPayload{SessionID: "s1"})

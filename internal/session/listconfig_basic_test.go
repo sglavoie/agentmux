@@ -27,6 +27,8 @@ func newClientFromWindows(t *testing.T, windows []kitty.OSWindow) *kitty.Subproc
 }
 
 func TestListWithConfig_TitleFallback_HappyPath(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -88,6 +90,8 @@ func TestListWithConfig_TitleFallback_HappyPath(t *testing.T) {
 }
 
 func TestListWithConfig_TitleFallback_ProfileMatchCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -132,6 +136,8 @@ func TestListWithConfig_TitleFallback_ProfileMatchCaseInsensitive(t *testing.T) 
 }
 
 func TestListWithConfig_TitleFallback_AmbiguousMatchSkipped(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -182,6 +188,8 @@ func TestListWithConfig_TitleFallback_AmbiguousMatchSkipped(t *testing.T) {
 }
 
 func TestListWithConfig_TitleFallback_NoConfigMatch(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,

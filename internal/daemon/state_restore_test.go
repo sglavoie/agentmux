@@ -12,6 +12,8 @@ import (
 )
 
 func TestRestoreFromUserVarsRestoresStateAndFutureGuard(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	guardExpiry := now.Add(time.Minute)
@@ -52,6 +54,8 @@ func TestRestoreFromUserVarsRestoresStateAndFutureGuard(t *testing.T) {
 }
 
 func TestRestoreFromUserVarsSkipsExpiredGuardAndUnmanagedWindows(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	encoded, err := state.WindowState{
@@ -88,6 +92,8 @@ func TestRestoreFromUserVarsSkipsExpiredGuardAndUnmanagedWindows(t *testing.T) {
 }
 
 func TestRestoreFromUserVarsRestoresReducerFactsLeasesAndGeneration(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	cfg := state.ReducerConfig{GuardDuration: 3, StaleActive: 600}
 	h.SetReducerConfig(cfg)
@@ -153,6 +159,8 @@ func TestRestoreFromUserVarsRestoresReducerFactsLeasesAndGeneration(t *testing.T
 // that shadow_current_mismatch forever — a permanent doctor/audit failure. A
 // fresh (unexpired) stop must keep rendering stop through the same path.
 func TestRestoreFromUserVarsRepublishesReducedStateAfterTombstoneExpiry(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 
@@ -224,6 +232,8 @@ func TestRestoreFromUserVarsRepublishesReducedStateAfterTombstoneExpiry(t *testi
 // persisting the anchor: a daemon restart in the middle of an agent turn must
 // resume the elapsed stretch, not restart it from the restore instant.
 func TestRestoreFromUserVarsKeepsLivePersistedBusySince(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	anchor := now.Add(-7 * time.Minute).Truncate(time.Second)
@@ -273,6 +283,8 @@ func TestRestoreFromUserVarsKeepsLivePersistedBusySince(t *testing.T) {
 // re-asserted against it or a pre-upgrade busy window would restore anchorless
 // and a stale persisted anchor would outlive its stretch.
 func TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 
@@ -323,6 +335,8 @@ func TestRestoreFromUserVarsStampsBusySinceForFactlessPayloads(t *testing.T) {
 }
 
 func TestRestoreFromUserVarsMigratesV1PayloadToSyntheticLegacySource(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	cfg := state.ReducerConfig{GuardDuration: 7}
 	h.SetReducerConfig(cfg)

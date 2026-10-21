@@ -10,10 +10,10 @@ import (
 	"github.com/sglavoie/agentmux/tui"
 )
 
-// sentinelHome is a home directory holding the user files a harness run must
-// never touch: launch overrides whose entries name no fixture project (so a
-// run that loaded them would prune them), a transcript cache, and a config.
-func sentinelHome(t *testing.T) (string, map[string]string) {
+// sentinelHomeDir is a home directory holding the user files a harness run
+// must never touch: launch overrides whose entries name no fixture project (so
+// a run that loaded them would prune them), a transcript cache, and a config.
+func sentinelHomeDir(t *testing.T) (string, map[string]string) {
 	t.Helper()
 	home := t.TempDir()
 	files := map[string]string{
@@ -30,9 +30,21 @@ func sentinelHome(t *testing.T) (string, map[string]string) {
 			t.Fatal(err)
 		}
 	}
+	return home, files
+}
+
+// sentinelUnsetKeys are the variables that could point a run somewhere other
+// than its HOME; a sentinel run has none of them set.
+var sentinelUnsetKeys = []string{overrides.PathEnvVar, "AMX_CONFIG", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CONFIG_HOME"}
+
+// sentinelHome makes a sentinel home this process's HOME for the rest of the
+// test.
+func sentinelHome(t *testing.T) (string, map[string]string) {
+	t.Helper()
+	home, files := sentinelHomeDir(t)
 	// The run must find the home by itself: nothing may point it elsewhere.
 	t.Setenv("HOME", home)
-	for _, key := range []string{overrides.PathEnvVar, "AMX_CONFIG", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CONFIG_HOME"} {
+	for _, key := range sentinelUnsetKeys {
 		old, had := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatal(err)
@@ -102,18 +114,4 @@ func TestFixtureRunsLeaveTheUsersHomeAlone(t *testing.T) {
 	if got := os.Getenv("HOME"); got != home {
 		t.Fatalf("HOME after the runs = %q; want it restored to %q", got, home)
 	}
-}
-
-// Every committed scenario, run the way `just tui-scenarios` runs them.
-func TestCommittedScenariosLeaveTheUsersHomeAlone(t *testing.T) {
-	scenarios, err := filepath.Glob("../../docs/tui-testing/scenarios/*.json")
-	if err != nil || len(scenarios) == 0 {
-		t.Fatalf("no committed scenarios found: %v", err)
-	}
-	home, files := sentinelHome(t)
-	args := append([]string{"tui-test", "run"}, scenarios...)
-	if _, stderr, err := runRootArgs(t, args...); err != nil {
-		t.Fatalf("run: %v (stderr=%q)", err, stderr)
-	}
-	requireUntouched(t, home, files)
 }

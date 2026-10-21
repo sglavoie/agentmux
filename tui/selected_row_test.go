@@ -18,6 +18,8 @@ import (
 )
 
 func TestRenderSelectedRowNormalizesNestedANSI(t *testing.T) {
+	t.Parallel()
+
 	plain := "  🦊 profile  codex  /tmp/项目  (current)"
 	nested := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555")).Render("  🦊 profile") +
 		styleDim.Render("  codex  /tmp/项目") +
@@ -40,6 +42,8 @@ func TestRenderSelectedRowNormalizesNestedANSI(t *testing.T) {
 }
 
 func TestConfigPickerCursorMoveRestoresNormalRow(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
@@ -113,6 +117,8 @@ func renderedLineContaining(t *testing.T, rendered, visible string) string {
 // row styling may be composed freely, but selection must always pass through
 // renderSelectedRow instead of directly nesting the reverse style around it.
 func TestSelectableListFamiliesUseNormalizedRenderer(t *testing.T) {
+	t.Parallel()
+
 	files := []string{
 		"chip_picker.go", "model_overlays.go",
 	}

@@ -62,6 +62,8 @@ func listFooterRows(m Model) []string {
 // lookup. Widths where truncation drops the tail are included, because a drop
 // must shorten the sequence rather than reorder what is left.
 func TestListFooterPaletteOrder(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{0, 80, 120, 160, 300} {
 		for _, tc := range listFooterStates(t, width) {
 			t.Run(fmt.Sprintf("%s/%d", tc.name, width), func(t *testing.T) {
@@ -131,6 +133,8 @@ func stripAnsiLines(lines []string) []string {
 // list does not show — so it is asserted per state and per width rather than at
 // one representative size.
 func TestListFooterIsExactlyOneRowAtEveryWidth(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{20, 40, 60, 79, 80, 119, 120, 160, 300} {
 		for _, tc := range listFooterStates(t, width) {
 			t.Run(fmt.Sprintf("%s/%d", tc.name, width), func(t *testing.T) {
@@ -151,6 +155,8 @@ func TestListFooterIsExactlyOneRowAtEveryWidth(t *testing.T) {
 // find out which half changed wording, which is the cost the all-or-nothing rule
 // buys out.
 func TestListFooterFallsBackToBareKeysWholesale(t *testing.T) {
+	t.Parallel()
+
 	m := withListRows(Model{mode: ModeList, height: 24}, session.RunningSession{Base: "a", State: "bolt", Account: "w"})
 	// The narrow end of the sweep starts where the bare-key row still fits: below
 	// that the row is hard-clamped, and a clamped row has no spelling to be
@@ -179,6 +185,8 @@ func TestListFooterFallsBackToBareKeysWholesale(t *testing.T) {
 // The wide case measures the unbounded row rather than naming a number, so the
 // assertion cannot rot the next time a binding joins the palette.
 func TestListFooterMarksOverflowWhenTruncated(t *testing.T) {
+	t.Parallel()
+
 	m := withListRows(Model{mode: ModeList, height: 24}, session.RunningSession{Base: "a", State: "bolt", Account: "w"})
 
 	narrow := m
@@ -212,6 +220,8 @@ func TestListFooterMarksOverflowWhenTruncated(t *testing.T) {
 // half-written binding behind. A row ending mid-key would advertise a keystroke
 // that does not exist, which is worse than the omission the marker admits to.
 func TestListFooterTruncationKeepsTokensWhole(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{79, 80, 119, 120, 160} {
 		for _, tc := range listFooterStates(t, width) {
 			t.Run(fmt.Sprintf("%s/%d", tc.name, width), func(t *testing.T) {
@@ -280,6 +290,8 @@ func isFooterMetadataToken(m Model, tok string) bool {
 // at each — because the footer picks its vocabulary per band and a regression
 // would land on the edge rather than in the middle.
 func TestListFooterIsOneRowAtEveryWidth(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{79, 80, 119, 120, 160} {
 		m := withListRows(Model{mode: ModeList, width: width, height: 24},
 			session.RunningSession{Base: "a", State: "key", Account: "w"})
@@ -303,6 +315,8 @@ func TestListFooterIsOneRowAtEveryWidth(t *testing.T) {
 // rows to the list rather than merely hiding output. The two sizes are the ones
 // the acceptance brief names: a standard 80×24 and a spacious 120×32.
 func TestListFooterReclaimsListCapacity(t *testing.T) {
+	t.Parallel()
+
 	for _, size := range []struct{ w, h int }{{80, 24}, {120, 32}} {
 		m := scrollModel()
 		m.width, m.height = size.w, size.h
@@ -332,6 +346,8 @@ func TestListFooterReclaimsListCapacity(t *testing.T) {
 }
 
 func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
+	t.Parallel()
+
 	const width = 110
 	m := withListRows(Model{mode: ModeList, width: width}, session.RunningSession{State: "bolt"})
 
@@ -353,6 +369,8 @@ func TestListFooterHasNoSpacerAndZebraRowsSpanViewport(t *testing.T) {
 }
 
 func TestRootFootersHaveZebraRows(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -389,6 +407,8 @@ func TestRootFootersHaveZebraRows(t *testing.T) {
 }
 
 func TestFooterZebraExcludesViewsWithoutRootFooter(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -472,6 +492,8 @@ func assertZebraFooterRows(t *testing.T, rendered string, width int) {
 // spellings were gone would pass just as well if the capabilities had gone with
 // them.
 func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model
@@ -525,6 +547,8 @@ func TestListFooterKeyHintsAlwaysPresent(t *testing.T) {
 }
 
 func TestViewerFootersAdvertiseCopy(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		mode  Mode

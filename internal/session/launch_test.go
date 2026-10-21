@@ -56,6 +56,8 @@ func hasArg(args []string, want string) bool {
 // TestLaunch_DedupSkipsExisting verifies that launching an already-running
 // session with the default policy does not call kitten @ launch.
 func TestLaunch_DedupSkipsExisting(t *testing.T) {
+	t.Parallel()
+
 	existing := loadFixture(t, "kitty_ls.json") // has P:dotfiles and W:api
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": existing,
@@ -80,6 +82,8 @@ func TestLaunch_DedupSkipsExisting(t *testing.T) {
 }
 
 func TestLaunch_AlwaysNewInstancePolicyBypassesDedup(t *testing.T) {
+	t.Parallel()
+
 	existing := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
 		`{"id":10,"is_active":true,"title":"api","windows":[` +
 		`{"id":11,"is_active":true,"title":"api","cwd":"/tmp/api","user_vars":{` +
@@ -121,6 +125,8 @@ func TestLaunch_AlwaysNewInstancePolicyBypassesDedup(t *testing.T) {
 // pass the profile's account record but Session.Profile takes precedence per
 // the rest of the codebase).
 func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
+	t.Parallel()
+
 	// Existing tab uses amx_profile=claude-prod (matches sess.Profile below).
 	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
 		`{"id":10,"is_active":true,"title":"api","windows":[` +
@@ -162,6 +168,8 @@ func TestLaunch_DedupUsesEffectiveProfile(t *testing.T) {
 // new tab must be placed in the Session.Profile group, not the account-name
 // group.
 func TestLaunch_InsertLocationUsesEffectiveProfile(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[{"id":1,"is_active":true,"is_focused":true,"tabs":[` +
 		`{"id":10,"is_active":true,"title":"apple","windows":[` +
 		`{"id":11,"is_active":true,"title":"apple","cwd":"/tmp/apple","user_vars":{` +

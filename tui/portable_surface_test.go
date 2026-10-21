@@ -31,6 +31,8 @@ func producesQuit(cmd tea.Cmd) bool {
 // An attached tmux view ran in the dashboard's own terminal and has given it
 // back, so the dashboard carries on.
 func TestTheDashboardSurvivesAnAttachedView(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	if _, cmd := m.Update(commands.FocusDoneMsg{}); !producesQuit(cmd) {
 		t.Fatal("a Kitty focus must still quit the dashboard")
@@ -53,6 +55,8 @@ func TestTheDashboardSurvivesAnAttachedView(t *testing.T) {
 // session: it ends, which closes the popup and uncovers the session. A switch
 // that was refused keeps it up.
 func TestAPopupDashboardEndsOnceItsTerminalIsSwitched(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	if _, cmd := m.Update(commands.AttachDoneMsg{Switched: true}); !producesQuit(cmd) {
 		t.Fatal("the popup stayed over the session it switched the terminal to")
@@ -65,6 +69,8 @@ func TestAPopupDashboardEndsOnceItsTerminalIsSwitched(t *testing.T) {
 }
 
 func TestAViewThatRanInThisTerminalDoesNotQuitTheDashboard(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	if _, cmd := m.Update(commands.PickerOpenDoneMsg{}); !producesQuit(cmd) {
 		t.Fatal("opening a Kitty tab must still quit the dashboard")
@@ -96,6 +102,8 @@ func TestAPortableLaunchLeavesTheDashboardRunning(t *testing.T) {
 // The sort order is computed, never held by a terminal: without Kitty the
 // command is still offered, moves nothing, and says the sessions are in order.
 func TestResortWithoutKittySaysSessionsAreAlwaysInSortOrder(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	resort := commandByID(t, commands.ResortTabs)
 	if availability := resort.AvailabilityFor(m, commands.Context{}); !availability.Available {

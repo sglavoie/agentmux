@@ -11,6 +11,8 @@ import (
 
 // TestClose_CallsCloseTab verifies that Close sends kitten @ close-tab.
 func TestClose_CallsCloseTab(t *testing.T) {
+	t.Parallel()
+
 	// ls returns empty (tab 4 is already gone immediately).
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": loadFixture(t, "kitty_ls_empty.json"),
@@ -37,6 +39,8 @@ func TestClose_CallsCloseTab(t *testing.T) {
 
 // TestPollClosed_TabGoneImmediately returns nil when the tab is not in ls.
 func TestPollClosed_TabGoneImmediately(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": loadFixture(t, "kitty_ls_empty.json"),
 	})
@@ -55,6 +59,8 @@ func TestPollClosed_TabGoneImmediately(t *testing.T) {
 // every fast close (e.g. Restart's old-tab cleanup) and slowing the test
 // suite proportionally.
 func TestPollClosed_NoSleepOnFirstSuccess(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": loadFixture(t, "kitty_ls_empty.json"),
 	})
@@ -75,6 +81,8 @@ func TestPollClosed_NoSleepOnFirstSuccess(t *testing.T) {
 
 // TestPollClosed_Timeout returns ErrCloseTimeout when tab persists.
 func TestPollClosed_Timeout(t *testing.T) {
+	t.Parallel()
+
 	// Tab 4 is present in kitty_ls.json (W:api has id=4).
 	runner := kitty.NewMockRunner(map[string][]byte{
 		"kitten @ ls": loadFixture(t, "kitty_ls.json"),
@@ -91,6 +99,8 @@ func TestPollClosed_Timeout(t *testing.T) {
 // exists: two of these three endings return no error, and only one of them means
 // the tab actually went away.
 func TestCloseObservedDistinguishesTheThreeEndings(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		ls       []byte
@@ -146,6 +156,8 @@ func TestCloseObservedDistinguishesTheThreeEndings(t *testing.T) {
 // TestCloseObservedReportsTheCloseTabFailure keeps the failure of the request
 // itself distinct from the failure to observe its effect.
 func TestCloseObservedReportsTheCloseTabFailure(t *testing.T) {
+	t.Parallel()
+
 	client := kitty.NewClientWithSocket(failingCloseRunner{}, "")
 
 	observation, err := session.CloseObserved(kitty.NewBackend(client), kitty.GroupRef(4))

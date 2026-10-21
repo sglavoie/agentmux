@@ -10,6 +10,8 @@ import (
 )
 
 func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
+	t.Parallel()
+
 	payload := protocol.ExportEventsPayload{
 		SchemaVersion: protocol.EventsExportSchemaVersion,
 		Windows: []protocol.ExportWindow{{
@@ -78,6 +80,8 @@ func TestProjectExportEventsPayloadV8RemovesSchemaV9CausalFields(t *testing.T) {
 }
 
 func TestProjectExportEventsPayloadV9PreservesCausalShapeWithoutProcessFields(t *testing.T) {
+	t.Parallel()
+
 	payload := protocol.ExportEventsPayload{
 		Windows: []protocol.ExportWindow{{
 			WindowID: 7,
@@ -154,6 +158,8 @@ func TestProjectExportEventsPayloadV9PreservesCausalShapeWithoutProcessFields(t 
 }
 
 func TestProjectExportEventsPayloadV10IncludesProcessFields(t *testing.T) {
+	t.Parallel()
+
 	payload := protocol.ExportEventsPayload{Windows: []protocol.ExportWindow{{
 		Shadow: protocol.WindowDebugShadow{Facts: []protocol.SourceFactSnapshot{{
 			Kind: protocol.SourceHarness, Key: "claude:s1", Icon: "bolt",

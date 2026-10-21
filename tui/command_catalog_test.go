@@ -41,6 +41,8 @@ func commandTestModel(target session.RunningSession) (Model, commands.Context, *
 }
 
 func TestCommandCatalogStableInventory(t *testing.T) {
+	t.Parallel()
+
 	type expectedCommand struct {
 		id       commands.ID
 		group    commands.Group
@@ -151,6 +153,8 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 // checked rather than assumed — Shortcut is read from dashboardBindings, so a
 // key retired there must show up here as an empty string.
 func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
+	t.Parallel()
+
 	const noDashboardKey = ""
 	want := map[commands.ID]string{
 		commands.FocusSession:      keyEnter,
@@ -233,6 +237,8 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 }
 
 func TestCommandCatalogDynamicTitles(t *testing.T) {
+	t.Parallel()
+
 	m, ctx, _ := commandTestModel(session.RunningSession{
 		TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work",
 	})
@@ -259,6 +265,8 @@ func TestCommandCatalogDynamicTitles(t *testing.T) {
 }
 
 func TestCommandCatalogAvailability(t *testing.T) {
+	t.Parallel()
+
 	t.Run("empty list disables every session command", func(t *testing.T) {
 		m := testModelWithSessions()
 		ctx := captureCommandContext(m)
@@ -351,6 +359,8 @@ func TestCommandCatalogAvailability(t *testing.T) {
 }
 
 func TestCommandCatalogConditionalVisibility(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work"}
 	m, ctx, _ := commandTestModel(target)
 	clear := commandByID(t, commands.ClearFilters)

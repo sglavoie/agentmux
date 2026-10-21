@@ -15,6 +15,8 @@ import (
 )
 
 func TestRebuildDeletesOldSidecarsAndHonorsAllOption(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	idx, err := LoadIndexAt(filepath.Join(tmp, "transcripts.json"))
 	if err != nil {
@@ -59,6 +61,8 @@ func TestRebuildDeletesOldSidecarsAndHonorsAllOption(t *testing.T) {
 }
 
 func TestRebuildReparsesCachedTranscriptsBeforeResettingSidecars(t *testing.T) {
+	t.Parallel()
+
 	cfg, readers, transcriptPath := filesystemTranscriptFixture(t)
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	idx, err := LoadIndexAt(path)
@@ -101,6 +105,8 @@ func TestRebuildReparsesCachedTranscriptsBeforeResettingSidecars(t *testing.T) {
 }
 
 func TestRebuildRepairsBlankCachedCurrentCodexTranscript(t *testing.T) {
+	t.Parallel()
+
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "codex-home")
 	sourcePath := filepath.Join(home, "sessions", "2026", "08", "25",
@@ -220,6 +226,8 @@ func TestRebuildRemovesSidecarsWhileHoldingAdvisoryLock(t *testing.T) {
 }
 
 func TestRebuildMalformedMetadataQuarantinesAndRepairsInOneRun(t *testing.T) {
+	t.Parallel()
+
 	cfg, readers, _ := filesystemTranscriptFixture(t)
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	writeMalformedMetadata(t, path)

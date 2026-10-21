@@ -10,6 +10,8 @@ import (
 )
 
 func TestEnsureNativeLaunchUsesUUIDAndPrivateDirectory(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	launchID, err := NewLaunchID()
 	if err != nil {
@@ -35,6 +37,8 @@ func TestEnsureNativeLaunchUsesUUIDAndPrivateDirectory(t *testing.T) {
 }
 
 func TestMaintainNativeProtectsActiveAndPrunesInactive(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	now := time.Unix(1_800_000_000, 0)
 	activeID := "11111111-1111-4111-8111-111111111111"
@@ -76,6 +80,8 @@ func TestMaintainNativeProtectsActiveAndPrunesInactive(t *testing.T) {
 }
 
 func TestMaintainNativeAggregateQuotaPrunesOldestInactiveLaunch(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	now := time.Unix(1_800_000_000, 0)
 	activeID := "55555555-5555-4555-8555-555555555555"
@@ -103,6 +109,8 @@ func TestMaintainNativeAggregateQuotaPrunesOldestInactiveLaunch(t *testing.T) {
 }
 
 func TestInspectNativeIsReadOnly(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	launchID := "44444444-4444-4444-8444-444444444444"
 	dir := writeNativeFixture(t, paths, launchID, "debug.log", 12, time.Now().Add(-48*time.Hour))
@@ -119,6 +127,8 @@ func TestInspectNativeIsReadOnly(t *testing.T) {
 }
 
 func TestMaintainNativeProtectsRecentlyPreparedLaunchFromConcurrentPruning(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	now := time.Unix(1_800_000_000, 0)
 	launchID := "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
@@ -138,6 +148,8 @@ func TestMaintainNativeProtectsRecentlyPreparedLaunchFromConcurrentPruning(t *te
 }
 
 func TestMaintainNativeRecoversOrphanTrimFile(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	now := time.Unix(1_800_000_000, 0)
 	modified := now.Add(-time.Hour)
@@ -173,6 +185,8 @@ func TestMaintainNativeRecoversOrphanTrimFile(t *testing.T) {
 }
 
 func TestMaintainNativeWaitsForCrossProcessMaintenanceLock(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	now := time.Unix(1_800_000_000, 0)
 	launchID := "dddddddd-dddd-4ddd-8ddd-dddddddddddd"

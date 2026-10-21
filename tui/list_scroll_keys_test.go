@@ -26,6 +26,8 @@ func scrollFixtureModel(t *testing.T, rows, height int) Model {
 }
 
 func TestHandleListKey_JAdvancesListOffsetPastVisibleWindow(t *testing.T) {
+	t.Parallel()
+
 	m := scrollFixtureModel(t, 40, 15)
 	visible := listVisibleHeight(m)
 
@@ -49,6 +51,8 @@ func TestHandleListKey_JAdvancesListOffsetPastVisibleWindow(t *testing.T) {
 }
 
 func TestHandleListKey_KFollowsCursorBackUp(t *testing.T) {
+	t.Parallel()
+
 	m := scrollFixtureModel(t, 40, 15)
 	visible := listVisibleHeight(m)
 
@@ -75,6 +79,8 @@ func TestHandleListKey_KFollowsCursorBackUp(t *testing.T) {
 }
 
 func TestHandleListKey_CtrlDAndCtrlUMoveHalfAPage(t *testing.T) {
+	t.Parallel()
+
 	for _, code := range []rune{'d', 'u'} {
 		t.Run(string(code), func(t *testing.T) {
 			m := scrollFixtureModel(t, 40, 15)
@@ -101,6 +107,8 @@ func TestHandleListKey_CtrlDAndCtrlUMoveHalfAPage(t *testing.T) {
 }
 
 func TestHandleListKey_PgDownAdvancesByPage(t *testing.T) {
+	t.Parallel()
+
 	m := scrollFixtureModel(t, 40, 15)
 	visible := listVisibleHeight(m)
 	step := visible - 1
@@ -120,6 +128,8 @@ func TestHandleListKey_PgDownAdvancesByPage(t *testing.T) {
 }
 
 func TestHandleListKey_PgUpMovesUpByPage(t *testing.T) {
+	t.Parallel()
+
 	m := scrollFixtureModel(t, 40, 15)
 	visible := listVisibleHeight(m)
 	step := visible - 1
@@ -143,6 +153,8 @@ func TestHandleListKey_PgUpMovesUpByPage(t *testing.T) {
 // scrollListToCursor must run so the persisted offset fits the new height
 // and the cursor stays inside the window.
 func TestWindowSizeMsg_ResizeKeepsCursorVisible(t *testing.T) {
+	t.Parallel()
+
 	m := scrollFixtureModel(t, 60, 40)
 	// Walk past the original window so listOffset is non-zero.
 	for i := 0; i < 50; i++ {

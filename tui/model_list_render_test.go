@@ -11,6 +11,8 @@ import (
 // ---- State group sorting tests ----
 
 func TestStateGroupSorting(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	sessions := []session.RunningSession{
 		{TabID: 1, Base: "idle1", Account: "work", State: ""},
@@ -39,6 +41,8 @@ func TestStateGroupSorting(t *testing.T) {
 }
 
 func TestRenderListGroupDividers(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height = 120, 40
 	sessions := []session.RunningSession{
@@ -83,6 +87,8 @@ func indexLineContaining(lines []string, needle string) int {
 }
 
 func TestSingleGroupNoDivider(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height = 120, 40
 	// Both empty-state with no activity record → both go to the Running bucket,
@@ -106,6 +112,8 @@ func TestSingleGroupNoDivider(t *testing.T) {
 // ---- Picker count tests ----
 
 func TestPickerSelectedCountInHeader(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "l") // → ModePicker
 
@@ -134,6 +142,8 @@ func TestPickerSelectedCountInHeader(t *testing.T) {
 // ---- Attention row smoke test ----
 
 func TestRenderListAttentionRowDoesNotPanic(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.width, m.height = 120, 40
 	sessions := []session.RunningSession{

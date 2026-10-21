@@ -15,6 +15,8 @@ const codexFixtureRoot = "testdata/codex"
 const currentCodexFixtureRoot = "testdata/codex-current"
 
 func TestCodexReader_Discover(t *testing.T) {
+	t.Parallel()
+
 	r := NewCodexReader()
 	metas, err := r.Discover(codexFixtureRoot, DiscoverOptions{})
 	if err != nil {
@@ -67,6 +69,8 @@ func TestCodexReader_Discover(t *testing.T) {
 }
 
 func TestCodexReader_DiscoverMissingDir(t *testing.T) {
+	t.Parallel()
+
 	r := NewCodexReader()
 	metas, err := r.Discover(filepath.Join(codexFixtureRoot, "does-not-exist"), DiscoverOptions{})
 	if err != nil {
@@ -78,6 +82,8 @@ func TestCodexReader_DiscoverMissingDir(t *testing.T) {
 }
 
 func TestCodexReader_DiscoverEmptyHome(t *testing.T) {
+	t.Parallel()
+
 	r := NewCodexReader()
 	metas, err := r.Discover("", DiscoverOptions{})
 	if err != nil {
@@ -89,6 +95,8 @@ func TestCodexReader_DiscoverEmptyHome(t *testing.T) {
 }
 
 func TestCodexReader_ReadMessages(t *testing.T) {
+	t.Parallel()
+
 	r := NewCodexReader()
 	path := filepath.Join(codexFixtureRoot, "sessions", "2026", "05", "24",
 		"rollout-2026-05-24T09-00-00-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jsonl")
@@ -121,6 +129,8 @@ func TestCodexReader_ReadMessages(t *testing.T) {
 }
 
 func TestCodexReader_CurrentUserMessageEvents(t *testing.T) {
+	t.Parallel()
+
 	r := NewCodexReader()
 	metas, err := r.Discover(currentCodexFixtureRoot, DiscoverOptions{})
 	if err != nil {
@@ -172,6 +182,8 @@ func TestCodexReader_CurrentUserMessageEvents(t *testing.T) {
 }
 
 func TestCleanCodexUserMessageRecognizesEmptyTurns(t *testing.T) {
+	t.Parallel()
+
 	text, ok := cleanCodexUserMessage(codexEventMsgPayload{
 		Type: "item_completed",
 		Item: &codexCompletedItem{Type: "UserMessage"},
@@ -188,6 +200,8 @@ func TestCleanCodexUserMessageRecognizesEmptyTurns(t *testing.T) {
 }
 
 func TestCodexDiscover_CacheHitSkipsParse(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, "sessions", "2026", "05", "24")
 	path := filepath.Join(dir, "rollout-2026-05-24T09-00-00-cccccccc-cccc-cccc-cccc-cccccccccccc.jsonl")
@@ -247,6 +261,8 @@ func TestCodexDiscover_CacheHitSkipsParse(t *testing.T) {
 }
 
 func TestCodexDiscover_MinTimeSkipsOldFiles(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	body := `{"timestamp":"2026-05-24T13:00:01.000Z","type":"session_meta","payload":{"id":"sess-id","timestamp":"2026-05-24T13:00:00.000Z","cwd":"/cwd"}}` + "\n"
 	newPath := filepath.Join(root, "sessions", "2026", "05", "24",
@@ -277,6 +293,8 @@ func TestCodexDiscover_MinTimeSkipsOldFiles(t *testing.T) {
 }
 
 func TestCodexDiscover_CacheMissReparses(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, "sessions", "2026", "05", "24")
 	path := filepath.Join(dir, "rollout-2026-05-24T09-00-00-dddddddd-dddd-dddd-dddd-dddddddddddd.jsonl")
@@ -324,6 +342,8 @@ func TestCodexDiscover_CacheMissReparses(t *testing.T) {
 }
 
 func TestCodexIDFromFilename(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in, want string
 	}{
@@ -368,6 +388,8 @@ func copyCodexFixture(t *testing.T) string {
 }
 
 func TestCodexDiscover_TitleComesFromTheLatestThreadName(t *testing.T) {
+	t.Parallel()
+
 	root := copyCodexFixture(t)
 	const id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	index := `{"id":"` + id + `","thread_name":"Magic links","updated_at":"2026-05-24T13:00:00Z"}
@@ -397,6 +419,8 @@ not json
 }
 
 func TestCodexDiscover_NoSessionIndexLeavesTitlesEmpty(t *testing.T) {
+	t.Parallel()
+
 	metas, err := NewCodexReader().Discover(codexFixtureRoot, DiscoverOptions{})
 	if err != nil || len(metas) != 1 || metas[0].Title != "" {
 		t.Fatalf("Discover = %+v, %v; want one untitled session", metas, err)
@@ -409,6 +433,8 @@ func TestCodexDiscover_NoSessionIndexLeavesTitlesEmpty(t *testing.T) {
 // entry and its search sidecar where they are instead of trading them between
 // the two files.
 func TestCodexContinuationSegmentIsOneConversation(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, "sessions", "2026", "10", "04")
 	const id = "01a108ac-75f4-7dd0-bf85-6f583dfa0983"
@@ -453,6 +479,8 @@ func TestCodexContinuationSegmentIsOneConversation(t *testing.T) {
 }
 
 func TestCodexDiscover_EndingIsTheLastAssistantReply(t *testing.T) {
+	t.Parallel()
+
 	metas, err := NewCodexReader().Discover(codexFixtureRoot, DiscoverOptions{})
 	if err != nil || len(metas) != 1 {
 		t.Fatalf("Discover = %d sessions, %v; want 1", len(metas), err)

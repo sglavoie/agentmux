@@ -137,6 +137,8 @@ func TestRuntimeHealthReportsSessionsAttachmentAndReconciliation(t *testing.T) {
 // A server that cannot be read is two journal records however long it lasts:
 // the pass that first failed and the pass that recovered.
 func TestRuntimeHealthJournalsAFailingStreakOnce(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	journal := &journalRecords{}
 	h.SetRuntimeJournal(journal.record)
@@ -198,6 +200,8 @@ func TestRuntimeHealthJournalsAFailingStreakOnce(t *testing.T) {
 // The interval is a bound: however often maintenance asks, the servers are
 // read once per interval.
 func TestRuntimeReconcileRunsAtMostOncePerInterval(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	passes := 0
 	h.SetRuntimeSessionReconciler(func(time.Time) (tmux.Report, error) {
@@ -219,6 +223,8 @@ func TestRuntimeReconcileRunsAtMostOncePerInterval(t *testing.T) {
 // exact. A tick that comes a little early must still get its pass, or the
 // servers are read every other tick.
 func TestRuntimeReconcileRunsOnEveryMaintenanceTick(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	passes := 0
 	h.SetRuntimeSessionReconciler(func(time.Time) (tmux.Report, error) {
@@ -253,6 +259,8 @@ func (o *countingObserver) Observe(pane backend.Ref) (backend.Screen, error) {
 // A probe tick reads each pane once however many probes ask, and health
 // counts the reads that reached the backend.
 func TestRuntimeHealthCountsScreenReadsNotCacheHits(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	observer := &countingObserver{}
 	h.SetScreenObserver(observer)
@@ -351,6 +359,8 @@ func TestHandler_ConcurrentHealthDuringRuntimeMaintenance(t *testing.T) {
 // maintenance loop. Asking it again every two seconds would leave that loop
 // little else; the wait doubles instead, to a ceiling.
 func TestRuntimeReconcileBacksOffWhileItFails(t *testing.T) {
+	t.Parallel()
+
 	want := []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second}
 	for failures, wait := range want {
 		if got := runtimeReconcileWait(uint64(failures)); got != wait {

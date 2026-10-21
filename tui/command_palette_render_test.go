@@ -58,6 +58,8 @@ func assertCommandPaletteSelectionVisible(t *testing.T, m Model) {
 // order, and one row per command rather than a title row plus however many rows
 // its description happened to wrap into.
 func TestCommandPaletteFullAndFilteredLayouts(t *testing.T) {
+	t.Parallel()
+
 	m := commandPaletteTestModel(100, 40)
 	rows := commandPaletteRows(m, commandPaletteContentWidth(m))
 	text := commandPaletteLayoutText(rows)
@@ -91,6 +93,8 @@ func TestCommandPaletteFullAndFilteredLayouts(t *testing.T) {
 }
 
 func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T) {
+	t.Parallel()
+
 	locked := session.RunningSession{
 		TabID: 7, Base: "api", Project: "api", Profile: "work", State: "bolt", Locked: true,
 	}
@@ -135,6 +139,8 @@ func TestCommandPaletteRendersContextDisabledNoResultsAndNoSession(t *testing.T)
 // against the right edge, and whatever the cursor is on is explained beneath the
 // list rather than under the row.
 func TestCommandPaletteShortcutAlignmentAndSelectedExplanation(t *testing.T) {
+	t.Parallel()
+
 	// The alignment half needs a command that still HAS a shortcut. Restart
 	// Session no longer does — `r` is an actions-overlay mnemonic now, and the
 	// palette reads its shortcut column from the dashboard binding table, so a
@@ -205,6 +211,8 @@ func TestCommandPaletteShortcutAlignmentAndSelectedExplanation(t *testing.T) {
 // group rules are interleaved into, which is why it asks where the SELECTED
 // COMMAND's row is rather than treating the cursor as a row number.
 func TestCommandPaletteScrollingAndResizeClamping(t *testing.T) {
+	t.Parallel()
+
 	m := commandPaletteTestModel(64, 20)
 	for i := 0; i < 20; i++ {
 		m = pressKey(m, keyDown)
@@ -233,6 +241,8 @@ func TestCommandPaletteScrollingAndResizeClamping(t *testing.T) {
 }
 
 func TestCommandPaletteModalGeometryAcrossViewports(t *testing.T) {
+	t.Parallel()
+
 	for _, size := range []struct {
 		name          string
 		width, height int
@@ -266,6 +276,8 @@ func TestCommandPaletteModalGeometryAcrossViewports(t *testing.T) {
 }
 
 func TestColonRemainsInputOutsideDashboardAndNeverOpensFromNavigation(t *testing.T) {
+	t.Parallel()
+
 	search := loadSessions(testModelWithSessions(), makeSessions())
 	search = pressKey(search, keySlash)
 	search = pressKey(search, keyColon)
@@ -328,6 +340,8 @@ func TestColonRemainsInputOutsideDashboardAndNeverOpensFromNavigation(t *testing
 }
 
 func TestCommandPaletteUITestObservationReportsModeAndCursor(t *testing.T) {
+	t.Parallel()
+
 	m := commandPaletteTestModel(100, 30)
 	m.commandCursor = 4
 	scrollCommandPaletteToCursor(&m)

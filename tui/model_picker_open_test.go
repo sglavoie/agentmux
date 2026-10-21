@@ -75,6 +75,8 @@ func pickerProjectIndex(t *testing.T, m Model, title string) int {
 }
 
 func TestPickerOKeyEmitsCmd(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "l")
 	updated, cmd := m.Update(keyPress("o"))
@@ -87,6 +89,8 @@ func TestPickerOKeyEmitsCmd(t *testing.T) {
 }
 
 func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
+	t.Parallel()
+
 	client := &fakePickerOpenClient{}
 	m := pickerOpenModel(t, client)
 	apiIdx := pickerProjectIndex(t, m, "api")
@@ -151,6 +155,8 @@ func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
 }
 
 func TestPickerOKeyWithoutSelectionOpensHighlightedProject(t *testing.T) {
+	t.Parallel()
+
 	client := &fakePickerOpenClient{}
 	m := pickerOpenModel(t, client)
 	backendIdx := pickerProjectIndex(t, m, "backend")
@@ -178,6 +184,8 @@ func TestPickerOKeyWithoutSelectionOpensHighlightedProject(t *testing.T) {
 }
 
 func TestPickerOKeyBatchContinuesAfterPartialFailureAndAggregatesErrors(t *testing.T) {
+	t.Parallel()
+
 	client := &fakePickerOpenClient{launchErrorBy: map[string]error{
 		"/projects/api":     errors.New("api launch failed"),
 		"/projects/backend": errors.New("backend launch failed"),
@@ -227,6 +235,8 @@ func TestPickerOKeyBatchContinuesAfterPartialFailureAndAggregatesErrors(t *testi
 }
 
 func TestPickerOKeyEmptyIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := pressKey(testModel(), "l")
 	updated, cmd := m.Update(keyPress("o"))
 	if updated.(Model).mode != ModePicker {
@@ -238,6 +248,8 @@ func TestPickerOKeyEmptyIsNoOp(t *testing.T) {
 }
 
 func TestPickerOpenEditorKeyEmitsCmd(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = pressKey(m, "l")
 	updated, cmd := m.Update(keyPress("O"))
@@ -250,6 +262,8 @@ func TestPickerOpenEditorKeyEmitsCmd(t *testing.T) {
 }
 
 func TestPickerOpenEditorKeyEmptyIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	m := pressKey(testModel(), "l")
 	updated, cmd := m.Update(keyPress("O"))
 	if updated.(Model).mode != ModePicker {
@@ -261,6 +275,8 @@ func TestPickerOpenEditorKeyEmptyIsNoOp(t *testing.T) {
 }
 
 func TestPickerOpenDoneMsgQuitsOnSuccess(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	_, cmd := m.Update(commands.PickerOpenDoneMsg{Err: nil})
 	if cmd == nil {
@@ -296,6 +312,8 @@ func TestPickerOpenDoneMsgStaysOpenOnError(t *testing.T) {
 }
 
 func TestFooterPickerOpenEditorHint(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModePicker
 	footer := stripAnsi(renderFooter(m))
@@ -310,6 +328,8 @@ func TestFooterPickerOpenEditorHint(t *testing.T) {
 // ---- Peek mode tests ----
 
 func TestPeekActionReturnsPeekCmd(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// Peek reads a live pane, so the overlay offers it only on a working row.
 	// Order after sort: backend(bolt) first.
@@ -322,6 +342,8 @@ func TestPeekActionReturnsPeekCmd(t *testing.T) {
 // `e` is retired at the list: peek is an overlay entry now, and the bare key
 // dispatches nothing whether or not there is a row to peek at.
 func TestRetiredPeekKeyIsInertAtTheList(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name     string
 		sessions []session.RunningSession
@@ -343,6 +365,8 @@ func TestRetiredPeekKeyIsInertAtTheList(t *testing.T) {
 }
 
 func TestPeekDoneMsgErrorSetsActionErr(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	updated, _ := m.Update(commands.PeekDoneMsg{Err: errors.New("window gone")})
 	if updated.(Model).actionErr == nil {
@@ -354,6 +378,8 @@ func TestPeekDoneMsgErrorSetsActionErr(t *testing.T) {
 // opens is where peek is offered or dimmed. The picker footer below still names
 // its own keys, because the picker keeps its direct keymap.
 func TestFooterListPointsAtTheOverlayRatherThanPeek(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	// Order after sort: backend(bolt) first — the state that used to switch the
 	// footer into its "active" branch.
@@ -367,6 +393,8 @@ func TestFooterListPointsAtTheOverlayRatherThanPeek(t *testing.T) {
 }
 
 func TestFooterPickerOpenDirHint(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModePicker
 	footer := stripAnsi(renderFooter(m))

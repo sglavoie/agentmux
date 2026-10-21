@@ -29,6 +29,8 @@ const claudeIdleProbeLongestRun = activity.ClaudeIdleProbeQuiescentSamples + act
 // written as literals rather than derived from the constants, so re-tuning a
 // constant fails here and has to be a deliberate edit to a stated number.
 func TestClaudeIdleProbeSampleTiers(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name      string
 		tier      screenstate.Tier
@@ -81,6 +83,8 @@ func assertClaudeScreenTier(t *testing.T, screen string, want screenstate.Tier) 
 // pays the extra sample the flat marker override used to charge every screen —
 // and it must still settle, since Claude shows exactly this after /clear.
 func TestProbeClaudeScreenStop_QuiescentScreenWithMarkerRunsLongest(t *testing.T) {
+	t.Parallel()
+
 	assertClaudeScreenTier(t, claudeQuiescentIdleScreen, screenstate.TierQuiescent)
 	// Three for the tier plus one for the marker title, written out so the
 	// end-to-end run pins the number rather than tracking whatever the constants
@@ -124,6 +128,8 @@ func TestProbeClaudeScreenStop_QuiescentScreenWithMarkerRunsLongest(t *testing.T
 // Claude emits, so with no marker title it settles at the two-sample floor —
 // never at one, where the fingerprint generation would go uncompared.
 func TestProbeClaudeScreenStop_InterruptedScreenSettlesOnTheFloor(t *testing.T) {
+	t.Parallel()
+
 	assertClaudeScreenTier(t, claudeInterruptedScreen, screenstate.TierTerminalExplicit)
 	const wantSamples = activity.ClaudeIdleProbeRequiredSamples
 	base := time.Now()
@@ -155,6 +161,8 @@ func TestProbeClaudeScreenStop_InterruptedScreenSettlesOnTheFloor(t *testing.T) 
 // phantom's exit: a stale marker over Claude's resting body must enter the idle
 // path, but it settles one sample later than the same screen under a bare title.
 func TestProbeClaudeScreenStop_RestingBrailleRequiresMarkerBumpedRun(t *testing.T) {
+	t.Parallel()
+
 	// claudeIdleScreen carries "✻ Cooked for 17m 6s", so the screen is
 	// TierTerminalShape: two samples for the tier, plus one for the marker title.
 	assertClaudeScreenTier(t, claudeIdleScreen, screenstate.TierTerminalShape)
@@ -199,6 +207,8 @@ func TestProbeClaudeScreenStop_RestingBrailleRequiresMarkerBumpedRun(t *testing.
 // read: an idle pane holding one would never settle. The screen is authoritative
 // and the title only lengthens stabilization by the marker bump.
 func TestProbeClaudeScreenStop_BusyBrailleDescriptionSettlesAfterMarkerRun(t *testing.T) {
+	t.Parallel()
+
 	assertClaudeScreenTier(t, claudeIdleScreen, screenstate.TierTerminalShape)
 	const wantSamples = activity.ClaudeIdleProbeRequiredSamples + activity.ClaudeIdleProbeMarkerSampleBump
 	base := time.Now()
@@ -244,6 +254,8 @@ func TestProbeClaudeScreenStop_BusyBrailleDescriptionSettlesAfterMarkerRun(t *te
 // the screen classifiers, not the title, are what defend an open permission
 // prompt now that a description title no longer vetoes the read.
 func TestProbeClaudeScreenStop_BlockingPromptWithDescriptionTitleKeepsBolt(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
 		Profile: "work",
@@ -275,6 +287,8 @@ func TestProbeClaudeScreenStop_BlockingPromptWithDescriptionTitleKeepsBolt(t *te
 // event restarts the streak, so a settle really does mean an uninterrupted run
 // of idle screens with zero hook traffic.
 func TestProbeClaudeScreenStop_HookEventResetsDescriptionMarkerRun(t *testing.T) {
+	t.Parallel()
+
 	const wantSamples = activity.ClaudeIdleProbeRequiredSamples + activity.ClaudeIdleProbeMarkerSampleBump
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{

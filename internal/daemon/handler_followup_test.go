@@ -79,6 +79,8 @@ func TestHandler_PermissionSurvivesActiveFollowUp(t *testing.T) {
 }
 
 func TestHandler_CopilotPendingPromptBlocksTurnNoiseUntilUserResponds(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{
@@ -311,6 +313,8 @@ func TestHandler_ElicitationCancelsPendingPermission(t *testing.T) {
 }
 
 func TestHandleStateUpdate_AccountFieldPropagated(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{
 		Type:     protocol.TypeStateUpdate,

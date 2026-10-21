@@ -15,6 +15,8 @@ import (
 )
 
 func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestion(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeForegroundWindows(
@@ -59,6 +61,8 @@ func TestProbeCodexScreenPrompts_UnmanagedCodexForegroundReplacesBoltWithQuestio
 }
 
 func TestProbeCodexScreenPrompts_UnmanagedPipeModeCodexForegroundIsNotProbed(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name      string
 		cmdline   []string
@@ -163,6 +167,8 @@ func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingNoti
 }
 
 func TestProbeCodexScreenPrompts_IgnoresUnmanagedNonCodexForeground(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeForegroundWindows(
@@ -188,6 +194,8 @@ func TestProbeCodexScreenPrompts_IgnoresUnmanagedNonCodexForeground(t *testing.T
 }
 
 func TestProbeCodexScreenPrompts_UnmanagedTabProbesOnlyActiveCodexForeground(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeSplitWindows(

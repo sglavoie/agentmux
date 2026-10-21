@@ -70,22 +70,30 @@ func assertLockedDenial(t *testing.T, key string) {
 
 // TestRestartDeniedOnLockedRow verifies restart is refused on a locked row.
 func TestRestartDeniedOnLockedRow(t *testing.T) {
+	t.Parallel()
+
 	assertLockedDenial(t, keyR)
 }
 
 // TestCloseDeniedOnLockedRow verifies close is refused on a locked row before
 // the close cmd or undo snapshot is created.
 func TestCloseDeniedOnLockedRow(t *testing.T) {
+	t.Parallel()
+
 	assertLockedDenial(t, keyClose)
 }
 
 // TestOverrideProfileDeniedOnLockedRow verifies profile override is refused on
 // a locked row and does not open the config picker.
 func TestOverrideProfileDeniedOnLockedRow(t *testing.T) {
+	t.Parallel()
+
 	assertLockedDenial(t, keyC)
 }
 
 func TestDashboardLaunchAllowedOnLockedRow(t *testing.T) {
+	t.Parallel()
+
 	m := pressRowAction(t, lockedTestModel(), keyDashboardLaunch)
 	if m.mode != ModeConfigPicker {
 		t.Fatalf("launch new on locked row: expected ModeConfigPicker, got %d", m.mode)
@@ -99,6 +107,8 @@ func TestDashboardLaunchAllowedOnLockedRow(t *testing.T) {
 }
 
 func TestClearStatusAllowedOnLockedAttentionRow(t *testing.T) {
+	t.Parallel()
+
 	m := lockedTestModel()
 	// The badge is written into both lists because the shared controller
 	// revalidates the captured row against the unfiltered one before it
@@ -125,6 +135,8 @@ func TestClearStatusAllowedOnLockedAttentionRow(t *testing.T) {
 // Clear icon has nothing to clear on a row carrying no badge, so the overlay
 // dims it. runRowAction refuses a blocked entry, which is what proves the gate.
 func TestClearStatusUnavailableOnNonAttentionRow(t *testing.T) {
+	t.Parallel()
+
 	m := pressKey(lockedTestModel(), keyA)
 	for _, a := range actionsFor(m) {
 		if a.KeyMatch != keyClearStatus {
@@ -143,6 +155,8 @@ func TestClearStatusUnavailableOnNonAttentionRow(t *testing.T) {
 // to session.Lock/Unlock via the kitty client), so we only assert it was
 // returned and the overlay closed behind it.
 func TestLockActionTogglesFromTheOverlay(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	rs := session.RunningSession{
 		TabID:     1,
@@ -169,6 +183,8 @@ func TestLockActionTogglesFromTheOverlay(t *testing.T) {
 
 // TestMuteActionTogglesFromTheOverlay mirrors the lock contract above.
 func TestMuteActionTogglesFromTheOverlay(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	rs := session.RunningSession{
 		TabID:     1,
@@ -197,6 +213,8 @@ func TestMuteActionTogglesFromTheOverlay(t *testing.T) {
 // rather than one per key: with no row under the cursor the overlay does not
 // open, so no entry in it can be reached at all.
 func TestRowActionsAreUnreachableWhenTheListIsEmpty(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	updated, cmd := m.Update(keyPress(keyA))
 	m2 := updated.(Model)

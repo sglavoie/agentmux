@@ -15,6 +15,8 @@ import (
 // even if something injected a bs key, and the restore-time invariant re-stamps
 // it from the icon the window actually restored with.
 func TestUserVarV1IgnoresBusySinceAndSelfHealsOnRestore(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	now := time.Now()
 	raw := fmt.Sprintf(`{"a":"active","acct":"work","h":"codex","t":%d,"bs":1710000000}`, now.Add(-time.Minute).Unix())

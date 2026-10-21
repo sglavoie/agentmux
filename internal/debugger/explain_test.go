@@ -27,6 +27,8 @@ func explanationRecord(stage, outcome, reason string) diagnostics.TraceEnvelope 
 }
 
 func TestExplanationClassifiesEveryInstrumentedBoundary(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		record diagnostics.TraceEnvelope
@@ -69,6 +71,8 @@ func TestExplanationClassifiesEveryInstrumentedBoundary(t *testing.T) {
 }
 
 func TestExplanationClassifiesProcessExitRecoveryWithoutOverridingRendererFailures(t *testing.T) {
+	t.Parallel()
+
 	lifecycle := explanationRecord("daemon.process_lifecycle", "settled", state.HarnessProcessExitReasonInteractive)
 	lifecycle.RequestID = ""
 	lifecycle.Evidence = map[string]string{
@@ -114,6 +118,8 @@ func TestExplanationClassifiesProcessExitRecoveryWithoutOverridingRendererFailur
 }
 
 func TestExplanationClassifiesDisabledAndUntrustedHookEvidence(t *testing.T) {
+	t.Parallel()
+
 	for _, test := range []struct {
 		name, code, want string
 	}{
@@ -136,6 +142,8 @@ func TestExplanationClassifiesDisabledAndUntrustedHookEvidence(t *testing.T) {
 }
 
 func TestExplanationDoesNotApplyAnotherEventsHookFailure(t *testing.T) {
+	t.Parallel()
+
 	hookReport := &HookReport{Profiles: []HookProfile{{
 		Profile: "work", Harness: harness.Codex, Activation: hooks.ActivationFailure,
 		Issues: []HookIssue{{Code: "events_disabled", Message: "Agent Mux events disabled by profile: PostCompact"}},
@@ -149,6 +157,8 @@ func TestExplanationDoesNotApplyAnotherEventsHookFailure(t *testing.T) {
 }
 
 func TestExplanationRefusesToInferProducerAbsence(t *testing.T) {
+	t.Parallel()
+
 	report := buildExplanation(ExplainOptions{Selector: Selector{RequestID: "missing"}, Recent: 10, Now: time.Now()}, nil)
 	if report.Cause.Classification != CauseInsufficientEvidence || report.Cause.Certainty != CertaintyUncertain ||
 		report.Cause.FirstMissingStage != "producer hook invocation" || !strings.Contains(report.Cause.Summary, "does not prove") {
@@ -163,6 +173,8 @@ func TestExplanationRefusesToInferProducerAbsence(t *testing.T) {
 }
 
 func TestExplainRecordsIsPureAndValidatesOptions(t *testing.T) {
+	t.Parallel()
+
 	record := explanationRecord("daemon.renderer.rendered", "success", "render_complete")
 	report, err := ExplainRecords(ExplainOptions{Selector: Selector{RequestID: "request-1"}}, []diagnostics.TraceEnvelope{record})
 	if err != nil || report.Cause.Classification != CauseSuccessfulCompletion || report.JournalSnapshot != (diagnostics.SnapshotStatistics{}) {
@@ -188,6 +200,8 @@ func TestExplainRecordsIsPureAndValidatesOptions(t *testing.T) {
 }
 
 func TestExplanationTraversalDoesNotFanOutFromContext(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	record := func(offset int, traceID, requestID, generation string) diagnostics.TraceEnvelope {
 		r := diagnostics.NewEnvelope("daemon.decision")
@@ -218,6 +232,8 @@ func TestExplanationTraversalDoesNotFanOutFromContext(t *testing.T) {
 }
 
 func TestExplanationTraversalRetractsDepthPruningForContextuallyAdmittedRecord(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	record := func(offset int, stage, traceID, parentTraceID, requestID string) diagnostics.TraceEnvelope {
 		r := diagnostics.NewEnvelope(stage)
@@ -254,6 +270,8 @@ func TestExplanationTraversalRetractsDepthPruningForContextuallyAdmittedRecord(t
 }
 
 func TestExplanationTraversalReportsDepthBelowContextuallyAdmittedRecord(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	record := func(offset int, stage, traceID, parentTraceID, requestID, sessionID string) diagnostics.TraceEnvelope {
 		r := diagnostics.NewEnvelope(stage)

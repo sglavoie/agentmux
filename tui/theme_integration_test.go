@@ -11,6 +11,8 @@ import (
 )
 
 func TestTerminalBackgroundUpdatesExistingDashboardAndFooterStyles(t *testing.T) {
+	t.Parallel()
+
 	theme.Configure("auto")
 	t.Cleanup(func() { theme.Configure("auto") })
 	m := testModel()

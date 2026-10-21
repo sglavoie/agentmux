@@ -151,6 +151,8 @@ func waitForCoalescedWaiters(t *testing.T, client *kitty.SubprocessClient, socke
 // than spawn `kitten @ ls` a second, third, and fourth time against a Kitty that
 // is already struggling to answer the first.
 func TestBoundedStartupOverlapKeepsOneSameSocketSubprocess(t *testing.T) {
+	t.Parallel()
+
 	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
 	release, entered := runner.blockLists(coordinationSocket)
 	defer release()
@@ -230,6 +232,8 @@ func TestBoundedStartupOverlapKeepsOneSameSocketSubprocess(t *testing.T) {
 // per socket: a daemon whose own Kitty instance is wedged must not stall a read
 // aimed at a different one.
 func TestBlockedDaemonSocketLeavesOtherSocketsIndependent(t *testing.T) {
+	t.Parallel()
+
 	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
 	release, entered := runner.blockLists(coordinationSocket)
 	defer release()
@@ -272,6 +276,8 @@ func TestBlockedDaemonSocketLeavesOtherSocketsIndependent(t *testing.T) {
 // guard for driving the shared coordinator from every daemon subsystem at once,
 // and it pins the accounting: waiters are counted, never charged as attempts.
 func TestConcurrentDaemonPathsShareOneSubprocessRepeatedly(t *testing.T) {
+	t.Parallel()
+
 	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
 	// The lists take a moment, as a subprocess does, so the four paths overlap
 	// however few processors run them. With instant lists a loaded or
@@ -345,6 +351,8 @@ func TestConcurrentDaemonPathsShareOneSubprocessRepeatedly(t *testing.T) {
 // callers must come back with the executor's receipts and the executor's
 // completion time.
 func TestCoalescedSnapshotPreservesExecutorReceiptProvenance(t *testing.T) {
+	t.Parallel()
+
 	runner := newGatedListRunner(mustMarshalWindows(t, fakeOSWindowsWithTab(42, "W:api")))
 	release, entered := runner.blockLists(coordinationSocket)
 	defer release()

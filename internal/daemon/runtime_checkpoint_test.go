@@ -71,6 +71,8 @@ func reducerRuntime(h *Handler, slot int) string {
 // binding, and a Kitty session's binding, come back in a new daemon; the tmux
 // session's next event lands on its restored state instead of replacing it.
 func TestRuntimeCheckpointSurvivesDaemonRestart(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), runtimeCheckpointFileName)
 	directory := newFakeRuntimeDirectory()
 	onTmux, onKitty := newRuntimeID(t), newRuntimeID(t)
@@ -148,6 +150,8 @@ func TestRuntimeCheckpointSurvivesDaemonRestart(t *testing.T) {
 // before the restore keeps its fact; the restore only adds what the fresh
 // state lacks.
 func TestRuntimeCheckpointFreshEventsWinOverRestoredState(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), runtimeCheckpointFileName)
 	directory := newFakeRuntimeDirectory()
 	onTmux := newRuntimeID(t)
@@ -203,6 +207,8 @@ func TestRuntimeCheckpointFreshEventsWinOverRestoredState(t *testing.T) {
 // longer knows, or lists at another generation or pane is not resurrected,
 // and the next flush forgets it.
 func TestRuntimeCheckpointDropsStaleTargets(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), runtimeCheckpointFileName)
 	directory := newFakeRuntimeDirectory()
 	ended, moved, forgotten, live := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
@@ -267,6 +273,8 @@ func TestRuntimeCheckpointDropsStaleTargets(t *testing.T) {
 // startup that cannot read the registry neither restores nor drops the
 // checkpointed sessions; maintenance restores them once it can.
 func TestRuntimeCheckpointDefersRestoreWhileRegistryIsUnreadable(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), runtimeCheckpointFileName)
 	directory := newFakeRuntimeDirectory()
 	onTmux := newRuntimeID(t)
@@ -312,6 +320,8 @@ func TestRuntimeCheckpointDefersRestoreWhileRegistryIsUnreadable(t *testing.T) {
 // TestRuntimeCheckpointCorruptFileIsQuarantined: a corrupt checkpoint
 // restores nothing, is moved aside, and the next flush starts it over.
 func TestRuntimeCheckpointCorruptFileIsQuarantined(t *testing.T) {
+	t.Parallel()
+
 	for name, content := range map[string]string{
 		"garbage":       "{not json",
 		"unknown field": `{"schema_version":1,"sessions":[],"extra":true}`,
@@ -350,6 +360,8 @@ func TestRuntimeCheckpointCorruptFileIsQuarantined(t *testing.T) {
 // is skipped without blocking the others, and a slot another live session
 // already holds stays with it.
 func TestRuntimeCheckpointRejectsInvalidAndConflictingEntries(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), runtimeCheckpointFileName)
 	directory := newFakeRuntimeDirectory()
 	good, badState, holder, displaced := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)

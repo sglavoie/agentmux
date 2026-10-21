@@ -8,6 +8,8 @@ import (
 )
 
 func TestListWithConfig_TitleFallback_StripsStateIcon(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -59,6 +61,8 @@ func TestListWithConfig_TitleFallback_StripsStateIcon(t *testing.T) {
 }
 
 func TestListWithConfig_TitleFallback_PreservesMuteIcon(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -110,6 +114,8 @@ func TestListWithConfig_TitleFallback_PreservesMuteIcon(t *testing.T) {
 }
 
 func TestListWithConfig_TitleFallback_LegacyPrefixedTitle_UniqueMatch(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -163,6 +169,8 @@ func TestListWithConfig_TitleFallback_LegacyPrefixedTitle_UniqueMatch(t *testing
 }
 
 func TestListWithConfig_TitleFallback_ExactTitleBeatsLegacyPrefix(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,
@@ -216,6 +224,8 @@ func TestListWithConfig_TitleFallback_ExactTitleBeatsLegacyPrefix(t *testing.T) 
 }
 
 func TestListWithConfig_TitleFallback_LegacyPrefixedTitle_AmbiguousMatchSkipped(t *testing.T) {
+	t.Parallel()
+
 	fixture := []byte(`[
   {
     "id": 1,

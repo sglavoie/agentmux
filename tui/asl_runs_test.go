@@ -72,6 +72,8 @@ func aslRowIDs(rows []aslbridge.Row) []string {
 }
 
 func TestASLRunsEntryAndExitLeaveDashboardUntouched(t *testing.T) {
+	t.Parallel()
+
 	d, _ := aslRunsDriver(t)
 	if err := d.Key("j"); err != nil {
 		t.Fatalf("moving the dashboard cursor: %v", err)
@@ -125,6 +127,8 @@ func TestASLRunsEntryAndExitLeaveDashboardUntouched(t *testing.T) {
 }
 
 func TestASLRunsCommandPaletteEntryOpensTheView(t *testing.T) {
+	t.Parallel()
+
 	d, _ := aslRunsDriver(t)
 	m := d.Model()
 	updated, cmd := commandByID(t, commands.ShowRuns).Run(m, captureCommandContext(m))
@@ -138,6 +142,8 @@ func TestASLRunsCommandPaletteEntryOpensTheView(t *testing.T) {
 }
 
 func TestASLRunsSortNeedsActionThenUrgencyThenActivity(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	want := []string{"row-reply", "row-paused", "row-orphan", "row-verify", "row-active"}
 	if got := aslRowIDs(d.Model().aslRows); !equalStrings(got, want) {
@@ -158,6 +164,8 @@ func TestASLRunsSortNeedsActionThenUrgencyThenActivity(t *testing.T) {
 }
 
 func TestASLRunsRefreshKeepsSelectionAndNeverNavigates(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	selected := d.Model().aslRows[d.Model().aslCursor].RowID
@@ -189,6 +197,8 @@ func TestASLRunsRefreshKeepsSelectionAndNeverNavigates(t *testing.T) {
 }
 
 func TestASLSnapshotArrivingOnDashboardDoesNotNavigate(t *testing.T) {
+	t.Parallel()
+
 	d, client := aslRunsDriver(t)
 	before := d.Model()
 	d.Inject(aslSnapshotLoadedMsg{
@@ -213,6 +223,8 @@ func TestASLSnapshotArrivingOnDashboardDoesNotNavigate(t *testing.T) {
 }
 
 func TestASLRunsStaleBannerThenUnavailable(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	m := d.Model()
 	m.aslMeta = aslbridge.SnapshotMeta{ReceivedAt: time.Now().Add(-3 * time.Second), Stale: true}
@@ -238,6 +250,8 @@ func TestASLRunsStaleBannerThenUnavailable(t *testing.T) {
 }
 
 func TestASLRunsUnavailableRatherThanEmpty(t *testing.T) {
+	t.Parallel()
+
 	fx := aslRunsFixture()
 	fx.ASLRows = nil
 	fx.ASLStatus = aslbridge.Status{Reason: "the agent-session-loop bridge is not running"}
@@ -261,6 +275,8 @@ func TestASLRunsUnavailableRatherThanEmpty(t *testing.T) {
 }
 
 func TestASLMarkersRequireAnExactBinding(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	m := d.Model()
 
@@ -295,6 +311,8 @@ func TestASLMarkersRequireAnExactBinding(t *testing.T) {
 }
 
 func TestASLFocusExactBinding(t *testing.T) {
+	t.Parallel()
+
 	d, client := enterASLRunsDriver(t)
 	if err := d.Key(keyF); err != nil {
 		t.Fatalf("focusing: %v", err)
@@ -314,6 +332,8 @@ func TestASLFocusExactBinding(t *testing.T) {
 // TestASLFocusOnEnter keeps Runs in line with every other list, where Enter
 // acts on the selected row: here that action is focus, the same as f.
 func TestASLFocusOnEnter(t *testing.T) {
+	t.Parallel()
+
 	d, client := enterASLRunsDriver(t)
 	if err := d.Key(keyEnter); err != nil {
 		t.Fatalf("focusing with enter: %v", err)
@@ -327,6 +347,8 @@ func TestASLFocusOnEnter(t *testing.T) {
 }
 
 func TestASLFocusFallsBackToASingleWorkspaceAndHarnessMatch(t *testing.T) {
+	t.Parallel()
+
 	d, client := enterASLRunsDriver(t)
 	m := d.Model()
 	// row-verify carries no window binding; leaving one gateway session live
@@ -362,6 +384,8 @@ func TestASLFocusFallsBackToASingleWorkspaceAndHarnessMatch(t *testing.T) {
 }
 
 func TestASLFocusAmbiguousOpensPicker(t *testing.T) {
+	t.Parallel()
+
 	d, client := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	if err := d.Key(keyF); err != nil {
@@ -393,6 +417,8 @@ func TestASLFocusAmbiguousOpensPicker(t *testing.T) {
 }
 
 func TestASLFocusWithoutAnyCandidateExplainsItself(t *testing.T) {
+	t.Parallel()
+
 	d, client := enterASLRunsDriver(t)
 	if err := d.Key("j"); err != nil { // row-orphan has no live workspace
 		t.Fatalf("moving: %v", err)
@@ -416,6 +442,8 @@ func TestASLFocusWithoutAnyCandidateExplainsItself(t *testing.T) {
 }
 
 func TestASLWorkbenchOpensStateSpecificLinkWithoutRetainingIt(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	if err := d.Key(keyASLWorkbench); err != nil {
 		t.Fatalf("opening the Workbench: %v", err)
@@ -440,6 +468,8 @@ func TestASLWorkbenchOpensStateSpecificLinkWithoutRetainingIt(t *testing.T) {
 }
 
 func TestASLWorkbenchFailureStaysGenericAndLeaksNothing(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	m := d.Model()
 	updated, _ := m.handleASLWorkbenchDone(aslWorkbenchDoneMsg{
@@ -460,6 +490,8 @@ func TestASLWorkbenchFailureStaysGenericAndLeaksNothing(t *testing.T) {
 }
 
 func TestOpenBrowserURLRefusesNonHTTPSchemes(t *testing.T) {
+	t.Parallel()
+
 	for _, raw := range []string{"file:///etc/passwd", "javascript:alert(1)", "", "https://", "not a url"} {
 		err := commands.OpenBrowserURL(raw)
 		if err == nil {

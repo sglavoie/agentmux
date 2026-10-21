@@ -18,6 +18,8 @@ import (
 // clear probe began. The snapshot receipt must reject that route before either
 // screen read and leave every state family exactly as the newer event set it.
 func TestProbeCodexClearWindow_DiscardsSnapshotPredatingReducerEvent(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name     string
 		action   string
@@ -75,6 +77,8 @@ func TestProbeCodexClearWindow_DiscardsSnapshotPredatingReducerEvent(t *testing.
 // clear is a complete no-op across reducer, guard, audit, mute, notification,
 // persistence, and renderer state.
 func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t *testing.T) {
+	t.Parallel()
+
 	type mutationSnapshot struct {
 		shadowSeq           uint64
 		stateSeq            uint64
@@ -271,6 +275,8 @@ func TestProbeCodexClearWindow_DiscardsObservationAfterConcurrentReducerEvent(t 
 }
 
 func TestProbeCodexScreenPrompts_ManagedOwnerSuppressesUnmanagedCodexSiblingClearProbe(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeSplitWindows(

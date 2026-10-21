@@ -8,6 +8,8 @@ import (
 )
 
 func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{
@@ -60,6 +62,8 @@ func TestHandler_ClaudeResetFlowUsesUserClear(t *testing.T) {
 }
 
 func TestHandler_CopilotResetFlowUsesUserClear(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.Handle(protocol.Request{
@@ -112,6 +116,8 @@ func TestHandler_CopilotResetFlowUsesUserClear(t *testing.T) {
 }
 
 func TestHandler_ResetFlowDoesNotLeakIntoLaterTurn(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.Handle(protocol.Request{

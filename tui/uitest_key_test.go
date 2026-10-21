@@ -11,6 +11,8 @@ import (
 // production model sees the key. String() is the identity used by the model's
 // key handling, so asserting on it guarantees behavioral parity.
 func TestParseUITestKeyNamedAndPrintable(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		spec string
 		want string
@@ -51,6 +53,8 @@ func TestParseUITestKeyNamedAndPrintable(t *testing.T) {
 // TestParseUITestKeySpaceHasNoText verifies the spacebar is created without
 // Text so it reports "space" — matching the existing keyPress helper.
 func TestParseUITestKeySpaceHasNoText(t *testing.T) {
+	t.Parallel()
+
 	msg, err := parseUITestKey("space")
 	if err != nil {
 		t.Fatalf("parseUITestKey(space): %v", err)
@@ -63,6 +67,8 @@ func TestParseUITestKeySpaceHasNoText(t *testing.T) {
 // TestParseUITestKeyCtrlChordCarriesModifier verifies control chords set the
 // ctrl modifier on the underlying rune rather than emitting literal text.
 func TestParseUITestKeyCtrlChordCarriesModifier(t *testing.T) {
+	t.Parallel()
+
 	msg, err := parseUITestKey("ctrl+c")
 	if err != nil {
 		t.Fatalf("parseUITestKey(ctrl+c): %v", err)
@@ -79,6 +85,8 @@ func TestParseUITestKeyCtrlChordCarriesModifier(t *testing.T) {
 // TestParseUITestKeyErrors confirms malformed specs fail closed instead of
 // silently producing a surprising key.
 func TestParseUITestKeyErrors(t *testing.T) {
+	t.Parallel()
+
 	for _, spec := range []string{"", "nope", "ArrowUp", "ab", "ctrl+", "ctrl+ab"} {
 		t.Run(spec, func(t *testing.T) {
 			if _, err := parseUITestKey(spec); err == nil {

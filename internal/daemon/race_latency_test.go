@@ -191,6 +191,8 @@ func TestRaceInjectedLatencyHookBurstsConverge(t *testing.T) {
 // observable, and the metrics must attribute exactly one accept per logical
 // request.
 func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
+	t.Parallel()
+
 	sock, server, handler := newTestServerWithRef(t)
 	c := ipc.NewClientWithSocket(sock)
 

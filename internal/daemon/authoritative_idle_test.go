@@ -32,6 +32,8 @@ func authoritativeIdleTestSource(harnessName string) protocol.SourceID {
 // idle observation retires an older interactive session's stranded ⚡ and the
 // tab converges to 🛑.
 func TestAuthoritativeIdleSettlesStaleInteractiveBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "old", "active", base)
@@ -61,6 +63,8 @@ func TestAuthoritativeIdleSettlesStaleInteractiveBolt(t *testing.T) {
 // TestAuthoritativeIdleBlockedByResetFlow proves a /clear, /reset, or /new flow
 // keeps its cleared-state semantics: no synthetic stop surfaces during one.
 func TestAuthoritativeIdleBlockedByResetFlow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "cur", "active", base)
@@ -89,6 +93,8 @@ func TestAuthoritativeIdleBlockedByResetFlow(t *testing.T) {
 // gate: an adapter that requires N consecutive idle frames only settles once
 // the streak reaches the threshold.
 func TestAuthoritativeIdleRequiresConsecutiveSamples(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "old", "active", base)
@@ -123,6 +129,8 @@ func TestAuthoritativeIdleRequiresConsecutiveSamples(t *testing.T) {
 // partial stabilization streak so the adapter cannot settle stale work over the
 // new state, and the captured sequence check backs it up.
 func TestAuthoritativeIdleStreakClearedByActivity(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "cur", "active", base)
@@ -153,6 +161,8 @@ func TestAuthoritativeIdleStreakClearedByActivity(t *testing.T) {
 // supersession is narrow: a live ASL lease masks the stop, and an interactive
 // attention icon, a pipe-mode child, and a subagent all survive.
 func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
+	t.Parallel()
+
 	t.Run("live ASL lease masks the stop", func(t *testing.T) {
 		h := newTestHandler()
 		base := time.Now().Unix()
@@ -234,6 +244,8 @@ func TestAuthoritativeIdlePreservesProtectedAndBackgroundState(t *testing.T) {
 // advances the effective generation and stamps the shadow export metadata with
 // the actual reduced result.
 func TestAuthoritativeIdleRecordsRenderGeneration(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now().Unix()
 	idleSeedHarness(t, h, 7, "old", "active", base)
@@ -313,6 +325,8 @@ func TestAuthoritativeIdleNotifiesOnTransitionOnlyAndDedupes(t *testing.T) {
 // TestAuthoritativeIdleNoWindowIsNoop proves an observation for an unknown
 // window (no reducer facts) is dropped without panicking.
 func TestAuthoritativeIdleNoWindowIsNoop(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	obs := authoritativeIdle{WindowID: 99, Source: authoritativeIdleTestSource("claude"), CapturedSeq: 0, At: time.Now().Unix(), RequiredSamples: 1}
 	if h.applyAuthoritativeIdle(obs) {
@@ -323,6 +337,8 @@ func TestAuthoritativeIdleNoWindowIsNoop(t *testing.T) {
 // TestIdleSampleExportedTrackingAndWindowClose covers the reusable
 // consecutive-sample API and the window-closure cleanup.
 func TestIdleSampleExportedTrackingAndWindowClose(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	src := authoritativeIdleTestSource("claude")
 	// Give the window live state so window-closure GC recognizes it as closed.

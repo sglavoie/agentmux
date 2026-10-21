@@ -12,6 +12,8 @@ import (
 )
 
 func TestCompactHarnessSourcesRemainDistinctAndStopOwnSession(t *testing.T) {
+	t.Parallel()
+
 	claudeSource := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:claude-session"}
 	codexSource := protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:codex-session"}
 
@@ -44,6 +46,8 @@ func TestCompactHarnessSourcesRemainDistinctAndStopOwnSession(t *testing.T) {
 }
 
 func TestMalformedCompactRequestCannotMutateReducerState(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	valid := compactHookPayloadJSON(t, hookevent.HookPayload{
 		SessionID: "session-1", TurnID: "turn-1", ToolUseID: "tool-1", SourceSequence: "1", EmittedTime: "100",

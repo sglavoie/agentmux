@@ -37,6 +37,8 @@ func sessionSearchScrollFixture(t *testing.T, rows, height int) Model {
 }
 
 func TestScrollSessionSearchToCursor_CursorRemainsRenderedAtBottomEdge(t *testing.T) {
+	t.Parallel()
+
 	// Bug repro: pressing j past the last visible row left the cursor one
 	// row below the rendered window, because the scroll budget did not
 	// reserve a row for the ▼ indicator that renderSessionSearchList emits
@@ -58,6 +60,8 @@ func TestScrollSessionSearchToCursor_CursorRemainsRenderedAtBottomEdge(t *testin
 }
 
 func TestScrollSessionSearchToCursor_LastRowVisible(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchScrollFixture(t, 40, 15)
 	visible := sessionSearchVisibleHeight(m)
 

@@ -10,6 +10,8 @@ import (
 )
 
 func TestDaemonLogWriterRetentionProtectsActiveBootstrapLog(t *testing.T) {
+	t.Parallel()
+
 	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	now := time.Unix(1_800_000_000, 0)
 	old := now.Add(-30 * 24 * time.Hour)

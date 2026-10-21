@@ -34,6 +34,8 @@ func chipPickerScrollFixture(t *testing.T, rows, height int) Model {
 }
 
 func TestChipPickerVisibleHeightBudget(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		height int
 		want   int
@@ -58,6 +60,8 @@ func TestChipPickerVisibleHeightBudget(t *testing.T) {
 }
 
 func TestChipPickerScroll_CursorAtBottomShowsTopArrowOnly(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerScrollFixture(t, 40, 15)
 	m.chipPickerCursor = len(m.chipPickerOptions) - 1
 	scrollChipPickerToCursor(&m)
@@ -72,6 +76,8 @@ func TestChipPickerScroll_CursorAtBottomShowsTopArrowOnly(t *testing.T) {
 }
 
 func TestChipPickerScroll_CursorAtTopShowsBottomArrowOnly(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerScrollFixture(t, 40, 15)
 	m.chipPickerCursor = 0
 	scrollChipPickerToCursor(&m)
@@ -86,6 +92,8 @@ func TestChipPickerScroll_CursorAtTopShowsBottomArrowOnly(t *testing.T) {
 }
 
 func TestChipPickerScroll_CursorMidListShowsBothArrows(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerScrollFixture(t, 40, 15)
 	m.chipPickerCursor = 20
 	scrollChipPickerToCursor(&m)
@@ -104,6 +112,8 @@ func TestChipPickerScroll_CursorMidListShowsBothArrows(t *testing.T) {
 // confirms the cursor row is still inside the rendered window. Mirrors the
 // session-search scroll regression test.
 func TestChipPickerScroll_CursorRemainsRenderedAcrossWindow(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerScrollFixture(t, 40, 15)
 	total := len(m.chipPickerOptions)
 
@@ -127,6 +137,8 @@ func TestChipPickerScroll_CursorRemainsRenderedAcrossWindow(t *testing.T) {
 // after parking the cursor deep in the list. scrollChipPickerToCursor must
 // re-clamp the offset so the cursor row still renders.
 func TestChipPickerScroll_ResizeKeepsCursorVisible(t *testing.T) {
+	t.Parallel()
+
 	m := chipPickerScrollFixture(t, 40, 30)
 	m.chipPickerCursor = 35
 	scrollChipPickerToCursor(&m)

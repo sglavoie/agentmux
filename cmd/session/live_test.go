@@ -17,6 +17,8 @@ import (
 // window, a conversation two tabs claim, and a daemon or Kitty that cannot be
 // asked all leave it out, the last two reported as unknown.
 func TestLiveConversationsFollowContinuesRule(t *testing.T) {
+	t.Parallel()
+
 	open := conversation.Identity{Harness: "claude", SessionID: "open-1"}
 	closed := conversation.Identity{Harness: "codex", SessionID: "closed-1"}
 	twice := conversation.Identity{Harness: "codex", SessionID: "twice-1"}
@@ -83,6 +85,8 @@ func TestLiveConversationsKeepCollidingKittyInstancesSeparate(t *testing.T) {
 // The LIVE column appears only when the lookup answered, so a table drawn
 // without a daemon does not claim that nothing is open.
 func TestSessionTableMarksLiveConversations(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	views := []sessionView{
 		{Harness: "claude", Profile: "p", Project: "x", LastAt: now, ID: "aaaa1111", Snippet: "open one"},
@@ -113,6 +117,8 @@ func TestSessionTableMarksLiveConversations(t *testing.T) {
 // mistaken for a sibling with the same opening prompt. Outside Kitty nothing
 // is marked.
 func TestLiveMarksTheConversationInThisWindow(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	live := map[string]liveConversation{
 		"claude:aaaa1111": {WindowID: 7, TabID: 2},

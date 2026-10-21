@@ -33,6 +33,8 @@ func newFamilyRepo(t *testing.T) (repo, linked string) {
 // user vars, tab 72 is recovered from its harness CWD. The two checkouts are
 // configured as separate projects and still belong to one repository.
 func TestListWithConfig_StampsOneRepositoryFamilyAcrossCheckouts(t *testing.T) {
+	t.Parallel()
+
 	repo, linked := newFamilyRepo(t)
 
 	client := newClientFromWindows(t, []kitty.OSWindow{{
@@ -121,6 +123,8 @@ func TestListWithConfig_StampsOneRepositoryFamilyAcrossCheckouts(t *testing.T) {
 }
 
 func TestListWithConfig_AmbiguousProjectLeavesFamilyEmpty(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
 		ID:       1,
@@ -172,6 +176,8 @@ func TestListWithConfig_AmbiguousProjectLeavesFamilyEmpty(t *testing.T) {
 }
 
 func TestListWithConfig_UnconfiguredDirectoryLeavesFamilyEmpty(t *testing.T) {
+	t.Parallel()
+
 	configured := t.TempDir()
 	elsewhere := t.TempDir()
 	client := newClientFromWindows(t, []kitty.OSWindow{{
@@ -215,6 +221,8 @@ func TestListWithConfig_UnconfiguredDirectoryLeavesFamilyEmpty(t *testing.T) {
 }
 
 func TestListFromOSWindows_WithoutConfigLeavesFamilyEmpty(t *testing.T) {
+	t.Parallel()
+
 	repo, _ := newFamilyRepo(t)
 	sessions := session.ListFromOSWindows([]kitty.OSWindow{{
 		ID:       1,

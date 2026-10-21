@@ -14,6 +14,8 @@ import (
 )
 
 func TestJournalRotationAgeAndQuotaRetention(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	journal, paths := testJournal(t, JournalOptions{
 		KeepDays: 1, MaxBytes: 1 << 30, SegmentBytes: 700,
@@ -71,6 +73,8 @@ func TestJournalRotationAgeAndQuotaRetention(t *testing.T) {
 }
 
 func TestRotationUnderAppendLockProceedsDuringSharedSnapshotCapture(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{SegmentBytes: 1})
 	reader, err := os.OpenFile(filepath.Join(paths.JournalDir, "events.lock"), os.O_RDWR, fileMode)
 	if err != nil {
@@ -106,6 +110,8 @@ func TestRotationUnderAppendLockProceedsDuringSharedSnapshotCapture(t *testing.T
 }
 
 func TestJournalSnapshotDoesNotOmitRotatedActiveSegment(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	const seeded = 4
 	requests := make(map[string]struct{}, seeded)

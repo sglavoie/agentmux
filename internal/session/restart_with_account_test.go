@@ -12,6 +12,8 @@ import (
 // TestRestartWithAccount_SwitchesAccount verifies that RestartWithAccount
 // relaunches with the same project title and the target account user var.
 func TestRestartWithAccount_SwitchesAccount(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -73,6 +75,8 @@ func TestRestartWithAccount_SwitchesAccount(t *testing.T) {
 // switching profiles recomputes inherited profile args when the running session
 // has no project-explicit args.
 func TestRestartWithAccount_NewSessionPicksUpTargetAccountArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -124,6 +128,8 @@ func TestRestartWithAccount_NewSessionPicksUpTargetAccountArgs(t *testing.T) {
 }
 
 func TestRestartWithAccount_MixedHarnessRecomputesTargetProfileArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -215,6 +221,8 @@ func TestRestartWithAccount_MixedHarnessRecomputesTargetProfileArgs(t *testing.T
 }
 
 func TestRestartWithAccount_LegacySessionPreservesEffectiveArgs(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -270,6 +278,8 @@ func TestRestartWithAccount_LegacySessionPreservesEffectiveArgs(t *testing.T) {
 // TestRestartWithAccount_SameAccountNoOp verifies that selecting the same account
 // returns nil without sending any kitten commands.
 func TestRestartWithAccount_SameAccountNoOp(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := buildTestConfig()
@@ -295,6 +305,8 @@ func TestRestartWithAccount_SameAccountNoOp(t *testing.T) {
 // Without this, a running tab whose user var case drifted from the config
 // would trigger a needless relaunch+close even though the profile is the same.
 func TestRestartWithAccount_CaseInsensitiveSameAccountNoOp(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 	cfg := buildTestConfig() // profile "work"
@@ -317,6 +329,8 @@ func TestRestartWithAccount_CaseInsensitiveSameAccountNoOp(t *testing.T) {
 // TestRestartWithAccount_PreservesMetadata verifies that directory, flags, env,
 // and groups survive an account switch.
 func TestRestartWithAccount_PreservesMetadata(t *testing.T) {
+	t.Parallel()
+
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{
 		lsResponses: [][]byte{empty, empty, empty, empty, empty},
@@ -368,6 +382,8 @@ func TestRestartWithAccount_PreservesMetadata(t *testing.T) {
 // TestRestartWithAccount_DedupRaceSkipped verifies that RestartWithAccount
 // launches even when a session with the target title already exists in ls.
 func TestRestartWithAccount_DedupRaceSkipped(t *testing.T) {
+	t.Parallel()
+
 	stale := loadFixture(t, "kitty_ls.json") // contains P:dotfiles
 	empty := loadFixture(t, "kitty_ls_empty.json")
 	runner := &sequentialLSRunner{

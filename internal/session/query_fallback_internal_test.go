@@ -15,6 +15,8 @@ import (
 // from one run to the next. The loop hammers the call because a single
 // invocation could pass by luck under randomized map iteration.
 func TestTitleFallbackBases_DeterministicOrderWithOverlappingEmojis(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		HarnessEmojis: map[string]string{
 			"claude":  "⚡",  // 3 bytes, byte-prefix of the codex emoji

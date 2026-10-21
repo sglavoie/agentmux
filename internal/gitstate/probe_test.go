@@ -44,6 +44,8 @@ func (s *scriptedGit) run(_ context.Context, directory string, timeout time.Dura
 }
 
 func TestProbeTable(t *testing.T) {
+	t.Parallel()
+
 	timeout := errors.New("git rev-parse timed out after 2s")
 	missingBinary := &exec.Error{Name: "git", Err: exec.ErrNotFound}
 	notARepo := errors.New("exit status 128")
@@ -123,6 +125,8 @@ func TestProbeTable(t *testing.T) {
 // they produce, so a silent change of either would change the meaning of the
 // column without changing its type.
 func TestProbeRunsTheDocumentedCommands(t *testing.T) {
+	t.Parallel()
+
 	git := &scriptedGit{revParse: []byte("main\n"), status: []byte("")}
 	Probe(context.Background(), git.run, "/tmp/checkout", ProbeTimeout)
 	if len(git.calls) != 2 {
@@ -137,12 +141,16 @@ func TestProbeRunsTheDocumentedCommands(t *testing.T) {
 }
 
 func TestProbeWithoutAnExecutorIsSilent(t *testing.T) {
+	t.Parallel()
+
 	if got := Probe(context.Background(), nil, "/tmp/checkout", ProbeTimeout); got != (State{}) {
 		t.Fatalf("Probe(nil executor) = %+v, want the zero value", got)
 	}
 }
 
 func TestBoundedBufferKeepsOnlyTheHead(t *testing.T) {
+	t.Parallel()
+
 	buf := &boundedBuffer{limit: 4}
 	n, err := buf.Write([]byte("abcdefgh"))
 	if err != nil || n != 8 {

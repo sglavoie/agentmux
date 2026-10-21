@@ -27,6 +27,8 @@ import (
 // Real-world Claude sessions are serial per window, so a race here would
 // indicate a structural locking bug, not a behavioural regression.
 func TestHandler_ConcurrentSubagentRefCounting(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	const goroutines = 16
@@ -58,6 +60,8 @@ func TestHandler_ConcurrentSubagentRefCounting(t *testing.T) {
 // the race detector catches any unprotected read-modify-write of the shared map
 // header.
 func TestHandler_ConcurrentStateUpdatesDifferentWindows(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	const windows = 32

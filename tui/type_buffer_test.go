@@ -8,6 +8,8 @@ import (
 // ---- Dashboard filter entry tests ----
 
 func TestUnboundPrintableDoesNotStartDashboardFilter(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	full := len(m.filtered)
 
@@ -28,6 +30,8 @@ func TestUnboundPrintableDoesNotStartDashboardFilter(t *testing.T) {
 }
 
 func TestSlashEntersDashboardSearch(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 
 	m = pressKey(m, "/")
@@ -41,6 +45,8 @@ func TestSlashEntersDashboardSearch(t *testing.T) {
 }
 
 func TestDashboardSearchNarrowsOnlyAfterSlash(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = typeString(m, "zz")
 	if !m.activeFilter.IsEmpty() {
@@ -70,6 +76,8 @@ func TestDashboardSearchNarrowsOnlyAfterSlash(t *testing.T) {
 // list does not swallow those letters into a type-ahead buffer — the dashboard
 // only starts filtering after `/`.
 func TestRowActionStillWorksWithoutSearchMode(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.cfg.Defaults.ConfirmDestructive = true
 
@@ -84,6 +92,8 @@ func TestRowActionStillWorksWithoutSearchMode(t *testing.T) {
 }
 
 func TestEnterCommitsExplicitDashboardSearch(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m = pressKey(m, "/")
 	m = typeString(m, "bac")
@@ -103,6 +113,8 @@ func TestEnterCommitsExplicitDashboardSearch(t *testing.T) {
 }
 
 func TestBackspaceDoesNotModifyFilterBeforeSlash(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	full := len(m.filtered)
 
@@ -117,6 +129,8 @@ func TestBackspaceDoesNotModifyFilterBeforeSlash(t *testing.T) {
 }
 
 func TestQQuitsFromListWithoutSearchMode(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	_, cmd := m.Update(keyPress("q"))
 	if cmd == nil {

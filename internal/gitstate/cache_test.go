@@ -60,6 +60,8 @@ func (c *fakeClock) advance(d time.Duration) {
 }
 
 func TestCacheServesWithinTTLAndReprobesAfterIt(t *testing.T) {
+	t.Parallel()
+
 	git := newCountingGit()
 	clock := &fakeClock{now: time.Unix(1700000000, 0)}
 	cache := New(Options{Git: git.run, Now: clock.Now, TTL: 10 * time.Second})
@@ -89,6 +91,8 @@ func TestCacheServesWithinTTLAndReprobesAfterIt(t *testing.T) {
 }
 
 func TestCacheEvictsDirectoriesAbsentFromTheSnapshot(t *testing.T) {
+	t.Parallel()
+
 	git := newCountingGit()
 	clock := &fakeClock{now: time.Unix(1700000000, 0)}
 	cache := New(Options{Git: git.run, Now: clock.Now})
@@ -113,6 +117,8 @@ func TestCacheEvictsDirectoriesAbsentFromTheSnapshot(t *testing.T) {
 }
 
 func TestCacheBoundsEntryCount(t *testing.T) {
+	t.Parallel()
+
 	git := newCountingGit()
 	clock := &fakeClock{now: time.Unix(1700000000, 0)}
 	cache := New(Options{Git: git.run, Now: clock.Now, TTL: time.Hour, MaxEntries: 3})
@@ -155,6 +161,8 @@ func TestCacheBoundsEntryCount(t *testing.T) {
 }
 
 func TestCacheNormalizesKeysAndDropsRelativeDirectories(t *testing.T) {
+	t.Parallel()
+
 	git := newCountingGit()
 	cache := New(Options{Git: git.run})
 
@@ -174,6 +182,8 @@ func TestCacheNormalizesKeysAndDropsRelativeDirectories(t *testing.T) {
 }
 
 func TestKeyRejectsWhatItCannotResolve(t *testing.T) {
+	t.Parallel()
+
 	if _, ok := Key("relative/path"); ok {
 		t.Fatal("Key accepted a relative path; it would resolve against the daemon's working directory")
 	}
@@ -190,6 +200,8 @@ func TestKeyRejectsWhatItCannotResolve(t *testing.T) {
 // reason its caller must not hold stateMu across one: a probe that waits out
 // its full timeout would otherwise block every reader for that long.
 func TestCacheHoldsNoLockAcrossAProbe(t *testing.T) {
+	t.Parallel()
+
 	git := newCountingGit()
 	cache := New(Options{Git: git.run})
 	git.before = func(string) {
@@ -203,6 +215,8 @@ func TestCacheHoldsNoLockAcrossAProbe(t *testing.T) {
 }
 
 func TestNilCacheRefreshesNothing(t *testing.T) {
+	t.Parallel()
+
 	var cache *Cache
 	if got := cache.Refresh(context.Background(), []string{"/repo/one"}); got != nil {
 		t.Fatalf("nil cache returned %+v, want nil", got)

@@ -6,6 +6,8 @@ import "testing"
 // projectName treats the stripped Kitty title as an exact project title and
 // does not try to infer or remove a profile prefix on its own.
 func TestProjectName_ProjectOnlyContract(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		base string
 		want string
@@ -27,6 +29,8 @@ func TestProjectName_ProjectOnlyContract(t *testing.T) {
 // explicit compatibility path. Prefixes only strip when they match the known
 // profile/account for the tab.
 func TestLegacyProjectName_ProfileAware(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		base     string
 		profile  string
@@ -58,6 +62,8 @@ func TestLegacyProjectName_ProfileAware(t *testing.T) {
 // to its lowercased self (rather than the empty string) so it still
 // has a stable, comparable key.
 func TestProjectSortKey(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		project string
 		want    string
@@ -84,6 +90,8 @@ func TestProjectSortKey(t *testing.T) {
 // normalize to the project portion when the caller supplies the matching
 // account/profile.
 func TestSortKey_UnicodePrefix(t *testing.T) {
+	t.Parallel()
+
 	// Same profile "中文", two projects "alpha" and "beta".
 	keyAlpha := SortKey("中文", "中:alpha", false, "account")
 	keyBeta := SortKey("中文", "中:beta", false, "account")

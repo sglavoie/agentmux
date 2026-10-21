@@ -7,6 +7,8 @@ import (
 )
 
 func TestSearchCacheInvalidatesOnSidecarWrite(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	key := "claude:cached"
 	must(t, idx.SetEntryForTest(key, SessionMeta{ID: "cached", Harness: "claude", Path: "cached.jsonl"}))
@@ -36,6 +38,8 @@ func TestSearchCacheInvalidatesOnSidecarWrite(t *testing.T) {
 }
 
 func TestSearchParallelLegacyUpgradesKeepResultOrder(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	reader := &dispatchReader{harness: "claude", byPath: make(map[string][]Message)}
 	for i := 7; i >= 0; i-- {

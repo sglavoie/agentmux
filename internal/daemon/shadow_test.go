@@ -39,6 +39,8 @@ func windowEffective(t *testing.T, h *Handler, windowID int) (state.EffectiveSta
 }
 
 func TestShadowReducerAgreesWithLegacyOnBasicFlow(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	resp := h.handleStateUpdate(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "active", Event: "UserPromptSubmit", IsPrompt: true})
@@ -69,6 +71,8 @@ func TestShadowReducerAgreesWithLegacyOnBasicFlow(t *testing.T) {
 }
 
 func TestReducerNewTurnRecoversAfterTerminalFailure(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	now := time.Now().Unix()
@@ -108,6 +112,8 @@ func TestReducerNewTurnRecoversAfterTerminalFailure(t *testing.T) {
 // an identifiable trailing completion of the terminated turn (same turn ID)
 // must not repaint the bolt, no matter how much later it arrives.
 func TestReducerSameTurnTrailingCompletionStaysSuppressed(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	now := time.Now().Unix()
@@ -133,6 +139,8 @@ func TestReducerSameTurnTrailingCompletionStaysSuppressed(t *testing.T) {
 }
 
 func TestShadowReducerTracksASLLoopLease(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	started := protocol.NormalizedEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Event: events.AgentSessionLoopStarted}
@@ -165,6 +173,8 @@ func TestShadowReducerTracksASLLoopLease(t *testing.T) {
 }
 
 func TestShadowReducerAssignsReceiptSequenceForSequencelessEvents(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	// Two identical sequence-less legacy requests must both apply (receipt
@@ -186,6 +196,8 @@ func TestShadowReducerAssignsReceiptSequenceForSequencelessEvents(t *testing.T) 
 }
 
 func TestShadowReducerSurvivesRestartViaUserVar(t *testing.T) {
+	t.Parallel()
+
 	h1 := newTestHandler()
 	h1.SetReducerConfig(state.ReducerConfig{GuardDuration: 5})
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}

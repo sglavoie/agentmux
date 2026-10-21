@@ -76,6 +76,8 @@ func warningToasts(m Model) []Toast {
 // used to run, and since a restart launches its replacement before closing the
 // original, one row became two.
 func TestReviewLifecycleDispatchSingleFlight(t *testing.T) {
+	t.Parallel()
+
 	lifecycle := []commands.ID{commands.CloseSession, commands.RestartSession, commands.OverrideProfile}
 
 	assertRefused := func(t *testing.T, m Model, wantInFlight int) {
@@ -412,6 +414,8 @@ const maxDashboardChurn = 18
 // first one's result arrived as a completion nobody claimed, so the close it may
 // have been never offered its undo.
 func TestReviewLifecycleGuardSurvivesCorrelationPressure(t *testing.T) {
+	t.Parallel()
+
 	lifecycle := []commands.ID{commands.CloseSession, commands.RestartSession, commands.OverrideProfile}
 
 	// Every lifecycle action held against every lifecycle retry, reached through

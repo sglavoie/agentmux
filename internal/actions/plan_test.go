@@ -65,6 +65,8 @@ func planError(t *testing.T, err error, code string) *Error {
 }
 
 func TestPlanRunStartsASupervisingSessionInThePlansDirectory(t *testing.T) {
+	t.Parallel()
+
 	cfg, plan := planFixture(t)
 	kitty, asl := &continuityKitty{}, readyASL()
 	deps := Dependencies{Config: cfg, Kitty: kitty, ASL: asl}
@@ -111,6 +113,8 @@ func TestPlanRunOnTmuxReportsTheRuntimeSession(t *testing.T) {
 // TestPlanRunStartsNothingForAPlanThatMayNotBeStarted: each refusal names
 // its reason by code, carries what ASL said, and launches nothing.
 func TestPlanRunStartsNothingForAPlanThatMayNotBeStarted(t *testing.T) {
+	t.Parallel()
+
 	for _, test := range []struct {
 		name, code string
 		edit       func(*planASL)
@@ -148,6 +152,8 @@ func TestPlanRunStartsNothingForAPlanThatMayNotBeStarted(t *testing.T) {
 }
 
 func TestPlanRunCheckReportsReadinessAndStartsNothing(t *testing.T) {
+	t.Parallel()
+
 	cfg, plan := planFixture(t)
 	asl := readyASL()
 	// No Kitty and no tmux: a check needs neither.
@@ -164,6 +170,8 @@ func TestPlanRunCheckReportsReadinessAndStartsNothing(t *testing.T) {
 }
 
 func TestPlanRunNeverGuessesTheProject(t *testing.T) {
+	t.Parallel()
+
 	cfg, plan := planFixture(t)
 	cfg.Accounts = append(cfg.Accounts, config.Account{Name: "home", Harness: harness.Codex, HomeDir: "/tmp/agentmux-home"})
 	cfg.Projects = append(cfg.Projects,
@@ -214,6 +222,8 @@ func TestPlanRunNeverGuessesTheProject(t *testing.T) {
 }
 
 func TestPlanRunRefusesOptionsBeforeAskingASL(t *testing.T) {
+	t.Parallel()
+
 	cfg, plan := planFixture(t)
 	asl := readyASL()
 	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, Kitty: &continuityKitty{}, ASL: asl}, PlanRun, Request{Plan: &plan, Parameters: map[string]string{"harness": "codex", "review_harness": "codex"}})

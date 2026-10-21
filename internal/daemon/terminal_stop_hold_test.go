@@ -222,6 +222,8 @@ func TestTerminalStopHold_CommitRefreshesVolatileFields(t *testing.T) {
 // callbacks are then in flight for one generation and exactly one of them may
 // commit.
 func TestTerminalStopHold_ConfirmationDeadlineClaimRace(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newTerminalHoldTestHandler(t)
 	// A far-future quiet period keeps the real timer from firing on its own, so
 	// the only two commit attempts are the simulated deadline callback and the

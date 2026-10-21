@@ -83,6 +83,8 @@ func claudeBlockedWindow(t *testing.T, screen string) (*Handler, time.Time) {
 // that shares this entry point declines a 🔑 window at its eligibility gate, so
 // a labeller placed inside it would silently never fire.
 func TestClaudePromptKindReachesWindowState(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		screen string
@@ -117,6 +119,8 @@ func TestClaudePromptKindReachesWindowState(t *testing.T) {
 // leaves an answered prompt in scrollback for the rest of the session — must
 // not acquire a reason, because there is no blocked row for one to explain.
 func TestClaudePromptKindNotStampedOutsideTheBlockingClass(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -146,6 +150,8 @@ func TestClaudePromptKindNotStampedOutsideTheBlockingClass(t *testing.T) {
 // choke point, which is the whole reason session 3 made the clear an invariant
 // of the icon rather than something a probe remembers to do.
 func TestClaudePromptKindClearedWhenPromptAnswered(t *testing.T) {
+	t.Parallel()
+
 	h, base := claudeBlockedWindow(t, claudeProceedPromptScreen)
 	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))
 	if got := promptKind(t, h, 42); got != string(activity.ClaudePromptPermission) {
@@ -172,6 +178,8 @@ func TestClaudePromptKindClearedWhenPromptAnswered(t *testing.T) {
 // produce one too), so this is the shape whatever renders the reason must read
 // well against, not a failure.
 func TestClaudePromptKindAbsentUnderAFlatOverride(t *testing.T) {
+	t.Parallel()
+
 	h, base := claudeBlockedWindow(t, "Do you want to yodel?\n ❯ 1. Yes\n   2. No\n")
 
 	h.ProbeClaudeScreenStop(base.Add(2 * time.Second))

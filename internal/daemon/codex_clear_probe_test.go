@@ -17,6 +17,8 @@ import (
 )
 
 func TestProbeCodexScreenPrompts_ClearScreenClearsStoppedCodexTab(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
@@ -71,6 +73,8 @@ func TestProbeCodexScreenPrompts_ClearScreenClearsStoppedCodexTab(t *testing.T) 
 }
 
 func TestProbeCodexScreenPrompts_ClearScreenKeepsStopWithTranscriptScrollback(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("W:api", "stop", false), kitty.UserVars{
@@ -99,6 +103,8 @@ func TestProbeCodexScreenPrompts_ClearScreenKeepsStopWithTranscriptScrollback(t 
 }
 
 func TestCodexClearProbeDoesNotJournalUnderStateLock(t *testing.T) {
+	t.Parallel()
+
 	notifier := notification.NewNotifier(&config.NotificationConfig{
 		Permission:           true,
 		PermissionDebounceMs: 60_000,

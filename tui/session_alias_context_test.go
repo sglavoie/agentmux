@@ -47,6 +47,8 @@ func sharedProjectAliasModel() Model {
 }
 
 func TestContextualSessionMetaCopiesOnlyMatchingSingleProjectAlias(t *testing.T) {
+	t.Parallel()
+
 	meta := sharedProjectAliasMeta()
 	original := meta
 	want := meta
@@ -77,6 +79,8 @@ func TestContextualSessionMetaCopiesOnlyMatchingSingleProjectAlias(t *testing.T)
 }
 
 func TestSharedProjectAliasRenderingAndViewerDoNotMutateStoredResult(t *testing.T) {
+	t.Parallel()
+
 	m := sharedProjectAliasModel()
 	stored := m.sessionResults[0]
 
@@ -121,6 +125,8 @@ func TestSharedProjectAliasRenderingAndViewerDoNotMutateStoredResult(t *testing.
 }
 
 func TestSharedProjectAliasSelectionTargetsEveryDeferredAction(t *testing.T) {
+	t.Parallel()
+
 	base := sharedProjectAliasModel()
 	stored := base.sessionResults[0]
 

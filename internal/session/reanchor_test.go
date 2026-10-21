@@ -15,6 +15,8 @@ import (
 // `kitten @ set-user-vars` call. The expected argv mirrors BuildUserVars'
 // contract; if a key changes there, this test must change too.
 func TestReanchorTab_InvokesSetUserVars(t *testing.T) {
+	t.Parallel()
+
 	defaults := config.Defaults{Args: []string{"--shared-default"}}
 	acc := config.Account{
 		Name:    "work",
@@ -81,6 +83,8 @@ func TestReanchorTab_InvokesSetUserVars(t *testing.T) {
 // commands (no canned response for set-user-vars), then assert the second
 // ghost still gets a kitten invocation.
 func TestReanchorAll_ProcessesEveryGhost(t *testing.T) {
+	t.Parallel()
+
 	defaults := config.Defaults{}
 	acc := config.Account{Name: "work", Harness: "claude", HomeDir: "~/h"}
 	mkGhost := func(tabID, winID int, project string) session.GhostTab {

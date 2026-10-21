@@ -15,6 +15,8 @@ import (
 // TestHandler_SubagentReferenceCount verifies that the robot emoji persists
 // while any sub-agents are still running and clears when the last one stops.
 func TestHandler_SubagentReferenceCount(t *testing.T) {
+	t.Parallel()
+
 	t.Run("single agent start then stop shows then clears robot", func(t *testing.T) {
 		h := newTestHandler()
 
@@ -128,6 +130,8 @@ func TestHandler_SubagentReferenceCount(t *testing.T) {
 // terminal action must reset the counter so future SubagentStop → active
 // transitions are not permanently suppressed.
 func TestHandler_SubagentCounterRecoversAfterTerminalAction(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	// Two SubagentStarts → counter=2. The matching SubagentStops never arrive
@@ -212,6 +216,8 @@ func TestHandler_IdleAfterSuppressedActivePreservesStopIcon(t *testing.T) {
 // processing many subagent cycles across many windows accumulates stale
 // entries indefinitely (slow but real memory leak).
 func TestHandler_SubagentCountCleanedUpAfterLastStop(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	for windowID := 1; windowID <= 10; windowID++ {

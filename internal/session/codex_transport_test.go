@@ -18,6 +18,8 @@ import (
 // Execute the launch command against a stand-in CLI: capability selection,
 // quoting and profile environment must survive the actual shell boundary.
 func TestManagedCodexLaunchTransport(t *testing.T) {
+	t.Parallel()
+
 	for _, shell := range []string{"sh", "zsh"} {
 		shellPath, err := exec.LookPath(shell)
 		if err != nil {
@@ -97,6 +99,8 @@ func TestManagedCodexLaunchTransport(t *testing.T) {
 }
 
 func TestCodexTransportOnlyForManagedCodex(t *testing.T) {
+	t.Parallel()
+
 	for _, name := range []string{harness.Claude, harness.Copilot, harness.Codex} {
 		invocation := harness.Invocation{Harness: name, Executable: name}
 		if isolateCodexLaunch(invocation) {

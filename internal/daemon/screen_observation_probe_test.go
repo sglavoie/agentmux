@@ -43,6 +43,8 @@ func (o *observerFunc) Observe(pane backend.Ref) (backend.Screen, error) {
 }
 
 func TestScreenProbesNeverSettleOnWithheldObservations(t *testing.T) {
+	t.Parallel()
+
 	const windowID = 42
 	pane := kitty.PaneRef(windowID)
 	kittyInstance := runtimesession.BackendInstance{Kind: runtimesession.BackendKitty}

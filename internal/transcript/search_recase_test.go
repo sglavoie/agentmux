@@ -14,6 +14,8 @@ func recaseReaders(byPath map[string][]Message) map[string]Reader {
 // of a lowercased sidecar is replaced by the same line as the transcript
 // wrote it, for an any-source and a source-filtered query alike.
 func TestRecasePreviewsRestoresTheCaseASidecarLost(t *testing.T) {
+	t.Parallel()
+
 	readers := recaseReaders(map[string][]Message{
 		"/tmp/a.jsonl": {
 			{Role: "user", Text: "Open QuickCapturePanel.swift"},
@@ -38,6 +40,8 @@ func TestRecasePreviewsRestoresTheCaseASidecarLost(t *testing.T) {
 // that already carries case, one whose transcript no longer matches, and one
 // with no reader.
 func TestRecasePreviewsKeepsWhatItCannotImprove(t *testing.T) {
+	t.Parallel()
+
 	readers := recaseReaders(map[string][]Message{
 		"/tmp/cased.jsonl": {{Role: "user", Text: "Swift but different"}},
 		"/tmp/gone.jsonl":  {{Role: "user", Text: "Nothing here now"}},
@@ -62,6 +66,8 @@ func TestRecasePreviewsKeepsWhatItCannotImprove(t *testing.T) {
 // results in order and stops once the transcripts it would read exceed the
 // budget, so a broad search cannot re-read the whole corpus.
 func TestRecasePreviewsStopsAtItsByteBudget(t *testing.T) {
+	t.Parallel()
+
 	readers := recaseReaders(map[string][]Message{
 		"/tmp/first.jsonl":  {{Role: "user", Text: "Swift first"}},
 		"/tmp/huge.jsonl":   {{Role: "user", Text: "Swift huge"}},

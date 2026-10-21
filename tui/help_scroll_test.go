@@ -8,6 +8,8 @@ import (
 )
 
 func TestRenderHelpClipsToVisible(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 12
@@ -24,6 +26,8 @@ func TestRenderHelpClipsToVisible(t *testing.T) {
 }
 
 func TestRenderHelpIndicatorsAtTopAndBottom(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.height = 12
@@ -49,6 +53,8 @@ func TestRenderHelpIndicatorsAtTopAndBottom(t *testing.T) {
 }
 
 func TestHelpScrollKeys(t *testing.T) {
+	t.Parallel()
+
 	base := func() Model {
 		m := loadSessions(testModel(), makeSessions())
 		m.mode = ModeHelp
@@ -111,6 +117,8 @@ func TestHelpScrollKeys(t *testing.T) {
 // line count or the modal renders taller than the visible window budgeted for
 // it (the modal_height_overflow the harness caught at W=30 H=40).
 func TestHelpScrollBoundsCountWrappedRows(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	m.width = 30
@@ -133,6 +141,8 @@ func TestHelpScrollBoundsCountWrappedRows(t *testing.T) {
 // the pre-fix logical-line scroll math the offset stopped short and the footer
 // overflow footnote stayed clipped off-screen.
 func TestHelpScrollReachesBottom(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 40})
@@ -167,6 +177,8 @@ func TestHelpScrollReachesBottom(t *testing.T) {
 // clamp the persisted offset would still point past the bottom of the
 // scrollable region and j/k would have to scroll up through dead rows.
 func TestHelpOffsetClampsOnResize(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeHelp
 

@@ -13,6 +13,8 @@ import (
 )
 
 func TestChipPickerProfileSelectionMatchesSharedHomeMembership(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	shared := transcript.SessionMeta{
 		ID:       "shared",
@@ -77,6 +79,8 @@ func TestChipPickerProfileSelectionMatchesSharedHomeMembership(t *testing.T) {
 }
 
 func TestChipPickerProjectSelectionMatchesSharedDirectoryMembership(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	shared := transcript.SessionMeta{
 		ID:       "shared-project",
@@ -147,6 +151,8 @@ func TestChipPickerProjectSelectionMatchesSharedDirectoryMembership(t *testing.T
 }
 
 func TestChipPickerNoMatchStateIsSafe(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enterChipPickerForTest(t, chipPickerSearchModel(t), tc.key, tc.kind)
@@ -196,6 +202,8 @@ func TestChipPickerNoMatchStateIsSafe(t *testing.T) {
 }
 
 func TestChipPickerReopenClearsQuery(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enterChipPickerForTest(t, chipPickerSearchModel(t), tc.key, tc.kind)
@@ -224,6 +232,8 @@ func TestChipPickerReopenClearsQuery(t *testing.T) {
 }
 
 func TestChipPickerSearchFooterAdvertisedForAllKinds(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range chipPickerSearchCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			m := enterChipPickerForTest(t, chipPickerSearchModel(t), tc.key, tc.kind)
@@ -236,6 +246,8 @@ func TestChipPickerSearchFooterAdvertisedForAllKinds(t *testing.T) {
 }
 
 func TestProjectChipPickerOverlayFitsNarrowShortTerminal(t *testing.T) {
+	t.Parallel()
+
 	m := enterProjectChipPickerForTest(t, chipPickerSearchModel(t))
 	m.width = 60
 	m.height = 10

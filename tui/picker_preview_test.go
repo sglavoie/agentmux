@@ -22,6 +22,8 @@ func pickerPreviewCfg() config.PreviewConfig {
 }
 
 func TestPickerPreviewToggleP(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
 	m.cfg.Defaults.Preview = pickerPreviewCfg()
@@ -50,6 +52,8 @@ func TestPickerPreviewToggleP(t *testing.T) {
 }
 
 func TestPickerPreviewRenderShowsConfigBlock(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
 	m.cfg.Defaults.Preview = pickerPreviewCfg()
@@ -74,6 +78,8 @@ func TestPickerPreviewRenderShowsConfigBlock(t *testing.T) {
 }
 
 func TestPickerPreviewEmojiTitleReservesIconColumn(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
 		Accounts: []config.Account{{Name: "work", Color: "blue"}},
@@ -94,6 +100,8 @@ func TestPickerPreviewEmojiTitleReservesIconColumn(t *testing.T) {
 }
 
 func TestPickerPreviewStyledFieldTruncationPreservesAnsi(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	raw := renderPickerPreview(m, 0, 4, 6)
 	lines := strings.Split(raw, "\n")
@@ -104,6 +112,8 @@ func TestPickerPreviewStyledFieldTruncationPreservesAnsi(t *testing.T) {
 }
 
 func TestPickerPreviewRootKeepsFooterAboveStatusBar(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width, m.height = 100, 14
 	m.cfg.Defaults.Preview = pickerPreviewCfg()
@@ -135,6 +145,8 @@ func TestPickerPreviewRootKeepsFooterAboveStatusBar(t *testing.T) {
 }
 
 func TestPickerProfileOverrideUpdatesLaunchProfile(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "C")
 	if m.mode != ModeConfigPicker {
@@ -167,6 +179,8 @@ func TestPickerProfileOverrideUpdatesLaunchProfile(t *testing.T) {
 }
 
 func TestPickerPreviewRenderAutoDisableNarrow(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	cfg := pickerPreviewCfg()
 	m.cfg.Defaults.Preview = cfg
@@ -179,6 +193,8 @@ func TestPickerPreviewRenderAutoDisableNarrow(t *testing.T) {
 }
 
 func TestPickerPreviewRunningPeek(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -208,6 +224,8 @@ func TestPickerPreviewRunningPeek(t *testing.T) {
 }
 
 func TestPickerPreviewUsesNewestDuplicateInSessionOrder(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -240,6 +258,8 @@ func TestPickerPreviewUsesNewestDuplicateInSessionOrder(t *testing.T) {
 }
 
 func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
@@ -283,6 +303,8 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 }
 
 func TestPickerExitRestartsListPreviewTicker(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: pickerPreviewCfg()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},

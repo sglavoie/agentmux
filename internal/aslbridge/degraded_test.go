@@ -3,6 +3,7 @@ package aslbridge
 import (
 	"context"
 	"errors"
+	"github.com/sglavoie/agentmux/internal/testutil"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -118,7 +119,7 @@ func TestVanishedTargetsRefuseWithTheirOwnCode(t *testing.T) {
 				f.refuse(req["id"].(string), refusal)
 			})
 			m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
-			waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+			testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 			_, err := m.Act(context.Background(), tc.request)
 			var got *Error
@@ -169,7 +170,7 @@ func TestASlowFirstProjectionStillEnablesMutations(t *testing.T) {
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
-	waitFor(t, "the slow first snapshot", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "the slow first snapshot", func() bool { return m.Status().MutationsEnabled })
 }
 
 // Refreshes are event-driven, and the bridge emits runs.changed only when the
@@ -199,11 +200,11 @@ func TestADroppedFirstSnapshotIsRetriedWithoutACorpusChange(t *testing.T) {
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
-	waitFor(t, "the handshake", func() bool { return m.Status().Available })
+	testutil.Eventually(t, "the handshake", func() bool { return m.Status().Available })
 	if m.Status().MutationsEnabled {
 		t.Fatal("a handshake alone enabled mutations; only a snapshot may")
 	}
-	waitFor(t, "the retried snapshot", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "the retried snapshot", func() bool { return m.Status().MutationsEnabled })
 }
 
 // The bridge owns the Workbench process. If it cannot bind or the server dies,
@@ -219,7 +220,7 @@ func TestWorkbenchBindFailureLeavesNothingCached(t *testing.T) {
 		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	for i := 0; i < 2; i++ {
 		link, err := m.Workbench(context.Background(), WorkbenchRequest{PlanDir: "/p", Focus: FocusReply})
@@ -245,7 +246,7 @@ func TestWorkbenchBindFailureLeavesNothingCached(t *testing.T) {
 func TestUnansweredMutationTimesOutWithoutAReceipt(t *testing.T) {
 	fake := scriptedBridge(t, func(f *fakeBridge, req map[string]any) {})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
-	waitFor(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
+	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -278,7 +279,7 @@ func TestRepeatedOperationIDUpdatesOneReceiptInPlace(t *testing.T) {
 		<-f.exited
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
-	waitFor(t, "the handshake", func() bool { return m.Status().Available })
+	testutil.Eventually(t, "the handshake", func() bool { return m.Status().Available })
 
 	progression := []string{OperationAccepted, OperationConsumed, OperationSuperseded}
 	for i, status := range progression {
@@ -287,7 +288,7 @@ func TestRepeatedOperationIDUpdatesOneReceiptInPlace(t *testing.T) {
 			Method:      MethodQuestionReply,
 			Status:      status,
 		})
-		waitFor(t, "receipt status "+status, func() bool {
+		testutil.Eventually(t, "receipt status "+status, func() bool {
 			receipts := m.Receipts()
 			return len(receipts) == 1 && receipts[0].Status == status
 		})
@@ -298,7 +299,7 @@ func TestRepeatedOperationIDUpdatesOneReceiptInPlace(t *testing.T) {
 		Method:      MethodRunResume,
 		Status:      OperationRejected,
 	})
-	waitFor(t, "a second operation", func() bool { return len(m.Receipts()) == 2 })
+	testutil.Eventually(t, "a second operation", func() bool { return len(m.Receipts()) == 2 })
 
 	receipts := m.Receipts()
 	if receipts[0].OperationID != "op-1" || receipts[0].Status != OperationSuperseded {
@@ -326,7 +327,7 @@ func TestUnknownOperationReceiptIsStillRecorded(t *testing.T) {
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 
-	waitFor(t, "the foreign receipt", func() bool { return len(m.Receipts()) == 1 })
+	testutil.Eventually(t, "the foreign receipt", func() bool { return len(m.Receipts()) == 1 })
 	if got := m.Receipts()[0]; got.Status != OperationExpired {
 		t.Errorf("receipt = %+v, want an expired status", got)
 	}

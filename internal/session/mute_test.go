@@ -10,6 +10,8 @@ import (
 // TestMute_Argv verifies Mute issues kitten @ set-user-vars with cc_mute=1
 // matched on the supplied window id.
 func TestMute_Argv(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 
@@ -34,6 +36,8 @@ func TestMute_Argv(t *testing.T) {
 // TestUnmute_Argv verifies Unmute issues kitten @ set-user-vars with cc_mute=
 // (empty) matched on the supplied window id.
 func TestUnmute_Argv(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(map[string][]byte{})
 	client := kitty.NewClientWithSocket(runner, "")
 

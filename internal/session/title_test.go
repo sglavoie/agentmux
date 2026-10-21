@@ -9,6 +9,8 @@ import (
 )
 
 func TestAccountPrefix(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		account string
 		want    string
@@ -31,6 +33,8 @@ func TestAccountPrefix(t *testing.T) {
 // valid UTF-8 prefix, not a truncated invalid byte that corrupts the tab
 // title rendered by Kitty.
 func TestProfilePrefix_Unicode(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		profile string
 		want    string
@@ -51,6 +55,8 @@ func TestProfilePrefix_Unicode(t *testing.T) {
 }
 
 func TestFormatTitle(t *testing.T) {
+	t.Parallel()
+
 	acc := config.Account{Name: "work", Color: "blue"}
 	cfg := &config.Config{}
 	cases := []struct {
@@ -76,6 +82,8 @@ func TestFormatTitle(t *testing.T) {
 // immediately before the project name. When the table is empty (or the
 // harness is missing), the output equals sess.Title.
 func TestFormatTitle_WithEmoji(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		acc  config.Account

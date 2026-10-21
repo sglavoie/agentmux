@@ -50,6 +50,8 @@ func seedTwoPlans(t *testing.T) (*Index, string, string) {
 }
 
 func TestSearch_MultiWordQueryRequiresEveryWord(t *testing.T) {
+	t.Parallel()
+
 	idx, planA, _ := seedTwoPlans(t)
 
 	results, err := Search(idx, Query{Text: "bar foo"})
@@ -70,6 +72,8 @@ func TestSearch_MultiWordQueryRequiresEveryWord(t *testing.T) {
 }
 
 func TestSearch_EmptyQueryReturnsAllByModTimeDesc(t *testing.T) {
+	t.Parallel()
+
 	idx, planA, planB := seedTwoPlans(t)
 
 	results, err := Search(idx, Query{Text: ""})
@@ -98,6 +102,8 @@ func TestSearch_EmptyQueryReturnsAllByModTimeDesc(t *testing.T) {
 }
 
 func TestSearch_ProjectFiltersMatchAliasesAndUnknown(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	idx.entries = map[string]PlanMeta{
 		"known": {
@@ -118,6 +124,8 @@ func TestSearch_ProjectFiltersMatchAliasesAndUnknown(t *testing.T) {
 }
 
 func TestSearch_SnippetMatchSurvivesMissingSidecar(t *testing.T) {
+	t.Parallel()
+
 	idx, planA, _ := seedTwoPlans(t)
 
 	// "Alpha" is in planA's snippet (manifest.md first line) but not
@@ -152,6 +160,8 @@ func TestSearch_SnippetMatchSurvivesMissingSidecar(t *testing.T) {
 }
 
 func TestSearch_SnippetHitStillCountsSidecar(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
 		"manifest.md":  "# Alpha overview",
@@ -183,6 +193,8 @@ func TestSearch_SnippetHitStillCountsSidecar(t *testing.T) {
 }
 
 func TestSearch_BodyOnlyMatchUsesSidecar(t *testing.T) {
+	t.Parallel()
+
 	idx, planA, _ := seedTwoPlans(t)
 
 	// "widgets" appears only in planB's session-1.md body, not in
@@ -214,6 +226,8 @@ func TestSearch_BodyOnlyMatchUsesSidecar(t *testing.T) {
 }
 
 func TestSearch_NeedleAbsentReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
 	idx, _, _ := seedTwoPlans(t)
 
 	results, err := Search(idx, Query{Text: "nonexistent-needle-zzz"})
@@ -226,6 +240,8 @@ func TestSearch_NeedleAbsentReturnsEmpty(t *testing.T) {
 }
 
 func TestSearch_UnicodeAndMixedCase(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := seedPlanDir(t, root, "uni-aabb112233cc", map[string]string{
 		"manifest.md":  "# Plan title",
@@ -257,6 +273,8 @@ func TestSearch_UnicodeAndMixedCase(t *testing.T) {
 }
 
 func TestSearch_MissingSidecarReadsSourceAndRepairs(t *testing.T) {
+	t.Parallel()
+
 	idx, planA, planB := seedTwoPlans(t)
 
 	// Delete planA's sidecar. A body-only match must be recovered from
@@ -292,6 +310,8 @@ func TestSearch_MissingSidecarReadsSourceAndRepairs(t *testing.T) {
 }
 
 func TestSearch_SortMatchesDescThenModTimeDesc(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	// planA: needle "alpha" appears 3 times in body, none in snippet
 	planA := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
@@ -347,6 +367,8 @@ func TestSearch_SortMatchesDescThenModTimeDesc(t *testing.T) {
 }
 
 func TestSortResults_ByMatches(t *testing.T) {
+	t.Parallel()
+
 	older := time.Now().Add(-1 * time.Hour)
 	newer := time.Now()
 	rs := []Result{
@@ -366,6 +388,8 @@ func TestSortResults_ByMatches(t *testing.T) {
 }
 
 func TestSortResults_ByModTime(t *testing.T) {
+	t.Parallel()
+
 	older := time.Now().Add(-1 * time.Hour)
 	newer := time.Now()
 	rs := []Result{
@@ -385,6 +409,8 @@ func TestSortResults_ByModTime(t *testing.T) {
 }
 
 func TestSearch_QuerySortByModTime(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	// planA: many matches, older mtime — would win under SortByMatches.
 	planA := seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
@@ -430,12 +456,16 @@ func TestSearch_QuerySortByModTime(t *testing.T) {
 }
 
 func TestSearch_NilIndexReturnsError(t *testing.T) {
+	t.Parallel()
+
 	if _, err := Search(nil, Query{Text: "anything"}); err == nil {
 		t.Errorf("Search(nil, ...) returned nil error; expected non-nil")
 	}
 }
 
 func TestSearch_WhitespaceOnlyQueryTreatedAsEmpty(t *testing.T) {
+	t.Parallel()
+
 	idx, _, _ := seedTwoPlans(t)
 
 	results, err := Search(idx, Query{Text: "   \t  "})
@@ -455,6 +485,8 @@ func TestSearch_WhitespaceOnlyQueryTreatedAsEmpty(t *testing.T) {
 // A plan line matched deep inside is previewed from just before the match, the
 // way transcript search previews are, so a narrow list still shows the match.
 func TestPlanSearchPreviewEntersALongLineNearTheMatch(t *testing.T) {
+	t.Parallel()
+
 	text := "# plan\nthe daemon renderer keeps a single writer and the companion hub debounces its publishes\n"
 	count, preview := countMatchesInSearchText(text, searchquery.Parse("debounces"))
 	if count != 1 || preview != "…and the companion hub debounces its publishes" {
@@ -465,6 +497,8 @@ func TestPlanSearchPreviewEntersALongLineNearTheMatch(t *testing.T) {
 // A multi-word query previews the line that holds every word, not the first
 // line that happens to hold one of them.
 func TestPlanSearchPreviewPrefersALineHoldingEveryTerm(t *testing.T) {
+	t.Parallel()
+
 	text := "# plan\nthe daemon owns the renderer\nthe socket is private\nthe daemon socket is 0600\n"
 	count, preview := countMatchesInSearchText(text, searchquery.Parse("socket daemon"))
 	if count != 4 || preview != "the daemon socket is 0600" {

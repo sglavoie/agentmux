@@ -68,6 +68,8 @@ func wrappedPlanViewNavModel() Model {
 }
 
 func TestPlanSearchLessKeysHalfAndFullPage(t *testing.T) {
+	t.Parallel()
+
 	base := planSearchNavModel(40, 15)
 	half := halfPageStep(planSearchVisibleHeight(base))
 
@@ -102,6 +104,8 @@ func TestPlanSearchLessKeysHalfAndFullPage(t *testing.T) {
 }
 
 func TestSessionSearchLessKeysHalfAndFullPage(t *testing.T) {
+	t.Parallel()
+
 	base := sessionSearchNavModel(40, 15)
 	half := halfPageStep(sessionSearchVisibleHeight(base))
 
@@ -136,6 +140,8 @@ func TestSessionSearchLessKeysHalfAndFullPage(t *testing.T) {
 }
 
 func TestSessionViewerLessKeysHalfAndFullPage(t *testing.T) {
+	t.Parallel()
+
 	base := sessionViewNavModel(40, 15)
 	half := halfPageStep(sessionViewVisibleHeight(base))
 
@@ -170,6 +176,8 @@ func TestSessionViewerLessKeysHalfAndFullPage(t *testing.T) {
 }
 
 func TestPlanViewerLessKeysScrollWrappedRows(t *testing.T) {
+	t.Parallel()
+
 	base := wrappedPlanViewNavModel()
 	rows := planViewerRows(base)
 	if len(rows) < 4 {

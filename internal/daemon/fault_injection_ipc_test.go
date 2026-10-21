@@ -23,6 +23,8 @@ import (
 // (connection closed early). The client's retry with the same request ID must
 // not re-apply the event.
 func TestFaultResponseLossRetryAppliesOnce(t *testing.T) {
+	t.Parallel()
+
 	sock, server, handler := newTestServerWithRef(t)
 
 	req := protocol.Request{

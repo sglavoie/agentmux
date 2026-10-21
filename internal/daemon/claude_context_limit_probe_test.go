@@ -45,6 +45,8 @@ Context limit reached · /compact or /clear to continue
 `
 
 func TestProbeClaudeContextLimit_BoltSwapsToError(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{
@@ -112,6 +114,8 @@ func TestProbeClaudeContextLimit_BoltSwapsToError(t *testing.T) {
 // an explicit user acknowledgement (user_clear) and a new prompt both clear it
 // through the normal reducer recovery paths.
 func TestProbeClaudeContextLimit_PublishesReducerErrorAndPreservesItAcrossIdle(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: []kitty.OSWindow{{
@@ -211,6 +215,8 @@ func TestProbeClaudeContextLimit_PublishesReducerErrorAndPreservesItAcrossIdle(t
 }
 
 func TestProbeClaudeContextLimit_EmptyStateSwapsToError(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "", false), kitty.UserVars{
@@ -255,6 +261,8 @@ func TestProbeClaudeContextLimit_EmptyStateSwapsToError(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_SubagentSwapsToError(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "subagent", false), kitty.UserVars{
@@ -278,6 +286,8 @@ func TestProbeClaudeContextLimit_SubagentSwapsToError(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_PreservesLoopMarkerAndHarnessEmoji(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	tabTitle := palette.BuildTitleParts(palette.TitleParts{
 		Base:    "🦊api",
@@ -316,6 +326,8 @@ func TestProbeClaudeContextLimit_PreservesLoopMarkerAndHarnessEmoji(t *testing.T
 }
 
 func TestProbeClaudeContextLimit_SplitTabOwnerStillDetectsContextLimit(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeSplitWindows(

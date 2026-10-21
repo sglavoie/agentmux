@@ -32,6 +32,8 @@ func assertHookFileIssue(t *testing.T, status AccountStatus, present bool, wantP
 }
 
 func TestStatusMissingNoFile(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")
 
@@ -50,6 +52,8 @@ func TestStatusMissingNoFile(t *testing.T) {
 }
 
 func TestStatusMissingNoamxHooks(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")
 	if err := os.MkdirAll(accountDir, 0o755); err != nil {
@@ -92,6 +96,8 @@ func TestStatusInSync(t *testing.T) {
 }
 
 func TestStatusDrifted(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "claude")
 	if err := os.MkdirAll(accountDir, 0o755); err != nil {

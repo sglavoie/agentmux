@@ -8,6 +8,8 @@ import (
 )
 
 func TestFindManagedTabRelative_NextWrapsAndSkipsUnmanagedTabs(t *testing.T) {
+	t.Parallel()
+
 	osWindows := []kitty.OSWindow{{
 		ID: 1,
 		Tabs: []kitty.Tab{
@@ -28,6 +30,8 @@ func TestFindManagedTabRelative_NextWrapsAndSkipsUnmanagedTabs(t *testing.T) {
 }
 
 func TestFindManagedTabRelative_PreviousWrapsAndSkipsUnmanagedTabs(t *testing.T) {
+	t.Parallel()
+
 	osWindows := []kitty.OSWindow{{
 		ID: 1,
 		Tabs: []kitty.Tab{
@@ -48,6 +52,8 @@ func TestFindManagedTabRelative_PreviousWrapsAndSkipsUnmanagedTabs(t *testing.T)
 }
 
 func TestFindManagedTabRelative_CurrentUnmanagedTab(t *testing.T) {
+	t.Parallel()
+
 	osWindows := []kitty.OSWindow{{
 		ID: 1,
 		Tabs: []kitty.Tab{
@@ -75,6 +81,8 @@ func TestFindManagedTabRelative_CurrentUnmanagedTab(t *testing.T) {
 }
 
 func TestFindManagedTabRelative_StaysInCurrentOSWindow(t *testing.T) {
+	t.Parallel()
+
 	osWindows := []kitty.OSWindow{
 		{
 			ID: 1,
@@ -101,6 +109,8 @@ func TestFindManagedTabRelative_StaysInCurrentOSWindow(t *testing.T) {
 }
 
 func TestFindManagedTabRelative_ReturnsFalseWithoutAnotherManagedTab(t *testing.T) {
+	t.Parallel()
+
 	osWindows := []kitty.OSWindow{{
 		ID: 1,
 		Tabs: []kitty.Tab{

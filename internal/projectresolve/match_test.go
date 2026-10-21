@@ -33,6 +33,8 @@ func (p blockingGitMetadataProvider) GitMetadata(dir string) (gitMetadata, error
 }
 
 func TestGitWorktreeListPorcelainZRejectsMalformedOutput(t *testing.T) {
+	t.Parallel()
+
 	tests := map[string][]byte{
 		"empty":             []byte(""),
 		"missing worktree":  []byte("HEAD abc\x00\x00"),
@@ -50,6 +52,8 @@ func TestGitWorktreeListPorcelainZRejectsMalformedOutput(t *testing.T) {
 }
 
 func TestGitMetadataProviderFailsClosedForMissingOrFile(t *testing.T) {
+	t.Parallel()
+
 	provider := realGitMetadataProvider{timeout: gitMetadataCommandTimeout}
 	if got, err := provider.GitMetadata(filepath.Join(t.TempDir(), "missing")); err == nil {
 		t.Fatalf("GitMetadata(missing) = %#v, want error", got)
@@ -65,6 +69,8 @@ func TestGitMetadataProviderFailsClosedForMissingOrFile(t *testing.T) {
 }
 
 func TestResolverPreservesConfiguredProjectMatching(t *testing.T) {
+	t.Parallel()
+
 	resolver := New([]config.Session{
 		{Title: "API", Directory: "/abs/projects/api", Account: "api-account"},
 		{Title: "Outer", Directory: "/abs/projects/mono", Profile: "outer-profile"},
@@ -102,6 +108,8 @@ func TestResolverPreservesConfiguredProjectMatching(t *testing.T) {
 }
 
 func TestResolverGitWorktreeEquivalentMatching(t *testing.T) {
+	t.Parallel()
+
 	repo := filepath.Join(string(filepath.Separator), "repos", "main")
 	linked := filepath.Join(string(filepath.Separator), "worktrees", "feature")
 	api := filepath.Join(repo, "services", "api")
@@ -157,6 +165,8 @@ func TestResolverGitWorktreeEquivalentMatching(t *testing.T) {
 }
 
 func TestResolverProbesGitMetadataConcurrentlyAndPreservesOrder(t *testing.T) {
+	t.Parallel()
+
 	rootA := filepath.Join(string(filepath.Separator), "repos", "a")
 	rootB := filepath.Join(string(filepath.Separator), "repos", "b")
 	dirA := filepath.Join(rootA, "service")
@@ -231,6 +241,8 @@ func TestResolverExpandsTilde(t *testing.T) {
 }
 
 func TestResolverMatchesSymlinkedSubdirectory(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	realDir := filepath.Join(root, "real")
 	if err := os.MkdirAll(filepath.Join(realDir, "sub"), 0o755); err != nil {
@@ -248,6 +260,8 @@ func TestResolverMatchesSymlinkedSubdirectory(t *testing.T) {
 }
 
 func TestResolverMatchesSymlinkEquivalentPaths(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	realDir := filepath.Join(root, "real")
 	if err := os.Mkdir(realDir, 0o755); err != nil {
@@ -275,6 +289,8 @@ func TestAbsPathExpandsTilde(t *testing.T) {
 }
 
 func TestAbsPathDoesNotExpandNamedTilde(t *testing.T) {
+	t.Parallel()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd: %v", err)

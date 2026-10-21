@@ -52,6 +52,8 @@ func sessionActionRow() session.RunningSession {
 // per-row menu honored confirm_destructive, so the same act had two answers
 // depending on how it was reached.
 func TestBothSurfacesShareConfirmationPolicy(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	for _, tc := range []struct {
 		name     string
@@ -88,6 +90,8 @@ func TestBothSurfacesShareConfirmationPolicy(t *testing.T) {
 // confirm handler, so a confirmed close recorded no undo entry and raised no
 // toast while an unconfirmed one did both.
 func TestConfirmedCloseRunsTheSameEffectAsAnUnconfirmedOne(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 
 	direct := sessionActionModel(false, row)
@@ -124,6 +128,8 @@ func TestConfirmedCloseRunsTheSameEffectAsAnUnconfirmedOne(t *testing.T) {
 // the menu entry point: esc out of the nested confirmation puts the operator
 // back in the menu, on the row and at the scroll position they chose from.
 func TestCancellingReturnsToTheActionsOverlay(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(true, row)
 	m.targetSession = row
@@ -155,6 +161,8 @@ func TestCancellingReturnsToTheActionsOverlay(t *testing.T) {
 // the query, cursor, and scroll position are restored from the captured origin
 // rather than from anything left in the model.
 func TestCancellingReturnsToThePaletteQuery(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(true, row)
 	m.mode = ModeCommandPalette
@@ -198,6 +206,8 @@ func TestCancellingReturnsToThePaletteQuery(t *testing.T) {
 // on now names a different command — and putting them back on a command they
 // never chose is a worse answer than the drift it was meant to fix.
 func TestCancellingRestoresThePaletteSelectionByIdentity(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(true, row)
 	m.mode = ModeCommandPalette
@@ -242,6 +252,8 @@ func TestCancellingRestoresThePaletteSelectionByIdentity(t *testing.T) {
 // the picker is one step further in than the confirmation, and cancelling it
 // still returns to the surface the action was chosen from.
 func TestCancellingTheProfilePickerReturnsToItsOrigin(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(true, row)
 	m.targetSession = row
@@ -265,6 +277,8 @@ func TestCancellingTheProfilePickerReturnsToItsOrigin(t *testing.T) {
 // for: a replacement profile is selected before the confirmation, so the prompt
 // names the profile it is about to restart under.
 func TestProfileReplacementConfirmsAfterTheChoice(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(true, row)
 	m.targetSession = row
@@ -301,6 +315,8 @@ func TestProfileReplacementConfirmsAfterTheChoice(t *testing.T) {
 // behavior through the controller: replacing a profile with the one already in
 // use restarts nothing and confirms nothing.
 func TestChoosingTheCurrentProfileStaysANoOp(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(true, row)
 	m.targetSession = row
@@ -327,6 +343,8 @@ func TestChoosingTheCurrentProfileStaysANoOp(t *testing.T) {
 // confirmation is refused with an explanation, and nothing is dispatched against
 // whatever now occupies its address.
 func TestStaleTargetIsRefusedRatherThanRetargeted(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	other := session.RunningSession{
 		TabID: 22, WindowID: 303, Base: "backend", Project: "backend", Profile: "work",
@@ -368,6 +386,8 @@ func TestStaleTargetIsRefusedRatherThanRetargeted(t *testing.T) {
 // warning. The action is still offered — restarting the session beside the
 // dashboard is ordinary — but the sentence comes before the keystroke.
 func TestHostTabConfirmationSaysTheDashboardClosesWithIt(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(true, row)
 	m.targetSession = row
@@ -396,6 +416,8 @@ func TestHostTabConfirmationSaysTheDashboardClosesWithIt(t *testing.T) {
 // moved by a cross-window selection handoff, which names the tab the dashboard
 // should SELECT rather than the one it lives in.
 func TestHostTabIsTrackedIndependentlyOfSelection(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m = applySessions(m, commands.SessionsMsg{
 		Sessions:     []session.RunningSession{sessionActionRow()},
@@ -421,6 +443,8 @@ func TestHostTabIsTrackedIndependentlyOfSelection(t *testing.T) {
 // clears the record of the dispatch it answers, and a reply naming nothing in
 // flight still reaches the model's own error handling.
 func TestActionDoneCorrelatesWithItsDispatch(t *testing.T) {
+	t.Parallel()
+
 	row := sessionActionRow()
 	m := sessionActionModel(false, row)
 	m.targetSession = row
@@ -453,6 +477,8 @@ func TestActionDoneCorrelatesWithItsDispatch(t *testing.T) {
 // worktree, handoff, launcher, and ASL flows, and the controller's "is this
 // mine" question must answer no for all of them.
 func TestUnrelatedConfirmationsStillReachTheirOwnHandlers(t *testing.T) {
+	t.Parallel()
+
 	m := sessionActionModel(true, sessionActionRow())
 	if m.sessionActionAwaitingConfirm() || m.sessionActionAwaitingProfile() {
 		t.Fatal("a fresh model claims a pending session action")

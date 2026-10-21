@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# named-arg NAME VALUE prints VALUE as a recipe should read it.
+#
+# `just` passes everything after a recipe's name positionally, so a caller who
+# writes the documented `asl_root=~/scripts` form hands the recipe that whole
+# string. The `NAME=` prefix is stripped rather than refused, so the named and
+# bare forms both work and neither silently reads the wrong value. A leading
+# `~` is expanded too: a shell leaves `name=~/x` alone unless it treats the
+# word as an assignment, and whether it does differs between shells.
+set -euo pipefail
+
+if [ "$#" -ne 2 ]; then
+    echo "usage: named-arg NAME VALUE" >&2
+    exit 64
+fi
+
+value="${2#"$1"=}"
+case "$value" in
+    "~") value="$HOME" ;;
+    "~/"*) value="$HOME/${value#"~/"}" ;;
+esac
+printf '%s\n' "$value"

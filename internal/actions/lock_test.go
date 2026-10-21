@@ -10,6 +10,8 @@ import (
 )
 
 func TestToggleLockUpdatesProtectionAndTab(t *testing.T) {
+	t.Parallel()
+
 	for _, locked := range []bool{false, true} {
 		t.Run(map[bool]string{false: "lock", true: "unlock"}[locked], func(t *testing.T) {
 			runner := kitty.NewMockRunner(nil)

@@ -8,6 +8,8 @@ import (
 )
 
 func TestCodexSessionClassification(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		originator string
@@ -42,6 +44,8 @@ func TestCodexSessionClassification(t *testing.T) {
 }
 
 func TestClaudeSessionClassification(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		record string
@@ -75,6 +79,8 @@ func TestClaudeSessionClassification(t *testing.T) {
 }
 
 func TestCopilotTopLevelSessionClassification(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	if err := os.WriteFile(path, []byte(`{"type":"subagent.started","data":{"agentId":"nested"}}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)

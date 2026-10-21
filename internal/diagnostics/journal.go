@@ -32,7 +32,12 @@ type JournalOptions struct {
 	// maintenance outlasts shared readers instead of reporting lock timeouts,
 	// while Append keeps its short fail-open budget.
 	MaintenanceLockTimeout time.Duration
-	Now                    func() time.Time
+	// CompactionInputFiles caps how many sealed segments one compaction
+	// commit consumes (zero means maxCompactionInputFiles). Production leaves
+	// it at the default; tests lower it so a few dozen segments exercise the
+	// same multi-pass drain that a backlog of thousands would.
+	CompactionInputFiles int
+	Now                  func() time.Time
 }
 
 type MaintenanceReport struct {
@@ -153,6 +158,9 @@ func normalizeJournalOptions(options JournalOptions) JournalOptions {
 	}
 	if options.MaintenanceLockTimeout <= 0 {
 		options.MaintenanceLockTimeout = 2 * time.Second
+	}
+	if options.CompactionInputFiles <= 0 {
+		options.CompactionInputFiles = maxCompactionInputFiles
 	}
 	if options.Now == nil {
 		options.Now = time.Now

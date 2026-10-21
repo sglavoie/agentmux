@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -220,13 +224,23 @@ func TestExitCodeDistinguishesFailureFromInvalid(t *testing.T) {
 const committedScenariosDir = "../../docs/tui-testing/scenarios"
 
 // TestTUITestRunCommittedScenariosEndToEnd drives every committed example
-// scenario through the real CLI run path in one invocation and asserts the
-// harness emits a stable JSON array of passing results, exits zero, and stays
-// silent on stderr. This is the end-to-end complement to the in-process
-// tui.TestExampleScenariosParseAndPass drift guard: it proves the same files
-// pass through flag parsing, scenario staging, and result encoding, not just the
-// package-level runner.
+// scenario through the real CLI run path, the way `just tui-scenarios` runs
+// them, and asserts the harness emits a stable JSON array of passing results,
+// exits zero, and stays silent on stderr. This is the end-to-end complement to
+// the in-process tui.TestExampleScenariosParseAndPass drift guard: it proves
+// the same files pass through flag parsing, scenario staging, and result
+// encoding, not just the package-level runner.
+//
+// The same runs are the isolation check for the committed set: each happens
+// under a sentinel HOME, and every file there must survive byte for byte.
+//
+// A run stages each scenario's environment in the process environment, so
+// two runs cannot share a process. The set is split into shards instead, and
+// each shard is one `tui-test run` of many files in a child of this test
+// binary (TestTUITestCommittedScenarioShard) with a sentinel HOME of its own;
+// together they run every file exactly once.
 func TestTUITestRunCommittedScenariosEndToEnd(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(committedScenariosDir)
 	if err != nil {
 		t.Fatalf("reading committed scenarios dir: %v", err)
@@ -236,34 +250,141 @@ func TestTUITestRunCommittedScenariosEndToEnd(t *testing.T) {
 		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
 			continue
 		}
-		paths = append(paths, filepath.Join(committedScenariosDir, e.Name()))
+		path, err := filepath.Abs(filepath.Join(committedScenariosDir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, path)
 	}
 	if len(paths) == 0 {
 		t.Fatalf("no committed scenarios found in %s", committedScenariosDir)
 	}
 
-	args := append([]string{"tui-test", "run"}, paths...)
+	shards := min(runtime.GOMAXPROCS(0), maxScenarioShards, len(paths))
+	groups := make([][]string, shards)
+	for i, path := range paths {
+		groups[i%shards] = append(groups[i%shards], path)
+	}
+
+	type shardRun struct {
+		home, out, stderr string
+		files             map[string]string
+		output            []byte
+		err               error
+	}
+	runs := make([]shardRun, shards)
+	var wg sync.WaitGroup
+	for i, group := range groups {
+		home, files := sentinelHomeDir(t)
+		out := filepath.Join(t.TempDir(), "results.json")
+		runs[i] = shardRun{home: home, files: files, out: out, stderr: out + ".stderr"}
+		cmd := exec.Command(os.Args[0], "-test.run=^TestTUITestCommittedScenarioShard$", "-test.count=1")
+		// The run must find the home by itself: nothing may point it elsewhere.
+		cmd.Env = append(environWithout(os.Environ(), sentinelUnsetKeys...),
+			"HOME="+home,
+			scenarioShardFilesEnv+"="+strings.Join(group, "\n"),
+			scenarioShardOutEnv+"="+out,
+		)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runs[i].output, runs[i].err = cmd.CombinedOutput()
+		}()
+	}
+	wg.Wait()
+
+	total := 0
+	for i, run := range runs {
+		requireUntouched(t, run.home, run.files)
+		if run.err != nil {
+			// A failing scenario fails its shard; the results below still
+			// name it when the shard got as far as writing them.
+			t.Errorf("shard %d of committed scenarios failed: %v\n%s", i, run.err, run.output)
+		}
+		stderr, err := os.ReadFile(run.stderr)
+		if err != nil {
+			t.Errorf("shard %d left no stderr record: %v\n%s", i, err, run.output)
+			continue
+		}
+		if strings.Contains(string(stderr), "Error:") {
+			t.Errorf("committed scenario run should keep stderr quiet, got %q", stderr)
+		}
+		stdout, err := os.ReadFile(run.out)
+		if err != nil {
+			t.Errorf("shard %d left no results: %v\n%s", i, err, run.output)
+			continue
+		}
+		var results []tui.UITestScenarioResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Errorf("shard %d did not emit a JSON array: %v\noutput=%q", i, err, stdout)
+			continue
+		}
+		if len(results) != len(groups[i]) {
+			t.Errorf("shard %d: expected %d results, got %d", i, len(groups[i]), len(results))
+		}
+		total += len(results)
+		for _, r := range results {
+			if !r.OK {
+				t.Errorf("committed scenario %q failed: %v", r.Scenario, r.Failures)
+			}
+		}
+	}
+	if !t.Failed() && total != len(paths) {
+		t.Fatalf("expected %d results across %d shards, got %d", len(paths), shards, total)
+	}
+}
+
+// maxScenarioShards bounds the child processes the end-to-end run starts.
+const maxScenarioShards = 8
+
+const (
+	scenarioShardFilesEnv = "AMX_TUITEST_SHARD_FILES"
+	scenarioShardOutEnv   = "AMX_TUITEST_SHARD_OUT"
+)
+
+// TestTUITestCommittedScenarioShard is one shard of
+// TestTUITestRunCommittedScenariosEndToEnd, run in a child process under a
+// sentinel HOME. It runs the files it is given through the CLI in a single
+// invocation and leaves the JSON results and stderr where the parent reads
+// them. Outside a shard it has nothing to do.
+func TestTUITestCommittedScenarioShard(t *testing.T) {
+	files := os.Getenv(scenarioShardFilesEnv)
+	out := os.Getenv(scenarioShardOutEnv)
+	if files == "" || out == "" {
+		t.Skip("run as a shard by TestTUITestRunCommittedScenariosEndToEnd")
+	}
+	// TestMain points XDG_STATE_HOME at a scratch root; a shard, like the
+	// sentinel home it runs under, leaves every path to be found from HOME.
+	for _, key := range sentinelUnsetKeys {
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	args := append([]string{"tui-test", "run"}, strings.Split(files, "\n")...)
 	args = append(args, "--json")
 	stdout, stderr, err := runRootArgs(t, args...)
+	if writeErr := os.WriteFile(out, []byte(stdout), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if writeErr := os.WriteFile(out+".stderr", []byte(stderr), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
 	if err != nil {
 		t.Fatalf("committed scenarios returned error: %v (stderr=%q)", err, stderr)
 	}
-	if strings.Contains(stderr, "Error:") {
-		t.Errorf("committed scenario run should keep stderr quiet, got %q", stderr)
-	}
+}
 
-	var results []tui.UITestScenarioResult
-	if err := json.Unmarshal([]byte(stdout), &results); err != nil {
-		t.Fatalf("run did not emit a JSON array: %v\noutput=%q", err, stdout)
-	}
-	if len(results) != len(paths) {
-		t.Fatalf("expected %d results, got %d", len(paths), len(results))
-	}
-	for _, r := range results {
-		if !r.OK {
-			t.Errorf("committed scenario %q failed: %v", r.Scenario, r.Failures)
+// environWithout returns env with every entry for keys removed.
+func environWithout(env []string, keys ...string) []string {
+	kept := env[:0:0]
+	for _, entry := range env {
+		name, _, _ := strings.Cut(entry, "=")
+		if name == "HOME" || slices.Contains(keys, name) {
+			continue
 		}
+		kept = append(kept, entry)
 	}
+	return kept
 }
 
 // TestTUITestRunExpandsScenarioGlob pins the unshelled form of the documented

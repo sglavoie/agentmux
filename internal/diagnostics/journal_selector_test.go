@@ -14,6 +14,8 @@ import (
 )
 
 func TestJournalSelectorsSanitizedEvidenceAndLimit(t *testing.T) {
+	t.Parallel()
+
 	journal, _ := testJournal(t, JournalOptions{})
 	base := time.Now().UTC().Add(-time.Hour)
 	for i, stage := range []string{"ingress", "decision", "decision"} {
@@ -42,6 +44,8 @@ func TestJournalSelectorsSanitizedEvidenceAndLimit(t *testing.T) {
 }
 
 func TestSelectorMatchesCoalescedTraceAndRequestIDEvidenceLists(t *testing.T) {
+	t.Parallel()
+
 	journal, _ := testJournal(t, JournalOptions{})
 	envelope := testEnvelope("daemon.renderer.rendered", "request-a")
 	envelope.TraceID = "trace-a"
@@ -76,6 +80,8 @@ func TestSelectorMatchesCoalescedTraceAndRequestIDEvidenceLists(t *testing.T) {
 }
 
 func TestJournalTolerantReadAndSpoolReconciliationPreserveLaterValidLines(t *testing.T) {
+	t.Parallel()
+
 	journal, paths := testJournal(t, JournalOptions{})
 	first := testEnvelope("tail", "main-first")
 	first.Evidence = map[string]string{"event": "PreToolUse"}

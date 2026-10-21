@@ -127,6 +127,8 @@ func TestDispatchPickerLaunch_SisOverrideCreatesNewCodexInstances(t *testing.T) 
 }
 
 func TestDashboardLaunch_SameProfileSelectionStillLaunches(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeLaunchDispatchClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -181,6 +183,8 @@ func TestDashboardLaunch_SameProfileSelectionStillLaunches(t *testing.T) {
 }
 
 func TestDashboardLaunch_AlternateProfileSelectionLaunchesWithSelectedVars(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeLaunchDispatchClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,
@@ -230,6 +234,8 @@ func TestDashboardLaunch_AlternateProfileSelectionLaunchesWithSelectedVars(t *te
 }
 
 func TestDashboardLaunch_CrossHarnessUsesConfiguredProjectTemplate(t *testing.T) {
+	t.Parallel()
+
 	client := &fakeLaunchDispatchClient{
 		windows: []kitty.OSWindow{{
 			ID: 1,

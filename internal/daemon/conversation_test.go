@@ -13,6 +13,8 @@ import (
 )
 
 func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T) {
+	t.Parallel()
+
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{
 		Source:    protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:parent-1"},
@@ -54,6 +56,8 @@ func TestReducerCurrentConversationUsesNewestLiveParentHarnessFact(t *testing.T)
 }
 
 func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T) {
+	t.Parallel()
+
 	t.Run("expired terminal", func(t *testing.T) {
 		r := state.NewReducer(state.ReducerConfig{})
 		r.Apply(protocol.ReducerEvent{
@@ -84,6 +88,8 @@ func TestReducerCurrentConversationRejectsExpiredAndMalformedFacts(t *testing.T)
 }
 
 func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{
@@ -122,6 +128,8 @@ func TestConversationSurvivesDurableStateAndDaemonRestore(t *testing.T) {
 }
 
 func TestConversationProjectionNeverTrustsDurableCacheWithoutFacts(t *testing.T) {
+	t.Parallel()
+
 	var state state.WindowState
 	if err := state.UnmarshalUserVar(`{"v":2,"c":{"harness":"claude","session_id":"stale"}}`); err != nil {
 		t.Fatalf("UnmarshalUserVar: %v", err)
@@ -140,6 +148,8 @@ func TestConversationProjectionNeverTrustsDurableCacheWithoutFacts(t *testing.T)
 }
 
 func TestWindowStateSnapshotOmitsAbsentConversationForLegacyClients(t *testing.T) {
+	t.Parallel()
+
 	data, err := json.Marshal(protocol.WindowStateSnapshot{IconState: "bolt", LastAction: "active"})
 	if err != nil {
 		t.Fatalf("Marshal snapshot: %v", err)

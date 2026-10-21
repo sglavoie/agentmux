@@ -83,6 +83,8 @@ func planSearchTestModel(t *testing.T) (Model, *kitty.MockRunner) {
 // entry-point sets ModePlanSearch and returns a non-nil cmd batch that
 // includes the refresh tick.
 func TestEnterPlanSearch_TransitionsModeAndDispatchesRefresh(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{}
 	cfg.Defaults.PlansDirectory = t.TempDir()
 	idx, err := plans.LoadIndexAt(filepath.Join(t.TempDir(), "plans.json"))
@@ -150,6 +152,8 @@ func TestEnterPlanSearchLoadsFilesystemCacheAsynchronously(t *testing.T) {
 }
 
 func TestPlanSearchResultsPreserveSelectionAndLastGoodRows(t *testing.T) {
+	t.Parallel()
+
 	m, _ := planSearchTestModel(t)
 	m.planCursor = 1
 	selectedPath := m.planResults[m.planCursor].Meta.DirPath
@@ -186,6 +190,8 @@ func TestPlanSearchResultsPreserveSelectionAndLastGoodRows(t *testing.T) {
 // final planSearchDoneMsg the model's planResults must contain only the
 // entry whose corpus matches the typed needle.
 func TestPlanSearch_TypingShrinksResultSet(t *testing.T) {
+	t.Parallel()
+
 	m, _ := planSearchTestModel(t)
 	if len(m.planResults) != 2 {
 		t.Fatalf("setup: want 2 results, got %d", len(m.planResults))
@@ -235,6 +241,8 @@ func TestPlanSearch_TypingShrinksResultSet(t *testing.T) {
 // lowercase o cycles the plan-search sort order and must not open the plan
 // directory in an editor from this mode.
 func TestPlanSearchLowercaseOIsSortKey(t *testing.T) {
+	t.Parallel()
+
 	m, _ := planSearchTestModel(t)
 	m.planSortMode = plans.SortByMatches
 
@@ -270,6 +278,8 @@ func TestPlanSearchLowercaseOIsSortKey(t *testing.T) {
 // TestPlanSearch_OpenInEditorInvokesLaunch verifies pressing `e` on a row
 // dispatches a tea.Cmd that drives kitten @ launch with the plan's directory.
 func TestPlanSearch_OpenInEditorInvokesLaunch(t *testing.T) {
+	t.Parallel()
+
 	m, runner := planSearchTestModel(t)
 
 	_, cmd := m.Update(keyPress("e"))
@@ -303,6 +313,8 @@ func TestPlanSearch_OpenInEditorInvokesLaunch(t *testing.T) {
 }
 
 func TestPlanSearchEnterRemainsViewAction(t *testing.T) {
+	t.Parallel()
+
 	m, _ := planSearchTestModel(t)
 
 	updated, cmd := m.Update(keyPress("enter"))

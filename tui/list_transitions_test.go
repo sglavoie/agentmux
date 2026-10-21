@@ -15,6 +15,8 @@ import (
 // transition for every row — otherwise launching the dashboard would pulse
 // every session by definition.
 func TestRecordTransitionsFirstRefreshNoPulse(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		sessions: []session.RunningSession{
 			{WindowID: 1, State: "bolt"},
@@ -36,6 +38,8 @@ func TestRecordTransitionsFirstRefreshNoPulse(t *testing.T) {
 // TestRecordTransitionsPulsesOnChange asserts a state change between the
 // snapshot and the current refresh records a pulse for the changed row only.
 func TestRecordTransitionsPulsesOnChange(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		lastSeenStates: map[int]string{1: "bolt", 2: "bolt"},
 		sessions: []session.RunningSession{
@@ -56,6 +60,8 @@ func TestRecordTransitionsPulsesOnChange(t *testing.T) {
 // (no prior entry in lastSeenStates) is seeded silently rather than pulsing
 // on its first appearance.
 func TestRecordTransitionsNewSessionNoPulse(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		lastSeenStates: map[int]string{1: "bolt"},
 		sessions: []session.RunningSession{
@@ -79,6 +85,8 @@ func TestRecordTransitionsNewSessionNoPulse(t *testing.T) {
 // snapshot would keep mismatching the current state and a fresh pulse
 // would fire forever every pulseDecay seconds.
 func TestRecordTransitionsDoesNotRePulseStableState(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		lastSeenStates: map[int]string{1: "bolt"},
 		sessions:       []session.RunningSession{{WindowID: 1, State: "key"}},
@@ -107,6 +115,8 @@ func TestRecordTransitionsDoesNotRePulseStableState(t *testing.T) {
 // TestSweepRecentTransitionsDecay asserts entries older than pulseDecay are
 // dropped while fresh entries survive.
 func TestSweepRecentTransitionsDecay(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	m := Model{
 		recentTransitions: map[int]time.Time{
@@ -127,6 +137,8 @@ func TestSweepRecentTransitionsDecay(t *testing.T) {
 // (which calls snapshotSeenStates) wipes recentTransitions so the pulse
 // layer surfaces only changes the user has not yet seen.
 func TestSnapshotSeenStatesClearsPulses(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		sessions: []session.RunningSession{
 			{WindowID: 1, State: "key"},
@@ -146,6 +158,8 @@ func TestSnapshotSeenStatesClearsPulses(t *testing.T) {
 // an active pulse, the rendered list reserves the pulse column and shifts
 // every row by exactly the column width so alignment is preserved.
 func TestRenderListPulseColumnAppearsOnTransition(t *testing.T) {
+	t.Parallel()
+
 	base := Model{
 		cfg:   &config.Config{},
 		width: 80,
@@ -181,6 +195,8 @@ func TestRenderListPulseColumnAppearsOnTransition(t *testing.T) {
 // gutter keeps saying so with the durable dot. Neither the keypress, the cursor
 // move it caused, nor the render that followed may touch Unseen.
 func TestUnreadDotSurvivesTheKeypressThatClearsThePulse(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		cfg:   &config.Config{},
 		width: 100,
@@ -238,6 +254,8 @@ func TestUnreadDotSurvivesTheKeypressThatClearsThePulse(t *testing.T) {
 // transitions, the pulse column is omitted entirely so rows render at full
 // width — no permanent visual cost.
 func TestRenderListNoPulseColumnByDefault(t *testing.T) {
+	t.Parallel()
+
 	m := Model{
 		cfg:   &config.Config{},
 		width: 80,

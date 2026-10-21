@@ -11,6 +11,8 @@ import (
 )
 
 func TestPrune_MarksOldEntriesHidden(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
@@ -53,6 +55,8 @@ func TestPrune_MarksOldEntriesHidden(t *testing.T) {
 }
 
 func TestPrune_DoesNotTouchFiles(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcript.jsonl")
 	if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
@@ -78,6 +82,8 @@ func TestPrune_DoesNotTouchFiles(t *testing.T) {
 }
 
 func TestPrune_RemovesSidecarsForNewlyHiddenEntries(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "transcript.jsonl")
 	if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
@@ -146,6 +152,8 @@ func TestPrune_BatchesIndexSave(t *testing.T) {
 }
 
 func TestPrune_PreservesHiddenEntriesAndSearchExcludesThem(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	must(t, idx.SetEntryForTest("claude:hidden", SessionMeta{
@@ -184,6 +192,8 @@ func TestPrune_PreservesHiddenEntriesAndSearchExcludesThem(t *testing.T) {
 }
 
 func TestPrune_ZeroKeepDaysIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	must(t, idx.SetEntryForTest("claude:ancient", SessionMeta{
@@ -208,6 +218,8 @@ func TestPrune_ZeroKeepDaysIsNoOp(t *testing.T) {
 }
 
 func TestPrune_ZeroLastAtIsKept(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:undated", SessionMeta{
 		ID: "undated", Harness: harness.Claude,
@@ -227,6 +239,8 @@ func TestPrune_ZeroLastAtIsKept(t *testing.T) {
 }
 
 func TestPrune_NilArgsReturnError(t *testing.T) {
+	t.Parallel()
+
 	if _, err := Prune(nil, &config.Config{}, time.Now()); err == nil {
 		t.Errorf("expected error for nil index")
 	}

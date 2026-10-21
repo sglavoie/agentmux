@@ -19,6 +19,8 @@ import (
 // the composer-idle screen has agreed across two consecutive samples: a single
 // transient idle frame must not settle live work.
 func TestProbeClaudeScreenStop_CompletedIdleStopsStuckBoltAfterTwoSamples(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -74,6 +76,8 @@ func TestProbeClaudeScreenStop_CompletedIdleStopsStuckBoltAfterTwoSamples(t *tes
 // sample; a one-sample tier never compares the screen fingerprint, so a marker
 // left over from an earlier turn could settle a working pane in a single tick.
 func TestProbeClaudeScreenStop_InterruptedStopsStuckBoltAfterTwoSamples(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -118,6 +122,8 @@ func TestProbeClaudeScreenStop_InterruptedStopsStuckBoltAfterTwoSamples(t *testi
 // Claude turn (esc-to-interrupt hint on screen) never settles, even across
 // several samples.
 func TestProbeClaudeScreenStop_ActiveSpinnerKeepsBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	base := time.Now()
 	fake := &fakeKittyClient{
@@ -152,6 +158,8 @@ func TestProbeClaudeScreenStop_ActiveSpinnerKeepsBolt(t *testing.T) {
 // stale-tolerant, so the probe scrapes the screen every tick; the working screen
 // is what keeps \u26a1 alive, silently, for as long as the turn runs.
 func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", false), kitty.UserVars{
 		Profile: "work",
@@ -221,6 +229,8 @@ func TestProbeClaudeScreenStop_BusyPaneTitleKeepsBolt(t *testing.T) {
 // reducer state after restore or missed hooks; the current busy marker alone is
 // sufficient to recover ⚡ without scraping the empty composer.
 func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
 		Profile: "work",
@@ -301,6 +311,8 @@ func TestProbeClaudeScreenStop_BusyPaneTitleRestoresEmptyState(t *testing.T) {
 // the live ASL lease; the next busy-title probe restores ⚡ without inventing or
 // withdrawing the independent 🔁 marker.
 func TestProbeClaudeScreenStop_BusyPaneTitleRecoversAfterUserClearPreservingLoop(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "bolt", true), kitty.UserVars{
 		Profile: "work",

@@ -14,6 +14,8 @@ import (
 // advertises: every mode that renders a truncatable palette opens the overlay
 // with `?`, and closing it lands back in that mode with its state intact.
 func TestContextualHelpRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		mode    Mode
@@ -83,6 +85,8 @@ func TestContextualHelpRoundTrip(t *testing.T) {
 // is the view `?` was pressed in, not the dashboard, so the detour never looks
 // like it left the transcript viewer or plan pager.
 func TestHelpOverlayDimsOriginatingView(t *testing.T) {
+	t.Parallel()
+
 	m := pressKey(contextualHelpModel(ModeSessionView), "?")
 	out := stripAnsi(m.render())
 	if !strings.Contains(out, "Keyboard Shortcuts") {
@@ -256,6 +260,8 @@ func TestHelpOverlayInFlightLoadsReachUnderlyingView(t *testing.T) {
 // return to the transcript viewer, so a read completing behind either must
 // still be there when the user comes back.
 func TestOverlayLoadResultsSurviveViewerDetours(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name    string
 		open    string
@@ -293,6 +299,8 @@ func TestOverlayLoadResultsSurviveViewerDetours(t *testing.T) {
 // after the viewer was truly left, or after a newer request superseded it, is
 // still dropped.
 func TestOverlayLoadGuardsStillRejectStaleResults(t *testing.T) {
+	t.Parallel()
+
 	t.Run("after leaving the viewer", func(t *testing.T) {
 		m, loaded := overlayLoadViewerModel(t)
 
@@ -343,6 +351,8 @@ func TestOverlayLoadGuardsStillRejectStaleResults(t *testing.T) {
 // view it was pressed in, with that section's header on the first visible row,
 // and that the dashboard still opens at the top where its section leads.
 func TestHelpOpensAtTheSectionForItsView(t *testing.T) {
+	t.Parallel()
+
 	for mode, section := range map[Mode]string{
 		ModeSessionSearch: "Past Sessions",
 		ModePlanSearch:    "Plans",
@@ -372,6 +382,8 @@ func TestHelpOpensAtTheSectionForItsView(t *testing.T) {
 }
 
 func TestHelpPagesWithHalfAndFullPageKeys(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m.width, m.height = 100, 30
 	m.openHelp(ModeList)

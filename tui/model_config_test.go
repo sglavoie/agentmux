@@ -46,6 +46,8 @@ func pollReloadConfig(t *testing.T, m Model) Model {
 }
 
 func TestConfigReloadUpdatesOpenLauncherAfterAtomicSave(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	path := filepath.Join(root, "config.toml")
 	writeReloadConfig(t, path, root)
@@ -95,6 +97,8 @@ func TestConfigReloadUpdatesOpenLauncherAfterAtomicSave(t *testing.T) {
 }
 
 func TestConfigReloadRemapsLauncherSelectionAndOverrides(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	idx := -1
 	for i, project := range m.pickerSessions {
@@ -133,6 +137,8 @@ func TestConfigReloadRemapsLauncherSelectionAndOverrides(t *testing.T) {
 }
 
 func TestConfigReloadWaitsForDirectoryEditToFinish(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.pickerDirMode = true
 	before := m.cfg

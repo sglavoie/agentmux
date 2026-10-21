@@ -149,6 +149,8 @@ func TestWatchdogTick_ExpiresOnAccumulatedIdle(t *testing.T) {
 // must drop an acknowledged cutoff when it crosses one hour even when the user
 // disables every configurable active/subagent/compact stale threshold.
 func TestSweepStale_CompactsAcknowledgedFactsWithoutStaleThresholds(t *testing.T) {
+	t.Parallel()
+
 	h, _, _ := newSweepTestHandler(0)
 	base := time.Unix(1_700_000_000, 0)
 

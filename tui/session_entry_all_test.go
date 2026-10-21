@@ -10,6 +10,8 @@ import (
 )
 
 func TestAllPastSessionsClearsFiltersAndOrdersAcrossProjects(t *testing.T) {
+	t.Parallel()
+
 	for _, route := range []string{"S", "palette"} {
 		for _, refreshing := range []bool{false, true} {
 			t.Run(route+map[bool]string{false: "/ready", true: "/refreshing"}[refreshing], func(t *testing.T) {
@@ -59,6 +61,8 @@ func TestAllPastSessionsClearsFiltersAndOrdersAcrossProjects(t *testing.T) {
 }
 
 func TestAllPastSessionsShortcutJoinsStartupCacheLoad(t *testing.T) {
+	t.Parallel()
+
 	m := testModel()
 	m.sessionCacheLoadInFlight = true
 	m.filterProject = []string{"Foo"}

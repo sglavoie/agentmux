@@ -29,6 +29,8 @@ func hintText(lines []string) string {
 }
 
 func TestFooterHintLinesFitWideTerminal(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		palette []footerEntry
@@ -54,6 +56,8 @@ func TestFooterHintLinesFitWideTerminal(t *testing.T) {
 }
 
 func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		palette []footerEntry
@@ -103,6 +107,8 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 }
 
 func TestFooterHintLinesDropsHighestPriorityFirst(t *testing.T) {
+	t.Parallel()
+
 	full := footerHintLines(Model{width: 500}, hintTestPalette, 1)
 	if len(full) != 1 {
 		t.Fatalf("wide render = %d rows, want 1:\n%s", len(full), hintText(full))
@@ -125,6 +131,8 @@ func TestFooterHintLinesDropsHighestPriorityFirst(t *testing.T) {
 }
 
 func TestFooterHintLinesNeverDropsEssentialEntries(t *testing.T) {
+	t.Parallel()
+
 	lines := footerHintLines(Model{width: 20}, hintTestPalette, 1)
 	out := hintText(lines)
 	for _, want := range []string{"enter view", "esc back", footerHintMore} {
@@ -140,6 +148,8 @@ func TestFooterHintLinesNeverDropsEssentialEntries(t *testing.T) {
 }
 
 func TestFooterHintLinesDegenerateWidth(t *testing.T) {
+	t.Parallel()
+
 	lines := footerHintLines(Model{width: 0}, hintTestPalette, 1)
 	if len(lines) != 1 {
 		t.Fatalf("width 0 render = %d rows, want the single unwrapped fallback:\n%s", len(lines), hintText(lines))
@@ -415,6 +425,8 @@ var footerHintCharacterizations = []struct {
 }
 
 func TestFooterHintPaletteCharacterization(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range footerHintCharacterizations {
 		t.Run(tc.name, func(t *testing.T) {
 			lines := footerHintLines(Model{width: tc.width}, tc.entries, footerHintMaxLines)
@@ -501,6 +513,8 @@ func footerAvailabilityCases() []footerAvailabilityCase {
 // its text, and only its key style changes. Layout therefore cannot shift as a
 // mode's data loads.
 func TestFooterHintAvailabilityChangesStyleOnly(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range footerAvailabilityCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			styled := 0
@@ -543,6 +557,8 @@ func TestFooterHintAvailabilityChangesStyleOnly(t *testing.T) {
 // fixture's row-verify permits stop and refuses abort, so one render must carry
 // both styles at once.
 func TestFooterHintASLRunsMixedAvailability(t *testing.T) {
+	t.Parallel()
+
 	d, _ := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	m := d.Model()
@@ -579,6 +595,8 @@ func hintTestTokens() []prioritizedFooterToken {
 // assertion: for every characterized palette and width, driving the helper
 // directly reproduces the adapter's rows byte for byte, ANSI included.
 func TestPrioritizedFooterLinesMatchesEntryAdapter(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range footerHintCharacterizations {
 		t.Run(tc.name, func(t *testing.T) {
 			m := Model{width: tc.width}
@@ -597,6 +615,8 @@ func TestPrioritizedFooterLinesMatchesEntryAdapter(t *testing.T) {
 }
 
 func TestPrioritizedFooterLinesDropsHighestPriorityFirst(t *testing.T) {
+	t.Parallel()
+
 	full := prioritizedFooterLines(hintTestTokens(), footerHintIndent, 500, 1)
 	if len(full) != 1 {
 		t.Fatalf("wide render = %d rows, want 1:\n%s", len(full), hintText(full))
@@ -619,6 +639,8 @@ func TestPrioritizedFooterLinesDropsHighestPriorityFirst(t *testing.T) {
 }
 
 func TestPrioritizedFooterLinesNeverDropsEssentialTokens(t *testing.T) {
+	t.Parallel()
+
 	out := hintText(prioritizedFooterLines(hintTestTokens(), footerHintIndent, 20, 1))
 	for _, want := range []string{"enter view", "esc back", footerHintMore} {
 		if !strings.Contains(out, want) {
@@ -633,6 +655,8 @@ func TestPrioritizedFooterLinesNeverDropsEssentialTokens(t *testing.T) {
 }
 
 func TestPrioritizedFooterLinesDegenerateWidth(t *testing.T) {
+	t.Parallel()
+
 	lines := prioritizedFooterLines(hintTestTokens(), footerHintIndent, 0, 1)
 	if len(lines) != 1 {
 		t.Fatalf("width 0 render = %d rows, want the single unwrapped fallback:\n%s", len(lines), hintText(lines))
@@ -646,6 +670,8 @@ func TestPrioritizedFooterLinesDegenerateWidth(t *testing.T) {
 }
 
 func TestPrioritizedFooterLinesUnlimitedRowsNeverTruncate(t *testing.T) {
+	t.Parallel()
+
 	lines := prioritizedFooterLines(hintTestTokens(), footerHintIndent, 24, 0)
 	if len(lines) < 2 {
 		t.Fatalf("maxLines 0 should wrap freely; got %d rows:\n%s", len(lines), hintText(lines))
@@ -665,6 +691,8 @@ func TestPrioritizedFooterLinesUnlimitedRowsNeverTruncate(t *testing.T) {
 // mid-token: one too wide for the terminal takes a row of its own and is
 // clamped there.
 func TestPrioritizedFooterLinesWrapsWholeTokens(t *testing.T) {
+	t.Parallel()
+
 	tokens := []prioritizedFooterToken{
 		{token: footerBindingToken("a", "short"), priority: footerPriorityEssential},
 		{token: footerBindingToken("b", strings.Repeat("wide", 12)), priority: footerPriorityEssential},
@@ -694,6 +722,8 @@ func TestPrioritizedFooterLinesWrapsWholeTokens(t *testing.T) {
 // separator itself: a caller-supplied one is ignored, and the block's last
 // token never trails one even after drops move which token is last.
 func TestPrioritizedFooterLinesOwnsSeparators(t *testing.T) {
+	t.Parallel()
+
 	tokens := hintTestTokens()
 	for i := range tokens {
 		tokens[i].token.sep = "|BOGUS|"
@@ -721,6 +751,8 @@ func TestPrioritizedFooterLinesOwnsSeparators(t *testing.T) {
 // TestPrioritizedFooterLinesDoesNotMutateCallerTokens keeps the drop loop's
 // slice surgery off the caller's backing array.
 func TestPrioritizedFooterLinesDoesNotMutateCallerTokens(t *testing.T) {
+	t.Parallel()
+
 	tokens := hintTestTokens()
 	before := make([]prioritizedFooterToken, len(tokens))
 	copy(before, tokens)
@@ -740,6 +772,8 @@ func TestPrioritizedFooterLinesDoesNotMutateCallerTokens(t *testing.T) {
 // The worktree mutations are lit exactly when their key handlers would ask for
 // confirmation rather than answer with an "Unavailable" toast.
 func TestWorktreeFooterOffersOnlyMutationsTheHandlersAccept(t *testing.T) {
+	t.Parallel()
+
 	merged := true
 	healthy := worktree.Entry{Path: "/tmp/wt", Exists: true, Actionable: true, GitAvailable: true, StatusAvailable: true}
 	dirty := healthy

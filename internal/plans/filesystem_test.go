@@ -21,6 +21,8 @@ func filesystemPlanFixture(t *testing.T) (string, string) {
 }
 
 func TestFilesystemPlanLoadStrictDiagnosticsAndMalformedRecovery(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "plans.json")
 	if err := os.WriteFile(path, []byte(`{"entries":`), 0o644); err != nil {
@@ -213,6 +215,8 @@ func TestFilesystemPlanRefreshWritesSidecarOnlyAfterFreshnessGate(t *testing.T) 
 }
 
 func TestFilesystemPlanSearchRepairsUnreadableSidecar(t *testing.T) {
+	t.Parallel()
+
 	root, planDir := filesystemPlanFixture(t)
 	idx, err := LoadIndexAt(filepath.Join(t.TempDir(), "plans.json"))
 	if err != nil {
@@ -239,6 +243,8 @@ func TestFilesystemPlanSearchRepairsUnreadableSidecar(t *testing.T) {
 }
 
 func TestFilesystemPlanConcurrentLoadRefreshDelete(t *testing.T) {
+	t.Parallel()
+
 	root, planDir := filesystemPlanFixture(t)
 	path := filepath.Join(t.TempDir(), "plans.json")
 	seed, err := LoadIndexAt(path)
@@ -283,6 +289,8 @@ func TestFilesystemPlanConcurrentLoadRefreshDelete(t *testing.T) {
 }
 
 func TestFilesystemPlanDeleteSidecarFailureKeepsCleanState(t *testing.T) {
+	t.Parallel()
+
 	root, planDir := filesystemPlanFixture(t)
 	path := filepath.Join(t.TempDir(), "plans.json")
 	idx, err := LoadIndexAt(path)
@@ -330,6 +338,8 @@ func TestFilesystemPlanDeleteSidecarFailureKeepsCleanState(t *testing.T) {
 }
 
 func TestFilesystemPlanAtomicReplacementLeavesNoTemporaryFiles(t *testing.T) {
+	t.Parallel()
+
 	root, _ := filesystemPlanFixture(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "plans.json")
@@ -354,6 +364,8 @@ func TestFilesystemPlanAtomicReplacementLeavesNoTemporaryFiles(t *testing.T) {
 }
 
 func TestFilesystemPlanUnreadableCacheAbortsMutations(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		mutate func(*Index, string, string) error

@@ -18,6 +18,8 @@ import (
 // none (or it refuses) leave it to the caller's own terminal. None of them
 // reports a missing Kitty client.
 func TestOpenActionsNeedNoKitty(t *testing.T) {
+	t.Parallel()
+
 	directory := t.TempDir()
 	cfg := &config.Config{
 		Accounts: []config.Account{{Name: "work", Harness: harness.Claude}},
@@ -71,6 +73,8 @@ func TestOpenActionsNeedNoKitty(t *testing.T) {
 // A session on tmux with no tmux server injected is missing a tmux server,
 // not a Kitty client; a Kitty session is still missing Kitty.
 func TestSessionActionsNameTheBackendTheyLack(t *testing.T) {
+	t.Parallel()
+
 	cfg := continuityConfig(harness.Claude)
 	for kind, want := range map[runtimesession.BackendKind]string{
 		runtimesession.BackendTmux:  "tmux server",

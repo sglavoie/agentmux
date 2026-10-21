@@ -10,7 +10,8 @@ never reads or writes the operator's real config or data. Every run is
 deterministic and isolated, so it is safe to run in CI or from an agent.
 
 The repository acceptance gate runs every committed wide and narrow layout
-scenario:
+scenario inside `go test ./...` (`cmd/tuitest` through the CLI, `tui`
+in-package); `just tui-scenarios` runs the same set by hand:
 
 ```bash
 just tui-scenarios
@@ -435,9 +436,11 @@ single reason line.
 ## Committed scenarios
 
 The [`scenarios/`](scenarios) directory is the complete committed acceptance
-inventory. `just tui-scenarios` passes `scenarios/*.json` to the harness, and
-the in-package scenario test independently discovers and executes every JSON
-file. The exact inventory is:
+inventory. `just tui-scenarios` passes `scenarios/*.json` to the harness, as
+`cmd/tuitest`'s end-to-end test does under `go test`, and the in-package
+scenario test independently discovers and executes every JSON file and holds
+the directory to the table below, which it reads as the inventory. The exact
+inventory is:
 
 | File | Fixture | Covers |
 | --- | --- | --- |
@@ -506,6 +509,8 @@ file. The exact inventory is:
 | [`health-details-overlay-narrow.json`](scenarios/health-details-overlay-narrow.json) | `health_states` | the details overlay wraps rather than clips at 62 columns, and `G` reaches the last body line — the configuration reading — instead of stopping a row short of it |
 | [`feedback-wide.json`](scenarios/feedback-wide.json) | `basic` | action feedback opens from the palette and fits a wide terminal |
 | [`feedback-narrow.json`](scenarios/feedback-narrow.json) | `basic` | retained action feedback and its controls fit a narrow terminal |
+| [`feedback-notices-wide.json`](scenarios/feedback-notices-wide.json) | `action_feedback` | populated feedback at 120 columns shows each notice's timestamp and its target-specific guidance (`inspect this session`) |
+| [`feedback-notices-narrow.json`](scenarios/feedback-notices-narrow.json) | `action_feedback` | the same populated notices, timestamps, and guidance fit 60×18 |
 | [`health-details-overlay-wide.json`](scenarios/health-details-overlay-wide.json) | `health_states` | the palette opens the full reading for every check at once: a running daemon, drifted hooks whose headline is the aggregate count with its remediation, and a configuration section that says it observed no deprecated keys rather than staying silent |
 | [`health-states-hooks-degraded.json`](scenarios/health-states-hooks-degraded.json) | `health_states` | one refresh tick reduces the two health causes — a live daemon beside hook files that are in sync, drifted, and missing at once — to the single worst reading `✖ hooks drifted` in the header, with the per-check pips and the degraded banner retired to the details overlay |
 | [`held-inspector-resumes-on-new-selection.json`](scenarios/held-inspector-resumes-on-new-selection.json) | `paused_queue` | the same round trip with the selection moved while the split was gone: the widening follows it, so the hold is dropped rather than carried onto another session — no `Paused`, no `output line 01`, and the tail of the new target on screen |

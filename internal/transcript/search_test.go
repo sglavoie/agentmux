@@ -10,6 +10,8 @@ import (
 )
 
 func TestSearch_EmptyTextReturnsFilteredMetadata(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:a", SessionMeta{
 		ID: "a", Harness: harness.Claude, Profile: "work", Project: "Foo",
@@ -53,6 +55,8 @@ func TestSearch_EmptyTextReturnsFilteredMetadata(t *testing.T) {
 }
 
 func TestSearch_ProfileFilterMatchesProfilesMembership(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:shared", SessionMeta{
 		ID:       "shared",
@@ -83,6 +87,8 @@ func TestSearch_ProfileFilterMatchesProfilesMembership(t *testing.T) {
 }
 
 func TestSearch_ProjectFilterMatchesProjectsMembership(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:shared", SessionMeta{
 		ID:       "shared",
@@ -113,6 +119,8 @@ func TestSearch_ProjectFilterMatchesProjectsMembership(t *testing.T) {
 }
 
 func TestSearch_TextFiltersAndCountsMatches(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	hitKey := "claude:hit"
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
@@ -180,6 +188,8 @@ func TestSearch_TextFiltersAndCountsMatches(t *testing.T) {
 // words may sit in different messages and any order, every one must appear
 // somewhere in the transcript, and a quoted phrase stays contiguous.
 func TestSearch_MultiWordQueryRequiresEveryWord(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	for _, id := range []string{"both", "one"} {
 		must(t, idx.SetEntryForTest("claude:"+id, SessionMeta{
@@ -226,6 +236,8 @@ func TestSearch_MultiWordQueryRequiresEveryWord(t *testing.T) {
 // A multi-word query previews the first line holding every word, even when it
 // sits in a later message than the first line holding one of them.
 func TestSearch_MultiWordPreviewPrefersALineHoldingEveryWord(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
 		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
@@ -254,6 +266,8 @@ func TestSearch_MultiWordPreviewPrefersALineHoldingEveryWord(t *testing.T) {
 // though a printed line holding every word still beats a written line holding
 // one of them.
 func TestSearch_PreviewPrefersWrittenLinesToToolOutput(t *testing.T) {
+	t.Parallel()
+
 	written := func(role, text string) Message {
 		return Message{Role: role, Text: text, handoffText: &text}
 	}
@@ -321,6 +335,8 @@ func TestSearch_PreviewPrefersWrittenLinesToToolOutput(t *testing.T) {
 }
 
 func TestSearch_TextPreviewMapsFoldedUnicodeOffset(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:hit", SessionMeta{
 		ID: "hit", Harness: harness.Claude, Path: "/tmp/hit.jsonl",
@@ -351,6 +367,8 @@ func TestSearch_TextPreviewMapsFoldedUnicodeOffset(t *testing.T) {
 }
 
 func TestSearch_NoReaderMeansSessionDropped(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:a", SessionMeta{
 		ID: "a", Harness: harness.Claude, Path: "/tmp/a.jsonl",
@@ -369,6 +387,8 @@ func TestSearch_NoReaderMeansSessionDropped(t *testing.T) {
 }
 
 func TestSearch_ReadErrorDropsSession(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:a", SessionMeta{
 		ID: "a", Harness: harness.Claude, Path: "/tmp/a.jsonl",
@@ -390,6 +410,8 @@ func TestSearch_ReadErrorDropsSession(t *testing.T) {
 }
 
 func TestSearch_ResultsSortedByLastAtThenStartedAt(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:older", SessionMeta{
 		ID: "older", Harness: harness.Claude,
@@ -423,6 +445,8 @@ func TestSearch_ResultsSortedByLastAtThenStartedAt(t *testing.T) {
 }
 
 func TestSearch_NilIndexReturnsError(t *testing.T) {
+	t.Parallel()
+
 	if _, err := Search(nil, nil, Query{}); err == nil {
 		t.Errorf("expected error for nil index")
 	}
@@ -444,6 +468,8 @@ func (d *dispatchReader) ReadMessages(path string) ([]Message, error) {
 }
 
 func TestSearch_SinceDropsOlderSessionsBeforeReadingAnything(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	must(t, idx.SetEntryForTest("claude:old", SessionMeta{ID: "old", Harness: harness.Claude, Snippet: "old", LastAt: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)}))
 	must(t, idx.SetEntryForTest("claude:new", SessionMeta{ID: "new", Harness: harness.Claude, Snippet: "new", LastAt: time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC)}))
@@ -459,6 +485,8 @@ func TestSearch_SinceDropsOlderSessionsBeforeReadingAnything(t *testing.T) {
 // The preview marks a line entered partway with a leading ellipsis; where the
 // line is entered is searchquery.MatchLine's to decide and test.
 func TestFirstMatchLineMarksALineEnteredNearTheMatch(t *testing.T) {
+	t.Parallel()
+
 	line := "d446830 feat(macos): Add the Agent Mux.app skeleton, toolchain, and packaging for release"
 	if got := firstMatchLine(line, strings.Index(line, "packaging")); got != "…toolchain, and packaging for release" {
 		t.Fatalf("preview = %q, want an ellipsis before the lead-in", got)
@@ -478,6 +506,8 @@ func (r *scopedReadRecorder) ReadMessages(path string) ([]Message, error) {
 	return []Message{{Role: "user", Text: "needle"}}, nil
 }
 func TestSearchConversationScopePrecedesTranscriptReads(t *testing.T) {
+	t.Parallel()
+
 	idx := newTestIndex(t)
 	for _, entry := range []SessionMeta{
 		{ID: "same", Harness: "claude", Path: "wanted", Project: "API"},

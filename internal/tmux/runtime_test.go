@@ -12,6 +12,8 @@ import (
 )
 
 func TestTmuxUnexpectedServerExitIsReportedAsAbsent(t *testing.T) {
+	t.Parallel()
+
 	err := &CommandError{Stderr: "server exited unexpectedly"}
 	if !errors.Is(err, ErrServerNotRunning) {
 		t.Fatalf("tmux exited while accepting a client: %v, want ErrServerNotRunning", err)
@@ -78,6 +80,8 @@ func candidate(t *testing.T, candidates []Candidate, source RuntimeSource) Candi
 }
 
 func TestSupportedVersion(t *testing.T) {
+	t.Parallel()
+
 	for version, want := range map[string]bool{
 		"3.5": true, "3.5a": true, "3.7c": true, "4.0": true, "next-3.8": true, "3.10": true,
 		"3.4": false, "3.3a": false, "2.9": false, "": false, "master": false, "openbsd-7.6": false, "3": false,
@@ -89,6 +93,8 @@ func TestSupportedVersion(t *testing.T) {
 }
 
 func TestBundledRuntimeIsVerifiedAndInstalledOutsideTheBundle(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	bundle := fakeBundle(t, "3.7c", "pinned tmux")
 	opts.Getenv = func(key string) string {
@@ -131,6 +137,8 @@ func TestBundledRuntimeIsVerifiedAndInstalledOutsideTheBundle(t *testing.T) {
 }
 
 func TestBundledRuntimeBesideTheExecutableNeedsNoEnvironment(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	bundle := fakeBundle(t, "3.7c", "pinned tmux")
 	resources := filepath.Dir(bundle)
@@ -150,6 +158,8 @@ func TestBundledRuntimeBesideTheExecutableNeedsNoEnvironment(t *testing.T) {
 
 // The app's bundles list VERSION among the checksums; it is installed once.
 func TestABundleThatChecksumsItsVersionInstalls(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	bundle := fakeBundle(t, "3.7c", "pinned tmux")
 	version, err := os.ReadFile(filepath.Join(bundle, "VERSION"))
@@ -191,6 +201,8 @@ func TestABundleThatChecksumsItsVersionInstalls(t *testing.T) {
 }
 
 func TestTamperedBundleIsRefused(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	bundle := fakeBundle(t, "3.7c", "pinned tmux")
 	if err := os.WriteFile(filepath.Join(bundle, "bin", "tmux"), []byte("something else"), 0o755); err != nil {
@@ -216,6 +228,8 @@ func TestTamperedBundleIsRefused(t *testing.T) {
 }
 
 func TestTamperedInstalledCopyIsReplacedFromTheBundle(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	bundle := fakeBundle(t, "3.7c", "pinned tmux")
 	opts.Getenv = func(key string) string {
@@ -251,6 +265,8 @@ func TestTamperedInstalledCopyIsReplacedFromTheBundle(t *testing.T) {
 }
 
 func TestChecksumsMayNotLeaveTheRuntime(t *testing.T) {
+	t.Parallel()
+
 	sum := strings.Repeat("a", 64)
 	for _, data := range []string{
 		sum + "  ../bin/tmux\n" + sum + "  bin/tmux\n",
@@ -266,6 +282,8 @@ func TestChecksumsMayNotLeaveTheRuntime(t *testing.T) {
 }
 
 func TestPathTmuxServesAStandaloneCommandLine(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	installed := fakeExecutable(t)
 	opts.LookPath = func(string) (string, error) { return installed, nil }
@@ -280,6 +298,8 @@ func TestPathTmuxServesAStandaloneCommandLine(t *testing.T) {
 }
 
 func TestOldPathTmuxIsRefusedWithWhatToDo(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	installed := fakeExecutable(t)
 	opts.LookPath = func(string) (string, error) { return installed, nil }
@@ -297,6 +317,8 @@ func TestOldPathTmuxIsRefusedWithWhatToDo(t *testing.T) {
 }
 
 func TestMissingTmuxNamesEveryPlaceTried(t *testing.T) {
+	t.Parallel()
+
 	_, candidates, err := ResolveRuntime(isolated(t))
 	if !IsNoRuntime(err) {
 		t.Fatalf("ResolveRuntime = %v, want a NoRuntimeError", err)
@@ -310,6 +332,8 @@ func TestMissingTmuxNamesEveryPlaceTried(t *testing.T) {
 }
 
 func TestAnExplicitChoiceIsNeverSilentlyReplaced(t *testing.T) {
+	t.Parallel()
+
 	onPath := fakeExecutable(t)
 	for name, configure := range map[string]func(*RuntimeOptions){
 		"configuration": func(o *RuntimeOptions) { o.Configured = "/nonexistent/tmux" },
@@ -338,6 +362,8 @@ func TestAnExplicitChoiceIsNeverSilentlyReplaced(t *testing.T) {
 }
 
 func TestConfiguredTmuxWinsOverTheBundle(t *testing.T) {
+	t.Parallel()
+
 	opts := isolated(t)
 	bundle := fakeBundle(t, "3.7c", "pinned tmux")
 	opts.Getenv = func(key string) string {
@@ -413,6 +439,8 @@ func TestARunningServerKeepsTheTmuxItWasStartedWith(t *testing.T) {
 }
 
 func TestAStaleSocketIsNotARunningServer(t *testing.T) {
+	t.Parallel()
+
 	dir := shortDir(t)
 	socket := filepath.Join(dir, "tmux.sock")
 	listener, err := net.Listen("unix", socket)
@@ -434,6 +462,8 @@ func TestAStaleSocketIsNotARunningServer(t *testing.T) {
 }
 
 func TestARecordThatNamesNothingIsIgnored(t *testing.T) {
+	t.Parallel()
+
 	dir := shortDir(t)
 	for _, content := range []string{"", "tmux\n", "/nonexistent/tmux\n", dir + "\n"} {
 		if err := os.WriteFile(filepath.Join(dir, pinName), []byte(content), 0o600); err != nil {

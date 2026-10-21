@@ -243,6 +243,8 @@ func TestKittySnapshotJournalEvidenceCarriesNoSecrets(t *testing.T) {
 // A daemon whose journal is disabled installs no observer at all, so the list
 // path costs nothing rather than calling a recorder that discards.
 func TestDisabledJournalInstallsNoKittyListObserver(t *testing.T) {
+	t.Parallel()
+
 	var recorder *lifecycleRecorder
 	if observer := recorder.kittySnapshotObserver(); observer != nil {
 		t.Error("a nil recorder produced an observer; the list path would pay for a discarded record")

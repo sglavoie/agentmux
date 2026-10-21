@@ -16,6 +16,8 @@ import (
 // even when session metadata includes profile/account combinations and unicode
 // values that no longer appear in the visible Kitty tab base title.
 func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		sess    config.Session
@@ -65,6 +67,8 @@ func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
 // output with BuildTitleFull/ParseTitleFull preserves the muted flag through
 // the full round-trip, complementing the BuildTitle/ParseTitle wrapper cases.
 func TestTitleRoundTrip_FormatPaletteFull(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		sess    config.Session
@@ -113,6 +117,8 @@ func TestTitleRoundTrip_FormatPaletteFull(t *testing.T) {
 // than being mistaken for an icon prefix. Uses a fox emoji (🦊) that is not
 // in the palette state-icon set, so the parser cannot confuse it for a state.
 func TestTitleRoundTrip_WithHarnessEmoji(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		acc     config.Account
@@ -157,6 +163,8 @@ func TestTitleRoundTrip_WithHarnessEmoji(t *testing.T) {
 // base titles come entirely from the project title (when no harness emoji
 // is configured).
 func TestFormatTitle_IgnoresProfileAndAccount(t *testing.T) {
+	t.Parallel()
+
 	sess := config.Session{Title: "api", Profile: "alpha", Account: "beta"}
 	acc := config.Account{Name: "work", Color: "blue"}
 	cfg := &config.Config{}
@@ -170,6 +178,8 @@ func TestFormatTitle_IgnoresProfileAndAccount(t *testing.T) {
 // case-insensitive matching should use FindByKey instead, since SessionKey
 // lowercases its inputs.
 func TestFind_CaseSensitive_Base(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{{Base: "W:api"}}
 	if _, ok := session.Find(sessions, "w:api"); ok {
 		t.Error("Find should be case-sensitive on Base; got match for w:api against W:api")
@@ -183,6 +193,8 @@ func TestFind_CaseSensitive_Base(t *testing.T) {
 // via SessionKey, which lowercases both profile and project. This is the
 // canonical lookup path used by Launch's dedup check.
 func TestFindByKey_CaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	sessions := []session.RunningSession{
 		{Key: session.SessionKey("work", "api"), Base: "W:api"},
 	}
@@ -196,6 +208,8 @@ func TestFindByKey_CaseInsensitive(t *testing.T) {
 // unicode profile names (Turkish dotted I excluded — Go's strings.ToLower uses
 // simple case folding which matches the validation rule at config load time).
 func TestSessionKey_UnicodeProfileCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	a := session.SessionKey("Éscriba", "Api")
 	b := session.SessionKey("éscriba", "api")
 	if a != b {
@@ -209,6 +223,8 @@ func TestSessionKey_UnicodeProfileCaseInsensitive(t *testing.T) {
 // string. This guards Restart's invariant that args, env, and groups survive
 // the user-var serialization round-trip.
 func TestSessionFromRunning_RoundTrip(t *testing.T) {
+	t.Parallel()
+
 	original := session.RunningSession{
 		Base:             "W:api",
 		Account:          "work",
@@ -261,6 +277,8 @@ func TestSessionFromRunning_RoundTrip(t *testing.T) {
 // has no project-level args (so the next launch will pick up account/defaults
 // args), rather than pinning the previous effective args.
 func TestSessionFromRunning_ExplicitFlagsSet_EmptyDoesNotInheritFromArgs(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{
 		Base:             "W:bare",
 		Account:          "work",
@@ -284,6 +302,8 @@ func TestSessionFromRunning_ExplicitFlagsSet_EmptyDoesNotInheritFromArgs(t *test
 // this branch, restarting an old tab would silently swap to the current
 // account defaults.
 func TestSessionFromRunning_LegacyNoExplicitFlagsPin(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{
 		Base:             "W:legacy",
 		Account:          "work",
@@ -301,6 +321,8 @@ func TestSessionFromRunning_LegacyNoExplicitFlagsPin(t *testing.T) {
 // Project is empty in user vars, EffectiveProject treats the stripped Kitty
 // base title as the project title under the new project-only contract.
 func TestRunningSessionEffectiveProject_UsesProjectOnlyBase(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{Base: "api", Project: ""}
 	if got := rs.EffectiveProject(); got != "api" {
 		t.Errorf("EffectiveProject base: got %q, want %q", got, "api")
@@ -311,6 +333,8 @@ func TestRunningSessionEffectiveProject_UsesProjectOnlyBase(t *testing.T) {
 // old prefix-stripping behavior as a compatibility path when the profile is
 // known but the explicit amx_project user var is missing.
 func TestRunningSessionEffectiveProject_LegacyPrefixFallbackUsesProfile(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{Base: "W:api", Profile: "work", Project: ""}
 	if got := rs.EffectiveProject(); got != "api" {
 		t.Errorf("EffectiveProject legacy fallback: got %q, want %q", got, "api")
@@ -321,6 +345,8 @@ func TestRunningSessionEffectiveProject_LegacyPrefixFallbackUsesProfile(t *testi
 // that a project-only title that happens to contain a colon is preserved when
 // it does not match the current profile's legacy prefix.
 func TestRunningSessionEffectiveProject_ProjectOnlyColonTitleNotStripped(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{Base: "A:b:c", Profile: "work", Project: ""}
 	if got := rs.EffectiveProject(); got != "A:b:c" {
 		t.Errorf("EffectiveProject colon title: got %q, want %q", got, "A:b:c")
@@ -332,6 +358,8 @@ func TestRunningSessionEffectiveProject_ProjectOnlyColonTitleNotStripped(t *test
 // (so a session whose tab title was renamed by the user still reports the
 // configured project name).
 func TestRunningSessionEffectiveProject_PrefersUserVar(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{Base: "other", Project: "api"}
 	if got := rs.EffectiveProject(); got != "api" {
 		t.Errorf("EffectiveProject user-var: got %q, want %q", got, "api")
@@ -341,6 +369,8 @@ func TestRunningSessionEffectiveProject_PrefersUserVar(t *testing.T) {
 // TestRunningSessionEffectiveProfile_ProfileBeatsAccount verifies the
 // modern Profile field is preferred over the legacy Account alias.
 func TestRunningSessionEffectiveProfile_ProfileBeatsAccount(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{Profile: "modern", Account: "legacy"}
 	if got := rs.EffectiveProfile(); got != "modern" {
 		t.Errorf("EffectiveProfile: got %q, want %q", got, "modern")
@@ -350,6 +380,8 @@ func TestRunningSessionEffectiveProfile_ProfileBeatsAccount(t *testing.T) {
 // TestRunningSessionEffectiveArgs_ArgsBeatsFlags verifies the modern Args
 // field is preferred over the legacy Flags alias.
 func TestRunningSessionEffectiveArgs_ArgsBeatsFlags(t *testing.T) {
+	t.Parallel()
+
 	rs := session.RunningSession{Args: "--new", Flags: "--old"}
 	if got := rs.EffectiveArgs(); got != "--new" {
 		t.Errorf("EffectiveArgs: got %q, want %q", got, "--new")

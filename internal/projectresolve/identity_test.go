@@ -34,6 +34,8 @@ func (p classifyingGitProvider) GitMetadata(dir string) (gitMetadata, error) {
 }
 
 func TestResolveIdentityRejectsUnusablePaths(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	file := filepath.Join(root, "not-a-dir")
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
@@ -59,6 +61,8 @@ func TestResolveIdentityRejectsUnusablePaths(t *testing.T) {
 }
 
 func TestResolveIdentityNonRepositoryIsNotAnError(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	real := AbsPath(dir)
 	resolver := newIdentityResolver(classifyingGitProvider{notARepo: map[string]bool{real: true}})
@@ -76,6 +80,8 @@ func TestResolveIdentityNonRepositoryIsNotAnError(t *testing.T) {
 }
 
 func TestResolveIdentityFailedProbeIsUnresolvedNotAbsent(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	// A probe that merely failed must never read as "plain directory": the
 	// directory could be a linked worktree of an excluded repository, and the
@@ -95,6 +101,8 @@ func TestResolveIdentityFailedProbeIsUnresolvedNotAbsent(t *testing.T) {
 }
 
 func TestResolveIdentityIncompleteRepositoryIsUnresolved(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	real := AbsPath(dir)
 	for name, meta := range map[string]gitMetadata{
@@ -114,6 +122,8 @@ func TestResolveIdentityIncompleteRepositoryIsUnresolved(t *testing.T) {
 }
 
 func TestResolveIdentityReportsCheckoutPosition(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	repo := AbsPath(root)
 	api := filepath.Join(repo, "services", "api")
@@ -142,6 +152,8 @@ func TestResolveIdentityReportsCheckoutPosition(t *testing.T) {
 }
 
 func TestIsNotARepositoryStderrOnlyMatchesTheAbsenceOfARepository(t *testing.T) {
+	t.Parallel()
+
 	for _, text := range []string{
 		"fatal: not a git repository (or any of the parent directories): .git",
 		"fatal: not a git repository: '/repos/app/.git'",
@@ -168,6 +180,8 @@ func TestIsNotARepositoryStderrOnlyMatchesTheAbsenceOfARepository(t *testing.T) 
 }
 
 func TestResolveIdentityAgainstRealGitRepository(t *testing.T) {
+	t.Parallel()
+
 	git := requireGit(t)
 	root := t.TempDir()
 	requireNoEnclosingRepository(t, root)
@@ -218,6 +232,8 @@ func TestResolveIdentityAgainstRealGitRepository(t *testing.T) {
 }
 
 func TestResolveIdentityAgainstRealNonRepository(t *testing.T) {
+	t.Parallel()
+
 	requireGit(t)
 	dir := t.TempDir()
 	requireNoEnclosingRepository(t, dir)
@@ -232,6 +248,8 @@ func TestResolveIdentityAgainstRealNonRepository(t *testing.T) {
 }
 
 func TestResolveIdentityRealProbeFailureStaysUnresolved(t *testing.T) {
+	t.Parallel()
+
 	requireGit(t)
 	repo := t.TempDir()
 	// An expired deadline is the deterministic form of a real probe failure.

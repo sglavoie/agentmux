@@ -14,6 +14,8 @@ import (
 // profile, a hook event ever seen, or an activation gap other than missing
 // evidence — keeps the warning.
 func TestHookReportMarksAProfileNothingUsesAsUnused(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
 	gaps := []hooks.ActivationIssue{
 		{Verdict: hooks.ActivationUnverified, Code: "last_seen_missing", Message: "no hook event"},

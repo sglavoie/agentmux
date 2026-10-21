@@ -11,6 +11,8 @@ import (
 )
 
 func TestRenderSessionViewEmojiTitleReservesIconColumn(t *testing.T) {
+	t.Parallel()
+
 	emoji := Model{
 		width:         60,
 		height:        20,
@@ -37,6 +39,8 @@ func TestRenderSessionViewEmojiTitleReservesIconColumn(t *testing.T) {
 }
 
 func TestRenderPlanViewEmojiTitleReservesIconColumn(t *testing.T) {
+	t.Parallel()
+
 	// "🗣" is treated as a 2-cell project icon, so the helper must not add
 	// a trailing space. A plain ASCII name is left alone.
 	emoji := Model{
@@ -63,6 +67,8 @@ func TestRenderPlanViewEmojiTitleReservesIconColumn(t *testing.T) {
 }
 
 func TestPlanViewerRowsForWidthGraphemeWrap(t *testing.T) {
+	t.Parallel()
+
 	// Wrapping must not split grapheme clusters: each visible row's width,
 	// measured through the centralized helper, must stay within the wrap
 	// budget.
@@ -76,6 +82,8 @@ func TestPlanViewerRowsForWidthGraphemeWrap(t *testing.T) {
 }
 
 func TestMessageDetailBodyLinesGraphemeSafe(t *testing.T) {
+	t.Parallel()
+
 	// Wrapping inside the message detail overlay must keep grapheme
 	// clusters whole; the resulting body lines must not exceed the
 	// requested width when measured through layout.StyledWidth.

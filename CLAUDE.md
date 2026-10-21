@@ -527,8 +527,9 @@ Release acceptance must keep explicit coverage for warm Past Sessions,
 partial transcript/plan failures, CLI and TUI continuity, handoff/worktree
 retention and compensation, and the absence of retired database artifacts from
 TUI, daemon, doctor, and session-command paths. Every JSON file in
-`docs/tui-testing/scenarios/` is both discovered by `just tui-scenarios` and
-executed in-package; keep the documented scenario inventory exact.
+`docs/tui-testing/scenarios/` is both discovered by `just tui-scenarios` (and
+by `cmd/tuitest`'s end-to-end test, which is how `just acceptance` runs them)
+and executed in-package; keep the documented scenario inventory exact.
 
 `amx doctor` must retain the existing daemon/reducer/renderer invariants when
 new checks are added. Stable finding identifiers are JSON consumer contracts.

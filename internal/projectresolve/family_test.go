@@ -24,6 +24,8 @@ func abs(parts ...string) string {
 }
 
 func TestResolveFamilyGroupsMainCheckoutAndLinkedWorktree(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	linked := abs("worktrees", "app-security")
 	common := filepath.Join(repo, ".git")
@@ -63,6 +65,8 @@ func TestResolveFamilyGroupsMainCheckoutAndLinkedWorktree(t *testing.T) {
 }
 
 func TestResolveFamilySeparatelyConfiguredWorktreeSharesOneKey(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	linked := abs("worktrees", "app-security")
 	common := filepath.Join(repo, ".git")
@@ -96,6 +100,8 @@ func TestResolveFamilySeparatelyConfiguredWorktreeSharesOneKey(t *testing.T) {
 }
 
 func TestResolveFamilyMonorepoSubprojectsShareRepositoryFamily(t *testing.T) {
+	t.Parallel()
+
 	mono := abs("repos", "mono")
 	common := filepath.Join(mono, ".git")
 	api := filepath.Join(mono, "services", "api")
@@ -131,6 +137,8 @@ func TestResolveFamilyMonorepoSubprojectsShareRepositoryFamily(t *testing.T) {
 }
 
 func TestResolveFamilyNestedRepositoriesStaySeparate(t *testing.T) {
+	t.Parallel()
+
 	outer := abs("repos", "outer")
 	inner := filepath.Join(outer, "vendor", "inner")
 	resolver := newWithGitProvider(
@@ -158,6 +166,8 @@ func TestResolveFamilyNestedRepositoriesStaySeparate(t *testing.T) {
 }
 
 func TestResolveFamilyDeduplicatesConfigEntriesSharingOneCommonDir(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	common := filepath.Join(repo, ".git")
 	resolver := newWithGitProvider(
@@ -190,6 +200,8 @@ func TestResolveFamilyDeduplicatesConfigEntriesSharingOneCommonDir(t *testing.T)
 }
 
 func TestResolveFamilyAmbiguousNonGitProjectsStayUngrouped(t *testing.T) {
+	t.Parallel()
+
 	dir := abs("notes")
 	resolver := newWithGitProvider(
 		[]config.Session{
@@ -205,6 +217,8 @@ func TestResolveFamilyAmbiguousNonGitProjectsStayUngrouped(t *testing.T) {
 }
 
 func TestResolveFamilyNonGitProjectUsesConfiguredIdentity(t *testing.T) {
+	t.Parallel()
+
 	dir := abs("notes")
 	resolver := newWithGitProvider(
 		[]config.Session{{Title: "Notes", Directory: dir, Profile: "claude"}},
@@ -230,6 +244,8 @@ func TestResolveFamilyNonGitProjectUsesConfiguredIdentity(t *testing.T) {
 }
 
 func TestResolveFamilyUntitledProjectFallsBackToDirectoryName(t *testing.T) {
+	t.Parallel()
+
 	dir := abs("notes", "scratch")
 	resolver := newWithGitProvider(
 		[]config.Session{{Directory: dir, Profile: "claude"}},
@@ -243,6 +259,8 @@ func TestResolveFamilyUntitledProjectFallsBackToDirectoryName(t *testing.T) {
 }
 
 func TestResolveFamilyWithoutMatchOrPathReportsNoFamily(t *testing.T) {
+	t.Parallel()
+
 	resolver := newWithGitProvider(
 		[]config.Session{{Title: "App", Directory: abs("repos", "app"), Profile: "work"}},
 		fakeGitMetadataProvider{metadata: map[string]gitMetadata{
@@ -259,6 +277,8 @@ func TestResolveFamilyWithoutMatchOrPathReportsNoFamily(t *testing.T) {
 }
 
 func TestResolveFamilyWithoutGitEvidenceIsNotARepository(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	// The provider answered, but with no common directory — a partial probe is
 	// not proof of a repository, so the project keys on its own identity.
@@ -279,6 +299,8 @@ func TestResolveFamilyWithoutGitEvidenceIsNotARepository(t *testing.T) {
 }
 
 func TestFamilyLabelNeverCarriesAnInternalKey(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	dir := abs("notes")
 	resolver := newWithGitProvider(
@@ -309,6 +331,8 @@ func TestFamilyLabelNeverCarriesAnInternalKey(t *testing.T) {
 }
 
 func TestPrimaryWorktreeRootPrefersTheMainWorktree(t *testing.T) {
+	t.Parallel()
+
 	main := abs("repos", "app")
 	linked := abs("worktrees", "app-security")
 	if got := primaryWorktreeRoot([]string{main, linked}, linked); got != main {
@@ -323,6 +347,8 @@ func TestPrimaryWorktreeRootPrefersTheMainWorktree(t *testing.T) {
 }
 
 func TestParseGitRevParseRoots(t *testing.T) {
+	t.Parallel()
+
 	root, common, err := parseGitRevParseRoots([]byte("/repos/app\n/repos/app/.git\n"))
 	if err != nil {
 		t.Fatalf("parseGitRevParseRoots: %v", err)
@@ -346,6 +372,8 @@ func TestParseGitRevParseRoots(t *testing.T) {
 }
 
 func TestGitMetadataProviderTimeoutDegradesToNoFamily(t *testing.T) {
+	t.Parallel()
+
 	requireGit(t)
 	repo := t.TempDir()
 
@@ -370,6 +398,8 @@ func TestGitMetadataProviderTimeoutDegradesToNoFamily(t *testing.T) {
 }
 
 func TestResolveFamilyAcrossRealWorktreesWithSpacesAndSymlinks(t *testing.T) {
+	t.Parallel()
+
 	git := requireGit(t)
 	root := t.TempDir()
 	repo := filepath.Join(root, "repo with space")

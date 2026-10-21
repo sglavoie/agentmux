@@ -10,6 +10,8 @@ import (
 )
 
 func TestProbeClaudeContextLimit_IgnoresNonClaudeHarnesses(t *testing.T) {
+	t.Parallel()
+
 	for _, harnessName := range []string{"codex", "copilot"} {
 		t.Run(harnessName, func(t *testing.T) {
 			h := newTestHandler()
@@ -37,6 +39,8 @@ func TestProbeClaudeContextLimit_IgnoresNonClaudeHarnesses(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_IgnoresProtectedIcons(t *testing.T) {
+	t.Parallel()
+
 	protected := []string{"stop", "warning", "error", "key", "question", "compact"}
 	for _, state := range protected {
 		t.Run("state="+state, func(t *testing.T) {
@@ -65,6 +69,8 @@ func TestProbeClaudeContextLimit_IgnoresProtectedIcons(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_NilKittyClient_NoPanic(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	// Do NOT call SetKittyClient — h.kittyClient stays nil.
 
@@ -73,6 +79,8 @@ func TestProbeClaudeContextLimit_NilKittyClient_NoPanic(t *testing.T) {
 }
 
 func TestProbeClaudeContextLimit_DisabledByConfigSkipsProbe(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{
 		windows: codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{

@@ -38,6 +38,8 @@ func startASLTestServer(t *testing.T, bridge asl.Bridge) string {
 }
 
 func TestClientASLRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	const secret = "yes, roll it forward"
 	bridge := &fakeASLBridge{
 		status:    aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true, MutationsEnabled: true},
@@ -93,6 +95,8 @@ func TestClientASLRoundTrip(t *testing.T) {
 }
 
 func TestClientASLReportsRefusals(t *testing.T) {
+	t.Parallel()
+
 	bridge := &fakeASLBridge{
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto)},
 		err:    aslbridge.ErrUnavailable,
@@ -110,6 +114,8 @@ func TestClientASLReportsRefusals(t *testing.T) {
 }
 
 func TestClientASLDeadlinesOutlastTheDaemonBudget(t *testing.T) {
+	t.Parallel()
+
 	if asl.ReadDeadline <= aslbridge.ReadTimeout {
 		t.Fatalf("client read deadline %s must outlast the daemon's %s", asl.ReadDeadline, aslbridge.ReadTimeout)
 	}

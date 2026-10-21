@@ -13,9 +13,11 @@ import (
 )
 
 func TestGateRecordsSignedEvidenceForACleanPair(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	log := filepath.Join(t.TempDir(), "recipes.log")
-	t.Setenv("FAKE_JUST_LOG", log)
+	f.setenv("FAKE_JUST_LOG", log)
 
 	opts := f.options()
 	opts.Tag = true
@@ -149,6 +151,8 @@ func TestGateRecordsSignedEvidenceForACleanPair(t *testing.T) {
 // smoking before restarting, would produce a record whose steps did not
 // describe the state they ran against.
 func TestGateRunsPhasesInTheDocumentedOrder(t *testing.T) {
+	t.Parallel()
+
 	steps := Plan("/amx", "/asl")
 
 	var phases []string
@@ -189,6 +193,8 @@ func TestGateRunsPhasesInTheDocumentedOrder(t *testing.T) {
 // Kitty is an optional backend, so no step of the gate may run it, name it, or
 // run the opt-in recipes that need it.
 func TestGateRequiresNoKitty(t *testing.T) {
+	t.Parallel()
+
 	for _, step := range Plan("/amx", "/asl") {
 		for _, word := range append([]string{step.Name}, step.Argv...) {
 			if strings.Contains(strings.ToLower(word), "kitty") || strings.Contains(word, "kitten") {
@@ -202,6 +208,8 @@ func TestGateRequiresNoKitty(t *testing.T) {
 // environment.kitty became optional readable, and a record from a later schema
 // refused.
 func TestLoadEvidenceStillReadsASchemaOneRecord(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	write := func(name string, ev Evidence) string {
 		data, err := json.Marshal(ev)
@@ -241,9 +249,11 @@ func TestLoadEvidenceStillReadsASchemaOneRecord(t *testing.T) {
 }
 
 func TestGateRefusesADirtyWorkingTree(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	log := filepath.Join(t.TempDir(), "recipes.log")
-	t.Setenv("FAKE_JUST_LOG", log)
+	f.setenv("FAKE_JUST_LOG", log)
 	writeFile(t, filepath.Join(f.aslRoot, "agent_session_loop", "scratch.py"), "# uncommitted\n")
 
 	opts := f.options()
@@ -298,8 +308,10 @@ func TestGateRefusesADirtyWorkingTree(t *testing.T) {
 }
 
 func TestGateStopsAtTheFirstFailingStep(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
-	t.Setenv("FAKE_JUST_FAIL", "test-all")
+	f.setenv("FAKE_JUST_FAIL", "test-all")
 
 	opts := f.options()
 	opts.Tag = true

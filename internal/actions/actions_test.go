@@ -14,6 +14,8 @@ import (
 )
 
 func TestDefaultRegistryHasStableDefinitions(t *testing.T) {
+	t.Parallel()
+
 	registry := DefaultRegistry()
 	got := registry.Definitions()
 	want := []ID{PlanRun, OpenDirectory, OpenEditor, ClearStatus, Close, Continue, CopyTitle, Focus, Fork, ForkWorktree, Handoff, Launch, MarkActive, Restart, ToggleLock, ToggleMute, WorktreeDiff, WorktreeEditor, WorktreeForget, WorktreeLand, WorktreeList, WorktreeRemove, WorktreeReopen, WorktreeShell, WorktreeShow}
@@ -28,6 +30,8 @@ func TestDefaultRegistryHasStableDefinitions(t *testing.T) {
 }
 
 func TestFocusUsesInjectedKittyClient(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
 	target := session.RunningSession{TabID: 42}
@@ -45,6 +49,8 @@ func TestFocusUsesInjectedKittyClient(t *testing.T) {
 }
 
 func TestCloseReportsConfirmationAndLockAvailability(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{TabID: 42}
 	registry := DefaultRegistry()
 
@@ -65,6 +71,8 @@ func TestCloseReportsConfirmationAndLockAvailability(t *testing.T) {
 // offering close recovery reads. Both endings changed something, so Changed
 // cannot carry it and the message must not claim more than was seen.
 func TestCloseReportsWhetherTheTabWasObservedToClose(t *testing.T) {
+	t.Parallel()
+
 	target := session.RunningSession{TabID: 42}
 	registry := DefaultRegistry()
 
@@ -97,6 +105,8 @@ func TestCloseReportsWhetherTheTabWasObservedToClose(t *testing.T) {
 }
 
 func TestLaunchDirectoryParameterIsCheckedInPlaceOfTheConfiguredOne(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
 	missing := filepath.Join(t.TempDir(), "gone")
@@ -115,6 +125,8 @@ func TestLaunchDirectoryParameterIsCheckedInPlaceOfTheConfiguredOne(t *testing.T
 }
 
 func TestCopyTitleUsesInjectedClipboard(t *testing.T) {
+	t.Parallel()
+
 	var copied string
 	target := session.RunningSession{Project: "api", Base: "W:api"}
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
@@ -134,6 +146,8 @@ func TestCopyTitleUsesInjectedClipboard(t *testing.T) {
 // Kitty does not refuse a --cwd that does not exist; it opens the tab in some
 // other directory, so the harness would start outside its project.
 func TestLaunchRefusesAProjectWhoseDirectoryIsUnusable(t *testing.T) {
+	t.Parallel()
+
 	runner := kitty.NewMockRunner(nil)
 	client := kitty.NewClientWithSocket(runner, "")
 	missing := filepath.Join(t.TempDir(), "gone")

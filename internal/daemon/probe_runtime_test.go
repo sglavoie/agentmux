@@ -14,6 +14,8 @@ import (
 // that has not reported and releases none for one that ended. It answers by
 // session and never hands back a slot as a window ID.
 func TestDiagnosticProbeNamesARuntimeSession(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetStopConfirm(0, 0, false)
 	directory := newFakeRuntimeDirectory()

@@ -15,6 +15,8 @@ import (
 )
 
 func TestDeleteChoiceMutationWaitsForCacheLockOutsideUpdate(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	target := m.sessionResults[0].Meta
 	m.mode = ModeDeleteChoice
@@ -92,6 +94,8 @@ func TestDeleteChoiceMutationWaitsForCacheLockOutsideUpdate(t *testing.T) {
 }
 
 func TestTranscriptDeletePartialSuccessUsesWarningToast(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	target := m.sessionResults[0].Meta
 	updated, _ := m.Update(transcriptDeleteDoneMsg{
@@ -115,6 +119,8 @@ func TestTranscriptDeletePartialSuccessUsesWarningToast(t *testing.T) {
 }
 
 func TestSessionsRefreshCmdPrunesOldEntries(t *testing.T) {
+	t.Parallel()
+
 	old := transcript.SessionMeta{
 		ID:      "old",
 		Harness: harness.Claude,
@@ -157,6 +163,8 @@ func TestSessionsRefreshCmdPrunesOldEntries(t *testing.T) {
 }
 
 func TestRenderSessionViewCompactsSharedHomeProfiles(t *testing.T) {
+	t.Parallel()
+
 	meta := transcript.SessionMeta{
 		Harness:  harness.Claude,
 		Profile:  "work",

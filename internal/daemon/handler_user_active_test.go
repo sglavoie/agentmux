@@ -67,6 +67,8 @@ func markActive(t *testing.T, h *Handler, windowID int) {
 }
 
 func TestHandler_UserActiveReplacesSettledIcons(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		action string
 		icon   string
@@ -106,6 +108,8 @@ func TestHandler_UserActiveReplacesSettledIcons(t *testing.T) {
 }
 
 func TestHandler_UserActiveFromSiblingPanesTargetsOwner(t *testing.T) {
+	t.Parallel()
+
 	// The managed case mirrors TestHandler_UserClearFromManagedNonOwnerTargetsOwner:
 	// the active managed pane owns the title, and F11 arrives from the other one.
 	siblings := map[string][2]kitty.Window{
@@ -150,6 +154,8 @@ func TestHandler_UserActiveFromSiblingPanesTargetsOwner(t *testing.T) {
 }
 
 func TestHandler_UserActiveOwnerlessIconFreeTabIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	fake := &fakeKittyClient{windows: fakeOSWindowsWithSplitTab("api", []kitty.Window{{ID: 43, IsActive: true}})}
 	h.SetKittyClient(fake)
@@ -167,6 +173,8 @@ func TestHandler_UserActiveOwnerlessIconFreeTabIsNoOp(t *testing.T) {
 // TestHandler_UserActiveNextRealEventDecides pins the retirement contract: the
 // next real hook event replaces the forced ⚡ with its own outcome.
 func TestHandler_UserActiveNextRealEventDecides(t *testing.T) {
+	t.Parallel()
+
 	t.Run("stop", func(t *testing.T) {
 		h, _ := userActiveOwnerFixture(t, "")
 		markActive(t, h, 42)
@@ -203,6 +211,8 @@ func TestHandler_UserActiveNextRealEventDecides(t *testing.T) {
 // TestHandler_UserActiveFromDashboardRetiresLikeF11 covers the un-stamped
 // state_update the TUI sends: it must land on the same retirable source.
 func TestHandler_UserActiveFromDashboardRetiresLikeF11(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	seedHarnessAction(t, h, 42, "stop", "Stop", time.Now())
 	if resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "user_active"}); !resp.OK {
@@ -223,6 +233,8 @@ func TestHandler_UserActiveFromDashboardRetiresLikeF11(t *testing.T) {
 // promotion hold, and ages out at StaleActive to an empty tab rather than to a
 // re-promoted ⚡ or a probe-settled 🛑.
 func TestHandler_UserActiveKeepsClearHoldAndAgesOut(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	windows := codexProbeWindows(42, palette.BuildTitle("W:api", "", false), kitty.UserVars{
 		Profile: "work",
@@ -298,6 +310,8 @@ func hooklessClaudeMarkFixture(t *testing.T) (*Handler, *fakeKittyClient) {
 // retirement: the idle screen the mark was pressed on never settles it, but a
 // turn the probe watched run and finish afterwards does.
 func TestHandler_UserActiveProbeSettlesAfterObservedWork(t *testing.T) {
+	t.Parallel()
+
 	h, fake := hooklessClaudeMarkFixture(t)
 	base := time.Now()
 
@@ -340,6 +354,8 @@ func TestHandler_UserActiveProbeSettlesAfterObservedWork(t *testing.T) {
 // TestHandler_UserActiveReArmsOnEachMark proves a new F11 forgets work observed
 // under an earlier mark.
 func TestHandler_UserActiveReArmsOnEachMark(t *testing.T) {
+	t.Parallel()
+
 	h, fake := hooklessClaudeMarkFixture(t)
 	base := time.Now()
 	fake.getText[kitty.MatchWindowByID(42)] = claudeWorkingScreen
@@ -365,6 +381,8 @@ func TestHandler_UserActiveReArmsOnEachMark(t *testing.T) {
 // under the mark: the probe confirms the hold instead of stepping aside, so the
 // stop does not wait for the hold's deadline.
 func TestHandler_UserActiveHeldStopConfirmedByProbe(t *testing.T) {
+	t.Parallel()
+
 	h, _ := newTerminalHoldProbeHandler(t, harness.Claude, claudeIdleScreen)
 	releaseHoldAtTestEnd(t, h, 42)
 	base := time.Now()
@@ -437,6 +455,8 @@ func TestHandler_UserActiveRetiredBySupervisorQuestion(t *testing.T) {
 // TestHandler_UserActiveRetiredByProcessExit proves a verified harness exit
 // settles the tab instead of leaving the forced ⚡ to age out.
 func TestHandler_UserActiveRetiredByProcessExit(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	identity := protocol.HarnessProcessIdentity{Harness: harness.Claude, PID: 7201, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)

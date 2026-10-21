@@ -26,6 +26,8 @@ func pressKeyPickerSafe(t *testing.T, m Model, key string) Model {
 // narrowing the picker filter to zero rows. Excludes `enter` because it
 // intentionally exits to ModeList — that path is covered separately.
 func TestPickerEmptyFilterNavigationIsSafe(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	for _, ch := range "zzzz" {
@@ -58,6 +60,8 @@ func TestPickerEmptyFilterNavigationIsSafe(t *testing.T) {
 // filter matches zero rows. With nothing selectable the launch is a no-op,
 // but the handler must still cleanly exit to ModeList and not panic.
 func TestPickerEnterOnEmptyFilterExitsCleanly(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	for _, ch := range "zzzz" {
@@ -82,6 +86,8 @@ func TestPickerEnterOnEmptyFilterExitsCleanly(t *testing.T) {
 // backspace re-applies the filter and resets pickerCursor to 0 so the user
 // can navigate the moment matches return.
 func TestPickerBackspaceRecoversFromEmptyFilter(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m = pressKey(m, "/")
 	for _, ch := range "zzzz" {
@@ -117,6 +123,8 @@ func TestPickerBackspaceRecoversFromEmptyFilter(t *testing.T) {
 // tolerates an empty filtered index — pickerCurrentWindowID guards before
 // dereferencing the cursor.
 func TestPickerEmptyFilterPreviewSafe(t *testing.T) {
+	t.Parallel()
+
 	m := pickerModel(t)
 	m.width, m.height = 120, 40
 	m.cfg.Defaults.Preview = pickerPreviewCfg()

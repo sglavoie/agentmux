@@ -16,6 +16,8 @@ import (
 )
 
 func TestCollectStatusUsesOneSnapshotForHealthAndLatestEvents(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
 	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
@@ -124,12 +126,15 @@ func TestAcceptanceSinglePassStatusSurvivesTinySegmentCompaction(t *testing.T) {
 	stateBase := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateBase)
 	paths := diagnostics.PathsForRoot(filepath.Join(stateBase, "agent-mux"))
-	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{})
+	// A lowered per-commit bound gives a few dozen tiny segments the same
+	// multi-pass compaction that thousands meet against the production default.
+	const compactionBound = 8
+	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{CompactionInputFiles: compactionBound})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	const tinySegmentCount = 2000
+	const tinySegmentCount = 5 * compactionBound
 	base := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
 	wantLastSeen := make(map[string]time.Time)
 	segmentSetupStarted := time.Now()
@@ -217,6 +222,9 @@ func TestAcceptanceSinglePassStatusSurvivesTinySegmentCompaction(t *testing.T) {
 		previousFiles = currentFiles
 	}
 	compactionElapsed := time.Since(compactionStarted)
+	if compactionPasses < 2 {
+		t.Fatalf("compaction finished in %d pass, want the bound to force several", compactionPasses)
+	}
 	segmentsAfter := acceptanceSegmentFiles(t, paths)
 	if len(segmentsAfter) > 2 {
 		t.Fatalf("compaction file count = %d -> %d, want at most 2 segments", len(segmentsBefore), len(segmentsAfter))
@@ -247,6 +255,8 @@ func TestAcceptanceSinglePassStatusSurvivesTinySegmentCompaction(t *testing.T) {
 }
 
 func TestCollectStatusWarnsForStaleOrLegacySpoolAndCountsSpoolQuota(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	for _, test := range []struct {
 		name        string

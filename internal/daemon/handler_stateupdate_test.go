@@ -14,6 +14,8 @@ import (
 )
 
 func TestHandler_StateUpdateAllowed(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "active"})
 	if !resp.OK || !resp.Allowed || resp.IconState != "bolt" {
@@ -22,6 +24,8 @@ func TestHandler_StateUpdateAllowed(t *testing.T) {
 }
 
 func TestHandler_StateUpdateBlocked(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "failure"})
 
@@ -32,6 +36,8 @@ func TestHandler_StateUpdateBlocked(t *testing.T) {
 }
 
 func TestHandler_AllActionIconStates(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		action    string
 		iconState string
@@ -115,6 +121,8 @@ func TestHandler_IdleClearsActiveIcon(t *testing.T) {
 }
 
 func TestHandler_LoopFinishedClearsActiveClassOnly(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		prev     string
 		wantIcon string
@@ -149,6 +157,8 @@ func TestHandler_LoopFinishedClearsActiveClassOnly(t *testing.T) {
 }
 
 func TestHandler_CleanupUsesRestoredDaemonState(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name     string
 		cleanup  string
@@ -201,6 +211,8 @@ func actionForIconStateForTest(iconState string) string {
 }
 
 func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	before := time.Now()
 	resp := h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"})
@@ -221,6 +233,8 @@ func TestHandler_StateUpdateRecordsActivity(t *testing.T) {
 }
 
 func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 1, Action: "failure"})
 
@@ -244,6 +258,8 @@ func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
 // TestHandler_StateUpdateUsesSnapshotDerivedMute verifies that state updates do
 // not affect the daemon's Kitty-derived mute cache.
 func TestHandler_StateUpdateUsesSnapshotDerivedMute(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	if h.IsMuted(42) {

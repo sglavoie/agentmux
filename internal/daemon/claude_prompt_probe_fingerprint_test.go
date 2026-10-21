@@ -50,6 +50,8 @@ const claudeTickingWorkScreenFormat = `❯ Think carefully, then write an essay.
 // stabilization streak each time instead, and the working pane keeps its ⚡ for
 // as long as it keeps repainting.
 func TestProbeClaudeScreenStop_ChangingScreenNeverSettles(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	claudeAdapter, ok := screenstate.For(harness.Claude)
 	if !ok {
@@ -128,6 +130,8 @@ func TestProbeClaudeScreenStop_ChangingScreenNeverSettles(t *testing.T) {
 // same frame repeats, the ordinary two-sample run completes and the stale bolt
 // still settles — a false negative that never ended would be its own bug.
 func TestProbeClaudeScreenStop_SettlesOnceTheScreenStopsChanging(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	moving := fmt.Sprintf(claudeTickingWorkScreenFormat, 47565)
 	fake := &fakeKittyClient{

@@ -61,6 +61,8 @@ func unseenTree(windowID int, focused bool) []kitty.OSWindow {
 }
 
 func TestForeignKittyFocusClearsOnlyItsCollidingSlot(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	const first, second = "unix:/kitty-first", "unix:/kitty-second"
 	h.stateMu.Lock()
@@ -93,6 +95,8 @@ func TestForeignKittyFocusClearsOnlyItsCollidingSlot(t *testing.T) {
 // then the focus snapshot is published, then `to` is published — so each row
 // isolates exactly one transition against a known starting bit.
 func TestUnseenPublishTransitionTable(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		from    string
@@ -168,6 +172,8 @@ func TestUnseenPublishTransitionTable(t *testing.T) {
 // stop→stop rule: an unfocused row that finished an hour ago stays raised through
 // however many maintenance ticks republish it.
 func TestUnseenSurvivesUnrelatedRepublishes(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	publishIcon(h, 7, "bolt")
 	h.publishSnapshot(unseenTree(7, false), time.Now())
@@ -188,6 +194,8 @@ func TestUnseenSurvivesUnrelatedRepublishes(t *testing.T) {
 // publishSnapshot path production uses, no explicit user action, just the pane
 // being on screen when the read landed.
 func TestFocusSnapshotClearsUnseen(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	publishIcon(h, 7, "bolt")
 	h.publishSnapshot(unseenTree(7, false), time.Now())
@@ -207,6 +215,8 @@ func TestFocusSnapshotClearsUnseen(t *testing.T) {
 // Kitty marks the active pane of every tab and the active tab of every OS window,
 // so any single flag is true for panes nobody can see.
 func TestFocusRefreshRequiresAllThreeFlags(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name                               string
 		osFocused, tabActive, windowActive bool
@@ -249,6 +259,8 @@ func TestFocusRefreshRequiresAllThreeFlags(t *testing.T) {
 // normal state of every window but one — so the refresh must leave a seen window
 // seen no matter how many times it runs.
 func TestFocusRefreshNeverSetsUnseen(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	// Window 7 is the focused pane; window 8 shares the tab but is not active;
 	// window 9 lives in an unfocused OS window. All three start seen.
@@ -291,6 +303,8 @@ func TestFocusRefreshNeverSetsUnseen(t *testing.T) {
 // TestFocusRefreshClearsOnlyTheFocusedPane keeps the blast radius honest: looking
 // at one row does not mark its neighbours read.
 func TestFocusRefreshClearsOnlyTheFocusedPane(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	for _, id := range []int{7, 8, 9} {
 		seedUnseen(h, id, true, false)
@@ -331,6 +345,8 @@ func TestFocusRefreshClearsOnlyTheFocusedPane(t *testing.T) {
 // state for panes the daemon does not manage — the same non-creating lookup
 // refreshMutedFromSnapshotLocked uses.
 func TestFocusRefreshIgnoresUnknownWindows(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 
 	h.stateMu.Lock()
@@ -349,6 +365,8 @@ func TestFocusRefreshIgnoresUnknownWindows(t *testing.T) {
 // every already-read stop into Needs Attention would be worse than not having the
 // bit at all.
 func TestUnseenNotRaisedByRestartRepublish(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	publishIcon(h, 7, "stop")
 	h.publishSnapshot(unseenTree(7, true), time.Now())

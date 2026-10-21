@@ -25,6 +25,8 @@ func openActionsOverlay(t *testing.T, m Model) Model {
 
 // TestRenderActionsOverlayHeader checks the header carries the row's title.
 func TestRenderActionsOverlayHeader(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "W:api", Account: "work", State: "bolt", WindowID: 10},
 	})
@@ -45,6 +47,8 @@ func TestRenderActionsOverlayHeader(t *testing.T) {
 // active (bolt) row: peek is available, clear is not, every other action
 // is available (open dir requires a matching config session).
 func TestActionAvailabilityActiveRow(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10},
 	})
@@ -68,6 +72,8 @@ func TestActionAvailabilityActiveRow(t *testing.T) {
 // TestActionAvailabilityAttentionRow verifies the matrix on an attention
 // (key) row: peek is unavailable, clear is available.
 func TestActionAvailabilityAttentionRow(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "key", WindowID: 10},
 	})
@@ -90,6 +96,8 @@ func TestActionAvailabilityAttentionRow(t *testing.T) {
 // TestActionAvailabilityIdleRow verifies the matrix on an idle row: both
 // peek and clear are unavailable.
 func TestActionAvailabilityIdleRow(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m.idleThreshold = time.Minute
 	m.lastActivity = map[int]time.Time{10: time.Now().Add(-time.Hour)}
@@ -116,6 +124,8 @@ func TestActionAvailabilityIdleRow(t *testing.T) {
 // destructive actions (close/restart/override) and the lock action are all
 // available.
 func TestActionAvailabilityUnlockedRow(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Locked: false},
 	})
@@ -138,6 +148,8 @@ func TestActionAvailabilityUnlockedRow(t *testing.T) {
 // always available — it must work on muted *and* locked rows so the user
 // can quiet a runaway tab without first unlocking it.
 func TestActionAvailabilityMuteAlwaysOn(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		rs   session.RunningSession
@@ -170,6 +182,8 @@ func TestActionAvailabilityMuteAlwaysOn(t *testing.T) {
 // restart / override are unavailable while the lock toggle itself stays
 // available so the user can still unlock.
 func TestActionAvailabilityLockedRow(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Locked: true},
 	})
@@ -189,6 +203,8 @@ func TestActionAvailabilityLockedRow(t *testing.T) {
 }
 
 func TestActionsOverlayReflectsDashboardRemap(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "key", WindowID: 10},
 	})
@@ -234,6 +250,8 @@ func TestActionsOverlayReflectsDashboardRemap(t *testing.T) {
 // TestOpenDirActionUnavailableWithoutConfig verifies the `o` action falls
 // back to unavailable when no config.Session matches the row's project title.
 func TestOpenDirActionUnavailableWithoutConfig(t *testing.T) {
+	t.Parallel()
+
 	m := testModel() // no Sessions in cfg
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, Base: "nosuch", Account: "work", State: "bolt"},
@@ -266,6 +284,8 @@ func menuCursorOn(t *testing.T, m Model, id commands.ID) Model {
 // enter used to focus the session because enter was focus-session's own
 // mnemonic, and it still does because focus-session is the initial selection.
 func TestActionsMenuEnterOnInitialSelectionFocusesTheSession(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10},
 	})
@@ -288,6 +308,8 @@ func TestActionsMenuEnterOnInitialSelectionFocusesTheSession(t *testing.T) {
 // declared enter as its mnemonic. A menu where enter always focused would have
 // passed the test above and still be wrong.
 func TestActionsMenuEnterRunsTheSelectedEntry(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	// Close is the clearest evidence of which entry ran, but only when it stops
 	// at a modal: with confirm_destructive off it takes the toast-and-undo path
@@ -316,6 +338,8 @@ func TestActionsMenuEnterRunsTheSelectedEntry(t *testing.T) {
 // selectable without making it runnable — the requirement that it explain
 // itself rather than vanish is only safe if reaching it cannot fire it.
 func TestActionsMenuEnterRefusesAnUnavailableEntry(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), []session.RunningSession{
 		{TabID: 1, Base: "api", Account: "work", State: "bolt", WindowID: 10, Locked: true},
 	})
@@ -348,6 +372,8 @@ func TestActionsMenuEnterRefusesAnUnavailableEntry(t *testing.T) {
 // outside the two live-dashboard modes; TestViewEnablesMouseOnlyForLiveDashboard
 // is what covers it.
 func TestActionsMenuOwnsTheKeyboard(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
 	cursor := m.cursor
@@ -374,6 +400,8 @@ func TestActionsMenuOwnsTheKeyboard(t *testing.T) {
 
 // TestActionsOverlayEscReturnsToList verifies esc closes the overlay.
 func TestActionsOverlayEscReturnsToList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
 	m = pressKey(m, "esc")
@@ -384,6 +412,8 @@ func TestActionsOverlayEscReturnsToList(t *testing.T) {
 
 // TestActionsOverlayQReturnsToList verifies q closes the overlay (not quit).
 func TestActionsOverlayQReturnsToList(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModelWithSessions(), makeSessions())
 	m = openActionsOverlay(t, m)
 	m = pressKey(m, "q")

@@ -53,6 +53,8 @@ func declineEvidence(fingerprint int64) activity.ScreenDeclineEvidence {
 // recordIdleSampleLocked already follows because tests construct Handlers
 // without NewHandler.
 func TestRecordScreenDeclineLockedStreakAndStability(t *testing.T) {
+	t.Parallel()
+
 	h := &Handler{}
 	ref := activity.Ref{WindowID: 7, Key: "codex_screen"}
 
@@ -113,6 +115,8 @@ func TestRecordScreenDeclineLockedStreakAndStability(t *testing.T) {
 // two halves of one observation and must land under a single stateMu
 // acquisition.
 func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	ref := activity.Ref{WindowID: 7, Key: source.Key}
@@ -160,6 +164,8 @@ func TestRecordScreenProbeDeclineResetsIdleSampleAtomically(t *testing.T) {
 // the right key: one window can run both harnesses' probe sources, and two
 // windows can be declining independently.
 func TestScreenProbeDeclineStreaksDoNotCollide(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	codex := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	claude := protocol.SourceID{Kind: protocol.SourceProbe, Key: claudeScreenStopProbeSource}
@@ -181,6 +187,8 @@ func TestScreenProbeDeclineStreaksDoNotCollide(t *testing.T) {
 // pane is never classified again, so a streak left behind would be a count
 // frozen forever at whatever it reached.
 func TestScreenProbeDeclineStreakPurgedOnWindowClose(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	// Give both windows live state so window-closure GC recognizes them.
@@ -209,6 +217,8 @@ func TestScreenProbeDeclineStreakPurgedOnWindowClose(t *testing.T) {
 // because the fixture is a static frame the fingerprint is stable, which is
 // exactly the shape a classifier that has stopped matching would produce.
 func TestProbeCodexScreenDeclineStreakThroughTheProbe(t *testing.T) {
+	t.Parallel()
+
 	base := time.Now()
 	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: screenPromptProbeSource}
 	fake := &fakeKittyClient{
@@ -324,6 +334,8 @@ func assertScreenDeclinesRetracted(t *testing.T, h *Handler, windowID int) {
 // doctor` keeps failing screenstate_persistent_decline for a window that already
 // recovered.
 func TestScreenDeclineRetractedWhenProbeBecomesIneligible(t *testing.T) {
+	t.Parallel()
+
 	// Each case is a transition away from ⚡ that the screen probe itself can
 	// never observe, because the probe is not eligible for the icon it leaves
 	// behind.

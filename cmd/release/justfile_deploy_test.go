@@ -9,6 +9,7 @@ package release
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -69,8 +70,13 @@ func TestJustInstallReplacesBinaryAtomically(t *testing.T) {
 func TestJustInstallRestartSmokeGatesOnReadinessAndStrictDoctor(t *testing.T) {
 	justfile := readJustfile(t)
 	// The restart and its gates live in the private restart-verify recipe,
-	// which `update` shares, so the smoke is judged through it.
-	smoke := justfileRecipe(t, justfile, "restart-verify")
+	// which `update` shares, and in the recipes it runs after the restart, so
+	// the smoke is judged through all of them.
+	smoke := justfileRecipeClosure(t, justfile, "restart-verify")
+	header, _ := justfileRecipeWithHeader(t, justfile, "restart-verify")
+	if !strings.Contains(header, `&& (daemon-ready "50") verify-daemon`) {
+		t.Errorf("restart-verify must wait for readiness, then verify, after the restart: %s", header)
+	}
 
 	for _, want := range []string{
 		"daemon restart",
@@ -167,6 +173,34 @@ func justfileRecipeWithHeader(t *testing.T, justfile, name string) (string, stri
 	return header, rest[:end]
 }
 
+// justfileRecipeClosure returns the header and body of name and of every
+// recipe it depends on, transitively, whether the dependency runs before it
+// (`a: b`) or after it (`a: && b`), with or without arguments (`(b "50")`).
+// A guard moved into a shared private recipe is still the recipe's guard, so
+// the contract tests judge what running the recipe runs.
+func justfileRecipeClosure(t *testing.T, justfile, name string) string {
+	t.Helper()
+	dep := regexp.MustCompile(`\(?([a-z][a-z0-9-]*)`)
+	var out strings.Builder
+	seen := map[string]bool{}
+	queue := []string{name}
+	for len(queue) > 0 {
+		next := queue[0]
+		queue = queue[1:]
+		if seen[next] {
+			continue
+		}
+		seen[next] = true
+		header, body := justfileRecipeWithHeader(t, justfile, next)
+		out.WriteString(header + body)
+		_, deps, _ := strings.Cut(header, ":")
+		for _, m := range dep.FindAllStringSubmatch(deps, -1) {
+			queue = append(queue, m[1])
+		}
+	}
+	return out.String()
+}
+
 // TestJustMacReleaseGateIsTheDesktopGateAndNothingElse keeps the desktop gate
 // a gate of its own: its recipe runs the hidden desktop-release-gate command
 // over this checkout, passes the operator's flags through, and reaches none of
@@ -193,5 +227,35 @@ func TestJustMacReleaseGateIsTheDesktopGateAndNothingElse(t *testing.T) {
 	}
 	if !desktopGateCmd.Hidden || !desktopGateCmd.SilenceErrors || !desktopGateCmd.SilenceUsage {
 		t.Error("desktop-release-gate must be hidden and map its own outcomes to exit codes")
+	}
+}
+
+// TestNamedArgReadsTheDocumentedForms pins scripts/named-arg, which the
+// recipes that take `key=value` arguments share: the prefix is stripped, a
+// bare value passes through, and a leading ~ is the home directory, since the
+// documented `asl_root=~/scripts` reaches the recipe unexpanded in some
+// shells.
+func TestNamedArgReadsTheDocumentedForms(t *testing.T) {
+	home := t.TempDir()
+	for _, tc := range []struct{ name, value, want string }{
+		{"asl_root", "asl_root=/src/scripts", "/src/scripts"},
+		{"asl_root", "/src/scripts", "/src/scripts"},
+		{"asl_root", "asl_root=~/scripts", home + "/scripts"},
+		{"signing_key", "~/.ssh/amx_release", home + "/.ssh/amx_release"},
+		{"signing_key", "signing_key=", ""},
+		{"tag", "tag=yes", "yes"},
+		{"asl_root", "~", home},
+		{"asl_root", "~other/scripts", "~other/scripts"},
+		{"asl_root", "signing_key=/key", "signing_key=/key"},
+	} {
+		cmd := exec.Command(filepath.Join("..", "..", "scripts", "named-arg"), tc.name, tc.value)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("named-arg %s %q: %v", tc.name, tc.value, err)
+		}
+		if got := strings.TrimSuffix(string(out), "\n"); got != tc.want {
+			t.Errorf("named-arg %s %q = %q, want %q", tc.name, tc.value, got, tc.want)
+		}
 	}
 }

@@ -12,6 +12,8 @@ import (
 )
 
 func TestCommandPaletteFooterHints(t *testing.T) {
+	t.Parallel()
+
 	out := stripAnsi(renderFooter(Model{mode: ModeCommandPalette, width: 100}))
 	for _, want := range []string{"ctrl+j/k", "ctrl+n/p up/down", "enter run", "esc close", "ctrl+c quit"} {
 		if !strings.Contains(out, want) {
@@ -21,6 +23,8 @@ func TestCommandPaletteFooterHints(t *testing.T) {
 }
 
 func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
+	t.Parallel()
+
 	planSearch := Model{
 		mode:   ModePlanSearch,
 		width:  100,
@@ -56,6 +60,8 @@ func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
 // The dashboard pins its footer to the final row and rests the feedback slot
 // directly on the list above it.
 func TestRootRenderPinsTheDashboardFooterToTheFinalRow(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width = 140
 	m.height = 20
@@ -91,6 +97,8 @@ func TestRootRenderPinsTheDashboardFooterToTheFinalRow(t *testing.T) {
 }
 
 func TestRootRenderUsesStatusBarForToasts(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width = 80
 	m.height = 20
@@ -122,6 +130,8 @@ func TestRootRenderUsesStatusBarForToasts(t *testing.T) {
 // judged against, so a footer that asked whether the inspector fits would be
 // asking itself.
 func TestRootRenderListKeepsItsFooterBesideTheInspector(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width = 140
 	m.height = 30
@@ -150,6 +160,8 @@ func TestRootRenderListKeepsItsFooterBesideTheInspector(t *testing.T) {
 // terminal at any supported band, including the width the drop loop cannot
 // reduce further because only essentials remain.
 func TestListFooterFitsTerminalWidth(t *testing.T) {
+	t.Parallel()
+
 	for _, width := range []int{40, 60, 79, 80, 119, 120, 160, 260} {
 		m := withListRows(Model{width: width}, session.RunningSession{State: "bolt"})
 		for i, line := range listFooterRows(m) {
@@ -165,6 +177,8 @@ func TestListFooterFitsTerminalWidth(t *testing.T) {
 // whole palette. There is no width to budget against yet, so dropping hints
 // would hide keys for a terminal size nothing has reported.
 func TestListFooterZeroWidthEmitsOneUnwrappedRow(t *testing.T) {
+	t.Parallel()
+
 	rows := listFooterRows(withListRows(Model{}, session.RunningSession{State: "bolt"}))
 	if len(rows) != 1 {
 		t.Fatalf("expected one row at zero width, got %d:\n%s", len(rows), strings.Join(rows, "\n"))
@@ -202,6 +216,8 @@ var cursorIndependentFooterKeys = map[string]bool{
 // overlay, `s` opens project history, and `n`/`N` dims when nothing on
 // the dashboard is waiting on a human.
 func TestListFooterAvailability(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		m    Model

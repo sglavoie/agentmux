@@ -14,6 +14,8 @@ import (
 // unresolvable session (no configured Copilot home and no default home) is a
 // no-op: the resolver returns an error and the bolt is preserved.
 func TestProbeCopilotTranscriptStop_MissingProfileHomeKeepsBolt(t *testing.T) {
+	t.Parallel()
+
 	h := newTestHandler()
 	h.SetCopilotTranscriptHomes(nil, "") // no profile homes, no default home
 	fake := &fakeKittyClient{
@@ -45,6 +47,8 @@ func TestProbeCopilotTranscriptStop_MissingProfileHomeKeepsBolt(t *testing.T) {
 // icon (a pipe-mode child is never falsely stopped), so the recorded row reports
 // the actual reduced state rather than stop.
 func TestProbeCopilotTranscriptStop_PrefersInteractiveOverPipeChild(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-interactive", copilotTurnEndTranscript)
 	writeCopilotTranscript(t, home, "sess-pipe", copilotActiveTranscript)
@@ -88,6 +92,8 @@ func TestProbeCopilotTranscriptStop_PrefersInteractiveOverPipeChild(t *testing.T
 // transcript-probe stop. The injected reader is a tripwire that fails the test if
 // the probe reaches transcript I/O at all.
 func TestProbeCopilotTranscriptStop_PipeOnlyChildNeverProbed(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	// A terminal pipe-child transcript that WOULD settle a stop if wrongly read.
 	writeCopilotTranscript(t, home, "sess-pipe", copilotTurnEndTranscript)
@@ -141,6 +147,8 @@ func TestProbeCopilotTranscriptStop_PipeOnlyChildNeverProbed(t *testing.T) {
 // contribution is gone and the interactive transcript reads Active, recovery
 // restores the interactive parent's ⚡ with no hook or prompt.
 func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecovers(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-interactive", copilotTurnEndTranscript)
 	h, fake := copilotProbeHandler(t, 42, "bolt", home)
@@ -223,6 +231,8 @@ func TestProbeCopilotTranscriptStop_MaskingPipeChildPreservesParentMemoAndRecove
 // settles Copilot-owned tabs: a Codex-managed owner with the same stuck bolt is
 // left alone even if a matching transcript exists.
 func TestProbeCopilotTranscriptStop_IgnoresNonCopilotOwner(t *testing.T) {
+	t.Parallel()
+
 	home := t.TempDir()
 	writeCopilotTranscript(t, home, "sess-1", copilotTurnEndTranscript)
 	h := newTestHandler()

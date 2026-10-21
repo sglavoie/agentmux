@@ -38,6 +38,8 @@ func healthBody(m Model) string {
 }
 
 func TestOpenHealthRemembersTheViewItWasOpenedFrom(t *testing.T) {
+	t.Parallel()
+
 	for _, from := range []Mode{ModeList, ModeSessionSearch, ModePlanSearch, ModeWorktrees} {
 		m := healthModel(t)
 		m.mode = from
@@ -66,6 +68,8 @@ func TestOpenHealthRemembersTheViewItWasOpenedFrom(t *testing.T) {
 }
 
 func TestHealthKeysCloseAndQuit(t *testing.T) {
+	t.Parallel()
+
 	for _, key := range []string{keyEsc, keyQ} {
 		m := healthModel(t)
 		m.openHealth(ModeList)
@@ -87,6 +91,8 @@ func TestHealthKeysCloseAndQuit(t *testing.T) {
 // exactly one line early — and on a short terminal that line is the whole of the
 // configuration reading.
 func TestHealthScrollReachesTheFinalLine(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.width, m.height = 62, 20
 	m.hookHealthErr = errors.New("read /home/user/.config/agent-mux/profiles/personal/settings.json: permission denied")
@@ -121,6 +127,8 @@ func TestHealthScrollReachesTheFinalLine(t *testing.T) {
 }
 
 func TestHealthScrollKeysStayInBounds(t *testing.T) {
+	t.Parallel()
+
 	base := func() Model {
 		m := healthModel(t)
 		m.width, m.height = 62, 20
@@ -167,6 +175,8 @@ func TestHealthScrollKeysStayInBounds(t *testing.T) {
 // render or key path that could reach it would make opening an overlay a side
 // effect on the operator's machine.
 func TestHealthOverlayStartsNoObservation(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.daemonAlive = false
 	m.deprecations = []config.Deprecation{{Key: "accounts", Replacement: "profiles"}}
@@ -204,6 +214,8 @@ func TestHealthOverlayStartsNoObservation(t *testing.T) {
 // down or hooks that have drifted, and the reading recomputed after it still
 // carries them.
 func TestDismissHealthNoticeIsScopedToTheConfigurationNotice(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.daemonAlive = false
 	m.hookHealth = commands.HookHealth{InSync: []string{"work"}, Drifted: []string{"personal"}}
@@ -260,6 +272,8 @@ func TestDismissHealthNoticeIsScopedToTheConfigurationNotice(t *testing.T) {
 }
 
 func TestDismissHealthNoticeDoesNothingWithNoNotice(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.daemonAlive = false
 	m.openHealth(ModeList)
@@ -279,6 +293,8 @@ func TestDismissHealthNoticeDoesNothingWithNoNotice(t *testing.T) {
 // A terminal that grew can leave an offset pointing past a body that now fits,
 // which would render an empty box.
 func TestHealthOffsetSurvivesAResize(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.width, m.height = 62, 20
 	m.hookHealthErr = errors.New("a long enough failure to push the body past one page of a short terminal")
@@ -316,6 +332,8 @@ func TestHealthOffsetSurvivesAResize(t *testing.T) {
 // one condition. The header carries the count; the remedies live in the overlay
 // it opens, which is the whole trade the quiet header makes.
 func TestHealthSurfacesAgreeOnOneReading(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.width = 120
 	m.daemonAlive = false
@@ -343,6 +361,8 @@ func TestHealthSurfacesAgreeOnOneReading(t *testing.T) {
 // so it names what is degraded and where the full reading is; inside the
 // details it names the part only, because the operator is already there.
 func TestDegradedHealthLineNamesThePartAndTheWayToDetails(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name         string
 		daemonDown   bool
@@ -380,6 +400,8 @@ func TestDegradedHealthLineNamesThePartAndTheWayToDetails(t *testing.T) {
 // report it as degraded — that would be a claim about evidence nobody gathered —
 // and the hint strip stays silent, exactly as it did before the issue model.
 func TestUnobservedHealthIsNotReportedAsDegraded(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), makeSessions())
 	m.width, m.height = 120, 40
 	m.now = func() time.Time { return healthOverlayNow }
@@ -408,6 +430,8 @@ func TestUnobservedHealthIsNotReportedAsDegraded(t *testing.T) {
 // check is Unknown, and the indicator wears the hollow mark and names the check
 // rather than claiming either a clean bill or a fault.
 func TestHeaderHealthIndicatorSeparatesUnobservedFromObserved(t *testing.T) {
+	t.Parallel()
+
 	hollow := dashboard.HealthUnknown.Glyph()
 
 	// Daemon in, hooks outstanding: not a clean reading, and not a fault either.
@@ -467,6 +491,8 @@ func TestHeaderHealthIndicatorSeparatesUnobservedFromObserved(t *testing.T) {
 // degraded reading the overlay must name, and a cold one that never rendered is
 // a failure rather than stale data.
 func TestHealthOverlayNamesStaleAndColdTopologySeparately(t *testing.T) {
+	t.Parallel()
+
 	warm := healthModel(t)
 	warm.topologyObservedAt = healthOverlayNow.Add(-protocol.KittySnapshotStaleAfter - time.Second)
 	issue, _ := dashboard.FindHealthIssue(healthIssues(warm), dashboard.HealthIssueTopology)
@@ -490,6 +516,8 @@ func TestHealthOverlayNamesStaleAndColdTopologySeparately(t *testing.T) {
 }
 
 func TestHealthModeIsRegisteredAcrossDispatch(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.openHealth(ModeList)
 
@@ -523,6 +551,8 @@ func TestHealthModeIsRegisteredAcrossDispatch(t *testing.T) {
 // The composited view draws the overlay over a dimmed dashboard rather than
 // replacing it.
 func TestHealthOverlayComposites(t *testing.T) {
+	t.Parallel()
+
 	m := healthModel(t)
 	m.openHealth(ModeList)
 

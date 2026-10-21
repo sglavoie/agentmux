@@ -10,6 +10,8 @@ import (
 // observation for the initial render plus one after each action, with modes and
 // sizes reflecting the applied steps.
 func TestUITestRunnerCapturesObservationPerStep(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 
@@ -39,6 +41,8 @@ func TestUITestRunnerCapturesObservationPerStep(t *testing.T) {
 // TestUITestRunnerStopsOnBadAction verifies an invalid action aborts the run,
 // returning the observations captured before the failure and an error.
 func TestUITestRunnerStopsOnBadAction(t *testing.T) {
+	t.Parallel()
+
 	m := testModelWithSessions()
 	m = loadSessions(m, makeSessions())
 
@@ -60,6 +64,8 @@ func TestUITestRunnerStopsOnBadAction(t *testing.T) {
 // TestUITestRunnerFromConfigBuildsFreshModel verifies runUITest constructs a
 // model from config + client and renders at the requested size with no actions.
 func TestUITestRunnerFromConfigBuildsFreshModel(t *testing.T) {
+	t.Parallel()
+
 	base := testModelWithSessions()
 	obs, err := runUITest(base.cfg, base.client, UITestOptions{Size: UITestSize{Width: 80, Height: 24}}, nil)
 	if err != nil {

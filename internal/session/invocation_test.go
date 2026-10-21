@@ -38,6 +38,8 @@ func TestBuildInvocation_ResolvesProfileAndProjectContext(t *testing.T) {
 }
 
 func TestRenderInvocation_QuotesAfterHarnessOrdersArgs(t *testing.T) {
+	t.Parallel()
+
 	invocation, err := BuildInvocation(
 		config.Session{Directory: "/tmp/project", Args: []string{"--model", "gpt 5"}},
 		config.Account{Harness: "codex", HomeDir: "/tmp/codex home"},
@@ -55,6 +57,8 @@ func TestRenderInvocation_QuotesAfterHarnessOrdersArgs(t *testing.T) {
 }
 
 func TestRenderInvocationPinsCodexNativeLogLevel(t *testing.T) {
+	t.Parallel()
+
 	invocation := harness.Invocation{
 		Harness:    harness.Codex,
 		Executable: "codex",

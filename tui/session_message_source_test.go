@@ -9,6 +9,8 @@ import (
 )
 
 func TestSessionMessageSourcePickerPreservesAndResets(t *testing.T) {
+	t.Parallel()
+
 	m := sessionSearchFilterModel(t)
 	m.mode = ModeSessionSearch
 	opened, _ := m.handleSessionSearchNavKey(keyPress("m"))
@@ -55,6 +57,8 @@ func TestSessionMessageSourcePickerPreservesAndResets(t *testing.T) {
 }
 
 func TestSessionMessageSourceViewerMatches(t *testing.T) {
+	t.Parallel()
+
 	m := Model{mode: ModeSessionView, sessionQuery: "needle", filterMessageSource: "harness", viewerLoadSeq: 3, width: 80, height: 24}
 	loaded, _ := m.handleViewerMessagesLoaded(viewerMessagesLoadedMsg{seq: 3, messages: []transcript.Message{
 		{Role: "user", Text: "needle prompt"},
@@ -76,6 +80,8 @@ func TestSessionMessageSourceViewerMatches(t *testing.T) {
 }
 
 func TestSessionMessageSourceNarrowChip(t *testing.T) {
+	t.Parallel()
+
 	in := history.SearchInput{Width: 26, Height: 12, BodyHeight: 10, MessageSourceChip: "harness"}
 	out := stripAnsi(in.Render())
 	for _, line := range strings.Split(out, "\n") {

@@ -11,6 +11,8 @@ import (
 // capability the harness reaches through the palette's own keys. Nothing else
 // is accepted, so a misspelled kind fails the scenario instead of being ignored.
 func TestUITestActionTypeValid(t *testing.T) {
+	t.Parallel()
+
 	valid := []UITestActionType{
 		UITestActionKey, UITestActionText, UITestActionResize, UITestActionTick, UITestActionMouse,
 		UITestActionCommand,
@@ -30,6 +32,8 @@ func TestUITestActionTypeValid(t *testing.T) {
 // TestUITestResultJSONRoundTrip verifies the JSON-facing contract types marshal
 // and unmarshal without loss, so the CLI output stays stable across sessions.
 func TestUITestResultJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	orig := uitestResult{
 		Name:   "profile-picker-fits",
 		Passed: false,
@@ -65,6 +69,8 @@ func TestUITestResultJSONRoundTrip(t *testing.T) {
 // TestUITestActionJSONOmitsZeroFields confirms only the fields relevant to a
 // given action Type are emitted, keeping scenario output compact and readable.
 func TestUITestActionJSONOmitsZeroFields(t *testing.T) {
+	t.Parallel()
+
 	data, err := json.Marshal(UITestAction{Type: UITestActionKey, Key: "enter"})
 	if err != nil {
 		t.Fatalf("marshal UITestAction: %v", err)

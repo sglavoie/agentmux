@@ -76,6 +76,8 @@ func newASLHandler(bridge asl.Bridge) *Handler {
 }
 
 func TestASLRequestsAreRefusedWithoutABridge(t *testing.T) {
+	t.Parallel()
+
 	h := newASLHandler(nil)
 	for _, msgType := range []protocol.MessageType{protocol.TypeASLSnapshot, protocol.TypeASLQuestion, protocol.TypeASLAction, protocol.TypeASLWorkbench} {
 		resp := h.Handle(protocol.Request{Type: msgType, ASL: &protocol.ASLRequest{PlanDir: "/p"}})
@@ -92,6 +94,8 @@ func TestASLRequestsAreRefusedWithoutABridge(t *testing.T) {
 }
 
 func TestASLUnavailabilityIsRetryable(t *testing.T) {
+	t.Parallel()
+
 	h := newASLHandler(&fakeASLBridge{
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto)},
 		err:    aslbridge.ErrUnavailable,
@@ -103,6 +107,8 @@ func TestASLUnavailabilityIsRetryable(t *testing.T) {
 }
 
 func TestASLSnapshotCarriesProvenanceAndReceipts(t *testing.T) {
+	t.Parallel()
+
 	bridge := &fakeASLBridge{
 		status:   aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true, MutationsEnabled: true},
 		snapshot: aslbridge.Snapshot{Protocol: 1, RowCount: 2, Digest: "d1"},
@@ -122,6 +128,8 @@ func TestASLSnapshotCarriesProvenanceAndReceipts(t *testing.T) {
 }
 
 func TestASLActionForwardsTypedParametersOnce(t *testing.T) {
+	t.Parallel()
+
 	bridge := &fakeASLBridge{
 		status:    aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true, MutationsEnabled: true},
 		operation: aslbridge.Operation{OperationID: "op9", Status: aslbridge.OperationAccepted},
@@ -147,6 +155,8 @@ func TestASLActionForwardsTypedParametersOnce(t *testing.T) {
 }
 
 func TestASLActionWithoutParametersIsInvalid(t *testing.T) {
+	t.Parallel()
+
 	bridge := &fakeASLBridge{status: aslbridge.Status{Mode: string(aslbridge.ModeAuto)}}
 	resp := newASLHandler(bridge).Handle(protocol.Request{Type: protocol.TypeASLAction})
 	if resp.OK || bridge.actions != 0 {
@@ -155,6 +165,8 @@ func TestASLActionWithoutParametersIsInvalid(t *testing.T) {
 }
 
 func TestASLQuestionBodyIsNotLoggedOrCaptured(t *testing.T) {
+	t.Parallel()
+
 	const secret = "the deploy key is abc123"
 	bridge := &fakeASLBridge{
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true},
@@ -191,6 +203,8 @@ func TestASLQuestionBodyIsNotLoggedOrCaptured(t *testing.T) {
 }
 
 func TestASLWorkbenchForwardsFocus(t *testing.T) {
+	t.Parallel()
+
 	bridge := &fakeASLBridge{
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true},
 		link:   aslbridge.WorkbenchLink{PlanDir: "/p", URL: "http://127.0.0.1:1/x"},
@@ -207,6 +221,8 @@ func TestASLWorkbenchForwardsFocus(t *testing.T) {
 }
 
 func TestHealthPublishesASLCapabilityIndependentlyOfReadiness(t *testing.T) {
+	t.Parallel()
+
 	bridge := &fakeASLBridge{status: aslbridge.Status{
 		Mode: string(aslbridge.ModeRequired), Available: false, Reason: "bridge exited",
 	}}
@@ -226,6 +242,8 @@ func TestHealthPublishesASLCapabilityIndependentlyOfReadiness(t *testing.T) {
 }
 
 func TestHealthOmitsASLCapabilityWithoutABridge(t *testing.T) {
+	t.Parallel()
+
 	h := newASLHandler(nil)
 	h.MarkReady()
 	if resp := h.handleHealth(); resp.ASLCapability != nil {
@@ -234,6 +252,8 @@ func TestHealthOmitsASLCapabilityWithoutABridge(t *testing.T) {
 }
 
 func TestASLFailureKeepsTypedRefusalText(t *testing.T) {
+	t.Parallel()
+
 	bridge := &fakeASLBridge{
 		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true, MutationsEnabled: true},
 		err:    &aslbridge.Error{Code: "stale-action-token", Message: "token is stale"},

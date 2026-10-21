@@ -14,6 +14,8 @@ import (
 )
 
 func TestStatusEvidenceCreditsProducerHomeWithLegacyFallback(t *testing.T) {
+	t.Parallel()
+
 	base := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
 	evidence := NewStatusEvidence()
 	personal := "/Users/dev/.claude-personal"
@@ -111,6 +113,8 @@ func TestStatusEvidenceHorizonDistinguishesShallowEmptyAndDeepJournals(t *testin
 }
 
 func TestStatusEvidenceDeliveryFailuresTerminalizePerRequest(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
 	evidence := NewStatusEvidence()
 	// Records are intentionally interleaved across requests and out of stage
@@ -157,6 +161,8 @@ func TestStatusEvidenceDeliveryFailuresTerminalizePerRequest(t *testing.T) {
 // request whose only failure evidence is an intermediate transport error — with
 // no terminal hook.delivery or hook.failure — is never counted as dropped.
 func TestStatusEvidenceDeliveryFailuresIgnoresTransientAttemptOnlyRequest(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
 	evidence := NewStatusEvidence()
 	for _, envelope := range []diagnostics.TraceEnvelope{
@@ -177,6 +183,8 @@ func TestStatusEvidenceDeliveryFailuresIgnoresTransientAttemptOnlyRequest(t *tes
 // neither the terminal record nor a legacy hook.failure counts as a dropped
 // delivery, while a real failure beside them still does.
 func TestStatusEvidenceDeliveryFailuresExcludeHooksOutsideKitty(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
 	evidence := NewStatusEvidence()
 	for _, envelope := range []diagnostics.TraceEnvelope{

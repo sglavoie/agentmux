@@ -19,6 +19,8 @@ func visibleDashboardBases(m Model) []string {
 }
 
 func TestDashboardProfileCycleFiltersRunningProfilesAndWraps(t *testing.T) {
+	t.Parallel()
+
 	running := []session.RunningSession{
 		{Base: "work-one", Profile: "Work", Account: "legacy"},
 		{Base: "personal", Profile: "personal"},
@@ -60,6 +62,8 @@ func TestDashboardProfileCycleFiltersRunningProfilesAndWraps(t *testing.T) {
 }
 
 func TestDashboardProfileCycleCombinesWithOtherFilterComponents(t *testing.T) {
+	t.Parallel()
+
 	running := []session.RunningSession{
 		{Base: "api-personal", Profile: "personal", Harness: "claude", State: "key"},
 		{Base: "api-work", Profile: "work", Harness: "claude", State: "key"},
@@ -100,6 +104,8 @@ func TestDashboardProfileCycleCombinesWithOtherFilterComponents(t *testing.T) {
 }
 
 func TestDashboardProfileCycleHandlesMissingAndEmptyProfileSets(t *testing.T) {
+	t.Parallel()
+
 	running := []session.RunningSession{
 		{Base: "work", Profile: "work"},
 		{Base: "personal", Profile: "personal"},
@@ -120,6 +126,8 @@ func TestDashboardProfileCycleHandlesMissingAndEmptyProfileSets(t *testing.T) {
 }
 
 func TestDashboardProfileCycleUsesLatestRunningProfiles(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{
 		{Base: "personal", Profile: "personal"},
 		{Base: "work", Profile: "work"},
@@ -143,6 +151,8 @@ func TestDashboardProfileCycleUsesLatestRunningProfiles(t *testing.T) {
 }
 
 func TestDashboardProfileCycleResetsNavigationAndRefreshesPreview(t *testing.T) {
+	t.Parallel()
+
 	m := loadSessions(testModel(), []session.RunningSession{
 		{Base: "personal", Profile: "personal", WindowID: 11},
 		{Base: "work", Profile: "work", WindowID: 22},

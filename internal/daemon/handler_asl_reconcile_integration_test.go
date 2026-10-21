@@ -245,6 +245,8 @@ func TestHookEventOverlappingRunsKeepIndependentLeases(t *testing.T) {
 // TestHookEventPausedRunShowsAttentionIcon: a paused run surfaces the matching
 // attention icon without a loop marker through the full hook path.
 func TestHookEventPausedRunShowsAttentionIcon(t *testing.T) {
+	t.Parallel()
+
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
@@ -260,6 +262,8 @@ func TestHookEventPausedRunShowsAttentionIcon(t *testing.T) {
 // the full hook path: the loop lease stays live without claiming that a user
 // can answer yet, and the wait ending remains a bare 🔁.
 func TestHookEventWaitingRunKeepsBareLoop(t *testing.T) {
+	t.Parallel()
+
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
@@ -285,6 +289,8 @@ func TestHookEventWaitingRunKeepsBareLoop(t *testing.T) {
 // through the session detail buffer — never through NormalizedEvent or a
 // reducer fact.
 func TestHookEventWaitStartedCarriesQuestionPreviewToSessionDetail(t *testing.T) {
+	t.Parallel()
+
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
@@ -318,6 +324,8 @@ func TestHookEventWaitStartedCarriesQuestionPreviewToSessionDetail(t *testing.T)
 // before the daemon copies the preview onto the SessionEvent the detail view
 // renders.
 func TestHookEventWaitStartedSanitizesQuestionPreview(t *testing.T) {
+	t.Parallel()
+
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
@@ -414,6 +422,8 @@ func TestHookEventFinishWithoutRunIDTriggersReconciliation(t *testing.T) {
 // TestHookEventVerificationPhaseContributesActiveWork: verification start and
 // heartbeat both render as active work with the lease held.
 func TestHookEventVerificationPhaseContributesActiveWork(t *testing.T) {
+	t.Parallel()
+
 	h, windows, projectDir := reconcileTestFixture(t)
 	fake := &fakeKittyClient{windows: windows}
 	h.SetKittyClient(fake)
@@ -480,6 +490,8 @@ func TestRestoredPausedLeaseNeverRevivesLoopMarker(t *testing.T) {
 }
 
 func TestReviewedLoopContractRoutesToExactTabAcrossHarnesses(t *testing.T) {
+	t.Parallel()
+
 	h, windows, projectDir := reconcileTestFixture(t)
 	windows[0].Tabs[0].Windows[0].UserVars.Harness = "codex"
 	fake := &fakeKittyClient{windows: windows}

@@ -34,6 +34,8 @@ func fakeGitMetadata(root string, worktreeRoots ...string) gitMetadata {
 }
 
 func TestResolverMatchesLinkedWorktreeRoot(t *testing.T) {
+	t.Parallel()
+
 	repo := filepath.Join(string(filepath.Separator), "repos", "app")
 	linked := filepath.Join(string(filepath.Separator), "worktrees", "app-security")
 	provider := fakeGitMetadataProvider{metadata: map[string]gitMetadata{
@@ -54,6 +56,8 @@ func TestResolverMatchesLinkedWorktreeRoot(t *testing.T) {
 }
 
 func TestResolverMatchesLinkedWorktreeSubproject(t *testing.T) {
+	t.Parallel()
+
 	repo := filepath.Join(string(filepath.Separator), "repos", "mono")
 	api := filepath.Join(repo, "services", "api")
 	linked := filepath.Join(string(filepath.Separator), "worktrees", "mono-feature")
@@ -75,6 +79,8 @@ func TestResolverMatchesLinkedWorktreeSubproject(t *testing.T) {
 }
 
 func TestResolverMatchesReturnsAmbiguousBestMatches(t *testing.T) {
+	t.Parallel()
+
 	root := filepath.Join(string(filepath.Separator), "repo")
 	provider := fakeGitMetadataProvider{metadata: map[string]gitMetadata{
 		root: fakeGitMetadata(root, root, filepath.Join(string(filepath.Separator), "wt")),
@@ -94,6 +100,8 @@ func TestResolverMatchesReturnsAmbiguousBestMatches(t *testing.T) {
 }
 
 func TestResolverGitProviderErrorFallsBack(t *testing.T) {
+	t.Parallel()
+
 	resolver := newWithGitProvider(
 		[]config.Session{{
 			Title:     "Repo",
@@ -117,6 +125,8 @@ func TestResolverGitProviderErrorFallsBack(t *testing.T) {
 }
 
 func TestGitWorktreeListPorcelainZParsesPathsWithSpaces(t *testing.T) {
+	t.Parallel()
+
 	roots, err := parseGitWorktreeListPorcelainZ([]byte(
 		"worktree /tmp/repo with space\x00HEAD abc\x00branch refs/heads/main\x00\x00" +
 			"worktree /tmp/linked worktree\x00HEAD def\x00branch refs/heads/feature\x00\x00",
@@ -134,6 +144,8 @@ func TestGitWorktreeListPorcelainZParsesPathsWithSpaces(t *testing.T) {
 }
 
 func TestGitMetadataProviderDiscoversRepositoryAndWorktrees(t *testing.T) {
+	t.Parallel()
+
 	git := requireGit(t)
 	root := t.TempDir()
 	repo := filepath.Join(root, "repo with space")
