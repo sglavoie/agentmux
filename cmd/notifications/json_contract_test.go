@@ -49,7 +49,7 @@ func runNotificationsStatusJSON(t *testing.T, health ipc.Health) string {
 func TestNotificationsStatusJSON(t *testing.T) {
 	if got, want := runNotificationsStatusJSON(t, ipc.Health{}),
 		`{"schema_version":1,"data":{"daemon_running":false,"enabled":false,"alerter_ready":false,"snooze":{"snoozed":false,"indefinite":false},`+
-			`"summary":["The daemon is not running, so no notification is delivered; `+"`amx daemon start`"+` starts it."]}}`; got != want {
+			`"summary":["The daemon is not running, so no notification is delivered; run `+"`amx daemon restart`"+` to start it in the background."]}}`; got != want {
 		t.Fatalf("daemon down:\n got %s\nwant %s", got, want)
 	}
 	health := ipc.Health{Alive: true, Notification: &protocol.NotificationCapability{
