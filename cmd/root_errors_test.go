@@ -19,6 +19,8 @@ func executeRootArgs(t *testing.T, leaf *cobra.Command, args ...string) (string,
 		rootCmd.AddCommand(leaf)
 		t.Cleanup(func() { rootCmd.RemoveCommand(leaf) })
 	}
+	resetRootBoolFlags()
+	t.Cleanup(resetRootBoolFlags)
 	var stdout, stderr bytes.Buffer
 	rootCmd.SetOut(&stdout)
 	rootCmd.SetErr(&stderr)
@@ -29,6 +31,14 @@ func executeRootArgs(t *testing.T, leaf *cobra.Command, args ...string) (string,
 	})
 	code := execute(args, &stderr)
 	return stdout.String(), stderr.String(), code
+}
+
+// resetRootBoolFlags clears the --help and --version an earlier run parsed:
+// cobra leaves them set on rootCmd, and the next run would print help or the
+// version instead of doing what it was asked.
+func resetRootBoolFlags() {
+	_ = rootCmd.Flags().Set("help", "false")
+	_ = rootCmd.Flags().Set("version", "false")
 }
 
 func TestJSONFailureWritesNothingToStderr(t *testing.T) {

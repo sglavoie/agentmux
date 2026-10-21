@@ -30,6 +30,14 @@ func TestSharedFlagsCompleteEverywhere(t *testing.T) {
 		}
 	}
 	walk(rootCmd)
+	// The root's own --backend (the dashboard's) is checked directly: a
+	// repeated in-process __complete of a root flag answers nothing, which
+	// a real shell, one process per <Tab>, never meets.
+	if complete, ok := rootCmd.GetFlagCompletionFunc(cli.BackendFlag); !ok {
+		t.Error("amx --backend has no completion")
+	} else if got, _ := complete(rootCmd, nil, ""); len(got) != 2 {
+		t.Errorf("amx --backend completes %q", got)
+	}
 	if seen[cli.RuntimeSessionFlag] < 5 || seen[cli.BackendFlag] < 5 {
 		t.Fatalf("found too few shared flags: %v", seen)
 	}
@@ -51,7 +59,6 @@ func TestStaticAndRuntimeSessionCompletions(t *testing.T) {
 		{[]string{"debug", "probe", "--runtime-session", ""}, runtimeDirective, nil},
 		{[]string{"send", "rs-x", "--key", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"enter", "escape"}},
 		{[]string{"overseer", "policy", "--access", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
-		{[]string{"--backend", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"kitty", "tmux"}},
 		{[]string{"overview", "--backend", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"kitty", "tmux"}},
 		{[]string{"worktree", "shell", "--backend", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"kitty", "tmux"}},
 		{[]string{"plans", "run", "--project", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
