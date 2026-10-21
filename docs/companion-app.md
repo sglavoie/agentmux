@@ -436,9 +436,9 @@ Pending configuration reads, failed reads, and daemon recovery remain distinct.
 ### Waiting
 
 Waiting in the inspector supports category filters, oldest-first sorting,
-expandable question/output context, and **Next waiting**. **All** groups decisions
+expandable question/output context, and **Next Waiting**. **All** groups decisions
 before other attention and completed turns, with counts. While the pointer or an
-expanded context holds the list, updates wait behind **Update list** so targets
+expanded context holds the list, updates wait behind **Update List** so targets
 stay put; changed prompts are disabled immediately. Answer opens the existing
 prompt or supervisor panel and never submits an answer itself.
 
@@ -465,8 +465,8 @@ anchor; the message navigation menu also reports the loaded message range.
 
 Result snippets highlight the same terms and quoted phrases. Results load 50 at
 a time; **Load more conversations** extends the list without changing the preview.
-Empty results offer **Clear search**, **Search all history**, and **Include
-automated sessions** as applicable, with an actual hidden-match count. Rows show
+Empty results offer **Clear Search**, **Search All History**, and **Include
+Automated Sessions** as applicable, with an actual hidden-match count. Rows show
 relative activity times with exact tooltips; all-history rows include checkout
 paths. The conversation heading's tooltip also includes its checkout.
 
@@ -505,7 +505,7 @@ Diffs show old/new line numbers, addition/deletion shading, and previous/next hu
 controls with the visible hunk number. Previous/Next starts from the visible hunk,
 including after manual scrolling, and wraps at the ends. Changed words receive stronger shading in
 paired replacement lines; large or unpaired blocks retain whole-line shading.
-Redundant file headers are hidden; **… → Show patch headers** restores them.
+Redundant file headers are hidden; **… → Show diff headers** restores them.
 Mode changes and no-newline markers remain visible. The pencil button opens the
 selected file in the configured editor.
 
@@ -516,7 +516,7 @@ shortest unique trailing path; tooltips and accessibility retain the full path.
 Switching files cancels obsolete diff reads; diff parsing runs off the UI thread.
 
 The **…** menu contains remembered **Wrap lines** and text-size preferences, plus
-**Copy unified patch** and **Copy changed source lines** (added and context lines
+**Copy Unified Diff** and **Copy Changed Source Lines** (added and context lines
 from displayed hunks). Copying selected text strips line numbers and diff markers;
 **Copy Unified Diff** in the context menu keeps patch syntax. Unified-patch copying
 always includes the original headers. Truncated diffs are labeled.
@@ -531,12 +531,12 @@ review cannot authorize landing while its replacement is being read.
 **View › Since Last Looked…** (⌘⇧U) shows recorded state transitions, process exits,
 and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days.
 Select an event for details and the last timestamped assistant output at or before
-it; **Load earlier messages** searches further back for supporting output.
+it; **Load Earlier Messages** searches further back for supporting output.
 Opening its conversation goes to that recorded location, briefly highlights it,
 and returns focus to Activity when closed. Missing evidence is explained; a failed
 read can retry the same event. You can also focus the matching live session.
 
-**Mark read** offers **Mark selected read** and **Mark all N results read**, including
+**Mark Read** offers **Mark Selected Read** and **Mark All N Results Read**, including
 loaded rows below the viewport but excluding records omitted by the query limit.
 **Undo** restores the last successful acknowledgement and prior selection when
 still in scope. Failed saves and Undo retain current markers and report the failure.
@@ -817,7 +817,7 @@ inference, harness/process lifecycle, subagent, or ASL. **Observed** is that
 fact's timestamp, independent of the latest event from another source. Missing
 or older-daemon evidence stays explicitly unavailable; it is not proof of idle.
 
-While using Find in an embedded agent, **Search full conversation…** opens
+While using Find in an embedded agent, **Search Full Conversation…** opens
 History on that exact conversation and carries the active terminal query.
 Terminal Find still labels whether it covers the visible screen or terminal
 history. History searches saved prose using words and quoted phrases, not
@@ -825,8 +825,8 @@ terminal regular expressions. An unavailable query read is explained. Closing
 History returns focus to the original visible terminal. Utility views keep
 their own terminal Find; they have no conversation to search.
 
-Waiting keeps category and Oldest first on one row. Next waiting stays available;
-Update list appears only when changes are held while you read. The keyboard hint
+Waiting keeps category and Oldest first on one row. Next Waiting stays available;
+Update List appears only when changes are held while you read. The keyboard hint
 appears while the Waiting reader has focus and disappears when focus leaves.
 Changed questions immediately lose their answer actions, even before you apply
 an updated list.

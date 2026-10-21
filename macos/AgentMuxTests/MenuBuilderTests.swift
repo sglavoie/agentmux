@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import AgentMux
 
@@ -30,6 +31,11 @@ final class MenuBuilderTests: XCTestCase {
         let row = MenuBuilder.row(s, showReason: true, input: input([s]))
         XCTAssertEqual(row.title, "🔑 api · claude · 4m · Needs permission")
         XCTAssertEqual(row.windowID, 1)
+        XCTAssertTrue(row.accessibilityLabel.contains("needs attention"), row.accessibilityLabel)
+        XCTAssertFalse(row.accessibilityLabel.contains("🔑"), "VoiceOver says the state, not the glyph")
+        let item = MenuBuilder.items(for: [.session(row)], target: NSObject(), sessionAction: #selector(NSObject.description),
+                                     actionSelector: #selector(NSObject.hash)).first
+        XCTAssertEqual(item?.accessibilityLabel(), row.accessibilityLabel, "the menu item carries the spoken label")
 
         s.muted = true
         s.iconState = ""

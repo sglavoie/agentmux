@@ -13,6 +13,9 @@ struct MenuSessionRow: Equatable {
     /// Set for a session the workspace embeds: focusing it shows its terminal
     /// there, and it has no Kitty window to name.
     var runtimeSessionID = ""
+    /// What VoiceOver says of the item: the workspace sidebar's words for the
+    /// same session, so the state glyph is said as a state, not an emoji name.
+    var accessibilityLabel = ""
 
     /// The row a click on `session` focuses, with nothing to display.
     static func focusing(_ session: CompanionSession, title: String? = nil) -> MenuSessionRow {
@@ -313,7 +316,9 @@ enum MenuBuilder {
             toolTip: tip.joined(separator: " · "),
             muted: session.muted,
             muteUnavailable: input.gate.unavailableReason(.muteToggle),
-            runtimeSessionID: embedded ?? ""
+            runtimeSessionID: embedded ?? "",
+            accessibilityLabel: WorkspaceRowCellView.accessibilityLabel(
+                WorkspaceSidebar.row(session, snapshotSocket: input.snapshot?.kitty.socket ?? "", now: input.now, glyphs: input.glyphs))
         )
     }
 
@@ -546,6 +551,7 @@ enum MenuBuilder {
             let item = NSMenuItem(title: row.title, action: sessionAction, keyEquivalent: "")
             item.target = target
             item.toolTip = row.toolTip
+            if !row.accessibilityLabel.isEmpty { item.setAccessibilityLabel(row.accessibilityLabel) }
             item.representedObject = RowBox(row)
             guard let muteAction else { return [item] }
             // An alternate pairs with the item before it when both share a

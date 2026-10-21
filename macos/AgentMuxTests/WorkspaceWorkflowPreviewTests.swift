@@ -116,7 +116,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             inspector.onContext = { _, receive in receive(.loaded(SecretText("Which deployment should proceed?\n\nReview the staging results before choosing production."))) }
             inspector.show(.init(waiting: [row])); inspector.toggleContext(row)
             try await render(PreviewNativeView(view: inspector), name: "consistency-waiting-contrast-\(dark)", width: 320, height: 600,
-                dark: dark, highContrast: true, expected: ["Which deployment", "Next waiting", "Oldest first", "Answer"])
+                dark: dark, highContrast: true, expected: ["Which deployment", "Next Waiting", "Oldest first", "Answer"])
             let transcript = WorkspaceTranscriptText(text: "# Deployment review\n\nInspect the failed check before resuming.\n\n```swift\nlet café = \"🦊\"\n```", terms: [], preferences: preferences)
             let read = WorkspaceReadObservation(title: "Transcript", refreshedAt: Date().addingTimeInterval(-125))
             try await render(VStack(alignment: .leading, spacing: 16) {
@@ -141,7 +141,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         model.search()
         XCTAssertEqual(model.entries.count, 2)
         XCTAssertEqual(model.transcript?.messages.count, 2)
-        try await render(WorkspaceHistoryView(model: model), name: "history", expected: ["pagination", "Focus live session"])
+        try await render(WorkspaceHistoryView(model: model), name: "history", expected: ["pagination", "Focus Live Session"])
         try await render(WorkspaceHistoryView(model: model), name: "history-dark-minimum", width: 720, height: 450, dark: true, expected: ["pagination", "Fork"])
     }
 
@@ -165,14 +165,14 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             try await render(WorkspaceHistoryView(preferences: preferences, model: history), name: "daily-history-large-\(dark)",
                              width: 720, height: 450, dark: dark, expected: ["Resume", "Fork", "Review the existing workflow"])
             try await render(WorkspaceActivityView(preferences: preferences, model: activity), name: "daily-activity-large-\(dark)",
-                             width: 760, height: 480, dark: dark, expected: ["Mark read", "Undo", "Supporting output"])
+                             width: 760, height: 480, dark: dark, expected: ["Mark Read", "Undo", "Supporting output"])
             let inspector = WorkspaceInspectorView(preferences: preferences)
             let row = WorkspaceWaitingRow(key: .embedded("one"), title: "API · deployment review", detail: "Question · 2m", glyph: "?", toolTip: "",
                 answer: .asl(.init(runID: "run-one", planDir: "/plans/api")), category: .question)
             inspector.onContext = { _, done in done(.loaded(SecretText("Which deployment should proceed?\n\nThe endpoint checks passed. Review the staging results before choosing production.\n\n" + String(repeating: "Keep the current deployment available until verification completes.\n\n", count: 10)))) }
             inspector.show(.init(waiting: [row])); inspector.focusReader()
             try await render(PreviewNativeView(view: inspector), name: "daily-waiting-large-\(dark)", width: 320, height: 600, dark: dark,
-                             expected: ["Answer", "Which deployment", "Next waiting"])
+                             expected: ["Answer", "Which deployment", "Next Waiting"])
             let app = FakeWorkspaceApp()
             app.store.apply(snapshot: WorkspaceFixture.snapshot([]))
             let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
@@ -284,7 +284,7 @@ extension WorkspaceWorkflowPreviewTests {
                 }
             }.padding(12)
             try await render(view, name: "waiting-palette-\(dark ? "dark" : "light")", width: 850, height: 560, dark: dark,
-                             expected: ["Needs a decision", "Completed turns", "Update list", "Changed", "Split with Checkout Changes", "Select a session"])
+                             expected: ["Needs a decision", "Completed turns", "Update List", "Changed", "Split with Checkout Changes", "Select a session"])
         }
     }
 
@@ -352,7 +352,7 @@ extension WorkspaceWorkflowPreviewTests {
                 try await render(WorkspaceChangesView(model: changes), name: "changes-\(suffix)", width: 720, height: 450, dark: dark,
                                  expected: ["Checkout Changes", "Compare"] + notice + (state == "initial-failure" ? ["Comparison could not be loaded"] : state == "empty" ? ["No changes"] : ["pagination_controller_test.go"]))
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
-                                 expected: ["Since Last Looked", "Mark read"] + notice + (state == "initial-failure" ? ["Activity could not be loaded"] : state == "empty" ? ["All caught up"] : ["Supporting output"]))
+                                 expected: ["Since Last Looked", "Mark Read"] + notice + (state == "initial-failure" ? ["Activity could not be loaded"] : state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,
                                  expected: ["ASL Runs", "Run a Plan"] + notice + (state == "initial-failure" ? ["Runs could not be loaded"] : state == "empty" ? ["No active runs"] : state == "failed" ? ["Inspect Failed Check"] : ["Resume", "Abort"]))
             }
@@ -423,7 +423,7 @@ extension WorkspaceWorkflowPreviewTests {
         let empty = WorkspaceHistoryModel(command: { emptyCommand }, runner: PreviewRunner())
         empty.query = "needle"; empty.scope = .project; empty.open(project: "API", conversation: nil)
         try await render(WorkspaceHistoryView(model: empty), name: "history-empty-scoped", width: 720, height: 450, dark: true,
-                         expected: ["Clear search", "Search all history", "7 automated matches"])
+                         expected: ["Clear Search", "Search All History", "7 automated matches"])
         let changesCommand = command { args in
             if args.first == "worktree" { return #"{"worktrees":[]}"# }
             return #"{"root":"/Projects/api","base":"abc","files":[{"path":"pagination.swift","added":2,"deleted":0,"binary":false,"untracked":false}],"patch":"@@ -0,0 +1,2 @@\n+let page = readEvents(after: cursor, limit: requestedLimit, includeArchived: false)\n+return page","truncated":false}"#

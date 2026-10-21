@@ -65,8 +65,8 @@ final class WorkspaceInspectorView: NSView {
     var onContext: ((WorkspaceWaitingRow, @escaping (WorkspaceWaitingContext.Result) -> Void) -> Void)?
     let filterPicker = NSPopUpButton()
     let oldestButton = NSButton(checkboxWithTitle: "Oldest first", target: nil, action: nil)
-    let nextButton = NSButton(title: "Next waiting", target: nil, action: nil)
-    let updatesButton = NSButton(title: "Update list", target: nil, action: nil)
+    let nextButton = NSButton(title: "Next Waiting", target: nil, action: nil)
+    let updatesButton = NSButton(title: "Update List", target: nil, action: nil)
     private let inboxControls = NSStackView()
     private(set) var waitingFilter = WorkspaceWaitingFilter.all
     private(set) var oldestFirst = false
@@ -239,7 +239,7 @@ final class WorkspaceInspectorView: NSView {
         readerHint.isHidden = model.tab != .waiting || window?.firstResponder !== self
         updatesButton.isEnabled = heldWaiting != nil
         updatesButton.isHidden = heldWaiting == nil
-        updatesButton.title = "Update list (\(model.waiting.count))"
+        updatesButton.title = "Update List (\(model.waiting.count))"
         updatesButton.toolTip = "Apply the updated waiting list. Items stay in place while you read."
         nextButton.isEnabled = model.current && !visibleWaiting.isEmpty
         let wanted = displayedLines

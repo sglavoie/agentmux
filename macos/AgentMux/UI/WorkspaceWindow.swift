@@ -252,7 +252,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// view id, shown on its line. It is never attention.
     var progresses: [String: Ghostty.Progress] = [:]
     let findBar = WorkspaceFindBar()
-    let conversationSearchButton = NSButton(title: "Search full conversation…", target: nil, action: nil)
+    let conversationSearchButton = NSButton(title: "Search Full Conversation…", target: nil, action: nil)
     var searchHintSessionID: String?
     let scrollbarView = WorkspaceScrollbarView()
     /// Runs a Ghostty binding action in a terminal, replaced in tests.

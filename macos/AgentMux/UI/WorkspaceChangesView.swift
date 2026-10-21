@@ -70,7 +70,7 @@ struct WorkspaceChangesView: View {
                         }.frame(width: 400, height: 240)
                     }
                     Spacer(minLength: 0)
-                    Button("Compare with source") { model.compareWithSource() }.disabled(model.loading || model.reviewing || model.landing)
+                    Button("Compare with Source") { model.compareWithSource() }.disabled(model.loading || model.reviewing || model.landing)
                     Button("Land…") { confirmedTree = tree }.disabled(!model.canLand).help(model.landingReason ?? "Fast-forward the source branch")
                 }
                 if let error = model.worktreeError {
@@ -114,14 +114,14 @@ struct WorkspaceChangesView: View {
                                     .help("Open in editor (⌘E)").accessibilityLabel("Open in editor").disabled(model.selectedFile == nil)
                                 Menu {
                                     Toggle("Wrap lines", isOn: $model.wrapDiffLines)
-                                    Toggle("Show patch headers", isOn: $showPatchHeaders)
-                                    Button("Larger text") { model.diffFontSize = min(24, model.diffFontSize + 1) }.disabled(model.diffFontSize >= 24)
-                                    Button("Smaller text") { model.diffFontSize = max(10, model.diffFontSize - 1) }.disabled(model.diffFontSize <= 10)
-                                    Button("Reset text size") { model.diffFontSize = 12 }
+                                    Toggle("Show diff headers", isOn: $showPatchHeaders)
+                                    Button("Larger Text") { model.diffFontSize = min(24, model.diffFontSize + 1) }.disabled(model.diffFontSize >= 24)
+                                    Button("Smaller Text") { model.diffFontSize = max(10, model.diffFontSize - 1) }.disabled(model.diffFontSize <= 10)
+                                    Button("Reset Text Size") { model.diffFontSize = 12 }
                                     Divider()
-                                    Button("Copy unified patch") { copy(model.diff.patch) }
+                                    Button("Copy Unified Diff") { copy(model.diff.patch) }
                                         .disabled(model.reading || model.patchIdentity != model.diffIdentity || model.patchError != nil)
-                                    Button("Copy changed source lines") {
+                                    Button("Copy Changed Source Lines") {
                                         copy(model.diff.lines.filter { $0.kind == .context || $0.kind == .added }.map { String($0.text.dropFirst()) }.joined(separator: "\n"))
                                     }.disabled(model.reading || model.patchIdentity != model.diffIdentity || model.patchError != nil)
                                 } label: { Image(systemName: "ellipsis.circle") }
