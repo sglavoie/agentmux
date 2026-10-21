@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // This file is the scenario driver: the in-process program that stands in for
 // a real Bubble Tea run. It builds a model, feeds it actions, and hands back
 // the screen each action produced — for a hand-written config, for a named

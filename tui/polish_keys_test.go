@@ -7,25 +7,6 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// `a` means actions everywhere else, so the Runs view no longer spends it on
-// abort; X (the actions menu's End Session letter) asks for the abort instead.
-func TestASLRunsAbortMovedOffA(t *testing.T) {
-	d, _ := enterASLRunsDriver(t)
-	selectASLRun(t, d, "row-reply")
-	if err := d.Key("a"); err != nil {
-		t.Fatalf("pressing a: %v", err)
-	}
-	if m := d.Model(); m.mode != ModeASLRuns {
-		t.Fatalf("a in Runs opened mode %v, want it inert", m.mode)
-	}
-	if err := d.Key("X"); err != nil {
-		t.Fatalf("pressing X: %v", err)
-	}
-	if m := d.Model(); m.mode != ModeConfirm {
-		t.Fatalf("X in Runs = mode %v, want the abort confirmation", m.mode)
-	}
-}
-
 func TestSessionDetailQuestionMarkOpensHelpAndReturns(t *testing.T) {
 	m := loadSessions(testModel(), makeSessions())
 	m.mode = ModeDetail

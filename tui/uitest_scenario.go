@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // This file is the scenario language: the JSON a scenario is written in, the
 // vocabulary of actions and assertions it may use, the key-name grammar its
 // keystrokes are spelled with, and the runner that executes one parsed

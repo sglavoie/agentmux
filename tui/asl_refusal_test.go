@@ -1,3 +1,5 @@
+//go:build tuitest
+
 package tui
 
 // Refusals: what the Runs view does when the bridge declines an action, when the

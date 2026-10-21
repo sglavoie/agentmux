@@ -515,39 +515,6 @@ func TestHealthOverlayNamesStaleAndColdTopologySeparately(t *testing.T) {
 	}
 }
 
-func TestHealthModeIsRegisteredAcrossDispatch(t *testing.T) {
-	t.Parallel()
-
-	m := healthModel(t)
-	m.openHealth(ModeList)
-
-	// Key dispatch reaches the overlay's own handler rather than the list's.
-	next, _ := m.Update(tea.KeyPressMsg{Code: 'j'})
-	if got := next.(Model).healthOffset; got == 0 && len(dashboard.HealthLines(healthInput(m))) > healthVisibleHeight(m) {
-		t.Fatal("j did not reach handleHealthKey through the mode dispatcher")
-	}
-
-	if got := ModeHealth.String(); got != "health" {
-		t.Fatalf("uitest mode name = %q, want %q", got, "health")
-	}
-	if modalBoxRenderer(ModeHealth) == nil {
-		t.Fatal("modal-fit detection has no renderer for ModeHealth")
-	}
-	if !modalUsesResponsiveWidth(ModeHealth) {
-		t.Fatal("ModeHealth is not exempt from the clipping check it satisfies by wrapping")
-	}
-	if got := fallbackStatusText(m); got == "" {
-		t.Fatal("status bar has no fallback text for ModeHealth")
-	}
-
-	footer := stripAnsi(renderFooter(m))
-	for _, want := range []string{"j/k", "esc/q"} {
-		if !strings.Contains(footer, want) {
-			t.Fatalf("footer missing %q:\n%s", want, footer)
-		}
-	}
-}
-
 // The composited view draws the overlay over a dimmed dashboard rather than
 // replacing it.
 func TestHealthOverlayComposites(t *testing.T) {

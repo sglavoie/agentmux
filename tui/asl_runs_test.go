@@ -1,3 +1,5 @@
+//go:build tuitest
+
 package tui
 
 import (
@@ -234,7 +236,7 @@ func TestASLRunsStaleBannerThenUnavailable(t *testing.T) {
 		t.Fatalf("view inside the stale window = %v, want asl.ViewStale", got)
 	}
 	rendered := renderASLRuns(m)
-	if !strings.Contains(rendered, aslBannerText(m)) {
+	if !strings.Contains(rendered, aslFacts(m).BannerText()) {
 		t.Fatalf("stale render is missing the read-only banner:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "api-refactor") {

@@ -1,3 +1,5 @@
+//go:build tuitest
+
 package tui
 
 // Form flow: opening the response form against a captured target, editing and

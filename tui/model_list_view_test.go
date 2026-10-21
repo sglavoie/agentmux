@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -122,7 +123,7 @@ func selectLine(t *testing.T, m Model, want string) Model {
 
 func wantLines(t *testing.T, m Model, want []string) {
 	t.Helper()
-	if got := itemLines(m); !equalStrings(got, want) {
+	if got := itemLines(m); !slices.Equal(got, want) {
 		t.Fatalf("list = %v, want %v", got, want)
 	}
 }
@@ -445,7 +446,7 @@ func TestFoldingCopiesTheCollapseMap(t *testing.T) {
 	if after.collapsedFamilies["git:/tools"] {
 		t.Error("the second fold reached back into the model held before the keypress")
 	}
-	if got := itemLines(after); !equalStrings(got, []string{
+	if got := itemLines(after); !slices.Equal(got, []string{
 		"summary:monorepo(folded)", "session:etl",
 		"summary:toolbox(open)", "session:cli", "session:lib",
 	}) {

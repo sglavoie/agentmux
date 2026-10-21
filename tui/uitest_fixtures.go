@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // This file is the fixture catalog: the named, deterministic worlds a scenario
 // can be driven against. It holds the session, plan, transcript, ASL run, and
 // worktree data each fixture publishes, the stub services that serve it, and

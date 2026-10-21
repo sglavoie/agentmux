@@ -133,24 +133,6 @@ func TestFeedbackDelayedOperationIsReplacedOnlyByItsOwnResult(t *testing.T) {
 	}
 }
 
-func TestFeedbackWrapsAndScrollsLongDiagnostic(t *testing.T) {
-	t.Parallel()
-
-	m := testModel()
-	m.width, m.height, m.mode = 60, 18, ModeFeedback
-	m.pushToast(Toast{Severity: toastError, Text: strings.Repeat("a long diagnostic ", 80) + "final detail"})
-	first := renderFeedbackBox(m)
-	next, _ := m.handleFeedbackKey(keyPress("G"))
-	m = next.(Model)
-	last := renderFeedbackBox(m)
-	if first == last || !strings.Contains(strings.Join(feedbackLines(m), " "), "final detail") {
-		t.Fatal("diagnostic cannot be read")
-	}
-	if modalBoxRenderer(ModeFeedback) == nil || !modalUsesResponsiveWidth(ModeFeedback) {
-		t.Fatal("feedback missing from layout checks")
-	}
-}
-
 func TestRetainedNoticeKeepsItsDetailsRouteAtNarrowWidths(t *testing.T) {
 	t.Parallel()
 

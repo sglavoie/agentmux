@@ -552,38 +552,6 @@ func TestFooterHintAvailabilityChangesStyleOnly(t *testing.T) {
 	}
 }
 
-// TestFooterHintASLRunsMixedAvailability covers the ASL Runs palette, whose
-// availability is answered by the bridge rather than by a Model field: the
-// fixture's row-verify permits stop and refuses abort, so one render must carry
-// both styles at once.
-func TestFooterHintASLRunsMixedAvailability(t *testing.T) {
-	t.Parallel()
-
-	d, _ := enterASLRunsDriver(t)
-	selectASLRun(t, d, "row-verify")
-	m := d.Model()
-	m.width = 200
-
-	if !aslStopAvailable(m) || aslAbortAvailable(m) {
-		t.Fatalf("fixture changed: stop available = %v, abort available = %v, want true/false",
-			aslStopAvailable(m), aslAbortAvailable(m))
-	}
-
-	lines := footerHintLines(m, aslRunsFooterPalette, footerHintMaxLines)
-	raw := strings.Join(lines, "\n")
-	if !strings.Contains(raw, chrome.Binding("s", "stop")) {
-		t.Fatalf("permitted stop is not rendered in the available style: %q", hintText(lines))
-	}
-	if !strings.Contains(raw, chrome.UnavailableBinding(keyASLAbort, "abort")) {
-		t.Fatalf("refused abort is not rendered in the muted style: %q", hintText(lines))
-	}
-
-	zero := footerHintLines(Model{width: 200}, aslRunsFooterPalette, footerHintMaxLines)
-	if got, want := hintText(lines), hintText(zero); got != want {
-		t.Fatalf("bridge availability changed the ASL Runs text\n got %q\nwant %q", got, want)
-	}
-}
-
 // hintTestTokens is hintTestPalette rendered into prioritized tokens, so the
 // helper-level tests below exercise the same priorities the entry-level tests
 // above do.

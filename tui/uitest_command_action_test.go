@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // This file pins the scenario harness's `command` action: that it reaches a
 // capability through the palette the operator uses rather than around it, and
 // that each distinct way that path can fail is reported as itself.

@@ -1,5 +1,5 @@
-// Package tuitest holds the hidden `tui-test` developer command, which drives
-// the in-process TUI scenario harness in the tui package.
+//go:build tuitest
+
 package tuitest
 
 import (

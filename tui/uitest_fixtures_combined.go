@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // The two fixture worlds the redesign's combined scenarios need and that none
 // of the single-surface fixtures can stand in for.
 //

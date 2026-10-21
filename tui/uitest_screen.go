@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // This file is what a rendered frame IS to a scenario: the normalized screen,
 // the modal box located inside it, the layout issues a frame can exhibit, and
 // the observation record a single action leaves behind.

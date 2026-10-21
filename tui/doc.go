@@ -1,7 +1,8 @@
 // Package tui is the Bubble Tea program behind the live-session dashboard: the
 // Model, the mode dispatcher, every key handler, the update loop that consumes
 // whatever an effect reports back, the styles it builds from tui/theme, and the
-// deterministic in-process uitest harness that cmd/tuitest/tuitest.go drives.
+// deterministic in-process uitest harness that cmd/tuitest/tuitest.go drives
+// (built only with the tuitest tag).
 //
 // Domain leaves under tui/ own the vocabulary the model renders — terminal
 // geometry, list-state wording, and age labels in tui/layout, the palette in
@@ -46,11 +47,16 @@
 // loads), the background-command queue, the clock, and the Kitty client, and
 // it asks each modal renderer for its box to check the overlay geometry.
 // Moving it out would mean exporting roughly forty of those Model internals,
-// which exist to be private, as a permanent API for a test harness; keeping
-// it here costs only binary size in a hidden command. The files share the
-// uitest_ prefix and nothing outside them names a uitest identifier, so the
-// harness is one group to read, and the exported UITest* names are the whole
-// surface cmd/tuitest uses.
+// which exist to be private, as a permanent API for a test harness. Every
+// uitest_*.go file, and every test that drives the model through one, carries
+// the `tuitest` build tag, so keeping the harness here costs a release build
+// nothing: `go build .` links none of it, and the gates run
+// `go test -tags tuitest`. The files share the uitest_ prefix and no untagged
+// file names a uitest identifier, so the harness is one group to read, and the
+// exported UITest* names are the whole surface cmd/tuitest uses. What the
+// harness and the untagged tests both need lives outside it: Mode.String,
+// config.DefaultPreview, internal/kitty/kittytest's recording client, and
+// tui/cmdtest's batch and timer detection.
 //
 // The whole TUI tree — this package included — depends on
 // internal/daemon/ipc, internal/daemon/process, and internal/daemon/protocol

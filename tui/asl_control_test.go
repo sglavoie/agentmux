@@ -1,3 +1,5 @@
+//go:build tuitest
+
 package tui
 
 // Run-level control commands (stop after current, abort) and the receipt window

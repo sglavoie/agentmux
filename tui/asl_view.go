@@ -51,8 +51,6 @@ func aslView(m Model) asl.ViewState { return aslFacts(m).View() }
 
 func aslVisibleHeight(m Model) int { return aslRunsInput(m).VisibleHeight() }
 
-func aslBannerText(m Model) string { return aslFacts(m).BannerText() }
-
 func renderASLRuns(m Model) string { return asl.RenderRuns(aslRunsInput(m)) }
 
 func renderASLResponseBox(m Model) string {

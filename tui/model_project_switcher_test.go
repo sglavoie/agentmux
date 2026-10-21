@@ -25,12 +25,6 @@ func projectScopeTestModel() Model {
 	return m
 }
 
-// railTestModel is projectScopeTestModel under the name the mouse and frame
-// tests reach it by. It is kept as an alias rather than renamed at every call
-// site because those tests are about geometry the project scopes no longer
-// participate in at all.
-func railTestModel() Model { return projectScopeTestModel() }
-
 func scopeLabels(scopes []dashboard.ProjectScope) []string {
 	out := make([]string, 0, len(scopes))
 	for _, scope := range scopes {

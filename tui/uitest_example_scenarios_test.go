@@ -1,3 +1,5 @@
+//go:build tuitest
+
 package tui
 
 // This test loads the committed example scenarios documented under

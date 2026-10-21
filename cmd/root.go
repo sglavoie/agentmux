@@ -32,7 +32,6 @@ import (
 	"github.com/sglavoie/agentmux/cmd/release"
 	"github.com/sglavoie/agentmux/cmd/session"
 	"github.com/sglavoie/agentmux/cmd/transcripts"
-	"github.com/sglavoie/agentmux/cmd/tuitest"
 	"github.com/sglavoie/agentmux/cmd/worktree"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -199,7 +198,7 @@ func init() {
 	addGrouped(groupSessions, session.Command(), project.Command(), session.AttachCommand(), session.SendCommand(), session.CloseCommand(), worktree.Command(), plans.Command(), dashboard.OverviewCommand(), dashboard.PastSessionsCommand(), dashboard.OpenDashboardCommand())
 	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.NameSessionCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
 	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.BackendCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
-	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), release.DesktopCommand(), tuitest.Command(), dashboard.WorkspaceViewCommand())
+	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), release.DesktopCommand(), scenarioHarnessCommand(), dashboard.WorkspaceViewCommand())
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.SetFlagErrorFunc(flagError)
 	// Added now rather than lazily by Execute, so the guard covers it too.

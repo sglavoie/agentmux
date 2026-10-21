@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // Every fixture in uitest_fixtures_redesign.go is asserted here. Nothing in the
 // harness discovers a fixture: a constructor that no test names is built by
 // zero tests, and a world that silently stopped containing the collision, the

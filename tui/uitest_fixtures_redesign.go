@@ -1,3 +1,5 @@
+//go:build tuitest
+
 // This file holds the fixture worlds the dashboard redesign needs and that no
 // existing fixture can stand in for: colliding row names, a scrollback long
 // enough to be followed or held, a health answer other than "no daemon", and

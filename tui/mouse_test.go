@@ -1,3 +1,5 @@
+//go:build tuitest
+
 package tui
 
 import (
@@ -425,3 +427,9 @@ func TestMouseOverAFullScreenInspectorReachesNoQueueRow(t *testing.T) {
 		t.Fatalf("a click over the full-screen pane issued %d FocusTab calls", got)
 	}
 }
+
+// railTestModel is projectScopeTestModel under the name the mouse and frame
+// tests reach it by. It is kept as an alias rather than renamed at every call
+// site because those tests are about geometry the project scopes no longer
+// participate in at all.
+func railTestModel() Model { return projectScopeTestModel() }
