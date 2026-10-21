@@ -532,8 +532,8 @@ paired-release-gate asl_root signing_key="" tag="no":
 #
 # Every committed TUI scenario runs inside `test`, so tui-scenarios is not
 # repeated here: cmd/tuitest's TestTUITestRunCommittedScenariosEndToEnd runs
-# the same files through the same CLI path that recipe does (under a sentinel
-# HOME that must come back untouched), and tui's
+# the same files through the same CLI path that recipe does (in parallel
+# shards, each under a sentinel HOME that must come back untouched), and tui's
 # TestExampleScenariosParseAndPass runs them in-package against the README
 # inventory. The tui-scenarios recipe stays for running them by hand.
 #
