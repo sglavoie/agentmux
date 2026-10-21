@@ -63,8 +63,11 @@ func documentedScenarioInventory(t *testing.T) map[string]bool {
 // TestExampleScenariosParseAndPass loads every committed example scenario,
 // confirms it parses under the same validation the CLI uses, and runs it to a
 // passing result. All committed examples are fixture-backed, so no config
-// staging environment is needed.
+// staging environment is needed, and nothing a fixture scenario does touches
+// the process environment or a file another scenario reads, so each runs as
+// a parallel subtest.
 func TestExampleScenariosParseAndPass(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(exampleScenariosDir)
 	if err != nil {
 		t.Fatalf("reading example scenarios dir: %v", err)
@@ -86,36 +89,38 @@ func TestExampleScenariosParseAndPass(t *testing.T) {
 	// not list, and listed names with no file, keeps the documentation and the
 	// acceptance run from silently diverging.
 	want := documentedScenarioInventory(t)
-
 	for _, name := range jsonFiles {
-		path := filepath.Join(exampleScenariosDir, name)
-		sc, err := LoadUITestScenario(path)
-		if err != nil {
-			t.Errorf("%s: load/parse failed: %v", name, err)
-			continue
-		}
-		if sc.Config != "" {
-			t.Errorf("%s: committed examples must be fixture-backed, got config %q", name, sc.Config)
-			continue
-		}
 		if _, tracked := want[name]; !tracked {
 			t.Errorf("undocumented scenario %s is not in the inventory table of %s", name, scenarioReadme)
 		} else {
 			want[name] = true
 		}
-		res, err := RunUITestScenario(sc, UITestScenarioEnv{})
-		if err != nil {
-			t.Errorf("%s: run failed: %v", name, err)
-			continue
-		}
-		if !res.OK {
-			t.Errorf("%s: scenario did not pass: %+v", name, res.Failures)
-		}
 	}
-
 	for name, seen := range want {
 		if !seen {
 			t.Errorf("%s lists scenario %s, which has no file", scenarioReadme, name)
 		}
+	}
+
+	for _, name := range jsonFiles {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			sc, err := LoadUITestScenario(filepath.Join(exampleScenariosDir, name))
+			if err != nil {
+				t.Fatalf("load/parse failed: %v", err)
+			}
+			// A config scenario stages its environment with Setenv, which a
+			// parallel subtest may not do, and the committed set is fixtures.
+			if sc.Config != "" {
+				t.Fatalf("committed examples must be fixture-backed, got config %q", sc.Config)
+			}
+			res, err := RunUITestScenario(sc, UITestScenarioEnv{})
+			if err != nil {
+				t.Fatalf("run failed: %v", err)
+			}
+			if !res.OK {
+				t.Fatalf("scenario did not pass: %+v", res.Failures)
+			}
+		})
 	}
 }
