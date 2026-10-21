@@ -223,12 +223,12 @@ func TestUITestModalBoxRendererCoversOverlayModes(t *testing.T) {
 	}
 	for _, mode := range modal {
 		if modalBoxRenderer(mode) == nil {
-			t.Errorf("mode %s should map to a bounded-popup renderer", uitestModeName(mode))
+			t.Errorf("mode %s should map to a bounded-popup renderer", mode.String())
 		}
 	}
 	for _, mode := range []Mode{ModeList, ModeSearch, ModePicker, ModeMessageDetail, ModeSessionSearch} {
 		if modalBoxRenderer(mode) != nil {
-			t.Errorf("mode %s should not map to a bounded-popup renderer", uitestModeName(mode))
+			t.Errorf("mode %s should not map to a bounded-popup renderer", mode.String())
 		}
 	}
 }

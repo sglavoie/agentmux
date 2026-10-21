@@ -328,12 +328,12 @@ func TestColonRemainsInputOutsideDashboardAndNeverOpensFromNavigation(t *testing
 		ModeWorktrees,
 		ModeLiveSessionPicker,
 	} {
-		t.Run(uitestModeName(mode)+" navigation", func(t *testing.T) {
+		t.Run(mode.String()+" navigation", func(t *testing.T) {
 			m := testModelWithSessions()
 			m.mode = mode
 			updated, _ := m.Update(keyPress(keyColon))
 			if got := updated.(Model).mode; got == ModeCommandPalette {
-				t.Fatalf("colon opened palette from %s", uitestModeName(mode))
+				t.Fatalf("colon opened palette from %s", mode.String())
 			}
 		})
 	}

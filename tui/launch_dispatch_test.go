@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/cmdtest"
 )
 
 type fakeLaunchDispatchClient struct {
@@ -68,11 +69,11 @@ func collectLeafMsgs(t *testing.T, cmd tea.Cmd) []tea.Msg {
 
 func flattenMsg(t *testing.T, msg tea.Msg) []tea.Msg {
 	t.Helper()
-	// Reuse the production harness's slice detection (uitest_driver.go) so the
+	// Reuse the scenario harness's slice detection (tui/cmdtest) so the
 	// test helper and the driver agree on what counts as a batch/sequence
 	// message. Leaf messages fall through unchanged; batch components are
 	// executed and flattened recursively.
-	cmds, ok := uitestFlattenCmds(msg)
+	cmds, ok := cmdtest.Flatten(msg)
 	if !ok {
 		return []tea.Msg{msg}
 	}

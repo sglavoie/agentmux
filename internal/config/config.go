@@ -255,21 +255,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Defaults.Diagnostics.NativeSessionMaxMiB == 0 {
 		cfg.Defaults.Diagnostics.NativeSessionMaxMiB = 128
 	}
-	if cfg.Defaults.Preview.Direction == "" {
-		cfg.Defaults.Preview.Direction = "horizontal"
-	}
-	if cfg.Defaults.Preview.Ratio == 0 {
-		cfg.Defaults.Preview.Ratio = 0.5
-	}
-	if cfg.Defaults.Preview.RefreshMs == 0 {
-		cfg.Defaults.Preview.RefreshMs = 500
-	}
-	if cfg.Defaults.Preview.MinCols == 0 {
-		cfg.Defaults.Preview.MinCols = 100
-	}
-	if cfg.Defaults.Preview.MinRows == 0 {
-		cfg.Defaults.Preview.MinRows = 30
-	}
+	ApplyPreviewDefaults(&cfg.Defaults.Preview)
 	if cfg.Defaults.Notifications.StopFailure == nil {
 		t := true
 		cfg.Defaults.Notifications.StopFailure = &t

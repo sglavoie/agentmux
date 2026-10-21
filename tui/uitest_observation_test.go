@@ -88,11 +88,11 @@ func TestUITestObservationModeNames(t *testing.T) {
 		ModeASLRuns:           "asl_runs",
 	}
 	for mode, want := range cases {
-		if got := uitestModeName(mode); got != want {
-			t.Errorf("uitestModeName(%d) = %q, want %q", mode, got, want)
+		if got := mode.String(); got != want {
+			t.Errorf("Mode(%d).String() = %q, want %q", mode, got, want)
 		}
 	}
-	if got := uitestModeName(Mode(9999)); got != "unknown" {
+	if got := Mode(9999).String(); got != "unknown" {
 		t.Errorf("expected unknown for out-of-range mode, got %q", got)
 	}
 }

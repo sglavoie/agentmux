@@ -35,7 +35,7 @@ func TestCommandActionDispatchesThroughThePalette(t *testing.T) {
 		t.Fatalf("focus through the palette: %v", err)
 	}
 	if got := d.Model().mode; got != ModeList {
-		t.Fatalf("palette left open: mode = %q", uitestModeName(got))
+		t.Fatalf("palette left open: mode = %q", got.String())
 	}
 	if calls := client.CallsFor("FocusTab"); len(calls) != 1 {
 		t.Fatalf("FocusTab calls = %d, want 1", len(calls))
@@ -75,7 +75,7 @@ func TestCommandActionWalksTheCursorWithNavigationKeys(t *testing.T) {
 		t.Fatalf("search plans through the palette: %v", err)
 	}
 	if got := d.Model().mode; got != ModePlanSearch {
-		t.Fatalf("mode = %q, want plan_search", uitestModeName(got))
+		t.Fatalf("mode = %q, want plan_search", got.String())
 	}
 }
 
@@ -119,7 +119,7 @@ func TestCommandActionFailsForHiddenCommand(t *testing.T) {
 		t.Fatalf("hidden command error = %v", err)
 	}
 	if got := d.Model().mode; got != ModeCommandPalette {
-		t.Fatalf("mode = %q: the failure should be diagnosed with the palette open", uitestModeName(got))
+		t.Fatalf("mode = %q: the failure should be diagnosed with the palette open", got.String())
 	}
 }
 
@@ -199,7 +199,7 @@ func TestCommandActionRefusesWhileTheProjectSwitcherIsOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	if d.Model().mode != ModeProjectSwitcher {
-		t.Fatalf("%q left the model in mode %q", keyProjectSwitcher, uitestModeName(d.Model().mode))
+		t.Fatalf("%q left the model in mode %q", keyProjectSwitcher, d.Model().mode.String())
 	}
 	err = d.Command(commands.SearchPlans)
 	if err == nil || !strings.Contains(err.Error(), "project_switcher") {

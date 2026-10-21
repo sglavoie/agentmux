@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
+	"github.com/sglavoie/agentmux/tui/cmdtest"
 	"github.com/sglavoie/agentmux/tui/commands"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
@@ -169,7 +170,7 @@ func TestUITestDriverFlattenCmds(t *testing.T) {
 	if batch == nil {
 		t.Fatal("expected a non-nil batch command")
 	}
-	cmds, ok := uitestFlattenCmds(batch())
+	cmds, ok := cmdtest.Flatten(batch())
 	if !ok {
 		t.Fatal("expected batch message to be recognized as a slice")
 	}
@@ -177,7 +178,7 @@ func TestUITestDriverFlattenCmds(t *testing.T) {
 		t.Fatalf("expected 2 component commands, got %d", len(cmds))
 	}
 
-	if _, ok := uitestFlattenCmds(commands.TickMsg{}); ok {
+	if _, ok := cmdtest.Flatten(commands.TickMsg{}); ok {
 		t.Fatal("expected a plain message not to be treated as a batch")
 	}
 }

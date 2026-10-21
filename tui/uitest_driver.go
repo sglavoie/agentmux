@@ -10,9 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
-	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +25,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
+	"github.com/sglavoie/agentmux/tui/cmdtest"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
@@ -274,13 +272,13 @@ func (d *uitestDriver) Command(id commands.ID) error {
 		return fmt.Errorf("uitest: command action requires a command id")
 	}
 	if d.model.mode != ModeList {
-		return fmt.Errorf("uitest: command %q is unreachable from mode %q: the palette opens from the session list", id, uitestModeName(d.model.mode))
+		return fmt.Errorf("uitest: command %q is unreachable from mode %q: the palette opens from the session list", id, d.model.mode.String())
 	}
 	if err := d.Key(keyColon); err != nil {
 		return err
 	}
 	if d.model.mode != ModeCommandPalette {
-		return fmt.Errorf("uitest: pressing %q left the model in mode %q instead of opening the command palette", keyColon, uitestModeName(d.model.mode))
+		return fmt.Errorf("uitest: pressing %q left the model in mode %q instead of opening the command palette", keyColon, d.model.mode.String())
 	}
 	index, err := uitestCommandRowIndex(d.model.commandResults, id, uitestCommandIDSet()[string(id)])
 	if err != nil {
@@ -422,7 +420,7 @@ func (d *uitestDriver) drain(cmd tea.Cmd) error {
 		if !ran || msg == nil {
 			continue
 		}
-		if cmds, isBatch := uitestFlattenCmds(msg); isBatch {
+		if cmds, isBatch := cmdtest.Flatten(msg); isBatch {
 			queue = append(queue, cmds...)
 			continue
 		}
@@ -444,7 +442,7 @@ func (d *uitestDriver) runCommand(cmd tea.Cmd) (tea.Msg, bool, error) {
 	if cmd == nil {
 		return nil, false, nil
 	}
-	if isUITestTimerCmd(cmd) {
+	if cmdtest.IsTimer(cmd) {
 		return nil, false, nil
 	}
 	d.commandMu.Lock()
@@ -467,15 +465,6 @@ func (d *uitestDriver) runCommand(cmd tea.Cmd) (tea.Msg, bool, error) {
 	}
 }
 
-func isUITestTimerCmd(cmd tea.Cmd) bool {
-	fn := runtime.FuncForPC(reflect.ValueOf(cmd).Pointer())
-	if fn == nil {
-		return false
-	}
-	name := fn.Name()
-	return strings.Contains(name, "bubbletea/v2.Tick") || strings.Contains(name, "bubbletea/v2.Every")
-}
-
 // Err reports the first asynchronous/void-operation driver error.
 func (d *uitestDriver) Err() error {
 	if d == nil {
@@ -495,24 +484,6 @@ func (d *uitestDriver) recordErr(err error) {
 		d.err = err
 	}
 	d.errMu.Unlock()
-}
-
-// uitestFlattenCmds reports whether msg is a slice-shaped batch/sequence message
-// and, if so, returns the component commands it carries. It mirrors the
-// reflection approach used by the launch-dispatch test helper so the harness
-// never depends on Bubble Tea's unexported batch/sequence message types.
-func uitestFlattenCmds(msg tea.Msg) ([]tea.Cmd, bool) {
-	v := reflect.ValueOf(msg)
-	if v.Kind() != reflect.Slice {
-		return nil, false
-	}
-	out := make([]tea.Cmd, 0, v.Len())
-	for i := 0; i < v.Len(); i++ {
-		if c, ok := v.Index(i).Interface().(tea.Cmd); ok && c != nil {
-			out = append(out, c)
-		}
-	}
-	return out, true
 }
 
 // This file binds a built-in fixture to a driver: the fixture's windows, plans,
@@ -789,7 +760,9 @@ var uitestFrozenNow = time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)
 // a fixture's did not, so without this every scenario would be judged against a
 // split geometry no installation produces.
 func newUITestDriver(cfg *config.Config, client kitty.KittyClient, size UITestSize) *uitestDriver {
-	uitestApplyPreviewDefaults(cfg)
+	if cfg != nil {
+		config.ApplyPreviewDefaults(&cfg.Defaults.Preview)
+	}
 	return newUITestDriverModel(NewModel(cfg, client), size)
 }
 

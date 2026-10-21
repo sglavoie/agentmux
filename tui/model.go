@@ -683,6 +683,67 @@ const (
 	ModePlanRun                // choices for starting an agent-session-loop run of one plan
 )
 
+// String names the mode in stable lower snake case ("list",
+// "command_palette"). The scenario harness reports and asserts modes by these
+// names, so a new mode must be added here or its observations read "unknown";
+// an out-of-range value reads "unknown" rather than panicking.
+func (mode Mode) String() string {
+	switch mode {
+	case ModeList:
+		return "list"
+	case ModeSearch:
+		return "search"
+	case ModeConfirm:
+		return "confirm"
+	case ModePicker:
+		return "picker"
+	case ModeConfigPicker:
+		return "config_picker"
+	case ModeHelp:
+		return "help"
+	case ModeDetail:
+		return "detail"
+	case ModeActions:
+		return "actions"
+	case ModeSessionSearch:
+		return "session_search"
+	case ModeSessionView:
+		return "session_view"
+	case ModeDeleteChoice:
+		return "delete_choice"
+	case ModeChipPicker:
+		return "chip_picker"
+	case ModeMessageDetail:
+		return "message_detail"
+	case ModeWorktrees:
+		return "worktrees"
+	case ModePlanSearch:
+		return "plan_search"
+	case ModePlanView:
+		return "plan_view"
+	case ModeCommandPalette:
+		return "command_palette"
+	case ModeLiveSessionPicker:
+		return "live_session_picker"
+	case ModeASLRuns:
+		return "asl_runs"
+	case ModeASLResponse:
+		return "asl_response"
+	case ModeSend:
+		return "send"
+	case ModePlanRun:
+		return "plan_run"
+	case ModeProjectSwitcher:
+		return "project_switcher"
+	case ModeFeedback:
+		return "feedback"
+	case ModeHealth:
+		return "health"
+	default:
+		return "unknown"
+	}
+}
+
 // LivePickerPurpose names the caller that raised ModeLiveSessionPicker. The
 // picker only chooses among candidates; the purpose decides what Enter does
 // with the chosen one and which root view the detour returns to.

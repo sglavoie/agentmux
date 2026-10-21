@@ -240,7 +240,7 @@ func TestRedesignFixturesAreReachableByCommandAction(t *testing.T) {
 				t.Fatalf("reach Plans by name: %v", err)
 			}
 			if d.Model().mode != ModePlanSearch {
-				t.Fatalf("mode = %q, want plan_search", uitestModeName(d.Model().mode))
+				t.Fatalf("mode = %q, want plan_search", d.Model().mode.String())
 			}
 		})
 	}

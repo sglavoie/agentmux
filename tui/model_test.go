@@ -54,7 +54,7 @@ func testModel() Model {
 		// 0 pins the inspector to its 40-column floor at every width, and
 		// min_cols 0 lowers the split floor from the configured 100 to the pane
 		// minimums' own 89.
-		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: uitestPreviewDefaults()},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: config.DefaultPreview()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},
@@ -274,7 +274,7 @@ func modalConfirmModel() Model {
 
 func testModelWithSessions() Model {
 	cfg := &config.Config{
-		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: uitestPreviewDefaults()},
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2, Preview: config.DefaultPreview()},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts: []config.Account{
 			{Name: "work", Color: "blue"},

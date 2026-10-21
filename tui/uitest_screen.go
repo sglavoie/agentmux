@@ -196,7 +196,7 @@ func detectModalFitIssues(m Model) []UITestLayoutIssue {
 	realW := layout.PopupWidth(live)
 	realH := popupLineCount(live)
 
-	mode := uitestModeName(m.mode)
+	mode := m.mode.String()
 	var issues []UITestLayoutIssue
 
 	if naturalW > realW && !modalUsesResponsiveWidth(m.mode) {
@@ -305,7 +305,7 @@ type UITestObservation struct {
 func observeUITest(m Model, size UITestSize) UITestObservation {
 	return UITestObservation{
 		Size:           size,
-		Mode:           uitestModeName(m.mode),
+		Mode:           m.mode.String(),
 		Cursor:         uitestCursor(m),
 		SelectedAction: uitestSelectedAction(m),
 		Screen:         captureUITestScreen(m, size),
@@ -352,66 +352,6 @@ func uitestCursor(m Model) int {
 		return projectSwitcherCursor(m)
 	default:
 		return m.cursor
-	}
-}
-
-// uitestModeName maps a Mode to a stable, lower-snake JSON string. New modes
-// must be added here so scenario output never carries a bare integer; unknown
-// values fall back to "unknown" rather than panicking.
-func uitestModeName(mode Mode) string {
-	switch mode {
-	case ModeList:
-		return "list"
-	case ModeSearch:
-		return "search"
-	case ModeConfirm:
-		return "confirm"
-	case ModePicker:
-		return "picker"
-	case ModeConfigPicker:
-		return "config_picker"
-	case ModeHelp:
-		return "help"
-	case ModeDetail:
-		return "detail"
-	case ModeActions:
-		return "actions"
-	case ModeSessionSearch:
-		return "session_search"
-	case ModeSessionView:
-		return "session_view"
-	case ModeDeleteChoice:
-		return "delete_choice"
-	case ModeChipPicker:
-		return "chip_picker"
-	case ModeMessageDetail:
-		return "message_detail"
-	case ModeWorktrees:
-		return "worktrees"
-	case ModePlanSearch:
-		return "plan_search"
-	case ModePlanView:
-		return "plan_view"
-	case ModeCommandPalette:
-		return "command_palette"
-	case ModeLiveSessionPicker:
-		return "live_session_picker"
-	case ModeASLRuns:
-		return "asl_runs"
-	case ModeASLResponse:
-		return "asl_response"
-	case ModeSend:
-		return "send"
-	case ModePlanRun:
-		return "plan_run"
-	case ModeProjectSwitcher:
-		return "project_switcher"
-	case ModeFeedback:
-		return "feedback"
-	case ModeHealth:
-		return "health"
-	default:
-		return "unknown"
 	}
 }
 

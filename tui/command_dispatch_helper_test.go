@@ -33,16 +33,13 @@ import (
 func runDashboardCommand(t *testing.T, m Model, id commands.ID) (Model, tea.Cmd) {
 	t.Helper()
 	if m.mode != ModeList {
-		t.Fatalf("command %q is unreachable from mode %q: the palette opens from the session list", id, uitestModeName(m.mode))
+		t.Fatalf("command %q is unreachable from mode %q: the palette opens from the session list", id, m.mode.String())
 	}
 	m = pressKey(m, keyColon)
 	if m.mode != ModeCommandPalette {
-		t.Fatalf("pressing %q left the model in mode %q instead of opening the command palette", keyColon, uitestModeName(m.mode))
+		t.Fatalf("pressing %q left the model in mode %q instead of opening the command palette", keyColon, m.mode.String())
 	}
-	index, err := uitestCommandRowIndex(m.commandResults, id, uitestCommandIDSet()[string(id)])
-	if err != nil {
-		t.Fatal(err)
-	}
+	index := paletteRowIndex(t, m.commandResults, id)
 	for steps := 0; m.commandCursor != index; steps++ {
 		if steps > len(m.commandResults) {
 			t.Fatalf("palette cursor stopped at %d walking to row %d", m.commandCursor, index)
@@ -65,6 +62,36 @@ func runDashboardCommand(t *testing.T, m Model, id commands.ID) (Model, tea.Cmd)
 	return next, cmd
 }
 
+// paletteRowIndex finds the one palette row carrying id, and tells an id the
+// catalog declares but hides for this selection apart from one that does not
+// exist, the same three refusals the harness's command action reports.
+func paletteRowIndex(t *testing.T, rows []commands.Command[Model], id commands.ID) int {
+	t.Helper()
+	found, matches := -1, 0
+	for i, row := range rows {
+		if row.ID != id {
+			continue
+		}
+		matches++
+		if found < 0 {
+			found = i
+		}
+	}
+	switch {
+	case matches > 1:
+		t.Fatalf("command %q is ambiguous: %d palette rows carry that id", id, matches)
+	case matches == 1:
+		return found
+	}
+	for _, candidate := range commandCatalog() {
+		if candidate.ID == id {
+			t.Fatalf("command %q is hidden for the current selection, so the palette offers no row for it", id)
+		}
+	}
+	t.Fatalf("no command with id %q exists", id)
+	return -1
+}
+
 // pressDashboardCommand is runDashboardCommand for a caller that only wants the
 // resulting model, mirroring pressKey's relationship to Model.Update.
 func pressDashboardCommand(t *testing.T, m Model, id commands.ID) Model {
@@ -85,11 +112,11 @@ func pressDashboardCommand(t *testing.T, m Model, id commands.ID) Model {
 func runRowAction(t *testing.T, m Model, key string) (Model, tea.Cmd) {
 	t.Helper()
 	if m.mode != ModeList {
-		t.Fatalf("the actions overlay is unreachable from mode %q: it opens from the session list", uitestModeName(m.mode))
+		t.Fatalf("the actions overlay is unreachable from mode %q: it opens from the session list", m.mode.String())
 	}
 	m = pressKey(m, keyA)
 	if m.mode != ModeActions {
-		t.Fatalf("pressing %q left the model in mode %q instead of opening the actions overlay", keyA, uitestModeName(m.mode))
+		t.Fatalf("pressing %q left the model in mode %q instead of opening the actions overlay", keyA, m.mode.String())
 	}
 	for _, a := range actionsFor(m) {
 		if a.KeyMatch != key {

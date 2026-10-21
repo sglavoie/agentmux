@@ -527,7 +527,7 @@ func TestHealthModeIsRegisteredAcrossDispatch(t *testing.T) {
 		t.Fatal("j did not reach handleHealthKey through the mode dispatcher")
 	}
 
-	if got := uitestModeName(ModeHealth); got != "health" {
+	if got := ModeHealth.String(); got != "health" {
 		t.Fatalf("uitest mode name = %q, want %q", got, "health")
 	}
 	if modalBoxRenderer(ModeHealth) == nil {

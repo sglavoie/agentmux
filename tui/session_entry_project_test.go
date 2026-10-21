@@ -134,7 +134,7 @@ func TestListProjectSessionSearchIsDisabledOnAnEmptyList(t *testing.T) {
 	}
 	m = pressKey(m, keyColon)
 	if m.mode != ModeCommandPalette {
-		t.Fatalf("expected the palette to open, got mode %q", uitestModeName(m.mode))
+		t.Fatalf("expected the palette to open, got mode %q", m.mode.String())
 	}
 	entry := commandByID(t, commands.SearchProject)
 	if availability := entry.AvailabilityFor(m, m.commandContext); availability.Available {

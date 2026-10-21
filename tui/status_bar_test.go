@@ -229,14 +229,14 @@ func TestFeedbackRowSitsAboveTheFooterOnTheDashboardOnly(t *testing.T) {
 		own := dash
 		own.mode = mode
 		if !dashboardOwnsChrome(own) {
-			t.Fatalf("%s gave up the dashboard's chrome", uitestModeName(mode))
+			t.Fatalf("%s gave up the dashboard's chrome", mode.String())
 		}
 	}
 	for _, mode := range []Mode{ModeSessionSearch, ModeSessionView, ModePlanSearch, ModePlanView, ModeWorktrees, ModeASLRuns, ModePicker} {
 		other := dash
 		other.mode = mode
 		if dashboardOwnsChrome(other) {
-			t.Fatalf("%s claims the dashboard's chrome", uitestModeName(mode))
+			t.Fatalf("%s claims the dashboard's chrome", mode.String())
 		}
 	}
 }

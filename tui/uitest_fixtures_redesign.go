@@ -52,7 +52,7 @@ func duplicateNamesFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: uitestPreviewDefaults(),
+			Preview: config.DefaultPreview(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
@@ -129,7 +129,7 @@ func pausedOutputFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: uitestPreviewDefaults(),
+			Preview: config.DefaultPreview(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
@@ -192,7 +192,7 @@ func healthStatesFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: uitestPreviewDefaults(),
+			Preview: config.DefaultPreview(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
@@ -262,7 +262,7 @@ func attentionOverlapFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: uitestPreviewDefaults(),
+			Preview: config.DefaultPreview(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
 		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},

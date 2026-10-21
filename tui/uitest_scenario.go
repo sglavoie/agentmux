@@ -349,7 +349,7 @@ func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model
 			return uitestAssertionFail(a, fmt.Sprintf("cursor is %d, want %d", final.Cursor, a.Cursor))
 		}
 	case UITestAssertSelectedAction:
-		if final.Mode != uitestModeName(ModeActions) {
+		if final.Mode != ModeActions.String() {
 			return uitestAssertionFail(a, fmt.Sprintf("mode is %q, so no action is selected", final.Mode))
 		}
 		if final.SelectedAction != a.Value {
@@ -423,7 +423,7 @@ func uitestSelectedSession(m Model) (session.RunningSession, bool) {
 func uitestModeNameSet() map[string]bool {
 	set := make(map[string]bool)
 	for mode := ModeList; mode <= ModePlanRun; mode++ {
-		set[uitestModeName(mode)] = true
+		set[mode.String()] = true
 	}
 	return set
 }

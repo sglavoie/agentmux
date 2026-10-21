@@ -202,7 +202,7 @@ func TestNavGAndCapitalGReachListEnds(t *testing.T) {
 				t.Errorf("%q cursor %d, want %d", key, got.cursor, want)
 			}
 			if got.mode != ModeList {
-				t.Errorf("%q left ModeList for %q", key, uitestModeName(got.mode))
+				t.Errorf("%q left ModeList for %q", key, got.mode.String())
 			}
 		})
 	}

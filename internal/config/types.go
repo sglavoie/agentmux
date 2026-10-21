@@ -384,6 +384,35 @@ type PreviewConfig struct {
 	MinRows   int     `toml:"min_rows"`   // below this, vertical split is disabled
 }
 
+// DefaultPreview is the Preview block Load fills in for an operator who
+// configured none.
+func DefaultPreview() PreviewConfig {
+	return PreviewConfig{Direction: "horizontal", Ratio: 0.5, RefreshMs: 500, MinCols: 100, MinRows: 30}
+}
+
+// ApplyPreviewDefaults fills the zero fields of preview from DefaultPreview,
+// field by field, which is what lets a config state one setting and inherit
+// the rest. Load runs it; a Config built literally (a test, a harness
+// fixture) never does unless it asks.
+func ApplyPreviewDefaults(preview *PreviewConfig) {
+	defaults := DefaultPreview()
+	if preview.Direction == "" {
+		preview.Direction = defaults.Direction
+	}
+	if preview.Ratio == 0 {
+		preview.Ratio = defaults.Ratio
+	}
+	if preview.RefreshMs == 0 {
+		preview.RefreshMs = defaults.RefreshMs
+	}
+	if preview.MinCols == 0 {
+		preview.MinCols = defaults.MinCols
+	}
+	if preview.MinRows == 0 {
+		preview.MinRows = defaults.MinRows
+	}
+}
+
 // OverviewConfig configures the live session overview (`amx overview`, F2).
 type OverviewConfig struct {
 	// Compact chooses the mode the overview opens in. *bool so an omitted key

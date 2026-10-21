@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
+	"github.com/sglavoie/agentmux/tui/cmdtest"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
@@ -49,14 +50,14 @@ func settlePreviewRead(t *testing.T, m *Model, cmd tea.Cmd) {
 // request coalesces into the pending bit and hands back nil, which reads exactly
 // like the dashboard refusing to fetch.
 func feedPreviewReplies(m *Model, cmd tea.Cmd, depth int) bool {
-	if cmd == nil || isUITestTimerCmd(cmd) {
+	if cmd == nil || cmdtest.IsTimer(cmd) {
 		return true
 	}
 	if depth > 16 {
 		return false
 	}
 	msg := cmd()
-	if parts, ok := uitestFlattenCmds(msg); ok {
+	if parts, ok := cmdtest.Flatten(msg); ok {
 		ok := true
 		for _, part := range parts {
 			ok = feedPreviewReplies(m, part, depth+1) && ok
@@ -354,7 +355,7 @@ func TestARetiredTickChainNeverSchedulesAgain(t *testing.T) {
 	if follow == nil {
 		t.Fatal("the live chain stopped scheduling")
 	}
-	if isUITestTimerCmd(follow) {
+	if cmdtest.IsTimer(follow) {
 		t.Error("the live chain scheduled its successor but dispatched no read")
 	}
 	if !m.previewReadInFlight {
@@ -396,7 +397,7 @@ func TestATickCoalescesWithTheReadAlreadyOut(t *testing.T) {
 		}
 		// The one command handed back is the next tick: the read coalesced
 		// rather than stacking behind the one still out.
-		if !isUITestTimerCmd(follow) {
+		if !cmdtest.IsTimer(follow) {
 			t.Fatalf("beat %d dispatched a read while one was in flight", beat)
 		}
 	}

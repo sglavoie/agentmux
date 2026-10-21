@@ -226,44 +226,6 @@ func actionFeedbackFixture() uitestFixture {
 	return fixture
 }
 
-// uitestPreviewDefaults is the Preview block config.Load fills in for an
-// operator who configured none. A fixture builds its Config literally and never
-// runs that defaulting pass, so without this the harness would render a world
-// no installation can produce: ratio 0 pins the inspector to its 40-column
-// floor at every width, and min_cols 0 lowers the split floor from the
-// configured 100 to the pane minimums' own 89.
-func uitestPreviewDefaults() config.PreviewConfig {
-	return config.PreviewConfig{Direction: "horizontal", Ratio: 0.5, RefreshMs: 500, MinCols: 100, MinRows: 30}
-}
-
-// uitestApplyPreviewDefaults fills the zero fields of a config's Preview block,
-// field by field, exactly as config.Load's defaulting pass does. Field by field
-// is what lets a fixture state one setting and inherit the rest —
-// triage_vertical sets a direction and nothing else, and a whole-block fallback
-// would silently take it back.
-func uitestApplyPreviewDefaults(cfg *config.Config) {
-	if cfg == nil {
-		return
-	}
-	defaults := uitestPreviewDefaults()
-	preview := &cfg.Defaults.Preview
-	if preview.Direction == "" {
-		preview.Direction = defaults.Direction
-	}
-	if preview.Ratio == 0 {
-		preview.Ratio = defaults.Ratio
-	}
-	if preview.RefreshMs == 0 {
-		preview.RefreshMs = defaults.RefreshMs
-	}
-	if preview.MinCols == 0 {
-		preview.MinCols = defaults.MinCols
-	}
-	if preview.MinRows == 0 {
-		preview.MinRows = defaults.MinRows
-	}
-}
-
 // uitestFixtureError reports a request for an unknown built-in fixture and
 // lists the names that are available.
 type uitestFixtureError struct {

@@ -58,7 +58,7 @@ func pausedQueueFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: uitestPreviewDefaults(),
+			Preview: config.DefaultPreview(),
 			// The one fixture that asks to be confirmed. A round trip through a
 			// confirmation prompt is part of what this world exists for, and the
 			// prompt is opt-in configuration rather than a property of any
@@ -122,7 +122,7 @@ func noSessionsFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: uitestPreviewDefaults(),
+			Preview: config.DefaultPreview(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		HarnessColors: map[string]string{"claude": "blue"},
@@ -160,7 +160,7 @@ func previewFailureFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Sort: "alpha", RefreshInterval: 2,
-			Preview: uitestPreviewDefaults(),
+			Preview: config.DefaultPreview(),
 		},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		HarnessColors: map[string]string{"claude": "blue"},
