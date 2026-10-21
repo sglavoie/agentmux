@@ -37,9 +37,7 @@ struct WorkspaceReviewStatus: View {
         // The oldest displayed observation sets the age: a new list read must
         // never make an older transcript or diff appear freshly updated.
         guard let at = reads.compactMap(\.refreshedAt).min() else { return "Not updated yet" }
-        let seconds = max(0, Int(now.timeIntervalSince(at)))
-        let age = seconds < 60 ? "\(seconds)s" : seconds < 3600 ? "\(seconds / 60)m" : seconds < 86400 ? "\(seconds / 3600)h" : "\(seconds / 86400)d"
-        return "Updated \(age) ago"
+        return "Updated " + AgeFormatter.string(since: at, now: now, style: .sentence, seconds: true)
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 5)) { context in

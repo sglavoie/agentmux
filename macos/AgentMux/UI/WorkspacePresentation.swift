@@ -325,13 +325,11 @@ struct WorkspaceFreshness: View {
     var compact = false
     @State private var showing = false
     static func text(at: Date, now: Date, retained: Bool) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(at)))
-        let age = seconds < 60 ? "just now" : seconds < 3600 ? "\(seconds / 60)m ago" : "\(seconds / 3600)h ago"
+        let age = AgeFormatter.string(since: at, now: now, style: .sentence)
         return retained ? "Showing results from \(age)" : "Refreshed \(age)"
     }
     static func age(at: Date, now: Date) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(at)))
-        return seconds < 60 ? "now" : seconds < 3600 ? "\(seconds / 60)m" : "\(seconds / 3600)h"
+        AgeFormatter.string(since: at, now: now, style: .compact)
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in

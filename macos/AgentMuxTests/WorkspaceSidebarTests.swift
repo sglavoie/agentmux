@@ -203,7 +203,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(personal.key, .embedded(F.runtimeID(2)))
         XCTAssertEqual(personal.glyph, "🛑")
         XCTAssertTrue(personal.attention)
-        XCTAssertEqual(personal.detail, "claude · <1m")
+        XCTAssertEqual(personal.detail, "claude · now")
         XCTAssertEqual(personal.toolTip, "tmux %2")
 
         let work = built[0].rows[0]

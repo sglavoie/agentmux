@@ -298,7 +298,7 @@ enum WorkspaceSidebar {
         var detail: [String] = []
         if !session.harness.isEmpty, session.harness != label { detail.append(session.harness) }
         if !session.branch.isEmpty { detail.append("\(session.branch)\(session.dirty ? "*" : "")") }
-        if let changed = session.changedAt { detail.append(MenuBuilder.age(since: changed, now: now)) }
+        if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
         if session.attention, !session.reason.isEmpty { detail.append(WorkspaceWording.status(session.reason)) }
         if embedded == nil { detail.append(kittyBadge) }
 

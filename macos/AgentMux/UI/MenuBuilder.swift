@@ -292,7 +292,7 @@ enum MenuBuilder {
     static func row(_ session: CompanionSession, showReason: Bool, input: Input) -> MenuSessionRow {
         var parts: [String] = [name(of: session)]
         if !session.harness.isEmpty { parts.append(session.harness) }
-        if let changed = session.changedAt { parts.append(age(since: changed, now: input.now)) }
+        if let changed = session.changedAt { parts.append(AgeFormatter.string(since: changed, now: input.now, style: .compact)) }
         if showReason, !session.reason.isEmpty { parts.append(WorkspaceWording.status(session.reason)) }
         var title = parts.joined(separator: " · ")
         let glyph = input.glyphs.glyph(for: session.iconState)
@@ -329,17 +329,6 @@ enum MenuBuilder {
             return "window \(session.windowID)"
         }
         return runtime.pane.isEmpty ? runtime.backend : "\(runtime.backend) \(runtime.pane)"
-    }
-
-    /// `<1m`, `4m`, `2h`, `3d`.
-    static func age(since date: Date, now: Date) -> String {
-        let seconds = max(0, Int(now.timeIntervalSince(date)))
-        switch seconds {
-        case ..<60: return "<1m"
-        case ..<3600: return "\(seconds / 60)m"
-        case ..<86400: return "\(seconds / 3600)h"
-        default: return "\(seconds / 86400)d"
-        }
     }
 
     // MARK: Actions
@@ -471,7 +460,7 @@ enum MenuBuilder {
         if live {
             parts.append("live")
         } else if let lastAt = conversation.lastAt {
-            parts.append(age(since: lastAt, now: now))
+            parts.append(AgeFormatter.string(since: lastAt, now: now, style: .compact))
         }
         let snippet = conversation.snippet
             .split(whereSeparator: \.isNewline).first.map(String.init)?

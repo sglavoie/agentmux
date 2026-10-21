@@ -354,7 +354,7 @@ struct ASLQuestionView: View {
     static func asked(_ askedAt: String, now: Date) -> String? {
         guard !askedAt.isEmpty else { return nil }
         guard let date = RecentConversation.parseTime(askedAt) else { return "asked \(askedAt)" }
-        return "asked \(MenuBuilder.age(since: date, now: now)) ago"
+        return "asked \(AgeFormatter.string(since: date, now: now, style: .sentence))"
     }
 
     @ViewBuilder private var form: some View {

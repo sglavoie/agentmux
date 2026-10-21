@@ -156,7 +156,7 @@ enum WorkspaceInspector {
                 answer = .prompt(runtimeSessionID: id)
             }
             var detail = [session.reason.isEmpty ? word(for: session.iconState) : WorkspaceWording.status(session.reason)]
-            if let changed = session.changedAt { detail.append(MenuBuilder.age(since: changed, now: now)) }
+            if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
             if row.embeddedRuntimeSessionID == nil { detail.append(WorkspaceSidebar.kittyBadge) }
             return WorkspaceWaitingRow(
                 key: row.key,
@@ -191,7 +191,7 @@ enum WorkspaceInspector {
                 .formatted(.dateTime.year().month().day().hour().minute().second().timeZone())))
         }
         if let changed = session.changedAt {
-            status.append(Field(label: "Since", value: MenuBuilder.age(since: changed, now: now)))
+            status.append(Field(label: "Since", value: AgeFormatter.string(since: changed, now: now, style: .compact)))
         }
         if session.isWorking, session.busySinceAt > 0 {
             status.append(Field(label: "Working for", value: age(session.busySinceAt, now: now)))
@@ -242,7 +242,7 @@ enum WorkspaceInspector {
     }
 
     private static func age(_ seconds: Int64, now: Date) -> String {
-        MenuBuilder.age(since: Date(timeIntervalSince1970: TimeInterval(seconds)), now: now)
+        AgeFormatter.string(since: Date(timeIntervalSince1970: TimeInterval(seconds)), now: now, style: .compact)
     }
 }
 
