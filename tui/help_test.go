@@ -453,6 +453,8 @@ func TestHelpKeymapPaintsItsKeysLikeKeys(t *testing.T) {
 // label and description the menu itself draws, in menu order, and Enter is
 // described for both backends rather than as a Kitty tab focus.
 func TestHelpActOnRowFollowsTheSessionActionTable(t *testing.T) {
+	t.Parallel()
+
 	var section []string
 	for _, sec := range helpSections {
 		if sec.name == "Act on row" {

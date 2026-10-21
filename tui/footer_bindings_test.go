@@ -10,6 +10,8 @@ import (
 )
 
 func TestFooterBindingStyles(t *testing.T) {
+	t.Parallel()
+
 	available := chrome.Binding("enter", "apply")
 	if !strings.Contains(available, styleFooterKey.Render("enter")) {
 		t.Fatalf("available binding does not use the accent key style: %q", available)
@@ -44,6 +46,8 @@ func TestFooterBindingStyles(t *testing.T) {
 }
 
 func TestRootFooterBindingsRemoveSeparatorColonsAndPreserveSemanticColons(t *testing.T) {
+	t.Parallel()
+
 	search := stripAnsi(renderFooter(Model{mode: ModeSearch, width: 200}))
 	if !strings.Contains(search, "filter: @profile") {
 		t.Fatalf("search footer lost DSL colon: %q", search)
@@ -78,6 +82,8 @@ func TestRootFooterBindingsRemoveSeparatorColonsAndPreserveSemanticColons(t *tes
 }
 
 func TestFooterCompactPromptsAndTruncatedMoreBinding(t *testing.T) {
+	t.Parallel()
+
 	confirm := stripAnsi(renderFooter(Model{mode: ModeConfirm, width: 80}))
 	for _, want := range []string{"[y]es", "[n]o", "[esc] cancel"} {
 		if !strings.Contains(confirm, want) {
@@ -95,6 +101,8 @@ func TestFooterCompactPromptsAndTruncatedMoreBinding(t *testing.T) {
 }
 
 func TestModalAndStandaloneHintRowsUseFooterBindings(t *testing.T) {
+	t.Parallel()
+
 	target := transcript.SessionMeta{ID: "abc", Project: "demo"}
 	cases := []struct {
 		name string
