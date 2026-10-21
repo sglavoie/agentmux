@@ -34,7 +34,7 @@ func pickerModel(t *testing.T) Model {
 	client := kitty.NewClientWithSocket(runner, "")
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
-	m = pressKey(m, "l")
+	m = pressKeyIO(m, "l")
 	if m.mode != ModePicker {
 		t.Fatalf("expected ModePicker after l, got %d", m.mode)
 	}

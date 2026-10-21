@@ -8,7 +8,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/launch"
@@ -90,13 +89,15 @@ func (m *Model) applyPendingConfig() tea.Cmd {
 		m.idleThreshold = 5 * time.Minute
 	}
 	if m.mode == ModePicker {
-		m.reloadPickerProjects()
-		return tea.Batch(m.requestTopologyRefresh(), m.refreshPreviewForPickerCursor())
+		check := m.reloadPickerProjects()
+		return tea.Batch(check, m.requestTopologyRefresh(), m.refreshPreviewForPickerCursor())
 	}
 	return m.requestTopologyRefresh()
 }
 
-func (m *Model) reloadPickerProjects() {
+// reloadPickerProjects re-reads the launcher's projects from the new
+// configuration and returns the directory check for them.
+func (m *Model) reloadPickerProjects() tea.Cmd {
 	old := m.pickerSessions
 	key := func(s config.Session) string { return session.SessionKey(s.EffectiveProfile(), s.Title) }
 	selectedKey := ""
@@ -125,10 +126,9 @@ func (m *Model) reloadPickerProjects() {
 			delete(m.pickerProfileOverride, i)
 		}
 	}
-	m.pickerDirProblems = launch.DirectoryProblems(m.pickerSessions, actions.ProjectDirectoryProblem)
-	for i := range m.pickerDirOverride {
-		m.refreshPickerDirProblem(i)
-	}
+	// The previous answers stay, remapped, until the new check reports.
+	m.pickerDirProblems = remapProjectValues(m.pickerDirProblems, remap)
+	check := m.checkPickerDirectoriesCmd()
 	m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
 	m.pickerCursor = 0
 	for cursor, i := range m.pickerFilteredIdx {
@@ -138,6 +138,7 @@ func (m *Model) reloadPickerProjects() {
 		}
 	}
 	scrollPickerToCursor(m)
+	return check
 }
 
 func remapProjectValues[T any](values map[int]T, indices map[int]int) map[int]T {

@@ -116,11 +116,8 @@ func (m Model) handleConfigPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					}
 					m.pickerProfileOverride[m.configPickerProjectIdx] = acc.Name
 				}
-				m.savePickerOverrides()
-				if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
-					return m, cmd
-				}
-				return m, nil
+				save := m.savePickerOverridesCmd()
+				return m, tea.Batch(save, m.refreshPreviewForPickerCursor())
 			}
 			// The restart-profile and dashboard-launch purposes are answered
 			// above, by the controller that opened the picker for them. Reaching

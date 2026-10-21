@@ -100,10 +100,6 @@ func (m Model) pickerOpenTargets() []config.Session {
 	return m.pickerInput().OpenTargets()
 }
 
-func (m Model) savePickerState(profileOverrides map[int]string, pinned map[int]bool) error {
-	return m.pickerInput().SaveState(profileOverrides, pinned)
-}
-
 // activeConfigPickerPurpose resolves why the profile-override overlay is open.
 // The fallback reads the mode the overlay will return to, which is root state,
 // so the resolution stays here even though the vocabulary is the leaf's.

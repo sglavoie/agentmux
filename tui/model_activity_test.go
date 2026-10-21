@@ -163,7 +163,7 @@ func TestPickerProfileOverride_Persists(t *testing.T) {
 
 	// Move cursor to work (index 0) and confirm.
 	m = pressKey(m, "k")
-	m = pressKey(m, "enter")
+	m = pressKeyIO(m, "enter")
 
 	if m.mode != ModePicker {
 		t.Fatalf("expected to return to ModePicker, got %d", m.mode)

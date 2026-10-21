@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"maps"
 
 	tea "charm.land/bubbletea/v2"
@@ -82,11 +81,9 @@ func (m Model) handlePickerDirKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		scrollPickerToCursor(&m)
 		return m, m.refreshPreviewForPickerCursor()
 	case keyTab:
-		if idx := m.pickerDirIdx; idx >= 0 && idx < len(m.pickerSessions) {
-			m.pickerDirValue = launch.CompleteDirectory(m.pickerSessions[idx].Directory, m.pickerDirValue)
-			m.pickerDirError = ""
-		}
-		return m, nil
+		// Completion lists a directory, so it runs as a command and lands
+		// through handlePickerDirCompleted.
+		return m, m.completePickerDirCmd()
 	case keyCtrlU:
 		m.pickerDirValue = ""
 		m.pickerDirError = ""
@@ -433,15 +430,24 @@ func (m Model) togglePickerPin() (tea.Model, tea.Cmd) {
 	} else {
 		delete(nextPinned, origIdx)
 	}
-	title := m.pickerSessions[origIdx].Title
-	if err := m.savePickerState(m.pickerProfileOverride, nextPinned); err != nil {
-		return m, m.pushToast(Toast{
-			Severity: toastError,
-			Text:     fmt.Sprintf("Could not update pin for %s: %s", title, err),
-		})
-	}
+	// The pin is applied now and saved off the update loop; the save's outcome
+	// says pinned or unpinned, or takes the pin back if it could not be written
+	// (handlePickerStateSaved).
+	change := &pickerPinChange{origIdx: origIdx, title: m.pickerSessions[origIdx].Title, pinned: pinned}
+	save := m.savePickerStateCmd(m.pickerProfileOverride, nextPinned, change)
+	m.applyPickerPins(nextPinned, origIdx)
 
-	m.pickerPinned = nextPinned
+	cmds := []tea.Cmd{save}
+	if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// applyPickerPins installs a pin set and keeps the cursor on the project whose
+// pin changed, wherever the re-partitioned list now puts it.
+func (m *Model) applyPickerPins(pinned map[int]bool, origIdx int) {
+	m.pickerPinned = pinned
 	m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
 	for i, idx := range m.pickerFilteredIdx {
 		if idx == origIdx {
@@ -449,20 +455,7 @@ func (m Model) togglePickerPin() (tea.Model, tea.Cmd) {
 			break
 		}
 	}
-	scrollPickerToCursor(&m)
-
-	action := "Unpinned"
-	if pinned {
-		action = "Pinned"
-	}
-	cmds := []tea.Cmd{m.pushToast(Toast{
-		Severity: toastSuccess,
-		Text:     fmt.Sprintf("%s %s", action, title),
-	})}
-	if cmd := m.refreshPreviewForPickerCursor(); cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-	return m, tea.Batch(cmds...)
+	scrollPickerToCursor(m)
 }
 
 // restartWithProfileCmd closes and relaunches a session under a different
@@ -644,10 +637,8 @@ func pickerOpenEditorCmd(m Model, sess config.Session) tea.Cmd {
 	}
 }
 
-// savePickerOverrides persists an updated one-time profile choice while
+// savePickerOverridesCmd persists an updated one-time profile choice while
 // retaining all project pins.
-func (m Model) savePickerOverrides() {
-	if err := m.savePickerState(m.pickerProfileOverride, m.pickerPinned); err != nil {
-		slog.Debug("overrides: save error", "err", err)
-	}
+func (m *Model) savePickerOverridesCmd() tea.Cmd {
+	return m.savePickerStateCmd(m.pickerProfileOverride, m.pickerPinned, nil)
 }

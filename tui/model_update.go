@@ -185,6 +185,15 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case launchProgressMsg:
 		return m.handleLaunchProgress(msg)
 
+	case pickerDirProblemsMsg:
+		return m.handlePickerDirProblems(msg)
+
+	case pickerDirCompletedMsg:
+		return m.handlePickerDirCompleted(msg)
+
+	case pickerStateSavedMsg:
+		return m.handlePickerStateSaved(msg)
+
 	case recoveryDoneMsg:
 		return m.handleRecoveryDone(msg)
 

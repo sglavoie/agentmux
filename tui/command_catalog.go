@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -54,7 +53,9 @@ func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	}
 	m.pickerSessions = launch.SortSessions(sessions)
 	m.pickerRunning = launch.BuildRunning(m.sessions)
-	m.pickerDirProblems = launch.DirectoryProblems(m.pickerSessions, actions.ProjectDirectoryProblem)
+	// Checking each directory is a stat per project, so it runs as a command;
+	// the rows gain their (missing) markers when it reports.
+	m.pickerDirProblems = map[int]string{}
 	m.pickerSelected = make(map[int]bool)
 	m.pickerProfileOverride, m.pickerPinned = launch.LoadState(m.pickerSessions)
 	m.pickerDirOverride = nil
@@ -65,7 +66,8 @@ func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	m.pickerDirMode = false
 	m.pickerFilteredIdx = m.pickerFilteredIndices("")
 	m.mode = ModePicker
-	return m, m.refreshPreviewForPickerCursor()
+	check := m.checkPickerDirectoriesCmd()
+	return m, tea.Batch(check, m.refreshPreviewForPickerCursor())
 }
 
 // recoverEndedTitle is the palette's name for UndoClose; recoverEndedHint is

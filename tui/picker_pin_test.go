@@ -26,8 +26,8 @@ func pickerPositionByTitle(t *testing.T, m Model, title string) int {
 func pinPickerTitle(t *testing.T, m Model, title string) Model {
 	t.Helper()
 	m.pickerCursor = pickerPositionByTitle(t, m, title)
-	updated, _ := m.Update(keyPress("P"))
-	return updated.(Model)
+	updated, cmd := m.Update(keyPress("P"))
+	return settlePickerIO(updated.(Model), cmd)
 }
 
 func TestPickerPinToggleReordersPersistsAndRenders(t *testing.T) {
@@ -80,7 +80,7 @@ func TestPickerPinToggleReordersPersistsAndRenders(t *testing.T) {
 	if got := fresh.pickerSessions[fresh.pickerFilteredIdx[0]].Title; got != "api" {
 		t.Fatalf("first picker row after restart = %q, want persisted api pin", got)
 	}
-	fresh = pressKey(fresh, "P")
+	fresh = pressKeyIO(fresh, "P")
 	if got := fresh.pickerSessions[fresh.pickerFilteredIdx[fresh.pickerCursor]].Title; got != "api" {
 		t.Fatalf("cursor moved to %q after unpin, want to remain on api", got)
 	}
@@ -220,9 +220,9 @@ func TestPickerPinSaveFailureLeavesOrderingUnchanged(t *testing.T) {
 	before := slices.Clone(m.pickerFilteredIdx)
 	m.pickerCursor = pickerPositionByTitle(t, m, "api")
 	updated, cmd := m.Update(keyPress("P"))
-	got := updated.(Model)
+	got := settlePickerIO(updated.(Model), cmd)
 
-	if cmd != nil || len(got.toasts) == 0 || !got.toasts[0].Persistent {
+	if len(got.toasts) == 0 || !got.toasts[0].Persistent {
 		t.Fatal("failed pin save must retain the failure without an expiry ticker")
 	}
 	if len(got.pickerPinned) != 0 {

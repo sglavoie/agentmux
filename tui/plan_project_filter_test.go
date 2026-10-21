@@ -75,7 +75,7 @@ func TestPlanSearchAndViewerRenderProjectLabels(t *testing.T) {
 		t.Fatalf("plan search missing active project chip:\n%s", got)
 	}
 	viewer := Model{width: 100, height: 20, viewerPlan: &known}
-	if got := stripAnsi(renderPlanView(viewer)); !strings.Contains(got, "[project: Primary]") {
+	if got := stripAnsi(renderPlanView(viewer)); !strings.Contains(got, "· project: Primary ·") {
 		t.Fatalf("plan viewer missing project label:\n%s", got)
 	}
 }

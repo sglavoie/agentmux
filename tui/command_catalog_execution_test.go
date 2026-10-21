@@ -283,7 +283,8 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 		m, ctx, _ := commandTestModel(target)
 		t.Setenv(overrides.PathEnvVar, t.TempDir()+"/overrides.json")
 		got, cmd := commandByID(t, commands.OpenLauncher).Run(m, ctx)
-		if got.mode != ModePicker || len(got.pickerSessions) != 3 || len(got.pickerFilteredIdx) != 3 || got.pickerSearchMode || cmd != nil {
+		if got.mode != ModePicker || len(got.pickerSessions) != 3 || len(got.pickerFilteredIdx) != 3 || got.pickerSearchMode || cmd == nil {
+			// The command is the directory check, which runs off the update loop.
 			t.Fatalf("launcher result: mode=%v sessions=%d filtered=%d search=%v cmd=%v", got.mode, len(got.pickerSessions), len(got.pickerFilteredIdx), got.pickerSearchMode, cmd != nil)
 		}
 	})

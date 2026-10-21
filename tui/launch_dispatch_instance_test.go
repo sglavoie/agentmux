@@ -55,7 +55,7 @@ func TestDispatchPickerLaunch_SisOverrideCreatesNewCodexInstances(t *testing.T) 
 		t.Fatalf("expected launcher-override purpose after C, got %d", m.configPickerPurpose)
 	}
 	m = pressKey(m, "j")
-	m = pressKey(m, "enter")
+	m = pressKeyIO(m, "enter")
 	if got := m.pickerEffectiveProfile(0); got != "vta-codex" {
 		t.Fatalf("expected picker override profile vta-codex, got %q", got)
 	}

@@ -175,9 +175,15 @@ type Model struct {
 	confirmReturnMode  Mode
 
 	// picker mode
-	pickerSessions       []config.Session
-	pickerRunning        map[string]int
-	pickerDirProblems    map[int]string // project index -> why its directory is unusable
+	pickerSessions    []config.Session
+	pickerRunning     map[string]int
+	pickerDirProblems map[int]string // project index -> why its directory is unusable
+	// pickerGen names one load of pickerSessions, so an asynchronous directory
+	// check or completion started against an older list is dropped.
+	pickerGen int
+	// pickerStateWriter and pickerStateSeq order the launcher's saves.
+	pickerStateWriter    *pickerStateWriter
+	pickerStateSeq       uint64
 	pickerSelected       map[int]bool
 	pickerPinned         map[int]bool // project index -> persistent launcher pin
 	pickerCursor         int

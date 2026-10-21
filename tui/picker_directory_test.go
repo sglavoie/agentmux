@@ -45,7 +45,7 @@ func TestPickerDirectoryOverrideAppliesToOneLaunchOnly(t *testing.T) {
 
 	// Typing is taken literally: d, j, and space edit the path, not the list.
 	m = typeKeys(pressKey(m, "ctrl+u"), other+"/s")
-	m = pressKey(pressKey(m, "tab"), "enter")
+	m = pressKey(pressKeyIO(m, "tab"), "enter")
 	want := filepath.Join(other, "sub")
 	if m.pickerDirMode || m.pickerDirOverride[apiIdx] != want {
 		t.Fatalf("override = %q (prompt open %v), want %q", m.pickerDirOverride[apiIdx], m.pickerDirMode, want)
