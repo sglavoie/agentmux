@@ -108,9 +108,9 @@ func TestDaemonLifecycleJSON(t *testing.T) {
 		newDaemonLifecycleClient = func() daemonLifecycleClient {
 			return &fakeDaemonLifecycleClient{sendErr: errors.New("dial unix: no such file"), healths: []ipc.Health{{Alive: false}}}
 		}
-		// Nothing to stop is what was asked for: success, stopped false.
 		out, err := run(t, daemonStopCmd)
-		if err != nil || out != `{"schema_version":1,"data":{"stopped":false}}`+"\n" {
+		var exit *cli.ExitError
+		if !errors.As(err, &exit) || !strings.Contains(out, `"code":"daemon_not_running"`) || strings.Contains(out, "dial unix") {
 			t.Fatalf("out = %q, err = %v", out, err)
 		}
 	})

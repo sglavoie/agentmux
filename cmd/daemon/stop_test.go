@@ -9,22 +9,20 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 )
 
-// Stopping a daemon that is not running is what the operator wanted already:
-// it succeeds, says so, and never shows the socket error.
-func TestDaemonStopWithNothingRunningSucceeds(t *testing.T) {
+// Stopping a daemon that is not running stays an error, so a script can tell
+// it from a stop that happened, but it says so plainly and never shows the
+// socket error.
+func TestDaemonStopWithNothingRunningSaysSoPlainly(t *testing.T) {
 	resetDaemonLifecycleTestState(t)
 	client := &fakeDaemonLifecycleClient{
 		sendErr: errors.New("connecting to daemon: dial unix /tmp/daemon.sock: connect: no such file or directory"),
 		healths: []ipc.Health{{Alive: false}},
 	}
 	newDaemonLifecycleClient = func() daemonLifecycleClient { return client }
-	var out bytes.Buffer
-	daemonStopCmd.SetOut(&out)
-	if err := daemonStopCmd.RunE(daemonStopCmd, nil); err != nil {
-		t.Fatalf("RunE: %v", err)
-	}
-	if got := out.String(); got != "daemon is not running; nothing to stop\n" || strings.Contains(got, "dial unix") {
-		t.Fatalf("output = %q", got)
+	daemonStopCmd.SetOut(&bytes.Buffer{})
+	err := daemonStopCmd.RunE(daemonStopCmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "daemon is not running; nothing to stop") || strings.Contains(err.Error(), "dial unix") {
+		t.Fatalf("RunE = %v; want the plain not-running error", err)
 	}
 }
 
