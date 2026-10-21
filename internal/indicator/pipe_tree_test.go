@@ -16,6 +16,8 @@ func fakeTree(cmdlines map[int]string, ppids map[int]int) (func(int) string, fun
 }
 
 func TestWalkTree_NormalProcess(t *testing.T) {
+	t.Parallel()
+
 	cmd, ppid := fakeTree(
 		map[int]string{1000: "/bin/zsh", 999: "launchd"},
 		map[int]int{1000: 999},
@@ -26,6 +28,8 @@ func TestWalkTree_NormalProcess(t *testing.T) {
 }
 
 func TestWalkTree_ClaudeWithDashP(t *testing.T) {
+	t.Parallel()
+
 	// Tree: 1002 (hook) → 1001 (shell) → 1000 (claude -p)
 	cmd, ppid := fakeTree(
 		map[int]string{
@@ -41,6 +45,8 @@ func TestWalkTree_ClaudeWithDashP(t *testing.T) {
 }
 
 func TestWalkTree_ClaudeWithPrint(t *testing.T) {
+	t.Parallel()
+
 	cmd, ppid := fakeTree(
 		map[int]string{
 			1001: "amx hook-indicator stop",
@@ -54,6 +60,8 @@ func TestWalkTree_ClaudeWithPrint(t *testing.T) {
 }
 
 func TestWalkTree_CodexExec(t *testing.T) {
+	t.Parallel()
+
 	cmd, ppid := fakeTree(
 		map[int]string{
 			1001: "amx hook-indicator Stop",
@@ -67,6 +75,8 @@ func TestWalkTree_CodexExec(t *testing.T) {
 }
 
 func TestWalkTree_StopsAtRoot(t *testing.T) {
+	t.Parallel()
+
 	cmd, ppid := fakeTree(
 		map[int]string{1: "launchd"},
 		map[int]int{},
@@ -82,6 +92,8 @@ func TestWalkTree_StopsAtRoot(t *testing.T) {
 // check, the parent's "claude" substring + "-p" was enough to flag the whole
 // tree as pipe mode.
 func TestWalkTree_FlagPositionMatters(t *testing.T) {
+	t.Parallel()
+
 	cmd, ppid := fakeTree(
 		map[int]string{
 			1001: "claude",         // interactive child, no pipe flag
@@ -95,6 +107,8 @@ func TestWalkTree_FlagPositionMatters(t *testing.T) {
 }
 
 func TestWalkTree_CycleProtection(t *testing.T) {
+	t.Parallel()
+
 	count := 0
 	cmd := func(_ int) string {
 		count++
@@ -145,6 +159,8 @@ func TestPsCommandLineHonorsTimeout(t *testing.T) {
 }
 
 func TestLooksLikeClaudePipe(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		cmd  string
 		want bool

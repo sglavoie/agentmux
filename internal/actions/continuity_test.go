@@ -103,6 +103,8 @@ func (r *continuityReader) ReadMessages(string) ([]transcript.Message, error) {
 }
 
 func TestContinueFocusesOnlyAnExactLiveConversation(t *testing.T) {
+	t.Parallel()
+
 	identity := conversation.Identity{Harness: harness.Claude, SessionID: "source-1"}
 	client := &continuityKitty{windows: []kitty.OSWindow{{Tabs: []kitty.Tab{{
 		ID: 100,
@@ -138,6 +140,8 @@ func TestContinueFocusesOnlyAnExactLiveConversation(t *testing.T) {
 }
 
 func TestContinueRefusesAnAmbiguousLiveConversation(t *testing.T) {
+	t.Parallel()
+
 	identity := conversation.Identity{Harness: harness.Codex, SessionID: "source-1"}
 	client := &continuityKitty{windows: []kitty.OSWindow{{Tabs: []kitty.Tab{
 		{ID: 100, Windows: []kitty.Window{{ID: 10, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Codex}}}},
@@ -164,6 +168,8 @@ func TestContinueRefusesAnAmbiguousLiveConversation(t *testing.T) {
 }
 
 func TestContinueLaunchesNativeResumeForEachSupportedHarness(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		harness string
 		want    string
@@ -205,6 +211,8 @@ func TestContinueLaunchesNativeResumeForEachSupportedHarness(t *testing.T) {
 }
 
 func TestForkUsesNativeSupportAndPreservesSource(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		harness string
 		want    string
@@ -236,6 +244,8 @@ func TestForkUsesNativeSupportAndPreservesSource(t *testing.T) {
 }
 
 func TestForkUsesPortableHandoffForCopilot(t *testing.T) {
+	t.Parallel()
+
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Copilot}
 	meta := continuityMeta(t, harness.Copilot, "source-1", "work")
@@ -264,6 +274,8 @@ func TestForkUsesPortableHandoffForCopilot(t *testing.T) {
 }
 
 func TestForkWorktreeLaunchesNativeForkAndRetainsSuccessfulWorktree(t *testing.T) {
+	t.Parallel()
+
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Codex}
 	meta := continuityMeta(t, harness.Codex, "source-1", "work")
@@ -306,6 +318,8 @@ func TestForkWorktreeLaunchesNativeForkAndRetainsSuccessfulWorktree(t *testing.T
 }
 
 func TestForkWorktreeUsesPortableLaunchDirectoryAndCleansUpFailure(t *testing.T) {
+	t.Parallel()
+
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Copilot}
 	meta := continuityMeta(t, harness.Copilot, "source-1", "work")
@@ -341,6 +355,8 @@ func TestForkWorktreeUsesPortableLaunchDirectoryAndCleansUpFailure(t *testing.T)
 }
 
 func TestForkWorktreeCleansUpWhenNativeLaunchFails(t *testing.T) {
+	t.Parallel()
+
 	client := &continuityKitty{launchErr: errors.New("Kitty unavailable")}
 	reader := &continuityReader{harness: harness.Claude}
 	meta := continuityMeta(t, harness.Claude, "source-1", "work")
@@ -355,6 +371,8 @@ func TestForkWorktreeCleansUpWhenNativeLaunchFails(t *testing.T) {
 }
 
 func TestForkWorktreeReportsGitCheckoutErrorsWithoutWorkspaceConcepts(t *testing.T) {
+	t.Parallel()
+
 	reader := &continuityReader{harness: harness.Codex}
 	meta := continuityMeta(t, harness.Codex, "source-1", "work")
 	runner := &continuityWorktree{createErr: fmt.Errorf("probe failed: %w", worktree.ErrNotGitCheckout)}
@@ -369,6 +387,8 @@ func TestForkWorktreeReportsGitCheckoutErrorsWithoutWorkspaceConcepts(t *testing
 }
 
 func TestHandoffReportsFinalArtifactAfterLaunchFailure(t *testing.T) {
+	t.Parallel()
+
 	client := &continuityKitty{}
 	reader := &continuityReader{harness: harness.Claude}
 	meta := continuityMeta(t, harness.Claude, "source-1", "work")

@@ -30,6 +30,8 @@ func tmuxSessions(t *testing.T, f *tmuxtest.Fixture, cfg *config.Config) []sessi
 }
 
 func TestLaunchActionRefusesAnUnusableBackend(t *testing.T) {
+	t.Parallel()
+
 	cfg := continuityConfig(harness.Claude)
 	project := cfg.Projects[0]
 	for _, test := range []struct {

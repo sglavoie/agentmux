@@ -50,6 +50,8 @@ func validSupervisorLeasePayload(now time.Time) map[string]any {
 }
 
 func TestReadSupervisorQuestionProjectionValidPendingAndClear(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now().UTC()
 	stateDir := t.TempDir()
 	candidate := Candidate{StateDir: stateDir, RunID: "run-current"}
@@ -78,6 +80,8 @@ func TestReadSupervisorQuestionProjectionValidPendingAndClear(t *testing.T) {
 }
 
 func TestReadSupervisorQuestionProjectionRejectsNonAuthoritativeEvidence(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now().UTC()
 	cases := map[string]func(map[string]any){
 		"v1": func(payload map[string]any) {

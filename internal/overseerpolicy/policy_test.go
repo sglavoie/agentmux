@@ -120,6 +120,8 @@ func assertAllowed(t *testing.T, decision Decision) {
 }
 
 func TestEvaluateAllowsExplicitlyOptedInProject(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	inside := filepath.Join(repo, "internal", "pkg")
 	decision := evaluate(t,
@@ -134,6 +136,8 @@ func TestEvaluateAllowsExplicitlyOptedInProject(t *testing.T) {
 }
 
 func TestEvaluateRefusesUnconfiguredRepository(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	other := abs("repos", "other")
 	decision := evaluate(t,
@@ -148,6 +152,8 @@ func TestEvaluateRefusesUnconfiguredRepository(t *testing.T) {
 }
 
 func TestEvaluateRefusesOmittedAndDeclinedOptIn(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	for name, tc := range map[string]struct {
 		optIn *bool
@@ -168,6 +174,8 @@ func TestEvaluateRefusesOmittedAndDeclinedOptIn(t *testing.T) {
 }
 
 func TestEvaluateDuplicateAliasesForOneDirectory(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	resolver := resolving(repoDir(repo, repo))
 
@@ -209,6 +217,8 @@ func TestEvaluateDuplicateAliasesForOneDirectory(t *testing.T) {
 }
 
 func TestEvaluateConflictingDeclarationsReportTheStrongestExclusion(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	decision := evaluate(t,
 		[]config.Session{
@@ -232,6 +242,8 @@ func TestEvaluateConflictingDeclarationsReportTheStrongestExclusion(t *testing.T
 }
 
 func TestEvaluateNestedProjectCannotBypassEnclosingExclusion(t *testing.T) {
+	t.Parallel()
+
 	outer := abs("repos", "outer")
 	inner := filepath.Join(outer, "services", "api")
 	projects := []config.Session{
@@ -256,6 +268,8 @@ func TestEvaluateNestedProjectCannotBypassEnclosingExclusion(t *testing.T) {
 }
 
 func TestEvaluateNestedExclusionDeniesTheEnclosingRequest(t *testing.T) {
+	t.Parallel()
+
 	outer := abs("repos", "outer")
 	inner := filepath.Join(outer, "vendor", "inner")
 	projects := []config.Session{
@@ -279,6 +293,8 @@ func TestEvaluateNestedExclusionDeniesTheEnclosingRequest(t *testing.T) {
 }
 
 func TestEvaluateNestedRepositoryStillObeysTheEnclosingDeclaration(t *testing.T) {
+	t.Parallel()
+
 	outer := abs("repos", "outer")
 	inner := filepath.Join(outer, "vendor", "inner")
 	// The two are separate repository families — display grouping keeps them
@@ -296,6 +312,8 @@ func TestEvaluateNestedRepositoryStillObeysTheEnclosingDeclaration(t *testing.T)
 }
 
 func TestEvaluateMonorepoSiblingsStayIndependent(t *testing.T) {
+	t.Parallel()
+
 	mono := abs("repos", "mono")
 	api := filepath.Join(mono, "services", "api")
 	web := filepath.Join(mono, "services", "web")
@@ -312,6 +330,8 @@ func TestEvaluateMonorepoSiblingsStayIndependent(t *testing.T) {
 }
 
 func TestEvaluateSymlinkedPathResolvesToTheDeclaredProject(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	link := abs("home", "app-link")
 	// The plan names the repository through a symlink; the declaration names
@@ -326,6 +346,8 @@ func TestEvaluateSymlinkedPathResolvesToTheDeclaredProject(t *testing.T) {
 }
 
 func TestEvaluateDeclarationThatCannotBeCanonicalizedGovernsNothing(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	link := abs("home", "app-link")
 	// The declaration is written through a path that does not exist on this
@@ -343,6 +365,8 @@ func TestEvaluateDeclarationThatCannotBeCanonicalizedGovernsNothing(t *testing.T
 }
 
 func TestEvaluateLinkedWorktreeInheritsTheMainCheckoutExclusion(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	linked := abs("worktrees", "app-security")
 	// Nothing is configured at the linked worktree at all. It is the same
@@ -357,6 +381,8 @@ func TestEvaluateLinkedWorktreeInheritsTheMainCheckoutExclusion(t *testing.T) {
 }
 
 func TestEvaluateLinkedWorktreeOfOptedInRepositoryIsAllowed(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	linked := abs("worktrees", "app-security")
 	decision := evaluate(t,
@@ -368,6 +394,8 @@ func TestEvaluateLinkedWorktreeOfOptedInRepositoryIsAllowed(t *testing.T) {
 }
 
 func TestEvaluateLinkedWorktreeExclusionReachesAcrossCheckouts(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	linked := abs("worktrees", "app-security")
 	// The exclusion is declared on the linked worktree and the plan names the
@@ -384,6 +412,8 @@ func TestEvaluateLinkedWorktreeExclusionReachesAcrossCheckouts(t *testing.T) {
 }
 
 func TestEvaluateMonorepoWorktreeSiblingsStayIndependent(t *testing.T) {
+	t.Parallel()
+
 	mono := abs("repos", "mono")
 	linked := abs("worktrees", "mono-feature")
 	api := filepath.Join(mono, "services", "api")
@@ -402,6 +432,8 @@ func TestEvaluateMonorepoWorktreeSiblingsStayIndependent(t *testing.T) {
 }
 
 func TestEvaluateRefusesMissingPath(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	decision := evaluate(t,
 		[]config.Session{{Title: "App", Directory: repo, Profile: "work", ASLOverseer: boolPtr(true)}},
@@ -418,6 +450,8 @@ func TestEvaluateRefusesMissingPath(t *testing.T) {
 }
 
 func TestEvaluateRefusesFailedGitIdentityResolution(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	unknown := abs("worktrees", "app-security")
 	// The probe failed, so this directory cannot be shown to be outside the
@@ -436,6 +470,8 @@ func TestEvaluateRefusesFailedGitIdentityResolution(t *testing.T) {
 }
 
 func TestEvaluateRefusesUnknownResolverFailures(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	// An error the resolver did not classify is still a refusal, and lands on
 	// the identity side rather than being mistaken for a merely absent path.
@@ -448,6 +484,8 @@ func TestEvaluateRefusesUnknownResolverFailures(t *testing.T) {
 }
 
 func TestEvaluateAllowsAPlainDirectoryProject(t *testing.T) {
+	t.Parallel()
+
 	notes := abs("notes")
 	decision := evaluate(t,
 		[]config.Session{{Title: "Notes", Directory: notes, Profile: "claude", ASLOverseer: boolPtr(true)}},
@@ -458,6 +496,8 @@ func TestEvaluateAllowsAPlainDirectoryProject(t *testing.T) {
 }
 
 func TestEvaluateWholePlanIsRefusedWhenOneRepositoryIsExcluded(t *testing.T) {
+	t.Parallel()
+
 	permitted := abs("repos", "app")
 	excluded := abs("repos", "secrets")
 	decision := evaluate(t,
@@ -488,6 +528,8 @@ func TestEvaluateWholePlanIsRefusedWhenOneRepositoryIsExcluded(t *testing.T) {
 }
 
 func TestEvaluateReportsTheFirstRefusalAndCountsTheRest(t *testing.T) {
+	t.Parallel()
+
 	first := abs("repos", "first")
 	second := abs("repos", "second")
 	decision := evaluate(t,
@@ -505,6 +547,8 @@ func TestEvaluateReportsTheFirstRefusalAndCountsTheRest(t *testing.T) {
 }
 
 func TestEvaluateRefusesARequestWithNoRepositories(t *testing.T) {
+	t.Parallel()
+
 	decision := evaluate(t,
 		[]config.Session{{Title: "App", Directory: abs("repos", "app"), Profile: "work", ASLOverseer: boolPtr(true)}},
 		resolving(),
@@ -514,6 +558,8 @@ func TestEvaluateRefusesARequestWithNoRepositories(t *testing.T) {
 }
 
 func TestEvaluateIgnoresDeclarationsWithoutADirectory(t *testing.T) {
+	t.Parallel()
+
 	repo := abs("repos", "app")
 	// A project with no directory names no place, so it must not be picked up
 	// as governing whatever the process happens to be running in.
@@ -531,6 +577,8 @@ func TestEvaluateIgnoresDeclarationsWithoutADirectory(t *testing.T) {
 }
 
 func TestEvaluateAgainstRealWorktreesAndSymlinks(t *testing.T) {
+	t.Parallel()
+
 	git := requireGit(t)
 	root := t.TempDir()
 	repo := filepath.Join(root, "repo with space")

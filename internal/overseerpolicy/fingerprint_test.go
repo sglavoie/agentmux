@@ -12,6 +12,8 @@ func fingerprintOf(projects ...config.Session) string {
 }
 
 func TestFingerprintIsSha256Hex(t *testing.T) {
+	t.Parallel()
+
 	got := fingerprintOf(config.Session{Title: "App", Directory: abs("repos", "app"), Profile: "work", ASLOverseer: boolPtr(true)})
 	digest, ok := strings.CutPrefix(got, "sha256:")
 	if !ok {
@@ -26,6 +28,8 @@ func TestFingerprintIsSha256Hex(t *testing.T) {
 }
 
 func TestFingerprintIsStableForTheSameDeclarations(t *testing.T) {
+	t.Parallel()
+
 	projects := []config.Session{
 		{Title: "App", Directory: abs("repos", "app"), Profile: "work", ASLOverseer: boolPtr(true)},
 		{Title: "Api", Directory: abs("repos", "api"), Profile: "work"},
@@ -41,6 +45,8 @@ func TestFingerprintIsStableForTheSameDeclarations(t *testing.T) {
 // decided against configuration that has since moved. Every input the decision
 // actually depends on therefore has to move it.
 func TestFingerprintChangesWithEveryDecidingField(t *testing.T) {
+	t.Parallel()
+
 	base := config.Session{Title: "App", Directory: abs("repos", "app"), Profile: "work", ASLOverseer: boolPtr(true)}
 	baseline := fingerprintOf(base)
 
@@ -75,6 +81,8 @@ func TestFingerprintChangesWithEveryDecidingField(t *testing.T) {
 }
 
 func TestFingerprintChangesWithDeclarationCountAndOrder(t *testing.T) {
+	t.Parallel()
+
 	app := config.Session{Title: "App", Directory: abs("repos", "app"), Profile: "work", ASLOverseer: boolPtr(true)}
 	api := config.Session{Title: "Api", Directory: abs("repos", "api"), Profile: "work"}
 
@@ -98,6 +106,8 @@ func TestFingerprintChangesWithDeclarationCountAndOrder(t *testing.T) {
 // the decision about the queried repository does not — so both halves are
 // asserted together.
 func TestFingerprintMovesWhenAnUnrelatedProjectIsWithdrawn(t *testing.T) {
+	t.Parallel()
+
 	app := abs("repos", "app")
 	docs := config.Session{Title: "Docs", Directory: abs("repos", "docs"), Profile: "work", ASLOverseer: boolPtr(true)}
 	withdrawn := docs
@@ -119,6 +129,8 @@ func TestFingerprintMovesWhenAnUnrelatedProjectIsWithdrawn(t *testing.T) {
 // length prefix is what keeps a title and a profile from trading characters
 // across their boundary without moving the fingerprint.
 func TestFingerprintSeparatesAdjacentFields(t *testing.T) {
+	t.Parallel()
+
 	directory := abs("repos", "app")
 	split := fingerprintOf(config.Session{Title: "a", Profile: "b", Directory: directory})
 	joined := fingerprintOf(config.Session{Title: "ab", Profile: "", Directory: directory})
@@ -128,6 +140,8 @@ func TestFingerprintSeparatesAdjacentFields(t *testing.T) {
 }
 
 func TestFingerprintCoversOnlyTheAuthorizationInput(t *testing.T) {
+	t.Parallel()
+
 	base := config.Session{Title: "App", Directory: abs("repos", "app"), Profile: "work", ASLOverseer: boolPtr(true)}
 	baseline := fingerprintOf(base)
 

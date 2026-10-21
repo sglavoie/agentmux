@@ -11,6 +11,8 @@ import (
 // an installed amx reached through a symlink is not foreign, and a PATH
 // without amx leaves the running binary as the only candidate.
 func TestExpectedBinaryPrefersTheInstalledAmx(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	installed := filepath.Join(root, "real", "amx")
 	link := filepath.Join(root, "bin", "amx")

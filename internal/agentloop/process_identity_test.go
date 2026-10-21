@@ -6,6 +6,8 @@ import "testing"
 // identity must land on a verdict the caller reads as indeterminate, because a
 // wrongly retired lease duplicates work while a wrongly held one costs a cycle.
 func TestAuthenticateProcessOnlyAssertsAbsenceWhenThePIDIsGone(t *testing.T) {
+	t.Parallel()
+
 	const published = "Fri Jul 10 13:05:00 2026"
 	cases := []struct {
 		name       string
@@ -84,6 +86,8 @@ func TestAuthenticateProcessOnlyAssertsAbsenceWhenThePIDIsGone(t *testing.T) {
 // one case where a missing token does mean gone — but only because the cheap
 // check is re-asked and agrees.
 func TestAuthenticateProcessRechecksLivenessWhenTheProbeMissedThePID(t *testing.T) {
+	t.Parallel()
+
 	calls := 0
 	pidRunning := func(int) bool {
 		calls++
@@ -99,6 +103,8 @@ func TestAuthenticateProcessRechecksLivenessWhenTheProbeMissedThePID(t *testing.
 }
 
 func TestCompareStartTokens(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name      string
 		published string
@@ -133,6 +139,8 @@ func TestCompareStartTokens(t *testing.T) {
 // The batched probe is what keeps the ten-second cadence to one subprocess. It
 // must survive being handed nothing to do.
 func TestReadProcessBirthTokensHandlesAnEmptyBatch(t *testing.T) {
+	t.Parallel()
+
 	for _, pids := range [][]int{nil, {}, {0, -1}} {
 		tokens, probed := readProcessBirthTokens(pids)
 		if !probed {

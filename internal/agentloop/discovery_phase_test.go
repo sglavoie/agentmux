@@ -11,6 +11,8 @@ import (
 // heartbeats, active-turn markers, or waiting flags, so every phase ASL can
 // publish must survive the round trip verbatim.
 func TestDiscoverCarriesEveryLivePhaseVerbatim(t *testing.T) {
+	t.Parallel()
+
 	for _, phase := range []string{PhaseStarting, PhaseTurn, PhaseVerification, PhaseBetween, PhaseWaiting} {
 		t.Run(phase, func(t *testing.T) {
 			root := t.TempDir()
@@ -40,6 +42,8 @@ func TestDiscoverCarriesEveryLivePhaseVerbatim(t *testing.T) {
 // still holding its position. Requiring liveness here would retire the lease of
 // every run that is waiting on a human.
 func TestDiscoverPausedRunIsPresentWithoutAProcess(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{Phase: PhasePaused, RunID: "run-paused"})
@@ -70,6 +74,8 @@ func TestDiscoverPausedRunIsPresentWithoutAProcess(t *testing.T) {
 // Reconciliation must see paused runs (their leases are still owed); routing and
 // the loop markers must not (there is no process to route to).
 func TestCandidatesFilterPausedRunsOnDemand(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	base := t.TempDir()
 	seedProjection(t, root, filepath.Join(base, "live"), projectionSeed{RunID: "run-live", PID: 11})
@@ -95,6 +101,8 @@ func TestCandidatesFilterPausedRunsOnDemand(t *testing.T) {
 // A finished run is the authoritative absence: it survives a daemon restart and
 // a missed hook alike, and it does not depend on catching the process gone.
 func TestDiscoverFinishedRunIsConfirmedAbsent(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{
@@ -121,6 +129,8 @@ func TestDiscoverFinishedRunIsConfirmedAbsent(t *testing.T) {
 }
 
 func TestDiscoverExitedProcessIsConfirmedAbsent(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{RunID: "run-gone", PID: 4242})
@@ -144,6 +154,8 @@ func TestDiscoverExitedProcessIsConfirmedAbsent(t *testing.T) {
 // unrelated process. The start token catches it, and the answer is
 // indeterminate — a recycled PID says nothing about where the original run went.
 func TestDiscoverRecycledPIDIsIndeterminate(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{RunID: "run-recycled", PID: 4242})
@@ -169,6 +181,8 @@ func TestDiscoverRecycledPIDIsIndeterminate(t *testing.T) {
 // process observed from a daemon in another zone renders as a whole-hour offset
 // of the same instant, which is a rendering difference rather than PID reuse.
 func TestDiscoverToleratesTimezoneRenderedStartTokens(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{
@@ -194,6 +208,8 @@ func TestDiscoverToleratesTimezoneRenderedStartTokens(t *testing.T) {
 
 // Whitespace padding is a `ps` formatting artifact, not an identity difference.
 func TestDiscoverToleratesStartTokenWhitespace(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{PID: 4242, StartToken: "Fri Jul  4 09:05:00 2026"})
@@ -215,6 +231,8 @@ func TestDiscoverToleratesStartTokenWhitespace(t *testing.T) {
 // When the probe itself fails, a running PID is not enough to claim identity and
 // not enough to claim absence.
 func TestDiscoverUnprobedProcessIsIndeterminate(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{PID: 4242})
@@ -237,6 +255,8 @@ func TestDiscoverUnprobedProcessIsIndeterminate(t *testing.T) {
 // state migration tool writes the same shape. Neither attests liveness, and
 // neither is a corrupt document.
 func TestDiscoverLivePhaseWithoutAProcessIsIndeterminate(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{Phase: PhaseTurn, NoProcess: true})
@@ -258,6 +278,8 @@ func TestDiscoverLivePhaseWithoutAProcessIsIndeterminate(t *testing.T) {
 // The whole sweep authenticates against one observation of the process table,
 // so plan count does not multiply subprocess cost at the ten-second cadence.
 func TestDiscoverProbesProcessBirthOnce(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	base := t.TempDir()
 	seedProjection(t, root, filepath.Join(base, "a"), projectionSeed{RunID: "run-a", PID: 11})
@@ -294,6 +316,8 @@ func TestDiscoverProbesProcessBirthOnce(t *testing.T) {
 }
 
 func TestPresenceByRunIDCollapsesConflictingDuplicates(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	base := t.TempDir()
 	seedProjection(t, root, filepath.Join(base, "one"), projectionSeed{RunID: "run-dup", PID: 11})
@@ -321,6 +345,8 @@ func TestPresenceByRunIDCollapsesConflictingDuplicates(t *testing.T) {
 // retire a lease, but it is reported as no-state rather than unreadable: it is
 // not a fault, and a state root with hundreds of them must not look broken.
 func TestDiscoverNeverRunPlanIsNoStateNotUnreadable(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	empty := filepath.Join(root, strings.Repeat("a", 64))
 	if err := os.MkdirAll(empty, 0o700); err != nil {

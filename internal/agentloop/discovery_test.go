@@ -9,6 +9,8 @@ import (
 )
 
 func TestDiscoverProjectsEveryContractField(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	base := t.TempDir()
 	planDir := filepath.Join(base, "plan")
@@ -87,6 +89,8 @@ func TestDiscoverProjectsEveryContractField(t *testing.T) {
 // yields no candidate AND no claim of absence. Reporting it absent is what
 // would let an unpaired upgrade retire every healthy run's lease at once.
 func TestDiscoverTreatsStateWithoutAProjectionAsIndeterminate(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	stateDir := stateDirForPlan(t, root, planDir)
@@ -115,6 +119,8 @@ func TestDiscoverTreatsStateWithoutAProjectionAsIndeterminate(t *testing.T) {
 }
 
 func TestDiscoverRejectsUnsupportedContractSet(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		seed projectionSeed
@@ -155,6 +161,8 @@ func TestDiscoverRejectsUnsupportedContractSet(t *testing.T) {
 // unknown member means the peer is describing something this build cannot
 // interpret.
 func TestDiscoverRejectsInexactProjectionMemberSet(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		mutate func(map[string]any)
@@ -198,6 +206,8 @@ func TestDiscoverRejectsInexactProjectionMemberSet(t *testing.T) {
 // One corrupt plan must not hide the healthy plans in the same sweep, and must
 // not be reported absent itself.
 func TestDiscoverIsolatesOneCorruptPlan(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	healthyPlan := filepath.Join(t.TempDir(), "healthy")
 	seedProjection(t, root, healthyPlan, projectionSeed{RunID: "run-healthy", PID: 200})
@@ -239,6 +249,8 @@ func TestDiscoverIsolatesOneCorruptPlan(t *testing.T) {
 // State copied into the wrong directory describes a run that may well be alive
 // somewhere else, so it withholds evidence instead of reporting absence.
 func TestDiscoverTreatsMisplacedStateAsIndeterminate(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	realPlan := filepath.Join(t.TempDir(), "real-plan")
 	otherPlan := filepath.Join(t.TempDir(), "other-plan")
@@ -265,6 +277,8 @@ func TestDiscoverTreatsMisplacedStateAsIndeterminate(t *testing.T) {
 }
 
 func TestDiscoverMissingRootReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
 	result, err := DiscoverPlans(DiscoverOptions{StateRoot: filepath.Join(t.TempDir(), "does-not-exist")})
 	if err != nil {
 		t.Fatalf("DiscoverPlans: %v", err)
@@ -278,6 +292,8 @@ func TestDiscoverMissingRootReturnsEmpty(t *testing.T) {
 // judgement left here is whether AgentMux knows the name. An unknown harness
 // stays empty rather than being guessed at.
 func TestDiscoverKeepsOnlyKnownHarnesses(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]string{
 		"copilot":        "copilot",
 		"codex":          "codex",
@@ -310,6 +326,8 @@ func TestDiscoverKeepsOnlyKnownHarnesses(t *testing.T) {
 // A plan with no workspace publishes a null workspace root. Routing then falls
 // back to window identity rather than inheriting another plan's directory.
 func TestDiscoverAllowsPlanWithoutAWorkspace(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{KittyWindowID: 7})
@@ -331,6 +349,8 @@ func TestDiscoverAllowsPlanWithoutAWorkspace(t *testing.T) {
 }
 
 func TestLookupPlanStateReadsWorkspaceRootFromTheProjection(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	workspace := filepath.Join(t.TempDir(), "repo")
@@ -352,6 +372,8 @@ func TestLookupPlanStateReadsWorkspaceRootFromTheProjection(t *testing.T) {
 // A plan with no workspace root has no association to report, and the caller
 // falls through to its own metadata rather than being handed a guess.
 func TestLookupPlanStateReportsNotFoundWithoutAWorkspaceRoot(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{})
@@ -363,6 +385,8 @@ func TestLookupPlanStateReportsNotFoundWithoutAWorkspaceRoot(t *testing.T) {
 }
 
 func TestLookupPlanStateIgnoresStateWithoutAProjection(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	stateDir := stateDirForPlan(t, root, planDir)
@@ -381,6 +405,8 @@ func TestLookupPlanStateIgnoresStateWithoutAProjection(t *testing.T) {
 }
 
 func TestLookupPlanStateRejectsMismatchedEmbeddedPlan(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	otherPlan := filepath.Join(t.TempDir(), "other")
@@ -400,6 +426,8 @@ func TestLookupPlanStateRejectsMismatchedEmbeddedPlan(t *testing.T) {
 }
 
 func TestDiscoverReviewedLoopContractStillRequiresLiveProcess(t *testing.T) {
+	t.Parallel()
+
 	root, planDir := t.TempDir(), t.TempDir()
 	seedProjection(t, root, planDir, projectionSeed{
 		RunID: "current-run", Phase: PhaseTurn, PID: 123, KittyWindowID: 3,

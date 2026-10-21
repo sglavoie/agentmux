@@ -24,6 +24,8 @@ func makeCodexAccount(name, dir string) config.Account {
 }
 
 func TestCodexHookContract_InstallPath(t *testing.T) {
+	t.Parallel()
+
 	contract := harness.Lookup(harness.Codex).HookContract()
 	homeDir := "/home/user/.codex"
 	want := filepath.Join(homeDir, "hooks.json")
@@ -277,6 +279,8 @@ func TestMergeCodexReplacesPriorAmxEntries(t *testing.T) {
 }
 
 func TestCodexStatusMissing(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	accountDir := filepath.Join(dir, "codex")
 

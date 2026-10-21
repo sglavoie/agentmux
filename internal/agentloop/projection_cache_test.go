@@ -13,6 +13,8 @@ func statePathFor(t *testing.T, stateDir string) string {
 }
 
 func TestProjectionCacheReusesUnchangedDocumentsAndNoticesRewrites(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	stateDir := seedProjection(t, root, planDir, projectionSeed{
@@ -84,6 +86,8 @@ func TestProjectionCacheReusesUnchangedDocumentsAndNoticesRewrites(t *testing.T)
 // A cache that only ever grew would pin one decode per plan the machine has
 // ever held, which is the very footprint the sweep exists to avoid re-reading.
 func TestProjectionCacheForgetsPlansThatLeftTheStateRoot(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	plans := t.TempDir()
 	kept := filepath.Join(plans, "kept")
@@ -114,6 +118,8 @@ func TestProjectionCacheForgetsPlansThatLeftTheStateRoot(t *testing.T) {
 // Caching is opt-in so one-shot callers keep read-through semantics, and a nil
 // cache must be usable rather than a panic waiting on the sweep path.
 func TestDiscoverWorksWithoutACache(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	seedProjection(t, root, planDir, projectionSeed{RunID: "run-1", Phase: "turn"})
@@ -130,6 +136,8 @@ func TestDiscoverWorksWithoutACache(t *testing.T) {
 // The expensive documents to re-parse are the corrupt ones, since they are the
 // least likely to change. Their verdict is cached like any other.
 func TestProjectionCacheMemoizesFailures(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, stateFileName)
 	if err := os.WriteFile(statePath, []byte("{"), 0o644); err != nil {
@@ -151,6 +159,8 @@ func TestProjectionCacheMemoizesFailures(t *testing.T) {
 // A missing file has nothing to key an entry on. It must read through rather
 // than serve whatever was last seen at that path.
 func TestProjectionCacheReadsThroughWhenTheFileIsGone(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
 	stateDir := seedProjection(t, root, planDir, projectionSeed{RunID: "run-1", Phase: "turn"})

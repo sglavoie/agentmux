@@ -65,6 +65,8 @@ func (m *actionWorktreeManager) Forget(context.Context, string) (worktree.Mutati
 }
 
 func TestWorktreeDefinitionsDeclareEntitiesParametersAndConfirmation(t *testing.T) {
+	t.Parallel()
+
 	registry := DefaultRegistry()
 	for _, id := range []ID{WorktreeShow, WorktreeReopen, WorktreeShell, WorktreeEditor, WorktreeRemove, WorktreeForget} {
 		definition, ok := registry.Get(id)
@@ -96,6 +98,8 @@ func TestWorktreeDefinitionsDeclareEntitiesParametersAndConfirmation(t *testing.
 }
 
 func TestWorktreeLifecycleErrorsHaveStableCodes(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		err  error
 		code string
@@ -114,6 +118,8 @@ func TestWorktreeLifecycleErrorsHaveStableCodes(t *testing.T) {
 }
 
 func TestWorktreeReopenDisambiguatesFreshLiveMatches(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	source := t.TempDir()
 	entry := worktree.Entry{ID: "wt-1", Path: root, SourceRoot: source, ProjectLabel: "api", Exists: true}
@@ -143,6 +149,8 @@ func TestWorktreeReopenDisambiguatesFreshLiveMatches(t *testing.T) {
 }
 
 func TestWorktreeRemoveFailsClosedOnProbeErrorsAndActivity(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	entry := worktree.Entry{ID: "wt-1", Path: root, Exists: true, Actionable: true}
 	manager := &actionWorktreeManager{entries: []worktree.Entry{entry}}
@@ -174,6 +182,8 @@ func TestWorktreeRemoveFailsClosedOnProbeErrorsAndActivity(t *testing.T) {
 }
 
 func TestWorktreeReopenUsesNewestVisibleTranscriptAndKeepsRefreshWarning(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	source := t.TempDir()
 	entry := worktree.Entry{ID: "wt-1", Path: root, SourceRoot: source, ProjectLabel: "api", Profile: "work", Harness: harness.Claude, Exists: true}
@@ -220,6 +230,8 @@ func TestWorktreeReopenUsesNewestVisibleTranscriptAndKeepsRefreshWarning(t *test
 }
 
 func TestWorktreeReopenFreshFallbackHandlesLegacyDefaultsAndProfileDrift(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	source := t.TempDir()
 	entry := worktree.Entry{ID: "wt-1", Path: root, SourceRoot: source, ProjectLabel: "api", Profile: "removed", Harness: harness.Claude, Exists: true}
@@ -293,6 +305,8 @@ func writeActionTranscriptIndex(t *testing.T, path string, metas ...transcript.S
 }
 
 func TestWorktreeDiffReviewsActiveAndDirtyWorktreesAndPassesItsOptions(t *testing.T) {
+	t.Parallel()
+
 	entry := worktree.Entry{
 		ID: "wt-1", Classification: worktree.ClassificationValid, SourceBranch: "main",
 		Exists: true, GitAvailable: true, Registered: true,
@@ -334,6 +348,8 @@ func TestWorktreeDiffReviewsActiveAndDirtyWorktreesAndPassesItsOptions(t *testin
 }
 
 func TestWorktreeLandRequiresConfirmationAnInactiveWorktreeAndReportsAKeptOne(t *testing.T) {
+	t.Parallel()
+
 	entry := worktree.Entry{
 		ID: "wt-1", Classification: worktree.ClassificationValid, Path: t.TempDir(), Branch: "amx/api/fix", SourceBranch: "main",
 		Exists: true, GitAvailable: true, StatusAvailable: true, Registered: true, Actionable: true,

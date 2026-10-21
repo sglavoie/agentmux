@@ -116,6 +116,8 @@ func TestSharedCodexUnresolvedOwnerNeverFallsBackToInheritedRuntime(t *testing.T
 }
 
 func TestDiscoverSharedCodexAppServer(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		command string
 		shared  bool

@@ -63,6 +63,8 @@ func TestOperatorIconActionsRefuseUnidentifiedKittyWindow(t *testing.T) {
 // A live session on a backend with no view of its own cannot be focused; a
 // worktree reopen reports it for the caller to attach instead of failing.
 func TestFocusingALiveTmuxWorktreeSessionReportsAttach(t *testing.T) {
+	t.Parallel()
+
 	running := session.RunningSession{
 		TabID: 1 << 41, WindowID: 1 << 41, Backend: runtimesession.BackendTmux,
 		Pane: backend.PaneID("%0"), RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Project: "api",
