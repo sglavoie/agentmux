@@ -471,6 +471,14 @@ final class WorkspaceRowCellView: NSTableCellView {
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             ? NSColor(srgbRed: 0.45, green: 0.68, blue: 1, alpha: 1) : nameOnTabColor
     }
+    /// The detail, key, and × on the selected line's opaque pill: the label
+    /// color, a little muted. Built per appearance, because muting
+    /// `labelColor` fixes it to whichever appearance was current then,
+    /// which drew it black on the dark pill.
+    static let selectedDetailColor = NSColor(name: nil) { appearance in
+        (appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor.white : .black)
+            .withAlphaComponent(0.8)
+    }
 
     /// Draws the text in `color`, for a session's color behind it, or as the
     /// list draws it when there is none. On the `selected` line's opaque pill
@@ -480,7 +488,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.textColor = color == nil ? Self.nameColor : Self.nameOnTabColor
         glyphLabel.textColor = color ?? .labelColor
         titleLabel.textColor = color ?? .labelColor
-        let muted = (color ?? (selected ? .labelColor : nil))?.withAlphaComponent(0.8)
+        let muted = color?.withAlphaComponent(0.8) ?? (selected ? Self.selectedDetailColor : nil)
         detailLabel.textColor = muted ?? .secondaryLabelColor
         closeButton.contentTintColor = muted ?? .tertiaryLabelColor
         keyLabel.textColor = muted ?? .tertiaryLabelColor

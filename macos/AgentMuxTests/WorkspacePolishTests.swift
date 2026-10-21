@@ -252,8 +252,24 @@ final class WorkspacePolishTests: XCTestCase {
         let cell = WorkspaceRowCellView()
         cell.setTabText(nil, selected: true)
         XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
-        XCTAssertEqual(cell.detailLabel.textColor, NSColor.labelColor.withAlphaComponent(0.8))
-        XCTAssertEqual(cell.keyLabel.textColor, NSColor.labelColor.withAlphaComponent(0.8))
+        XCTAssertEqual(cell.detailLabel.textColor, WorkspaceRowCellView.selectedDetailColor)
+        XCTAssertEqual(cell.keyLabel.textColor, WorkspaceRowCellView.selectedDetailColor)
+    }
+
+    /// Muting the label color once fixed it to the appearance current then,
+    /// which drew the selected line's detail black on the dark pill.
+    func testASelectedLinesDetailIsLightInTheDarkAppearance() {
+        func resolved(_ name: NSAppearance.Name) -> CGFloat {
+            var white: CGFloat = -1
+            NSAppearance(named: name)!.performAsCurrentDrawingAppearance {
+                let color = WorkspaceRowCellView.selectedDetailColor.usingColorSpace(.genericGray)!
+                white = color.whiteComponent
+                XCTAssertEqual(color.alphaComponent, 0.8, accuracy: 0.01)
+            }
+            return white
+        }
+        XCTAssertEqual(resolved(.darkAqua), 1, accuracy: 0.01)
+        XCTAssertEqual(resolved(.aqua), 0, accuracy: 0.01)
     }
 
     func testTheSidebarToggleIsTheSidebarSymbol() {
