@@ -489,8 +489,16 @@ func TestSortEntriesAttentionAndTieBreakers(t *testing.T) {
 	}
 }
 
+// testInventory runs real Git, but gives a read-only probe the time a mutating
+// command gets: the suite runs in parallel and under -race, and on a loaded
+// machine a probe can outlast its two-second production budget, which would
+// fail a test about something else. Tests of a probe timing out inject their
+// own runner.
 func testInventory(root string) *Inventory {
-	return &Inventory{directory: func() (string, error) { return root, nil }, git: runGit, workers: maxInventoryWorkers}
+	git := func(ctx context.Context, directory string, timeout time.Duration, args ...string) ([]byte, error) {
+		return runGit(ctx, directory, max(timeout, gitCommandTimeout), args...)
+	}
+	return &Inventory{directory: func() (string, error) { return root, nil }, git: git, workers: maxInventoryWorkers}
 }
 
 func metadataForInventory(path, common, source, id string) Metadata {
