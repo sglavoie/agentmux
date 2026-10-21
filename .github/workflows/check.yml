@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 # Three lanes with different authority.
 #
 #   `linux-portable` is cheap and deliberately partial: build, vet, gofmt and
@@ -43,6 +46,11 @@ jobs:
 
       - name: Test
         run: just test
+
+      - name: Explain contract coverage for contributors
+        if: ${{ github.repository != 'sglavoie/agentmux' || (github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]')) }}
+        run: |
+          echo 'The test suite verifies the vendored ASL corpus locally. Comparing it against the private upstream repository runs only on trusted upstream events.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Vet
         run: just vet
@@ -84,6 +92,11 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
 
+      - name: Install tmux for integration tests
+        run: |
+          brew install tmux
+          tmux -V
+
       # `just acceptance` is `fmt-check test race-core vet`, with the TUI
       # scenarios inside `test` (which builds the harness with -tags tuitest). No Kitty is
       # installed on this runner and none is needed: the acceptance suites
@@ -110,6 +123,10 @@ jobs:
 
   cross-repository-contract:
     name: Cross-repository contract
+    # A fork's main branch and external PRs have no ASL_REPO_TOKEN. The
+    # ordinary suite still verifies the vendored corpus on those events.
+    # Dependabot PRs also lack Actions secrets, even on the upstream repo.
+    if: ${{ github.repository == 'sglavoie/agentmux' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

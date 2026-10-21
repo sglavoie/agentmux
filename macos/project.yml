@@ -24,6 +24,8 @@ targets:
       # each state with the same glyph.
       - path: ../internal/palette/icons.json
         buildPhase: resources
+      - path: ../LICENSE
+        buildPhase: resources
       # Ghostty's license notice, for the sources ported under AgentMux/Ghostty
       # and the themes bundled below.
       - path: NOTICE-ghostty

@@ -10,14 +10,31 @@ searches past conversations and plans, and supports resume, fork, handoff,
 and managed Git worktrees. It can also start and supervise prepared
 `agent-session-loop` plans.
 
+![Agent Mux desktop walkthrough: switch agents, approve a waiting session, open the dashboard and overview, and review a patch beside an agent.](docs/media/desktop-demo.gif)
+
+The real macOS app, driven automatically on a separate Mac over SSH. Agent
+responses are **scripted demo data**; no live AI requests are made. The
+46-second walkthrough shows session switching, approval, the dashboard and
+overview, the attention inspector, and a split checkout diff.
+[Video](docs/media/desktop-demo.mp4) · [Still image](docs/media/desktop-demo.png) ·
+[Reproduce the demo](scripts/demo/README.md)
+
 ## First session
 
-Requires Go 1.26+, [just](https://github.com/casey/just), tmux 3.5+ on `PATH`
+Requires Go 1.26.2+ (see [`go.mod`](go.mod)), [just](https://github.com/casey/just), tmux 3.5+ on `PATH`
 (the optional macOS app bundles its own), and an installed, authenticated agent
 CLI. On macOS, native notifications additionally need
 [alerter](https://github.com/vjeantet/alerter) 26.x+ when enabled.
 
-1. **Install.** From this checkout, run `just install`. It puts `amx` in
+1. **Install from source.** Clone the repository, then run `just install`:
+
+   ```sh
+   git clone https://github.com/sglavoie/agentmux.git
+   cd agentmux
+   just install
+   ```
+
+   It puts `amx` in
    `~/.local/bin` (put that on your `PATH`) and creates a starter
    `~/.config/agent-mux/config.toml` if none exists.
 2. **Configure.** Run `amx config setup`. It asks for the agent CLI, its
@@ -130,3 +147,16 @@ Its bindings include `F2` for the live session overview and
 `just uninstall` stops the daemon and removes the binary; configuration and
 session data remain. `just mac-uninstall` removes the app and leaves agents
 running unless explicitly asked to end them.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, checks, and pull
+requests. Report bugs and propose improvements through
+[GitHub issues](https://github.com/sglavoie/agentmux/issues). For suspected
+vulnerabilities, follow [SECURITY.md](SECURITY.md).
+
+## License
+
+Agent Mux is licensed under the [MIT License](LICENSE). Third-party components
+retain their own licenses; see the [Ghostty notice](macos/NOTICE-ghostty) and
+the license files included with the bundled tmux runtime.

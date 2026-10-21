@@ -1,5 +1,8 @@
 /amx
 
+# Local Python demo/acceptance tooling.
+__pycache__/
+
 # Agent Mux.app build products and caches (macos/README.md). The XcodeGen
 # project is generated from macos/project.yml and never committed.
 macos/build/
