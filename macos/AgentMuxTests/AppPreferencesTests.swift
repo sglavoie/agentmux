@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import AgentMux
 
@@ -509,6 +510,107 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertFalse(controller.window.styleMask.contains(.resizable),
                        "the content is laid out at a fixed width, so the window does not resize")
         XCTAssertEqual(controller.window.contentLayoutRect.width, PreferencesWindowController.contentWidth, accuracy: 1)
+    }
+
+    @MainActor
+    func testSettingsUsesToolbarTabsWithTitlesAndSymbols() throws {
+        let controller = PreferencesWindowController(model: PreferencesModel(defaults: freshDefaults()))
+        defer { controller.window.close() }
+        let tabs = try XCTUnwrap(controller.window.contentViewController as? PreferencesTabViewController)
+        XCTAssertTrue(tabs === controller.tabViewController)
+        XCTAssertEqual(tabs.tabStyle, .toolbar)
+        XCTAssertEqual(controller.window.toolbarStyle, .preference)
+        XCTAssertEqual(tabs.tabViewItems.map(\.label), ["General", "Shortcuts", "Appearance", "Workspace", "Advanced"])
+        for (item, tab) in zip(tabs.tabViewItems, PreferencesTab.allCases) {
+            XCTAssertEqual(item.identifier as? String, tab.rawValue)
+            XCTAssertNotNil(item.image, "\(tab.title) has an SF Symbol")
+            XCTAssertNotNil(NSImage(systemSymbolName: tab.symbolName, accessibilityDescription: nil), tab.symbolName)
+            XCTAssertTrue(item.viewController is NSHostingController<PreferencesView>)
+        }
+        XCTAssertEqual(controller.selectedTab, .general, "a first open shows General")
+    }
+
+    @MainActor
+    func testSettingsRemembersTheSelectedTab() {
+        let defaults = freshDefaults()
+        let model = PreferencesModel(defaults: defaults)
+        XCTAssertEqual(model.selectedTab, .general)
+        model.selectedTab = .appearance
+        XCTAssertEqual(PreferencesModel(defaults: defaults).selectedTab, .appearance, "the next launch opens on the same tab")
+        defaults.set("retired", forKey: PreferencesTab.defaultsKey)
+        XCTAssertEqual(PreferencesModel(defaults: defaults).selectedTab, .general, "an unknown tab falls back to General")
+
+        model.selectedTab = .shortcuts
+        let controller = PreferencesWindowController(model: model)
+        let window = controller.window // made on first show
+        defer { window.close() }
+        XCTAssertEqual(controller.selectedTab, .shortcuts, "the window opens on the remembered tab")
+        let tabs = controller.tabViewController!
+        tabs.selectedTabViewItemIndex = PreferencesTab.allCases.firstIndex(of: .advanced)!
+        XCTAssertEqual(model.selectedTab, .advanced, "picking a tab in the toolbar is remembered")
+        XCTAssertEqual(defaults.string(forKey: PreferencesTab.defaultsKey), PreferencesTab.advanced.rawValue)
+    }
+
+    @MainActor
+    func testRequestsOpenSettingsAtTheirTab() {
+        let model = PreferencesModel(defaults: freshDefaults())
+        let controller = PreferencesWindowController(model: model)
+        let window = controller.window
+        defer { window.close() }
+        XCTAssertEqual(controller.selectedTab, .general)
+        model.amxBinarySettingsRequest += 1
+        XCTAssertEqual(model.selectedTab, .advanced, "Open Settings on an amx-not-found alert shows Advanced")
+        XCTAssertEqual(controller.selectedTab, .advanced)
+        model.launchSettingsRequest += 1
+        XCTAssertEqual(model.selectedTab, .workspace, "Launch Settings shows Workspace")
+        XCTAssertEqual(controller.selectedTab, .workspace)
+    }
+
+    @MainActor
+    func testTabChangeEndsRecordingAndCommitsTheBinaryPath() {
+        let model = PreferencesModel(defaults: freshDefaults())
+        let controller = PreferencesWindowController(model: model)
+        let window = controller.window
+        defer { window.close() }
+        controller.dashboardRecorder.addMonitor = { _ in NSObject() }
+        controller.dashboardRecorder.removeMonitor = { _ in }
+        controller.dashboardRecorder.start(onStateChange: { _ in }, onRecord: { _ in })
+        model.binaryPathDraft = "/opt/amx"
+        model.selectedTab = .appearance
+        XCTAssertFalse(controller.dashboardRecorder.isRecording, "leaving Shortcuts stops a recording")
+        XCTAssertEqual(model.preferences.binaryPath, "/opt/amx", "leaving a tab applies the typed binary path")
+    }
+
+    @MainActor
+    func testSettingsWindowTakesEachPanesHeight() {
+        let model = PreferencesModel(defaults: freshDefaults())
+        let controller = PreferencesWindowController(model: model)
+        defer { controller.window.close() }
+        let appearance = controller.idealHeight(of: .appearance)
+        let shortcuts = controller.idealHeight(of: .shortcuts)
+        XCTAssertGreaterThan(appearance, PreferencesWindowController.minimumContentHeight)
+        XCTAssertGreaterThan(shortcuts, appearance, "Shortcuts lists every workspace command; Appearance has one section")
+
+        let window = controller.window
+        let chrome = { window.frame.height - window.contentView!.frame.height }
+        let available = { (window.screen ?? NSScreen.main).map { $0.visibleFrame.height - PreferencesWindowController.screenMargin - chrome() } }
+        for tab in [PreferencesTab.appearance, .shortcuts, .general] {
+            model.selectedTab = tab
+            let expected = PreferencesWindowController.contentHeight(ideal: controller.idealHeight(of: tab), available: available())
+            XCTAssertEqual(window.contentView!.frame.height, expected, accuracy: 1, "\(tab.title) sets the height")
+            XCTAssertEqual(window.contentLayoutRect.width, PreferencesWindowController.contentWidth, accuracy: 1, "every tab keeps the width")
+            XCTAssertFalse(window.styleMask.contains(.resizable))
+        }
+    }
+
+    func testPaneHeightsStayOnScreen() {
+        typealias Controller = PreferencesWindowController
+        XCTAssertEqual(Controller.contentHeight(ideal: 300.2, available: 900), 301)
+        XCTAssertEqual(Controller.contentHeight(ideal: 1500, available: 700), 700, "a tall pane scrolls within the screen")
+        XCTAssertEqual(Controller.contentHeight(ideal: 40, available: 900), Controller.minimumContentHeight)
+        XCTAssertEqual(Controller.contentHeight(ideal: 0, available: nil), Controller.fallbackContentHeight, "an unmeasured pane")
+        XCTAssertEqual(Controller.contentHeight(ideal: .infinity, available: 500), 500)
+        XCTAssertEqual(Controller.contentHeight(ideal: 900, available: 20), Controller.minimumContentHeight, "never below the minimum")
     }
 
     func testASharedRecorderRecordsForOneRowAtATime() {
