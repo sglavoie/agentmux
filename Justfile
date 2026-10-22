@@ -21,6 +21,14 @@ harness_tags := "tuitest"
 build:
     go build -o amx .
 
+# Regenerate the animated README SVG from the offline TUI tour (requires uv)
+readme-media:
+    sh scripts/demo/readme-media.sh
+
+# Check that the README SVG matches the dashboard's current rendering
+readme-media-check:
+    sh scripts/demo/readme-media.sh --check
+
 # The suite runs once with the harness tag, which is a superset of the
 # untagged suite everywhere except root's command assembly: there the tag
 # swaps the hidden tui-test stand-in for the real harness, so `./cmd` runs once

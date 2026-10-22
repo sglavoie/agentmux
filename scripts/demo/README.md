@@ -1,10 +1,35 @@
-# Desktop demo on a physical Mac
+# README animation and desktop recording
+
+## README animation
+
+The README embeds `docs/media/demo.svg`, generated from the real dashboard
+using synthetic session data and the offline TUI driver. The 21.2-second tour
+inspects Claude, Codex, and Copilot output, jumps to a session needing
+permission, filters by harness, opens the project switcher, and searches the
+command palette. No app windows, tmux sessions, daemon, or live AI requests
+are needed.
+
+Requires the repository's Go toolchain and `uv` (which installs the pinned
+Rich renderer dependency):
+
+```sh
+just readme-media        # regenerate docs/media/demo.svg
+just readme-media-check  # fail if the committed SVG is stale
+```
+
+Edit the fixture and keyboard tour in `tui/readme_demo_test.go`; adjust SVG
+styling in `scripts/demo/render_svg.py`. Every captured frame is checked for
+layout issues and expected content before export. The SVG is self-contained,
+uses CSS animation, and holds its opening frame for reduced-motion viewers.
+Review it in a browser after changing the tour, including at README width.
+
+## Desktop recording on a physical Mac
 
 This tooling drives and captures the real macOS workspace using deterministic
 agent stand-ins. It makes no AI requests and does not load agent credentials.
 It is local tooling; never run it in GitHub Actions.
 
-The README walkthrough was recorded on a separate MacBook Pro over SSH.
+The linked desktop video was recorded on a separate MacBook Pro over SSH.
 It exercises the actual desktop app; terminal responses come from the
 clearly labeled stand-ins, not live AI services.
 

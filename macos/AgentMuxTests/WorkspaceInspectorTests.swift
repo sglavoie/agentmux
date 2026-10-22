@@ -51,7 +51,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         session.reason = "permission"
         session.name = "migrations"
         let waiting = WorkspaceInspector.waiting([session], now: now, glyphs: .fallback)
-        XCTAssertEqual(waiting.map(\.title), ["migrations"])
+        XCTAssertEqual(waiting.map(\.title), ["api — migrations"])
         XCTAssertEqual(waiting.map(\.detail), ["Needs permission · 5m"])
         XCTAssertTrue(waiting[0].toolTip.hasPrefix("api — personal"), "the name does not hide where the session is")
     }

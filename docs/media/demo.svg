@@ -1,0 +1,1045 @@
+<svg role="img" aria-labelledby="demo-title demo-description" class="rich-terminal" viewBox="0 0 1238 635.5999999999999" xmlns="http://www.w3.org/2000/svg">
+<title id="demo-title">Agent Mux dashboard walkthrough</title>
+<desc id="demo-description">Three scripted agent sessions. Inspect their output, jump to the session needing permission, filter by harness, switch projects, and find commands.</desc>
+    <!-- Generated with Rich https://www.textualize.io -->
+    <style>
+
+    
+    
+
+    .amx-matrix {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 20px;
+        line-height: 24.4px;
+        font-variant-east-asian: full-width;
+    }
+
+    .amx-title {
+        font-size: 18px;
+        font-weight: bold;
+        font-family: arial;
+    }
+
+    .amx-r1 { fill: #7faedb;font-weight: bold }
+.amx-r2 { fill: #a5b1be }
+.amx-r3 { fill: #f2f4f7 }
+.amx-r4 { fill: #4ec9b0 }
+.amx-r5 { fill: #f2f4f7;font-weight: bold }
+.amx-r6 { fill: #ffaa00;font-weight: bold }
+.amx-r7 { fill: #4890da }
+.amx-r8 { fill: #ffaa00 }
+.amx-r9 { fill: #52677c }
+.amx-r10 { fill: #4ec9b0;font-weight: bold }
+    .amx-frame { visibility: hidden; animation: 21200ms step-end infinite; }
+.amx-caption { font: bold 16px ui-monospace, Menlo, monospace; fill: #4ec9b0; }
+.amx-f0 { animation-name: amx-k0; } @keyframes amx-k0 { 0% { visibility: hidden; } 0.000% { visibility: visible; } 14.151% { visibility: hidden; } }
+.amx-f1 { animation-name: amx-k1; } @keyframes amx-k1 { 0% { visibility: hidden; } 14.151% { visibility: visible; } 26.415% { visibility: hidden; } }
+.amx-f2 { animation-name: amx-k2; } @keyframes amx-k2 { 0% { visibility: hidden; } 26.415% { visibility: visible; } 38.679% { visibility: hidden; } }
+.amx-f3 { animation-name: amx-k3; } @keyframes amx-k3 { 0% { visibility: hidden; } 38.679% { visibility: visible; } 52.830% { visibility: hidden; } }
+.amx-f4 { animation-name: amx-k4; } @keyframes amx-k4 { 0% { visibility: hidden; } 52.830% { visibility: visible; } 66.038% { visibility: hidden; } }
+.amx-f5 { animation-name: amx-k5; } @keyframes amx-k5 { 0% { visibility: hidden; } 66.038% { visibility: visible; } 77.358% { visibility: hidden; } }
+.amx-f6 { animation-name: amx-k6; } @keyframes amx-k6 { 0% { visibility: hidden; } 77.358% { visibility: visible; } 91.509% { visibility: hidden; } }
+.amx-f7 { animation-name: amx-k7; } @keyframes amx-k7 { 0% { visibility: hidden; } 91.509% { visibility: visible; } 100.000% { visibility: visible; } }
+@media (prefers-reduced-motion: reduce) { .amx-frame { animation: none; } .amx-f0 { visibility: visible; } }
+    </style>
+
+    <defs>
+    <clipPath id="amx-clip-terminal">
+      <rect x="0" y="0" width="1219.0" height="584.5999999999999" />
+    </clipPath>
+    <clipPath id="amx-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath>
+    </defs>
+
+    <rect fill="#151b22" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1236" height="633.6" rx="8"/><text class="amx-title" fill="#f2f4f7" text-anchor="middle" x="618" y="27">Agent&#160;Mux</text>
+            <g transform="translate(26,22)">
+            <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
+            <circle cx="22" cy="0" r="7" fill="#febc2e"/>
+            <circle cx="44" cy="0" r="7" fill="#28c840"/>
+            </g>
+        
+<style>
+.amx0-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx0-r1 { fill: #7faedb;font-weight: bold }
+.amx0-r2 { fill: #a5b1be }
+.amx0-r3 { fill: #f2f4f7 }
+.amx0-r4 { fill: #4ec9b0 }
+.amx0-r5 { fill: #f2f4f7;font-weight: bold }
+.amx0-r6 { fill: #ffaa00;font-weight: bold }
+.amx0-r7 { fill: #4890da }
+.amx0-r8 { fill: #ffaa00 }
+.amx0-r9 { fill: #52677c }
+.amx0-r10 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx0-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx0-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f0">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">Three&#160;agents.&#160;One&#160;dashboard.</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="0" y="25.9" width="597.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="24.4" y="74.7" width="402.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="1220" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="61" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="73.2" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="158.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="195.2" y="562.7" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="256.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="268.4" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="317.2" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="366" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="378.2" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="451.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="488" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="500.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="512.4" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="597.8" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="634.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="646.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="658.8" y="562.7" width="97.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="756.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="793" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="805.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="817.4" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="890.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="927.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="939.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="951.6" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1000.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1037" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1073.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1085.8" y="562.7" width="109.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1195.6" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx0-matrix">
+    <text class="amx0-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx0-line-0)">Agent&#160;Mux</text><text class="amx0-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx0-line-0)">&#160;·&#160;</text><text class="amx0-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx0-line-0)">Urgency</text><text class="amx0-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx0-line-0)">&#160;·&#160;</text><text class="amx0-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx0-line-0)">all&#160;projects</text><text class="amx0-r4" x="1037" y="20" textLength="183" clip-path="url(#amx0-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx0-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx0-line-0)">
+</text><text class="amx0-r5" x="0" y="44.4" textLength="597.8" clip-path="url(#amx0-line-1)">&gt;&#160;Sessions&#160;·&#160;focused&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r2" x="597.8" y="44.4" textLength="12.2" clip-path="url(#amx0-line-1)">│</text><text class="amx0-r2" x="610" y="44.4" textLength="610" clip-path="url(#amx0-line-1)">&#160;&#160;Inspector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx0-line-1)">
+</text><text class="amx0-r6" x="24.4" y="68.8" textLength="158.6" clip-path="url(#amx0-line-2)">Needs&#160;you&#160;(1)</text><text class="amx0-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx0-line-2)">│</text><text class="amx0-r7" x="610" y="68.8" textLength="36.6" clip-path="url(#amx0-line-2)">api</text><text class="amx0-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx0-line-2)">
+</text><text class="amx0-r8" x="0" y="93.2" textLength="12.2" clip-path="url(#amx0-line-3)">▌</text><text class="amx0-r5" x="24.4" y="93.2" textLength="402.6" clip-path="url(#amx0-line-3)">api&#160;&#160;&#160;&#160;&#160;&#160;&#160;Needs&#160;permission&#160;&#160;&#160;&#160;&#160;&#160;—</text><text class="amx0-r2" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx0-line-3)">│</text><text class="amx0-r8" x="610" y="93.2" textLength="195.2" clip-path="url(#amx0-line-3)">Needs&#160;permission</text><text class="amx0-r2" x="805.2" y="93.2" textLength="48.8" clip-path="url(#amx0-line-3)">&#160;·&#160;—</text><text class="amx0-r2" x="854" y="93.2" textLength="219.6" clip-path="url(#amx0-line-3)">&#160;·&#160;claude&#160;·&#160;claude</text><text class="amx0-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx0-line-3)">
+</text><text class="amx0-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx0-line-4)">│</text><text class="amx0-r2" x="610" y="117.6" textLength="97.6" clip-path="url(#amx0-line-4)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="707.6" y="117.6" textLength="512.4" clip-path="url(#amx0-line-4)">~/projects/api&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx0-line-4)">
+</text><text class="amx0-r1" x="24.4" y="142" textLength="134.2" clip-path="url(#amx0-line-5)">Running&#160;(1)</text><text class="amx0-r2" x="597.8" y="142" textLength="12.2" clip-path="url(#amx0-line-5)">│</text><text class="amx0-r2" x="610" y="142" textLength="97.6" clip-path="url(#amx0-line-5)">Branch&#160;&#160;</text><text class="amx0-r3" x="707.6" y="142" textLength="512.4" clip-path="url(#amx0-line-5)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx0-line-5)">
+</text><text class="amx0-r9" x="0" y="166.4" textLength="12.2" clip-path="url(#amx0-line-6)">▌</text><text class="amx0-r3" x="24.4" y="166.4" textLength="36.6" clip-path="url(#amx0-line-6)">web</text><text class="amx0-r3" x="146.4" y="166.4" textLength="195.2" clip-path="url(#amx0-line-6)">Working&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r2" x="366" y="166.4" textLength="61" clip-path="url(#amx0-line-6)">&#160;1:35</text><text class="amx0-r2" x="597.8" y="166.4" textLength="12.2" clip-path="url(#amx0-line-6)">│</text><text class="amx0-r2" x="610" y="166.4" textLength="610" clip-path="url(#amx0-line-6)">──────────────────────────────────────────────────</text><text class="amx0-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx0-line-6)">
+</text><text class="amx0-r2" x="597.8" y="190.8" textLength="12.2" clip-path="url(#amx0-line-7)">│</text><text class="amx0-r3" x="610" y="190.8" textLength="610" clip-path="url(#amx0-line-7)">Claude&#160;Code&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx0-line-7)">
+</text><text class="amx0-r1" x="24.4" y="215.2" textLength="97.6" clip-path="url(#amx0-line-8)">Idle&#160;(1)</text><text class="amx0-r2" x="597.8" y="215.2" textLength="12.2" clip-path="url(#amx0-line-8)">│</text><text class="amx0-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx0-line-8)">
+</text><text class="amx0-r2" x="0" y="239.6" textLength="12.2" clip-path="url(#amx0-line-9)">▌</text><text class="amx0-r3" x="24.4" y="239.6" textLength="48.8" clip-path="url(#amx0-line-9)">docs</text><text class="amx0-r2" x="146.4" y="239.6" textLength="195.2" clip-path="url(#amx0-line-9)">Done&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r2" x="366" y="239.6" textLength="61" clip-path="url(#amx0-line-9)">&#160;&#160;&#160;&#160;—</text><text class="amx0-r2" x="597.8" y="239.6" textLength="12.2" clip-path="url(#amx0-line-9)">│</text><text class="amx0-r3" x="610" y="239.6" textLength="610" clip-path="url(#amx0-line-9)">Add&#160;request&#160;validation&#160;to&#160;the&#160;API.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx0-line-9)">
+</text><text class="amx0-r2" x="597.8" y="264" textLength="12.2" clip-path="url(#amx0-line-10)">│</text><text class="amx0-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx0-line-10)">
+</text><text class="amx0-r2" x="597.8" y="288.4" textLength="12.2" clip-path="url(#amx0-line-11)">│</text><text class="amx0-r3" x="610" y="288.4" textLength="610" clip-path="url(#amx0-line-11)">Ready&#160;to&#160;check&#160;the&#160;new&#160;handlers:&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx0-line-11)">
+</text><text class="amx0-r2" x="597.8" y="312.8" textLength="12.2" clip-path="url(#amx0-line-12)">│</text><text class="amx0-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx0-line-12)">
+</text><text class="amx0-r2" x="597.8" y="337.2" textLength="12.2" clip-path="url(#amx0-line-13)">│</text><text class="amx0-r3" x="610" y="337.2" textLength="610" clip-path="url(#amx0-line-13)">&#160;&#160;go&#160;test&#160;./internal/api/...&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx0-line-13)">
+</text><text class="amx0-r2" x="597.8" y="361.6" textLength="12.2" clip-path="url(#amx0-line-14)">│</text><text class="amx0-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx0-line-14)">
+</text><text class="amx0-r2" x="597.8" y="386" textLength="12.2" clip-path="url(#amx0-line-15)">│</text><text class="amx0-r3" x="610" y="386" textLength="610" clip-path="url(#amx0-line-15)">Allow&#160;this&#160;command?&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx0-line-15)">
+</text><text class="amx0-r2" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx0-line-16)">│</text><text class="amx0-r3" x="610" y="410.4" textLength="610" clip-path="url(#amx0-line-16)">&#160;&#160;1.&#160;Yes&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx0-line-16)">
+</text><text class="amx0-r2" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx0-line-17)">│</text><text class="amx0-r3" x="610" y="434.8" textLength="610" clip-path="url(#amx0-line-17)">&#160;&#160;2.&#160;No&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx0-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx0-line-17)">
+</text><text class="amx0-r2" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx0-line-18)">│</text><text class="amx0-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx0-line-18)">
+</text><text class="amx0-r2" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx0-line-19)">│</text><text class="amx0-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx0-line-19)">
+</text><text class="amx0-r2" x="597.8" y="508" textLength="12.2" clip-path="url(#amx0-line-20)">│</text><text class="amx0-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx0-line-20)">
+</text><text class="amx0-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx0-line-21)">
+</text><text class="amx0-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx0-line-22)">
+</text><text class="amx0-r10" x="24.4" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">j/k</text><text class="amx0-r2" x="73.2" y="581.2" textLength="85.4" clip-path="url(#amx0-line-23)">up/down</text><text class="amx0-r2" x="158.6" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">&#160;·&#160;</text><text class="amx0-r10" x="195.2" y="581.2" textLength="61" clip-path="url(#amx0-line-23)">enter</text><text class="amx0-r2" x="268.4" y="581.2" textLength="48.8" clip-path="url(#amx0-line-23)">open</text><text class="amx0-r2" x="317.2" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">&#160;·&#160;</text><text class="amx0-r10" x="353.8" y="581.2" textLength="12.2" clip-path="url(#amx0-line-23)">t</text><text class="amx0-r2" x="378.2" y="581.2" textLength="73.2" clip-path="url(#amx0-line-23)">answer</text><text class="amx0-r2" x="451.4" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">&#160;·&#160;</text><text class="amx0-r10" x="488" y="581.2" textLength="12.2" clip-path="url(#amx0-line-23)">a</text><text class="amx0-r2" x="512.4" y="581.2" textLength="85.4" clip-path="url(#amx0-line-23)">actions</text><text class="amx0-r2" x="597.8" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">&#160;·&#160;</text><text class="amx0-r10" x="634.4" y="581.2" textLength="12.2" clip-path="url(#amx0-line-23)">:</text><text class="amx0-r2" x="658.8" y="581.2" textLength="97.6" clip-path="url(#amx0-line-23)">commands</text><text class="amx0-r2" x="756.4" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">&#160;·&#160;</text><text class="amx0-r10" x="793" y="581.2" textLength="12.2" clip-path="url(#amx0-line-23)">/</text><text class="amx0-r2" x="817.4" y="581.2" textLength="73.2" clip-path="url(#amx0-line-23)">filter</text><text class="amx0-r2" x="890.6" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">&#160;·&#160;</text><text class="amx0-r10" x="927.2" y="581.2" textLength="12.2" clip-path="url(#amx0-line-23)">?</text><text class="amx0-r2" x="951.6" y="581.2" textLength="48.8" clip-path="url(#amx0-line-23)">help</text><text class="amx0-r2" x="1000.4" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">&#160;·&#160;</text><text class="amx0-r10" x="1037" y="581.2" textLength="36.6" clip-path="url(#amx0-line-23)">n/N</text><text class="amx0-r2" x="1085.8" y="581.2" textLength="109.8" clip-path="url(#amx0-line-23)">needs&#160;you</text>
+    </g>
+    </g>
+</g>
+<style>
+.amx1-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx1-r1 { fill: #7faedb;font-weight: bold }
+.amx1-r2 { fill: #a5b1be }
+.amx1-r3 { fill: #f2f4f7 }
+.amx1-r4 { fill: #4ec9b0 }
+.amx1-r5 { fill: #f2f4f7;font-weight: bold }
+.amx1-r6 { fill: #ffaa00;font-weight: bold }
+.amx1-r7 { fill: #48c870 }
+.amx1-r8 { fill: #ffaa00 }
+.amx1-r9 { fill: #52677c }
+.amx1-r10 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx1-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx1-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f1">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">j&#160;&#160;inspect&#160;the&#160;next&#160;agent</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="0" y="25.9" width="597.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="24.4" y="147.9" width="402.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="1220" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="61" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="73.2" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="158.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="195.2" y="562.7" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="256.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="268.4" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="317.2" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="366" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="378.2" y="562.7" width="134.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="512.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="549" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="561.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="573.4" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="658.8" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="695.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="707.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="719.8" y="562.7" width="97.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="817.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="854" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="866.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="878.4" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="951.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="988.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1000.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1012.6" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1061.4" y="562.7" width="158.6" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx1-matrix">
+    <text class="amx1-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx1-line-0)">Agent&#160;Mux</text><text class="amx1-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx1-line-0)">&#160;·&#160;</text><text class="amx1-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx1-line-0)">Urgency</text><text class="amx1-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx1-line-0)">&#160;·&#160;</text><text class="amx1-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx1-line-0)">all&#160;projects</text><text class="amx1-r4" x="1037" y="20" textLength="183" clip-path="url(#amx1-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx1-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx1-line-0)">
+</text><text class="amx1-r5" x="0" y="44.4" textLength="597.8" clip-path="url(#amx1-line-1)">&gt;&#160;Sessions&#160;·&#160;focused&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r2" x="597.8" y="44.4" textLength="12.2" clip-path="url(#amx1-line-1)">│</text><text class="amx1-r2" x="610" y="44.4" textLength="610" clip-path="url(#amx1-line-1)">&#160;&#160;Inspector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx1-line-1)">
+</text><text class="amx1-r6" x="24.4" y="68.8" textLength="158.6" clip-path="url(#amx1-line-2)">Needs&#160;you&#160;(1)</text><text class="amx1-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx1-line-2)">│</text><text class="amx1-r7" x="610" y="68.8" textLength="36.6" clip-path="url(#amx1-line-2)">web</text><text class="amx1-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx1-line-2)">
+</text><text class="amx1-r8" x="0" y="93.2" textLength="12.2" clip-path="url(#amx1-line-3)">▌</text><text class="amx1-r3" x="24.4" y="93.2" textLength="36.6" clip-path="url(#amx1-line-3)">api</text><text class="amx1-r8" x="146.4" y="93.2" textLength="195.2" clip-path="url(#amx1-line-3)">Needs&#160;permission</text><text class="amx1-r2" x="366" y="93.2" textLength="61" clip-path="url(#amx1-line-3)">&#160;&#160;&#160;&#160;—</text><text class="amx1-r2" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx1-line-3)">│</text><text class="amx1-r3" x="610" y="93.2" textLength="85.4" clip-path="url(#amx1-line-3)">Working</text><text class="amx1-r2" x="695.4" y="93.2" textLength="85.4" clip-path="url(#amx1-line-3)">&#160;·&#160;1:35</text><text class="amx1-r2" x="780.8" y="93.2" textLength="195.2" clip-path="url(#amx1-line-3)">&#160;·&#160;codex&#160;·&#160;codex</text><text class="amx1-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx1-line-3)">
+</text><text class="amx1-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx1-line-4)">│</text><text class="amx1-r2" x="610" y="117.6" textLength="97.6" clip-path="url(#amx1-line-4)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="707.6" y="117.6" textLength="512.4" clip-path="url(#amx1-line-4)">~/projects/web&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx1-line-4)">
+</text><text class="amx1-r1" x="24.4" y="142" textLength="134.2" clip-path="url(#amx1-line-5)">Running&#160;(1)</text><text class="amx1-r2" x="597.8" y="142" textLength="12.2" clip-path="url(#amx1-line-5)">│</text><text class="amx1-r2" x="610" y="142" textLength="97.6" clip-path="url(#amx1-line-5)">Branch&#160;&#160;</text><text class="amx1-r3" x="707.6" y="142" textLength="512.4" clip-path="url(#amx1-line-5)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx1-line-5)">
+</text><text class="amx1-r9" x="0" y="166.4" textLength="12.2" clip-path="url(#amx1-line-6)">▌</text><text class="amx1-r5" x="24.4" y="166.4" textLength="402.6" clip-path="url(#amx1-line-6)">web&#160;&#160;&#160;&#160;&#160;&#160;&#160;Working&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;1:35</text><text class="amx1-r2" x="597.8" y="166.4" textLength="12.2" clip-path="url(#amx1-line-6)">│</text><text class="amx1-r2" x="610" y="166.4" textLength="610" clip-path="url(#amx1-line-6)">──────────────────────────────────────────────────</text><text class="amx1-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx1-line-6)">
+</text><text class="amx1-r2" x="597.8" y="190.8" textLength="12.2" clip-path="url(#amx1-line-7)">│</text><text class="amx1-r3" x="610" y="190.8" textLength="610" clip-path="url(#amx1-line-7)">OpenAI&#160;Codex&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx1-line-7)">
+</text><text class="amx1-r1" x="24.4" y="215.2" textLength="97.6" clip-path="url(#amx1-line-8)">Idle&#160;(1)</text><text class="amx1-r2" x="597.8" y="215.2" textLength="12.2" clip-path="url(#amx1-line-8)">│</text><text class="amx1-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx1-line-8)">
+</text><text class="amx1-r2" x="0" y="239.6" textLength="12.2" clip-path="url(#amx1-line-9)">▌</text><text class="amx1-r3" x="24.4" y="239.6" textLength="48.8" clip-path="url(#amx1-line-9)">docs</text><text class="amx1-r2" x="146.4" y="239.6" textLength="195.2" clip-path="url(#amx1-line-9)">Done&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r2" x="366" y="239.6" textLength="61" clip-path="url(#amx1-line-9)">&#160;&#160;&#160;&#160;—</text><text class="amx1-r2" x="597.8" y="239.6" textLength="12.2" clip-path="url(#amx1-line-9)">│</text><text class="amx1-r3" x="610" y="239.6" textLength="610" clip-path="url(#amx1-line-9)">Build&#160;the&#160;settings&#160;page.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx1-line-9)">
+</text><text class="amx1-r2" x="597.8" y="264" textLength="12.2" clip-path="url(#amx1-line-10)">│</text><text class="amx1-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx1-line-10)">
+</text><text class="amx1-r2" x="597.8" y="288.4" textLength="12.2" clip-path="url(#amx1-line-11)">│</text><text class="amx1-r3" x="610" y="288.4" textLength="610" clip-path="url(#amx1-line-11)">+&#160;Added&#160;account&#160;preferences&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx1-line-11)">
+</text><text class="amx1-r2" x="597.8" y="312.8" textLength="12.2" clip-path="url(#amx1-line-12)">│</text><text class="amx1-r3" x="610" y="312.8" textLength="610" clip-path="url(#amx1-line-12)">+&#160;Connected&#160;the&#160;theme&#160;selector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx1-line-12)">
+</text><text class="amx1-r2" x="597.8" y="337.2" textLength="12.2" clip-path="url(#amx1-line-13)">│</text><text class="amx1-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx1-line-13)">
+</text><text class="amx1-r2" x="597.8" y="361.6" textLength="12.2" clip-path="url(#amx1-line-14)">│</text><text class="amx1-r3" x="610" y="361.6" textLength="610" clip-path="url(#amx1-line-14)">Running&#160;component&#160;tests...&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx1-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx1-line-14)">
+</text><text class="amx1-r2" x="597.8" y="386" textLength="12.2" clip-path="url(#amx1-line-15)">│</text><text class="amx1-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx1-line-15)">
+</text><text class="amx1-r2" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx1-line-16)">│</text><text class="amx1-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx1-line-16)">
+</text><text class="amx1-r2" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx1-line-17)">│</text><text class="amx1-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx1-line-17)">
+</text><text class="amx1-r2" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx1-line-18)">│</text><text class="amx1-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx1-line-18)">
+</text><text class="amx1-r2" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx1-line-19)">│</text><text class="amx1-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx1-line-19)">
+</text><text class="amx1-r2" x="597.8" y="508" textLength="12.2" clip-path="url(#amx1-line-20)">│</text><text class="amx1-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx1-line-20)">
+</text><text class="amx1-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx1-line-21)">
+</text><text class="amx1-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx1-line-22)">
+</text><text class="amx1-r10" x="24.4" y="581.2" textLength="36.6" clip-path="url(#amx1-line-23)">j/k</text><text class="amx1-r2" x="73.2" y="581.2" textLength="85.4" clip-path="url(#amx1-line-23)">up/down</text><text class="amx1-r2" x="158.6" y="581.2" textLength="36.6" clip-path="url(#amx1-line-23)">&#160;·&#160;</text><text class="amx1-r10" x="195.2" y="581.2" textLength="61" clip-path="url(#amx1-line-23)">enter</text><text class="amx1-r2" x="268.4" y="581.2" textLength="48.8" clip-path="url(#amx1-line-23)">open</text><text class="amx1-r2" x="317.2" y="581.2" textLength="36.6" clip-path="url(#amx1-line-23)">&#160;·&#160;</text><text class="amx1-r10" x="353.8" y="581.2" textLength="12.2" clip-path="url(#amx1-line-23)">t</text><text class="amx1-r2" x="378.2" y="581.2" textLength="134.2" clip-path="url(#amx1-line-23)">send&#160;prompt</text><text class="amx1-r2" x="512.4" y="581.2" textLength="36.6" clip-path="url(#amx1-line-23)">&#160;·&#160;</text><text class="amx1-r10" x="549" y="581.2" textLength="12.2" clip-path="url(#amx1-line-23)">a</text><text class="amx1-r2" x="573.4" y="581.2" textLength="85.4" clip-path="url(#amx1-line-23)">actions</text><text class="amx1-r2" x="658.8" y="581.2" textLength="36.6" clip-path="url(#amx1-line-23)">&#160;·&#160;</text><text class="amx1-r10" x="695.4" y="581.2" textLength="12.2" clip-path="url(#amx1-line-23)">:</text><text class="amx1-r2" x="719.8" y="581.2" textLength="97.6" clip-path="url(#amx1-line-23)">commands</text><text class="amx1-r2" x="817.4" y="581.2" textLength="36.6" clip-path="url(#amx1-line-23)">&#160;·&#160;</text><text class="amx1-r10" x="854" y="581.2" textLength="12.2" clip-path="url(#amx1-line-23)">/</text><text class="amx1-r2" x="878.4" y="581.2" textLength="73.2" clip-path="url(#amx1-line-23)">filter</text><text class="amx1-r2" x="951.6" y="581.2" textLength="36.6" clip-path="url(#amx1-line-23)">&#160;·&#160;</text><text class="amx1-r10" x="988.2" y="581.2" textLength="12.2" clip-path="url(#amx1-line-23)">?</text><text class="amx1-r2" x="1012.6" y="581.2" textLength="48.8" clip-path="url(#amx1-line-23)">help</text>
+    </g>
+    </g>
+</g>
+<style>
+.amx2-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx2-r1 { fill: #7faedb;font-weight: bold }
+.amx2-r2 { fill: #a5b1be }
+.amx2-r3 { fill: #f2f4f7 }
+.amx2-r4 { fill: #4ec9b0 }
+.amx2-r5 { fill: #f2f4f7;font-weight: bold }
+.amx2-r6 { fill: #ffaa00;font-weight: bold }
+.amx2-r7 { fill: #ffaa00 }
+.amx2-r8 { fill: #52677c }
+.amx2-r9 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx2-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx2-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f2">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">j&#160;&#160;check&#160;completed&#160;work</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="0" y="25.9" width="597.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="24.4" y="221.1" width="402.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="1220" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="61" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="73.2" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="158.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="195.2" y="562.7" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="256.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="268.4" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="317.2" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="366" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="378.2" y="562.7" width="134.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="512.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="549" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="561.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="573.4" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="658.8" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="695.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="707.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="719.8" y="562.7" width="97.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="817.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="854" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="866.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="878.4" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="951.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="988.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1000.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1012.6" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1061.4" y="562.7" width="158.6" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx2-matrix">
+    <text class="amx2-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx2-line-0)">Agent&#160;Mux</text><text class="amx2-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx2-line-0)">&#160;·&#160;</text><text class="amx2-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx2-line-0)">Urgency</text><text class="amx2-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx2-line-0)">&#160;·&#160;</text><text class="amx2-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx2-line-0)">all&#160;projects</text><text class="amx2-r4" x="1037" y="20" textLength="183" clip-path="url(#amx2-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx2-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx2-line-0)">
+</text><text class="amx2-r5" x="0" y="44.4" textLength="597.8" clip-path="url(#amx2-line-1)">&gt;&#160;Sessions&#160;·&#160;focused&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r2" x="597.8" y="44.4" textLength="12.2" clip-path="url(#amx2-line-1)">│</text><text class="amx2-r2" x="610" y="44.4" textLength="610" clip-path="url(#amx2-line-1)">&#160;&#160;Inspector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx2-line-1)">
+</text><text class="amx2-r6" x="24.4" y="68.8" textLength="158.6" clip-path="url(#amx2-line-2)">Needs&#160;you&#160;(1)</text><text class="amx2-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx2-line-2)">│</text><text class="amx2-r3" x="610" y="68.8" textLength="610" clip-path="url(#amx2-line-2)">docs&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx2-line-2)">
+</text><text class="amx2-r7" x="0" y="93.2" textLength="12.2" clip-path="url(#amx2-line-3)">▌</text><text class="amx2-r3" x="24.4" y="93.2" textLength="36.6" clip-path="url(#amx2-line-3)">api</text><text class="amx2-r7" x="146.4" y="93.2" textLength="195.2" clip-path="url(#amx2-line-3)">Needs&#160;permission</text><text class="amx2-r2" x="366" y="93.2" textLength="61" clip-path="url(#amx2-line-3)">&#160;&#160;&#160;&#160;—</text><text class="amx2-r2" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx2-line-3)">│</text><text class="amx2-r2" x="610" y="93.2" textLength="48.8" clip-path="url(#amx2-line-3)">Done</text><text class="amx2-r2" x="658.8" y="93.2" textLength="48.8" clip-path="url(#amx2-line-3)">&#160;·&#160;—</text><text class="amx2-r2" x="707.6" y="93.2" textLength="244" clip-path="url(#amx2-line-3)">&#160;·&#160;copilot&#160;·&#160;copilot</text><text class="amx2-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx2-line-3)">
+</text><text class="amx2-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx2-line-4)">│</text><text class="amx2-r2" x="610" y="117.6" textLength="97.6" clip-path="url(#amx2-line-4)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="707.6" y="117.6" textLength="512.4" clip-path="url(#amx2-line-4)">~/projects/docs&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx2-line-4)">
+</text><text class="amx2-r1" x="24.4" y="142" textLength="134.2" clip-path="url(#amx2-line-5)">Running&#160;(1)</text><text class="amx2-r2" x="597.8" y="142" textLength="12.2" clip-path="url(#amx2-line-5)">│</text><text class="amx2-r2" x="610" y="142" textLength="97.6" clip-path="url(#amx2-line-5)">Branch&#160;&#160;</text><text class="amx2-r3" x="707.6" y="142" textLength="512.4" clip-path="url(#amx2-line-5)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx2-line-5)">
+</text><text class="amx2-r8" x="0" y="166.4" textLength="12.2" clip-path="url(#amx2-line-6)">▌</text><text class="amx2-r3" x="24.4" y="166.4" textLength="36.6" clip-path="url(#amx2-line-6)">web</text><text class="amx2-r3" x="146.4" y="166.4" textLength="195.2" clip-path="url(#amx2-line-6)">Working&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r2" x="366" y="166.4" textLength="61" clip-path="url(#amx2-line-6)">&#160;1:35</text><text class="amx2-r2" x="597.8" y="166.4" textLength="12.2" clip-path="url(#amx2-line-6)">│</text><text class="amx2-r2" x="610" y="166.4" textLength="610" clip-path="url(#amx2-line-6)">──────────────────────────────────────────────────</text><text class="amx2-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx2-line-6)">
+</text><text class="amx2-r2" x="597.8" y="190.8" textLength="12.2" clip-path="url(#amx2-line-7)">│</text><text class="amx2-r3" x="610" y="190.8" textLength="610" clip-path="url(#amx2-line-7)">GitHub&#160;Copilot&#160;CLI&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx2-line-7)">
+</text><text class="amx2-r1" x="24.4" y="215.2" textLength="97.6" clip-path="url(#amx2-line-8)">Idle&#160;(1)</text><text class="amx2-r2" x="597.8" y="215.2" textLength="12.2" clip-path="url(#amx2-line-8)">│</text><text class="amx2-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx2-line-8)">
+</text><text class="amx2-r2" x="0" y="239.6" textLength="12.2" clip-path="url(#amx2-line-9)">▌</text><text class="amx2-r5" x="24.4" y="239.6" textLength="402.6" clip-path="url(#amx2-line-9)">docs&#160;&#160;&#160;&#160;&#160;&#160;Done&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;—</text><text class="amx2-r2" x="597.8" y="239.6" textLength="12.2" clip-path="url(#amx2-line-9)">│</text><text class="amx2-r3" x="610" y="239.6" textLength="610" clip-path="url(#amx2-line-9)">Update&#160;the&#160;getting-started&#160;guide.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx2-line-9)">
+</text><text class="amx2-r2" x="597.8" y="264" textLength="12.2" clip-path="url(#amx2-line-10)">│</text><text class="amx2-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx2-line-10)">
+</text><text class="amx2-r2" x="597.8" y="288.4" textLength="12.2" clip-path="url(#amx2-line-11)">│</text><text class="amx2-r3" x="610" y="288.4" textLength="610" clip-path="url(#amx2-line-11)">+&#160;Documented&#160;tmux&#160;setup&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx2-line-11)">
+</text><text class="amx2-r2" x="597.8" y="312.8" textLength="12.2" clip-path="url(#amx2-line-12)">│</text><text class="amx2-r3" x="610" y="312.8" textLength="610" clip-path="url(#amx2-line-12)">+&#160;Added&#160;profile&#160;examples&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx2-line-12)">
+</text><text class="amx2-r2" x="597.8" y="337.2" textLength="12.2" clip-path="url(#amx2-line-13)">│</text><text class="amx2-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx2-line-13)">
+</text><text class="amx2-r2" x="597.8" y="361.6" textLength="12.2" clip-path="url(#amx2-line-14)">│</text><text class="amx2-r3" x="610" y="361.6" textLength="610" clip-path="url(#amx2-line-14)">Documentation&#160;checks&#160;passed.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx2-line-14)">
+</text><text class="amx2-r2" x="597.8" y="386" textLength="12.2" clip-path="url(#amx2-line-15)">│</text><text class="amx2-r3" x="610" y="386" textLength="610" clip-path="url(#amx2-line-15)">Ready&#160;for&#160;your&#160;next&#160;prompt.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx2-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx2-line-15)">
+</text><text class="amx2-r2" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx2-line-16)">│</text><text class="amx2-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx2-line-16)">
+</text><text class="amx2-r2" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx2-line-17)">│</text><text class="amx2-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx2-line-17)">
+</text><text class="amx2-r2" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx2-line-18)">│</text><text class="amx2-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx2-line-18)">
+</text><text class="amx2-r2" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx2-line-19)">│</text><text class="amx2-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx2-line-19)">
+</text><text class="amx2-r2" x="597.8" y="508" textLength="12.2" clip-path="url(#amx2-line-20)">│</text><text class="amx2-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx2-line-20)">
+</text><text class="amx2-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx2-line-21)">
+</text><text class="amx2-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx2-line-22)">
+</text><text class="amx2-r9" x="24.4" y="581.2" textLength="36.6" clip-path="url(#amx2-line-23)">j/k</text><text class="amx2-r2" x="73.2" y="581.2" textLength="85.4" clip-path="url(#amx2-line-23)">up/down</text><text class="amx2-r2" x="158.6" y="581.2" textLength="36.6" clip-path="url(#amx2-line-23)">&#160;·&#160;</text><text class="amx2-r9" x="195.2" y="581.2" textLength="61" clip-path="url(#amx2-line-23)">enter</text><text class="amx2-r2" x="268.4" y="581.2" textLength="48.8" clip-path="url(#amx2-line-23)">open</text><text class="amx2-r2" x="317.2" y="581.2" textLength="36.6" clip-path="url(#amx2-line-23)">&#160;·&#160;</text><text class="amx2-r9" x="353.8" y="581.2" textLength="12.2" clip-path="url(#amx2-line-23)">t</text><text class="amx2-r2" x="378.2" y="581.2" textLength="134.2" clip-path="url(#amx2-line-23)">send&#160;prompt</text><text class="amx2-r2" x="512.4" y="581.2" textLength="36.6" clip-path="url(#amx2-line-23)">&#160;·&#160;</text><text class="amx2-r9" x="549" y="581.2" textLength="12.2" clip-path="url(#amx2-line-23)">a</text><text class="amx2-r2" x="573.4" y="581.2" textLength="85.4" clip-path="url(#amx2-line-23)">actions</text><text class="amx2-r2" x="658.8" y="581.2" textLength="36.6" clip-path="url(#amx2-line-23)">&#160;·&#160;</text><text class="amx2-r9" x="695.4" y="581.2" textLength="12.2" clip-path="url(#amx2-line-23)">:</text><text class="amx2-r2" x="719.8" y="581.2" textLength="97.6" clip-path="url(#amx2-line-23)">commands</text><text class="amx2-r2" x="817.4" y="581.2" textLength="36.6" clip-path="url(#amx2-line-23)">&#160;·&#160;</text><text class="amx2-r9" x="854" y="581.2" textLength="12.2" clip-path="url(#amx2-line-23)">/</text><text class="amx2-r2" x="878.4" y="581.2" textLength="73.2" clip-path="url(#amx2-line-23)">filter</text><text class="amx2-r2" x="951.6" y="581.2" textLength="36.6" clip-path="url(#amx2-line-23)">&#160;·&#160;</text><text class="amx2-r9" x="988.2" y="581.2" textLength="12.2" clip-path="url(#amx2-line-23)">?</text><text class="amx2-r2" x="1012.6" y="581.2" textLength="48.8" clip-path="url(#amx2-line-23)">help</text>
+    </g>
+    </g>
+</g>
+<style>
+.amx3-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx3-r1 { fill: #7faedb;font-weight: bold }
+.amx3-r2 { fill: #a5b1be }
+.amx3-r3 { fill: #f2f4f7 }
+.amx3-r4 { fill: #4ec9b0 }
+.amx3-r5 { fill: #f2f4f7;font-weight: bold }
+.amx3-r6 { fill: #ffaa00;font-weight: bold }
+.amx3-r7 { fill: #4890da }
+.amx3-r8 { fill: #ffaa00 }
+.amx3-r9 { fill: #52677c }
+.amx3-r10 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx3-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx3-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f3">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">n&#160;&#160;jump&#160;to&#160;the&#160;agent&#160;that&#160;needs&#160;you</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="0" y="25.9" width="597.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="24.4" y="74.7" width="402.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="1220" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="61" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="73.2" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="158.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="195.2" y="562.7" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="256.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="268.4" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="317.2" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="366" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="378.2" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="451.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="488" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="500.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="512.4" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="597.8" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="634.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="646.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="658.8" y="562.7" width="97.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="756.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="793" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="805.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="817.4" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="890.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="927.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="939.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="951.6" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1000.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1037" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1073.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1085.8" y="562.7" width="109.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1195.6" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx3-matrix">
+    <text class="amx3-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx3-line-0)">Agent&#160;Mux</text><text class="amx3-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx3-line-0)">&#160;·&#160;</text><text class="amx3-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx3-line-0)">Urgency</text><text class="amx3-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx3-line-0)">&#160;·&#160;</text><text class="amx3-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx3-line-0)">all&#160;projects</text><text class="amx3-r4" x="1037" y="20" textLength="183" clip-path="url(#amx3-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx3-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx3-line-0)">
+</text><text class="amx3-r5" x="0" y="44.4" textLength="597.8" clip-path="url(#amx3-line-1)">&gt;&#160;Sessions&#160;·&#160;focused&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r2" x="597.8" y="44.4" textLength="12.2" clip-path="url(#amx3-line-1)">│</text><text class="amx3-r2" x="610" y="44.4" textLength="610" clip-path="url(#amx3-line-1)">&#160;&#160;Inspector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx3-line-1)">
+</text><text class="amx3-r6" x="24.4" y="68.8" textLength="158.6" clip-path="url(#amx3-line-2)">Needs&#160;you&#160;(1)</text><text class="amx3-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx3-line-2)">│</text><text class="amx3-r7" x="610" y="68.8" textLength="36.6" clip-path="url(#amx3-line-2)">api</text><text class="amx3-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx3-line-2)">
+</text><text class="amx3-r8" x="0" y="93.2" textLength="12.2" clip-path="url(#amx3-line-3)">▌</text><text class="amx3-r5" x="24.4" y="93.2" textLength="402.6" clip-path="url(#amx3-line-3)">api&#160;&#160;&#160;&#160;&#160;&#160;&#160;Needs&#160;permission&#160;&#160;&#160;&#160;&#160;&#160;—</text><text class="amx3-r2" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx3-line-3)">│</text><text class="amx3-r8" x="610" y="93.2" textLength="195.2" clip-path="url(#amx3-line-3)">Needs&#160;permission</text><text class="amx3-r2" x="805.2" y="93.2" textLength="48.8" clip-path="url(#amx3-line-3)">&#160;·&#160;—</text><text class="amx3-r2" x="854" y="93.2" textLength="219.6" clip-path="url(#amx3-line-3)">&#160;·&#160;claude&#160;·&#160;claude</text><text class="amx3-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx3-line-3)">
+</text><text class="amx3-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx3-line-4)">│</text><text class="amx3-r2" x="610" y="117.6" textLength="97.6" clip-path="url(#amx3-line-4)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="707.6" y="117.6" textLength="512.4" clip-path="url(#amx3-line-4)">~/projects/api&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx3-line-4)">
+</text><text class="amx3-r1" x="24.4" y="142" textLength="134.2" clip-path="url(#amx3-line-5)">Running&#160;(1)</text><text class="amx3-r2" x="597.8" y="142" textLength="12.2" clip-path="url(#amx3-line-5)">│</text><text class="amx3-r2" x="610" y="142" textLength="97.6" clip-path="url(#amx3-line-5)">Branch&#160;&#160;</text><text class="amx3-r3" x="707.6" y="142" textLength="512.4" clip-path="url(#amx3-line-5)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx3-line-5)">
+</text><text class="amx3-r9" x="0" y="166.4" textLength="12.2" clip-path="url(#amx3-line-6)">▌</text><text class="amx3-r3" x="24.4" y="166.4" textLength="36.6" clip-path="url(#amx3-line-6)">web</text><text class="amx3-r3" x="146.4" y="166.4" textLength="195.2" clip-path="url(#amx3-line-6)">Working&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r2" x="366" y="166.4" textLength="61" clip-path="url(#amx3-line-6)">&#160;1:35</text><text class="amx3-r2" x="597.8" y="166.4" textLength="12.2" clip-path="url(#amx3-line-6)">│</text><text class="amx3-r2" x="610" y="166.4" textLength="610" clip-path="url(#amx3-line-6)">──────────────────────────────────────────────────</text><text class="amx3-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx3-line-6)">
+</text><text class="amx3-r2" x="597.8" y="190.8" textLength="12.2" clip-path="url(#amx3-line-7)">│</text><text class="amx3-r3" x="610" y="190.8" textLength="610" clip-path="url(#amx3-line-7)">Claude&#160;Code&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx3-line-7)">
+</text><text class="amx3-r1" x="24.4" y="215.2" textLength="97.6" clip-path="url(#amx3-line-8)">Idle&#160;(1)</text><text class="amx3-r2" x="597.8" y="215.2" textLength="12.2" clip-path="url(#amx3-line-8)">│</text><text class="amx3-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx3-line-8)">
+</text><text class="amx3-r2" x="0" y="239.6" textLength="12.2" clip-path="url(#amx3-line-9)">▌</text><text class="amx3-r3" x="24.4" y="239.6" textLength="48.8" clip-path="url(#amx3-line-9)">docs</text><text class="amx3-r2" x="146.4" y="239.6" textLength="195.2" clip-path="url(#amx3-line-9)">Done&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r2" x="366" y="239.6" textLength="61" clip-path="url(#amx3-line-9)">&#160;&#160;&#160;&#160;—</text><text class="amx3-r2" x="597.8" y="239.6" textLength="12.2" clip-path="url(#amx3-line-9)">│</text><text class="amx3-r3" x="610" y="239.6" textLength="610" clip-path="url(#amx3-line-9)">Add&#160;request&#160;validation&#160;to&#160;the&#160;API.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx3-line-9)">
+</text><text class="amx3-r2" x="597.8" y="264" textLength="12.2" clip-path="url(#amx3-line-10)">│</text><text class="amx3-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx3-line-10)">
+</text><text class="amx3-r2" x="597.8" y="288.4" textLength="12.2" clip-path="url(#amx3-line-11)">│</text><text class="amx3-r3" x="610" y="288.4" textLength="610" clip-path="url(#amx3-line-11)">Ready&#160;to&#160;check&#160;the&#160;new&#160;handlers:&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx3-line-11)">
+</text><text class="amx3-r2" x="597.8" y="312.8" textLength="12.2" clip-path="url(#amx3-line-12)">│</text><text class="amx3-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx3-line-12)">
+</text><text class="amx3-r2" x="597.8" y="337.2" textLength="12.2" clip-path="url(#amx3-line-13)">│</text><text class="amx3-r3" x="610" y="337.2" textLength="610" clip-path="url(#amx3-line-13)">&#160;&#160;go&#160;test&#160;./internal/api/...&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx3-line-13)">
+</text><text class="amx3-r2" x="597.8" y="361.6" textLength="12.2" clip-path="url(#amx3-line-14)">│</text><text class="amx3-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx3-line-14)">
+</text><text class="amx3-r2" x="597.8" y="386" textLength="12.2" clip-path="url(#amx3-line-15)">│</text><text class="amx3-r3" x="610" y="386" textLength="610" clip-path="url(#amx3-line-15)">Allow&#160;this&#160;command?&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx3-line-15)">
+</text><text class="amx3-r2" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx3-line-16)">│</text><text class="amx3-r3" x="610" y="410.4" textLength="610" clip-path="url(#amx3-line-16)">&#160;&#160;1.&#160;Yes&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx3-line-16)">
+</text><text class="amx3-r2" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx3-line-17)">│</text><text class="amx3-r3" x="610" y="434.8" textLength="610" clip-path="url(#amx3-line-17)">&#160;&#160;2.&#160;No&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx3-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx3-line-17)">
+</text><text class="amx3-r2" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx3-line-18)">│</text><text class="amx3-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx3-line-18)">
+</text><text class="amx3-r2" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx3-line-19)">│</text><text class="amx3-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx3-line-19)">
+</text><text class="amx3-r2" x="597.8" y="508" textLength="12.2" clip-path="url(#amx3-line-20)">│</text><text class="amx3-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx3-line-20)">
+</text><text class="amx3-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx3-line-21)">
+</text><text class="amx3-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx3-line-22)">
+</text><text class="amx3-r10" x="24.4" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">j/k</text><text class="amx3-r2" x="73.2" y="581.2" textLength="85.4" clip-path="url(#amx3-line-23)">up/down</text><text class="amx3-r2" x="158.6" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">&#160;·&#160;</text><text class="amx3-r10" x="195.2" y="581.2" textLength="61" clip-path="url(#amx3-line-23)">enter</text><text class="amx3-r2" x="268.4" y="581.2" textLength="48.8" clip-path="url(#amx3-line-23)">open</text><text class="amx3-r2" x="317.2" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">&#160;·&#160;</text><text class="amx3-r10" x="353.8" y="581.2" textLength="12.2" clip-path="url(#amx3-line-23)">t</text><text class="amx3-r2" x="378.2" y="581.2" textLength="73.2" clip-path="url(#amx3-line-23)">answer</text><text class="amx3-r2" x="451.4" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">&#160;·&#160;</text><text class="amx3-r10" x="488" y="581.2" textLength="12.2" clip-path="url(#amx3-line-23)">a</text><text class="amx3-r2" x="512.4" y="581.2" textLength="85.4" clip-path="url(#amx3-line-23)">actions</text><text class="amx3-r2" x="597.8" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">&#160;·&#160;</text><text class="amx3-r10" x="634.4" y="581.2" textLength="12.2" clip-path="url(#amx3-line-23)">:</text><text class="amx3-r2" x="658.8" y="581.2" textLength="97.6" clip-path="url(#amx3-line-23)">commands</text><text class="amx3-r2" x="756.4" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">&#160;·&#160;</text><text class="amx3-r10" x="793" y="581.2" textLength="12.2" clip-path="url(#amx3-line-23)">/</text><text class="amx3-r2" x="817.4" y="581.2" textLength="73.2" clip-path="url(#amx3-line-23)">filter</text><text class="amx3-r2" x="890.6" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">&#160;·&#160;</text><text class="amx3-r10" x="927.2" y="581.2" textLength="12.2" clip-path="url(#amx3-line-23)">?</text><text class="amx3-r2" x="951.6" y="581.2" textLength="48.8" clip-path="url(#amx3-line-23)">help</text><text class="amx3-r2" x="1000.4" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">&#160;·&#160;</text><text class="amx3-r10" x="1037" y="581.2" textLength="36.6" clip-path="url(#amx3-line-23)">n/N</text><text class="amx3-r2" x="1085.8" y="581.2" textLength="109.8" clip-path="url(#amx3-line-23)">needs&#160;you</text>
+    </g>
+    </g>
+</g>
+<style>
+.amx4-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx4-r1 { fill: #7faedb;font-weight: bold }
+.amx4-r2 { fill: #a5b1be }
+.amx4-r3 { fill: #f2f4f7 }
+.amx4-r4 { fill: #4ec9b0 }
+.amx4-r5 { fill: #f2f4f7;font-weight: bold }
+.amx4-r6 { fill: #48c870 }
+.amx4-r7 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx4-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx4-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f4">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">/&#160;%codex&#160;&#160;filter&#160;by&#160;harness</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="0" y="50.3" width="597.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="0" y="99.1" width="292.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="1220" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="61" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="73.2" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="158.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="195.2" y="562.7" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="256.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="268.4" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="317.2" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="366" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="378.2" y="562.7" width="134.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="512.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="549" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="561.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="573.4" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="658.8" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="695.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="707.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="719.8" y="562.7" width="97.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="817.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="854" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="866.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="878.4" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="951.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="988.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1000.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1012.6" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1061.4" y="562.7" width="158.6" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx4-matrix">
+    <text class="amx4-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx4-line-0)">Agent&#160;Mux</text><text class="amx4-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx4-line-0)">&#160;·&#160;</text><text class="amx4-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx4-line-0)">Urgency</text><text class="amx4-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx4-line-0)">&#160;·&#160;</text><text class="amx4-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx4-line-0)">all&#160;projects</text><text class="amx4-r4" x="1037" y="20" textLength="183" clip-path="url(#amx4-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx4-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx4-line-0)">
+</text><text class="amx4-r3" x="0" y="44.4" textLength="109.8" clip-path="url(#amx4-line-1)">▌%codex&#160;✕</text><text class="amx4-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx4-line-1)">
+</text><text class="amx4-r5" x="0" y="68.8" textLength="597.8" clip-path="url(#amx4-line-2)">&gt;&#160;Sessions&#160;·&#160;focused&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx4-line-2)">│</text><text class="amx4-r2" x="610" y="68.8" textLength="610" clip-path="url(#amx4-line-2)">&#160;&#160;Inspector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx4-line-2)">
+</text><text class="amx4-r1" x="0" y="93.2" textLength="134.2" clip-path="url(#amx4-line-3)">Running&#160;(1)</text><text class="amx4-r2" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx4-line-3)">│</text><text class="amx4-r6" x="610" y="93.2" textLength="36.6" clip-path="url(#amx4-line-3)">web</text><text class="amx4-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx4-line-3)">
+</text><text class="amx4-r5" x="0" y="117.6" textLength="292.8" clip-path="url(#amx4-line-4)">web&#160;&#160;&#160;&#160;&#160;&#160;&#160;Working&#160;&#160;&#160;1:35</text><text class="amx4-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx4-line-4)">│</text><text class="amx4-r3" x="610" y="117.6" textLength="85.4" clip-path="url(#amx4-line-4)">Working</text><text class="amx4-r2" x="695.4" y="117.6" textLength="85.4" clip-path="url(#amx4-line-4)">&#160;·&#160;1:35</text><text class="amx4-r2" x="780.8" y="117.6" textLength="195.2" clip-path="url(#amx4-line-4)">&#160;·&#160;codex&#160;·&#160;codex</text><text class="amx4-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx4-line-4)">
+</text><text class="amx4-r2" x="597.8" y="142" textLength="12.2" clip-path="url(#amx4-line-5)">│</text><text class="amx4-r2" x="610" y="142" textLength="97.6" clip-path="url(#amx4-line-5)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="707.6" y="142" textLength="512.4" clip-path="url(#amx4-line-5)">~/projects/web&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx4-line-5)">
+</text><text class="amx4-r2" x="597.8" y="166.4" textLength="12.2" clip-path="url(#amx4-line-6)">│</text><text class="amx4-r2" x="610" y="166.4" textLength="97.6" clip-path="url(#amx4-line-6)">Branch&#160;&#160;</text><text class="amx4-r3" x="707.6" y="166.4" textLength="512.4" clip-path="url(#amx4-line-6)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx4-line-6)">
+</text><text class="amx4-r2" x="597.8" y="190.8" textLength="12.2" clip-path="url(#amx4-line-7)">│</text><text class="amx4-r2" x="610" y="190.8" textLength="610" clip-path="url(#amx4-line-7)">──────────────────────────────────────────────────</text><text class="amx4-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx4-line-7)">
+</text><text class="amx4-r2" x="597.8" y="215.2" textLength="12.2" clip-path="url(#amx4-line-8)">│</text><text class="amx4-r3" x="610" y="215.2" textLength="610" clip-path="url(#amx4-line-8)">OpenAI&#160;Codex&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx4-line-8)">
+</text><text class="amx4-r2" x="597.8" y="239.6" textLength="12.2" clip-path="url(#amx4-line-9)">│</text><text class="amx4-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx4-line-9)">
+</text><text class="amx4-r2" x="597.8" y="264" textLength="12.2" clip-path="url(#amx4-line-10)">│</text><text class="amx4-r3" x="610" y="264" textLength="610" clip-path="url(#amx4-line-10)">Build&#160;the&#160;settings&#160;page.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx4-line-10)">
+</text><text class="amx4-r2" x="597.8" y="288.4" textLength="12.2" clip-path="url(#amx4-line-11)">│</text><text class="amx4-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx4-line-11)">
+</text><text class="amx4-r2" x="597.8" y="312.8" textLength="12.2" clip-path="url(#amx4-line-12)">│</text><text class="amx4-r3" x="610" y="312.8" textLength="610" clip-path="url(#amx4-line-12)">+&#160;Added&#160;account&#160;preferences&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx4-line-12)">
+</text><text class="amx4-r2" x="597.8" y="337.2" textLength="12.2" clip-path="url(#amx4-line-13)">│</text><text class="amx4-r3" x="610" y="337.2" textLength="610" clip-path="url(#amx4-line-13)">+&#160;Connected&#160;the&#160;theme&#160;selector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx4-line-13)">
+</text><text class="amx4-r2" x="597.8" y="361.6" textLength="12.2" clip-path="url(#amx4-line-14)">│</text><text class="amx4-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx4-line-14)">
+</text><text class="amx4-r2" x="597.8" y="386" textLength="12.2" clip-path="url(#amx4-line-15)">│</text><text class="amx4-r3" x="610" y="386" textLength="610" clip-path="url(#amx4-line-15)">Running&#160;component&#160;tests...&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx4-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx4-line-15)">
+</text><text class="amx4-r2" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx4-line-16)">│</text><text class="amx4-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx4-line-16)">
+</text><text class="amx4-r2" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx4-line-17)">│</text><text class="amx4-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx4-line-17)">
+</text><text class="amx4-r2" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx4-line-18)">│</text><text class="amx4-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx4-line-18)">
+</text><text class="amx4-r2" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx4-line-19)">│</text><text class="amx4-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx4-line-19)">
+</text><text class="amx4-r2" x="597.8" y="508" textLength="12.2" clip-path="url(#amx4-line-20)">│</text><text class="amx4-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx4-line-20)">
+</text><text class="amx4-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx4-line-21)">
+</text><text class="amx4-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx4-line-22)">
+</text><text class="amx4-r7" x="24.4" y="581.2" textLength="36.6" clip-path="url(#amx4-line-23)">j/k</text><text class="amx4-r2" x="73.2" y="581.2" textLength="85.4" clip-path="url(#amx4-line-23)">up/down</text><text class="amx4-r2" x="158.6" y="581.2" textLength="36.6" clip-path="url(#amx4-line-23)">&#160;·&#160;</text><text class="amx4-r7" x="195.2" y="581.2" textLength="61" clip-path="url(#amx4-line-23)">enter</text><text class="amx4-r2" x="268.4" y="581.2" textLength="48.8" clip-path="url(#amx4-line-23)">open</text><text class="amx4-r2" x="317.2" y="581.2" textLength="36.6" clip-path="url(#amx4-line-23)">&#160;·&#160;</text><text class="amx4-r7" x="353.8" y="581.2" textLength="12.2" clip-path="url(#amx4-line-23)">t</text><text class="amx4-r2" x="378.2" y="581.2" textLength="134.2" clip-path="url(#amx4-line-23)">send&#160;prompt</text><text class="amx4-r2" x="512.4" y="581.2" textLength="36.6" clip-path="url(#amx4-line-23)">&#160;·&#160;</text><text class="amx4-r7" x="549" y="581.2" textLength="12.2" clip-path="url(#amx4-line-23)">a</text><text class="amx4-r2" x="573.4" y="581.2" textLength="85.4" clip-path="url(#amx4-line-23)">actions</text><text class="amx4-r2" x="658.8" y="581.2" textLength="36.6" clip-path="url(#amx4-line-23)">&#160;·&#160;</text><text class="amx4-r7" x="695.4" y="581.2" textLength="12.2" clip-path="url(#amx4-line-23)">:</text><text class="amx4-r2" x="719.8" y="581.2" textLength="97.6" clip-path="url(#amx4-line-23)">commands</text><text class="amx4-r2" x="817.4" y="581.2" textLength="36.6" clip-path="url(#amx4-line-23)">&#160;·&#160;</text><text class="amx4-r7" x="854" y="581.2" textLength="12.2" clip-path="url(#amx4-line-23)">/</text><text class="amx4-r2" x="878.4" y="581.2" textLength="73.2" clip-path="url(#amx4-line-23)">filter</text><text class="amx4-r2" x="951.6" y="581.2" textLength="36.6" clip-path="url(#amx4-line-23)">&#160;·&#160;</text><text class="amx4-r7" x="988.2" y="581.2" textLength="12.2" clip-path="url(#amx4-line-23)">?</text><text class="amx4-r2" x="1012.6" y="581.2" textLength="48.8" clip-path="url(#amx4-line-23)">help</text>
+    </g>
+    </g>
+</g>
+<style>
+.amx5-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx5-r1 { fill: #547391;font-weight: bold }
+.amx5-r2 { fill: #a5b1be }
+.amx5-r3 { fill: #f2f4f7 }
+.amx5-r4 { fill: #4ec9b0 }
+.amx5-r5 { fill: #999da1 }
+.amx5-r6 { fill: #a1700d;font-weight: bold }
+.amx5-r7 { fill: #48c870 }
+.amx5-r8 { fill: #a1700d }
+.amx5-r9 { fill: #ffaa00 }
+.amx5-r10 { fill: #6b757f }
+.amx5-r11 { fill: #394858 }
+.amx5-r12 { fill: #f2f4f7;font-weight: bold }
+.amx5-r13 { fill: #7faedb }
+.amx5-r14 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx5-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx5-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f5">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">p&#160;&#160;switch&#160;projects</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="24.4" y="123.5" width="402.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="317.2" y="196.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="329.4" y="196.7" width="561.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="890.6" y="196.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="317.2" y="221.1" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="329.4" y="221.1" width="561.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="890.6" y="221.1" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="317.2" y="245.5" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="329.4" y="245.5" width="561.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="890.6" y="245.5" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="317.2" y="269.9" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="329.4" y="269.9" width="561.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="890.6" y="269.9" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="317.2" y="294.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="329.4" y="294.3" width="561.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="890.6" y="294.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="513.9" width="1220" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="538.3" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="85.4" y="538.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="97.6" y="538.3" width="134.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="231.8" y="538.3" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="256.2" y="538.3" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="341.6" y="538.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="538.3" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="427" y="538.3" width="793" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx5-matrix">
+    <text class="amx5-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx5-line-0)">Agent&#160;Mux</text><text class="amx5-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx5-line-0)">&#160;·&#160;</text><text class="amx5-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx5-line-0)">Urgency</text><text class="amx5-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx5-line-0)">&#160;·&#160;</text><text class="amx5-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx5-line-0)">all&#160;projects</text><text class="amx5-r4" x="1037" y="20" textLength="183" clip-path="url(#amx5-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx5-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx5-line-0)">
+</text><text class="amx5-r6" x="24.4" y="44.4" textLength="158.6" clip-path="url(#amx5-line-1)">Needs&#160;you&#160;(1)</text><text class="amx5-r2" x="597.8" y="44.4" textLength="12.2" clip-path="url(#amx5-line-1)">│</text><text class="amx5-r7" x="610" y="44.4" textLength="36.6" clip-path="url(#amx5-line-1)">web</text><text class="amx5-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx5-line-1)">
+</text><text class="amx5-r8" x="0" y="68.8" textLength="12.2" clip-path="url(#amx5-line-2)">▌</text><text class="amx5-r3" x="24.4" y="68.8" textLength="36.6" clip-path="url(#amx5-line-2)">api</text><text class="amx5-r9" x="146.4" y="68.8" textLength="195.2" clip-path="url(#amx5-line-2)">Needs&#160;permission</text><text class="amx5-r2" x="366" y="68.8" textLength="61" clip-path="url(#amx5-line-2)">&#160;&#160;&#160;&#160;—</text><text class="amx5-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx5-line-2)">│</text><text class="amx5-r3" x="610" y="68.8" textLength="85.4" clip-path="url(#amx5-line-2)">Working</text><text class="amx5-r2" x="695.4" y="68.8" textLength="85.4" clip-path="url(#amx5-line-2)">&#160;·&#160;1:35</text><text class="amx5-r2" x="780.8" y="68.8" textLength="195.2" clip-path="url(#amx5-line-2)">&#160;·&#160;codex&#160;·&#160;codex</text><text class="amx5-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx5-line-2)">
+</text><text class="amx5-r10" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx5-line-3)">│</text><text class="amx5-r2" x="610" y="93.2" textLength="97.6" clip-path="url(#amx5-line-3)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="707.6" y="93.2" textLength="512.4" clip-path="url(#amx5-line-3)">~/projects/web&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx5-line-3)">
+</text><text class="amx5-r1" x="24.4" y="117.6" textLength="134.2" clip-path="url(#amx5-line-4)">Running&#160;(1)</text><text class="amx5-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx5-line-4)">│</text><text class="amx5-r2" x="610" y="117.6" textLength="97.6" clip-path="url(#amx5-line-4)">Branch&#160;&#160;</text><text class="amx5-r3" x="707.6" y="117.6" textLength="512.4" clip-path="url(#amx5-line-4)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx5-line-4)">
+</text><text class="amx5-r11" x="0" y="142" textLength="12.2" clip-path="url(#amx5-line-5)">▌</text><text class="amx5-r12" x="24.4" y="142" textLength="402.6" clip-path="url(#amx5-line-5)">web&#160;&#160;&#160;&#160;&#160;&#160;&#160;Working&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;1:35</text><text class="amx5-r2" x="597.8" y="142" textLength="12.2" clip-path="url(#amx5-line-5)">│</text><text class="amx5-r2" x="610" y="142" textLength="610" clip-path="url(#amx5-line-5)">──────────────────────────────────────────────────</text><text class="amx5-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx5-line-5)">
+</text><text class="amx5-r10" x="597.8" y="166.4" textLength="12.2" clip-path="url(#amx5-line-6)">│</text><text class="amx5-r3" x="610" y="166.4" textLength="610" clip-path="url(#amx5-line-6)">OpenAI&#160;Codex&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx5-line-6)">
+</text><text class="amx5-r1" x="24.4" y="190.8" textLength="97.6" clip-path="url(#amx5-line-7)">Idle&#160;(1)</text><text class="amx5-r13" x="305" y="190.8" textLength="610" clip-path="url(#amx5-line-7)">╭────────────────────────────────────────────────╮</text><text class="amx5-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx5-line-7)">
+</text><text class="amx5-r10" x="0" y="215.2" textLength="12.2" clip-path="url(#amx5-line-8)">▌</text><text class="amx5-r3" x="24.4" y="215.2" textLength="48.8" clip-path="url(#amx5-line-8)">docs</text><text class="amx5-r2" x="146.4" y="215.2" textLength="158.6" clip-path="url(#amx5-line-8)">Done&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r13" x="305" y="215.2" textLength="12.2" clip-path="url(#amx5-line-8)">│</text><text class="amx5-r2" x="329.4" y="215.2" textLength="561.2" clip-path="url(#amx5-line-8)">Project&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;need&#160;act&#160;idle</text><text class="amx5-r13" x="902.8" y="215.2" textLength="12.2" clip-path="url(#amx5-line-8)">│</text><text class="amx5-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx5-line-8)">
+</text><text class="amx5-r13" x="305" y="239.6" textLength="12.2" clip-path="url(#amx5-line-9)">│</text><text class="amx5-r12" x="329.4" y="239.6" textLength="549" clip-path="url(#amx5-line-9)">›●&#160;🔑&#160;All&#160;projects&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;1&#160;&#160;&#160;1&#160;&#160;&#160;&#160;1</text><text class="amx5-r13" x="902.8" y="239.6" textLength="12.2" clip-path="url(#amx5-line-9)">│</text><text class="amx5-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx5-line-9)">
+</text><text class="amx5-r13" x="305" y="264" textLength="12.2" clip-path="url(#amx5-line-10)">│</text><text class="amx5-r9" x="329.4" y="264" textLength="549" clip-path="url(#amx5-line-10)">&#160;&#160;&#160;🔑&#160;api&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;1&#160;&#160;&#160;0&#160;&#160;&#160;&#160;0</text><text class="amx5-r13" x="902.8" y="264" textLength="12.2" clip-path="url(#amx5-line-10)">│</text><text class="amx5-r3" x="915" y="264" textLength="305" clip-path="url(#amx5-line-10)">es&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx5-line-10)">
+</text><text class="amx5-r13" x="305" y="288.4" textLength="12.2" clip-path="url(#amx5-line-11)">│</text><text class="amx5-r3" x="329.4" y="288.4" textLength="549" clip-path="url(#amx5-line-11)">&#160;&#160;&#160;⚡&#160;web&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;0&#160;&#160;&#160;1&#160;&#160;&#160;&#160;0</text><text class="amx5-r13" x="902.8" y="288.4" textLength="12.2" clip-path="url(#amx5-line-11)">│</text><text class="amx5-r3" x="915" y="288.4" textLength="305" clip-path="url(#amx5-line-11)">ector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx5-line-11)">
+</text><text class="amx5-r13" x="305" y="312.8" textLength="12.2" clip-path="url(#amx5-line-12)">│</text><text class="amx5-r3" x="329.4" y="312.8" textLength="549" clip-path="url(#amx5-line-12)">&#160;&#160;&#160;🛑&#160;docs&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;0&#160;&#160;&#160;0&#160;&#160;&#160;&#160;1</text><text class="amx5-r13" x="902.8" y="312.8" textLength="12.2" clip-path="url(#amx5-line-12)">│</text><text class="amx5-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx5-line-12)">
+</text><text class="amx5-r13" x="305" y="337.2" textLength="610" clip-path="url(#amx5-line-13)">╰────────────────────────────────────────────────╯</text><text class="amx5-r3" x="915" y="337.2" textLength="305" clip-path="url(#amx5-line-13)">.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx5-line-13)">
+</text><text class="amx5-r10" x="597.8" y="361.6" textLength="12.2" clip-path="url(#amx5-line-14)">│</text><text class="amx5-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx5-line-14)">
+</text><text class="amx5-r10" x="597.8" y="386" textLength="12.2" clip-path="url(#amx5-line-15)">│</text><text class="amx5-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx5-line-15)">
+</text><text class="amx5-r10" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx5-line-16)">│</text><text class="amx5-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx5-line-16)">
+</text><text class="amx5-r10" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx5-line-17)">│</text><text class="amx5-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx5-line-17)">
+</text><text class="amx5-r10" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx5-line-18)">│</text><text class="amx5-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx5-line-18)">
+</text><text class="amx5-r10" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx5-line-19)">│</text><text class="amx5-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx5-line-19)">
+</text><text class="amx5-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx5-line-20)">
+</text><text class="amx5-r3" x="0" y="532.4" textLength="1220" clip-path="url(#amx5-line-21)">&#160;Switch&#160;project:&#160;all&#160;projects&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx5-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx5-line-21)">
+</text><text class="amx5-r14" x="24.4" y="556.8" textLength="61" clip-path="url(#amx5-line-22)">enter</text><text class="amx5-r2" x="97.6" y="556.8" textLength="134.2" clip-path="url(#amx5-line-22)">apply&#160;scope</text><text class="amx5-r14" x="256.2" y="556.8" textLength="85.4" clip-path="url(#amx5-line-22)">esc/q/p</text><text class="amx5-r2" x="353.8" y="556.8" textLength="73.2" clip-path="url(#amx5-line-22)">cancel</text><text class="amx5-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx5-line-22)">
+</text><text class="amx5-r14" x="24.4" y="581.2" textLength="12.2" clip-path="url(#amx5-line-23)">/</text><text class="amx5-r2" x="48.8" y="581.2" textLength="73.2" clip-path="url(#amx5-line-23)">search</text><text class="amx5-r14" x="146.4" y="581.2" textLength="36.6" clip-path="url(#amx5-line-23)">j/k</text><text class="amx5-r2" x="195.2" y="581.2" textLength="85.4" clip-path="url(#amx5-line-23)">up/down</text><text class="amx5-r14" x="305" y="581.2" textLength="36.6" clip-path="url(#amx5-line-23)">g/G</text><text class="amx5-r2" x="353.8" y="581.2" textLength="122" clip-path="url(#amx5-line-23)">top/bottom</text><text class="amx5-r14" x="500.2" y="581.2" textLength="109.8" clip-path="url(#amx5-line-23)">pgup/pgdn</text><text class="amx5-r2" x="622.2" y="581.2" textLength="48.8" clip-path="url(#amx5-line-23)">page</text>
+    </g>
+    </g>
+</g>
+<style>
+.amx6-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx6-r1 { fill: #547391;font-weight: bold }
+.amx6-r2 { fill: #a5b1be }
+.amx6-r3 { fill: #f2f4f7 }
+.amx6-r4 { fill: #4ec9b0 }
+.amx6-r5 { fill: #999da1 }
+.amx6-r6 { fill: #a1700d;font-weight: bold }
+.amx6-r7 { fill: #48c870 }
+.amx6-r8 { fill: #a1700d }
+.amx6-r9 { fill: #ffaa00 }
+.amx6-r10 { fill: #6b757f }
+.amx6-r11 { fill: #394858 }
+.amx6-r12 { fill: #f2f4f7;font-weight: bold }
+.amx6-r13 { fill: #7faedb }
+.amx6-r14 { fill: #7faedb;font-weight: bold }
+.amx6-r15 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx6-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx6-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f6">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">:&#160;worktree&#160;&#160;find&#160;a&#160;command</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="24.4" y="123.5" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="147.9" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="147.9" width="183" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="280.6" y="147.9" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="292.8" y="147.9" width="841.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="172.3" width="244" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="341.6" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="353.8" y="172.3" width="780.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="196.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="196.7" width="122" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="219.6" y="196.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="231.8" y="196.7" width="902.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="221.1" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="221.1" width="1024.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="1122.4" y="221.1" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="245.5" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="97.6" y="245.5" width="1024.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="1122.4" y="245.5" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="269.9" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="269.9" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="109.8" y="269.9" width="1024.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="294.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="294.3" width="1024.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="1122.4" y="294.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="318.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="318.7" width="1024.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="1122.4" y="318.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="85.4" y="343.1" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="97.6" y="343.1" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#1b222b" x="1122.4" y="343.1" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="538.3" width="329.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="538.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="366" y="538.3" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="451.4" y="538.3" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="488" y="538.3" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="549" y="538.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="561.2" y="538.3" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="597.8" y="538.3" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="634.4" y="538.3" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="671" y="538.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="683.2" y="538.3" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="744.2" y="538.3" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="780.8" y="538.3" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="854" y="538.3" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="866.2" y="538.3" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="915" y="538.3" width="305" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="562.7" width="1220" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx6-matrix">
+    <text class="amx6-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx6-line-0)">Agent&#160;Mux</text><text class="amx6-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx6-line-0)">&#160;·&#160;</text><text class="amx6-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx6-line-0)">Urgency</text><text class="amx6-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx6-line-0)">&#160;·&#160;</text><text class="amx6-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx6-line-0)">all&#160;projects</text><text class="amx6-r4" x="1037" y="20" textLength="183" clip-path="url(#amx6-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx6-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx6-line-0)">
+</text><text class="amx6-r6" x="24.4" y="44.4" textLength="158.6" clip-path="url(#amx6-line-1)">Needs&#160;you&#160;(1)</text><text class="amx6-r2" x="597.8" y="44.4" textLength="12.2" clip-path="url(#amx6-line-1)">│</text><text class="amx6-r7" x="610" y="44.4" textLength="36.6" clip-path="url(#amx6-line-1)">web</text><text class="amx6-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx6-line-1)">
+</text><text class="amx6-r8" x="0" y="68.8" textLength="12.2" clip-path="url(#amx6-line-2)">▌</text><text class="amx6-r3" x="24.4" y="68.8" textLength="36.6" clip-path="url(#amx6-line-2)">api</text><text class="amx6-r9" x="146.4" y="68.8" textLength="195.2" clip-path="url(#amx6-line-2)">Needs&#160;permission</text><text class="amx6-r2" x="366" y="68.8" textLength="61" clip-path="url(#amx6-line-2)">&#160;&#160;&#160;&#160;—</text><text class="amx6-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx6-line-2)">│</text><text class="amx6-r3" x="610" y="68.8" textLength="85.4" clip-path="url(#amx6-line-2)">Working</text><text class="amx6-r2" x="695.4" y="68.8" textLength="85.4" clip-path="url(#amx6-line-2)">&#160;·&#160;1:35</text><text class="amx6-r2" x="780.8" y="68.8" textLength="195.2" clip-path="url(#amx6-line-2)">&#160;·&#160;codex&#160;·&#160;codex</text><text class="amx6-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx6-line-2)">
+</text><text class="amx6-r10" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx6-line-3)">│</text><text class="amx6-r2" x="610" y="93.2" textLength="97.6" clip-path="url(#amx6-line-3)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx6-r3" x="707.6" y="93.2" textLength="512.4" clip-path="url(#amx6-line-3)">~/projects/web&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx6-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx6-line-3)">
+</text><text class="amx6-r1" x="24.4" y="117.6" textLength="134.2" clip-path="url(#amx6-line-4)">Running&#160;(1)</text><text class="amx6-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx6-line-4)">│</text><text class="amx6-r2" x="610" y="117.6" textLength="97.6" clip-path="url(#amx6-line-4)">Branch&#160;&#160;</text><text class="amx6-r3" x="707.6" y="117.6" textLength="512.4" clip-path="url(#amx6-line-4)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx6-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx6-line-4)">
+</text><text class="amx6-r11" x="0" y="142" textLength="12.2" clip-path="url(#amx6-line-5)">▌</text><text class="amx6-r12" x="24.4" y="142" textLength="48.8" clip-path="url(#amx6-line-5)">web&#160;</text><text class="amx6-r13" x="73.2" y="142" textLength="1073.6" clip-path="url(#amx6-line-5)">╭──────────────────────────────────────────────────────────────────────────────────────╮</text><text class="amx6-r2" x="1146.8" y="142" textLength="73.2" clip-path="url(#amx6-line-5)">──────</text><text class="amx6-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx6-line-5)">
+</text><text class="amx6-r13" x="73.2" y="166.4" textLength="12.2" clip-path="url(#amx6-line-6)">│</text><text class="amx6-r14" x="97.6" y="166.4" textLength="183" clip-path="url(#amx6-line-6)">Command&#160;Palette</text><text class="amx6-r13" x="1134.6" y="166.4" textLength="12.2" clip-path="url(#amx6-line-6)">│</text><text class="amx6-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx6-line-6)">
+</text><text class="amx6-r1" x="24.4" y="190.8" textLength="48.8" clip-path="url(#amx6-line-7)">Idle</text><text class="amx6-r13" x="73.2" y="190.8" textLength="12.2" clip-path="url(#amx6-line-7)">│</text><text class="amx6-r2" x="97.6" y="190.8" textLength="244" clip-path="url(#amx6-line-7)">Session:&#160;web&#160;·&#160;codex</text><text class="amx6-r13" x="1134.6" y="190.8" textLength="12.2" clip-path="url(#amx6-line-7)">│</text><text class="amx6-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx6-line-7)">
+</text><text class="amx6-r10" x="0" y="215.2" textLength="12.2" clip-path="url(#amx6-line-8)">▌</text><text class="amx6-r3" x="24.4" y="215.2" textLength="48.8" clip-path="url(#amx6-line-8)">docs</text><text class="amx6-r13" x="73.2" y="215.2" textLength="12.2" clip-path="url(#amx6-line-8)">│</text><text class="amx6-r15" x="97.6" y="215.2" textLength="122" clip-path="url(#amx6-line-8)">:worktree▌</text><text class="amx6-r13" x="1134.6" y="215.2" textLength="12.2" clip-path="url(#amx6-line-8)">│</text><text class="amx6-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx6-line-8)">
+</text><text class="amx6-r13" x="73.2" y="239.6" textLength="12.2" clip-path="url(#amx6-line-9)">│</text><text class="amx6-r2" x="97.6" y="239.6" textLength="1024.8" clip-path="url(#amx6-line-9)">─&#160;Navigate&#160;─────────────────────────────────────────────────────────────────────────</text><text class="amx6-r13" x="1134.6" y="239.6" textLength="12.2" clip-path="url(#amx6-line-9)">│</text><text class="amx6-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx6-line-9)">
+</text><text class="amx6-r13" x="73.2" y="264" textLength="12.2" clip-path="url(#amx6-line-10)">│</text><text class="amx6-r12" x="97.6" y="264" textLength="1024.8" clip-path="url(#amx6-line-10)">▸&#160;Manage&#160;Worktrees&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx6-r13" x="1134.6" y="264" textLength="12.2" clip-path="url(#amx6-line-10)">│</text><text class="amx6-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx6-line-10)">
+</text><text class="amx6-r13" x="73.2" y="288.4" textLength="12.2" clip-path="url(#amx6-line-11)">│</text><text class="amx6-r13" x="1134.6" y="288.4" textLength="12.2" clip-path="url(#amx6-line-11)">│</text><text class="amx6-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx6-line-11)">
+</text><text class="amx6-r13" x="73.2" y="312.8" textLength="12.2" clip-path="url(#amx6-line-12)">│</text><text class="amx6-r2" x="97.6" y="312.8" textLength="1024.8" clip-path="url(#amx6-line-12)">Browse&#160;managed&#160;Git&#160;worktrees&#160;and&#160;open&#160;their&#160;paths.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx6-r13" x="1134.6" y="312.8" textLength="12.2" clip-path="url(#amx6-line-12)">│</text><text class="amx6-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx6-line-12)">
+</text><text class="amx6-r13" x="73.2" y="337.2" textLength="12.2" clip-path="url(#amx6-line-13)">│</text><text class="amx6-r13" x="1134.6" y="337.2" textLength="12.2" clip-path="url(#amx6-line-13)">│</text><text class="amx6-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx6-line-13)">
+</text><text class="amx6-r13" x="73.2" y="361.6" textLength="12.2" clip-path="url(#amx6-line-14)">│</text><text class="amx6-r15" x="122" y="361.6" textLength="36.6" clip-path="url(#amx6-line-14)">↑/↓</text><text class="amx6-r2" x="170.8" y="361.6" textLength="85.4" clip-path="url(#amx6-line-14)">up/down</text><text class="amx6-r2" x="256.2" y="361.6" textLength="36.6" clip-path="url(#amx6-line-14)">&#160;·&#160;</text><text class="amx6-r15" x="292.8" y="361.6" textLength="61" clip-path="url(#amx6-line-14)">enter</text><text class="amx6-r2" x="366" y="361.6" textLength="36.6" clip-path="url(#amx6-line-14)">run</text><text class="amx6-r2" x="402.6" y="361.6" textLength="36.6" clip-path="url(#amx6-line-14)">&#160;·&#160;</text><text class="amx6-r15" x="439.2" y="361.6" textLength="36.6" clip-path="url(#amx6-line-14)">esc</text><text class="amx6-r2" x="488" y="361.6" textLength="61" clip-path="url(#amx6-line-14)">close</text><text class="amx6-r13" x="1134.6" y="361.6" textLength="12.2" clip-path="url(#amx6-line-14)">│</text><text class="amx6-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx6-line-14)">
+</text><text class="amx6-r13" x="73.2" y="386" textLength="1073.6" clip-path="url(#amx6-line-15)">╰──────────────────────────────────────────────────────────────────────────────────────╯</text><text class="amx6-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx6-line-15)">
+</text><text class="amx6-r10" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx6-line-16)">│</text><text class="amx6-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx6-line-16)">
+</text><text class="amx6-r10" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx6-line-17)">│</text><text class="amx6-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx6-line-17)">
+</text><text class="amx6-r10" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx6-line-18)">│</text><text class="amx6-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx6-line-18)">
+</text><text class="amx6-r10" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx6-line-19)">│</text><text class="amx6-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx6-line-19)">
+</text><text class="amx6-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx6-line-20)">
+</text><text class="amx6-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx6-line-21)">
+</text><text class="amx6-r15" x="24.4" y="556.8" textLength="329.4" clip-path="url(#amx6-line-22)">↑/↓&#160;or&#160;ctrl+j/k&#160;or&#160;ctrl+n/p</text><text class="amx6-r2" x="366" y="556.8" textLength="85.4" clip-path="url(#amx6-line-22)">up/down</text><text class="amx6-r2" x="451.4" y="556.8" textLength="36.6" clip-path="url(#amx6-line-22)">&#160;·&#160;</text><text class="amx6-r15" x="488" y="556.8" textLength="61" clip-path="url(#amx6-line-22)">enter</text><text class="amx6-r2" x="561.2" y="556.8" textLength="36.6" clip-path="url(#amx6-line-22)">run</text><text class="amx6-r2" x="597.8" y="556.8" textLength="36.6" clip-path="url(#amx6-line-22)">&#160;·&#160;</text><text class="amx6-r15" x="634.4" y="556.8" textLength="36.6" clip-path="url(#amx6-line-22)">esc</text><text class="amx6-r2" x="683.2" y="556.8" textLength="61" clip-path="url(#amx6-line-22)">close</text><text class="amx6-r2" x="744.2" y="556.8" textLength="36.6" clip-path="url(#amx6-line-22)">&#160;·&#160;</text><text class="amx6-r15" x="780.8" y="556.8" textLength="73.2" clip-path="url(#amx6-line-22)">ctrl+c</text><text class="amx6-r2" x="866.2" y="556.8" textLength="48.8" clip-path="url(#amx6-line-22)">quit</text><text class="amx6-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx6-line-22)">
+</text><text class="amx6-r3" x="0" y="581.2" textLength="1220" clip-path="url(#amx6-line-23)">&#160;Command&#160;Palette:&#160;1&#160;result&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+    </g>
+    </g>
+</g>
+<style>
+.amx7-matrix { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.amx7-r1 { fill: #7faedb;font-weight: bold }
+.amx7-r2 { fill: #a5b1be }
+.amx7-r3 { fill: #f2f4f7 }
+.amx7-r4 { fill: #4ec9b0 }
+.amx7-r5 { fill: #f2f4f7;font-weight: bold }
+.amx7-r6 { fill: #ffaa00;font-weight: bold }
+.amx7-r7 { fill: #4890da }
+.amx7-r8 { fill: #ffaa00 }
+.amx7-r9 { fill: #52677c }
+.amx7-r10 { fill: #4ec9b0;font-weight: bold }
+</style>
+<defs><clipPath id="amx7-line-0">
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-1">
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-2">
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-3">
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-4">
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-5">
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-6">
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-7">
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-8">
+    <rect x="0" y="196.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-9">
+    <rect x="0" y="221.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-10">
+    <rect x="0" y="245.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-11">
+    <rect x="0" y="269.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-12">
+    <rect x="0" y="294.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-13">
+    <rect x="0" y="318.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-14">
+    <rect x="0" y="343.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-15">
+    <rect x="0" y="367.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-16">
+    <rect x="0" y="391.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-17">
+    <rect x="0" y="416.3" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-18">
+    <rect x="0" y="440.7" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-19">
+    <rect x="0" y="465.1" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-20">
+    <rect x="0" y="489.5" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-21">
+    <rect x="0" y="513.9" width="1220" height="24.65"/>
+            </clipPath>
+<clipPath id="amx7-line-22">
+    <rect x="0" y="538.3" width="1220" height="24.65"/>
+            </clipPath></defs>
+<g class="amx-frame amx-f7">
+<text class="amx-caption" text-anchor="end" x="1214" y="27">Back&#160;to&#160;the&#160;queue</text>
+    <g transform="translate(9, 41)" clip-path="url(#amx-clip-terminal)">
+    <rect fill="#1d3f3c" x="0" y="25.9" width="597.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#1d3f3c" x="24.4" y="74.7" width="402.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="538.3" width="1220" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="0" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="24.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="61" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="73.2" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="158.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="195.2" y="562.7" width="61" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="256.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="268.4" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="317.2" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="353.8" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="366" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="378.2" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="451.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="488" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="500.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="512.4" y="562.7" width="85.4" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="597.8" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="634.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="646.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="658.8" y="562.7" width="97.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="756.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="793" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="805.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="817.4" y="562.7" width="73.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="890.6" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="927.2" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="939.4" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="951.6" y="562.7" width="48.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1000.4" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1037" y="562.7" width="36.6" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1073.6" y="562.7" width="12.2" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1085.8" y="562.7" width="109.8" height="24.65" shape-rendering="crispEdges"/><rect fill="#252d36" x="1195.6" y="562.7" width="24.4" height="24.65" shape-rendering="crispEdges"/>
+    <g class="amx7-matrix">
+    <text class="amx7-r1" x="0" y="20" textLength="109.8" clip-path="url(#amx7-line-0)">Agent&#160;Mux</text><text class="amx7-r2" x="109.8" y="20" textLength="36.6" clip-path="url(#amx7-line-0)">&#160;·&#160;</text><text class="amx7-r2" x="146.4" y="20" textLength="85.4" clip-path="url(#amx7-line-0)">Urgency</text><text class="amx7-r2" x="231.8" y="20" textLength="36.6" clip-path="url(#amx7-line-0)">&#160;·&#160;</text><text class="amx7-r2" x="268.4" y="20" textLength="146.4" clip-path="url(#amx7-line-0)">all&#160;projects</text><text class="amx7-r4" x="1037" y="20" textLength="183" clip-path="url(#amx7-line-0)">●&#160;all&#160;checks&#160;ok</text><text class="amx7-r3" x="1220" y="20" textLength="12.2" clip-path="url(#amx7-line-0)">
+</text><text class="amx7-r5" x="0" y="44.4" textLength="597.8" clip-path="url(#amx7-line-1)">&gt;&#160;Sessions&#160;·&#160;focused&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r2" x="597.8" y="44.4" textLength="12.2" clip-path="url(#amx7-line-1)">│</text><text class="amx7-r2" x="610" y="44.4" textLength="610" clip-path="url(#amx7-line-1)">&#160;&#160;Inspector&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#amx7-line-1)">
+</text><text class="amx7-r6" x="24.4" y="68.8" textLength="158.6" clip-path="url(#amx7-line-2)">Needs&#160;you&#160;(1)</text><text class="amx7-r2" x="597.8" y="68.8" textLength="12.2" clip-path="url(#amx7-line-2)">│</text><text class="amx7-r7" x="610" y="68.8" textLength="36.6" clip-path="url(#amx7-line-2)">api</text><text class="amx7-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#amx7-line-2)">
+</text><text class="amx7-r8" x="0" y="93.2" textLength="12.2" clip-path="url(#amx7-line-3)">▌</text><text class="amx7-r5" x="24.4" y="93.2" textLength="402.6" clip-path="url(#amx7-line-3)">api&#160;&#160;&#160;&#160;&#160;&#160;&#160;Needs&#160;permission&#160;&#160;&#160;&#160;&#160;&#160;—</text><text class="amx7-r2" x="597.8" y="93.2" textLength="12.2" clip-path="url(#amx7-line-3)">│</text><text class="amx7-r8" x="610" y="93.2" textLength="195.2" clip-path="url(#amx7-line-3)">Needs&#160;permission</text><text class="amx7-r2" x="805.2" y="93.2" textLength="48.8" clip-path="url(#amx7-line-3)">&#160;·&#160;—</text><text class="amx7-r2" x="854" y="93.2" textLength="219.6" clip-path="url(#amx7-line-3)">&#160;·&#160;claude&#160;·&#160;claude</text><text class="amx7-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#amx7-line-3)">
+</text><text class="amx7-r2" x="597.8" y="117.6" textLength="12.2" clip-path="url(#amx7-line-4)">│</text><text class="amx7-r2" x="610" y="117.6" textLength="97.6" clip-path="url(#amx7-line-4)">Dir&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="707.6" y="117.6" textLength="512.4" clip-path="url(#amx7-line-4)">~/projects/api&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#amx7-line-4)">
+</text><text class="amx7-r1" x="24.4" y="142" textLength="134.2" clip-path="url(#amx7-line-5)">Running&#160;(1)</text><text class="amx7-r2" x="597.8" y="142" textLength="12.2" clip-path="url(#amx7-line-5)">│</text><text class="amx7-r2" x="610" y="142" textLength="97.6" clip-path="url(#amx7-line-5)">Branch&#160;&#160;</text><text class="amx7-r3" x="707.6" y="142" textLength="512.4" clip-path="url(#amx7-line-5)">main&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="142" textLength="12.2" clip-path="url(#amx7-line-5)">
+</text><text class="amx7-r9" x="0" y="166.4" textLength="12.2" clip-path="url(#amx7-line-6)">▌</text><text class="amx7-r3" x="24.4" y="166.4" textLength="36.6" clip-path="url(#amx7-line-6)">web</text><text class="amx7-r3" x="146.4" y="166.4" textLength="195.2" clip-path="url(#amx7-line-6)">Working&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r2" x="366" y="166.4" textLength="61" clip-path="url(#amx7-line-6)">&#160;1:35</text><text class="amx7-r2" x="597.8" y="166.4" textLength="12.2" clip-path="url(#amx7-line-6)">│</text><text class="amx7-r2" x="610" y="166.4" textLength="610" clip-path="url(#amx7-line-6)">──────────────────────────────────────────────────</text><text class="amx7-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#amx7-line-6)">
+</text><text class="amx7-r2" x="597.8" y="190.8" textLength="12.2" clip-path="url(#amx7-line-7)">│</text><text class="amx7-r3" x="610" y="190.8" textLength="610" clip-path="url(#amx7-line-7)">Claude&#160;Code&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#amx7-line-7)">
+</text><text class="amx7-r1" x="24.4" y="215.2" textLength="97.6" clip-path="url(#amx7-line-8)">Idle&#160;(1)</text><text class="amx7-r2" x="597.8" y="215.2" textLength="12.2" clip-path="url(#amx7-line-8)">│</text><text class="amx7-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#amx7-line-8)">
+</text><text class="amx7-r2" x="0" y="239.6" textLength="12.2" clip-path="url(#amx7-line-9)">▌</text><text class="amx7-r3" x="24.4" y="239.6" textLength="48.8" clip-path="url(#amx7-line-9)">docs</text><text class="amx7-r2" x="146.4" y="239.6" textLength="195.2" clip-path="url(#amx7-line-9)">Done&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r2" x="366" y="239.6" textLength="61" clip-path="url(#amx7-line-9)">&#160;&#160;&#160;&#160;—</text><text class="amx7-r2" x="597.8" y="239.6" textLength="12.2" clip-path="url(#amx7-line-9)">│</text><text class="amx7-r3" x="610" y="239.6" textLength="610" clip-path="url(#amx7-line-9)">Add&#160;request&#160;validation&#160;to&#160;the&#160;API.&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="239.6" textLength="12.2" clip-path="url(#amx7-line-9)">
+</text><text class="amx7-r2" x="597.8" y="264" textLength="12.2" clip-path="url(#amx7-line-10)">│</text><text class="amx7-r3" x="1220" y="264" textLength="12.2" clip-path="url(#amx7-line-10)">
+</text><text class="amx7-r2" x="597.8" y="288.4" textLength="12.2" clip-path="url(#amx7-line-11)">│</text><text class="amx7-r3" x="610" y="288.4" textLength="610" clip-path="url(#amx7-line-11)">Ready&#160;to&#160;check&#160;the&#160;new&#160;handlers:&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="288.4" textLength="12.2" clip-path="url(#amx7-line-11)">
+</text><text class="amx7-r2" x="597.8" y="312.8" textLength="12.2" clip-path="url(#amx7-line-12)">│</text><text class="amx7-r3" x="1220" y="312.8" textLength="12.2" clip-path="url(#amx7-line-12)">
+</text><text class="amx7-r2" x="597.8" y="337.2" textLength="12.2" clip-path="url(#amx7-line-13)">│</text><text class="amx7-r3" x="610" y="337.2" textLength="610" clip-path="url(#amx7-line-13)">&#160;&#160;go&#160;test&#160;./internal/api/...&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="337.2" textLength="12.2" clip-path="url(#amx7-line-13)">
+</text><text class="amx7-r2" x="597.8" y="361.6" textLength="12.2" clip-path="url(#amx7-line-14)">│</text><text class="amx7-r3" x="1220" y="361.6" textLength="12.2" clip-path="url(#amx7-line-14)">
+</text><text class="amx7-r2" x="597.8" y="386" textLength="12.2" clip-path="url(#amx7-line-15)">│</text><text class="amx7-r3" x="610" y="386" textLength="610" clip-path="url(#amx7-line-15)">Allow&#160;this&#160;command?&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="386" textLength="12.2" clip-path="url(#amx7-line-15)">
+</text><text class="amx7-r2" x="597.8" y="410.4" textLength="12.2" clip-path="url(#amx7-line-16)">│</text><text class="amx7-r3" x="610" y="410.4" textLength="610" clip-path="url(#amx7-line-16)">&#160;&#160;1.&#160;Yes&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="410.4" textLength="12.2" clip-path="url(#amx7-line-16)">
+</text><text class="amx7-r2" x="597.8" y="434.8" textLength="12.2" clip-path="url(#amx7-line-17)">│</text><text class="amx7-r3" x="610" y="434.8" textLength="610" clip-path="url(#amx7-line-17)">&#160;&#160;2.&#160;No&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text><text class="amx7-r3" x="1220" y="434.8" textLength="12.2" clip-path="url(#amx7-line-17)">
+</text><text class="amx7-r2" x="597.8" y="459.2" textLength="12.2" clip-path="url(#amx7-line-18)">│</text><text class="amx7-r3" x="1220" y="459.2" textLength="12.2" clip-path="url(#amx7-line-18)">
+</text><text class="amx7-r2" x="597.8" y="483.6" textLength="12.2" clip-path="url(#amx7-line-19)">│</text><text class="amx7-r3" x="1220" y="483.6" textLength="12.2" clip-path="url(#amx7-line-19)">
+</text><text class="amx7-r2" x="597.8" y="508" textLength="12.2" clip-path="url(#amx7-line-20)">│</text><text class="amx7-r3" x="1220" y="508" textLength="12.2" clip-path="url(#amx7-line-20)">
+</text><text class="amx7-r3" x="1220" y="532.4" textLength="12.2" clip-path="url(#amx7-line-21)">
+</text><text class="amx7-r3" x="1220" y="556.8" textLength="12.2" clip-path="url(#amx7-line-22)">
+</text><text class="amx7-r10" x="24.4" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">j/k</text><text class="amx7-r2" x="73.2" y="581.2" textLength="85.4" clip-path="url(#amx7-line-23)">up/down</text><text class="amx7-r2" x="158.6" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">&#160;·&#160;</text><text class="amx7-r10" x="195.2" y="581.2" textLength="61" clip-path="url(#amx7-line-23)">enter</text><text class="amx7-r2" x="268.4" y="581.2" textLength="48.8" clip-path="url(#amx7-line-23)">open</text><text class="amx7-r2" x="317.2" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">&#160;·&#160;</text><text class="amx7-r10" x="353.8" y="581.2" textLength="12.2" clip-path="url(#amx7-line-23)">t</text><text class="amx7-r2" x="378.2" y="581.2" textLength="73.2" clip-path="url(#amx7-line-23)">answer</text><text class="amx7-r2" x="451.4" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">&#160;·&#160;</text><text class="amx7-r10" x="488" y="581.2" textLength="12.2" clip-path="url(#amx7-line-23)">a</text><text class="amx7-r2" x="512.4" y="581.2" textLength="85.4" clip-path="url(#amx7-line-23)">actions</text><text class="amx7-r2" x="597.8" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">&#160;·&#160;</text><text class="amx7-r10" x="634.4" y="581.2" textLength="12.2" clip-path="url(#amx7-line-23)">:</text><text class="amx7-r2" x="658.8" y="581.2" textLength="97.6" clip-path="url(#amx7-line-23)">commands</text><text class="amx7-r2" x="756.4" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">&#160;·&#160;</text><text class="amx7-r10" x="793" y="581.2" textLength="12.2" clip-path="url(#amx7-line-23)">/</text><text class="amx7-r2" x="817.4" y="581.2" textLength="73.2" clip-path="url(#amx7-line-23)">filter</text><text class="amx7-r2" x="890.6" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">&#160;·&#160;</text><text class="amx7-r10" x="927.2" y="581.2" textLength="12.2" clip-path="url(#amx7-line-23)">?</text><text class="amx7-r2" x="951.6" y="581.2" textLength="48.8" clip-path="url(#amx7-line-23)">help</text><text class="amx7-r2" x="1000.4" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">&#160;·&#160;</text><text class="amx7-r10" x="1037" y="581.2" textLength="36.6" clip-path="url(#amx7-line-23)">n/N</text><text class="amx7-r2" x="1085.8" y="581.2" textLength="109.8" clip-path="url(#amx7-line-23)">needs&#160;you</text>
+    </g>
+    </g>
+</g>
+</svg>

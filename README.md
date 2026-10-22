@@ -10,14 +10,12 @@ searches past conversations and plans, and supports resume, fork, handoff,
 and managed Git worktrees. It can also start and supervise prepared
 `agent-session-loop` plans.
 
-![Agent Mux desktop walkthrough: switch agents, approve a waiting session, open the dashboard and overview, and review a patch beside an agent.](docs/media/desktop-demo.gif)
+![Agent Mux dashboard: inspect Claude, Codex, and Copilot sessions, jump to an agent needing permission, filter by harness, switch projects, and find commands.](docs/media/demo.svg)
 
-The real macOS app, driven automatically on a separate Mac over SSH. Agent
-responses are **scripted demo data**; no live AI requests are made. The
-46-second walkthrough shows session switching, approval, the dashboard and
-overview, the attention inspector, and a split checkout diff.
-[Video](docs/media/desktop-demo.mp4) · [Still image](docs/media/desktop-demo.png) ·
-[Reproduce the demo](scripts/demo/README.md)
+The real terminal UI with scripted demo data. Inspect agent output, jump to
+sessions needing you, and filter by harness—all from the keyboard.
+[Desktop video](docs/media/desktop-demo.mp4) ·
+[Rebuild the animation](scripts/demo/README.md#readme-animation)
 
 ## First session
 

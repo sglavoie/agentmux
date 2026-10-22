@@ -29,7 +29,7 @@ enum WorkspaceWaitingAnswer: Equatable {
 /// One session waiting on the operator, as the right sidebar lists it.
 struct WorkspaceWaitingRow: Equatable {
     let key: AttentionCycler.Key
-    /// The name the operator gave the session, else its project and profile.
+    /// The project and session name, or project and profile for unnamed sessions.
     let title: String
     /// `needs permission · 4m`.
     let detail: String
@@ -160,7 +160,7 @@ enum WorkspaceInspector {
             if row.embeddedRuntimeSessionID == nil { detail.append(WorkspaceSidebar.kittyBadge) }
             return WorkspaceWaitingRow(
                 key: row.key,
-                title: row.displayName,
+                title: "\(row.project) — \(row.name.isEmpty ? row.label : row.name)",
                 detail: detail.joined(separator: " · "),
                 glyph: row.glyph,
                 toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)",
