@@ -183,9 +183,18 @@ unbind-key -n MouseDown3Status
 unbind-key -n M-MouseDown3Status
 unbind-key -n MouseDown3StatusLeft
 unbind-key -n M-MouseDown3StatusLeft
+# tmux 3.8 adds menus on empty space and Ctrl-drag pane creation. Empty-space
+# key names are unknown to older supported runtimes; -q keeps sourcing quiet.
+unbind-key -q -n MouseDown3Empty
+unbind-key -q -n M-MouseDown3Empty
+unbind-key -q -n C-MouseDrag1Empty
+unbind-key -n C-MouseDrag1Pane
+unbind-key -n M-MouseDrag1Pane
+unbind-key -n M-MouseDrag1Border
 unbind-key -n C-MouseDown1Pane
 unbind-key -n C-MouseDown1Status
 unbind-key -n MouseDown1Status
+unbind-key -n MouseDown1Control7
 unbind-key -n MouseDown1Control8
 unbind-key -n MouseDown1Control9
 unbind-key -n WheelUpStatus

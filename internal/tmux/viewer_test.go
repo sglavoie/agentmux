@@ -251,7 +251,11 @@ func TestMouseBindingsOfferNothingDestructive(t *testing.T) {
 	f := newFixture(t, Options{})
 	f.launch(t, "mouse", echoArgv("mouse"), nil)
 	keys := f.tmux(t, "list-keys", "-T", "root")
-	for _, forbidden := range []string{"display-menu", "kill-pane", "kill-window", "respawn", "split-window", "swap-pane", "swap-window", "new-window", "new-session"} {
+	for _, forbidden := range []string{
+		"display-menu", "kill-pane", "kill-window", "respawn", "split-window",
+		"swap-pane", "swap-window", "new-window", "new-session",
+		"new-pane", "move-pane", "break-pane", "join-pane",
+	} {
 		if strings.Contains(keys, forbidden) {
 			t.Errorf("a root binding still runs %s:\n%s", forbidden, keys)
 		}
