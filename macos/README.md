@@ -139,12 +139,19 @@ the running server is on an earlier one.
 
 - **Default.** The first valid Apple Development identity in the keychain. A
   certificate gives the app a designated requirement that survives a rebuild,
-  so a notification permission is granted once rather than after every install.
+  allowing Screen Recording, Accessibility, and other privacy grants to carry
+  forward across builds. See Apple's [code signing requirements guide](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
 - **No identity.** Without one the app is signed ad-hoc, and macOS treats every
-  build as a new app.
-- **`AMX_CODESIGN_IDENTITY`.** Overrides the identity. `-` forces ad-hoc.
-- **Xcode's own products.** `build-app.sh` and `test-app.sh` have xcodebuild
-  sign with the same identity (`scripts/signing-lib.sh`), so the copies in
+  changed build as a new app. The build prints a warning; a keychain lookup
+  failure stops the build instead of silently falling back to ad-hoc.
+- **`AMX_CODESIGN_IDENTITY`.** Overrides the identity by certificate name or
+  SHA-1 fingerprint. Names are resolved to valid fingerprints before reaching
+  Xcode. `-` forces ad-hoc.
+- **Xcode's own products.** `generate-project.sh` records the resolved signing
+  identity and team in the generated project, so direct `xcodebuild` and Xcode
+  GUI builds use the same certificate as `build-app.sh` and `test-app.sh`
+  (`scripts/signing-lib.sh`). Regenerate the project after changing signing
+  identities. The copies in
   `DerivedData`, the hosted tests' app among them, share the installed app's
   designated requirement. They share its bundle identifier too, and an ad-hoc
   copy would take the privacy grants (Files and Folders, notifications) the
@@ -154,6 +161,15 @@ the running server is on an earlier one.
   secure timestamp. With `AMX_NOTARY_PROFILE`, the name of an
   `xcrun notarytool store-credentials` profile, the app is also notarized and
   stapled.
+- **Updates.** Before quitting or replacing the installed app, the installer
+  checks that old and new signatures satisfy each other's designated
+  requirements. An incompatible update stops with instructions to select the
+  original certificate. For an intentional signing migration, set
+  `AMX_ALLOW_SIGNING_CHANGE=1`; existing permissions may then need granting
+  again once. This also catches an accidental switch to ad-hoc signing.
+
+Signing regression checks (mock keychain and signatures; no permission changes):
+`python3 -m unittest discover -s macos/scripts/tests -v` from the repository root.
 
 ### Other environment
 

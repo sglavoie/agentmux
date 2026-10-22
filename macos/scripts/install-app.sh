@@ -23,6 +23,8 @@
 #   AMX_APP_SOURCE          the bundle to install (default macos/build/Agent Mux.app)
 #   AMX_APP_INSTALL_DIR     destination directory (default /Applications)
 #   AMX_APP_NO_LAUNCH=1     install without launching the new copy
+#   AMX_ALLOW_SIGNING_CHANGE=1  allow an intentional identity migration;
+#                           existing privacy grants may need renewal
 
 set -eu
 
@@ -30,6 +32,8 @@ script_dir=$(CDPATH="" cd -- "$(dirname -- "$0")" && pwd)
 macos_dir=$(dirname -- "$script_dir")
 # shellcheck disable=SC1091
 . "$script_dir/app-lib.sh"
+# shellcheck disable=SC1091
+. "$script_dir/signing-lib.sh"
 
 require_tool ditto
 require_tool codesign
@@ -49,6 +53,7 @@ dest="$install_dir/Agent Mux.app"
 # place. A bundle whose runtime cannot be used is not installed at all.
 
 check_bundle "$app"
+check_signing_continuity "$dest" "$app"
 before=$(backend_status "$app/Contents/Resources/bin/amx")
 if [ "$(status_field "$before" tmux.available)" != true ]; then
 	echo "the tmux runtime in $app cannot be used on this Mac:" >&2

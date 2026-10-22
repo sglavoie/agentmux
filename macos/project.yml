@@ -12,8 +12,11 @@ settings:
     SWIFT_VERSION: "5.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "-"
-    DEVELOPMENT_TEAM: ""
+    # generate-project.sh resolves these on the Mac doing the build. Persist
+    # them in the generated project so Xcode GUI/direct builds sign exactly
+    # like build-app.sh, including the hosted tests' app.
+    CODE_SIGN_IDENTITY: "${AMX_PROJECT_SIGNING_IDENTITY}"
+    DEVELOPMENT_TEAM: "${AMX_PROJECT_SIGNING_TEAM}"
 targets:
   AgentMux:
     type: application

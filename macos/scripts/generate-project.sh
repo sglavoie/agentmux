@@ -82,4 +82,11 @@ resolve_xcodegen() {
 }
 
 xcodegen=$(resolve_xcodegen)
+# XcodeGen expands these into the project itself. Command-line overrides in
+# build-app.sh/test-app.sh alone leave GUI and direct xcodebuild builds ad-hoc.
+# shellcheck disable=SC1091
+. "$script_dir/signing-lib.sh"
+AMX_PROJECT_SIGNING_IDENTITY=$(signing_identity)
+AMX_PROJECT_SIGNING_TEAM=$(signing_team "$AMX_PROJECT_SIGNING_IDENTITY")
+export AMX_PROJECT_SIGNING_IDENTITY AMX_PROJECT_SIGNING_TEAM
 "$xcodegen" generate --quiet --spec "$macos_dir/project.yml" --project "$macos_dir"

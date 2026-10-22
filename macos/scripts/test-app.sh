@@ -58,8 +58,10 @@ esac
 # with the identity sign.sh uses rather than ad-hoc (signing-lib.sh).
 # shellcheck disable=SC1091
 . "$script_dir/signing-lib.sh"
-# shellcheck disable=SC2046
-set -- "$@" $(xcode_signing_settings)
+signing_settings=$(xcode_signing_settings)
+# Intentional splitting: identity is a fingerprint and team contains no spaces.
+# shellcheck disable=SC2086
+set -- "$@" $signing_settings
 
 "$script_dir/generate-project.sh"
 
