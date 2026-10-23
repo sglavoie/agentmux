@@ -115,7 +115,7 @@ final class WorkspaceRunsModel: ObservableObject {
             guard let actionFeedback else { return }
             let operation = pending?.operationID
             let target = actionTarget
-            feedbackHistory.record(actionFeedback, available: { [weak self] in
+            feedbackHistory.record(actionFeedback, destination: .runs(rowID: target?.rowID, runID: target?.runID), available: { [weak self] in
                 guard let self, !self.acting else { return false }
                 return actionFeedback.recovery != .receipt || (operation != nil && self.pending?.operationID == operation)
             }) { [weak self] in
@@ -288,6 +288,12 @@ final class WorkspaceRunsModel: ObservableObject {
         // Authorization tokens can rotate without changing displayed evidence.
         current.actionToken = ""; previous.actionToken = ""
         return current != previous || now().timeIntervalSince(at) >= Self.detailRefreshInterval
+    }
+
+    func inspectFeedback(rowID: String?, runID: String?) {
+        guard !acting else { return }
+        if let rowID, let runID { feedbackSelection = FeedbackTarget(rowID: rowID, runID: runID) }
+        refresh()
     }
 
     func select(_ id: String?) {

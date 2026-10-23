@@ -139,8 +139,12 @@ struct ProjectCatalog: Equatable {
         if let unavailable { return unavailable }
         if let error = state.error { return "Could not refresh projects: \(error). Choose Launch Project to try again." }
         guard let entries = state.value else { return "Loading configured projects…" }
-        if entries.isEmpty { return "No projects configured. Run amx config edit to add a profile and a project, then choose Launch Project to refresh." }
+        if entries.isEmpty { return "No projects configured. Set Up First Project guides you through your agent profile, project directory, hooks, and launch destination." }
         return "Choose a configured project to start, or return to a past conversation."
+    }
+
+    static func offersSetup(_ state: FetchState<[ProjectEntry]>, unavailable: String?) -> Bool {
+        unavailable == nil && state.error == nil && state.value?.isEmpty == true && !state.loading
     }
 
     static let maxAge: TimeInterval = 10

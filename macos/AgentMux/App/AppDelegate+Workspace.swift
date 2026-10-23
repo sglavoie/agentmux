@@ -429,6 +429,24 @@ extension AppDelegate {
         return model
     }
 
+    func inspectSavedFeedback(_ destination: WorkspaceFeedbackDestination) {
+        switch destination {
+        case let .conversation(encoded):
+            guard let identity = ConversationIdentity(encoded: encoded) else { return }
+            openHistory(conversation: identity)
+        case let .checkout(directory): inspectFeedbackCheckout(directory)
+        case let .runs(rowID, runID):
+            openRuns(launch: false)
+            runsWindow?.model.inspectFeedback(rowID: rowID, runID: runID)
+        case let .plan(saved):
+            openRuns(launch: true)
+            guard let model = runsWindow?.plan, !model.launching, !model.checking else { return }
+            model.plan = saved.plan; model.project = saved.project; model.profile = saved.profile
+            model.harness = saved.harness; model.reviewHarness = saved.reviewHarness; model.commitMode = saved.commitMode
+            model.check()
+        }
+    }
+
     func inspectFeedbackCheckout(_ directory: String) {
         let controller = changesWindow ?? WorkspaceChangesWindow(model: makeChangesModel())
         guard !controller.model.landing else { controller.show(); return }
@@ -548,6 +566,19 @@ extension AppDelegate {
         })
     }
 
+    func workspaceResumeConversation(_ identity: ConversationIdentity) {
+        let workspace = workspaceController()
+        guard workspace.window.attachedSheet == nil else { return }
+        let model = WorkspaceResumeModel(identity: identity, command: { [weak self] in self?.command }, feedbackHistory: reviewFeedbackHistory)
+        model.onResume = { [weak self] conversation, done in
+            guard let self else { done("The workspace is unavailable."); return }
+            self.openHistoryConversation(conversation, fork: false, completion: done)
+        }
+        let panel = WorkspaceResumePanel(model: model)
+        resumePanel = panel
+        panel.show(on: workspace.window)
+    }
+
     func workspaceSearchConversation() { searchConversation(nil) }
 
     func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil, query: String = "", searchNote: String? = nil) {
@@ -650,6 +681,15 @@ extension AppDelegate {
     var workspaceLaunchDescription: String {
         let choice = preferencesModel.preferences.launchBackend
         return "Launch in \(choice.destination(cliBackend: preferences.backend.cliLaunchBackend)) · \(choice.source(cliSource: preferences.backend.cliLaunchBackendSource))"
+    }
+
+    var workspaceOffersSetup: Bool {
+        ProjectCatalog.offersSetup(projects.state, unavailable: gate.unavailableReason(.project))
+    }
+
+    func workspaceSetupFinished() {
+        refreshProjects(force: true)
+        refreshBackendStatus()
     }
 
     var workspaceProjectGuidance: String {

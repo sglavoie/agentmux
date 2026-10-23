@@ -21,10 +21,34 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             inspector.show(.init(waiting: [row])); inspector.toggleContext(row)
             try await render(PreviewNativeView(view: inspector), name: "seams-waiting-loading-\(dark)", width: 320, height: 600, dark: dark, expected: ["Loading context", "Answer"])
             receive?(.loaded(SecretText("# Deployment review\n\n- Check staging\n- Keep rollback available\n\n```sh\nmake check\n```")))
-            try await render(PreviewNativeView(view: inspector), name: "seams-waiting-loaded-\(dark)", width: 320, height: 600, dark: dark, expected: ["Deployment review", "Copy code", "Refresh"])
+            try await render(PreviewNativeView(view: inspector), name: "seams-waiting-loaded-\(dark)", width: 320, height: 600, dark: dark, expected: ["Deployment review", "Copy code", "Read"])
             inspector.refreshContext(row)
             receive?(.failed(SecretText("Connection lost. Try again.")))
             try await render(PreviewNativeView(view: inspector), name: "seams-waiting-failed-\(dark)", width: 320, height: 600, dark: dark, expected: ["Context read failed", "Retry", "Deployment review"])
+        }
+    }
+
+    func testNativeRecoveryAndRestoredFeedbackPreviews() async throws {
+        let amx = command { _ in
+            #"{"session":{"id":"recorded-conversation","harness":"codex","profile":"work","project":"API","cwd":"/Projects/api"}}"#
+        }
+        let model = WorkspaceResumeModel(identity: .init(harness: "codex", sessionID: "recorded-conversation"), command: { amx }, runner: PreviewRunner())
+        model.load()
+        for dark in [false, true] {
+            try await render(WorkspaceResumeView(model: model, cancel: {}), name: "recovery-native-\(dark)", width: 460, height: 279, dark: dark,
+                             expected: ["Resume Conversation", "Profile: work", "Workspace", "recorded-conversation"])
+        }
+        let suite = "amx-feedback-preview-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let original = WorkspaceFeedbackHistory(defaults: defaults)
+        let failure = WorkspaceFeedback(target: "/Projects/api", message: "Landing could not complete: checkout changed.", nextStep: "Review the current checkout before trying again.")
+        original.record(failure, destination: .checkout("/Projects/api"))
+        original.record(failure, destination: .checkout("/Projects/api"))
+        let reopened = WorkspaceFeedbackHistory(defaults: defaults)
+        for dark in [false, true] {
+            try await render(WorkspaceFeedbackHistoryView(history: reopened), name: "recovery-feedback-\(dark)", width: 420, height: 392, dark: dark,
+                             expected: ["Repeated 2 times", "checkout changed", "Dismiss"])
         }
     }
 

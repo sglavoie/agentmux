@@ -156,15 +156,94 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         scroll.reflectScrolledClipView(scroll.contentView)
         try await Task.sleep(for: .milliseconds(100))
         let before = try XCTUnwrap(text.readingAnchor())
+        let selection = NSRange(location: text.lineRanges[before.index].location + 1, length: 12)
+        text.setSelectedRange(selection)
+        var lastTick = ProcessInfo.processInfo.systemUptime, maxGap = 0.0
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.005, repeats: true) { _ in
+            let now = ProcessInfo.processInfo.systemUptime
+            maxGap = max(maxGap, now - lastTick); lastTick = now
+        }
+        defer { timer.invalidate() }
         host.rootView = view(wrap: true)
-        try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(text.readingAnchor()?.line.text, before.line.text)
+        try await waitForLayout(host)
+        let wrappedText = try XCTUnwrap(find(host))
+        XCTAssertEqual(wrappedText.readingAnchor()?.line.text, before.line.text)
+        XCTAssertEqual(wrappedText.selectedRange(), selection, "Wrapping preserves a source selection")
         let saved = scroll.contentView.bounds.origin.y
         let reopened = NSHostingView(rootView: view(wrap: true))
         window.contentView = reopened
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitForLayout(reopened)
         let restored = try XCTUnwrap(find(reopened))
         XCTAssertEqual(restored.enclosingScrollView!.contentView.bounds.origin.y, saved, accuracy: 1)
         XCTAssertEqual(restored.readingAnchor()?.line.text, before.line.text)
+        print("DIFF_RESTORATION_MEASUREMENT wrap_and_reopen_max_main_queue_gap_ms=\(maxGap * 1000)")
+        XCTAssertLessThan(maxGap, 0.12, "Deep restoration and wrap changes must keep the main loop responsive")
     }
+    func testLargeDiffRepeatedReturnsResizeAndSupersededLayout() async throws {
+        let suite = "amx.diff-returns.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let review = WorkspaceReviewState(defaults: defaults)
+        let diff = WorkspaceDiff("@@ -1,6000 +1,6000 @@\n" + (0..<6000).map {
+            " context \($0) " + String(repeating: "long source ", count: 24)
+        }.joined(separator: "\n"))
+        for id in ["one", "two"] { review.savePosition(NSPoint(x: 0, y: 40000), id: id) }
+        func view(_ id: String, wrap: Bool) -> WorkspaceDiffView {
+            WorkspaceDiffView(diff: diff, identity: id, loading: false, jump: nil, jumpSequence: 0, reviewState: review, wrapLines: wrap)
+        }
+        func find(_ view: NSView) -> WorkspaceDiffTextView? {
+            if let text = view as? WorkspaceDiffTextView { return text }
+            return view.subviews.lazy.compactMap(find).first
+        }
+        let host = NSHostingView(rootView: view("one", wrap: true))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 450), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = host; window.orderFront(nil)
+        defer { window.close() }
+        try await waitForLayout(host)
+        var anchors: [String: String] = [:]
+        anchors["one"] = try XCTUnwrap(find(host)?.readingAnchor()?.line.text)
+        var lastTick = ProcessInfo.processInfo.systemUptime, maxGap = 0.0
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.005, repeats: true) { _ in
+            let now = ProcessInfo.processInfo.systemUptime
+            maxGap = max(maxGap, now - lastTick); lastTick = now
+        }
+        defer { timer.invalidate() }
+        for iteration in 0..<12 {
+            let id = iteration % 2 == 0 ? "two" : "one"
+            host.rootView = view(id, wrap: iteration % 3 != 0)
+            try await waitForLayout(host)
+            let text = try XCTUnwrap(find(host))
+            let anchor = try XCTUnwrap(text.readingAnchor()?.line.text)
+            if let previous = anchors[id] { XCTAssertEqual(anchor, previous) }
+            anchors[id] = anchor
+            window.setContentSize(NSSize(width: iteration % 2 == 0 ? 820 : 720, height: 450))
+            try await waitForLayout(host)
+            XCTAssertEqual(find(host)?.readingAnchor()?.line.text, anchor)
+        }
+        print("DIFF_RETURN_MEASUREMENT returns=12 resize_and_wrap_max_main_queue_gap_ms=\(maxGap * 1000)")
+        XCTAssertLessThan(maxGap, 0.12)
+        // An in-flight layout must not overwrite a newer file, including a
+        // quick return to the document that was already displayed.
+        host.rootView = view("two", wrap: true)
+        try await Task.sleep(for: .milliseconds(30))
+        let small = WorkspaceDiff("@@ -1 +1 @@\n-old\n+replacement")
+        host.rootView = WorkspaceDiffView(diff: small, identity: "replacement", loading: false, jump: nil, jumpSequence: 0)
+        try await waitForLayout(host)
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(find(host)?.diff, small)
+    }
+
+    private func waitForLayout(_ view: NSView) async throws {
+        func container(_ view: NSView) -> WorkspaceDiffContainer? {
+            if let value = view as? WorkspaceDiffContainer { return value }
+            return view.subviews.lazy.compactMap(container).first
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        for _ in 0..<100 {
+            if let value = container(view), !value.preparing { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTFail("Diff restoration did not settle")
+    }
+
 }

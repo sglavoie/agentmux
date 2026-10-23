@@ -205,13 +205,9 @@ struct WorkspaceTranscriptCode: View {
             HStack {
                 Text(language.isEmpty ? "Code" : language).font(.caption.weight(.medium))
                 Spacer()
-                Button {
+                WorkspaceCodeCopyButton(title: feedback.message ?? "Copy code", copied: feedback.succeeded) {
                     feedback.copy(text, to: pasteboard)
-                } label: { Label(feedback.message ?? "Copy code", systemImage: feedback.succeeded ? "checkmark" : "doc.on.doc") }
-                    .buttonStyle(.borderless).help("Copy this code block without Markdown fences")
-                    .font(.callout).foregroundStyle(.primary)
-                    .accessibilityLabel(feedback.message ?? "Copy code")
-                    .accessibilityIdentifier("transcript-copy-code")
+                }.fixedSize()
             }.padding(8)
             Divider()
             if preferences.wrapLines {
@@ -237,5 +233,39 @@ struct WorkspaceTranscriptCode: View {
     private var codeText: some View {
         Text(WorkspaceHighlight.applying(to: AttributedString(text), terms: terms))
             .font(.system(size: preferences.effectiveFontSize, design: .monospaced))
+    }
+}
+
+/// A native button keeps the shared prose reader's Copy action visible in both
+/// AppKit's accessibility tree and the system accessibility bridge.
+private struct WorkspaceCodeCopyButton: NSViewRepresentable {
+    let title: String
+    let copied: Bool
+    let action: () -> Void
+    final class Coordinator: NSObject {
+        var action: () -> Void = {}
+        @objc func press(_ sender: Any?) { action() }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.press(_:)))
+        button.isBordered = false
+        button.imagePosition = .imageLeading
+        button.font = .systemFont(ofSize: NSFont.systemFontSize)
+        button.contentTintColor = .labelColor
+        button.toolTip = "Copy this code block without Markdown fences"
+        button.setAccessibilityIdentifier("transcript-copy-code")
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.action = action
+        button.title = title
+        button.image = NSImage(systemSymbolName: copied ? "checkmark" : "doc.on.doc", accessibilityDescription: nil)
+        button.setAccessibilityLabel(title)
+        button.cell?.setAccessibilityLabel(title)
+        button.invalidateIntrinsicContentSize()
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? {
+        nsView.fittingSize
     }
 }

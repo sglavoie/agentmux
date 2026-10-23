@@ -10,7 +10,20 @@ import UserNotifications
 /// (`DaemonConnection`, `AMXLookup`, `SnoozeController`, `ConfigWatcher`),
 /// and the rest is grouped by surface in `AppDelegate+….swift` extensions.
 final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, WorkspaceDelegate {
-    let reviewFeedbackHistory = WorkspaceFeedbackHistory()
+    lazy var reviewFeedbackHistory: WorkspaceFeedbackHistory = {
+        let history = WorkspaceFeedbackHistory(defaults: Self.isRunningTests ? nil : .standard)
+        history.canOpen = { [weak self] destination in
+            guard let self, self.command != nil else { return false }
+            switch destination {
+            case .conversation: return self.historyWindow?.model.acting != true
+            case .checkout: return self.changesWindow?.model.landing != true
+            case .runs: return self.runsWindow?.model.acting != true
+            case .plan: return self.runsWindow?.plan.launching != true && self.runsWindow?.plan.checking != true
+            }
+        }
+        history.open = { [weak self] destination in self?.inspectSavedFeedback(destination) }
+        return history
+    }()
     nonisolated static let logger = Logger(subsystem: "io.github.sglavoie.agentmux", category: "app")
 
     var statusItem: StatusItemController?
@@ -19,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var aslPanel: ASLQuestionPanelController?
     var promptPanel: PromptAnswerPanelController?
     var historyWindow: WorkspaceHistoryWindow?
+    var resumePanel: WorkspaceResumePanel?
     var conversationSearchSequence = 0
     var activityWindow: WorkspaceActivityWindow?
     var runsWindow: WorkspaceRunsWindow?

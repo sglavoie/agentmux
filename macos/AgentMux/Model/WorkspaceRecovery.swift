@@ -201,9 +201,9 @@ enum WorkspaceSessionStatus: Equatable {
 
     /// The pane's title and message for a session that is not running. Nil
     /// for one that is, or that could not be asked about. With `resumable`,
-    /// the pane offers Past Sessions on its conversation and says so.
+    /// the pane offers native recovery of its recorded conversation.
     func notice(for name: String, resumable: Bool = false) -> (title: String, message: String)? {
-        let resume = "Past Sessions opens on its conversation: press c there to resume it."
+        let resume = "Resume Conversation shows its recorded profile and destination before you resume it."
         switch self {
         case .live, .unknown:
             return nil

@@ -41,6 +41,9 @@ Kitty installed, setup recommends tmux; keep remains the default answer.`,
 	RunE: runConfigSetup,
 }
 
+// SetupCommand exposes the existing guided setup to the embedded workspace view.
+func SetupCommand() *cobra.Command { return configSetupCmd }
+
 var setupLookPath = exec.LookPath
 var setupBackendStatus = func(cfg *config.Config) cli.BackendStatus {
 	cli.ConfigureTmux(cfg)

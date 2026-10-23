@@ -56,7 +56,10 @@ final class WorkspaceRunPlanModel: ObservableObject {
         didSet {
             guard let feedback else { return }
             let saved = (feedback.target, project, profile, harness, reviewHarness, commitMode)
-            feedbackHistory.record(feedback, available: { [weak self] in
+            let destination: WorkspaceFeedbackDestination = feedback.recovery == .runs
+                ? .runs(rowID: nil, runID: nil)
+                : .plan(.init(plan: saved.0, project: saved.1, profile: saved.2, harness: saved.3, reviewHarness: saved.4, commitMode: saved.5))
+            feedbackHistory.record(feedback, destination: destination, available: { [weak self] in
                 guard let self else { return false }
                 return !self.launching && !self.checking
             }) { [weak self] in

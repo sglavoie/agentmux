@@ -163,14 +163,15 @@ the tab titles use and a count of waiting sessions beside each project.
   The agents were running in tmux all along and are simply shown again. A
   session that another terminal attached to meanwhile is shown **Detached**
   rather than taken back.
-- An agent that is no longer running is never started again by the app. The
+- An agent that is no longer running is never restarted automatically. The
   pane says what happened instead: **Agent exited** when the agent ended on
   its own (with its exit status), **Agent lost** when the terminal it ran in
   is gone, as after a reboot. When the agent's conversation is known the pane
-  offers **Resume from Past Sessions**: Past Sessions opens with that
-  conversation selected, and `c` continues it (`f` forks it) in a new session
-  shown in the workspace. Otherwise starting or resuming is done from the
-  Dashboard.
+  offers **Resume Conversation…**. A native panel reads that exact conversation
+  and shows its profile, checkout, and Workspace (tmux) destination. **Resume
+  Conversation** rechecks the source before opening it; a conversation already
+  running is focused. Changed source details require review and refresh. Otherwise
+  starting or resuming is done from the Dashboard.
 - A click on a **Kitty** session brings Kitty forward on its window, as the
   menu does. Its row is marked `Kitty`. Moving through the sidebar with the
   arrow keys only selects; it never switches apps.
@@ -430,8 +431,12 @@ app, CLI, and plan destinations; **Follow CLI** aligns the app with CLI configur
 
 An empty workspace offers **Launch Project…**, **Conversation History**, and
 **Open Dashboard**, and names the effective launch destination. With no configured
-projects it explains how to add a profile and project using `amx config edit`.
-Pending configuration reads, failed reads, and daemon recovery remain distinct.
+projects it offers **Set Up First Project…**, running the existing `amx config
+setup` guide in an embedded terminal. The guide asks about the profile, directory,
+hooks, and backend. Its summary and any errors stay visible until you press Return;
+then the native workspace refreshes projects and the effective launch destination.
+Setup never launches an agent. Pending configuration reads, failed reads, and
+daemon recovery remain distinct from an empty configuration.
 
 ### Waiting
 
@@ -514,6 +519,10 @@ scroll positions per checkout/base/file. Refresh follows matching nearby source
 text where possible, falling back to a nearby source line. File labels use the
 shortest unique trailing path; tooltips and accessibility retain the full path.
 Switching files cancels obsolete diff reads; diff parsing runs off the UI thread.
+Large diffs initially lay out just the visible region. Restoring a deep reading
+position, changing wrapping, or resizing a restored large diff prepares its full
+layout off the UI thread. **Restoring reading position…** labels that work; newer
+selections discard obsolete layouts.
 
 The **…** menu contains remembered **Wrap lines** and text-size preferences, plus
 **Copy Unified Diff** and **Copy Changed Source Lines** (added and context lines
@@ -612,12 +621,18 @@ History, Changes, Activity, and Runs restore their saved window position and siz
 When a display is disconnected, the restored window is fitted onto an available
 display; a window without saved placement opens centered.
 
-The feedback-history button retains the newest 30 native action outcomes for this
-app session, shared by History, Changes, Runs, and the plan form. Notices keep their
+The feedback-history button retains up to 30 native action outcomes, shared by
+History, Changes, Runs, and the plan form. Unresolved errors and warnings survive
+app restarts until dismissed or displaced by newer failures at the limit. Repeated
+identical outcomes are grouped with their count and latest timestamp; routine
+successes cannot displace unresolved failures. Notices keep their
 original target, time, message, and recovery action and can be copied or dismissed.
 Recovery opens the original conversation/checkout, checks original plan options, or
 checks the exact pending receipt. It never repeats a resume, fork, landing, launch,
-or run control, and an old receipt cannot retry a newer operation.
+or run control, and an old receipt cannot retry a newer operation. After a restart,
+receipt notices open fresh state for the original run instead of retrying its old
+receipt. Only messages and read destinations are saved, never authorization tokens
+or executable actions.
 
 ### Panes and restoration
 
@@ -824,6 +839,12 @@ history. History searches saved prose using words and quoted phrases, not
 terminal regular expressions. An unavailable query read is explained. Closing
 History returns focus to the original visible terminal. Utility views keep
 their own terminal Find; they have no conversation to search.
+
+Expanded Waiting cards put the question directly below the session title and
+Answer controls, with a compact refresh icon beside Hide context. Read time and
+retained-read failures appear below the question; failures keep an explicit Retry
+button. The collapsed card keeps its reason text, and accessible labels retain
+session context. Lighter card backgrounds keep the prose prominent.
 
 Waiting keeps category and Oldest first on one row. Next Waiting stays available;
 Update List appears only when changes are held while you read. The keyboard hint

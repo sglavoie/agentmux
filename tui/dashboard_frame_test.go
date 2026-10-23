@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -18,6 +19,10 @@ func TestRootFrameIsTheOnlyComposition(t *testing.T) {
 	t.Parallel()
 
 	responsiveCases(t, func(t *testing.T, m Model) {
+		// These are equivalent renders of one instant. A real clock can
+		// cross an age/animation boundary between the three calls under -race.
+		now := modelNow(m)
+		m.now = func() time.Time { return now }
 		frame := renderRootFrame(m)
 		if got := m.render(); got != frame.text {
 			t.Fatal("the scenario harness composes a different screen from renderRootFrame")

@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-23",
+  "fixture_only": true,
+  "capture_method": "SCScreenshotManager, current test process windows only",
+  "test_command": "macos/scripts/test-app.sh",
+  "tests_executed": 983,
+  "failures": 0,
+  "images": [
+    {
+      "file": "resume-light.png",
+      "fixture_output": "recovery-native-false.png",
+      "sha256": "26e98fe29af4d8f18df0c99a3ad12e03fe1542a7661fbab76618bbacb5f4fdd6"
+    },
+    {
+      "file": "resume-dark.png",
+      "fixture_output": "recovery-native-true.png",
+      "sha256": "087bfe28bb82b3589d843250dc1191ed1867d4978282cd7a8a0537f185679624"
+    },
+    {
+      "file": "waiting-light.png",
+      "fixture_output": "seams-waiting-loaded-false.png",
+      "sha256": "f06d34b504bd49095509b0d82bb7d5158e1e623e776ac0c2555e084ab705d4a7"
+    },
+    {
+      "file": "waiting-dark.png",
+      "fixture_output": "seams-waiting-loaded-true.png",
+      "sha256": "84e57924484311949d6d38abac1e0f4676e4d8439e1af65fa485cc6dfbddd2e0"
+    },
+    {
+      "file": "waiting-failed-dark.png",
+      "fixture_output": "seams-waiting-failed-true.png",
+      "sha256": "0c20894f00baf89a3555bf8be15ffaaeb3f54646a2a357fb317afdc7da2709e7"
+    },
+    {
+      "file": "feedback-light.png",
+      "fixture_output": "recovery-feedback-false.png",
+      "sha256": "90bdb04f618244f917d285b3826c03184746be44b807d7f614c30337e96fa45b"
+    },
+    {
+      "file": "feedback-dark.png",
+      "fixture_output": "recovery-feedback-true.png",
+      "sha256": "0980ddd381f6ad45e14e32c971880716f6f32742d222237e397bbce6c815d5c7"
+    }
+  ],
+  "sources": {
+    "macos/AgentMuxTests/WorkspaceWorkflowPreviewTests.swift": "e41cf36958dd68fa29f5d5d58cd34d8d024dcf053d7290f1b5cfe20f86ad3b77",
+    "macos/AgentMux/UI/WorkspaceResumePanel.swift": "49db54849ce6528572ed613750d6aae577e18d6f29c6e240f4748daec7a40bb9",
+    "macos/AgentMux/UI/WorkspaceInspectorView.swift": "2c79820275a06ec7437bbd858a14959060d738469374cb5fc703d08ce93bd8ea",
+    "macos/AgentMux/UI/WorkspaceTranscriptText.swift": "01d13ac3b31c744a9fc3cac23602dd8b54c7bca13ea23f76ca8ed7bdbc04df19",
+    "macos/AgentMux/UI/WorkspacePresentation.swift": "1dfbac15c16f8a3812eda7b7e5242dce295134fc6c4cf0ccaf493b127a41bb44",
+    "macos/AgentMux/Model/WorkspaceFeedback.swift": "a24f0ed3d305504f479c62fc0295ebd88909486cfd2b9808ed5f5325803d077c"
+  }
+}

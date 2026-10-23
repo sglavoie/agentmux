@@ -430,7 +430,8 @@ extension WorkspaceWindowController {
         case let .view(id)? where views.view(id) != nil:
             showView(id, focus: true)
         default:
-            showView(WorkspaceUtilityView.dashboard.id, focus: true)
+            if view.kind == .setup { updateContent(focus: false) }
+            else { showView(WorkspaceUtilityView.dashboard.id, focus: true) }
         }
     }
 

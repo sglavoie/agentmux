@@ -87,6 +87,11 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     var conversationSearchRequests = 0
     func workspaceSearchConversation() { conversationSearchRequests += 1 }
     var performedCommands: [WorkspaceCommand] = []
+    var resumeRequests: [ConversationIdentity] = []
+    func workspaceResumeConversation(_ identity: ConversationIdentity) { resumeRequests.append(identity) }
+    var workspaceOffersSetup = false
+    var setupFinishes = 0
+    func workspaceSetupFinished() { setupFinishes += 1 }
     func workspaceLaunchProjects(from view: NSView) { launchMenuRequests += 1 }
     func workspacePerform(_ command: WorkspaceCommand) { performedCommands.append(command) }
     private(set) var made: [String] = []

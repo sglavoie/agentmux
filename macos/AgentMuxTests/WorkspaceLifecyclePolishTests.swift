@@ -130,18 +130,21 @@ final class WorkspaceLifecyclePolishTests: XCTestCase {
             guard visited.insert(ObjectIdentifier(object)).inserted else { return [] }
             let children = (object as? NSAccessibilityProtocol)?.accessibilityChildren() as? [NSObject]
                 ?? object.accessibilityAttributeValue(.children) as? [NSObject] ?? []
-            return [object] + children.flatMap(elements)
+            // NSHostingView may keep native representable children in its
+            // view tree while its virtual AX tree is served out-of-process.
+            let native = (object as? NSView)?.subviews ?? []
+            return [object] + (children + native).flatMap(elements)
         }
         let tree = elements(host)
         let copy = tree.first {
-            ($0.accessibilityAttributeValue(.role) as? String) == NSAccessibility.Role.button.rawValue &&
-            ($0.accessibilityAttributeValue(.title) as? String ?? $0.accessibilityAttributeValue(.description) as? String) == "Copy code"
+            guard let element = $0 as? NSAccessibilityProtocol else { return false }
+            return element.accessibilityRole() == .button && element.accessibilityLabel() == "Copy code"
         }
         if copy == nil && !AXIsProcessTrusted() {
             throw XCTSkip("SwiftUI virtual elements are not exposed to this hosted lookup, and system Accessibility access is unavailable. Complete the recorded VoiceOver workflow; this is not an accessibility pass.")
         }
         let button = try XCTUnwrap(copy, "Copy code must be reachable in the accessibility tree")
-        button.accessibilityPerformAction(.press)
+        _ = (button as? NSAccessibilityProtocol)?.accessibilityPerformPress()
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(board.string(forType: .string), code)
     }

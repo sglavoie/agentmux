@@ -41,6 +41,13 @@ struct WorkspaceDiffView: NSViewRepresentable {
         return container
     }
 
+    static func dismantleNSView(_ container: WorkspaceDiffContainer, coordinator: Coordinator) {
+        coordinator.cancelPreparation()
+        coordinator.updating = true
+        container.onResize = nil
+        container.onReady = nil
+    }
+
     func updateNSView(_ container: WorkspaceDiffContainer, context: Context) {
         update(container, state: context.coordinator)
     }
@@ -54,48 +61,124 @@ struct WorkspaceDiffView: NSViewRepresentable {
             return
         }
         container.onReady = nil
+        container.onResize = { [weak container, weak state] in
+            guard let container, let state else { return }
+            update(container, state: state)
+        }
         let scroll = container.scroll
-        guard let text = scroll.documentView as? WorkspaceDiffTextView else { return }
+        guard var text = scroll.documentView as? WorkspaceDiffTextView else { return }
         text.onCopy = onCopy
         state.onVisibleHunk = onVisibleHunk
-        guard !loading else { return }
+        guard !loading else {
+            state.cancelPreparation()
+            container.showPreparation(false)
+            return
+        }
         let contentChanged = state.identity != identity || state.diff != diff || state.fontSize != fontSize || state.compactMetadata != compactMetadata
-        if contentChanged || state.wrapLines != wrapLines {
+        let resized = wrapLines && state.layoutWidth != container.bounds.width
+        let request = Coordinator.LayoutRequest(identity: identity, diff: diff, font: fontSize,
+            wrap: wrapLines, compact: compactMetadata, width: container.bounds.width)
+        if state.preparing != nil && state.preparing != request {
+            state.cancelPreparation()
+            container.showPreparation(false)
+        }
+        if contentChanged || state.wrapLines != wrapLines || resized {
+            // Capture the actual displayed document, never a pending replacement.
             if let previous = state.identity {
                 state.positions[previous] = scroll.contentView.bounds.origin
                 state.anchors[previous] = text.readingAnchor()
             }
+            let position = state.preparedRequest == request ? state.preparedPosition : state.positions[identity] ?? reviewState?.position(identity) ?? .zero
+            let anchor = state.preparedRequest == request ? state.preparedAnchor : state.anchors[identity]
+            let initialViewportOnly = diff.lines.count > 1000 && anchor == nil && position == .zero
+            if diff.lines.count > 1000 && !initialViewportOnly && state.preparedRequest != request {
+                container.showPreparation(true)
+                guard state.preparing != request else { return }
+                state.preparing = request
+                state.preparedPosition = position
+                state.preparedAnchor = anchor
+                let rendered = Self.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
+                let digits = max(3, String(diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
+                let gutter = CGFloat(digits * 2 + 3) * fontSize * 0.61
+                let width = wrapLines ? max(1, container.bounds.width - gutter - text.textContainerInset.width * 2) : CGFloat.greatestFiniteMagnitude
+                let ticket = UUID()
+                state.preparationID = ticket
+                let work = DispatchWorkItem { [weak state, weak container] in
+                    let prepared = WorkspacePreparedDiff(text: rendered.text, width: width)
+                    DispatchQueue.main.async {
+                        guard let state, let container, state.preparing == request, state.preparationID == ticket else { return }
+                        state.prepared = prepared
+                        state.preparedRequest = request
+                        state.preparing = nil
+                        state.preparation = nil
+                        container.onResize?()
+                    }
+                }
+                state.preparation = work
+                Coordinator.layoutQueue.async(execute: work)
+                return
+            }
             state.updating = true
             defer { state.updating = false }
-            let position = state.positions[identity] ?? reviewState?.position(identity) ?? .zero
-            let anchor = state.anchors[identity]
+            container.showPreparation(false)
+            let retainedSelection = state.identity == identity && state.diff == diff && state.compactMetadata == compactMetadata
+                ? text.selectedRanges : nil
+            state.layoutWidth = container.bounds.width
             state.identity = identity
             state.diff = diff
             state.fontSize = fontSize
             state.wrapLines = wrapLines
             state.compactMetadata = compactMetadata
             state.hasReportedHunk = false
-            let initialViewportOnly = diff.lines.count > 1000 && anchor == nil && position == .zero
-            text.layoutManager?.allowsNonContiguousLayout = initialViewportOnly
+            let prepared = state.preparedRequest == request ? state.prepared : nil
             let digits = max(3, String(diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
             container.gutter.digits = digits
             container.gutterWidth = CGFloat(digits * 2 + 3) * fontSize * 0.61
             container.needsLayout = true
             container.layoutSubtreeIfNeeded()
             scroll.hasHorizontalScroller = !wrapLines
-            text.isHorizontallyResizable = !wrapLines
-            text.textContainer?.widthTracksTextView = wrapLines
-            text.textContainer?.containerSize = NSSize(width: wrapLines ? scroll.contentSize.width : CGFloat.greatestFiniteMagnitude,
-                                                       height: CGFloat.greatestFiniteMagnitude)
-            if wrapLines { text.setFrameSize(NSSize(width: scroll.contentSize.width, height: text.frame.height)) }
+            if let prepared {
+                let hadFocus = text.window?.firstResponder === text
+                let replacement = WorkspaceDiffTextView(frame: NSRect(x: 0, y: 0, width: scroll.contentSize.width,
+                    height: max(scroll.contentSize.height, prepared.height + 20)), textContainer: prepared.container)
+                replacement.isEditable = false
+                replacement.isSelectable = true
+                replacement.isRichText = true
+                replacement.isVerticallyResizable = true
+                replacement.isHorizontallyResizable = !wrapLines
+                replacement.autoresizingMask = [.width]
+                replacement.minSize = .zero
+                replacement.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+                replacement.textContainerInset = NSSize(width: 8, height: 10)
+                // Geometry was already computed off-main. Tracking the view
+                // would invalidate it on attachment; onResize prepares a fresh
+                // graph when the viewport width changes instead.
+                prepared.container.widthTracksTextView = false
+                replacement.setAccessibilityLabel("Unified diff; copy selects source text without line numbers or diff markers")
+                replacement.onCopy = onCopy
+                if let retainedSelection { replacement.selectedRanges = retainedSelection }
+                scroll.documentView = replacement
+                text = replacement
+                state.displayedLayout = prepared
+                if hadFocus { text.window?.makeFirstResponder(text) }
+            } else {
+                text.layoutManager?.allowsNonContiguousLayout = initialViewportOnly
+                text.isHorizontallyResizable = !wrapLines
+                text.textContainer?.widthTracksTextView = wrapLines
+                text.textContainer?.containerSize = NSSize(width: wrapLines ? scroll.contentSize.width : CGFloat.greatestFiniteMagnitude,
+                                                           height: CGFloat.greatestFiniteMagnitude)
+                if wrapLines { text.setFrameSize(NSSize(width: scroll.contentSize.width, height: text.frame.height)) }
+            }
             scroll.tile()
-            if contentChanged {
+            if contentChanged || prepared != nil {
                 let rendered = Self.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
                 state.hunkRanges = rendered.hunks
                 text.diff = diff
                 text.lineRanges = rendered.lines
-                text.textStorage?.setAttributedString(rendered.text)
+                if prepared == nil { text.textStorage?.setAttributedString(rendered.text) }
             }
+            state.prepared = nil
+            state.preparedRequest = nil
             // New large files only need the first viewport. Restoring a reading
             // position needs final geometry: TextKit's estimated document size
             // otherwise clamps or shifts the saved point during layout.
@@ -103,7 +186,9 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 if initialViewportOnly {
                     text.layoutManager?.ensureLayout(forBoundingRect: scroll.documentVisibleRect, in: tc)
                 } else if let layout = text.layoutManager {
-                    layout.ensureLayout(forCharacterRange: NSRange(location: 0, length: text.textStorage?.length ?? 0))
+                    if prepared == nil {
+                        layout.ensureLayout(forCharacterRange: NSRange(location: 0, length: text.textStorage?.length ?? 0))
+                    }
                     // NSTextView can still have its pre-wrap height here.
                     // Resize before scrolling so NSClipView does not clamp a
                     // deep saved position to that obsolete document boundary.
@@ -214,7 +299,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
             scroll.contentView.postsBoundsChangedNotifications = true
             observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification,
                 object: scroll.contentView, queue: .main) { [weak self, weak scroll] _ in
-                guard let self, !self.updating, let scroll, let id = self.identity else { return }
+                guard let self, !self.updating, self.preparing == nil, let scroll, scroll.window != nil, let id = self.identity else { return }
                 let point = scroll.contentView.bounds.origin
                 self.positions[id] = point
                 self.store?.savePosition(point, id: id)
@@ -223,6 +308,30 @@ struct WorkspaceDiffView: NSViewRepresentable {
             }
         }
         deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
+        struct LayoutRequest: Equatable {
+            let identity: String
+            let diff: WorkspaceDiff
+            let font: CGFloat
+            let wrap: Bool
+            let compact: Bool
+            let width: CGFloat
+        }
+        static let layoutQueue = DispatchQueue(label: "io.github.sglavoie.agentmux.diff-layout", qos: .userInitiated)
+        var preparing: LayoutRequest?
+        var preparedRequest: LayoutRequest?
+        var preparation: DispatchWorkItem?
+        var preparationID = UUID()
+        var prepared: WorkspacePreparedDiff?
+        var preparedPosition = NSPoint.zero
+        var preparedAnchor: WorkspaceDiffTextView.Anchor?
+        // NSTextStorage must outlive the layout manager installed in the view.
+        var displayedLayout: WorkspacePreparedDiff?
+        var layoutWidth: CGFloat = 0
+        func cancelPreparation() {
+            preparationID = UUID()
+            preparation?.cancel()
+            preparation = nil; preparing = nil; prepared = nil; preparedRequest = nil
+        }
         var updating = false
         var identity: String?
         var diff: WorkspaceDiff?
@@ -285,8 +394,13 @@ final class WorkspaceDiffTextView: NSTextView {
                 abs((diff.lines[$0].new ?? diff.lines[$0].old ?? 0) - (anchor.line.new ?? anchor.line.old ?? 0))
                 < abs((diff.lines[$1].new ?? diff.lines[$1].old ?? 0) - (anchor.line.new ?? anchor.line.old ?? 0))
             }
-        guard let index, let rect = lineRect(index) else { return nil }
-        return max(0, rect.minY + anchor.offset)
+        guard let index, let rect = lineRect(index), let layout = layoutManager, let container = textContainer else { return nil }
+        // A wrapped source line can occupy several visual lines. When it
+        // becomes shorter, an old pixel offset must not spill into the next
+        // source line. Keep the offset within this source line's new extent.
+        let glyphs = layout.glyphRange(forCharacterRange: lineRanges[index], actualCharacterRange: nil)
+        let height = layout.boundingRect(forGlyphRange: glyphs, in: container).height
+        return max(0, rect.minY + min(max(0, anchor.offset), max(0, height - 1)))
     }
 
     /// Keeps partial selections and Unicode intact, removing only actual diff markers.
@@ -334,12 +448,25 @@ final class WorkspaceDiffContainer: NSView {
     let gutter = WorkspaceDiffGutter()
     var gutterWidth: CGFloat = 66
     var onReady: (() -> Void)?
+    var onResize: (() -> Void)?
+    private var lastWidth: CGFloat = 0
+    let preparationLabel = NSTextField(labelWithString: "Restoring reading position…")
+    private(set) var preparing = false
+    func showPreparation(_ value: Bool) {
+        preparing = value
+        preparationLabel.isHidden = !value
+        scroll.isHidden = value
+        gutter.isHidden = value
+    }
     override var isFlipped: Bool { true }
     override init(frame: NSRect) {
         super.init(frame: frame)
         gutter.scrollView = scroll
         addSubview(gutter)
         addSubview(scroll)
+        preparationLabel.textColor = .secondaryLabelColor
+        preparationLabel.isHidden = true
+        addSubview(preparationLabel)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func layout() {
@@ -347,6 +474,11 @@ final class WorkspaceDiffContainer: NSView {
         gutter.frame = NSRect(x: 0, y: 0, width: gutterWidth, height: bounds.height)
         scroll.frame = NSRect(x: gutterWidth, y: 0, width: max(0, bounds.width - gutterWidth), height: bounds.height)
         gutter.needsDisplay = true
+        preparationLabel.frame = NSRect(x: 12, y: 12, width: max(0, bounds.width - 24), height: 24)
+        if bounds.width != lastWidth {
+            lastWidth = bounds.width
+            DispatchQueue.main.async { [weak self] in self?.onResize?() }
+        }
         if bounds.width > 0, bounds.height > 0, onReady != nil {
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.bounds.width > 0, self.bounds.height > 0,

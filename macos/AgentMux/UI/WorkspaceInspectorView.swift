@@ -624,9 +624,9 @@ final class WorkspaceWaitingRowView: NSBox {
         didSet { syncFill() }
     }
 
-    static let restingFill = NSColor.quaternaryLabelColor
-    static let hoveredFill = NSColor.labelColor.withAlphaComponent(0.16)
-    static let pressedFill = NSColor.labelColor.withAlphaComponent(0.24)
+    static let restingFill = NSColor.labelColor.withAlphaComponent(0.035)
+    static let hoveredFill = NSColor.labelColor.withAlphaComponent(0.07)
+    static let pressedFill = NSColor.labelColor.withAlphaComponent(0.12)
 
     private func syncFill() {
         fillColor = isPressed ? Self.pressedFill : isHovered ? Self.hoveredFill : Self.restingFill
@@ -705,11 +705,16 @@ final class WorkspaceWaitingRowView: NSBox {
         contextStatus.maximumNumberOfLines = 3
         contextStatus.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         contextHeader.addArrangedSubview(contextStatus)
-        contextHeader.addArrangedSubview(refreshContextButton)
+        actions.addArrangedSubview(refreshContextButton)
+        refreshContextButton.isBordered = false
+        refreshContextButton.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Refresh context")
+        refreshContextButton.imagePosition = .imageOnly
+        refreshContextButton.toolTip = "Refresh context"
+        refreshContextButton.isHidden = true
         contextHeader.alignment = .top
         contextHeader.spacing = 4
         contextHeader.isHidden = true
-        let column = NSStackView(views: [stack, actions, contextHeader, contextScroll])
+        let column = NSStackView(views: [stack, actions, contextScroll, contextHeader])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 4
@@ -752,6 +757,8 @@ final class WorkspaceWaitingRowView: NSBox {
 
     func showContext(_ reading: WorkspaceWaitingContext.Reading?) {
         contextHeader.isHidden = reading == nil
+        refreshContextButton.isHidden = reading == nil
+        detailLabel.isHidden = reading != nil
         contextScroll.isHidden = reading == nil
         contextButton.title = reading == nil ? "Context" : "Hide context"
         contextButton.setAccessibilityLabel("\(contextButton.title) for \(row.title)")
@@ -773,7 +780,11 @@ final class WorkspaceWaitingRowView: NSBox {
         contextStatus.toolTip = status + (reading.refreshedAt.map { "\n" + $0.formatted(.dateTime.year().month().day().hour().minute().second().timeZone()) } ?? "")
         contextStatus.textColor = reading.problem == nil ? .secondaryLabelColor : .systemOrange
         refreshContextButton.title = reading.loading ? "Reading…" : reading.problem == nil ? "Refresh" : "Retry"
+        refreshContextButton.imagePosition = reading.problem == nil ? .imageOnly : .imageLeading
         refreshContextButton.isEnabled = !reading.loading
+        refreshContextButton.toolTip = reading.loading ? "Reading context…" : reading.problem == nil ? "Refresh context" : "Retry context read"
+        refreshContextButton.setAccessibilityLabel("\(refreshContextButton.toolTip!) for \(row.title)")
+        refreshContextButton.cell?.setAccessibilityLabel("\(refreshContextButton.toolTip!) for \(row.title)")
         guard reading.content != shownReading?.content else { return }
         let text = reading.content?.reveal() ?? ""
         let origin = contextScroll.contentView.bounds.origin
@@ -824,7 +835,8 @@ final class WorkspaceWaitingRowView: NSBox {
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hit = super.hitTest(point) else { return nil }
         if let answerButton, hit.isDescendant(of: answerButton) { return hit }
-        if hit.isDescendant(of: contextButton) || hit.isDescendant(of: contextScroll) { return hit }
+        if hit.isDescendant(of: contextButton) || hit.isDescendant(of: refreshContextButton)
+            || hit.isDescendant(of: contextHeader) || hit.isDescendant(of: contextScroll) { return hit }
         return self
     }
 
@@ -860,7 +872,7 @@ final class WorkspaceWaitingRowView: NSBox {
     override func accessibilityChildren() -> [Any]? {
         var children: [NSView] = answerButton.map { [$0] } ?? []
         children.append(contextButton)
-        if !contextScroll.isHidden { children.append(contentsOf: [contextHeader, contextScroll]) }
+        if !contextScroll.isHidden { children.append(contentsOf: [refreshContextButton, contextScroll, contextHeader]) }
         return NSAccessibility.unignoredChildren(from: children)
     }
 }

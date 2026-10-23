@@ -142,8 +142,11 @@ live snapshot lists the session and `amx attach --json` reports no terminal
 attached to it. Restoring never takes a session from another terminal or
 launches an agent: one that stopped is shown as
 exited or lost, and the way on is the Dashboard or, when its conversation is
-known, Past Sessions opened on it (`amx workspace-view history`), where the
-operator presses `c`.
+known, a native Resume Conversation panel (`Model/WorkspaceResume.swift`). It
+reads and rechecks the exact recorded source, shows profile and destination, and
+uses History's focus/resume path only after explicit submission. The first-project
+empty state opens `amx workspace-view setup`, which scrubs session identity before
+running the existing guided config setup and retains its summary until Return.
 
 A session's terminal only views a pane the private tmux server holds, so its
 scrollback is the server's (`Ghostty.Scrollback.server`): the View and Edit

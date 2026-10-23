@@ -87,9 +87,12 @@ protocol WorkspaceDelegate: AnyObject {
     var workspaceCommands: [WorkspaceSwitcher.Entry] { get }
     var workspaceLaunchDescription: String { get }
     var workspaceProjectGuidance: String { get }
+    var workspaceOffersSetup: Bool { get }
+    func workspaceSetupFinished()
     func workspaceLaunchProjects(from view: NSView)
     func workspacePerform(_ command: WorkspaceCommand)
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void)
+    func workspaceResumeConversation(_ identity: ConversationIdentity)
     func workspaceSearchConversation()
     /// Opens Settings on the amx binary, from an error that says amx was not
     /// found.
@@ -103,8 +106,11 @@ extension WorkspaceDelegate {
     var workspaceCommands: [WorkspaceSwitcher.Entry] { [] }
     var workspaceLaunchDescription: String { "Launch in Workspace (tmux)" }
     var workspaceProjectGuidance: String { "Choose a configured project to start, or return to a past conversation." }
+    var workspaceOffersSetup: Bool { false }
+    func workspaceSetupFinished() {}
     func workspaceLaunchProjects(from view: NSView) {}
     func workspacePerform(_ command: WorkspaceCommand) {}
+    func workspaceResumeConversation(_ identity: ConversationIdentity) {}
     func workspaceSearchConversation() {}
     func workspaceOpenAMXSettings() {}
     var workspaceDaemonIsDown: Bool { false }

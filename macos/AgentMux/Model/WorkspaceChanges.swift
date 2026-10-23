@@ -84,7 +84,7 @@ final class WorkspaceChangesModel: ObservableObject {
         didSet {
             guard let landFeedback else { return }
             let reveal = onFeedbackRecovery
-            feedbackHistory.record(landFeedback, available: { [weak self] in reveal != nil || (self != nil && self?.landing == false) }) { [weak self] in
+            feedbackHistory.record(landFeedback, destination: .checkout(landFeedback.target), available: { [weak self] in reveal != nil || (self != nil && self?.landing == false) }) { [weak self] in
                 if let reveal { reveal(landFeedback.target) }
                 else { self?.open(directory: landFeedback.target) }
             }

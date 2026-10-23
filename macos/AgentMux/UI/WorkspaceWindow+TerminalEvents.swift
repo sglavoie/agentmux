@@ -358,6 +358,7 @@ extension WorkspaceWindowController {
             updateContent(focus: false)
         } else {
             retire(view)
+            if view.kind == .setup { delegate?.workspaceSetupFinished() }
         }
     }
 

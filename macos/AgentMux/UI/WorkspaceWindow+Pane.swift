@@ -311,7 +311,7 @@ extension WorkspaceWindowController {
         reportShowing()
     }
 
-    static let resumeTitle = "Resume from Past Sessions"
+    static let resumeTitle = "Resume Conversation…"
 
     static let startDaemonTitle = WorkspaceSidebar.DaemonAction.start.title
 
@@ -347,12 +347,13 @@ extension WorkspaceWindowController {
             if state.rows.isEmpty {
                 placeholder.show(title: "No live sessions",
                     message: [delegate?.workspaceProjectGuidance ?? "", delegate?.workspaceLaunchDescription ?? ""].joined(separator: "\n\n"),
-                    button: "Launch Project…", secondary: [
+                    button: delegate?.workspaceOffersSetup == true ? "Set Up First Project…" : "Launch Project…", secondary: [
                         ("Conversation History", { [weak self] in self?.delegate?.workspacePerform(.history) }),
                         ("Open Dashboard", { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }),
                     ]) { [weak self] in
                         guard let self else { return }
-                        self.delegate?.workspaceLaunchProjects(from: self.placeholder.button)
+                        if self.delegate?.workspaceOffersSetup == true { self.open(.setup) }
+                        else { self.delegate?.workspaceLaunchProjects(from: self.placeholder.button) }
                     }
                 break
             }
@@ -422,10 +423,10 @@ extension WorkspaceWindowController {
                 }
                 break
             }
-            // Past Sessions on that conversation, where resuming is a key the
-            // operator presses: the workspace still starts no agent.
+            // The native recovery panel reads the exact conversation and shows
+            // its profile and destination before the operator resumes it.
             placeholder.show(title: notice.0, message: notice.1, button: Self.resumeTitle) { [weak self] in
-                self?.open(.history(conversation))
+                self?.delegate?.workspaceResumeConversation(conversation)
             }
         case let .detached(id):
             placeholder.show(

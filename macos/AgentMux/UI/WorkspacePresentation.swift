@@ -378,6 +378,7 @@ struct WorkspaceFeedbackHistoryView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(entry.feedback.target).fontWeight(.semibold)
                         Text(entry.occurred.formatted(.dateTime.month().day().hour().minute().second().timeZone())).font(.caption).foregroundStyle(.secondary)
+                        if entry.occurrences > 1 { Text("Repeated \(entry.occurrences) times · latest occurrence shown").font(.caption).foregroundStyle(.secondary) }
                         Text(entry.feedback.message)
                         if !entry.feedback.nextStep.isEmpty { Text(entry.feedback.nextStep).foregroundStyle(.secondary) }
                         HStack {

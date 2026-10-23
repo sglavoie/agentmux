@@ -456,7 +456,7 @@ final class WorkspaceHistoryModel: ObservableObject {
                 recovery: problem == nil ? nil : .refresh)
             self.actionFeedback = feedback
             let identity = selected.conversation.identity
-            self.feedbackHistory.record(feedback, available: { [weak self] in self != nil && self?.acting == false }) { [weak self] in
+            self.feedbackHistory.record(feedback, destination: .conversation(identity.encoded), available: { [weak self] in self != nil && self?.acting == false }) { [weak self] in
                 guard let self else { return }
                 self.currentConversation = identity
                 self.scope = .conversation

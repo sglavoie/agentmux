@@ -17,7 +17,13 @@ final class WorkspaceDailyPolishTests: XCTestCase {
     }
 
     func testProjectGuidanceDistinguishesSetupLoadingFailureAndReady() {
-        XCTAssertTrue(ProjectCatalog.guidance(.init(value: []), unavailable: nil).contains("amx config edit"))
+        XCTAssertTrue(ProjectCatalog.guidance(.init(value: []), unavailable: nil).contains("Set Up First Project"))
+        XCTAssertTrue(ProjectCatalog.offersSetup(.init(value: []), unavailable: nil))
+        XCTAssertFalse(ProjectCatalog.offersSetup(.init(), unavailable: nil))
+        XCTAssertFalse(ProjectCatalog.offersSetup(.init(value: [], loading: true), unavailable: nil))
+        XCTAssertFalse(ProjectCatalog.offersSetup(.init(value: [], error: "bad config"), unavailable: nil))
+        XCTAssertFalse(ProjectCatalog.offersSetup(.init(value: []), unavailable: "amx unavailable"))
+        XCTAssertFalse(ProjectCatalog.offersSetup(.init(value: [.init(profile: "work", title: "API")]), unavailable: nil))
         XCTAssertEqual(ProjectCatalog.guidance(.init(), unavailable: nil), "Loading configured projects…")
         XCTAssertTrue(ProjectCatalog.guidance(.init(error: "bad config"), unavailable: nil).contains("bad config"))
         XCTAssertEqual(ProjectCatalog.guidance(.init(value: []), unavailable: "amx unavailable"), "amx unavailable")

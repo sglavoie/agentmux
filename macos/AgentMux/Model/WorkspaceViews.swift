@@ -62,7 +62,7 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 /// program ends, and then the pane goes back to where it was.
 struct WorkspaceUtilityView: Equatable, Codable {
     enum Kind: String, Equatable, Codable {
-        case dashboard, overview, shell, editor, pager, terminal
+        case dashboard, overview, shell, editor, pager, terminal, setup
         /// Past Sessions on one conversation, `harness:session_id`, or on
         /// every conversation when the target is empty.
         case history
@@ -102,7 +102,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
     var aboutRuntimeSessionID: String? {
         switch kind {
         case .terminal, .pager, .iconPicker, .colorPicker: return target
-        case .dashboard, .overview, .shell, .editor, .history, .keybindings: return nil
+        case .dashboard, .overview, .shell, .editor, .history, .keybindings, .setup: return nil
         }
     }
 
@@ -121,7 +121,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
     /// utility view at all: closing one only detaches.
     var asksBeforeClosing: Bool {
         switch kind {
-        case .shell, .editor, .pager, .terminal: return true
+        case .shell, .editor, .pager, .terminal, .setup: return true
         case .dashboard, .overview, .history, .keybindings, .iconPicker, .colorPicker: return false
         }
     }
@@ -130,6 +130,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
     /// workspace passes only the kind and the target.
     var arguments: [String] {
         switch kind {
+        case .setup: return ["workspace-view", "setup"]
         case .dashboard: return ["workspace-view", "dashboard"]
         case .overview: return ["workspace-view", "overview"]
         case .shell: return ["workspace-view", "shell", target]
@@ -145,6 +146,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
 
     var glyph: String {
         switch kind {
+        case .setup: return "⚙"
         case .dashboard: return "▦"
         case .overview: return "▤"
         case .shell, .terminal: return "❯"
@@ -159,6 +161,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
     /// The line under the title.
     var detail: String {
         switch kind {
+        case .setup: return "Set up your first profile and project"
         case .dashboard: return "Projects, sessions, plans"
         case .overview: return "Every live session at once"
         case .shell: return "Shell · \(Self.abbreviated(target))"
@@ -196,6 +199,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
         return target.isEmpty ? detail : target
     }
 
+    static let setup = WorkspaceUtilityView(kind: .setup, target: "", title: "Set Up First Project")
     static let dashboard = WorkspaceUtilityView(kind: .dashboard, target: "", title: "Dashboard")
     static let overview = WorkspaceUtilityView(kind: .overview, target: "", title: "Overview")
     static let keybindings = WorkspaceUtilityView(kind: .keybindings, target: "", title: "Keybindings")
@@ -242,7 +246,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
             guard isRuntimeSessionID(request.runtimeSessionID) else { return nil }
             return WorkspaceUtilityView(kind: .pager, target: request.runtimeSessionID,
                                         title: label.isEmpty ? "Scrollback" : label)
-        case .terminal, .history, .keybindings, .iconPicker, .colorPicker:
+        case .terminal, .history, .keybindings, .iconPicker, .colorPicker, .setup:
             // Only the operator opens one, from the workspace itself.
             return nil
         }

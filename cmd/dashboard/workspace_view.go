@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	configcmd "github.com/sglavoie/agentmux/cmd/config"
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/agentmux/internal/backend"
@@ -59,6 +61,7 @@ var (
 		overviewBackend = string(runtimesession.BackendTmux)
 		return runOverviewCommand(0)
 	}
+	workspaceViewSetup    = func(cmd *cobra.Command) error { return configcmd.SetupCommand().RunE(cmd, nil) }
 	workspaceViewHistory  = runWorkspaceHistory
 	workspaceViewExec     = syscall.Exec
 	workspaceViewEdit     = session.EditPath
@@ -94,6 +97,7 @@ counted as waiting.`,
 
 func init() {
 	workspaceViewCmd.AddCommand(
+		&cobra.Command{Use: "setup", Short: "Guided first-project setup", Args: cobra.NoArgs, RunE: runWorkspaceSetup},
 		&cobra.Command{
 			Use:   "dashboard",
 			Short: "The dashboard, launching on tmux and showing sessions in the workspace",
@@ -180,6 +184,19 @@ func init() {
 			},
 		},
 	)
+}
+
+// Keep the summary (including partial setup failures) readable until the
+// operator returns to the native workspace. Setup's own prompts authorize writes.
+func runWorkspaceSetup(cmd *cobra.Command, _ []string) error {
+	scrubUtilityEnvironment()
+	err := workspaceViewSetup(cmd)
+	if err != nil {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nSetup did not finish: %v\n", err)
+	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "\nPress Enter to return to the workspace and refresh projects.")
+	_, _ = bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	return err
 }
 
 // utilityIdentityVariable reports a variable that names a managed session or

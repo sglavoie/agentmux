@@ -125,7 +125,7 @@ final class WorkspaceRestorationTests: XCTestCase {
         let unknown = try XCTUnwrap(WorkspaceSessionStatus.unknownSession("").notice(for: "api — work", resumable: true))
         XCTAssertEqual(unknown.title, "No longer known")
         XCTAssertFalse(unknown.message.contains("ended"), "nobody is known to have ended it")
-        XCTAssertTrue(unknown.message.contains("Past Sessions"))
+        XCTAssertTrue(unknown.message.contains("Resume Conversation"))
     }
 
     func testExitedAndLostAreSaidDifferentlyAndNeitherPromisesARestart() throws {
@@ -140,11 +140,11 @@ final class WorkspaceRestorationTests: XCTestCase {
         }
         XCTAssertTrue(exited.message.contains("agent exited (status 1)"))
         for notice in [exited, lost] {
-            XCTAssertFalse(notice.message.contains("press c"), "nothing is promised without a conversation")
+            XCTAssertFalse(notice.message.contains("Resume Conversation"), "nothing is promised without a conversation")
         }
         let resumable = try XCTUnwrap(WorkspaceSessionStatus.lost("").notice(for: "api — work", resumable: true))
         XCTAssertTrue(resumable.message.contains("It was not restarted"))
-        XCTAssertTrue(resumable.message.contains("press c"))
+        XCTAssertTrue(resumable.message.contains("Resume Conversation"))
         XCTAssertNil(WorkspaceSessionStatus.live(clients: 0).notice(for: "x"))
         XCTAssertNil(WorkspaceSessionStatus.unknown("x").notice(for: "x"))
     }
@@ -349,7 +349,7 @@ final class WorkspaceRecoveryTests: XCTestCase {
         XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.dashboard.id)
     }
 
-    func testAStoppedAgentWithAConversationOffersItInPastSessions() throws {
+    func testAStoppedAgentWithAConversationOffersNativeRecovery() throws {
         let conversation = ConversationIdentity(harness: "claude", sessionID: "c-1")
         app.store.apply(snapshot: F.snapshot([F.tmux(1, project: "api", conversation: "c-1"), sessions[1]]))
         workspace.activate(try row("api", "work"))
@@ -361,16 +361,15 @@ final class WorkspaceRecoveryTests: XCTestCase {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Agent exited")
         let message = workspace.placeholder.messageLabel.stringValue
         XCTAssertTrue(message.contains("It was not restarted"), message)
-        XCTAssertTrue(message.contains("press c"), message)
-        XCTAssertEqual(workspace.placeholder.button.title, "Resume from Past Sessions")
+        XCTAssertTrue(message.contains("Resume Conversation"), message)
+        XCTAssertEqual(workspace.placeholder.button.title, "Resume Conversation…")
         XCTAssertEqual(app.conversations.last, .some(nil), "a session that is gone is not where the next launch returns")
 
         workspace.placeholder.press()
-        let history = WorkspaceUtilityView.history(conversation)
-        XCTAssertEqual(workspace.viewSelection, history.id)
-        XCTAssertEqual(app.madeViews, [history.id], "the list is opened and nothing else")
+        XCTAssertEqual(app.resumeRequests, [conversation])
+        XCTAssertEqual(app.madeViews, [], "recovery opens no terminal utility")
         XCTAssertEqual(app.made, [F.runtimeID(1)], "no terminal is attached and no agent started for it")
-        XCTAssertNil(workspace.gone)
+        XCTAssertEqual(workspace.gone?.conversation, conversation)
     }
 
     func testASessionGoneAtLaunchIsResumedFromTheConversationSavedForIt() throws {
@@ -381,9 +380,10 @@ final class WorkspaceRecoveryTests: XCTestCase {
         app.store.apply(snapshot: F.snapshot(sessions))
 
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Agent lost")
-        XCTAssertEqual(workspace.placeholder.button.title, "Resume from Past Sessions")
+        XCTAssertEqual(workspace.placeholder.button.title, "Resume Conversation…")
         workspace.placeholder.press()
-        XCTAssertEqual(app.madeViews, ["history:codex:c-9"])
+        XCTAssertEqual(app.resumeRequests, [saved])
+        XCTAssertTrue(app.madeViews.isEmpty)
         XCTAssertEqual(app.made, [], "nothing is attached or started")
     }
 
