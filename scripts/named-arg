@@ -2,8 +2,8 @@
 # named-arg NAME VALUE prints VALUE as a recipe should read it.
 #
 # `just` passes everything after a recipe's name positionally, so a caller who
-# writes the documented `asl_root=~/scripts` form hands the recipe that whole
-# string. The `NAME=` prefix is stripped rather than refused, so the named and
+# writes the documented `asl_root=~/1_dev_projects/sglavoie_agent-session-loop`
+# form hands the recipe that whole string. The `NAME=` prefix is stripped rather than refused, so the named and
 # bare forms both work and neither silently reads the wrong value. A leading
 # `~` is expanded too: a shell leaves `name=~/x` alone unless it treats the
 # word as an assignment, and whether it does differs between shells.

@@ -46,7 +46,7 @@ just crash-restart   # fault injection and restart equivalence, under -race
 just cockpit-smoke   # real tmux + installed pair, from any terminal; fails rather than skips
 just install-kitty   # opt-in: link agent-mux.conf into ~/.config/kitty (`just install` does not)
 just kitty-smoke     # opt-in: real Kitty + installed amx, from a Kitty window; in no gate
-just overseer-integration asl_root=~/scripts   # installed amx + installed asl, isolated world
+just overseer-integration asl_root=~/1_dev_projects/sglavoie_agent-session-loop   # installed amx + installed asl, isolated world
 ```
 
 The native menu bar companion lives in `macos/` (Swift, XcodeGen, see

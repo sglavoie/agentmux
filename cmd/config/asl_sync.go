@@ -190,7 +190,7 @@ var configASLSyncCmd = &cobra.Command{
 		"--check performs the entire preflight and writes nothing.",
 	Example: `  amx config asl-sync --check
   amx config asl-sync
-  amx config asl-sync --command ~/scripts/asl --json`,
+  amx config asl-sync --command ~/.local/bin/asl --json`,
 	Args: cobra.NoArgs,
 	// Every failure this command produces is a structured refusal with its own
 	// remediation. Printing the flag list under one would bury the line the

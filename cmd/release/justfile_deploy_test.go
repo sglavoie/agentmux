@@ -233,19 +233,19 @@ func TestJustMacReleaseGateIsTheDesktopGateAndNothingElse(t *testing.T) {
 // TestNamedArgReadsTheDocumentedForms pins scripts/named-arg, which the
 // recipes that take `key=value` arguments share: the prefix is stripped, a
 // bare value passes through, and a leading ~ is the home directory, since the
-// documented `asl_root=~/scripts` reaches the recipe unexpanded in some
-// shells.
+// documented `asl_root=~/1_dev_projects/sglavoie_agent-session-loop` reaches
+// the recipe unexpanded in some shells.
 func TestNamedArgReadsTheDocumentedForms(t *testing.T) {
 	home := t.TempDir()
 	for _, tc := range []struct{ name, value, want string }{
-		{"asl_root", "asl_root=/src/scripts", "/src/scripts"},
-		{"asl_root", "/src/scripts", "/src/scripts"},
-		{"asl_root", "asl_root=~/scripts", home + "/scripts"},
+		{"asl_root", "asl_root=/src/agent-session-loop", "/src/agent-session-loop"},
+		{"asl_root", "/src/agent-session-loop", "/src/agent-session-loop"},
+		{"asl_root", "asl_root=~/1_dev_projects/sglavoie_agent-session-loop", home + "/1_dev_projects/sglavoie_agent-session-loop"},
 		{"signing_key", "~/.ssh/amx_release", home + "/.ssh/amx_release"},
 		{"signing_key", "signing_key=", ""},
 		{"tag", "tag=yes", "yes"},
 		{"asl_root", "~", home},
-		{"asl_root", "~other/scripts", "~other/scripts"},
+		{"asl_root", "~other/agent-session-loop", "~other/agent-session-loop"},
 		{"asl_root", "signing_key=/key", "signing_key=/key"},
 	} {
 		cmd := exec.Command(filepath.Join("..", "..", "scripts", "named-arg"), tc.name, tc.value)

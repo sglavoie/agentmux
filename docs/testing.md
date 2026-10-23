@@ -67,8 +67,9 @@ AMX_RUNTIME_SESSION_ID=rs-bogus TMUX=/tmp/x,1,0 TMUX_PANE=%9 KITTY_WINDOW_ID=7 \
 
 The recipes that take a checkout path (`asl-contract-sync`,
 `overseer-integration`, `paired-release-gate`) accept the documented
-`asl_root=~/scripts` form from zsh as well as bash: zsh leaves a `~` after `=`
-unexpanded, so the recipes expand a leading `~` themselves.
+`asl_root=~/1_dev_projects/sglavoie_agent-session-loop` form from zsh as well
+as bash: zsh leaves a `~` after `=` unexpanded, so the recipes expand a leading
+`~` themselves.
 
 Three gates sit outside `just check` because each needs something a hermetic
 suite does not have:

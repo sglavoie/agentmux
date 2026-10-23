@@ -122,11 +122,11 @@ asl-integration:
 # every digest check and visible only here.
 #
 # `just` passes everything after the recipe name positionally, so a caller who
-# writes the documented `asl_root=/path/to/scripts` form hands the recipe that
-# whole string. scripts/named-arg strips the prefix (and expands a leading ~,
-# which zsh, unlike bash, leaves unexpanded after =) rather than refusing it, so
-# the named and bare forms both work and neither silently checks the wrong
-# directory.
+# writes the documented `asl_root=/path/to/agent-session-loop` form hands the
+# recipe that whole string. scripts/named-arg strips the prefix (and expands a
+# leading ~, which zsh, unlike bash, leaves unexpanded after =) rather than
+# refusing it, so the named and bare forms both work and neither silently
+# checks the wrong directory.
 #
 # Compare the vendored ASL contract corpus with an ASL checkout's (offline)
 asl-contract-sync asl_root:
@@ -139,7 +139,7 @@ asl-contract-sync asl_root:
 
     if [ ! -d "$canonical" ]; then
         echo "no ASL corpus at $canonical" >&2
-        echo "pass the ASL checkout: just asl-contract-sync asl_root=/path/to/scripts" >&2
+        echo "pass the ASL checkout: just asl-contract-sync asl_root=/path/to/agent-session-loop" >&2
         exit 1
     fi
 
@@ -177,8 +177,9 @@ asl-contract-sync asl_root:
 # turns the suite's "no installed pair here" skip into a failure, because a
 # silent skip would report a compatible pair that was never actually checked.
 #
-# As with asl-contract-sync, the documented `asl_root=/path/to/scripts` prefix
-# is stripped by scripts/named-arg rather than refused.
+# As with asl-contract-sync, the documented
+# `asl_root=/path/to/agent-session-loop` prefix is stripped by scripts/named-arg
+# rather than refused.
 #
 # Exercise the overseer against the installed amx and asl pair, in a throwaway world
 overseer-integration asl_root: installed-amx
@@ -191,7 +192,7 @@ overseer-integration asl_root: installed-amx
 
     if [ ! -d "$asl_root/agent_session_loop" ]; then
         echo "no ASL checkout at $asl_root" >&2
-        echo "pass the ASL checkout: just overseer-integration asl_root=/path/to/scripts" >&2
+        echo "pass the ASL checkout: just overseer-integration asl_root=/path/to/agent-session-loop" >&2
         exit 1
     fi
 
@@ -482,8 +483,8 @@ kitty-smoke: installed-amx daemon-ready
 
     echo "kitty-smoke: ok"
 
-#   just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release
-#   just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release tag=yes
+#   just paired-release-gate asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
+#   just paired-release-gate asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release tag=yes
 #
 # The gate itself lives in internal/release and is documented there; this recipe
 # only translates the `key=value` invocation into flags. As with
@@ -513,7 +514,7 @@ paired-release-gate asl_root signing_key="" tag="no":
     # have the key silently interpreted as a checkout path.
     case "$asl_root" in
         signing_key=*|tag=*)
-            echo "first argument must be the ASL checkout: asl_root=/path/to/scripts" >&2
+            echo "first argument must be the ASL checkout: asl_root=/path/to/agent-session-loop" >&2
             exit 1
             ;;
     esac

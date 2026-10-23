@@ -394,11 +394,11 @@ request that asked for 200.
 
 Everything above is a contract between two programs that are released
 separately, so the version an operator runs is the only version that matters.
-`just overseer-integration asl_root=/path/to/scripts` is the gate that judges
+`just overseer-integration asl_root=/path/to/agent-session-loop` is the gate that judges
 it, and the only one that does.
 
 ```bash
-just overseer-integration asl_root=~/scripts
+just overseer-integration asl_root=~/1_dev_projects/sglavoie_agent-session-loop
 ```
 
 It drives ASL's own overseer leaves — policy, history, watch, checkpoint,

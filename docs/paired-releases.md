@@ -8,8 +8,8 @@ to prevent. `just paired-release-gate` is the procedure that makes a pair
 releasable, and its signed evidence record is what says it was.
 
 ```bash
-just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release
-just paired-release-gate asl_root=~/scripts signing_key=~/.ssh/amx_release tag=yes
+just paired-release-gate asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
+just paired-release-gate asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release tag=yes
 ```
 
 Run it from any terminal, on the machine the pair is installed on. It needs a
@@ -364,7 +364,7 @@ phase and the smoke:
 ```bash
 just verify-asl-install        # in the ASL checkout
 just install-restart-smoke     # in the Agent Mux checkout
-just overseer-integration asl_root=~/scripts
+just overseer-integration asl_root=~/1_dev_projects/sglavoie_agent-session-loop
 just cockpit-smoke
 amx doctor --strict
 amx config hooks-status
