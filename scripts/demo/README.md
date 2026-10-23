@@ -1,27 +1,9 @@
-# README animation and desktop recording
+# Desktop demo and terminal animation
 
-## README animation
-
-The README embeds `docs/media/demo.svg`, generated from the real dashboard
-using synthetic session data and the offline TUI driver. The 21.2-second tour
-inspects Claude, Codex, and Copilot output, jumps to a session needing
-permission, filters by harness, opens the project switcher, and searches the
-command palette. No app windows, tmux sessions, daemon, or live AI requests
-are needed.
-
-Requires the repository's Go toolchain and `uv` (which installs the pinned
-Rich renderer dependency):
-
-```sh
-just readme-media        # regenerate docs/media/demo.svg
-just readme-media-check  # fail if the committed SVG is stale
-```
-
-Edit the fixture and keyboard tour in `tui/readme_demo_test.go`; adjust SVG
-styling in `scripts/demo/render_svg.py`. Every captured frame is checked for
-layout issues and expected content before export. The SVG is self-contained,
-uses CSS animation, and holds its opening frame for reduced-motion viewers.
-Review it in a browser after changing the tour, including at README width.
+The README embeds `docs/media/desktop-demo.gif` and links to the full-resolution
+`docs/media/desktop-demo.mp4`. Both show the real macOS workspace with scripted
+agent data. Follow [Desktop recording on a physical Mac](#desktop-recording-on-a-physical-mac)
+to reproduce them.
 
 ## Desktop recording on a physical Mac
 
@@ -29,9 +11,9 @@ This tooling drives and captures the real macOS workspace using deterministic
 agent stand-ins. It makes no AI requests and does not load agent credentials.
 It is local tooling; never run it in GitHub Actions.
 
-The linked desktop video was recorded on a separate MacBook Pro over SSH.
-It exercises the actual desktop app; terminal responses come from the
-clearly labeled stand-ins, not live AI services.
+The README's desktop animation and video were recorded on a separate MacBook
+Pro over SSH. They exercise the actual desktop app; terminal responses come
+from the clearly labeled stand-ins, not live AI services.
 
 ## Prepare without opening windows
 
@@ -134,10 +116,13 @@ fails, it writes an adjacent `FRAME_DIRECTORY.error.txt`; `open` alone does not
 reliably communicate the app's exit status.
 
 The recorder captures only the demo workspace window, at five frames per
-second for a 46-second walkthrough. It switches sessions, approves the
-scripted documentation check, opens the dashboard and overview, and shows the
-inspector, then opens Checkout Changes beside the agent. Input targets the
-demo process. The recorder raises its window at scene changes, so reserve the chosen desktop for the duration of the run.
+second for a 46-second walkthrough. It opens with native Checkout Changes
+beside the agent with the changed-file list hidden for readability, swaps
+panes, switches sessions, shows the waiting inspector,
+and approves the scripted documentation check. It then opens the native
+session switcher and command palette before returning to the split diff.
+Input targets the demo process. The recorder raises its window at scene
+changes, so reserve the chosen desktop for the duration of the run.
 Each scene checks the foreground app and expected window title; a mismatch
 aborts the capture instead of reporting a successful walkthrough.
 `recording.json` lists the actions and elapsed capture time. A partial run
@@ -183,3 +168,26 @@ This stops the demo app (after verifying its PID still names that exact
 executable), ends its sessions, stops its daemon, waits for the daemon to exit,
 and removes the demo copy's preferences. It preserves the temporary world and
 logs for inspection. You may remove that world directory afterward.
+
+## Terminal dashboard animation
+
+The former README animation, `docs/media/demo.svg`, remains available as a
+terminal dashboard demo, generated using synthetic session data and the
+offline TUI driver. The 21.2-second tour inspects Claude, Codex, and Copilot
+output, jumps to a session needing permission, filters by harness, opens the
+project switcher, and searches the command palette. No app windows, tmux
+sessions, daemon, or live AI requests are needed.
+
+Requires the repository's Go toolchain and `uv` (which installs the pinned
+Rich renderer dependency):
+
+```sh
+just readme-media        # regenerate docs/media/demo.svg (terminal demo only)
+just readme-media-check  # fail if the committed SVG is stale
+```
+
+Edit the fixture and keyboard tour in `tui/readme_demo_test.go`; adjust SVG
+styling in `scripts/demo/render_svg.py`. Every captured frame is checked for
+layout issues and expected content before export. The SVG is self-contained,
+uses CSS animation, and holds its opening frame for reduced-motion viewers.
+Review it in a browser after changing the tour, including at README width.

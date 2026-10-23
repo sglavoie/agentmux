@@ -202,7 +202,12 @@ struct Recorder {
         config.captureResolution = .nominal
 
         try await selectProject("api-service", pid: app.processIdentifier)
+        try pressMenu("splitWorkspaceChanges:", pid: app.processIdentifier)
         try await pause(1)
+        // Give the patch the full review pane at README size. This is the
+        // app's own presentation toggle, saved only in the isolated demo.
+        try pressButton("Hide changed files", pid: app.processIdentifier)
+        try await pause(0.3)
 
         // One image of the actual window every 200 ms. Actions use only the
         // demo process's menu equivalents; no input reaches another app.
@@ -218,41 +223,45 @@ struct Recorder {
             var expectedTitle: String?
             switch frame {
             case 0:
-                scene = "Completed change in api-service"
-                expectedTitle = "api-service"
-            case 5 * fps:
+                scene = "Native checkout diff beside the agent"
+                expectedTitle = "Checkout Changes"
+            case 7 * fps:
+                try pressMenu("swapWorkspacePanes:", pid: app.processIdentifier)
+                scene = "Swap the native diff and terminal panes"
+                expectedTitle = "Checkout Changes"
+            case 11 * fps:
+                try pressMenu("collapseWorkspacePane:", pid: app.processIdentifier)
                 try await selectProject("release-page", pid: app.processIdentifier)
                 scene = "Switch to the working release-page session"
                 expectedTitle = "release-page"
-            case 10 * fps:
+            case 16 * fps:
                 try await selectProject("documentation", pid: app.processIdentifier)
                 scene = "Documentation session waiting for approval"
                 expectedTitle = "documentation"
-            case 14 * fps:
+            case 20 * fps:
+                try pressButton("Toggle Inspector", pid: app.processIdentifier)
+                scene = "Native waiting inspector beside the session"
+                expectedTitle = "documentation"
+            case 25 * fps:
+                try pressButton("Toggle Inspector", pid: app.processIdentifier)
                 try type("approve", pid: app.processIdentifier)
                 try key(36, pid: app.processIdentifier)
                 scene = "Approve the scripted documentation check"
                 expectedTitle = "documentation"
-            case 19 * fps:
-                try pressMenu("openDashboardFromMenu:", pid: app.processIdentifier)
-                scene = "Terminal dashboard inside the desktop app"
-                expectedTitle = "Dashboard"
-            case 24 * fps:
-                try pressMenu("openOverviewFromMenu:", pid: app.processIdentifier)
-                scene = "Live overview"
-                expectedTitle = "Overview"
-            case 29 * fps:
+            case 30 * fps:
                 try await selectProject("api-service", pid: app.processIdentifier)
-                scene = "Return to the completed change"
+                try pressMenu("showSwitcher:", pid: app.processIdentifier)
+                scene = "Native session and view switcher"
                 expectedTitle = "api-service"
-            case 33 * fps:
-                try pressButton("Toggle Inspector", pid: app.processIdentifier)
-                scene = "Session inspector and attention list"
+            case 35 * fps:
+                try key(53, pid: app.processIdentifier)
+                try pressMenu("showCommandPalette:", pid: app.processIdentifier)
+                scene = "Native command palette"
                 expectedTitle = "api-service"
-            case 38 * fps:
-                try pressButton("Toggle Inspector", pid: app.processIdentifier)
+            case 40 * fps:
+                try key(53, pid: app.processIdentifier)
                 try pressMenu("splitWorkspaceChanges:", pid: app.processIdentifier)
-                scene = "Review the health endpoint patch beside the agent"
+                scene = "Return to the native checkout review"
                 expectedTitle = "Checkout Changes"
             default: break
             }
@@ -282,6 +291,7 @@ struct Recorder {
             if remaining > 0 { try await pause(remaining) }
         }
         let metadata: [String: Any] = ["fps": fps, "frames": fps * seconds,
+            "tour": "native-desktop-v2",
             "scripted_agent_output": true, "events": events,
             "elapsed_seconds": Date().timeIntervalSince(begin)]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys])

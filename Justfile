@@ -21,11 +21,11 @@ harness_tags := "tuitest"
 build:
     go build -o amx .
 
-# Regenerate the animated README SVG from the offline TUI tour (requires uv)
+# Regenerate the terminal demo SVG from the offline TUI tour (requires uv)
 readme-media:
     sh scripts/demo/readme-media.sh
 
-# Check that the README SVG matches the dashboard's current rendering
+# Check that the terminal demo SVG matches the dashboard's current rendering
 readme-media-check:
     sh scripts/demo/readme-media.sh --check
 

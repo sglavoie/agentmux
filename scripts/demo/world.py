@@ -121,6 +121,14 @@ def prepare(args):
              "-c", "user.email=demo@example.invalid", "-c", "commit.gpgsign=false",
              "commit", "-qm", "Initial demo project"], env=git_env)
         source.write_text('def handle(path):\n    if path == "/health":\n        return {"status": 200}\n    return {"status": 404}\n')
+        if project == "api-service":
+            (checkout / "test_server.py").write_text(
+                'from server import handle\n\n\n'
+                'def test_health_endpoint():\n'
+                '    assert handle("/health") == {"status": 200}\n\n\n'
+                'def test_unknown_route():\n'
+                '    assert handle("/missing") == {"status": 404}\n'
+            )
         config += ['[[profiles]]', f'name = "{harness}"', f'harness = "{harness}"',
                    f'home_dir = {json.dumps(str(profile_home))}', f'color = "{color}"',
                    '[[projects]]', f'title = "{project}"',
