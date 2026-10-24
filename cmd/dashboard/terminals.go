@@ -19,7 +19,7 @@ import (
 
 // BackendFlagUsage documents --backend on the surfaces. Without a configured
 // destination, the surface launches where it can show the result.
-const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: config.toml, otherwise kitty inside Kitty or tmux in other terminals)"
+const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend; unset, kitty inside Kitty and tmux in other terminals)"
 
 // The seams the tests replace: a test must not read the operator's Kitty
 // environment or open their tmux server.

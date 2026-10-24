@@ -81,17 +81,8 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
                 return result
             }
         }
-        // Menu uppercase and shifted punctuation imply Shift, even when the
-        // menu item's modifier mask only says Command.
-        let shifted = Dictionary(uniqueKeysWithValues: zip(Array("~!@#$%^&*()_+{}|:\"<>?"), Array("`1234567890-=[]\\;',./")))
-        func normalized(_ key: String, _ flags: NSEvent.ModifierFlags) -> (String, NSEvent.ModifierFlags) {
-            var flags = flags.intersection([.command, .control, .option, .shift])
-            if key != key.lowercased() { flags.insert(.shift) }
-            if key.count == 1, let char = key.first, let base = shifted[char] { flags.insert(.shift); return (String(base), flags) }
-            return (key.lowercased(), flags)
-        }
-        let wanted = normalized(equivalent.key, equivalent.modifiers)
-        if let owner = fixedKeys(menu).first(where: { normalized($0.key, $0.modifiers) == wanted }) {
+        let wanted = HotKeyConflicts.normalized(equivalent.key, equivalent.modifiers)
+        if let owner = fixedKeys(menu).first(where: { HotKeyConflicts.normalized($0.key, $0.modifiers) == wanted }) {
             return "\(combo.displayString) is already used for “\(owner.title)”. Choose another shortcut."
         }
         return nil

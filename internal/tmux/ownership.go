@@ -75,7 +75,8 @@ const (
 // error, so an unreachable server is never mistaken for an absent one.
 func (b *Backend) Survey() (Survey, error) {
 	survey := Survey{Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendTmux, Address: b.server.socket}}
-	paneFormat := strings.Join(append(append([]string{surveyPane}, discoverFields...), "#{pane_width}", "#{pane_height}"), fieldSep)
+	// The size comes first so the pane's free-text fields stay last.
+	paneFormat := strings.Join(append([]string{surveyPane, "#{pane_width}", "#{pane_height}"}, discoverFields...), fieldSep)
 	out, err := b.server.runChain([][]string{
 		{"display-message", "-p", strings.Join([]string{surveyServer, "#{pid}", "#{start_time}"}, fieldSep)},
 		{"list-panes", "-a", "-F", paneFormat},
@@ -88,32 +89,44 @@ func (b *Backend) Survey() (Survey, error) {
 		return Survey{}, err
 	}
 	survey.Sizes = map[string]Size{}
-	for line := range strings.SplitSeq(strings.TrimSuffix(out, "\n"), "\n") {
+	// A pane or client line that is not what its tag says is skipped, so one
+	// odd pane or terminal never hides the rest of the server.
+	starts := func(line string) bool {
 		tag, rest, _ := strings.Cut(line, fieldSep)
-		f := strings.Split(rest, fieldSep)
 		switch tag {
 		case surveyServer:
+			return true
+		case surveyPane:
+			f := strings.SplitN(rest, fieldSep, 3)
+			return len(f) == 3 && isPaneLine(f[2])
+		case surveyClient:
+			return len(strings.Split(rest, fieldSep)) == len(clientFields)
+		}
+		return false
+	}
+	continues := func(line string) bool { return strings.HasPrefix(line, surveyPane+fieldSep) }
+	for _, line := range records(out, starts, continues) {
+		tag, rest, _ := strings.Cut(line, fieldSep)
+		switch tag {
+		case surveyServer:
+			f := strings.Split(rest, fieldSep)
 			if len(f) != 2 || f[0] == "" || f[1] == "" {
 				return Survey{}, fmt.Errorf("tmux: unexpected server identity %q", line)
 			}
 			survey.Instance = b.server.instance(f[0], f[1])
 			survey.Running = true
 		case surveyPane:
-			if len(f) != len(discoverFields)+2 {
-				return Survey{}, fmt.Errorf("tmux: malformed pane line %q", line)
+			f := strings.SplitN(rest, fieldSep, 3)
+			pane, ok := parsePane(f[2])
+			if !ok {
+				continue
 			}
-			pane, err := parsePane(strings.Join(f[:len(discoverFields)], fieldSep))
-			if err != nil {
-				return Survey{}, err
-			}
-			cols, _ := strconv.Atoi(f[len(f)-2])
-			rows, _ := strconv.Atoi(f[len(f)-1])
+			cols, _ := strconv.Atoi(f[0])
+			rows, _ := strconv.Atoi(f[1])
 			survey.Panes = append(survey.Panes, pane)
 			survey.Sizes[pane.Ref.ID] = Size{Cols: cols, Rows: rows}
 		case surveyClient:
-			if len(f) != len(clientFields) {
-				return Survey{}, fmt.Errorf("tmux: malformed client line %q", line)
-			}
+			f := strings.Split(rest, fieldSep)
 			client := Client{Name: f[0], Group: backend.GroupID(f[1])}
 			client.PID, _ = strconv.Atoi(f[2])
 			client.Created, _ = strconv.ParseInt(f[3], 10, 64)

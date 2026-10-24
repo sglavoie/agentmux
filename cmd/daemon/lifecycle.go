@@ -69,6 +69,7 @@ watch its log in a terminal (add --debug for verbose logging). It has no
 --json: it answers nothing until it stops.`,
 	Example: `  amx daemon start
   amx --debug daemon start`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
@@ -152,6 +153,7 @@ reason, when the new daemon came up degraded. A daemon that never answered
 is a structured error (restart_timeout).`,
 	Example: `  amx daemon restart
   amx daemon restart --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		c := newDaemonLifecycleClient()

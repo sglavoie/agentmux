@@ -35,10 +35,11 @@ func OverviewCommand() *cobra.Command { return overviewCmd }
 var overviewCmd = &cobra.Command{
 	Use:   "overview",
 	Short: "Open or focus the live session overview (overlay grid)",
-	Long: "Open the live session overview: a grid of every managed session in this Kitty " +
-		"instance with a compact header and a live preview of each pane. The overview is a " +
-		"singleton, so invoking it again focuses the one already open rather than drawing a " +
-		"second copy.",
+	Long: "Open the live session overview: a grid of every managed session, in Kitty tabs " +
+		"or on Agent Mux's tmux server, with a compact header and a live preview of each pane. " +
+		"In Kitty the overview is a singleton, so invoking it again focuses the one already " +
+		"open rather than drawing a second copy. In any other terminal it opens there, and as " +
+		"a popup over a terminal attached to a tmux session it is that terminal's one overview.",
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runOverviewCommand(overviewSourceWindowID)

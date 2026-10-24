@@ -17,16 +17,17 @@ func TestNameSessionWritesAndRemovesTheName(t *testing.T) {
 	f, launched := attachLaunchAgent(t)
 	id := string(launched.RuntimeSessionID)
 	current := ""
+	clearName := false
 	run := func(named string, args ...string) (string, error) {
 		t.Helper()
-		oldNamed, oldJSON, oldOut, oldCurrent := nameSessionRuntimeSession, nameSessionJSON, nameSessionCmd.OutOrStdout(), currentRuntimeSession
+		oldNamed, oldJSON, oldClear, oldOut, oldCurrent := nameSessionRuntimeSession, nameSessionJSON, nameSessionClear, nameSessionCmd.OutOrStdout(), currentRuntimeSession
 		defer func() {
-			nameSessionRuntimeSession, nameSessionJSON = oldNamed, oldJSON
+			nameSessionRuntimeSession, nameSessionJSON, nameSessionClear = oldNamed, oldJSON, oldClear
 			nameSessionCmd.SetOut(oldOut)
 			currentRuntimeSession = oldCurrent
 		}()
 		currentRuntimeSession = func() string { return current }
-		nameSessionRuntimeSession, nameSessionJSON = named, true
+		nameSessionRuntimeSession, nameSessionJSON, nameSessionClear = named, true, clearName
 		var out bytes.Buffer
 		nameSessionCmd.SetOut(&out)
 		err := nameSessionCmd.RunE(nameSessionCmd, args)
@@ -60,12 +61,35 @@ func TestNameSessionWritesAndRemovesTheName(t *testing.T) {
 	if out, err = run(id, "billing fix"); err != nil || !strings.Contains(out, `"name":"billing fix","changed":false`) {
 		t.Fatalf("the same name again: out = %s, err = %v", out, err)
 	}
-	if out, err = run(id); err != nil || !strings.Contains(out, `"name":"","changed":true`) {
+	// No name at all is a missing parameter, never a silent removal.
+	if out, err = run(id); err == nil || !strings.Contains(out, `"code":"missing_parameter"`) {
 		t.Fatalf("no name: out = %s, err = %v", out, err)
+	}
+	if got := kept(); got != "billing fix" {
+		t.Fatalf("a bare name-session changed the name to %q", got)
+	}
+	// A runtime session ID typed as the name is refused with a hint.
+	if out, err = run(id, id); err == nil || !strings.Contains(out, `"code":"invalid_arguments"`) || !strings.Contains(out, "--runtime-session") {
+		t.Fatalf("runtime session ID as the name: out = %s, err = %v", out, err)
+	}
+	// An explicit empty name removes it, as the app asks.
+	if out, err = run(id, ""); err != nil || !strings.Contains(out, `"name":"","changed":true`) {
+		t.Fatalf("empty name: out = %s, err = %v", out, err)
 	}
 	if got := kept(); got != "" {
 		t.Fatalf("the pane still carries the name %q after it was removed", got)
 	}
+	if _, err = run(id, "again"); err != nil {
+		t.Fatal(err)
+	}
+	clearName = true
+	if out, err = run(id, "x"); err == nil || !strings.Contains(out, `"code":"invalid_arguments"`) {
+		t.Fatalf("--clear with a name: out = %s, err = %v", out, err)
+	}
+	if out, err = run(id); err != nil || !strings.Contains(out, `"name":"","changed":true`) {
+		t.Fatalf("--clear: out = %s, err = %v", out, err)
+	}
+	clearName = false
 
 	// A session named exactly and not running is an error, not a no-op.
 	unknown := "rs-" + strings.Repeat("0", 32)
@@ -91,6 +115,25 @@ func TestNameSessionWritesAndRemovesTheName(t *testing.T) {
 	}
 	if got := kept(); got != "from inside" {
 		t.Fatalf("the pane carries the name %q after naming the current session", got)
+	}
+}
+
+func TestNameSessionSummaryIsOneLine(t *testing.T) {
+	t.Parallel()
+
+	id := "rs-" + strings.Repeat("a", 32)
+	for _, tc := range []struct {
+		result nameSessionResult
+		want   string
+	}{
+		{nameSessionResult{RuntimeSessionID: id, Name: "x", Changed: true}, `named ` + id + ` "x"`},
+		{nameSessionResult{RuntimeSessionID: id, Name: "x"}, id + ` is already named "x"`},
+		{nameSessionResult{RuntimeSessionID: id, Changed: true}, "removed name from " + id},
+		{nameSessionResult{RuntimeSessionID: id}, id + " has no name"},
+	} {
+		if got := nameSessionSummary(tc.result); got != tc.want {
+			t.Errorf("nameSessionSummary(%+v) = %q; want %q", tc.result, got, tc.want)
+		}
 	}
 }
 

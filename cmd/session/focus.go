@@ -33,7 +33,7 @@ arrives at has no other terminal left attached.`
 
 var focusPrevManagedCmd = &cobra.Command{
 	Use:   "focus-prev-managed",
-	Short: "Focus the previous managed tab",
+	Short: "Focus the previous managed session (Kitty tab or tmux session)",
 	Long: `Cycles focus to the previous Agent Mux-managed Kitty tab within the
 current Kitty OS window. Wraps around from the beginning.
 
@@ -41,6 +41,7 @@ KITTY_WINDOW_ID must be set (provided automatically by Kitty launches),
 or supply --window-id explicitly.` + focusRuntimeHelp,
 	Example: `  amx focus-prev-managed
   amx focus-prev-managed --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if id, ok := focusRuntimeSession(cmd, focusPrevManagedWindowID); ok {
 			return runFocusRuntime(cmd, id, neighborSession(-1))
@@ -51,7 +52,7 @@ or supply --window-id explicitly.` + focusRuntimeHelp,
 
 var focusNextManagedCmd = &cobra.Command{
 	Use:   "focus-next-managed",
-	Short: "Focus the next managed tab",
+	Short: "Focus the next managed session (Kitty tab or tmux session)",
 	Long: `Cycles focus to the next Agent Mux-managed Kitty tab within the current
 Kitty OS window. Wraps around from the end.
 
@@ -59,6 +60,7 @@ KITTY_WINDOW_ID must be set (provided automatically by Kitty launches),
 or supply --window-id explicitly.` + focusRuntimeHelp,
 	Example: `  amx focus-next-managed
   amx focus-next-managed --window-id 12`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if id, ok := focusRuntimeSession(cmd, focusNextManagedWindowID); ok {
 			return runFocusRuntime(cmd, id, neighborSession(1))
@@ -69,7 +71,7 @@ or supply --window-id explicitly.` + focusRuntimeHelp,
 
 var focusNextCmd = &cobra.Command{
 	Use:   "focus-next",
-	Short: "Focus the next tab requiring attention",
+	Short: "Focus the next session requiring attention (Kitty tab or tmux session)",
 	Long: `Cycles focus to the next Kitty tab whose state requires user interaction
 (stop, permission, error, or elicitation) or that has a Kitty bell notification (🔔).
 Wraps around from the end.
@@ -78,6 +80,7 @@ KITTY_WINDOW_ID must be set (provided automatically by harness hooks),
 or supply --window-id explicitly.` + focusRuntimeHelp,
 	Example: `  amx focus-next
   amx focus-next --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --client /dev/ttys004`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if id, ok := focusRuntimeSession(cmd, focusNextWindowID); ok {
 			return runFocusRuntime(cmd, id, nextAttentionSession)

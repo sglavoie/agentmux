@@ -110,11 +110,11 @@ func renderFooter(m Model) string {
 	case ModeSessionView:
 		lines = footerHintLines(m, sessionViewFooterPalette, footerHintMaxLines)
 	case ModePlanSearch:
-		lines = footerHintLines(m, planSearchFooterPalette, footerHintMaxLines)
+		lines = footerHintLines(m, planSearchFooter(m), footerHintMaxLines)
 	case ModePlanView:
 		lines = footerHintLines(m, planViewFooterPalette, footerHintMaxLines)
 	case ModeWorktrees:
-		lines = footerHintLines(m, worktreesFooterPalette, footerHintMaxLines)
+		lines = footerHintLines(m, worktreesFooter(m), footerHintMaxLines)
 	case ModeASLRuns:
 		lines = footerHintLines(m, aslRunsFooterPalette, footerHintMaxLines)
 	case ModeASLResponse:

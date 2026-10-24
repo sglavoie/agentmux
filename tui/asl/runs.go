@@ -74,8 +74,8 @@ func (in RunsInput) headerText() string {
 }
 
 // emptyRunsText is the empty list's state and its next step: a run starts from
-// a saved plan, with R in the Plans view (":" then "Search Plans").
-var emptyRunsText = layout.EmptyText("active or actionable runs", "R on a plan in Search Plans starts one")
+// a saved plan, with R in the Plans view (reached from ":" then "Search Plans").
+var emptyRunsText = layout.EmptyText("active or actionable runs", "R on a plan in Plans starts one")
 
 func (in RunsInput) renderRunList(height int) string {
 	switch in.View() {

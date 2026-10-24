@@ -197,8 +197,8 @@ For lifecycle behavior and confirmation preferences, see
   `amx doctor` reports known Kitty sockets and renderer drift; a `fd:` value or
   render failures indicate a stale binary — `just install` then
   `amx daemon restart`.
-- **The `A` view says `agent-session-loop is unavailable`**: read the `asl:` line
-  from `amx doctor` or `amx daemon status`. It names the mode, the resolved
+- **The Runs view (`:` → Show Runs) says `agent-session-loop is unavailable`**: read
+  the `asl:` line from `amx doctor` or `amx daemon status`. It names the mode, the resolved
   executable, the negotiated version and protocol, snapshot age, restart count,
   action outcomes, and a sanitized reason. `mode disabled` means
   `[defaults.asl] enabled = false`. A mode line with no executable means the
@@ -213,7 +213,7 @@ For lifecycle behavior and confirmation preferences, see
   indistinguishable from an idle one anywhere else. A nonzero quarantine count
   with `contract_set_mismatch` or `schema_unsupported` means the two halves were
   built from different corpora; `amx config asl-sync --check` compares them.
-- **The `A` view is stuck read-only / `[stale]`**: the bridge process is alive
+- **The Runs view is stuck read-only / `[stale]`**: the bridge process is alive
   but its last snapshot aged out, so reads continue and every action refuses
   rather than sending a mutation with an unpredictable outcome. This clears
   itself once a fresh snapshot arrives. If it does not, the restart count in the

@@ -246,7 +246,7 @@ struct HotKeyPreference: Equatable {
     )
     /// Focuses the next session waiting on a human.
     static let nextAttention = HotKeyPreference(
-        defaultsKey: "amxHotKeyNextAttention", default: HotKeyCombo(string: "ctrl+opt+cmd+n")!, label: "Next Waiting Session"
+        defaultsKey: "amxHotKeyNextAttention", default: HotKeyCombo(string: "ctrl+opt+cmd+n")!, label: AttentionCycler.commandTitle
     )
 
     static let all = [dashboard, nextAttention]
@@ -419,17 +419,35 @@ enum HotKeyConflicts {
         }
     }
 
+    /// What a menu key equivalent, as AppKit matches it, comes to: the
+    /// unshifted key and the modifiers that count. An uppercase letter and
+    /// shifted punctuation (`!` for 1, `}` for ]) imply Shift, even when
+    /// the item's modifier mask only says Command.
+    struct NormalizedKey: Equatable {
+        let key: String
+        let modifiers: NSEvent.ModifierFlags
+    }
+
+    private static let shiftedPunctuation = Dictionary(
+        uniqueKeysWithValues: zip(Array("~!@#$%^&*()_+{}|:\"<>?"), Array("`1234567890-=[]\\;',./"))
+    )
+
+    static func normalized(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> NormalizedKey {
+        var flags = modifiers.intersection([.command, .control, .option, .shift])
+        if key.count == 1, let char = key.first, let base = shiftedPunctuation[char] {
+            flags.insert(.shift)
+            return NormalizedKey(key: String(base), modifiers: flags)
+        }
+        if key != key.lowercased() { flags.insert(.shift) }
+        return NormalizedKey(key: key.lowercased(), modifiers: flags)
+    }
+
     /// The warning for a shortcut that is also one of the app's own menu
     /// keys: the global shortcut wins, so the menu item's key stops working.
     static func menuCollision(_ combo: HotKeyCombo?, menuKeys: [MenuKey]) -> String? {
-        guard let combo, let wanted = combo.menuKeyEquivalent else { return nil }
-        let relevant: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
-        let owner = menuKeys.first { item in
-            var modifiers = item.modifiers.intersection(relevant)
-            // An uppercase key equivalent implies Shift.
-            if item.key != item.key.lowercased() { modifiers.insert(.shift) }
-            return item.key.lowercased() == wanted.key && modifiers == wanted.modifiers.intersection(relevant)
-        }
+        guard let combo, let equivalent = combo.menuKeyEquivalent else { return nil }
+        let wanted = normalized(equivalent.key, equivalent.modifiers)
+        let owner = menuKeys.first { normalized($0.key, $0.modifiers) == wanted }
         guard let owner else { return nil }
         return "\(combo.displayString) is also the menu key for “\(owner.title)”, which stops working while this shortcut is set."
     }

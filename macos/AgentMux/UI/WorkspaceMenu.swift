@@ -39,13 +39,15 @@ enum WorkspaceMenu {
     /// keys Kitty binds for its tabs, acting on the workspace's sessions.
     /// F1 shows the same list (`kittykeys.Workspace`), and
     /// `TestWorkspaceFunctionKeysMatchTheApp` holds the two together. F3 has
-    /// no target: it goes to the terminal that has the keyboard.
+    /// no target: it goes to the terminal that has the keyboard. Titles stay
+    /// literals, one tuple a line, because that test reads this file; F4's
+    /// is held to `AttentionCycler.commandTitle` by the app's own tests.
     @MainActor
     static let functionKeys: [(number: Int, title: String, action: Selector)] = [
         (1, "Keybinding Reference", #selector(AppDelegate.showKeybindings(_:))),
         (2, "Overview", #selector(AppDelegate.openOverviewFromMenu(_:))),
         (3, "Toggle Error and Warning Markers", #selector(Ghostty.SurfaceView.toggleMarkers(_:))),
-        (4, "Next Needing Attention", #selector(AppDelegate.nextAttention(_:))),
+        (4, "Next Waiting Session", #selector(AppDelegate.nextAttention(_:))),
         (5, "Set Session Icon…", #selector(AppDelegate.pickSessionIcon(_:))),
         (6, "Set Session Color…", #selector(AppDelegate.pickSessionColor(_:))),
         (7, "Previous Session Only", #selector(AppDelegate.focusPreviousSession(_:))),
@@ -168,11 +170,9 @@ enum WorkspaceMenu {
             view.addItem(command)
         }
         view.addItem(.separator())
-        view.addItem(item("Split with Shell", #selector(AppDelegate.splitWorkspaceShell(_:)), "", target: target))
-        view.addItem(item("Split with Checkout Changes", #selector(AppDelegate.splitWorkspaceChanges(_:)), "", target: target))
-        view.addItem(item("Focus Other Pane", #selector(AppDelegate.focusOtherWorkspacePane(_:)), "", target: target))
-        view.addItem(item("Swap Panes", #selector(AppDelegate.swapWorkspacePanes(_:)), "", target: target))
-        view.addItem(item("Hide Other Pane", #selector(AppDelegate.collapseWorkspacePane(_:)), "", target: target))
+        for shortcut in [WorkspaceShortcut.splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane] {
+            view.addItem(item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target))
+        }
         view.addItem(.separator())
         // ⌘W closes what the pane is on, as it closes a tab elsewhere. Its
         // title follows what that is (`AppDelegate.validateMenuItem`):
@@ -182,7 +182,7 @@ enum WorkspaceMenu {
         let session = submenu("Session", in: main)
         session.addItem(item("Go to…", #selector(AppDelegate.showSwitcher(_:)), "p", target: target))
         session.addItem(item("Command Palette…", #selector(AppDelegate.showCommandPalette(_:)), "P", target: target))
-        session.addItem(item("Next Needing Attention", #selector(AppDelegate.nextAttention(_:)), "A", target: target))
+        session.addItem(item(AttentionCycler.commandTitle, #selector(AppDelegate.nextAttention(_:)), "A", target: target))
         session.addItem(item("New Terminal Below", #selector(AppDelegate.newSessionTerminal(_:)), "\r", target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))
         session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), ".", target: target))

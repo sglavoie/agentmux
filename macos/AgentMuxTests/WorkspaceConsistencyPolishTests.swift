@@ -84,6 +84,8 @@ final class WorkspaceConsistencyPolishTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: file.url, encoding: .utf8), "always")
         try file.write(.never)
         XCTAssertEqual(try String(contentsOf: file.url, encoding: .utf8), "never")
+        file.remove()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.url.path), "quitting leaves nothing in $TMPDIR")
     }
 
     func testAdvancedConversationArgumentsPreserveQueryAsData() {

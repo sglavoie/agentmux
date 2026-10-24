@@ -36,5 +36,15 @@ func runtimeSessionPanes(term backend.Discoverer, id runtimesession.ID) ([]backe
 
 // noRuntimeSession is the not-found error for the runtime session id.
 func noRuntimeSession(id runtimesession.ID) error {
-	return fmt.Errorf("%w with runtime session %s", errNoRuntimeSession, id)
+	return fmt.Errorf("%w with runtime session %s; %s", errNoRuntimeSession, id, findRuntimeSessionsHint)
 }
+
+// unknownRuntimeSession is the not-found error for a runtime session id the
+// registry does not hold.
+func unknownRuntimeSession(id runtimesession.ID) error {
+	return fmt.Errorf("no runtime session %s; %s", id, findRuntimeSessionsHint)
+}
+
+// findRuntimeSessionsHint is the next step after a runtime session that was
+// not found: where the running ones are listed.
+const findRuntimeSessionsHint = "<Tab> completes the running ones, and `amx session list --live --json` reports each as live.runtime_session_id"

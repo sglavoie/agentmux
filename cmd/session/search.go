@@ -53,7 +53,7 @@ the query was typed there. The selector flags narrow the search the way they nar
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		selection, code, err := readSessionSelection(cmd, cfg)
 		if err != nil {

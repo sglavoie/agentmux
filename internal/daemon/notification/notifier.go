@@ -82,13 +82,27 @@ type NotificationTrace struct {
 // one does. For a session on a backend other than Kitty they are also the
 // focus target: its click shows the runtime session (SetSessionFocus), and
 // neither WindowID nor KittyListenOn is ever handed to Kitty.
+//
+// KittyWindowID is the Kitty window a click focuses when it differs from the
+// slot: two Kitty instances can each have a window 7, and the second one's
+// slot is then a collision slot that Kitty has never heard of. It is used for
+// focusing alone, never as a bookkeeping key; zero means WindowID.
 type NotificationTarget struct {
 	WindowID         int
+	KittyWindowID    int
 	Account          string
 	KittyListenOn    string
 	Navigable        bool
 	RuntimeSessionID string
 	Backend          string
+}
+
+// focusWindowID is the Kitty window a click on the target focuses.
+func (t NotificationTarget) focusWindowID() int {
+	if t.KittyWindowID > 0 {
+		return t.KittyWindowID
+	}
+	return t.WindowID
 }
 
 // sessionFocus reports whether a click on the target shows a runtime session

@@ -342,6 +342,7 @@ func (o RuntimeOptions) installBundle(dir string) (Runtime, Candidate) {
 	if err := atomicfile.Write(filepath.Join(o.Root, currentName), []byte(filepath.Base(target)+"\n"), 0o600); err != nil {
 		return fail("recording %s: %v", target, err)
 	}
+	removeRetired(o.Root)
 	c.Path = filepath.Join(target, bundledBinary)
 	return Runtime{Binary: c.Path, Version: version, Source: SourceBundled, Verified: true}, c
 }
@@ -500,12 +501,41 @@ func copyRuntime(from, target string, files []checksum, sums []byte) error {
 	}
 	if _, err := os.Lstat(target); err == nil {
 		retired := target + ".retired-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-		if err := os.Rename(target, retired); err != nil {
+		// Another process may have retired it first.
+		if err := os.Rename(target, retired); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
-	return os.Rename(staging, target)
+	if beforeRuntimeRenameForTest != nil {
+		beforeRuntimeRenameForTest()
+	}
+	err = os.Rename(staging, target)
+	if errors.Is(err, os.ErrExist) {
+		// Another process installed the same build in the meantime. Its copy
+		// is as good as this one if it verifies; it may already be running.
+		if installed, readErr := os.ReadFile(filepath.Join(target, checksumsName)); readErr == nil &&
+			bytes.Equal(installed, sums) && verifyFiles(target, files) == nil {
+			return nil
+		}
+	}
+	return err
 }
+
+// removeRetired deletes the copies copyRuntime renamed aside once a verified
+// runtime is in place. The rename was what kept a server running an old copy
+// safe: its executable stays open by inode after the name is gone, and nothing
+// starts from a retired directory, since a server's record names the target.
+// A copy that cannot be removed now is left for the next resolve.
+func removeRetired(root string) {
+	retired, _ := filepath.Glob(filepath.Join(root, "tmux-*.retired-*"))
+	for _, dir := range retired {
+		_ = os.RemoveAll(dir)
+	}
+}
+
+// beforeRuntimeRenameForTest runs just before copyRuntime renames its staging
+// directory into place, so a test can install a competing copy there.
+var beforeRuntimeRenameForTest func()
 
 func copyFile(from, to string) error {
 	if err := os.MkdirAll(filepath.Dir(to), 0o700); err != nil {
@@ -627,9 +657,11 @@ func PinnedBinary(dir string) string {
 // serverBinary chooses the executable for the server in dir. A server that is
 // running keeps the one it was started with, whatever would be resolved now:
 // an app update that ships another tmux must not put a different client, let
-// alone a different server, under live sessions. Only when no server is
-// running is the resolution asked, and its answer recorded for the server the
-// next launch starts.
+// alone a different server, under live sessions. Otherwise the resolution is
+// asked. Choosing records nothing: the record is written by the launch that
+// starts a server (Server.starting), so it never names a tmux no server ran,
+// and a running server with no record stays unrecorded, which status reports
+// as unknown, rather than being credited with whatever resolves now.
 func serverBinary(dir, socket string) (string, error) {
 	if Listening(socket) {
 		if pinned := PinnedBinary(dir); pinned != "" {
@@ -640,12 +672,18 @@ func serverBinary(dir, socket string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if PinnedBinary(dir) != rt.Binary {
-		if err := atomicfile.Write(filepath.Join(dir, pinName), []byte(rt.Binary+"\n"), 0o600); err != nil {
-			return "", fmt.Errorf("tmux: recording the server executable: %w", err)
-		}
-	}
 	return rt.Binary, nil
+}
+
+// recordBinary records binary as the executable of the server in dir.
+func recordBinary(dir, binary string) error {
+	if PinnedBinary(dir) == binary {
+		return nil
+	}
+	if err := atomicfile.Write(filepath.Join(dir, pinName), []byte(binary+"\n"), 0o600); err != nil {
+		return fmt.Errorf("tmux: recording the server executable: %w", err)
+	}
+	return nil
 }
 
 // IsNoRuntime reports whether err says that no usable tmux was found.

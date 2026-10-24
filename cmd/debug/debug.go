@@ -234,7 +234,7 @@ func init() {
 	flags.StringSliceVar(&debugSelectorFlags.stages, "stage", nil, "select one or more diagnostic stages")
 	flags.StringVar(&debugSelectorFlags.after, "after", "", "lower time bound (RFC3339, Unix seconds, or duration such as 30m)")
 	flags.StringVar(&debugSelectorFlags.before, "before", "", "upper time bound (RFC3339, Unix seconds, or duration such as 30m)")
-	_ = debugCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
+	_ = debugCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnesses)
 	_ = debugCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	_ = debugCmd.RegisterFlagCompletionFunc("stage", cli.FixedCompletions(debugStageNames...))
 	_ = debugCmd.RegisterFlagCompletionFunc("outcome", cli.FixedCompletions(debugOutcomeNames...))

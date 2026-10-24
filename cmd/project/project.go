@@ -142,7 +142,7 @@ func init() {
 	projectListCmd.Flags().StringSliceVar(&projectListHarnesses, "harness", nil, "only projects whose profile runs this harness (repeatable)")
 	projectListCmd.Flags().StringSliceVar(&projectListGroups, "group", nil, "only projects in this group (repeatable)")
 	_ = projectListCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
-	_ = projectListCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
+	_ = projectListCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnesses)
 	_ = projectListCmd.RegisterFlagCompletionFunc("group", completeProjectGroups)
 	cli.AddJSONFlag(projectLaunchCmd, &projectLaunchJSON)
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
@@ -190,7 +190,7 @@ type projectLaunchData struct {
 func runProjectList(cmd *cobra.Command, _ []string) error {
 	cfg, err := projectLoadConfig()
 	if err != nil {
-		return cli.CommandFailure(cmd, projectListJSON, "config_invalid", err)
+		return cli.ConfigFailure(cmd, projectListJSON, err)
 	}
 	filter, err := newProjectListFilter(cfg)
 	if err != nil {
@@ -441,7 +441,7 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	}
 	cfg, err := projectLoadConfig()
 	if err != nil {
-		return cli.CommandFailure(cmd, projectLaunchJSON, "config_invalid", err)
+		return cli.ConfigFailure(cmd, projectLaunchJSON, err)
 	}
 	if title == "" {
 		return projectMissingTitle(cmd, cfg)

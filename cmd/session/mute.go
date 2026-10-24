@@ -47,6 +47,7 @@ named by --runtime-session reports runtime_session_id as well, and a
 window_id of zero.`,
 	Example: `  amx mute-toggle
   amx mute-toggle --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --json`,
+	Args: cobra.NoArgs,
 	RunE: runMuteToggle,
 }
 

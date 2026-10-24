@@ -135,12 +135,23 @@ func selectedWorktreePath(m Model) string {
 // the sigil-aware completion popup when it is open. The DSL is documented in
 // tui/filter.go.
 func renderSearch(m Model) string {
-	prompt := styleSearch.Render("/") + m.filterText + "█"
+	prompt := styleSearch.Render("/") + filterInputText(m.filterText+"█", m.width)
 	out := prompt + "\n" + dashboard.RenderFilterHint(m.filterText, m.width)
 	if popup := renderCompletion(m); popup != "" {
 		out += popup
 	}
 	return out
+}
+
+// filterInputText fits an input's text and cursor into a line of width cells
+// that starts with its one-cell sigil. A long query drops its start rather
+// than its end, so what was just typed and the cursor stay on screen. A
+// non-positive width (no window size yet) leaves the text whole.
+func filterInputText(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	return layout.TruncateLeft(text, width-1, "…")
 }
 
 func configSessionDisplayTitle(sess config.Session) string {

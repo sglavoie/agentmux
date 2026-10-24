@@ -530,7 +530,7 @@ func fitStatusBarText(text string, width int) string {
 		return text
 	}
 	if layout.Width(text) > width {
-		text = layout.Truncate(text, width, "...")
+		text = layout.Truncate(text, width, "…")
 	}
 	return layout.PadRight(text, width)
 }

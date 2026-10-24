@@ -110,6 +110,9 @@ final class DaemonConnection {
     }
 
     private func handle(_ event: SubscriptionClient.Event) {
+        // An event the client was already reporting, or one still queued for
+        // the main thread, can arrive after `stop`: it changes nothing.
+        guard !stopped else { return }
         switch event {
         case .connecting:
             subscriptionWaiting = false

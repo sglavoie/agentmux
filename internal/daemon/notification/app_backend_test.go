@@ -499,7 +499,7 @@ func TestAppBackendRetractsOnCancelPendingAndWindowClose(t *testing.T) {
 		reason string
 	}{
 		{"cancel_pending", func(n *Notifier) { n.CancelPending(1) }, "superseded"},
-		{"cancel_pending_disposition", func(n *Notifier) { n.CancelPendingDisposition(1) }, "superseded"},
+		{"cancel_pending_disposition", func(n *Notifier) { n.FinishCancellation(n.CancelPendingDisposition(1)) }, "superseded"},
 		{"purge_window", func(n *Notifier) { n.PurgeWindow(1) }, "window_closed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -526,6 +526,31 @@ func TestAppBackendRetractsOnCancelPendingAndWindowClose(t *testing.T) {
 			})
 		})
 	}
+}
+
+// CancelPendingDisposition only takes the notices, so a caller holding its own
+// locks never reaches the companion; FinishCancellation retracts them.
+func TestAppBackendCancelPendingDispositionDefersRetraction(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		app := newFakeApp()
+		app.respond = deliverThen("")
+		n, _, _ := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
+
+		n.MaybeNotify(1, "W:api", "work", "stop", false)
+		synctest.Wait()
+		cancellation := n.CancelPendingDisposition(1)
+		synctest.Wait()
+		if ids, _ := app.retractions(); len(ids) != 0 {
+			t.Fatalf("CancelPendingDisposition retracted %v before FinishCancellation", ids)
+		}
+		n.FinishCancellation(cancellation)
+		synctest.Wait()
+		if ids, reasons := app.retractions(); len(ids) != 1 || reasons[0] != "superseded" {
+			t.Fatalf("retractions = %v %v; want the window's notice, superseded", ids, reasons)
+		}
+		app.reportAll(protocol.DispositionDismissed)
+		synctest.Wait()
+	})
 }
 
 func TestAppBackendInteractionTimeoutRetracts(t *testing.T) {

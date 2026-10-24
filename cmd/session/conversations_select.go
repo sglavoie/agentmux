@@ -208,7 +208,7 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("here", false, "only sessions started in the current directory or below it")
 	cmd.Flags().Bool("live", false, "only conversations open right now, in a Kitty tab or a tmux session")
 	cmd.Flags().StringSlice("harness", nil, "only sessions of this harness (repeatable)")
-	_ = cmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
+	_ = cmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnesses)
 	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	cmd.Flags().StringSlice("project", nil, "only sessions of this project, by title; \"amx\" also matches \"🐱amx\" (repeatable)")

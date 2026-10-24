@@ -145,6 +145,28 @@ final class HotKeyTests: XCTestCase {
         XCTAssertNil(HotKeyConflicts.menuCollision(combo, menuKeys: shifted))
     }
 
+    /// A menu item keyed `!` or `}` with ⌘ alone is ⌘⇧1 or ⌘⇧], as AppKit
+    /// matches it, so a shortcut on those keys collides with it.
+    @MainActor
+    /// "Bigger Sidebars" is ⌥ and `+`, which is ⌥⇧= on the keyboard: a global
+    /// ⌥⇧= takes it, though the menu spells the key as the shifted character.
+    func testShiftedPunctuationMenuKeysCollideWithTheirShiftCombos() throws {
+        for (name, base, shiftedKey) in [("equal", "=", "+"), ("minus", "-", "_")] {
+            let combo = try XCTUnwrap(HotKeyCombo(string: "shift+opt+" + name))
+            guard combo.menuKeyEquivalent?.key == base else {
+                throw XCTSkip("the current keyboard layout does not put \(base) on that key")
+            }
+            let keys = [HotKeyConflicts.MenuKey(title: "Item \(shiftedKey)", key: shiftedKey, modifiers: [.option])]
+            XCTAssertEqual(
+                HotKeyConflicts.menuCollision(combo, menuKeys: keys),
+                "\(combo.displayString) is also the menu key for “Item \(shiftedKey)”, which stops working while this shortcut is set."
+            )
+            XCTAssertNil(HotKeyConflicts.menuCollision(HotKeyCombo(string: "opt+" + name), menuKeys: keys))
+            XCTAssertEqual(HotKeyConflicts.normalized(shiftedKey, [.option]),
+                           HotKeyConflicts.normalized(base, [.option, .shift]))
+        }
+    }
+
     @MainActor
     func testOpenDashboardShowsTheGlobalShortcut() throws {
         let open = NSMenuItem(title: "Open Dashboard", action: nil, keyEquivalent: "")
@@ -205,6 +227,15 @@ final class HotKeyTests: XCTestCase {
         for preference in HotKeyPreference.all {
             XCTAssertTrue(titles.contains(preference.label), "\(preference.label) is a status menu item")
         }
+    }
+
+    /// The status menu, Settings, and the workspace's F4 call the attention
+    /// cycle by one name (the Session menu's ⌘⇧A is checked with the
+    /// workspace's keys).
+    @MainActor
+    func testTheNextWaitingCommandHasOneName() {
+        XCTAssertEqual(HotKeyPreference.nextAttention.label, AttentionCycler.commandTitle)
+        XCTAssertEqual(WorkspaceMenu.functionKeys.first { $0.number == 4 }?.title, AttentionCycler.commandTitle)
     }
 
     func testSystemCombosAreReadable() {

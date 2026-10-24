@@ -129,6 +129,7 @@ func init() {
 	debugCaptureCmd.AddCommand(debugCaptureStartCmd, debugCaptureStopCmd, debugCaptureStatusCmd)
 
 	debugBundleCmd.Flags().StringVar(&debugBundleMode, "mode", string(debugger.BundleModeShare), "redaction mode: share or forensic")
+	_ = debugBundleCmd.RegisterFlagCompletionFunc("mode", cli.FixedCompletions(string(debugger.BundleModeShare), string(debugger.BundleModeForensic)))
 	debugBundleCmd.Flags().StringVarP(&debugBundleOutput, "output", "o", "", "output .tar.gz path")
 	cli.AddReportJSONFlag(debugBundleCmd, &debugBundleJSON, "the report")
 	debugBundleCmd.Flags().BoolVar(&debugBundleIncludeASL, "include-asl", false,

@@ -51,3 +51,15 @@ func TestWorkspaceConfirmationFollowsLivePolicyAndConfiguration(t *testing.T) {
 		t.Fatal("ordinary terminals must retain their config policy")
 	}
 }
+
+func TestUnknownConfirmationPolicyListsTheValidOnes(t *testing.T) {
+	_, err := ConfirmationRequired("sometimes")
+	if err == nil || err.Error() != `unknown confirmation policy "sometimes": want one of follow-cli, always, never` {
+		t.Fatalf("err = %v", err)
+	}
+	for _, policy := range ConfirmationPolicies()[1:] {
+		if _, err := ConfirmationRequired(policy); err != nil {
+			t.Errorf("%s: %v", policy, err)
+		}
+	}
+}

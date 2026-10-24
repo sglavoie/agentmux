@@ -30,7 +30,7 @@ With --json it reports an array of {name, harness}.`,
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_invalid", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		rows := make([]profileChoice, 0, len(cfg.Profiles))
 		for _, profile := range cfg.Profiles {

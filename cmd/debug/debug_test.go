@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -244,6 +245,34 @@ func TestDebugProbeJSONStatesScopeAndStages(t *testing.T) {
 	}
 	if !report.Success || report.TraceID != "trace-probe" || len(report.Stages) != 2 || !strings.Contains(report.Scope, "does not prove") {
 		t.Fatalf("report = %+v", report)
+	}
+}
+
+type debugFailingProbe struct{}
+
+func (debugFailingProbe) SendWithAutoStartObserved(protocol.Request, string, ipc.DeliveryObserver) (protocol.Response, error) {
+	return protocol.Response{}, errors.New("daemon unreachable")
+}
+
+// A failed probe prints its report, "error:" line included, and exits with the
+// health status quietly, so the root does not print the same message again.
+func TestDebugProbeTextFailurePrintsItsErrorOnce(t *testing.T) {
+	resetDebugTestState(t)
+	debugProbeKittySocket = "unix:/kitty-test"
+	debugSelectorFlags.windowID = 77
+	debugSelectorFlags.harness = "codex"
+	debugProbeClient = func() debugger.ProbeClient { return debugFailingProbe{} }
+	debugExecutable = func() (string, error) { return "/tmp/amx", nil }
+
+	var out bytes.Buffer
+	debugProbeCmd.SetOut(&out)
+	err := debugProbeCmd.RunE(debugProbeCmd, nil)
+	var exit *cli.ExitError
+	if !errors.As(err, &exit) || exit.Code != cli.ExitHealthFailure || !exit.Quiet {
+		t.Fatalf("err = %#v, want a quiet health-failure exit", err)
+	}
+	if !strings.Contains(out.String(), "result: success=false") || !strings.Contains(out.String(), "error: ") {
+		t.Fatalf("report:\n%s", out.String())
 	}
 }
 

@@ -373,6 +373,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         terminals?.shutdown()
         connection.stop()
         configWatcher?.stop()
+        workspaceConfirmationFile.remove()
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
         if let becameActiveObserver { NotificationCenter.default.removeObserver(becameActiveObserver) }

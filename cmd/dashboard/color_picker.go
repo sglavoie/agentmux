@@ -18,7 +18,7 @@ func ColorPickerCommand() *cobra.Command { return colorPickerCmd }
 
 var colorPickerCmd = &cobra.Command{
 	Use:   "color-picker",
-	Short: "Set the current tab's color (overlay picker)",
+	Short: "Set the current session's color (Kitty tab or tmux session)",
 	Long: `Pick the color of the Kitty tab this is opened on, as an overlay.
 
 Outside Kitty the picker opens in this terminal and colors a tmux session

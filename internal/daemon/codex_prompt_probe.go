@@ -261,8 +261,7 @@ func (h *Handler) applyCodexClearObservation(
 	// paused before this boundary remains cancelable below; a callback that
 	// already crossed it applies first and advances the receipt before this
 	// observation can recheck freshness.
-	var pendingDisposition notification.NotificationDisposition
-	var pendingCancelled bool
+	var pendingCancellation notification.PendingCancellation
 	var supersededHold pendingStopHold
 	var supersededHoldDropped bool
 	h.resetStopCommitMu.Lock()
@@ -270,8 +269,8 @@ func (h *Handler) applyCodexClearObservation(
 	defer func() {
 		h.stateMu.Unlock()
 		h.resetStopCommitMu.Unlock()
-		if pendingCancelled {
-			h.notifier.EmitDisposition(pendingDisposition)
+		if h.notifier != nil {
+			h.notifier.FinishCancellation(pendingCancellation)
 		}
 		if supersededHoldDropped {
 			h.recordSupersededStopHold(supersededHold)
@@ -321,7 +320,7 @@ func (h *Handler) applyCodexClearObservation(
 	// later event cannot be cleared after it has advanced the reducer receipt.
 	h.guard.TryUpdate(windowID, "user_clear", false)
 	if h.notifier != nil {
-		pendingDisposition, pendingCancelled = h.notifier.CancelPendingDisposition(windowID)
+		pendingCancellation = h.notifier.CancelPendingDisposition(windowID)
 	}
 
 	if st.Reducer == nil {

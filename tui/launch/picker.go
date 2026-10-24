@@ -165,9 +165,9 @@ func (in PickerInput) RenderList(height int) string {
 		}
 		sb.WriteString(prompt + "\n\n")
 	case in.SearchMode:
-		sb.WriteString(styleSearch.Render("/") + in.Filter + "█" + "\n\n")
+		sb.WriteString(styleSearch.Render("/") + fitFilterInput(in.Filter+"█", in.Width) + "\n\n")
 	case in.Filter != "":
-		sb.WriteString(styleSearch.Render("/") + in.Filter + "\n\n")
+		sb.WriteString(styleSearch.Render("/") + fitFilterInput(in.Filter, in.Width) + "\n\n")
 	default:
 		sb.WriteByte('\n')
 	}
@@ -364,4 +364,16 @@ func DirectoryProblems(sessions []config.Session, problem func(string) string) m
 		}
 	}
 	return problems
+}
+
+// fitFilterInput fits the filter text (and the cursor, while typing) into a
+// line of width cells that starts with the one-cell "/" sigil. A long filter
+// drops its start rather than its end, so what was just typed and the cursor
+// stay on screen. A non-positive width (no window size yet) leaves the text
+// whole.
+func fitFilterInput(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	return layout.TruncateLeft(text, width-1, "…")
 }

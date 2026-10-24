@@ -65,6 +65,14 @@ func TestStaticAndRuntimeSessionCompletions(t *testing.T) {
 		{[]string{"debug", "tail", "--stage", "hook."}, cobra.ShellCompDirectiveNoFileComp, []string{"hook.delivery"}},
 		{[]string{"debug", "tail", "--outcome", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"accepted"}},
 		{[]string{"daemon", "export-events", "--schema", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"13", "8"}},
+		{[]string{"config", "confirmation", "--policy", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"follow-cli", "always", "never"}},
+		{[]string{"debug", "bundle", "--mode", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"share", "forensic"}},
+		{[]string{"overseer", "history", "--harness", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"claude", "codex"}},
+		{[]string{"overseer", "history", "--repository", ""}, cobra.ShellCompDirectiveFilterDirs, nil},
+		{[]string{"overseer", "policy", "--repository", ""}, cobra.ShellCompDirectiveFilterDirs, nil},
+		// --harness names a harness whatever positional arguments come first.
+		{[]string{"session", "search", "billing", "--harness", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"claude", "codex"}},
+		{[]string{"debug", "--harness", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"copilot"}},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			stdout, _, err := runRootArgs(t, append([]string{cobra.ShellCompNoDescRequestCmd}, tc.args...)...)

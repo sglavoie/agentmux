@@ -328,8 +328,8 @@ func TestPolicyMalformedConfigurationFailsClosed(t *testing.T) {
 	requireQuietExit(t, err)
 
 	failure := decodeFailure(t, stdout)
-	if failure.Code != "config_error" {
-		t.Fatalf("code = %q, want config_error: %s", failure.Code, failure.Message)
+	if failure.Code != "config_invalid" {
+		t.Fatalf("code = %q, want config_invalid: %s", failure.Code, failure.Message)
 	}
 	if !strings.Contains(failure.Message, "asl_overseer") {
 		t.Errorf("message = %q, want the offending key named", failure.Message)
@@ -342,8 +342,8 @@ func TestPolicyUnreadableConfigurationFailsClosed(t *testing.T) {
 	stdout, _, err := executePolicy(t, "--json", "--access", "context", "--repository", "app=/srv/app")
 	requireQuietExit(t, err)
 
-	if failure := decodeFailure(t, stdout); failure.Code != "config_error" {
-		t.Fatalf("code = %q, want config_error: %s", failure.Code, failure.Message)
+	if failure := decodeFailure(t, stdout); failure.Code != "config_missing" {
+		t.Fatalf("code = %q, want config_missing: %s", failure.Code, failure.Message)
 	}
 }
 

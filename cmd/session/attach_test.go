@@ -188,7 +188,7 @@ func TestAttachRefusesWithStructuredErrors(t *testing.T) {
 	if out, err := attachRun(t, "not-an-id", "--json"); err == nil || decode(out) != "invalid_arguments" {
 		t.Fatalf("malformed id: %v %s", err, out)
 	}
-	if out, err := attachRun(t, "rs-00000000000000000000000000000000", "--json"); err == nil || decode(out) != "not_found" {
+	if out, err := attachRun(t, "rs-00000000000000000000000000000000", "--json"); err == nil || decode(out) != "not_found" || !strings.Contains(out, "amx session list --live --json") {
 		t.Fatalf("unknown id: %v %s", err, out)
 	}
 

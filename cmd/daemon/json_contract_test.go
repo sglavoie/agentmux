@@ -14,11 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// `daemon status` shares the retained command envelope. `export-events` is
-// deliberately absent: its export carries its own schema version and is not
-// wrapped. Keep the enveloped leaves explicit so adding one is a decision.
+// `daemon status`, `stop`, and `restart` share the retained command envelope.
+// `export-events` is deliberately absent: its export carries its own schema
+// version and is not wrapped. `audit` is registered here but lives in
+// cmd/debug, whose audit covers its report. Keep the enveloped leaves
+// explicit so adding one is a decision.
 func TestDaemonJSONCommandSurfaceIsVersioned(t *testing.T) {
-	for _, command := range []*cobra.Command{daemonStatusCmd} {
+	for _, command := range []*cobra.Command{daemonStatusCmd, daemonStopCmd, daemonRestartCmd} {
 		if command.Flags().Lookup("json") == nil {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}

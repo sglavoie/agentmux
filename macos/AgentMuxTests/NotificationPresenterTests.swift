@@ -348,6 +348,21 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertEqual(responses.last?.embeddedRuntimeSessionID, "")
     }
 
+    /// A notice the center refuses after `presentApp` said yes still gets
+    /// the operator's attention: the caller's fallback runs.
+    func testTheAppsOwnNoticeFallsBackWhenTheCenterRefusesIt() {
+        let shown = presenter()
+        var fallbacks = 0
+        center.autoAdd = .some(AddFailed())
+        XCTAssertTrue(shown.presentApp(title: "Could not launch", body: "x") { fallbacks += 1 })
+        XCTAssertEqual(fallbacks, 1)
+
+        center.autoAdd = .some(nil)
+        XCTAssertTrue(shown.presentApp(title: "Could not launch", body: "x") { fallbacks += 1 })
+        XCTAssertEqual(fallbacks, 1, "a notice the center took needs no fallback")
+        XCTAssertEqual(reports, [], "the daemon never hears of it")
+    }
+
     /// Snooze, mute, and being on screen hold a terminal notice back, as
     /// they do the daemon's.
     func testATerminalsNotificationObeysSnoozeMuteAndTheScreen() {

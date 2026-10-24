@@ -207,7 +207,7 @@ func (n *Notifier) dispatchToApp(parent context.Context, app AppBackend, target 
 	navigable := target.Navigable && windowID > 0
 	notice := AppNotice{
 		NotificationID:   newNotificationID(),
-		WindowID:         windowID,
+		WindowID:         target.focusWindowID(),
 		Navigable:        navigable,
 		Title:            title,
 		Subtitle:         subtitle,

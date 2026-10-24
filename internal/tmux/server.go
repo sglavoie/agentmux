@@ -51,6 +51,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/atomicfile"
+	"github.com/sglavoie/agentmux/internal/cachefile"
 	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
@@ -365,6 +366,24 @@ func (s *Server) Kill() error {
 	return err
 }
 
+// starting runs fn, a client invocation that may start the server, and
+// records the executable beside the socket when it did. Launches hold a lock
+// beside the socket for this, so of two that race to start a server, the one
+// that found none listening under the lock is the one whose client started
+// it, and the record names the tmux that server runs. A record that cannot be
+// written does not undo a launch that worked: the server is then reported as
+// running an unknown tmux, which is the truth.
+func (s *Server) starting(fn func() error) error {
+	return cachefile.WithExclusive(filepath.Join(s.dir, "server-start"), func() error {
+		running := Listening(s.socket)
+		err := fn()
+		if !running && Listening(s.socket) && filepath.IsAbs(s.binary) {
+			_ = recordBinary(s.dir, s.binary)
+		}
+		return err
+	})
+}
+
 // CommandError is a failed tmux client invocation.
 type CommandError struct {
 	Args   []string
@@ -425,15 +444,10 @@ func (s *Server) runChainInput(cmds [][]string, stdin []byte) (string, error) {
 			args = append(args, ";")
 			shown = append(shown, ";")
 		}
-		for j, a := range cmd {
+		for _, a := range cmd {
 			args = append(args, escapeArg(a))
-			if j > 0 && cmd[j-1] == "-e" {
-				// Launch environments carry profile secrets; errors name only the key.
-				key, _, _ := strings.Cut(a, "=")
-				a = key + "=<redacted>"
-			}
-			shown = append(shown, a)
 		}
+		shown = append(shown, redactArgs(cmd)...)
 	}
 	// The timeout covers the wait for a client slot as well as the client
 	// itself, so a caller never waits longer than it would have for a server
@@ -464,6 +478,33 @@ func (s *Server) runChainInput(cmds [][]string, stdin []byte) (string, error) {
 		return stdout.String(), &CommandError{Args: shown, Stderr: stderr.String(), Err: err}
 	}
 	return stdout.String(), nil
+}
+
+// redactedArg stands in for an argument a CommandError must not show.
+const redactedArg = "<redacted>"
+
+// redactArgs is cmd as a CommandError shows it. A launch environment carries
+// profile secrets, so only its keys are named; the pane metadata and the
+// program's argv after "--" carry the initial prompt and whatever the harness
+// was given, so none of it is shown at all.
+func redactArgs(cmd []string) []string {
+	shown := make([]string, 0, len(cmd))
+	argv := false
+	for j, a := range cmd {
+		switch {
+		case argv:
+			a = redactedArg
+		case j > 0 && a == "--":
+			argv = true
+		case j > 0 && cmd[j-1] == "-e":
+			key, _, _ := strings.Cut(a, "=")
+			a = key + "=" + redactedArg
+		case j > 0 && cmd[j-1] == varsOption:
+			a = redactedArg
+		}
+		shown = append(shown, a)
+	}
+	return shown
 }
 
 func escapeArg(a string) string {

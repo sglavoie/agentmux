@@ -2,6 +2,8 @@ package cli
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -70,5 +72,55 @@ func TestUnknownProfileNamesTheConfiguredProfiles(t *testing.T) {
 	}
 	if got, want := UnknownProfile(&config.Config{}, "home").Error(), `--profile "home": no profile is configured`; got != want {
 		t.Fatalf("UnknownProfile without profiles = %q, want %q", got, want)
+	}
+}
+
+// Every command that cannot load the configuration reports one of three codes,
+// whichever loader it went through.
+func TestConfigErrorCodeClassifiesTheFailure(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AMX_CONFIG", filepath.Join(dir, "absent.toml"))
+	_, missing := LoadRunnableConfig()
+
+	_, notFound := config.Load(filepath.Join(dir, "absent.toml"))
+
+	unreadable := filepath.Join(dir, "dir.toml")
+	if err := os.Mkdir(unreadable, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AMX_CONFIG", unreadable)
+	_, isDir := LoadRunnableConfig()
+
+	malformed := filepath.Join(dir, "bad.toml")
+	if err := os.WriteFile(malformed, []byte("this is not = = toml\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AMX_CONFIG", malformed)
+	_, parse := LoadRunnableConfig()
+
+	invalid := filepath.Join(dir, "invalid.toml")
+	if err := os.WriteFile(invalid, []byte("[[profiles]]\nname = \"x\"\nharness = \"nope\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AMX_CONFIG", invalid)
+	_, validation := LoadRunnableConfig()
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"missing", missing, ConfigMissing},
+		{"not found by path", notFound, ConfigMissing},
+		{"a directory", isDir, ConfigUnreadable},
+		{"malformed", parse, ConfigInvalid},
+		{"invalid", validation, ConfigInvalid},
+	} {
+		if tc.err == nil {
+			t.Fatalf("%s: loading succeeded", tc.name)
+		}
+		if got := ConfigErrorCode(tc.err); got != tc.want {
+			t.Errorf("%s: ConfigErrorCode(%v) = %q; want %q", tc.name, tc.err, got, tc.want)
+		}
 	}
 }

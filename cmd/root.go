@@ -119,7 +119,7 @@ func execute(args []string, stderr io.Writer) int {
 		// complete structured result, so JSON runs are not followed by a
 		// redundant stderr line.
 		if !exitErr.Quiet && exitErr.Err != nil {
-			_, _ = fmt.Fprintln(stderr, exitErr.Error())
+			_, _ = fmt.Fprintln(stderr, command.ErrPrefix(), exitErr.Error())
 		}
 		return exitErr.Code
 	}

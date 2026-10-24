@@ -77,15 +77,19 @@ var discoverFields = []string{
 	"#{pane_dead}",
 	"#{pane_dead_status}",
 	"#{pane_dead_signal}",
-	"#{pane_current_path}",
-	"#{pane_title}",
 	"#{" + titleOption + "}",
 	"#{" + varsOption + "}",
+	// Free text last. tmux keeps control characters out of a pane title, but
+	// a working directory can hold anything, fieldSep and newlines included,
+	// so it is last of all and cannot shift another field.
+	"#{pane_title}",
+	"#{pane_current_path}",
 }
 
 // Discover lists every pane on the server. A server that is not running hosts
 // nothing, so it reports no panes rather than an error; any other failure is
 // an error so a caller never mistakes an unreachable server for an empty one.
+// A line that is not a pane is skipped, so one odd pane never hides the rest.
 func (b *Backend) Discover() ([]backend.Pane, error) {
 	out, err := b.server.run([]string{"list-panes", "-a", "-F", strings.Join(discoverFields, fieldSep)})
 	if errors.Is(err, ErrServerNotRunning) {
@@ -95,38 +99,58 @@ func (b *Backend) Discover() ([]backend.Pane, error) {
 		return nil, err
 	}
 	var panes []backend.Pane
-	for line := range strings.SplitSeq(strings.TrimSuffix(out, "\n"), "\n") {
-		if line == "" {
-			continue
+	for _, record := range records(out, isPaneLine, func(string) bool { return true }) {
+		if pane, ok := parsePane(record); ok {
+			panes = append(panes, pane)
 		}
-		pane, err := parsePane(line)
-		if err != nil {
-			return nil, err
-		}
-		panes = append(panes, pane)
 	}
 	return panes, nil
 }
 
-func parsePane(line string) (backend.Pane, error) {
-	f := strings.Split(line, fieldSep)
-	if len(f) != len(discoverFields) {
-		return backend.Pane{}, fmt.Errorf("tmux: malformed pane line %q", line)
+// records splits formatted output into one record per item. A working
+// directory is the last field of its line and may itself hold a newline, so
+// a line that starts no record continues the one before it when that record
+// may be continued, and is dropped otherwise.
+func records(out string, starts, continues func(string) bool) []string {
+	var recs []string
+	open := false
+	for line := range strings.SplitSeq(strings.TrimSuffix(out, "\n"), "\n") {
+		switch {
+		case starts(line):
+			recs = append(recs, line)
+			open = continues(line)
+		case open:
+			recs[len(recs)-1] += "\n" + line
+		}
 	}
+	return recs
+}
+
+// isPaneLine reports whether line begins a discoverFields record.
+func isPaneLine(line string) bool {
+	f := strings.SplitN(line, fieldSep, len(discoverFields))
+	return len(f) == len(discoverFields) && canonicalID(f[0], '$') && canonicalID(f[3], '%')
+}
+
+func parsePane(line string) (backend.Pane, bool) {
+	if !isPaneLine(line) {
+		return backend.Pane{}, false
+	}
+	f := strings.SplitN(line, fieldSep, len(discoverFields))
 	p := backend.Pane{
 		Group:       backend.GroupID(f[0]),
 		GroupActive: f[2] != "" && f[2] != "0",
 		Ref:         backend.PaneID(f[3]),
 		Active:      f[5] == "1",
-		CWD:         f[9],
-		Title:       f[10],
+		CWD:         f[12],
+		Title:       f[11],
 		GroupTitle:  f[1],
 	}
-	if title, err := decodeString(f[11]); err == nil && f[11] != "" {
+	if title, err := decodeString(f[9]); err == nil && f[9] != "" {
 		p.GroupTitle = title
 	}
-	if f[12] != "" {
-		if vars, err := decodeVars(f[12]); err == nil {
+	if f[10] != "" {
+		if vars, err := decodeVars(f[10]); err == nil {
 			p.Vars = vars
 		}
 	}
@@ -137,9 +161,9 @@ func parsePane(line string) (backend.Pane, error) {
 		}
 		p.Exit = exit
 	} else if pid, err := strconv.Atoi(f[4]); err == nil && pid > 0 {
-		p.Foreground = []backend.Process{{PID: pid, CWD: f[9]}}
+		p.Foreground = []backend.Process{{PID: pid, CWD: f[12]}}
 	}
-	return p, nil
+	return p, true
 }
 
 // Launched is what one launch created.
@@ -169,7 +193,9 @@ func (b *Backend) LaunchTarget(spec backend.LaunchSpec) (Launched, error) {
 	newSession := []string{"new-session", "-d", "-s", name, "-P", "-F",
 		strings.Join([]string{"#{session_id}", "#{pane_id}", "#{pane_pid}", "#{pid}", "#{start_time}"}, fieldSep)}
 	if spec.Directory != "" {
-		newSession = append(newSession, "-c", spec.Directory)
+		// tmux expands -c as a format: an unescaped '#' would make
+		// `C#Tools` a title expansion and start the agent somewhere else.
+		newSession = append(newSession, "-c", strings.ReplaceAll(spec.Directory, "#", "##"))
 	}
 	for _, k := range slices.Sorted(maps.Keys(spec.Env)) {
 		newSession = append(newSession, "-e", k+"="+spec.Env[k])
@@ -184,7 +210,12 @@ func (b *Backend) LaunchTarget(spec backend.LaunchSpec) (Launched, error) {
 	if vars := encodeVars(spec.Vars); vars != "" {
 		cmds = append(cmds, []string{"set-option", "-p", "-t", target, varsOption, vars})
 	}
-	out, err := b.server.runChain(cmds)
+	var out string
+	err = b.server.starting(func() error {
+		var err error
+		out, err = b.server.runChain(cmds)
+		return err
+	})
 	var l Launched
 	if err == nil {
 		l, err = b.parseLaunched(out)

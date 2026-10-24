@@ -30,6 +30,11 @@ func (h *Handler) ASLReconcileMetrics() protocol.ASLReconcileSnapshot {
 func (h *Handler) SetASLStateRoot(root string) {
 	h.stateMu.Lock()
 	h.aslStateRootValue = root
+	// Candidates cached from another root describe other runs.
+	h.activeLoopCache = nil
+	h.activeLoopCacheAt = time.Time{}
+	h.activeLoopCacheValid = false
+	h.activeLoopCacheGen++
 	h.stateMu.Unlock()
 }
 

@@ -86,7 +86,7 @@ func runClose(cmd *cobra.Command, args []string) error {
 	}
 	record, err := registry.Get(id)
 	if err != nil {
-		return cli.CommandFailure(cmd, closeJSON, "not_found", fmt.Errorf("no runtime session %s", id))
+		return cli.CommandFailure(cmd, closeJSON, "not_found", unknownRuntimeSession(id))
 	}
 	if record.Target == nil {
 		return cli.CommandFailure(cmd, closeJSON, notLiveCode(record), notLiveError(record))

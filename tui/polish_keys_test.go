@@ -27,12 +27,38 @@ func TestHistoryOnlyFooterSaysEscQuits(t *testing.T) {
 		t.Fatalf("standalone Past Sessions footer = %q, want esc quit", got)
 	}
 	m.sessionQuery = "api"
-	if got := stripAnsi(renderFooter(m)); !strings.Contains(got, "esc back") {
-		t.Fatalf("with a query to clear the footer = %q, want the shared label", got)
+	if got := stripAnsi(renderFooter(m)); !strings.Contains(got, "esc clear filter") {
+		t.Fatalf("with a query to clear the footer = %q, want esc clear filter", got)
 	}
 	m = Model{mode: ModeSessionSearch, width: 220}
 	if got := stripAnsi(renderFooter(m)); !strings.Contains(got, "esc back") {
 		t.Fatalf("Past Sessions over the dashboard = %q, want esc back", got)
+	}
+}
+
+// Esc clears a set query or filter before it leaves Past Sessions, Plans, or
+// Worktrees, so the footer names that first step rather than promising back.
+func TestFooterEscLabelClearsFilterFirst(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+		set  func(*Model)
+	}{
+		{"past sessions", Model{mode: ModeSessionSearch, width: 220}, func(m *Model) { m.sessionQuery = "api" }},
+		{"plans", Model{mode: ModePlanSearch, width: 220}, func(m *Model) { m.planQuery = "api" }},
+		{"worktrees", Model{mode: ModeWorktrees, width: 220}, func(m *Model) { m.worktreeFilter = "api" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := tc.m
+			if got := stripAnsi(renderFooter(m)); !strings.Contains(got, "esc back") || strings.Contains(got, "esc clear filter") {
+				t.Fatalf("without a filter the footer = %q, want esc back", got)
+			}
+			tc.set(&m)
+			if got := stripAnsi(renderFooter(m)); !strings.Contains(got, "esc clear filter") || strings.Contains(got, "esc back") {
+				t.Fatalf("with a filter set the footer = %q, want esc clear filter", got)
+			}
+		})
 	}
 }
 

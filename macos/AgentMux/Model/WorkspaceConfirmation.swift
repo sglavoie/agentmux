@@ -23,7 +23,11 @@ final class WorkspaceConfirmationFile {
     func write(_ policy: WorkspaceConfirmationPolicy) throws {
         try Data(policy.rawValue.utf8).write(to: url, options: .atomic)
     }
-    deinit { try? FileManager.default.removeItem(at: url) }
+    /// Deletes the file. The app delegate lives until the process ends, so
+    /// `applicationWillTerminate` calls this rather than relying on deinit;
+    /// a later `write` makes the file again.
+    func remove() { try? FileManager.default.removeItem(at: url) }
+    deinit { remove() }
 }
 
 extension AppDelegate {

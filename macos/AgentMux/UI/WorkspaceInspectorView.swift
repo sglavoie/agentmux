@@ -147,6 +147,10 @@ final class WorkspaceInspectorView: NSView {
         oldestButton.action = #selector(filterChanged(_:))
         nextButton.target = self
         nextButton.action = #selector(nextWaiting(_:))
+        // The pane is narrow, so the button keeps the short form of the
+        // command's title; its tooltip and accessibility label say it whole.
+        nextButton.toolTip = AttentionCycler.commandTitle
+        nextButton.setAccessibilityLabel(AttentionCycler.commandTitle)
         updatesButton.target = self
         updatesButton.action = #selector(applyWaitingUpdates(_:))
         for control in [filterPicker, oldestButton, nextButton, updatesButton] {

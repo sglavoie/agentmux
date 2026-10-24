@@ -118,7 +118,7 @@ are written.`,
 		jsonOutput := hooksSyncJSON
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		bin, err := hooksBinary()
 		if err != nil {
@@ -182,10 +182,11 @@ installed one, and says so.`,
 	Example: `  amx config hooks-status
   amx config hooks-status --json
   amx config hooks-status | awk -F'\t' '$3 != "in_sync"'`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, hooksStatusJSON, "config_error", err)
+			return cli.ConfigFailure(cmd, hooksStatusJSON, err)
 		}
 		running, err := hooksBinary()
 		if err != nil {

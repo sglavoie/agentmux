@@ -27,7 +27,9 @@ the build deliberately.
 status, error}]}` in the schema-v1 envelope, where `status` is `created`,
 `updated`, `skipped` (already up to date), or `error`. A profile that failed
 keeps the others' results and exits nonzero; a refusal (`foreign_binary`,
-`transient_binary`, `config_error`) is the structured error envelope.
+`transient_binary`) or a configuration that cannot be loaded
+(`config_missing`, `config_invalid`, `config_unreadable`) is the structured
+error envelope.
 
 Hook installation is harness-aware:
 

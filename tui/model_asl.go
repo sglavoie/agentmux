@@ -209,11 +209,13 @@ func (m Model) handleASLRunsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// focusSelectedASLRun focuses the Kitty window running the selected plan. An
-// exact projected binding wins outright. Without one it falls back to live
-// sessions whose canonical workspace and harness both match: exactly one
-// focuses, several raise the shared ambiguity picker, and none refuses with a
-// reason rather than focusing an unrelated window.
+// focusSelectedASLRun shows the live session running the selected plan through
+// commands.Focus: a Kitty window is focused, a tmux session is attached in
+// this terminal (or shown by whatever hosts the surface). An exact projected
+// binding wins outright. Without one it falls back to live sessions whose
+// canonical workspace and harness both match: exactly one focuses, several
+// raise the shared ambiguity picker, and none refuses with a reason rather
+// than focusing an unrelated session.
 func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 	row, ok := m.selectedASLRow()
 	if !ok {

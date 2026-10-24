@@ -10,6 +10,10 @@ import (
 // management views receive it; agent terminals and shells do not inherit it.
 const WorkspaceConfirmationEnv = "AMX_WORKSPACE_CONFIRMATION_FILE"
 
+// ConfirmationPolicies are the workspace confirmation policies
+// ConfirmationRequired accepts, in the order they are offered.
+func ConfirmationPolicies() []string { return []string{"follow-cli", "always", "never"} }
+
 // ConfirmationRequired evaluates an explicit workspace policy. Inheritance
 // rereads config.toml so already-open views follow edits without restarting.
 func ConfirmationRequired(policy string) (bool, error) {
@@ -25,7 +29,7 @@ func ConfirmationRequired(policy string) (bool, error) {
 		}
 		return cfg.Defaults.ConfirmDestructive, nil
 	default:
-		return true, fmt.Errorf("unknown confirmation policy %q", policy)
+		return true, fmt.Errorf("unknown confirmation policy %q: want one of %s", policy, strings.Join(ConfirmationPolicies(), ", "))
 	}
 }
 

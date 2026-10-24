@@ -44,7 +44,7 @@ func TestDisplayWidthBasic(t *testing.T) {
 		{"emoji-warn", "⚠", 1},
 		{"emoji-warn-vs", "⚠️", 2},
 		{"emoji-bolt", "⚡", 2},
-		{"emoji-rainbow-flag", "\U0001f3f3️‍\U0001f308", 1},
+		{"emoji-rainbow-flag", "\U0001f3f3️‍\U0001f308", 2},
 		{"emoji-then-text", "🐱 cat", 6},
 	}
 	for _, c := range cases {
@@ -113,9 +113,8 @@ func lastANSIResetIndex(s string) int {
 }
 
 // TestDisplayTruncateKeepsClusters locks in that truncation never splits
-// a grapheme cluster. The rainbow flag is the canonical case: even
-// though it occupies a single cell, it is a 4-codepoint cluster that
-// must not be partially emitted.
+// a grapheme cluster. The rainbow flag is the canonical case: it is a
+// 4-codepoint cluster two cells wide that must not be partially emitted.
 func TestDisplayTruncateKeepsClusters(t *testing.T) {
 	cases := []struct {
 		name string
@@ -130,9 +129,10 @@ func TestDisplayTruncateKeepsClusters(t *testing.T) {
 		{"empty-input", "", 5, "…", ""},
 		{"zero-max", "abc", 0, "…", ""},
 		{"tail-bigger-than-max", "abcdef", 1, "…", "…"},
-		// Rainbow flag is 1 cell wide, single cluster — should fit at
-		// max=1 with no tail required.
-		{"rainbow-flag-fits", "\U0001f3f3️‍\U0001f308", 1, "…", "\U0001f3f3️‍\U0001f308"},
+		// Rainbow flag is 2 cells wide, single cluster — should fit at
+		// max=2 with no tail required, and never be split at max=1.
+		{"rainbow-flag-fits", "\U0001f3f3️‍\U0001f308", 2, "…", "\U0001f3f3️‍\U0001f308"},
+		{"rainbow-flag-not-split", "\U0001f3f3️‍\U0001f308", 1, "…", "…"},
 		// Two emoji of width 2 + cat: trimming at 3 must keep the first
 		// 2-cell emoji whole, drop the second, leave room for the tail.
 		{"emoji-cluster-boundary", "🐱🧠cat", 4, "…", "🐱…"},
@@ -267,7 +267,7 @@ func TestTitleCellIconPadding(t *testing.T) {
 		{"warn-vs-already-wide", "⚠️", "⚠️"},
 		{"speak-already-wide", "🗣", "🗣"},
 		{"speak-vs-already-wide", "🗣️", "🗣️"},
-		{"rainbow-needs-pad", "\U0001f3f3️‍\U0001f308", "\U0001f3f3️‍\U0001f308 "},
+		{"rainbow-already-wide", "\U0001f3f3️‍\U0001f308", "\U0001f3f3️‍\U0001f308"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -345,10 +345,10 @@ func TestTitleCellRenderPadsIconColumn(t *testing.T) {
 			t.Errorf("RenderTitleIcon(%q) = %q, want unchanged", title, got)
 		}
 	})
-	t.Run("rainbow-padded", func(t *testing.T) {
+	t.Run("rainbow-unchanged", func(t *testing.T) {
 		title := "\U0001f3f3️‍\U0001f308 flag"
 		got := RenderTitleIcon(title)
-		want := "\U0001f3f3️‍\U0001f308  flag"
+		want := title
 		if got != want {
 			t.Errorf("RenderTitleIcon(rainbow) = %q, want %q", got, want)
 		}

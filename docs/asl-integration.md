@@ -277,8 +277,8 @@ question, and both the fingerprint and the digest move when it does.
 process status. A refusal is still a decision and comes back in the ordinary
 `{"schema_version":1,"data":…}` envelope; only a malformed request or unreadable
 configuration uses the structured error envelope, with `unsupported_access`,
-`unsupported_contract_version`, `invalid_repository`, `missing_parameter`, or
-`config_error`.
+`unsupported_contract_version`, `invalid_repository`, `missing_parameter`, `config_missing`, `config_invalid`,
+or `config_unreadable`.
 
 Inside the envelope, a `contract` block names the contract (`overseer_policy`),
 its version, and the access categories this build accepts. It is versioned
@@ -341,7 +341,7 @@ withdrawn is not half-authorized, and the client contract is binary in any case
 none and exits nonzero). `examined` and any corpus `warnings` survive, so a
 stopped request does not read as an empty corpus. Configuration that becomes
 unreadable partway through stops the request the same way and reports
-`config_error`, because an answer nobody can currently give is not an answer of
+`config_missing`, `config_invalid`, or `config_unreadable`, because an answer nobody can currently give is not an answer of
 yes.
 
 Two shapes are unavailable no matter how the configuration reads. A conversation
@@ -384,7 +384,7 @@ Like `policy`, a plan-level refusal returns the ordinary
 `{"schema_version":1,"data":…}` envelope with a nonzero quiet exit, and only a
 malformed request or unreadable configuration uses the structured error envelope
 (`unsupported_contract_version`, `invalid_repository`, `invalid_since`,
-`config_error`, `history_error`). The `contract` block names `overseer_history`
+`config_missing`, `config_invalid`, `config_unreadable`, `history_error`). The `contract` block names `overseer_history`
 and versions independently of both the schema-v1 envelope and the policy
 contract. The `request_digest` binds the bounds as well as the plan and the
 repository set: an answer taken under a 10-message bound is not evidence for a
