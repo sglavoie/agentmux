@@ -25,7 +25,7 @@ func IconPickerCommand() *cobra.Command { return iconPickerCmd }
 
 var iconPickerCmd = &cobra.Command{
 	Use:   "icon-picker",
-	Short: "Set or clear the current tab's harness icon (overlay picker)",
+	Short: "Set or clear the current session's harness icon (Kitty tab or tmux session)",
 	Long: `Pick the harness icon of the Kitty tab this is opened on, as an overlay.
 
 Outside Kitty the picker opens in this terminal and edits the title of a tmux

@@ -33,7 +33,7 @@ arrives at has no other terminal left attached.`
 
 var focusPrevManagedCmd = &cobra.Command{
 	Use:   "focus-prev-managed",
-	Short: "Focus the previous managed tab",
+	Short: "Focus the previous managed session (Kitty tab or tmux session)",
 	Long: `Cycles focus to the previous Agent Mux-managed Kitty tab within the
 current Kitty OS window. Wraps around from the beginning.
 
@@ -52,7 +52,7 @@ or supply --window-id explicitly.` + focusRuntimeHelp,
 
 var focusNextManagedCmd = &cobra.Command{
 	Use:   "focus-next-managed",
-	Short: "Focus the next managed tab",
+	Short: "Focus the next managed session (Kitty tab or tmux session)",
 	Long: `Cycles focus to the next Agent Mux-managed Kitty tab within the current
 Kitty OS window. Wraps around from the end.
 
@@ -71,7 +71,7 @@ or supply --window-id explicitly.` + focusRuntimeHelp,
 
 var focusNextCmd = &cobra.Command{
 	Use:   "focus-next",
-	Short: "Focus the next tab requiring attention",
+	Short: "Focus the next session requiring attention (Kitty tab or tmux session)",
 	Long: `Cycles focus to the next Kitty tab whose state requires user interaction
 (stop, permission, error, or elicitation) or that has a Kitty bell notification (🔔).
 Wraps around from the end.

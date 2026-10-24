@@ -51,7 +51,7 @@ func ConfigureTmux(cfg *config.Config) {
 }
 
 // BackendFlagUsage is --backend's help on a launch entrypoint.
-const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend, else kitty)"
+const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend; unset, kitty)"
 
 // AddBackendFlag registers --backend on a launch entrypoint.
 func AddBackendFlag(cmd *cobra.Command) {

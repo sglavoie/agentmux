@@ -17,7 +17,7 @@ func KeybindingsCommand() *cobra.Command { return keybindingsCmd }
 
 var keybindingsCmd = &cobra.Command{
 	Use:   "keybindings",
-	Short: "Show the Kitty keybinding reference as an overlay",
+	Short: "Show the reference of the keys Agent Mux binds in Kitty or tmux",
 	Long: `Show the reference of the keys Agent Mux binds. In Kitty it opens as an
 overlay (or focuses the one already open), listing Kitty's bindings. In any
 other terminal it opens here and lists the keys the private tmux server binds
