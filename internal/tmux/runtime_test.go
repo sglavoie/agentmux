@@ -426,15 +426,91 @@ func TestARunningServerKeepsTheTmuxItWasStartedWith(t *testing.T) {
 		t.Fatalf("the record of a live server was rewritten to %s", PinnedBinary(dir))
 	}
 
-	// Once the server is gone the next one starts with the current runtime.
+	// Once the server is gone the next one starts with the current runtime,
+	// but choosing it records nothing: only a launch that starts a server
+	// with it does.
 	_ = listener.Close()
 	_ = os.Remove(socket)
 	got, err = serverBinary(dir, socket)
 	if err != nil {
 		t.Fatalf("serverBinary after the server ended: %v", err)
 	}
-	if got != updated || PinnedBinary(dir) != updated {
-		t.Fatalf("after the server ended: binary %s, record %s; want %s", got, PinnedBinary(dir), updated)
+	if got != updated {
+		t.Fatalf("after the server ended: binary %s, want %s", got, updated)
+	}
+	if PinnedBinary(dir) != started {
+		t.Fatalf("choosing a binary rewrote the record to %s before any server ran it", PinnedBinary(dir))
+	}
+}
+
+// A running server nobody recorded is reached with what resolves now, but is
+// not credited with it: the record stays absent, which status reports as an
+// unknown tmux.
+func TestAnUnrecordedRunningServerStaysUnrecorded(t *testing.T) {
+	dir := shortDir(t)
+	socket := filepath.Join(dir, "tmux.sock")
+	resolved := fakeExecutable(t)
+	t.Setenv(BinaryEnv, resolved)
+	t.Cleanup(func() { binaryVersionForTest = nil })
+	binaryVersionForTest = func(string) (string, error) { return "3.7c", nil }
+
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	got, err := serverBinary(dir, socket)
+	if err != nil {
+		t.Fatalf("serverBinary: %v", err)
+	}
+	if got != resolved {
+		t.Fatalf("serverBinary = %s, want the resolved %s", got, resolved)
+	}
+	if _, err := os.Stat(filepath.Join(dir, pinName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a server nobody recorded was recorded as running %s (stat err %v)", PinnedBinary(dir), err)
+	}
+}
+
+// Two processes installing the same bundled build race to rename their copy
+// into place; the one that loses finds a verified copy there and uses it.
+func TestARuntimeInstalledConcurrentlyIsAccepted(t *testing.T) {
+	bundle := fakeBundle(t, "3.7c", "#!/bin/sh\necho tmux 3.7c\n")
+	sums, err := os.ReadFile(filepath.Join(bundle, checksumsName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := parseChecksums(sums)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "runtime", "tmux-3.7c-x")
+	t.Cleanup(func() { beforeRuntimeRenameForTest = nil })
+	install := func(tamper bool) error {
+		beforeRuntimeRenameForTest = func() {
+			beforeRuntimeRenameForTest = nil
+			if err := copyRuntime(bundle, target, files, sums); err != nil {
+				t.Fatalf("competing install: %v", err)
+			}
+			if tamper {
+				if err := os.WriteFile(filepath.Join(target, bundledBinary), []byte("altered"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		return copyRuntime(bundle, target, files, sums)
+	}
+
+	if err := install(false); err != nil {
+		t.Fatalf("losing the race to an identical copy failed the install: %v", err)
+	}
+	if err := verifyFiles(target, files); err != nil {
+		t.Fatalf("installed copy: %v", err)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := install(true); err == nil {
+		t.Fatal("a competing copy that does not verify was accepted")
 	}
 }
 

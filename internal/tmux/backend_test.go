@@ -619,12 +619,141 @@ func TestClientEnvStripsTerminalIdentity(t *testing.T) {
 
 func TestCommandErrorRedactsLaunchEnvironment(t *testing.T) {
 	f := newFixture(t, Options{})
-	_, err := f.server.runChain([][]string{{"new-session", "-d", "-e", "AMX_SECRET=hunter2", "-x", "not-a-width"}})
+	_, err := f.server.runChain([][]string{
+		{"new-session", "-d", "-e", "AMX_SECRET=hunter2", "-x", "not-a-width", "--", "claude", "--prompt", "prompt-secret"},
+		{"set-option", "-p", "-t", "=x:", varsOption, "vars-secret"},
+	})
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	if strings.Contains(err.Error(), "hunter2") || !strings.Contains(err.Error(), "AMX_SECRET=<redacted>") {
-		t.Errorf("error = %v, want the value redacted", err)
+	msg := err.Error()
+	for _, secret := range []string{"hunter2", "claude", "--prompt", "prompt-secret", "vars-secret"} {
+		if strings.Contains(msg, secret) {
+			t.Errorf("error %q shows %q", msg, secret)
+		}
+	}
+	for _, kept := range []string{"AMX_SECRET=<redacted>", "-x not-a-width", varsOption + " <redacted>", "set-option"} {
+		if !strings.Contains(msg, kept) {
+			t.Errorf("error %q lost %q", msg, kept)
+		}
+	}
+}
+
+// tmux expands a launch directory as a format, so a '#' in it must reach the
+// pane as written: `C#Tools` once expanded #T and started the agent in HOME.
+func TestLaunchDirectoryWithHashIsNotExpanded(t *testing.T) {
+	f := newFixture(t, Options{})
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, name := range []string{"C#Tools", "x#{pane_id}##y#(echo z)"} {
+		dir := filepath.Join(base, name)
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		out := filepath.Join(base, "pwd-"+strconv.Itoa(i))
+		if _, err := f.backend.LaunchTarget(backend.LaunchSpec{
+			Directory: dir,
+			Argv:      []string{"/bin/sh", "-c", `pwd -P > "$1"; exec sleep 600`, "pwd", out},
+		}); err != nil {
+			t.Fatalf("LaunchTarget(%q): %v", name, err)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		var got []byte
+		for ; time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+			if got, err = os.ReadFile(out); err == nil && len(got) > 0 {
+				break
+			}
+		}
+		if strings.TrimSuffix(string(got), "\n") != dir {
+			t.Errorf("agent for %q started in %q", dir, got)
+		}
+	}
+}
+
+// A working directory may hold the field separator and newlines. It is the
+// last field, so such a pane is read whole and every other pane with it.
+func TestOddWorkingDirectoryBreaksNoListing(t *testing.T) {
+	f := newFixture(t, Options{})
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	odd := filepath.Join(base, "a"+fieldSep+"b\nc"+fieldSep+"%9\n$1")
+	if err := os.Mkdir(odd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.backend.LaunchTarget(backend.LaunchSpec{
+		Directory: odd,
+		Vars:      map[string]string{"amx_launch_id": "odd"},
+		Argv:      []string{"/bin/sh", "-c", "exec sleep 600"},
+	}); err != nil {
+		t.Fatalf("LaunchTarget: %v", err)
+	}
+	plain := f.launch(t, "plain", []string{"/bin/sh", "-c", "exec sleep 600"}, nil)
+	f.waitFor(t, "odd", func(p backend.Pane) bool { return p.CWD == odd && p.Exit == nil })
+	f.waitFor(t, "plain", func(backend.Pane) bool { return true })
+
+	survey, err := f.backend.Survey()
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if len(survey.Panes) != 2 {
+		t.Fatalf("survey panes = %+v, want both", survey.Panes)
+	}
+	for _, pane := range survey.Panes {
+		if pane.Vars["amx_launch_id"] == "odd" && pane.CWD != odd {
+			t.Errorf("survey read the odd directory as %q", pane.CWD)
+		}
+		if size := survey.Sizes[pane.Ref.ID]; size.Cols <= 0 || size.Rows <= 0 {
+			t.Errorf("pane %s size = %+v", pane.Ref.ID, size)
+		}
+	}
+	if _, ok := backend.FindPane(survey.Panes, plain.Pane); !ok {
+		t.Errorf("survey lost the plain pane %s", plain.Pane.ID)
+	}
+}
+
+func TestMalformedListingLinesAreSkipped(t *testing.T) {
+	t.Parallel()
+
+	good := strings.Join([]string{"$1", "name", "0", "%2", "42", "1", "0", "", "", "", "", "title", "/a\nb"}, fieldSep)
+	out := "garbage\n" + good + "\n" + strings.Join([]string{"$x", "too", "few"}, fieldSep) + "\n"
+	recs := records(out, isPaneLine, func(string) bool { return true })
+	if len(recs) != 1 {
+		t.Fatalf("records = %q, want one", recs)
+	}
+	// The line before the first record is dropped. The lines after it start
+	// no record, so they continue its path.
+	pane, ok := parsePane(recs[0])
+	if !ok || pane.Ref.ID != "%2" || !strings.HasPrefix(pane.CWD, "/a\nb") || pane.Title != "title" {
+		t.Fatalf("parsePane = %+v, %v", pane, ok)
+	}
+	if _, ok := parsePane("garbage"); ok {
+		t.Error("garbage parsed as a pane")
+	}
+}
+
+// Only the launch that starts the server records its tmux; a launch into a
+// running server leaves the record alone.
+func TestTheLaunchThatStartsTheServerRecordsItsTmux(t *testing.T) {
+	f := newFixture(t, Options{})
+	if got := PinnedBinary(f.server.dir); got != "" {
+		t.Fatalf("a server nobody started is recorded as running %s", got)
+	}
+	f.launch(t, "first", []string{"/bin/sh", "-c", "exec sleep 600"}, nil)
+	if got := PinnedBinary(f.server.dir); got != f.server.Binary() {
+		t.Fatalf("record after starting the server = %q, want %s", got, f.server.Binary())
+	}
+	other := filepath.Join(t.TempDir(), "tmux")
+	writeFile(t, other, "#!/bin/sh\n")
+	if err := recordBinary(f.server.dir, other); err != nil {
+		t.Fatal(err)
+	}
+	f.launch(t, "second", []string{"/bin/sh", "-c", "exec sleep 600"}, nil)
+	if got := PinnedBinary(f.server.dir); got != other {
+		t.Fatalf("a launch into a running server rewrote the record to %s", got)
 	}
 }
 
