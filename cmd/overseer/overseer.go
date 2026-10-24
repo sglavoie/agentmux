@@ -154,6 +154,7 @@ func newPolicyCommand() *cobra.Command {
 	_ = policyCmd.RegisterFlagCompletionFunc("access", cli.FixedCompletions(accessCategoryNames()...))
 	flags.StringArray("repository", nil, "repository the plan participates in, as alias=path or path (repeatable); the path must be absolute or start with ~")
 	flags.Int("contract-version", contractVersion, "overseer policy contract version the caller understands")
+	_ = policyCmd.RegisterFlagCompletionFunc("repository", cli.CompleteDirectories)
 	return policyCmd
 }
 

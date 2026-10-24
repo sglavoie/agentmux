@@ -142,7 +142,7 @@ func init() {
 	projectListCmd.Flags().StringSliceVar(&projectListHarnesses, "harness", nil, "only projects whose profile runs this harness (repeatable)")
 	projectListCmd.Flags().StringSliceVar(&projectListGroups, "group", nil, "only projects in this group (repeatable)")
 	_ = projectListCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
-	_ = projectListCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnessFirstArg)
+	_ = projectListCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnesses)
 	_ = projectListCmd.RegisterFlagCompletionFunc("group", completeProjectGroups)
 	cli.AddJSONFlag(projectLaunchCmd, &projectLaunchJSON)
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")

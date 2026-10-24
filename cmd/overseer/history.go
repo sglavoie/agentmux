@@ -147,6 +147,8 @@ func newHistoryCommand() *cobra.Command {
 	flags.Int("max-chars", 0, fmt.Sprintf("maximum characters per excerpt (default %d, maximum %d)", transcript.DefaultHistoryExcerptChars, transcript.MaxHistoryExcerptChars))
 	flags.StringArray("harness", nil, "restrict the answer to this harness (repeatable); omit for all harnesses")
 	flags.String("since", "", "only consider transcripts modified at or after this RFC 3339 timestamp")
+	_ = historyCmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnesses)
+	_ = historyCmd.RegisterFlagCompletionFunc("repository", cli.CompleteDirectories)
 	return historyCmd
 }
 

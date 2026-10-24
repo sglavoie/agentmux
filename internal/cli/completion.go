@@ -32,11 +32,19 @@ func CompleteProfiles(_ *cobra.Command, _ []string, toComplete string) ([]string
 }
 
 // CompleteHarnessFirstArg suggests harness names for the first positional
-// argument and nothing after it, as the completion for a --harness flag.
-func CompleteHarnessFirstArg(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+// argument and nothing after it. A --harness flag completes with
+// CompleteHarnesses instead, since its value is a harness whatever
+// positional arguments precede it.
+func CompleteHarnessFirstArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	return CompleteHarnesses(cmd, args, toComplete)
+}
+
+// CompleteHarnesses suggests harness names, ignoring the positional arguments
+// already given: the completion for every --harness flag.
+func CompleteHarnesses(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	var names []string
 	for _, name := range harness.Names() {
 		if strings.HasPrefix(name, toComplete) {
@@ -53,4 +61,10 @@ func CompleteProfileFirstArg(cmd *cobra.Command, args []string, toComplete strin
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return CompleteProfiles(cmd, args, toComplete)
+}
+
+// CompleteDirectories offers the shell's directory completion, for a flag
+// whose value is a directory path.
+func CompleteDirectories(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return nil, cobra.ShellCompDirectiveFilterDirs
 }

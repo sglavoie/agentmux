@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/spf13/cobra"
@@ -27,7 +29,8 @@ var confirmationCmd = &cobra.Command{
 }
 
 func init() {
-	confirmationCmd.Flags().String("policy", "follow-cli", "follow-cli, always, or never")
+	confirmationCmd.Flags().String("policy", "follow-cli", "confirmation policy: "+strings.Join(config.ConfirmationPolicies(), ", "))
+	_ = confirmationCmd.RegisterFlagCompletionFunc("policy", cli.FixedCompletions(config.ConfirmationPolicies()...))
 	cli.AddJSONFlag(confirmationCmd, nil)
 	configCmd.AddCommand(confirmationCmd)
 }
