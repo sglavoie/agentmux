@@ -305,7 +305,7 @@ func (n *Notifier) settleInteraction(target NotificationTarget, action string, t
 // record a precise terminal focus disposition after the notification
 // subprocess exits.
 func (n *Notifier) focusForClick(focus FocusClient, target NotificationTarget) error {
-	_, err := FocusKittyWindow(focus, target.KittyListenOn, target.WindowID)
+	_, err := FocusKittyWindow(focus, target.KittyListenOn, target.focusWindowID())
 	return err
 }
 

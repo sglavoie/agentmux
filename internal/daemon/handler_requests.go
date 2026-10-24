@@ -270,7 +270,8 @@ func (h *Handler) notificationTitle(windowID int, sessionTitle string) string {
 // click on it may focus. The runtime session holding the slot travels with the
 // target so a notice can be traced, and acted on, by session identity. A
 // Kitty pane is focused as the exact window, through the socket the daemon
-// learned for it. A session on another backend has no Kitty window behind its
+// learned for it: for a Kitty collision slot that is KittyWindowID, never
+// the slot. A session on another backend has no Kitty window behind its
 // slot: its click shows the runtime session (focus_session), and the target
 // never carries a slot number dressed as a window ID or a socket to dial.
 func (h *Handler) notificationTarget(windowID int, account string) notification.NotificationTarget {
@@ -281,7 +282,9 @@ func (h *Handler) notificationTarget(windowID int, account string) notification.
 	h.stateMu.Lock()
 	target.KittyListenOn = h.kittySockets[windowID]
 	if key, mapped := h.runtimeRoutes.kittyWindow(windowID); mapped {
-		target.WindowID = key.windowID
+		// The slot stays the notifier's key, so cancelling or purging the
+		// slot reaches this notice; only a click uses the real window.
+		target.KittyWindowID = key.windowID
 		if target.KittyListenOn == "" {
 			target.KittyListenOn = key.socket
 		}

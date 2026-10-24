@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -429,8 +430,33 @@ func TestNotificationTargetUsesTheRealKittyWindowNumber(t *testing.T) {
 	h.rememberKittySocketLocked(alias, kittyB)
 	h.stateMu.Unlock()
 	target := h.notificationTarget(alias, "work")
-	if target.WindowID != 7 || target.KittyListenOn != kittyB {
-		t.Fatalf("notification target = %+v; want Kitty B window 7", target)
+	if target.WindowID != alias || target.KittyWindowID != 7 || target.KittyListenOn != kittyB {
+		t.Fatalf("notification target = %+v; want slot %d focusing Kitty B window 7", target, alias)
+	}
+}
+
+// Two Kitty instances each with a window 7: the second one's pending
+// notification is kept under its collision slot, so cancelling that slot
+// retracts it and the first instance's window 7 is never touched.
+func TestNotificationBookkeepingIsKeyedByTheKittyCollisionSlot(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler()
+	notifier, _ := newTestNotifier(&config.NotificationConfig{Permission: true, PermissionDebounceMs: 60000})
+	h.notifier = notifier
+	h.stateMu.Lock()
+	h.kittySlotLocked(kittyA, 7)
+	alias := h.kittySlotLocked(kittyB, 7)
+	h.rememberKittySocketLocked(alias, kittyB)
+	h.stateMu.Unlock()
+
+	h.maybeNotify(alias, "api", "work", "permission", false)
+	if !notifier.HasPending(alias) || notifier.HasPending(7) {
+		t.Fatalf("pending: slot %d = %v, window 7 = %v; want only the slot", alias, notifier.HasPending(alias), notifier.HasPending(7))
+	}
+	h.cancelPendingNotification(alias)
+	if notifier.HasPending(alias) {
+		t.Fatal("cancelling the collision slot left its notification pending")
 	}
 }
 
