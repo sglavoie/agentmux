@@ -12,7 +12,7 @@ require (
 	github.com/rivo/uniseg v0.4.7
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
