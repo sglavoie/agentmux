@@ -207,8 +207,8 @@ repeated audit samples.
 | `unknown_producer_fact` | warning | An unacknowledged window-scoped legacy fact contributes an icon or live lease without a known producer harness. |
 | `acknowledged_fact_pressure` | warning / failure | 49–64 evictable acknowledged nonterminal facts warn; more than 64 fails. Live ASL leases, terminal history, and unacknowledged facts are excluded. |
 
-Automated evidence lives in `cmd/invariants_test.go`,
-`cmd/doctor_strict_test.go`, and `cmd/daemon_audit_test.go`. Correctly routed
+Automated evidence lives in `cmd/debug/invariants_test.go`,
+`cmd/debug/doctor_strict_test.go`, and `cmd/debug/daemon_audit_test.go`. Correctly routed
 cross-harness traces carry `route_decision: "owner"`, retain the producer pane
 in `origin_window_id`, and produce none of the mismatch findings. Ordinary
 acknowledged history remains an informational `acknowledged_state` finding.
@@ -387,7 +387,7 @@ These convergence expectations are pinned by the automated gate:
   settling a stale interactive bolt, discard-on-moved-sequence, reset-flow
   block, consecutive-sample stabilization, and protected/background masking
   (live ASL lease, attention icon, pipe-mode child, running subagent).
-- `internal/daemon/reducer_interactive_ownership_test.go` — interactive vs.
+- `internal/daemon/state/interactive_ownership_test.go` — interactive vs.
   pipe-mode ownership, cross-harness terminal retirement, session replacement,
   and durable `pm` round-trip/restart.
 - `internal/daemon/{codex,claude}_prompt_probe_test.go`,
