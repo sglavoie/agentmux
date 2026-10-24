@@ -58,7 +58,7 @@ has_more, hidden_automated, sessions}.`,
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		selection, code, err := readSessionSelection(cmd, cfg)
 		if err != nil {
@@ -177,7 +177,7 @@ removes it. With --json it reports {action, changed, message, data}.`,
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		meta, err := resolveConversationOrFail(cmd, jsonOutput, cfg, sessionCommandsSessionReaders(), identity)
 		if err != nil {
@@ -225,7 +225,7 @@ pack's path.`,
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		meta, err := resolveConversationOrFail(cmd, jsonOutput, cfg, sessionCommandsSessionReaders(), identity)
 		if err != nil {

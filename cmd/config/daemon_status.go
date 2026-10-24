@@ -36,7 +36,7 @@ daemon is not running or cannot report its settings.`,
 		jsonOut, _ := cmd.Flags().GetBool("json")
 		cfg, err := daemonSettingsLoad()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOut, "config_invalid", err)
+			return cli.ConfigFailure(cmd, jsonOut, err)
 		}
 		health := daemonSettingsHealth()
 		status := daemonSettingsStatus{Changed: []string{}}

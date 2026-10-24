@@ -106,7 +106,7 @@ func runOpenDashboard(cmd *cobra.Command, _ []string) error {
 	// dashboard refuses an invalid one and a tab that opens only to show an
 	// error and close is worse than an error from this command.
 	if _, err := loadOpenDashboardConfig(); err != nil {
-		return cli.CommandFailure(cmd, openDashboardJSON, "config_invalid", err)
+		return cli.ConfigFailure(cmd, openDashboardJSON, err)
 	}
 	bin, err := openDashboardBinary()
 	if err != nil {
@@ -141,7 +141,7 @@ func runOpenDashboard(cmd *cobra.Command, _ []string) error {
 // that, since its output is the JSON document, and says so.
 func openDashboardInTerminal(cmd *cobra.Command) error {
 	if _, err := loadOpenDashboardConfig(); err != nil {
-		return cli.CommandFailure(cmd, openDashboardJSON, "config_invalid", err)
+		return cli.ConfigFailure(cmd, openDashboardJSON, err)
 	}
 	popupErr := errNoAttachedTerminal
 	if opened, err := openTmux(); err == nil {

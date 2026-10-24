@@ -189,7 +189,7 @@ func runPolicy(cmd *cobra.Command, _ []string) error {
 
 	cfg, err := overseerLoadConfig()
 	if err != nil {
-		return policyError(cli.CommandFailure(cmd, jsonOutput, "config_error", err))
+		return policyError(cli.ConfigFailure(cmd, jsonOutput, err))
 	}
 
 	plan, _ := cmd.Flags().GetString("plan")

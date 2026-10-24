@@ -153,6 +153,30 @@ func TestVersionCommandMatchesTheVersionFlag(t *testing.T) {
 	}
 }
 
+// A config file that does not exist is config_missing whichever family
+// reports it: config show, config validate, and session list used to say
+// config_unreadable, config_invalid, and config_error.
+func TestMissingConfigIsOneCodeEverywhere(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("AMX_CONFIG", filepath.Join(dir, "absent.toml"))
+	for _, path := range [][]string{
+		{"config", "show"}, {"config", "validate"}, {"config", "hooks-status"},
+		{"session", "list"}, {"project", "list"},
+	} {
+		name := strings.Join(path, " ")
+		t.Run(name, func(t *testing.T) {
+			stdout, stderr, code := executeRootArgs(t, nil, append(append([]string{}, path...), "--json")...)
+			if code != 1 || stderr != "" {
+				t.Fatalf("exit = %d, stderr = %q", code, stderr)
+			}
+			if got := decodeErrorEnvelope(t, stdout); got.Code != cli.ConfigMissing {
+				t.Fatalf("code = %q, want %s: %s", got.Code, cli.ConfigMissing, got.Message)
+			}
+		})
+	}
+}
+
 // selfValidatedArgs are the leaves that declare no Args because their RunE
 // reads the positional arguments itself, with errors that name the selector
 // form they expected.
@@ -173,6 +197,11 @@ func TestEveryLeafDeclaresItsArguments(t *testing.T) {
 		for _, child := range command.Commands() {
 			if child.HasSubCommands() {
 				walk(child)
+				continue
+			}
+			// Cobra's own help and completion requests, added once root
+			// has run, take command names as arguments.
+			if child.Name() == "help" || child.Name() == cobra.ShellCompRequestCmd || child.Name() == cobra.ShellCompNoDescRequestCmd {
 				continue
 			}
 			if child.Runnable() && child.Args == nil && !selfValidatedArgs[child.CommandPath()] {

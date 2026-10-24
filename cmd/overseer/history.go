@@ -183,7 +183,7 @@ func runHistory(cmd *cobra.Command, _ []string) error {
 
 	cfg, err := overseerLoadConfig()
 	if err != nil {
-		return policyError(cli.CommandFailure(cmd, jsonOutput, "config_error", err))
+		return policyError(cli.ConfigFailure(cmd, jsonOutput, err))
 	}
 
 	plan, _ := cmd.Flags().GetString("plan")
@@ -269,7 +269,7 @@ func writeHistoryHalt(cmd *cobra.Command, jsonOutput bool, data historyData, hal
 		// envelope, while unreadable configuration is a failure and travels in
 		// the error envelope, exactly as it does when the read fails before the
 		// request starts.
-		return policyError(cli.CommandFailure(cmd, jsonOutput, "config_error", halt.err))
+		return policyError(cli.ConfigFailure(cmd, jsonOutput, halt.err))
 	}
 	data.Allowed = false
 	data.Reason = string(halt.decision.Reason)

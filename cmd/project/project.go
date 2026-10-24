@@ -190,7 +190,7 @@ type projectLaunchData struct {
 func runProjectList(cmd *cobra.Command, _ []string) error {
 	cfg, err := projectLoadConfig()
 	if err != nil {
-		return cli.CommandFailure(cmd, projectListJSON, "config_invalid", err)
+		return cli.ConfigFailure(cmd, projectListJSON, err)
 	}
 	filter, err := newProjectListFilter(cfg)
 	if err != nil {
@@ -441,7 +441,7 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	}
 	cfg, err := projectLoadConfig()
 	if err != nil {
-		return cli.CommandFailure(cmd, projectLaunchJSON, "config_invalid", err)
+		return cli.ConfigFailure(cmd, projectLaunchJSON, err)
 	}
 	if title == "" {
 		return projectMissingTitle(cmd, cfg)

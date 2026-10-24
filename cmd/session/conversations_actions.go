@@ -39,7 +39,7 @@ func newConversationActionCommand(name string, actionID actions.ID, short, long,
 			}
 			cfg, err := sessionCommandsLoadConfig()
 			if err != nil {
-				return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+				return cli.ConfigFailure(cmd, jsonOutput, err)
 			}
 			meta, err := resolveConversationOrFail(cmd, jsonOutput, cfg, sessionCommandsSessionReaders(), identity)
 			if err != nil {
@@ -63,7 +63,7 @@ func runConversationActionHere(cmd *cobra.Command, jsonOutput bool, name string,
 	}
 	cfg, err := sessionCommandsLoadConfig()
 	if err != nil {
-		return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+		return cli.ConfigFailure(cmd, jsonOutput, err)
 	}
 	dirs, err := sessionListHereDirs()
 	if err != nil {

@@ -118,7 +118,7 @@ are written.`,
 		jsonOutput := hooksSyncJSON
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		bin, err := hooksBinary()
 		if err != nil {
@@ -186,7 +186,7 @@ installed one, and says so.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, hooksStatusJSON, "config_error", err)
+			return cli.ConfigFailure(cmd, hooksStatusJSON, err)
 		}
 		running, err := hooksBinary()
 		if err != nil {

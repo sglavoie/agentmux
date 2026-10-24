@@ -78,7 +78,7 @@ fields are present only when messages were read.`,
 		}
 		cfg, err := sessionCommandsLoadConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		meta, err := resolveConversationOrFail(cmd, jsonOutput, cfg, sessionCommandsSessionReaders(), identity)
 		if err != nil {

@@ -766,8 +766,8 @@ func TestHistoryConfigFailureBetweenConversationsFailsClosed(t *testing.T) {
 		t.Fatalf("evidence read before the failure was returned: %s", stdout)
 	}
 	failure := decodeFailure(t, stdout)
-	if failure.Code != "config_error" {
-		t.Errorf("error code = %q, want config_error", failure.Code)
+	if failure.Code != "config_invalid" {
+		t.Errorf("error code = %q, want config_invalid", failure.Code)
 	}
 }
 

@@ -131,7 +131,7 @@ Only the cache is rewritten; the transcript files themselves never are.`,
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := transcriptsLoadConfig()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+			return cli.ConfigFailure(cmd, jsonOutput, err)
 		}
 		result, err := transcript.Rebuild(transcriptsIndexPath(), cfg, transcriptsReaders(), transcriptsRebuildAll)
 		if err != nil {

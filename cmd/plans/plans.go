@@ -153,7 +153,7 @@ func runPlanRun(cmd *cobra.Command, args []string) error {
 	}
 	cfg, err := planLoadConfig()
 	if err != nil {
-		return cli.CommandFailure(cmd, jsonOutput, "config_invalid", err)
+		return cli.ConfigFailure(cmd, jsonOutput, err)
 	}
 	plan, err := selectPlan(cfg, args[0])
 	if err != nil {

@@ -379,7 +379,7 @@ func runWorktreeViewHere(cmd *cobra.Command, view actions.UtilityView) error {
 func executeWorktreeAction(cmd *cobra.Command, actionID actions.ID, request actions.Request) (actions.Result, error) {
 	cfg, err := worktreeCommandsLoadConfig()
 	if err != nil {
-		return actions.Result{}, &actions.Error{Code: "config_error", Action: actionID, Message: err.Error()}
+		return actions.Result{}, &actions.Error{Code: cli.ConfigErrorCode(err), Action: actionID, Message: err.Error()}
 	}
 	deps := actions.Dependencies{
 		Config: cfg, WorktreeManager: worktreeCommandsNewManager(), Readers: worktreeCommandsReaders(),

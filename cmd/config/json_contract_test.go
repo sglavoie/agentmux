@@ -163,7 +163,7 @@ func TestConfigShowJSON(t *testing.T) {
 
 	out, err := run()
 	var exit *cli.ExitError
-	if !errors.As(err, &exit) || !strings.Contains(out, `"code":"config_unreadable"`) {
+	if !errors.As(err, &exit) || !strings.Contains(out, `"code":"config_missing"`) {
 		t.Fatalf("missing config: out = %s, err = %v", out, err)
 	}
 

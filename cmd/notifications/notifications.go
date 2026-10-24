@@ -90,7 +90,7 @@ func runNotificationsTest(cmd *cobra.Command, _ []string) error {
 	}
 	cfg, err := notificationsLoadConfig()
 	if err != nil {
-		return cli.CommandFailure(cmd, jsonOutput, "config_error", err)
+		return cli.ConfigFailure(cmd, jsonOutput, err)
 	}
 	// The test sends from this process rather than through the daemon, so
 	// it would sail past a snooze the daemon is holding. Ask first, and

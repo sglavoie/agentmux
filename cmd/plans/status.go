@@ -26,7 +26,7 @@ complete status, including each session's recorded verification.`,
 			jsonOutput, _ := cmd.Flags().GetBool("json")
 			cfg, err := planLoadConfig()
 			if err != nil {
-				return cli.CommandFailure(cmd, jsonOutput, "config_invalid", err)
+				return cli.ConfigFailure(cmd, jsonOutput, err)
 			}
 			if cfg.Defaults.ASL.ASLModeValue() == "disabled" {
 				return cli.CommandFailure(cmd, jsonOutput, "asl_disabled", errors.New("ASL is disabled in the configuration"))

@@ -181,7 +181,7 @@ With --json it reports {path, content}: content is the file's text, unparsed.`,
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		data, err := config.ReadDefault()
 		if err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "config_unreadable", fmt.Errorf("reading config: %w", err))
+			return cli.ConfigFailure(cmd, jsonOutput, fmt.Errorf("reading config: %w", err))
 		}
 		if jsonOutput {
 			return cli.WriteJSON(cmd, configShowData{Path: config.DefaultConfigPath(), Content: string(data)})
@@ -238,7 +238,7 @@ invalid_project_directories}.`,
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {
 			if jsonOutput {
-				return cli.CommandFailure(cmd, true, "config_invalid", err)
+				return cli.ConfigFailure(cmd, true, err)
 			}
 			ccerrors.Print(err)
 			return &cli.ExitError{Code: 1, Err: err, Quiet: true}
