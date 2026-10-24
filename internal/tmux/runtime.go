@@ -342,6 +342,7 @@ func (o RuntimeOptions) installBundle(dir string) (Runtime, Candidate) {
 	if err := atomicfile.Write(filepath.Join(o.Root, currentName), []byte(filepath.Base(target)+"\n"), 0o600); err != nil {
 		return fail("recording %s: %v", target, err)
 	}
+	removeRetired(o.Root)
 	c.Path = filepath.Join(target, bundledBinary)
 	return Runtime{Binary: c.Path, Version: version, Source: SourceBundled, Verified: true}, c
 }
@@ -518,6 +519,18 @@ func copyRuntime(from, target string, files []checksum, sums []byte) error {
 		}
 	}
 	return err
+}
+
+// removeRetired deletes the copies copyRuntime renamed aside once a verified
+// runtime is in place. The rename was what kept a server running an old copy
+// safe: its executable stays open by inode after the name is gone, and nothing
+// starts from a retired directory, since a server's record names the target.
+// A copy that cannot be removed now is left for the next resolve.
+func removeRetired(root string) {
+	retired, _ := filepath.Glob(filepath.Join(root, "tmux-*.retired-*"))
+	for _, dir := range retired {
+		_ = os.RemoveAll(dir)
+	}
 }
 
 // beforeRuntimeRenameForTest runs just before copyRuntime renames its staging

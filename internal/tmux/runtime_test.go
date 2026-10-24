@@ -256,11 +256,42 @@ func TestTamperedInstalledCopyIsReplacedFromTheBundle(t *testing.T) {
 	if body, _ := os.ReadFile(healed.Binary); string(body) != "pinned tmux" || !healed.Verified {
 		t.Fatalf("the tampered copy was used as it was: %q, %+v", body, healed)
 	}
-	// The altered directory was renamed aside rather than written over, so a
-	// server still running from it keeps its executable.
+	// The altered directory was renamed aside rather than written over, and
+	// removed once the healed copy was in place.
 	retired, _ := filepath.Glob(filepath.Dir(filepath.Dir(healed.Binary)) + ".retired-*")
-	if len(retired) != 1 {
-		t.Fatalf("retired copies = %v, want the one that was replaced", retired)
+	if len(retired) != 0 {
+		t.Fatalf("retired copies = %v, want none left behind", retired)
+	}
+}
+
+func TestARetiredCopyLeftByAnEarlierInstallIsRemoved(t *testing.T) {
+	t.Parallel()
+
+	opts := isolated(t)
+	bundle := fakeBundle(t, "3.7c", "pinned tmux")
+	opts.Getenv = func(key string) string {
+		if key == RuntimeEnv {
+			return bundle
+		}
+		return ""
+	}
+	leftover := filepath.Join(opts.Root, "tmux-3.7b-0123456789abcdef.retired-abc", "bin")
+	if err := os.MkdirAll(leftover, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	unrelated := filepath.Join(opts.Root, "notes.retired-keep")
+	if err := os.WriteFile(unrelated, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := ResolveRuntime(opts); err != nil {
+		t.Fatal(err)
+	}
+	if retired, _ := filepath.Glob(filepath.Join(opts.Root, "tmux-*.retired-*")); len(retired) != 0 {
+		t.Fatalf("retired copies = %v, want none left behind", retired)
+	}
+	if _, err := os.Stat(unrelated); err != nil {
+		t.Fatalf("a file that is not a retired runtime was removed: %v", err)
 	}
 }
 
