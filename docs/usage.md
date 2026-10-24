@@ -392,6 +392,39 @@ amx session fork-worktree codex <session-id> --yes
 amx session handoff claude:<session-id> --profile codex-work
 ```
 
+`amx session activity` reads what the daemon recorded in its journal: sessions
+changing state, agents exiting, and agent-session-loop runs starting and
+finishing. It is a record of what happened, never rebuilt from the sessions
+running now, so it reaches back only as far as the journal is retained.
+
+```bash
+amx session activity                     # the last 7 days, at most 500 records
+amx session activity --days 1 --limit 50 # --days is 1–90, --limit 1–1000
+amx session activity --json              # {entries, since, earliest_available, truncated, corrupt_lines, matched}
+```
+
+Each line is the time, the harness, a title, and a detail. A journal the
+command cannot open is `activity_unavailable`.
+
+`amx session changes` reviews a Git checkout against `--base` (`HEAD` unless
+given): staged and unstaged changes to tracked files, and untracked paths.
+Name the checkout with exactly one of `--directory`, or `--runtime-session`
+for the directory a live tmux session's agent is working in; a Kitty session
+is reviewed by `--directory`. It writes nothing, and runs no Git hook,
+external diff driver, or textconv.
+
+```bash
+amx session changes --directory .
+amx session changes --directory ~/projects/api --base main
+amx session changes --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --file README.md
+amx session changes --directory . --json   # {root, base, files, patch}
+```
+
+Each changed file is listed as `+added -deleted` and its path; `--file` adds
+that one file's patch. A runtime session that is not live, or whose pane has
+no working directory, is `session_unavailable`; a checkout Git cannot read is
+`review_unavailable`.
+
 `session show --at` opens a bounded window around the latest timestamped assistant
 message at or before the given RFC3339 event time, including old messages outside
 the recent tail. It returns `focus_message` when one exists; otherwise it returns
@@ -664,7 +697,7 @@ Inside the runs view:
 - `s`: stop the run after the current session, after confirmation
 - `X`: abort the run, after confirmation (`a` opens actions elsewhere and does nothing here)
 - `w`: open the run's Workbench page in your browser
-- `Enter` or `f`: focus the Kitty window bound to the run
+- `Enter` or `f`: focus or attach the session bound to the run
 - `Y`: copy the run's workspace root
 - `?`: show the keymap; `q`, `Esc`, or `A` returns to the dashboard (`A` is a
   runs-view key now — it closes the view it used to open)
@@ -1026,8 +1059,10 @@ What changes for a tmux session, and only for it:
   both stay overlays on the tab, and `--runtime-session` reaches a tmux session
   from there. `amx keybindings` opens in place.
 - **A tmux session can be given a name.** `amx name-session --runtime-session
-  <id> [name]` keeps a name with the session, on one line and at most 64
-  characters; with no name it removes the one the session has. Agent Mux.app
+  <id> <name>` keeps a name with the session, on one line and at most 64
+  characters, and `amx name-session --runtime-session <id> --clear` removes
+  the one it has; with neither a name nor `--clear` the command is refused,
+  so a slip never erases a name. Agent Mux.app
   shows the name above the session's profile in its sidebar, and names a
   session itself with ⌘R or a right-click on its line.
 - **A tmux outage keeps the list.** When tmux stops answering, the tmux rows
@@ -1494,6 +1529,19 @@ that may not be started is the same envelope with `started: false`, a
 `readiness.findings`, and a quiet nonzero exit: that is a decision about the
 plan, not a failure to decide. Everything else (an unknown plan, an ambiguous
 project, an agent-session-loop that did not answer) is the error envelope.
+
+`amx plans status PLAN` asks agent-session-loop (`asl status`) how far a split
+plan has got, and reads `PLAN` the same way. A terminal gets the plan's title,
+its complete and pending session counts, and the run working on it; `--json`
+carries the whole status, including each session's recorded verification.
+With agent-session-loop disabled in `[defaults.asl]` it is refused as
+`asl_disabled`, and an agent-session-loop that does not answer within 20
+seconds, or answers with no session progress, is `asl_status_failed`.
+
+```bash
+amx plans status 2e774ec64570
+amx plans status ~/.local/share/agent-plans/2e774ec64570-1a09b1daef1c --json
+```
 
 Project association is source-backed rather than inferred from plan prose.
 Agent Mux resolves the canonical plan workspace in this order: retained ASL

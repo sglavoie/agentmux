@@ -44,6 +44,7 @@ configuration is older than the file.
 | `amx config validate` | validate the config; warns about unknown and deprecated keys and about project directories that are missing or not directories. `--strict` fails on such a directory instead. `--json` reports the same as data, with a nonzero exit only under `--strict` |
 | `amx config hooks-sync` | sync hooks into all configured profiles |
 | `amx config hooks-status` | show hook sync status per profile |
+| `amx config confirmation` | report whether destructive actions (End Session, restart, and restart under another profile) ask for confirmation. `--policy follow-cli` (the default) reads `[defaults] confirm_destructive` from `config.toml` each time; `always` and `never` answer without reading it. `--json` reports `{required}`. Under **Follow config.toml**, the desktop app runs it just before a destructive action |
 
 ## Kitty (optional)
 
@@ -145,6 +146,27 @@ stores the profile it should launch by default, and one-time launcher overrides
 target another profile by this same `name`. If you use the same account or
 project family across harnesses, give each harness variant its own ID, such as
 `vta` for Claude and `vta-codex` for Codex.
+
+A profile's `home_dir` is exported to the harness as the variable named below.
+`config_dir` is the older spelling of the same key and is still read: a
+profile with no `home_dir` uses it, and when both are set `home_dir` wins.
+With neither, the harness's usual home is used. New configurations should
+write `home_dir`.
+
+A project may add environment variables of its own with `env`, a table of
+strings:
+
+```toml
+[[projects]]
+title = "api-staging"
+directory = "~/projects/api"
+profile = "claude-work"
+env = { API_ENV = "staging" }
+```
+
+They are applied after the profile's home variable, so a project key wins over
+it, and they reach the agent on either backend. `amx config validate` rejects
+an empty key or one containing `=`.
 
 ### Claude Code
 
