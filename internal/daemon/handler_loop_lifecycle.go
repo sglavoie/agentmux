@@ -144,7 +144,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 		)
 	}
 
-	if marker := loopMarkerForLifecycleTarget(eventOrAction, target, openTargets); marker != nil {
+	if marker := loopMarkerForLifecycleTarget(eventOrAction, target, openTargets, h.aslStateRoot()); marker != nil {
 		h.stateMu.Lock()
 		st := h.ensureWindowStateLocked(target.windowID)
 		// The reducer's per-run leases are authoritative once any ASL fact has
@@ -322,7 +322,9 @@ func normalizeKnownLoopHarness(raw string) string {
 	}
 }
 
-func loopMarkerForLifecycleTarget(eventOrAction string, lifecycleTarget loopLifecycleTarget, openTargets []agentloop.WorkspaceTarget) *bool {
+// stateRoot is the configured ASL state root ("" for ASL's default), which
+// the finish check's discovery must scan like every other discovery.
+func loopMarkerForLifecycleTarget(eventOrAction string, lifecycleTarget loopLifecycleTarget, openTargets []agentloop.WorkspaceTarget, stateRoot string) *bool {
 	target := lifecycleTarget.workspace
 	switch eventOrAction {
 	case events.AgentSessionLoopStarted, events.AgentSessionLoopTurnStarted,
@@ -349,7 +351,7 @@ func loopMarkerForLifecycleTarget(eventOrAction string, lifecycleTarget loopLife
 			slog.Debug("preserving loop marker after loop finish; target directory missing")
 			return nil
 		}
-		candidates, err := daemonLoopDiscover(agentloop.DiscoverOptions{})
+		candidates, err := daemonLoopDiscover(agentloop.DiscoverOptions{StateRoot: stateRoot})
 		if err != nil {
 			slog.Debug("preserving loop marker after loop finish; discovery failed", "err", err)
 			return nil

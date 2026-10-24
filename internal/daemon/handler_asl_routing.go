@@ -247,9 +247,10 @@ func (h *Handler) activeLoopCandidates() ([]agentloop.Candidate, error) {
 	// Capture the arrival generation so a lifecycle invalidation that races this
 	// scan can be detected before the result is published.
 	gen := h.activeLoopCacheGen
+	stateRoot := h.aslStateRootValue
 	h.stateMu.Unlock()
 
-	candidates, err := daemonLoopDiscover(agentloop.DiscoverOptions{})
+	candidates, err := daemonLoopDiscover(agentloop.DiscoverOptions{StateRoot: stateRoot})
 	if err != nil {
 		return nil, err
 	}
