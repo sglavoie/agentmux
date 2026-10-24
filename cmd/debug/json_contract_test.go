@@ -1,6 +1,8 @@
 package debug
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/debugger"
@@ -71,9 +73,9 @@ func TestDebugJSONCommandSurfaceIsVersioned(t *testing.T) {
 // identifier as fatal is behaving correctly, which is exactly why adding one
 // bumps the report version.
 //
-// Not audited here: `daemon audit` and `release-gate`, which also declare
-// --json and are absent from every audit in this file. Both are recorded as
-// follow-ups rather than fixed alongside doctor.
+// Not audited here: `release-gate`, which also declares --json; its evidence
+// record is versioned by internal/release. `daemon audit` has its own audit
+// below.
 func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 	commands := []*cobra.Command{doctorCmd}
 	for _, command := range commands {
@@ -134,5 +136,26 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 			t.Errorf("duplicate doctor finding identifier %q", check)
 		}
 		seen[check] = true
+	}
+}
+
+// `amx daemon audit --json` emits its own versioned report, like doctor, and
+// shares doctor's finding identifiers; what a consumer branches on is the
+// report version, the healthy verdict, and the strict-style exit status.
+func TestDaemonAuditJSONCommandSurfaceIsVersioned(t *testing.T) {
+	if daemonAuditCmd.Flags().Lookup("json") == nil {
+		t.Errorf("%s does not declare --json", daemonAuditCmd.CommandPath())
+	}
+	if auditReportSchemaVersion != 1 {
+		t.Fatalf("unexpected daemon audit JSON schema version %d; want 1", auditReportSchemaVersion)
+	}
+	encoded, err := json.Marshal(auditReport{SchemaVersion: auditReportSchemaVersion, Findings: []doctorFinding{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"schema_version":1`, `"started_at"`, `"finished_at"`, `"samples"`, `"findings":[]`, `"healthy"`} {
+		if !strings.Contains(string(encoded), field) {
+			t.Errorf("daemon audit report %s lacks %s", encoded, field)
+		}
 	}
 }
