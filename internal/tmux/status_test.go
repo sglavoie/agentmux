@@ -51,20 +51,28 @@ type colors struct {
 	// background is the SGR parameter the terminal is sent for a "#89b4fa"
 	// background: the color itself, or the nearest of the 256 indexed ones.
 	background string
+	// noLocale leaves LANG and LC_* unset, as they are for an app launchd
+	// started, though the terminal itself draws UTF-8.
+	noLocale bool
 }
 
 var (
 	indexedColors = colors{name: "256 colors", background: "48;5;111"}
 	trueColors    = colors{name: "true color", colorterm: "truecolor", background: "48;2;137;180;250"}
+	noLocale      = colors{name: "no locale", background: "48;5;111", noLocale: true}
 )
 
 // env is environ with the terminal's capabilities replaced by c's.
 func (c colors) env(environ []string) []string {
 	env := make([]string, 0, len(environ)+2)
 	for _, kv := range environ {
-		if !strings.HasPrefix(kv, "TERM=") && !strings.HasPrefix(kv, "COLORTERM=") {
-			env = append(env, kv)
+		if strings.HasPrefix(kv, "TERM=") || strings.HasPrefix(kv, "COLORTERM=") {
+			continue
 		}
+		if c.noLocale && (strings.HasPrefix(kv, "LANG=") || strings.HasPrefix(kv, "LC_")) {
+			continue
+		}
+		env = append(env, kv)
 	}
 	env = append(env, "TERM=xterm-256color")
 	if c.colorterm != "" {
@@ -176,7 +184,7 @@ func TestWriteStatusesIsOneClientAndEachPaneStandsAlone(t *testing.T) {
 // the option as the daemon rewrites it, and nothing in the text is read as
 // tmux styling. The color reaches a terminal in the form it can draw.
 func TestAnAttachedTerminalShowsTheRenderedStatus(t *testing.T) {
-	for _, c := range []colors{indexedColors, trueColors} {
+	for _, c := range []colors{indexedColors, trueColors, noLocale} {
 		t.Run(c.name, func(t *testing.T) { testAnAttachedTerminalShowsTheRenderedStatus(t, c) })
 	}
 }

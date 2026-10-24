@@ -132,6 +132,15 @@ func (in Input) Validate() error {
 // Typist writes input to a pane's program. It is what answering or prompting
 // an agent with no terminal attached needs; the caller has already decided
 // that this pane, now, is the one to write to.
+//
+// generation, when not empty, is the backend instance the caller decided on:
+// the input is written only while the backend is still that instance, so a
+// pane ID a restarted backend reused never receives it. A write refused that
+// way returns ErrStaleGeneration, and nothing reached the pane.
 type Typist interface {
-	Send(ref Ref, input Input) error
+	Send(ref Ref, generation string, input Input) error
 }
+
+// ErrStaleGeneration reports input that was not written because the backend
+// is no longer the instance the caller named.
+var ErrStaleGeneration = errors.New("backend: instance is not the generation named")

@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
+	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
 // Sending input to an agent nobody is attached to.
@@ -179,7 +180,12 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 	if err := term.SetMetadata(ref, map[string]string{SendOperationVar: req.OperationID + ":" + sendPending}); err != nil {
 		return SendOutcome{}, fmt.Errorf("recording operation %s: %w", req.OperationID, err)
 	}
-	if err := term.Send(ref, req.Input); err != nil {
+	if err := term.Send(ref, req.Record.Target.Instance.Generation, req.Input); err != nil {
+		if notWritten(err) {
+			// Nothing reached the pane, so the operation is not unknown: the
+			// mark goes back to what it was and a repeat may write it.
+			_ = term.SetMetadata(ref, map[string]string{SendOperationVar: pane.Vars[SendOperationVar]})
+		}
 		return outcome, err
 	}
 	outcome.Written = true
@@ -187,6 +193,14 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 		return outcome, fmt.Errorf("the input was written, but recording operation %s as sent failed: %w", req.OperationID, err)
 	}
 	return outcome, nil
+}
+
+// notWritten reports a failed write that certainly wrote nothing: the input
+// was refused before reaching the pane, or the client that would have written
+// it was never started.
+func notWritten(err error) bool {
+	return errors.Is(err, backend.ErrStaleGeneration) || errors.Is(err, backend.ErrInvalidInput) ||
+		errors.Is(err, backend.ErrInvalidRef) || errors.Is(err, tmux.ErrClientQueueTimeout)
 }
 
 // SendLook is what an agent's screen shows to someone about to send to it:

@@ -443,6 +443,11 @@ type AttachView struct {
 //
 // The status line is set for the session in the same invocation. One terminal
 // owns a session, so the line always follows the terminal attached last.
+//
+// The client is started with -u, as every other client is (runChainInput):
+// the terminals it runs in are UTF-8, but the locale it inherits may not say
+// so (an app launched by launchd has no LANG), and tmux would then draw every
+// non-ASCII character of the agent's screen and the status line as '_'.
 func (b *Backend) AttachCommand(pane backend.Ref, view AttachView) (*exec.Cmd, error) {
 	if err := paneOnly(pane); err != nil {
 		return nil, err
@@ -451,7 +456,7 @@ func (b *Backend) AttachCommand(pane backend.Ref, view AttachView) (*exec.Cmd, e
 	if view.StatusLine {
 		status = "on"
 	}
-	args := []string{"-S", b.server.socket, "-f", b.server.config, "source-file", b.server.config, ";"}
+	args := []string{"-u", "-S", b.server.socket, "-f", b.server.config, "source-file", b.server.config, ";"}
 	if view.Amx != "" {
 		if !filepath.IsAbs(view.Amx) || strings.ContainsRune(view.Amx, 0) {
 			return nil, fmt.Errorf("tmux: amx executable %q must be an absolute path", view.Amx)

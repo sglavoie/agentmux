@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
 
@@ -18,15 +19,19 @@ import (
 type failingTypist struct {
 	SendTerminal
 	failSend    bool
+	sendErr     error
 	failRecord  bool
 	wroteRecord int
 }
 
-func (f *failingTypist) Send(ref backend.Ref, input backend.Input) error {
+func (f *failingTypist) Send(ref backend.Ref, generation string, input backend.Input) error {
+	if f.sendErr != nil {
+		return f.sendErr
+	}
 	if f.failSend {
 		return errors.New("tmux went away")
 	}
-	return f.SendTerminal.Send(ref, input)
+	return f.SendTerminal.Send(ref, generation, input)
 }
 
 func (f *failingTypist) SetMetadata(ref backend.Ref, vars map[string]string) error {
@@ -104,6 +109,27 @@ func TestSendThatFailsLeavesItsOperationUnfinished(t *testing.T) {
 	req.OperationID = "op-2"
 	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written || outcome.Screen != SendScreenIdle {
 		t.Fatalf("new operation = %+v, %v", outcome, err)
+	}
+}
+
+func TestSendThatCertainlyWroteNothingCanBeRepeated(t *testing.T) {
+	for name, cause := range map[string]error{
+		"no client slot": &tmux.CommandError{Err: tmux.ErrClientQueueTimeout},
+		"another server": backend.ErrStaleGeneration,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, req := sendFixture(t)
+			outcome, err := Send(&failingTypist{SendTerminal: f.Backend, sendErr: cause}, req)
+			if err == nil || outcome.Written {
+				t.Fatalf("Send = %+v, %v; want a failure that wrote nothing", outcome, err)
+			}
+			if got := sendRecorded(t, f, req.Record); got == "op-1:pending" {
+				t.Fatal("a write that never started left its operation pending, so a repeat would be refused forever")
+			}
+			if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written {
+				t.Fatalf("repeat = %+v, %v; want it written", outcome, err)
+			}
+		})
 	}
 }
 

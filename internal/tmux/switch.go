@@ -226,12 +226,13 @@ func (s Switcher) Hosted(id runtimesession.ID) (bool, error) {
 	return strings.HasPrefix(record.Attachment.ID, hostedAttachmentPrefix), nil
 }
 
-// owner is the client that attached last.
+// owner is the client that attached last, by the same order Competing keeps
+// its owner by.
 func (s Survey) owner() (Client, bool) {
 	var last Client
 	found := false
 	for _, client := range s.Clients {
-		if !found || client.Created > last.Created || (client.Created == last.Created && client.Name > last.Name) {
+		if !found || attachedAfter(client, last) {
 			last, found = client, true
 		}
 	}

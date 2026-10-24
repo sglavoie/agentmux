@@ -165,7 +165,10 @@ func (s Survey) ClientsOf(pane backend.Ref) []Client {
 // fingerprint reads a process's start token. Without one, a live pane holding
 // the registered PID is taken to hold the registered process: the server
 // holds each pane's program as its own child for as long as the pane is not
-// dead, so within one server generation that PID cannot have been reused.
+// dead, so within one server generation that PID cannot have been reused. A
+// fingerprint that fails to read is treated as no fingerprint, never as no
+// process: a slow or failing ps is no evidence that the agent has gone, and a
+// session the registry marks stale never comes back.
 func (s Survey) Observation(record runtimesession.Record, fingerprint func(pid int) (runtimesession.ProcessFingerprint, error)) runtimesession.Observation {
 	observation := runtimesession.Observation{Instance: s.Instance}
 	if record.Target == nil || !s.Running {
@@ -188,11 +191,13 @@ func (s Survey) Observation(record runtimesession.Record, fingerprint func(pid i
 		return observation
 	}
 	pid := pane.Foreground[0].PID
-	switch {
-	case fingerprint != nil:
+	if fingerprint != nil {
 		if process, err := fingerprint(pid); err == nil {
 			observation.Process = &process
+			return observation
 		}
+	}
+	switch {
 	case record.Process != nil && record.Process.PID == pid:
 		process := *record.Process
 		observation.Process = &process
@@ -268,19 +273,25 @@ func (s Survey) Competing() []Client {
 		if len(clients) < 2 {
 			continue
 		}
-		sort.Slice(clients, func(i, j int) bool {
-			if clients[i].Created != clients[j].Created {
-				return clients[i].Created > clients[j].Created
-			}
-			if clients[i].Activity != clients[j].Activity {
-				return clients[i].Activity > clients[j].Activity
-			}
-			return clients[i].Name > clients[j].Name
-		})
+		sort.Slice(clients, func(i, j int) bool { return attachedAfter(clients[i], clients[j]) })
 		competing = append(competing, clients[1:]...)
 	}
 	sort.Slice(competing, func(i, j int) bool { return competing[i].Name < competing[j].Name })
 	return competing
+}
+
+// attachedAfter orders the terminals of one session by which attached last.
+// tmux records attachment to the second, so equals fall to the one used last
+// and then to the name. Competing keeps the first and Switcher.Viewer moves
+// it; one order keeps them from picking different terminals.
+func attachedAfter(a, b Client) bool {
+	if a.Created != b.Created {
+		return a.Created > b.Created
+	}
+	if a.Activity != b.Activity {
+		return a.Activity > b.Activity
+	}
+	return a.Name > b.Name
 }
 
 // OpenExisting returns the private server whose socket is at address, for
