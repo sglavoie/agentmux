@@ -297,7 +297,7 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v cmd=%v", spec.Title, spec.Directory, harnessName, spec.Placement, spec.Env, spec.Argv)
 	if err := term.Launch(spec); err != nil {
 		launchDebug.Printf("Launch: LaunchTab error: %v", err)
-		recordHarnessLaunch(cfg, sess, acc, invocation, "error", err.Error(), nativeReport)
+		recordHarnessLaunch(cfg, sess, acc, invocation, "error", launchReasonLaunchFailed, nativeReport)
 		return fmt.Errorf("launching session %q: %w", formattedTitle, err)
 	}
 	launchDebug.Printf("Launch: LaunchTab succeeded")

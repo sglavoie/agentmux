@@ -20,6 +20,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
 // RuntimeSessionVar is the pane metadata key naming the runtime session a
@@ -178,7 +179,7 @@ func psStartToken(pid int) (string, error) {
 // launchers can never both decide a key is free, and every launch either
 // ends live in the registry or leaves nothing running: a failed launch ends
 // its pending record, and a launch whose registration cannot be committed is
-// closed again.
+// closed again (and its record ended only once the close succeeded).
 func launchTmux(rt Runtime, sess config.Session, acc config.Account, cfg *config.Config, formattedTitle string, build func() (harness.Invocation, error), policy LaunchPolicy, lin lineage) (LaunchResult, error) {
 	result := LaunchResult{Backend: runtimesession.BackendTmux}
 	store, err := rt.registry()
@@ -269,7 +270,7 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 	launchDebug.Printf("Launch: tmux LaunchTarget: runtime=%s title=%q dir=%q", id, spec.Title, spec.Directory)
 	launched, err := rt.Tmux.LaunchTarget(spec)
 	if err != nil {
-		recordHarnessLaunch(cfg, sess, acc, invocation, "error", err.Error(), nativeReport)
+		recordHarnessLaunch(cfg, sess, acc, invocation, "error", tmuxLaunchFailureReason(err), nativeReport)
 		return tmuxLaunch{}, errors.Join(fmt.Errorf("launching session %q: %w", formattedTitle, err), end())
 	}
 	committed := func() error {
@@ -286,13 +287,34 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 	if committed != nil {
 		// An agent the registry does not know about could be launched again
 		// by the next attempt, so a launch that cannot be committed is undone.
-		recordHarnessLaunch(cfg, sess, acc, invocation, "error", committed.Error(), nativeReport)
-		return tmuxLaunch{}, errors.Join(
-			fmt.Errorf("launching session %q: committing runtime session %s: %w", formattedTitle, id, committed),
-			rt.Tmux.Close(launched.Group), end())
+		recordHarnessLaunch(cfg, sess, acc, invocation, "error", launchReasonCommitFailed, nativeReport)
+		failure := fmt.Errorf("launching session %q: committing runtime session %s: %w", formattedTitle, id, committed)
+		if closeErr := rt.Tmux.Close(launched.Group); closeErr != nil {
+			// The agent may still be running, so its record stays pending:
+			// ending it would leave a running agent the registry calls
+			// finished. The next launch abandons the interrupted
+			// registration (AbandonInterrupted), and until then the pane
+			// still deduplicates its key.
+			return tmuxLaunch{}, errors.Join(failure,
+				fmt.Errorf("closing uncommitted session %s: %w", id, closeErr))
+		}
+		return tmuxLaunch{}, errors.Join(failure, end())
 	}
 	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport)
 	return tmuxLaunch{Launched: launched, id: id}, nil
+}
+
+// Journal reasons for a launch that failed. A reason is a word from a fixed
+// vocabulary, never an error's text: a backend error can carry the launch's
+// argument list, which holds the project environment and the initial prompt.
+const (
+	launchReasonLaunchFailed = "launch_failed"
+	launchReasonCommitFailed = "commit_failed"
+)
+
+// tmuxLaunchFailureReason names a failed tmux launch by its failure class.
+func tmuxLaunchFailureReason(err error) string {
+	return launchReasonLaunchFailed + ":" + tmux.FailureClass(err)
 }
 
 func loginShell() string {
