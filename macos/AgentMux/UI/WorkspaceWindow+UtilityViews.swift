@@ -168,6 +168,37 @@ extension WorkspaceWindowController {
         }
     }
 
+    /// Session shells belong to their session. Remove the whole batch before
+    /// updating either pane so navigation cannot reopen a sibling being closed.
+    func closeTerminals(beside sessionIDs: Set<String>) {
+        let children = views.opened.filter { view in
+            view.besideRuntimeSessionID.map { sessionIDs.contains($0) } ?? false
+        }
+        guard !children.isEmpty else { return }
+        let ids = Set(children.map(\.id))
+        for view in children {
+            discardViewTerminal(view.id)
+            views.close(view.id)
+            endedViews.remove(view.id)
+        }
+        returnPlaces = returnPlaces.filter { entry in
+            if ids.contains(entry.key) { return false }
+            if case let .view(id) = entry.value { return !ids.contains(id) }
+            return true
+        }
+        if case let .view(id)? = otherPlace, ids.contains(id) {
+            otherPlace = nil
+            otherContent = .empty
+            activeOnRight = false
+        }
+        if let id = viewSelection, ids.contains(id) {
+            viewSelection = nil
+            showView(WorkspaceUtilityView.dashboard.id, focus: !isSwitching)
+        }
+        reloadSidebar()
+        updateContent(focus: false)
+    }
+
     /// What ⌘W does where the pane is now, as its menu item says it.
     var closeShownTitle: String {
         if reviewSelected || viewSelection != nil { return Self.closeViewTitle }
@@ -217,6 +248,9 @@ extension WorkspaceWindowController {
         } else {
             alert.informativeText = "Its agent is idle and stops when the session ends. \(Self.conversationKept)"
         }
+        if !views.terminals(beside: row.embeddedRuntimeSessionID).isEmpty {
+            alert.informativeText += " Terminals opened beside this session will also close."
+        }
         alert.addButton(withTitle: "End Session").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { response in
@@ -251,6 +285,7 @@ extension WorkspaceWindowController {
                 return
             }
             Self.logger.notice("workspace: closed session \(id, privacy: .public)")
+            self.closeTerminals(beside: [id])
             if self.state.current, !self.state.embeddedRuntimeSessionIDs.contains(id) {
                 self.closing[id] = nil
             } else {
@@ -285,7 +320,7 @@ extension WorkspaceWindowController {
 
     private var sessionForTerminalBeside: String? {
         let id = views.view(viewSelection)?.besideRuntimeSessionID ?? state.selectedRow?.embeddedRuntimeSessionID
-        guard let id, state.row(.embedded(id)) != nil else { return nil }
+        guard let id, state.row(.embedded(id)) != nil, closing[id] == nil else { return nil }
         return id
     }
 

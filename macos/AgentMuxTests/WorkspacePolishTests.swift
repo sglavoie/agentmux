@@ -128,14 +128,15 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertEqual(try cell().detailLabel.stringValue, "Shell · release notes")
         XCTAssertEqual(try cell().toolTip, "Shell · release notes")
 
-        // Its session ends: the terminal keeps the name it was last listed
-        // under, never the raw runtime session ID.
-        app.store.apply(snapshot: F.snapshot([named[1], named[2]]))
-        XCTAssertNotNil(workspace.views.view(id))
-        XCTAssertEqual(try cell().toolTip, "Shell · release notes")
         workspace.toggleSwitcher()
         workspace.switcher.enter("release")
-        XCTAssertEqual(workspace.switcher.shown.map(\.detail), ["Shell · release notes"])
+        XCTAssertTrue(workspace.switcher.shown.map(\.detail).contains("Shell · release notes"))
+
+        // Its session ends: the terminal leaves the sidebar and switcher too.
+        app.store.apply(snapshot: F.snapshot([named[1], named[2]]))
+        XCTAssertNil(workspace.views.view(id))
+        XCTAssertTrue(workspace.isSwitching, "session cleanup preserves an open switcher")
+        XCTAssertTrue(workspace.switcher.shown.isEmpty)
     }
 
     // MARK: Right-click

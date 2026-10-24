@@ -543,6 +543,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 Self.logger.notice("workspace: \(id, privacy: .public) is no longer listed; detaching its terminal")
                 discardTerminal(id)
             }
+            closeTerminals(beside: Set(views.opened.compactMap(\.besideRuntimeSessionID)).subtracting(listed))
             detached.formIntersection(listed)
             closing = closing.filter { !$0.value.answered || listed.contains($0.key) }
         }

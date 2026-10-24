@@ -42,7 +42,8 @@ extension WorkspaceWindowController {
         restoringFraction = layout.fraction
         if case let .session(encoded) = layout.active, let place = WorkspaceRestoration.Place(encoded: encoded) {
             restore(place, conversation: layoutConversation)
-        } else if let active = restorePane(layout.active) {
+        } else {
+            let active = restorePane(layout.active) ?? .view(WorkspaceUtilityView.dashboard.id)
             state.select(nil)
             viewSelection = nil
             reviewSelected = false
@@ -63,6 +64,9 @@ extension WorkspaceWindowController {
             return WorkspaceRestoration.Place(encoded: encoded)?.sessionKey.map(Place.session)
         case let .utility(view):
             guard !view.isOverlay else { return nil }
+            if let id = view.besideRuntimeSessionID {
+                guard state.row(.embedded(id)) != nil, closing[id] == nil else { return nil }
+            }
             views.open(view)
             if !view.isPermanent { endedViews.insert(view.id) }
             return .view(view.id)

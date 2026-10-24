@@ -160,19 +160,22 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertEqual(try viewCell(second).detailLabel.stringValue, "zsh · api — personal")
         XCTAssertEqual(try viewCell(second).toolTip, "Shell · api — personal")
 
-        // Its session ends: the terminal keeps both the program's title and
-        // the name it was last listed under.
-        app.store.apply(snapshot: F.snapshot([named[1]]))
-        XCTAssertNotNil(workspace.views.view(first))
-        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "zsh · release notes")
-        XCTAssertEqual(try viewCell(first).toolTip, "Shell · release notes")
-        workspace.toggleSwitcher()
-        workspace.switcher.enter("release")
-        XCTAssertEqual(workspace.switcher.shown.map(\.detail), ["Shell · release notes"])
-
         // The title cleared, the line is the view's own again.
         workspace.terminalTitleChanged(firstTerminal, title: "")
         XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "Shell · release notes")
+
+        // Its session ends: neither its terminal nor its program title remains.
+        app.store.apply(snapshot: F.snapshot([named[1]]))
+        XCTAssertNil(workspace.views.view(first))
+        XCTAssertNil(workspace.programTitles[first])
+        XCTAssertEqual(try viewCell(second).detailLabel.stringValue, "zsh · api — personal")
+        workspace.toggleSwitcher()
+        workspace.switcher.enter("release")
+        XCTAssertTrue(workspace.switcher.shown.isEmpty)
+
+        // A late event from the discarded terminal cannot restore its title.
+        workspace.terminalTitleChanged(firstTerminal, title: "late title")
+        XCTAssertNil(workspace.programTitles[first])
     }
 
     /// tmux copies a mouse selection when the button is let go: the link

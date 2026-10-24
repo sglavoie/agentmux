@@ -7,8 +7,7 @@ extension WorkspaceWindowController {
     // MARK: Sidebar
 
     func reloadSidebar(force: Bool = false, allowReorder: Bool = false) {
-        // A session's terminals follow its row. One whose session is no
-        // longer listed keeps running, among the workspace's own views.
+        // A session's terminals follow its row and are closed with it by refresh.
         let listed = state.embeddedRuntimeSessionIDs
         for row in state.rows {
             if let id = row.embeddedRuntimeSessionID {

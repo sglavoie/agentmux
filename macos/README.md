@@ -462,7 +462,8 @@ ASL answer panel work the same either way.
   leaving the agent running and listed. Click the row or choose Reattach to
   return. The Session menu and row context menu provide **End Session…** (⌘⇧W),
   which runs `amx close <runtime-session-id> --yes` after confirmation by default.
-  Its conversation stays on disk. ⌘W's menu item says **Detach Terminal** on
+  Its conversation stays on disk; terminals opened beside it close with it.
+  ⌘W's menu item says **Detach Terminal** on
   a session and **Close View** on a utility view. Closing a utility view ends
   its program, asking first when Ghostty reports it still needs confirmation.
   Settings → Workspace offers Follow config.toml and Always/Never app
@@ -697,7 +698,8 @@ and Kitty variable from its environment before running it.
   a login shell in the directory of that session's pane, which amx reads only
   while the private server holds the pane for that session. The sidebar lists
   it under the session's row (`reloadSidebar`) rather than in **Workspace**,
-  and moves it there if a live snapshot stops listing the session. It is a
+  and closes it when the session ends, including when a live snapshot stops
+  listing the session. A disconnected feed keeps the terminals intact. It is a
   utility view in every other respect: `WorkspaceState.rows` never holds it,
   so the digit shortcuts cannot land on it; `selectNeighbor` walks the
   sidebar's sessions and the terminals under them, so ⌘] and ⌘[ do, and

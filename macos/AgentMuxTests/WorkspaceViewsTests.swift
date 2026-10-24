@@ -738,10 +738,137 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertNil(workspace.views.view(second))
         XCTAssertEqual(app.closedViews, [second])
 
-        // Its session ends: the shell keeps running, among the workspace's views.
+        // Its session ends: its remaining shell closes too.
         app.store.apply(snapshot: F.snapshot([sessions[1], sessions[2]]))
-        XCTAssertEqual(app.closedViews, [second])
-        XCTAssertEqual(try index(ofView: first), 3)
+        XCTAssertEqual(app.closedViews, [second, first])
+        XCTAssertNil(workspace.views.view(first))
+        XCTAssertNil(workspace.utilityTerminalView(for: first))
+    }
+
+    func testEndingSessionClosesAllItsTerminalsOnlyAfterSuccess() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(.embedded(F.runtimeID(2)), focus: true)
+        workspace.openTerminalBesideSession()
+        let unrelated = try XCTUnwrap(workspace.viewSelection)
+        workspace.openNewShell(in: "/work/api")
+        let shell = try XCTUnwrap(workspace.viewSelection)
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.openTerminalBesideSession()
+        workspace.openTerminalBesideSession()
+        let children = workspace.views.terminals(beside: F.runtimeID(1)).map(\.id)
+        let made = app.madeViews
+        app.runningViews = Set(children)
+        workspace.confirmViewClose = { _, _ in XCTFail("ending the session already authorizes its terminal cleanup") }
+        workspace.confirmClose = { _, answer in answer(true) }
+        app.holdsCloses = true
+
+        workspace.closeSession(.embedded(F.runtimeID(1)))
+        XCTAssertTrue(app.closedViews.isEmpty, "keep shells until the close succeeds")
+        XCTAssertFalse(workspace.openTerminalBesideSession(), "do not add terminals while ending")
+        app.finishClosing()
+
+        XCTAssertEqual(Set(app.closedViews), Set(children))
+        XCTAssertTrue(workspace.views.terminals(beside: F.runtimeID(1)).isEmpty)
+        XCTAssertTrue(children.allSatisfy { workspace.utilityTerminalView(for: $0) == nil })
+        XCTAssertNotNil(workspace.utilityTerminalView(for: unrelated))
+        XCTAssertNotNil(workspace.utilityTerminalView(for: shell))
+        XCTAssertEqual(workspace.content, .view(id: "dashboard"))
+        XCTAssertEqual(app.madeViews, made + ["dashboard"], "cleanup cannot recreate a sibling terminal")
+        app.store.apply(snapshot: F.snapshot(Array(sessions.dropFirst())))
+        XCTAssertEqual(app.closedViews.count, children.count, "snapshot cleanup is idempotent")
+    }
+
+    func testCancelledAndFailedSessionClosePreserveItsTerminals() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.openTerminalBesideSession()
+        let child = try XCTUnwrap(workspace.viewSelection)
+        let terminal = try XCTUnwrap(workspace.utilityTerminalView(for: child))
+        workspace.confirmClose = { _, answer in answer(false) }
+        workspace.closeSession(.embedded(F.runtimeID(1)))
+        XCTAssertTrue(app.ended.isEmpty)
+        XCTAssertTrue(app.closedViews.isEmpty)
+
+        workspace.confirmClose = { _, answer in answer(true) }
+        app.closeProblem = "server unavailable"
+        var problems: [String] = []
+        workspace.reportCloseProblem = { _, problem in problems.append(problem) }
+        workspace.closeSession(.embedded(F.runtimeID(1)))
+        XCTAssertEqual(problems, ["server unavailable"])
+        XCTAssertTrue(app.closedViews.isEmpty)
+        XCTAssertTrue(workspace.utilityTerminalView(for: child) === terminal)
+        XCTAssertEqual(workspace.viewSelection, child)
+        XCTAssertTrue(workspace.canOpenTerminalBesideSession)
+    }
+
+    func testLiveRemovalClosesChildTerminalsAcrossPanesButDisconnectionAndDetachKeepThem() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.openTerminalBesideSession()
+        let first = try XCTUnwrap(workspace.viewSelection)
+        workspace.split(with: .embedded(F.runtimeID(1)))
+        workspace.openTerminalBesideSession()
+        let second = try XCTUnwrap(workspace.viewSelection)
+        XCTAssertEqual(workspace.otherPlace, .view(first))
+        workspace.detachSession(.embedded(F.runtimeID(1)))
+        XCTAssertTrue(app.closedViews.isEmpty)
+        app.store.apply(.disconnected(.notRunning, retryIn: 0.5))
+        XCTAssertTrue(app.closedViews.isEmpty)
+        XCTAssertEqual(workspace.viewSelection, second)
+
+        app.store.apply(snapshot: F.snapshot(Array(sessions.dropFirst())))
+        XCTAssertEqual(Set(app.closedViews), [first, second])
+        XCTAssertFalse(workspace.isSplit)
+        XCTAssertEqual(workspace.content, .view(id: "dashboard"))
+        XCTAssertTrue(workspace.views.terminals(beside: F.runtimeID(1)).isEmpty)
+        XCTAssertTrue(app.ended.isEmpty, "the snapshot already reports the session gone")
+    }
+
+    func testEndingBackgroundSessionPreservesShownTerminal() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.openTerminalBesideSession()
+        let child = try XCTUnwrap(workspace.viewSelection)
+        workspace.select(.embedded(F.runtimeID(2)), focus: true)
+        workspace.confirmClose = { _, answer in answer(true) }
+
+        workspace.closeSession(.embedded(F.runtimeID(1)))
+        XCTAssertEqual(app.closedViews, [child])
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
+        XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(2)))
+    }
+
+    func testSnapshotBeforeCloseReplyCleansTerminalsEvenWithWindowClosed() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.openTerminalBesideSession()
+        let child = try XCTUnwrap(workspace.viewSelection)
+        workspace.confirmClose = { _, answer in answer(true) }
+        app.holdsCloses = true
+        workspace.closeSession(.embedded(F.runtimeID(1)))
+        workspace.window.close()
+        XCTAssertTrue(app.closedViews.isEmpty)
+
+        app.store.apply(snapshot: F.snapshot(Array(sessions.dropFirst())))
+        XCTAssertEqual(app.closedViews, [child])
+        XCTAssertNil(workspace.views.view(child))
+        XCTAssertFalse(workspace.isOpen)
+        app.finishClosing()
+        XCTAssertEqual(app.closedViews, [child])
+        workspace.openForTesting()
+        XCTAssertEqual(workspace.content, .view(id: "dashboard"))
+        XCTAssertEqual(app.madeViews, [child, "dashboard"])
+    }
+
+    func testSavedLayoutDoesNotRestoreOrphanTerminals() {
+        let first = WorkspaceUtilityView(kind: .terminal, target: F.runtimeID(1), title: "Terminal", ordinal: 1)
+        let second = WorkspaceUtilityView(kind: .terminal, target: F.runtimeID(1), title: "Terminal 2", ordinal: 2)
+        workspace.restoreLayout(.init(active: .utility(second), other: .utility(first), activeOnRight: true))
+        app.store.apply(snapshot: F.snapshot(Array(sessions.dropFirst())))
+        XCTAssertTrue(workspace.views.terminals(beside: F.runtimeID(1)).isEmpty)
+        XCTAssertFalse(workspace.isSplit)
+        XCTAssertEqual(workspace.content, .view(id: "dashboard"))
+        XCTAssertEqual(app.madeViews, ["dashboard"])
     }
 
     func testUtilityViewsAreNeverSessionsAndNeverWait() throws {
