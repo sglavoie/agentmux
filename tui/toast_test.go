@@ -227,7 +227,7 @@ func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
 	if cmd != nil || !m.toasts[0].Persistent {
 		t.Fatal("copy failure should remain visible without an expiry ticker")
 	}
-	assertStatusBarContains(t, m, "copy: clipboard unavailable")
+	assertStatusBarContains(t, m, "Copy failed: clipboard unavailable")
 }
 
 func TestCopyDoneSuccessSaysWhatWasCopied(t *testing.T) {
@@ -239,7 +239,7 @@ func TestCopyDoneSuccessSaysWhatWasCopied(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected copy success to arm toast tick")
 	}
-	assertStatusBarContains(t, m, "copied: /tmp/demo.jsonl")
+	assertStatusBarContains(t, m, "Copied: /tmp/demo.jsonl")
 }
 
 func TestCopyExcerptKeepsOneBoundedLine(t *testing.T) {

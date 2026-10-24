@@ -571,3 +571,29 @@ func TestViewerFootersAdvertiseCopy(t *testing.T) {
 		})
 	}
 }
+
+// While `/` takes text, every letter a list's palette names is typed into the
+// query, so the footer names only the keys that end the typing.
+func TestFootersWhileTypingAQueryNameOnlyApplyAndCancel(t *testing.T) {
+	for name, m := range map[string]Model{
+		"launcher":      {mode: ModePicker, pickerSearchMode: true},
+		"past sessions": {mode: ModeSessionSearch, sessionSearchMode: true},
+		"plans":         {mode: ModePlanSearch, planSearchMode: true},
+		"worktrees":     {mode: ModeWorktrees, worktreeFilterMode: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m.width, m.height = 120, 24
+			footer := ansi.Strip(renderFooter(m))
+			for _, want := range []string{"enter apply", "esc cancel"} {
+				if !strings.Contains(footer, want) {
+					t.Errorf("footer %q lacks %q", footer, want)
+				}
+			}
+			for _, typed := range []string{"toggle", "launch", "continue", "delete", "run", "up/down"} {
+				if strings.Contains(footer, typed) {
+					t.Errorf("footer %q names %q, whose key is being typed into the query", footer, typed)
+				}
+			}
+		})
+	}
+}

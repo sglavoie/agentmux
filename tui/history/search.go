@@ -73,15 +73,26 @@ func (in SearchInput) VisibleHeight() int {
 	return avail
 }
 
+// errorLines reports how many wrapped rows the inline refresh and search
+// errors occupy at the current width.
 func (in SearchInput) errorLines() int {
 	n := 0
-	if in.RefreshErr != nil {
-		n++
-	}
-	if in.SearchErr != nil {
-		n++
+	for _, line := range in.errorTexts() {
+		n += len(layout.WrapHard(line, layout.WrapWidth(in.Width)))
 	}
 	return n
+}
+
+// errorTexts are the inline errors, before wrapping.
+func (in SearchInput) errorTexts() []string {
+	var texts []string
+	if err := in.RefreshErr; err != nil {
+		texts = append(texts, in.RefreshErrLabel+": "+err.Error())
+	}
+	if err := in.SearchErr; err != nil {
+		texts = append(texts, "Search error: "+err.Error())
+	}
+	return texts
 }
 
 // Render renders the entire Past Sessions view: header, chip bar, query bar,
@@ -116,9 +127,9 @@ func (in SearchInput) Render() string {
 	var queryBar string
 	switch {
 	case in.SearchMode:
-		queryBar = styleSearch.Render("/") + in.Query + "█"
+		queryBar = layout.QueryLine(styleSearch.Render("/"), in.Query+"█", in.Width)
 	case in.Query != "":
-		queryBar = styleSearch.Render("/") + in.Query
+		queryBar = layout.QueryLine(styleSearch.Render("/"), in.Query, in.Width)
 	default:
 		// The footer names every row key; this line only says how to start.
 		queryBar = styleDim.Render("press / to search")
@@ -132,11 +143,10 @@ func (in SearchInput) Render() string {
 	}
 	sb.WriteByte('\n')
 
-	if err := in.RefreshErr; err != nil {
-		sb.WriteString(styleError.Render(in.RefreshErrLabel+": "+err.Error()) + "\n")
-	}
-	if err := in.SearchErr; err != nil {
-		sb.WriteString(styleError.Render("search error: "+err.Error()) + "\n")
+	for _, text := range in.errorTexts() {
+		for _, line := range layout.WrapHard(text, layout.WrapWidth(in.Width)) {
+			sb.WriteString(styleError.Render(line) + "\n")
+		}
 	}
 
 	sb.WriteString(in.RenderList(in.VisibleHeight()))
@@ -191,10 +201,14 @@ func (in SearchInput) emptyHint() string {
 
 // emptyText is what an empty list says. With nothing narrowing it no
 // transcript was found at all, which points at the profiles' home_dir rather
-// than at a filter.
+// than at a filter, unless loading them failed: then the line says so and how
+// to retry (opening Past Sessions again rescans), as Plans does.
 func (in SearchInput) emptyText() string {
 	hint := in.emptyHint()
 	if hint == "" {
+		if in.RefreshErr != nil || in.SearchErr != nil {
+			return layout.Placeholder(layout.LoadFailedText("past sessions", "esc, then reopen Past Sessions to retry"))
+		}
 		return layout.Placeholder(layout.EmptyText("past sessions found", "each profile's home_dir in config.toml says where to look"))
 	}
 	return layout.Placeholder(layout.NoMatchText("sessions", hint))

@@ -252,12 +252,8 @@ func modeErrorStatus(m Model) (statusMessage, bool) {
 	return statusMessage{}, false
 }
 
-func sentenceCase(s string) string {
-	if s == "" {
-		return ""
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
+// sentenceCase capitalizes a message's first letter, whatever its width.
+func sentenceCase(s string) string { return layout.Sentence(s) }
 
 // daemonHealthDegraded and hookHealthDegraded are the status bar's reading of
 // two named issues. They ask the issue model rather than re-testing the raw

@@ -60,6 +60,7 @@ func openLauncherCommand(m Model, _ commands.Context) (Model, tea.Cmd) {
 	m.pickerProfileOverride, m.pickerPinned = launch.LoadState(m.pickerSessions)
 	m.pickerDirOverride = nil
 	m.pickerCursor = 0
+	m.pickerOffset = 0
 	m.pickerFilter = ""
 	m.pickerProfileFilter = ""
 	m.pickerSearchMode = false

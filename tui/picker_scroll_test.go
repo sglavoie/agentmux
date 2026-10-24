@@ -367,3 +367,23 @@ func TestHandlePickerKey_HomeAndEndMatchGAndShiftG(t *testing.T) {
 		t.Fatalf("after home: cursor=%d offset=%d, want 0/0", m.pickerCursor, m.pickerOffset)
 	}
 }
+
+// A launcher closed while scrolled reopens at the top with the cursor on a row
+// it draws, so Enter never launches a project the operator cannot see.
+func TestPickerReopensScrolledToItsCursor(t *testing.T) {
+	t.Parallel()
+
+	m := pickerScrollFixtureModel(t, 30, 14)
+	m = pressKey(m, "G")
+	if m.pickerOffset == 0 {
+		t.Fatal("G did not scroll the launcher; the fixture no longer exercises a scrolled close")
+	}
+	m = pressKey(m, "esc")
+	if m.mode == ModePicker {
+		t.Fatal("esc did not close the launcher")
+	}
+	m = pressKey(m, "l")
+	if m.pickerCursor != 0 || m.pickerOffset != 0 {
+		t.Fatalf("reopened with cursor %d at offset %d, want both 0", m.pickerCursor, m.pickerOffset)
+	}
+}

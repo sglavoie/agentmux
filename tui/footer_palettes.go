@@ -151,6 +151,15 @@ func sessionSearchFooter(m Model) []footerEntry {
 	}
 }
 
+// queryTypingFooterPalette is a list's footer while `/` takes text. Every
+// letter a list's own palette names is typed into the query then, so the only
+// keys left to name are the ones that end the typing, as the dashboard's
+// filter prompt names them.
+var queryTypingFooterPalette = []footerEntry{
+	{"enter", "apply", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"esc", "cancel", footerSectionApp, footerAlways, footerPriorityEssential},
+}
+
 // planSearchFooter is the Plans palette as this model reads it: with a query
 // set, esc clears it before it leaves the view.
 func planSearchFooter(m Model) []footerEntry {
@@ -334,7 +343,7 @@ var planRunFooterPalette = []footerEntry{
 	{"enter", "check and run", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"h/l", "change", footerSectionRow, footerAlways, footerPriorityEssential},
 	{"j/k", "row", footerSectionRow, footerAlways, footerPriorityEssential},
-	{"esc", "close", footerSectionApp, footerAlways, footerPriorityEssential},
+	{"esc/q", "close", footerSectionApp, footerAlways, footerPriorityEssential},
 }
 
 // aslFocusAvailable mirrors what f actually does: it is offered only when the

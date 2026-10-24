@@ -229,9 +229,10 @@ func (m Model) handleSessionSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		return m, tea.Quit
 	case keyQ, keyEsc:
 		// Two-stage esc: first clears the text query if one is set, then
-		// exits the mode. Mirrors picker behaviour so a stray esc never
-		// surprises the user with an unintended mode switch.
-		if m.sessionQuery != "" {
+		// exits the mode, so a stray esc never surprises the user with an
+		// unintended mode switch. q leaves in one step, as it does in the
+		// launcher.
+		if msg.String() == keyEsc && m.sessionQuery != "" {
 			m.sessionQuery = ""
 			return m, m.dispatchSessionSearch()
 		}

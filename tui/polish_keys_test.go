@@ -62,6 +62,35 @@ func TestFooterEscLabelClearsFilterFirst(t *testing.T) {
 	}
 }
 
+// q leaves Past Sessions, Plans, and Worktrees in one step, as it leaves the
+// launcher, even with a query set; esc is the key that clears it first.
+func TestQLeavesListViewsInOneStep(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Model
+	}{
+		{"past sessions", Model{mode: ModeSessionSearch, width: 220, sessionQuery: "api"}},
+		{"plans", Model{mode: ModePlanSearch, width: 220, planQuery: "api"}},
+		{"worktrees", Model{mode: ModeWorktrees, width: 220, worktreeFilter: "api"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := pressKey(tc.m, "q"); got.mode == tc.m.mode {
+				t.Fatalf("q with a query set stayed in mode %v", got.mode)
+			}
+			if got := pressKey(tc.m, "esc"); got.mode != tc.m.mode {
+				t.Fatalf("esc with a query set left for mode %v; it clears the query first", got.mode)
+			}
+		})
+	}
+}
+
+func TestSentenceCaseCapitalizesAWideFirstLetter(t *testing.T) {
+	if got := sentenceCase("échec de la copie"); got != "Échec de la copie" {
+		t.Fatalf("sentenceCase = %q", got)
+	}
+}
+
 func TestDashboardHelpListsRecoverKey(t *testing.T) {
 	found := false
 	for _, line := range helpDashboardSection() {

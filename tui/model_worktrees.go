@@ -138,7 +138,9 @@ func (m Model) handleWorktreesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyEsc, keyQ:
-		if m.worktreeFilter != "" {
+		// esc clears the filter before it leaves; q leaves in one step, as
+		// in the launcher.
+		if msg.String() == keyEsc && m.worktreeFilter != "" {
 			m.worktreeFilter = ""
 			m.captureWorktreeSelection()
 			m.reapplyWorktreeFilter()

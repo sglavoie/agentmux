@@ -223,9 +223,9 @@ func (m *Model) applySessionActionResult(result sessionactions.Result) tea.Cmd {
 // and a key that seems to do nothing gets pressed again.
 func (m Model) handleCopyDone(msg commands.CopyDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err == nil {
-		return m, m.pushToast(Toast{Severity: toastSuccess, Text: "copied: " + copyExcerpt(msg.Text)})
+		return m, m.pushToast(Toast{Severity: toastSuccess, Text: "Copied: " + copyExcerpt(msg.Text)})
 	}
-	if c := m.pushToast(Toast{Severity: toastError, Text: "copy: " + msg.Err.Error()}); c != nil {
+	if c := m.pushToast(Toast{Severity: toastError, Text: "Copy failed: " + msg.Err.Error()}); c != nil {
 		return m, c
 	}
 	return m, nil
@@ -623,7 +623,7 @@ func (m *Model) publishPlanResults(results []plans.Result) {
 
 // handlePlanEditorErr processes a planEditorErrMsg: pushes an error toast.
 func (m Model) handlePlanEditorErr(msg planEditorErrMsg) (tea.Model, tea.Cmd) {
-	if c := m.pushToast(Toast{Severity: toastError, Text: "open editor: " + msg.err.Error()}); c != nil {
+	if c := m.pushToast(Toast{Severity: toastError, Text: "Open editor failed: " + msg.err.Error()}); c != nil {
 		return m, c
 	}
 	return m, nil

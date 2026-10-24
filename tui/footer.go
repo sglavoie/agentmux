@@ -44,6 +44,13 @@ func renderFooter(m Model) string {
 			)
 			break
 		}
+		if m.pickerSearchMode {
+			lines = nonEmptyFooterLines(
+				footerStyledLine(m.width, "  ", chrome.Binding("enter", "apply"), chrome.Binding("esc", "cancel")),
+				footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word")),
+			)
+			break
+		}
 		lines = nonEmptyFooterLines(
 			footerStyledLine(m.width, "  ",
 				chrome.Binding("space", "toggle"), chrome.Binding("enter", "launch"),
@@ -106,14 +113,26 @@ func renderFooter(m Model) string {
 			footerStyledLine(m.width, "  ", healthDismissFooterBinding(m), chrome.Binding("esc/q", "close")),
 		)
 	case ModeSessionSearch:
+		if m.sessionSearchMode {
+			lines = footerHintLines(m, queryTypingFooterPalette, footerHintMaxLines)
+			break
+		}
 		lines = footerHintLines(m, sessionSearchFooter(m), footerHintMaxLines)
 	case ModeSessionView:
 		lines = footerHintLines(m, sessionViewFooterPalette, footerHintMaxLines)
 	case ModePlanSearch:
+		if m.planSearchMode {
+			lines = footerHintLines(m, queryTypingFooterPalette, footerHintMaxLines)
+			break
+		}
 		lines = footerHintLines(m, planSearchFooter(m), footerHintMaxLines)
 	case ModePlanView:
 		lines = footerHintLines(m, planViewFooterPalette, footerHintMaxLines)
 	case ModeWorktrees:
+		if m.worktreeFilterMode {
+			lines = footerHintLines(m, queryTypingFooterPalette, footerHintMaxLines)
+			break
+		}
 		lines = footerHintLines(m, worktreesFooter(m), footerHintMaxLines)
 	case ModeASLRuns:
 		lines = footerHintLines(m, aslRunsFooterPalette, footerHintMaxLines)

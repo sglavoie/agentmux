@@ -65,7 +65,7 @@ func (m Model) openPlanRunForm(plan plans.PlanMeta) (tea.Model, tea.Cmd) {
 	}
 	projects, profiles := planRunProjects(m.cfg, plan), configuredProfileNames(m.cfg)
 	if len(projects) == 0 || len(profiles) == 0 {
-		return m, m.pushToast(Toast{Severity: toastError, Text: "a run launches from a configured project, and none is configured"})
+		return m, m.pushToast(Toast{Severity: toastError, Text: "A run launches from a configured project, and none is configured"})
 	}
 	m.planRun = runform.Open(plan, projects, profiles, m.planRun.Seq+1)
 	m.mode = ModePlanRun
@@ -149,7 +149,7 @@ func (m Model) handlePlanRunDone(msg planRunDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err == nil {
 		title := m.planRun.PlanTitle()
 		m.closePlanRunForm()
-		return m, tea.Batch(m.pushToast(Toast{Severity: toastSuccess, Text: "started run of " + title}), m.requestTopologyRefresh())
+		return m, tea.Batch(m.pushToast(Toast{Severity: toastSuccess, Text: "Started run of " + title}), m.requestTopologyRefresh())
 	}
 	if readiness, ok := msg.result.Data[actions.DataPlanReadiness].(planrun.Readiness); ok {
 		m.planRun.Readiness = &readiness
@@ -176,5 +176,5 @@ func planRunFailureText(err error) string {
 func renderPlanRunBox(m Model) string {
 	state := m.planRun
 	state.Destination = commands.LaunchDestination()
-	return runform.Render(state, m.width)
+	return runform.Render(state, m.width, newRootChrome(m).bodyHeight())
 }

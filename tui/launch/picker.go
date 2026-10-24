@@ -156,18 +156,22 @@ func (in PickerInput) RenderList(height int) string {
 	sb.WriteString(in.renderHeader(header))
 	switch {
 	case in.DirMode:
-		prompt := styleSearch.Render("dir: ") + in.DirValue + "█"
+		// The error stays beside the value, and the value keeps its end and
+		// the cursor, as the filter does; only the start of a long path goes.
+		problem := ""
 		if in.DirError != "" {
-			prompt += "  " + styleError.Render("("+in.DirError+")")
+			problem = "  " + styleError.Render("("+in.DirError+")")
 		}
-		if in.Width > 0 {
-			prompt = layout.StyledTruncate(prompt, in.Width, "…")
+		width := in.Width
+		if width > 0 {
+			width -= layout.StyledWidth(problem)
 		}
-		sb.WriteString(prompt + "\n\n")
+		prompt := layout.QueryLine(styleSearch.Render("dir: "), in.DirValue+"█", width) + problem
+		sb.WriteString(layout.ClampLine(prompt, in.Width) + "\n\n")
 	case in.SearchMode:
-		sb.WriteString(styleSearch.Render("/") + fitFilterInput(in.Filter+"█", in.Width) + "\n\n")
+		sb.WriteString(layout.QueryLine(styleSearch.Render("/"), in.Filter+"█", in.Width) + "\n\n")
 	case in.Filter != "":
-		sb.WriteString(styleSearch.Render("/") + fitFilterInput(in.Filter, in.Width) + "\n\n")
+		sb.WriteString(layout.QueryLine(styleSearch.Render("/"), in.Filter, in.Width) + "\n\n")
 	default:
 		sb.WriteByte('\n')
 	}
@@ -364,16 +368,4 @@ func DirectoryProblems(sessions []config.Session, problem func(string) string) m
 		}
 	}
 	return problems
-}
-
-// fitFilterInput fits the filter text (and the cursor, while typing) into a
-// line of width cells that starts with the one-cell "/" sigil. A long filter
-// drops its start rather than its end, so what was just typed and the cursor
-// stay on screen. A non-positive width (no window size yet) leaves the text
-// whole.
-func fitFilterInput(text string, width int) string {
-	if width <= 0 {
-		return text
-	}
-	return layout.TruncateLeft(text, width-1, "…")
 }

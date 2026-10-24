@@ -24,6 +24,17 @@ func ClampLine(line string, width int) string {
 	return StyledTruncate(line, width, "…")
 }
 
+// QueryLine is prompt followed by a query being typed or shown, fit to width
+// by dropping the start of the query rather than its end: the newest
+// characters, and the cursor after them, are what the operator is looking at.
+// A non-positive width (pre-resize) is a no-op.
+func QueryLine(prompt, query string, width int) string {
+	if width <= 0 {
+		return prompt + query
+	}
+	return ClampLine(prompt+TruncateLeft(query, width-StyledWidth(prompt), "…"), width)
+}
+
 // ListWindow is the slice of a flat list that fits a body of a given height,
 // plus whether scroll indicators are needed above and below it. The indicators
 // consume a row each, which is why the window is narrower than the raw height

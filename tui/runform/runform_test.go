@@ -99,7 +99,7 @@ func TestRenderFitsItsWidthAndShowsEveryFinding(t *testing.T) {
 		{Severity: "yellow", Category: "manifest-readiness", Message: "plan readiness state is 'reviewed'", Detail: "run preflight to advance to loop-ready when checks pass"},
 	}}
 	for _, terminal := range []int{120, 48} {
-		rendered := ansi.Strip(Render(form, terminal))
+		rendered := ansi.Strip(Render(form, terminal, 0))
 		for _, line := range strings.Split(rendered, "\n") {
 			if got := layout.Width(line); got > Width(terminal) {
 				t.Fatalf("at %d columns a line is %d wide, want at most %d:\n%s", terminal, got, Width(terminal), rendered)
@@ -127,5 +127,32 @@ func TestWrapWordsBreaksAtSpacesAndInsideOnlyALongWord(t *testing.T) {
 	}
 	if got := wrapWords("", 10); len(got) != 1 || got[0] != "" {
 		t.Fatalf("empty text = %q", got)
+	}
+}
+
+// A form with more findings than rows keeps its height and its choices, and
+// counts the findings it could not show.
+func TestRenderKeepsItsHeightAndCountsTheFindingsLeftOut(t *testing.T) {
+	form := testForm()
+	findings := make([]planrun.Finding, 30)
+	for i := range findings {
+		findings[i] = planrun.Finding{Severity: "yellow", Category: "plan-structure", Message: "session file is missing"}
+	}
+	form.Readiness = &planrun.Readiness{State: planrun.StateNotReady, Title: "Fix the things", Findings: findings}
+	for _, height := range []int{24, 18} {
+		rendered := ansi.Strip(Render(form, 120, height))
+		lines := strings.Split(rendered, "\n")
+		if len(lines) > height {
+			t.Fatalf("at %d rows the form is %d rows tall:\n%s", height, len(lines), rendered)
+		}
+		if !strings.HasPrefix(strings.TrimSpace(lines[len(lines)-1]), "╰") {
+			t.Fatalf("at %d rows the bottom border is cut off:\n%s", height, rendered)
+		}
+		if !strings.Contains(rendered, "Supervisor") || !strings.Contains(rendered, "more; `asl preflight` lists every finding") {
+			t.Fatalf("at %d rows the form lost its choices or does not count what it left out:\n%s", height, rendered)
+		}
+	}
+	if rendered := ansi.Strip(Render(form, 120, 0)); strings.Contains(rendered, "more;") {
+		t.Fatalf("with no height every finding is shown:\n%s", rendered)
 	}
 }

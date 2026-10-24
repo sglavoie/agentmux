@@ -542,6 +542,9 @@ func (m Model) applyDeleteChoice(alsoFile bool) (tea.Model, tea.Cmd) {
 // metadata could not be updated.
 func (m Model) handleTranscriptDeleteDone(msg transcriptDeleteDoneMsg) (tea.Model, tea.Cmd) {
 	var toast Toast
+	// removed says whether the row leaves the list: a failed delete keeps it,
+	// and the cursor stays on it.
+	removed := true
 	if msg.err == nil {
 		if msg.alsoFile {
 			toast = Toast{Severity: toastSuccess, Text: fmt.Sprintf("Deleted transcript file for %s", history.DeleteTargetLabel(msg.target))}
@@ -556,6 +559,7 @@ func (m Model) handleTranscriptDeleteDone(msg transcriptDeleteDoneMsg) (tea.Mode
 				Text:     fmt.Sprintf("Deleted transcript file for %s, but index update failed: %v", history.DeleteTargetLabel(msg.target), partial.Err),
 			}
 		} else {
+			removed = false
 			toast = Toast{Severity: toastError, Text: "Delete failed: " + msg.err.Error()}
 		}
 	}
@@ -563,7 +567,7 @@ func (m Model) handleTranscriptDeleteDone(msg transcriptDeleteDoneMsg) (tea.Mode
 	// Clamp the cursor before the async sessionSearchDoneMsg handler runs: it
 	// also clamps, but a stale offset between now and that message can scroll
 	// past the new tail. Mirror the pattern in case sessionSearchDoneMsg.
-	if m.sessionCursor >= len(m.sessionResults)-1 && m.sessionCursor > 0 {
+	if removed && m.sessionCursor >= len(m.sessionResults)-1 && m.sessionCursor > 0 {
 		m.sessionCursor--
 	}
 	scrollSessionSearchToCursor(&m)

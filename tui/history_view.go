@@ -125,9 +125,9 @@ func sessionSearchVisibleHeight(m Model) int {
 // the same label outside the Past Sessions view.
 func sessionRefreshErrorLabel(m Model) string {
 	if m.transcriptIndex == nil {
-		return "cache load error"
+		return "Cache load error"
 	}
-	return "refresh error"
+	return "Refresh error"
 }
 
 // ── Transcript viewer and message overlay ─────────────────────────────────────

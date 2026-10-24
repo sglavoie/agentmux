@@ -60,7 +60,7 @@ func (in ListInput) noticeLines() int {
 	width := layout.WrapWidth(in.Width)
 	lines := 0
 	if in.RefreshErr != nil {
-		lines += len(layout.WrapHard("refresh error: "+in.RefreshErr.Error(), width))
+		lines += len(layout.WrapHard("Refresh error: "+in.RefreshErr.Error(), width))
 	}
 	for _, warning := range in.RefreshWarnings {
 		lines += len(layout.WrapHard("warning: "+warning, width))
@@ -86,9 +86,9 @@ func (in ListInput) Render() string {
 	var filter string
 	switch {
 	case in.FilterMode:
-		filter = styleSearch.Render("/") + in.Filter + "█"
+		filter = layout.QueryLine(styleSearch.Render("/"), in.Filter+"█", in.Width)
 	case in.Filter != "":
-		filter = styleSearch.Render("/") + in.Filter
+		filter = layout.QueryLine(styleSearch.Render("/"), in.Filter, in.Width)
 	default:
 		filter = styleDim.Render("press / to filter worktrees")
 	}
@@ -102,7 +102,7 @@ func (in ListInput) Render() string {
 
 	width := layout.WrapWidth(in.Width)
 	if in.RefreshErr != nil {
-		for _, line := range layout.WrapHard("refresh error: "+in.RefreshErr.Error(), width) {
+		for _, line := range layout.WrapHard("Refresh error: "+in.RefreshErr.Error(), width) {
 			sb.WriteString(styleError.Render(line))
 			sb.WriteByte('\n')
 		}

@@ -118,6 +118,26 @@ func TestTranscriptDeletePartialSuccessUsesWarningToast(t *testing.T) {
 	}
 }
 
+// A delete that failed leaves its row on the list, so the cursor stays on it
+// rather than moving to the row above.
+func TestTranscriptDeleteFailureKeepsTheCursorOnItsRow(t *testing.T) {
+	t.Parallel()
+
+	m := sessionSearchFilterModel(t)
+	if len(m.sessionResults) < 2 {
+		t.Fatalf("fixture has %d results, want at least two", len(m.sessionResults))
+	}
+	last := len(m.sessionResults) - 1
+	m.sessionCursor = last
+	updated, _ := m.Update(transcriptDeleteDoneMsg{
+		target: m.sessionResults[last].Meta,
+		err:    errors.New("cache lock timed out"),
+	})
+	if got := updated.(Model).sessionCursor; got != last {
+		t.Fatalf("cursor = %d after a failed delete, want it left on row %d", got, last)
+	}
+}
+
 func TestSessionsRefreshCmdPrunesOldEntries(t *testing.T) {
 	t.Parallel()
 

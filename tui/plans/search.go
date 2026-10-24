@@ -63,10 +63,10 @@ func (in SearchInput) errorLines() int {
 	width := layout.WrapWidth(in.Width)
 	n := 0
 	if err := in.RefreshErr; err != nil {
-		n += len(layout.WrapHard("refresh error: "+err.Error(), width))
+		n += len(layout.WrapHard("Refresh error: "+err.Error(), width))
 	}
 	if err := in.SearchErr; err != nil {
-		n += len(layout.WrapHard("search error: "+err.Error(), width))
+		n += len(layout.WrapHard("Search error: "+err.Error(), width))
 	}
 	return n
 }
@@ -92,9 +92,9 @@ func (in SearchInput) Render() string {
 	var queryBar string
 	switch {
 	case in.SearchMode:
-		queryBar = styleSearch.Render("/") + in.Query + "█"
+		queryBar = layout.QueryLine(styleSearch.Render("/"), in.Query+"█", in.Width)
 	case in.Query != "":
-		queryBar = styleSearch.Render("/") + in.Query
+		queryBar = layout.QueryLine(styleSearch.Render("/"), in.Query, in.Width)
 	default:
 		queryBar = styleDim.Render("press / to search plan content")
 	}
@@ -108,12 +108,12 @@ func (in SearchInput) Render() string {
 
 	wrapWidth := layout.WrapWidth(in.Width)
 	if err := in.RefreshErr; err != nil {
-		for _, line := range layout.WrapHard("refresh error: "+err.Error(), wrapWidth) {
+		for _, line := range layout.WrapHard("Refresh error: "+err.Error(), wrapWidth) {
 			sb.WriteString(styleError.Render(line) + "\n")
 		}
 	}
 	if err := in.SearchErr; err != nil {
-		for _, line := range layout.WrapHard("search error: "+err.Error(), wrapWidth) {
+		for _, line := range layout.WrapHard("Search error: "+err.Error(), wrapWidth) {
 			sb.WriteString(styleError.Render(line) + "\n")
 		}
 	}

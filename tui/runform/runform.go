@@ -229,10 +229,15 @@ func Width(terminalWidth int) int {
 	return max(width, 1)
 }
 
-// Render draws the form inside the overlay border.
-func Render(state State, terminalWidth int) string {
+// Render draws the form inside the overlay border, in at most terminalHeight
+// rows; a non-positive height does not limit it.
+func Render(state State, terminalWidth, terminalHeight int) string {
 	width := Width(terminalWidth)
-	return styleBox.Width(width).Render(strings.TrimRight(render(state, width), "\n"))
+	height := 0
+	if terminalHeight > 0 {
+		height = max(terminalHeight-styleBox.GetVerticalFrameSize(), 1)
+	}
+	return styleBox.Width(width).Render(strings.TrimRight(render(state, width, height), "\n"))
 }
 
 func (s State) value(field Field) string {
@@ -268,7 +273,11 @@ func (s State) value(field Field) string {
 
 var labels = [fieldCount]string{"Project", "Supervisor", "Harness", "Review harness", "Commit"}
 
-func render(state State, width int) string {
+// render draws the form's lines. With a height, findings that do not fit are
+// counted on one line in their place, so the box's bottom border and the
+// choices above stay on screen; the form above them is cut only when even
+// that does not fit.
+func render(state State, width, height int) string {
 	var lines []string
 	// The box's border and padding come out of the width it is given.
 	textWidth := max(width-styleBox.GetHorizontalFrameSize(), 1)
@@ -314,13 +323,27 @@ func render(state State, width int) string {
 		add(style, state.Notice)
 	}
 	if state.Readiness != nil {
-		for _, finding := range state.Readiness.Findings {
+		findings := state.Readiness.Findings
+		for i, finding := range findings {
 			text := fmt.Sprintf("%s  %s: %s", finding.Severity, finding.Category, finding.Message)
 			if finding.Detail != "" {
 				text += " (" + finding.Detail + ")"
 			}
+			before := len(lines)
 			add(styleWarning, text)
+			if height <= 0 || len(lines) <= height && (i == len(findings)-1 || len(lines) < height) {
+				continue
+			}
+			// This finding, or the line saying how many are left after it,
+			// would not fit: it gives its rows to that line.
+			lines = lines[:before]
+			more := fmt.Sprintf("+%d more; `asl preflight` lists every finding", len(findings)-i)
+			lines = append(lines, styleWarning.Render(layout.Truncate(more, textWidth, "…")))
+			break
 		}
+	}
+	if height > 0 && len(lines) > height {
+		lines = lines[:height]
 	}
 	return strings.Join(lines, "\n")
 }

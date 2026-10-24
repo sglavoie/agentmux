@@ -174,10 +174,9 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	case keyCtrlC:
 		return m, tea.Quit
 	case keyQ, keyEsc:
-		// Two-stage esc: first clears the text query, then exits the mode.
-		// Mirrors session-search behaviour so a stray esc never surprises
-		// the user with an unintended mode switch.
-		if m.planQuery != "" {
+		// Two-stage esc: first clears the text query, then exits the mode,
+		// as in Past Sessions. q leaves in one step, as in the launcher.
+		if msg.String() == keyEsc && m.planQuery != "" {
 			m.planQuery = ""
 			return m, m.dispatchPlanSearch()
 		}

@@ -185,14 +185,14 @@ func TestRenderSessionSearchDistinguishesStatusAndErrors(t *testing.T) {
 	for _, want := range []string{
 		"loading past sessions",
 		"scanning transcripts",
-		"cache load error: cache unavailable",
-		"search error: sidecar denied",
+		"Cache load error: cache unavailable",
+		"Search error: sidecar denied",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in render output:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "refresh error: cache unavailable") {
+	if strings.Contains(out, "Refresh error: cache unavailable") {
 		t.Fatalf("cache load failure was rendered as a refresh error:\n%s", out)
 	}
 
@@ -203,8 +203,8 @@ func TestRenderSessionSearchDistinguishesStatusAndErrors(t *testing.T) {
 	out = stripAnsi(renderSessionSearch(m))
 	for _, want := range []string{
 		"searching",
-		"refresh error: scan denied",
-		"search error: query failed",
+		"Refresh error: scan denied",
+		"Search error: query failed",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected %q in render output:\n%s", want, out)
