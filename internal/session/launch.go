@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -294,7 +296,9 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 		Argv:      []string{shell, "-lic", shellCmd},
 	}
 
-	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v cmd=%v", spec.Title, spec.Directory, harnessName, spec.Placement, spec.Env, spec.Argv)
+	// Environment values and the command line can carry secrets and the
+	// initial prompt, so only the variable names are logged.
+	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v", spec.Title, spec.Directory, harnessName, spec.Placement, slices.Sorted(maps.Keys(spec.Env)))
 	if err := term.Launch(spec); err != nil {
 		launchDebug.Printf("Launch: LaunchTab error: %v", err)
 		recordHarnessLaunch(cfg, sess, acc, invocation, "error", launchReasonLaunchFailed, nativeReport)
