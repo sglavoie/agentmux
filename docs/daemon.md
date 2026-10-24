@@ -217,16 +217,29 @@ doctor and never trusted for a decision. The response line is the ack,
 daemon speaks the lower of the subscriber's `protocol` and its own
 `CompanionProtocolVersion` (today 1), and `server_protocol_max` tells a client
 that is merely older from one that is incompatible. `features` lists
-`snapshot`, `heartbeat`, and `notifications`.
+`snapshot`, `heartbeat`, and `notifications`, plus each optional feature the
+subscriber named in its own `features` and the daemon granted:
+
+- `runtime_sessions` selects the mixed-backend snapshot (version 2,
+  `CompanionSnapshotVersionRuntime`): every version-1 field, a runtime block on
+  each session an AgentMux runtime session owns, and the sessions that run on a
+  backend other than Kitty, which carry no window, tab, OS-window, or socket
+  field. A subscriber that does not name it keeps receiving version 1, which
+  lists Kitty sessions only.
+- `workspace_views` marks a client that hosts workspace views (the desktop
+  workspace). Only such a subscriber is sent `workspace_view` frames, and a
+  `workspace_view` request is refused with `workspace_unavailable` while none
+  is connected.
 
 Every later line is a frame `{v, seq, type, data}`. `v` is the protocol version,
 `seq` rises by one per frame on one stream, and `data` depends on `type`:
 
 | `type` | `data` | When |
 | --- | --- | --- |
-| `snapshot` | the `CompanionSnapshot` (its own `version`, today 1) | on subscribe, then whenever the projection changes |
+| `snapshot` | the `CompanionSnapshot` (its own `version`: 1, or 2 with `runtime_sessions`) | on subscribe, then whenever the projection changes |
 | `notification` | `{notification_id, window_id, navigable, title, subtitle, action, run_id, session_id, actions[]}` | to the notification backend only |
 | `notification_retract` | `{notification_id, reason}` | a notice still showing is withdrawn |
+| `workspace_view` | `{kind, runtime_session_id, await, directory, path, title, raise}`; `kind` is `session`, `dashboard`, `overview`, `shell`, `editor`, or `pager`, and no field is a command line | to `workspace_views` subscribers only, when a `workspace_view` request is accepted or a `focus_session` request finds a workspace (with `raise` set) |
 | `heartbeat` | none | every 15s |
 | `bye` | `{reason}`: `shutdown` or `slow_consumer` | the last frame of a stream ended on purpose |
 
@@ -664,9 +677,10 @@ rides to its deadline and **commits anyway** at `stop_confirm.timeout` (15s by
 default), so the fingerprint gate can never indefinitely suppress a real
 terminal stop. When there was no hook at all, only the watchdog clears the tab:
 `sweepStale` clears a stale window to the **empty** icon and never to `🛑`,
-firing its one-shot "Session idle" notification. With no `[defaults.watchdog]`
-threshold configured there is no such sweep, so an unstabilizable pane can hold
-`⚡` indefinitely.
+firing its one-shot "Session idle" notification. The sweep always runs: with
+no `[defaults.watchdog]` threshold configured, `active` defaults to 600 seconds
+(`subagent` to 1800, `compact` to 180), so an unstabilizable pane holds `⚡` for
+no longer than that threshold plus one sweep.
 
 Codex exposes edit approvals and `request_user_input` waits through
 TUI/server-request flows. A native `PreToolUse(request_user_input)`, when

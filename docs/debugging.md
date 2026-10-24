@@ -1,6 +1,6 @@
 # Debugging event delivery
 
-Agent Mux 0.6.0 keeps a private causal journal and native harness logs so an
+Agent Mux keeps a private causal journal and native harness logs so an
 intermittent icon or notification problem can be investigated after the fact.
 Start with the offline-first workflow. `tail` and `explain` read persisted state
 without contacting the daemon. `status` performs a read-only daemon health call
@@ -358,7 +358,8 @@ request, or source-event ID from `tail`.
 | --- | --- | --- |
 | Disabled or untrusted hook | `debug status` activation finding; explanation `hook_disabled` or `hook_untrusted` | Correct the effective harness/profile setting, then run `amx config hooks-sync` |
 | Invalid payload | `hook.validation` rejected and quarantined `daemon.decision`; raw body absent unless temporary capture was authorized | `amx debug explain --request <id>` |
-| Missing Kitty | `hook.kitty_detection` rejected with `outside_kitty` | Confirm the hook came from a Kitty-managed session and that `KITTY_LISTEN_ON` is present |
+| Missing Kitty | `hook.kitty_detection` rejected with `outside_kitty`; reached only when the hook carries no `AMX_RUNTIME_SESSION_ID` | Confirm the hook came from a managed session: a tmux session sets `AMX_RUNTIME_SESSION_ID` (delivered via `hook.runtime_session`), a Kitty session sets `KITTY_LISTEN_ON` |
+| Invalid runtime session | `hook.runtime_session` rejected with `invalid_runtime_session` | Check the `AMX_RUNTIME_SESSION_ID` the harness inherited; it must be one Agent Mux issued |
 | Daemon unavailable | Numbered `hook.ipc_attempt` and `hook.daemon_autostart` stages ending in retryable delivery failure | Check `amx debug status`, daemon log, and binary identity |
 | Retry exhaustion | ASL `agent_mux_delivery` contains all attempts and final retryable outcome | Repair availability; ASL itself remains fail-open |
 | Duplicate delivery | Hook outcome `duplicate` plus `request_replayed` daemon decision; no reducer mutation | Treat as successful idempotency unless duplicates grow unexpectedly |

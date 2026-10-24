@@ -236,7 +236,7 @@ Command tree (`cmd/...`; every user-facing command lives in a child package):
   what the `tuitest` tag keeps out. No other `cmd` package may import it.
   `TestCommandFamiliesAreRegisteredUnderRoot` is the one registration check.
 - `cmd/daemon` (`amx daemon`), `cmd/dashboard` (dashboard, overview,
-  `open-dashboard`, overlays; the singleton rule), `cmd/project`,
+  `open-dashboard`, `past-sessions`, overlays; the singleton rule), `cmd/project`,
   `cmd/config` (incl. `asl-sync`), `cmd/hooks`, `cmd/debug` (`debug`, `doctor`,
   `daemon audit`), `cmd/session` (conversation commands and root tab controls),
   `cmd/worktree`, `cmd/plans` (`amx plans run`; the family is never `plan`,
@@ -247,8 +247,10 @@ Command tree (`cmd/...`; every user-facing command lives in a child package):
 Shared and domain packages (`internal/...`):
 
 - `internal/cli`: bootstrap every command family shares (exit statuses, JSON
-  envelope and structured errors, tables, runtime assembly). Never imports a
-  `cmd` package; reaches the daemon only through `internal/daemon/ipc`.
+  envelope and structured errors, tables, runtime assembly, the tmux backend
+  and `amx backend status` report, shared completion). Never imports a `cmd`
+  package; reaches the daemon only through `internal/daemon/ipc` (with
+  `internal/daemon/protocol` for its request and response types).
 - `internal/actions`: typed action registry shared by CLI and TUI.
 - `internal/conversation`: canonical `(harness, session_id)` identity.
 - `internal/runtimesession`: opaque AgentMux runtime-session IDs and the

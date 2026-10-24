@@ -417,7 +417,7 @@ ASL answer panel work the same either way.
   pin of a session that ended is forgotten the next time a pin changes while
   the feed is live.
 - **Selecting and focusing.** Selecting a row (arrow keys, **Session ›
-  Select Next/Previous Session**) shows what there is to show and never leaves
+  Next/Previous Session or Terminal**) shows what there is to show and never leaves
   the app: a tmux session's terminal, or a note that the session is a Kitty
   window. Focusing a row (a click, a status-menu row, the next-attention
   shortcut, a banner) goes where the session is: the keyboard moves into the
@@ -585,9 +585,15 @@ ASL answer panel work the same either way.
   appears in the sidebar, window and pane titles, Go to… search, and close
   prompts. Clearing it restores the original label. Naming keeps the same
   running process; saved pane layouts retain the name when restored.
-- **Right-click menu.** A session's line offers **Name Session…** and **Pin
-  to Top**/**Unpin**, and an embedded one also **New Terminal Below**, **Copy
-  Runtime Session ID**, and **End Session…** (the same sheet as its ×). An
+- **Right-click menu.** A session's line offers **Name Session…**,
+  **Color…**, **Icon…**, **Mute**/**Unmute**, and **Pin to Top**/**Unpin**,
+  acting on the line under the pointer rather than the session the pane is on.
+  On a Kitty session the naming, color, and icon items are listed but greyed
+  out, since Kitty has those, and the menu ends with **Show in Kitty**, which
+  brings its window forward as a click does. An embedded session instead ends
+  with **New Terminal Below**, **Copy Runtime Session ID**, and **End
+  Session…** (the same sheet as its ×), preceded by **Reattach** while its
+  terminal has ended and is not remade until asked for. An
   opened view, or the Dashboard or Overview while its program runs, offers
   **Close**; shells and terminals also offer **Name Terminal…**. A line with nothing to offer, a heading among them, shows no
   menu (`WorkspaceSidebarView.hasMenu`).
@@ -626,7 +632,7 @@ messages** adds 100. **Focus live session**, **Resume**, and **Fork** use exact
 harness-qualified identities. Resumes and forks from this view open in the workspace.
 An error remains visible, and an unknown launch outcome is never retried automatically.
 
-**View › Review Checkout Changes…**, or **Changes…** in the Session inspector,
+**View › Checkout Changes…**, or **Changes…** in the Session inspector,
 opens a checkout-wide review. An embedded session supplies its current directory;
 otherwise a folder picker selects the checkout. The comparison base defaults to
 HEAD and accepts another commit or reference. Files show additions/deletions,
@@ -1145,8 +1151,10 @@ question) in the order the workspace sidebar lists every session
 and projects in their saved order. How long a session has waited moves
 nothing, and the menu's Needs attention section lists them in the same order.
 Each press focuses the one after the session the last
-press focused, and wraps after the last one. A session is its Kitty socket
-plus its window ID, so the cycle spans Kitty instances. When the session it
+press focused, and wraps after the last one. A Kitty session is its Kitty
+socket plus its window ID, and a session the workspace embeds is its runtime
+session ID alone (`AttentionCycler.Key.embedded`), so the cycle spans Kitty
+instances and backends. When the session it
 last focused no longer waits, or is gone, the cycle carries on from where
 that session stood instead of starting over. With nothing waiting, it beeps.
 
@@ -1199,7 +1207,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxLaunchBackend` | `workspace` | `workspace` uses tmux; `kitty` explicitly uses Kitty; `follow-cli` reads the CLI configuration before project launches and Recent conversation resumes. A stored legacy `automatic` migrates to `workspace`. Unknown or missing values use `workspace`. |
 | `amxDashboardPlace` | `workspace` | Where the dashboard shortcut and Open Dashboard show the dashboard: `workspace` (the workspace's own view), or `kitty` (a dashboard tab in Kitty when a Kitty is running, else the workspace). |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
-| `amxConfirmBeforeClosing` | true | Asks before closing a running utility view (⌘W) or ending a session (⌘⇧W). Changes apply immediately to shortcuts, menus, and sidebar close actions; app quit confirmation is separate. |
+| `amxConfirmationPolicy` | `follow-cli` | Whether to ask before closing a running utility view (⌘W) or ending a session (⌘⇧W): `follow-cli` asks what `config.toml` says (`[defaults] confirm_destructive`, read through `amx config confirmation --json`) right before the action and asks when that cannot be read; `always` and `never` override it. Changes apply immediately to shortcuts, menus, sidebar close actions, and the embedded dashboards; app quit confirmation is separate. A stored legacy `amxConfirmBeforeClosing` Boolean is read only when this key is absent (true → `always`, false → `never`) and is removed on the next save. |
 | `amxReadingProseSize` | 13 | Prose size in History, Activity and Waiting (11–24 points), independent of code/diff/terminal-preview size. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
 | `amxTerminalTheme` | none | The Ghostty `theme` every terminal uses, as Ghostty writes it: `Name` or `light:Name,dark:Name`; unset uses the Ghostty config. Changes recolor all open terminals. |

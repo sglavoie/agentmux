@@ -318,12 +318,17 @@ health overlay, the help overlay, and the command palette respectively.
 
 The **footer** is the final line and is exactly one row at every size. It is
 generated from the same binding source the command palette reads, ordered by
-priority, and it omits lower-priority hints rather than wrapping — a trailing
-`? more` says hints were dropped, and `?` opens the full list. Six essentials
-are never dropped: movement, the enter binding, `a actions`, `: commands`,
-`/ filter`, and `? help`. When even those will not fit spelled out, the whole
-row falls back at once to its bare-key spelling (`j/k · ↵ · a · : · / · ?`)
-rather than shortening some hints and not others.
+priority, and it omits lower-priority hints rather than wrapping; `? help`
+stays on the row and opens the full list, which is why the trailing `? more`
+other footers add when hints are dropped never appears here. The essentials go
+only after every other hint: movement, the enter binding, `t` when the selected
+session can be sent to (or `: runs ↵ answer run` when its run has a question
+open), `a actions` when a row is selected, `: commands`, and `? help`.
+`/ filter` is a primary hint, dropped with the rest of its band. When even the
+essentials will not fit spelled out, the whole row falls back at once to its
+bare-key spelling (for example `j/k · ↵ · a · : · ?`) rather than shortening
+some hints and not others. Narrower still, `t`, the answer hint, and `a` go
+too, leaving movement, enter, `:`, and `?`.
 
 Between the list and the footer is the **feedback slot**, one reserved row that
 is genuinely blank when there is nothing to report. Action errors, in-progress
@@ -819,7 +824,7 @@ Overrides are useful for cross-harness launches. For example, a project such as
 same project under a Codex profile such as `vta-codex`.
 
 Overrides only affect launcher behavior. They do not rewrite `config.toml`.
-The dashboard's own **launch new** entry (`a`, then `C`) uses the same profile
+The dashboard's own **Launch another session** entry (`a`, then `C`) uses the same profile
 picker, but launches from the highlighted running row instead of from the
 launcher list. Pressing `enter` in the launcher
 is an explicit request for new tab(s): if the selected project/profile is
@@ -933,8 +938,9 @@ versions: amx 0.8.0, daemon 0.8.0, go1.26.0, tmux 3.7c (needs 3.5 or newer), kit
 ```
 
 The `backend:` and `versions:` lines are read by `doctor` itself, so they are
-there with the daemon down. `amx debug status` prints the same lines, and
-`doctor --json` carries them as `backend`, `versions`, and `daemon.runtime`.
+there with the daemon down. `amx debug status` prints the same `backend:`
+line, and with a daemon running the `runtime sessions:` and `screen captures:`
+lines, without doctor's findings; it prints no `versions:` line. `doctor --json` carries them as `backend`, `versions`, and `daemon.runtime`.
 What they can raise, each under a stable identifier:
 
 | Finding | Severity | Means |
@@ -1112,9 +1118,12 @@ needed only when several projects share a title. An ambiguous or unmatched
 selector launches nothing and lists the configured projects it could have meant
 (`ambiguous_project` or `not_found`, with `candidates` whose `id` is
 `profile/title`); an unmatched title lists only the projects whose titles
-contain it, when there are any. Like `enter` in the launcher, `project launch` always opens a
-new tab. Its `--json` data is `{action, changed, message, project, tab_id,
-window_id}`; `tab_id` and `window_id` name the new tab when exactly one new tab
+contain it, when there are any. Like `enter` in the launcher, `project launch` always starts a
+new session (a new tab on Kitty). Its `--json` data is `{action, changed,
+message, project, tab_id, window_id, backend, runtime_session_id}`. `backend`
+is where the session launched. `runtime_session_id` is the runtime session a
+tmux launch registered, the one `amx attach` takes, and is omitted otherwise.
+`tab_id` and `window_id` name the new Kitty tab when exactly one new tab
 carrying the title appeared, and are omitted otherwise.
 
 `--directory DIR` starts that one session in `DIR` instead of the project's
@@ -1472,7 +1481,8 @@ the selected plan directory in your editor, `Y` copies the plan directory, and `
 supports `j`/`k`, `g`/`G`, `Ctrl+d/u/f/b`, `n`/`N` to move between matches,
 `/` to refine the query, `y` to copy the selected raw line, `Y` to copy the plan
 directory, and `O` (or `e`) to open the plan directory in your editor. `esc` or
-`q` returns to the plan list, and pressing either again there leaves Plans.
+`q` returns to the plan list. On the list, `q` leaves Plans in one step; `esc`
+first clears an active query and leaves Plans only when there is none.
 
 ### Starting a run of a plan
 

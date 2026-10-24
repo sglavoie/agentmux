@@ -59,8 +59,12 @@ Harness identity uses `[harness_emojis]` for the tab-title prefix and
 `[harness_colors]` for harness-name cells in the dashboard and launch picker
 (see the starter `config.toml`).
 
-`hook_silence = 0` on a per-profile override disables the silence sweep
-for that profile only.
+`hook_silence = 0` on a per-profile override does not disable the silence
+sweep for that profile: zero (like an omitted key) inherits the global
+`[defaults.watchdog] hook_silence`, and a negative value is rejected. There is
+no per-profile switch to turn the sweep off. A larger per-profile value makes
+that profile's notification rarer, and `hook_silence = false` under
+`[defaults.notifications]` suppresses the notification for every profile.
 
 The notifications themselves are gated by `[defaults.notifications]`:
 

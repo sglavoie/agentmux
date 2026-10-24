@@ -27,6 +27,12 @@
 // configuration before launching, because a tab that opens only to show a
 // config error and close is worse than refusing.
 //
+// `amx past-sessions` (past_sessions.go) opens Past Sessions over every
+// profile's conversations with no dashboard behind it: leaving Past Sessions
+// quits, and continue, resume, and fork work as they do from the dashboard's
+// S. It is what ctrl+shift+y runs in Kitty and, as a popup, in a terminal
+// attached to a tmux session. It looks for no running instance of itself.
+//
 // `amx workspace-view` (workspace_view.go, hidden) is what the desktop
 // workspace runs in the terminals it embeds beside the agents: the dashboard
 // and the overview hosted by the workspace, Past Sessions opened on the

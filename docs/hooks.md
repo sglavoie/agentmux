@@ -154,8 +154,11 @@ harness, using `active_turn.harness` before top-level `harness`.
 
 Copilot and Codex hook files are user-level for a given harness home, so any CLI
 surface that reuses that home — including VS Code or another non-Kitty session
-— will run the same hook commands. Agent Mux treats those non-Kitty invocations
-as silent no-ops; only Kitty-backed sessions update tab state.
+— will run the same hook commands. Only managed sessions update state: a hook
+whose environment carries `AMX_RUNTIME_SESSION_ID` (every tmux launch) is
+routed by that runtime session alone (`hook.runtime_session`), and a hook
+without one is routed by its Kitty window (`KITTY_LISTEN_ON`). An invocation
+with neither is a silent no-op.
 
 Copilot hook entries use the documented `{"bash": ..., "powershell": ...}`
 schema. If you installed hooks with an older Agent Mux build that wrote a
