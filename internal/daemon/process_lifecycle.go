@@ -50,11 +50,6 @@ type processLifecycleCandidate struct {
 	facts    []processLifecycleFactReceipt
 }
 
-type pendingLifecycleNotificationDisposition struct {
-	disposition notification.NotificationDisposition
-	cancelled   bool
-}
-
 type processLifecycleDiagnostic struct {
 	windowID             int
 	identity             protocol.HarnessProcessIdentity
@@ -128,7 +123,7 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 	h.recordProcessInspectionFailures(observedAt, identities, inspections)
 
 	committed := 0
-	pendingDispositions := make([]pendingLifecycleNotificationDisposition, 0)
+	pendingCancellations := make([]notification.PendingCancellation, 0)
 	diagnosticsToRecord := make([]processLifecycleDiagnostic, 0)
 	bypassedHolds := make([]pendingStopHold, 0)
 	// A verified process exit is genuinely terminal, so it settles the window
@@ -180,11 +175,7 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 		h.clearIdleSamplesForWindowLocked(candidate.windowID)
 
 		if h.notifier != nil {
-			disposition, cancelled := h.notifier.CancelPendingDisposition(candidate.windowID)
-			pendingDispositions = append(pendingDispositions, pendingLifecycleNotificationDisposition{
-				disposition: disposition,
-				cancelled:   cancelled,
-			})
+			pendingCancellations = append(pendingCancellations, h.notifier.CancelPendingDisposition(candidate.windowID))
 		}
 
 		action := processLifecycleActionForIcon(after.Icon)
@@ -231,11 +222,10 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 	h.resetStopCommitMu.Unlock()
 
 	// Observer callbacks may perform bounded diagnostic work and can re-enter
-	// handler state. Emit cancellation dispositions only after stateMu is free.
-	for _, pending := range pendingDispositions {
-		if pending.cancelled {
-			h.notifier.EmitDisposition(pending.disposition)
-		}
+	// handler state, and a retraction reaches the companion. Finish the
+	// cancellations only after stateMu is free.
+	for _, pending := range pendingCancellations {
+		h.notifier.FinishCancellation(pending)
 	}
 	for _, dropped := range bypassedHolds {
 		h.recordBypassedStopHold(dropped)

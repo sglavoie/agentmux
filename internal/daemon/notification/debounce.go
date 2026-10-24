@@ -58,12 +58,37 @@ func (n *Notifier) cancelPendingLocked(windowID int, reason string) (Notificatio
 	return NotificationDisposition{}, false
 }
 
+// PendingCancellation is what CancelPendingDisposition took from the
+// notifier: the cancelled permission notification's disposition, if any, and
+// the companion notices still to retract. FinishCancellation carries both out.
+type PendingCancellation struct {
+	Disposition NotificationDisposition
+	Cancelled   bool
+	app         AppBackend
+	retract     []string
+}
+
 // CancelPendingDisposition removes any pending permission notification for
-// windowID and returns its disposition without invoking the observer. The
-// daemon's process-exit and codex clear paths hold their own locks while they
-// decide to cancel, so they publish the disposition later via EmitDisposition.
-func (n *Notifier) CancelPendingDisposition(windowID int) (NotificationDisposition, bool) {
-	return n.cancelPending(windowID)
+// windowID and takes the companion notices still showing for it, without
+// invoking the observer or the companion. The daemon's process-exit and codex
+// clear paths hold their own locks while they decide to cancel, so they pass
+// the result to FinishCancellation once those locks are released.
+func (n *Notifier) CancelPendingDisposition(windowID int) PendingCancellation {
+	n.mu.Lock()
+	disposition, cancelled := n.cancelPendingLocked(windowID, "superseded")
+	app, superseded := n.takeAppNoticesLocked(windowID)
+	n.mu.Unlock()
+	return PendingCancellation{Disposition: disposition, Cancelled: cancelled, app: app, retract: superseded}
+}
+
+// FinishCancellation retracts the notices a CancelPendingDisposition took and
+// emits its disposition. Callers run it with no lock of their own held, since
+// a retraction reaches the companion and the observer may re-enter them.
+func (n *Notifier) FinishCancellation(c PendingCancellation) {
+	retractAll(c.app, c.retract, "superseded")
+	if c.Cancelled {
+		n.emitDisposition(c.Disposition)
+	}
 }
 
 // HasPending reports whether a debounced permission notification is still
@@ -76,26 +101,11 @@ func (n *Notifier) HasPending(windowID int) bool {
 	return ok
 }
 
-// cancelPending removes any pending permission notification for windowID and
-// returns its disposition without invoking the observer. Callers that hold
-// broader locks can therefore defer observer work until those locks are free.
+// CancelPending cancels any pending permission notification for windowID.
 //
 // The window has moved on, so any companion notice still showing for it is
 // retracted as well: a banner announcing a stop the operator already answered
 // would only send them to a pane that no longer needs them.
-func (n *Notifier) cancelPending(windowID int) (NotificationDisposition, bool) {
-	n.mu.Lock()
-	disposition, cancelled := n.cancelPendingLocked(windowID, "superseded")
-	app, superseded := n.takeAppNoticesLocked(windowID)
-	n.mu.Unlock()
-	retractAll(app, superseded, "superseded")
-	return disposition, cancelled
-}
-
-// CancelPending cancels any pending permission notification for windowID.
 func (n *Notifier) CancelPending(windowID int) {
-	disposition, cancelled := n.cancelPending(windowID)
-	if cancelled {
-		n.emitDisposition(disposition)
-	}
+	n.FinishCancellation(n.CancelPendingDisposition(windowID))
 }

@@ -24,7 +24,9 @@
 // A notice still showing is retracted when a newer notification for its
 // window passes every gate (never by one that is suppressed, which would leave
 // the operator with nothing), when CancelPending or CancelPendingDisposition
-// says the window moved on, and when the window closes. Dispatch and focus
+// says the window moved on, and when the window closes. CancelPendingDisposition
+// only takes the notices; its caller retracts them with FinishCancellation once
+// its own locks are released, since a retraction reaches the companion. Dispatch and focus
 // dispositions name the backend they came from.
 //
 // It must never import the daemon root; the daemon drives it through the
