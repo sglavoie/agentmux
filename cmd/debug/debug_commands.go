@@ -140,7 +140,10 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	if !report.Success {
-		return &cli.ExitError{Code: cli.ExitHealthFailure, Err: errors.New(report.Error), Quiet: debugProbeJSON}
+		// The report, its "error:" line included, is already printed in
+		// either mode; the root printing the same message again on stderr
+		// only repeats it.
+		return &cli.ExitError{Code: cli.ExitHealthFailure, Err: errors.New(report.Error), Quiet: true}
 	}
 	return nil
 }

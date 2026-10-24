@@ -77,6 +77,10 @@ func TestFailurePrintsItsErrorExactlyOnce(t *testing.T) {
 			if got := strings.Count(stderr, "probe failed"); got != 1 {
 				t.Fatalf("stderr names the failure %d times, want once:\n%s", got, stderr)
 			}
+			// Both read the same way, behind the command's error prefix.
+			if stderr != "Error: probe failed\n" {
+				t.Fatalf("stderr = %q, want %q", stderr, "Error: probe failed\n")
+			}
 		})
 	}
 }

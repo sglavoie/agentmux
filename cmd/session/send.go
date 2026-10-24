@@ -196,7 +196,7 @@ func runSend(cmd *cobra.Command, args []string) error {
 	}
 	record, err := registry.Get(id)
 	if err != nil {
-		return cli.CommandFailure(cmd, sendJSON, "not_found", fmt.Errorf("no runtime session %s", id))
+		return cli.CommandFailure(cmd, sendJSON, "not_found", unknownRuntimeSession(id))
 	}
 	if record.State != runtimesession.StateLive {
 		return cli.CommandFailure(cmd, sendJSON, notLiveCode(record), notLiveError(record))

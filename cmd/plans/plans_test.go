@@ -245,7 +245,7 @@ func TestPlanRunSelectsOnePlanOrListsCandidates(t *testing.T) {
 	}
 
 	output, _ = runPlan(t, "beta", "--json", "--check")
-	if failure := decodeError(t, output); failure.Code != "not_found" {
+	if failure := decodeError(t, output); failure.Code != "not_found" || !strings.Contains(failure.Message, "<Tab> completes the plan names") {
 		t.Fatalf("failure = %+v", failure)
 	}
 	output, _ = runPlan(t, "--json")

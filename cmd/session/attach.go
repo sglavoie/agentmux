@@ -153,7 +153,7 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	}
 	record, err := registry.Get(id)
 	if err != nil {
-		return cli.CommandFailure(cmd, attachJSON, "not_found", fmt.Errorf("no runtime session %s", id))
+		return cli.CommandFailure(cmd, attachJSON, "not_found", unknownRuntimeSession(id))
 	}
 	if record.State != runtimesession.StateLive {
 		return cli.CommandFailure(cmd, attachJSON, notLiveCode(record), notLiveError(record))

@@ -322,7 +322,7 @@ func selectPlan(cfg *config.Config, selector string) (plans.PlanMeta, error) {
 	}
 	switch len(matches) {
 	case 0:
-		return plans.PlanMeta{}, &actions.Error{Code: "not_found", Action: actions.PlanRun, Message: fmt.Sprintf("no plan named %q under %s", selector, cli.DisplayPath(config.ExpandTilde(cfg.Defaults.PlansDirectory)))}
+		return plans.PlanMeta{}, &actions.Error{Code: "not_found", Action: actions.PlanRun, Message: fmt.Sprintf("no plan named %q under %s; <Tab> completes the plan names there, and a path to a plan directory works too", selector, cli.DisplayPath(config.ExpandTilde(cfg.Defaults.PlansDirectory)))}
 	case 1:
 		return describePlan(matches[0])
 	}
