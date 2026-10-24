@@ -573,11 +573,16 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
 
     /// Shows the app's own notice, when app notifications are on and allowed;
     /// false otherwise, so the caller can get the operator's attention some
-    /// other way. Like a terminal's, it never asks for permission.
+    /// other way. Like a terminal's, it never asks for permission. The
+    /// center can still refuse a notice it was handed: `failed` then runs,
+    /// on the main thread, so the caller can fall back after all.
     @discardableResult
-    func presentApp(title: String, body: String) -> Bool {
+    func presentApp(title: String, body: String, failed: @escaping () -> Void = {}) -> Bool {
         guard enabled, authorization == .authorized else { return false }
-        center.add(Self.appRequest(title: title, body: body)) { _ in }
+        center.add(Self.appRequest(title: title, body: body)) { [schedule] error in
+            guard error != nil else { return }
+            schedule(failed)
+        }
         return true
     }
 

@@ -13,6 +13,11 @@ import Foundation
 /// cycle spans every Kitty instance the snapshot lists. A session on another
 /// backend has no window; its runtime session ID alone identifies it.
 struct AttentionCycler {
+    /// What the command that runs the cycle is called everywhere it is
+    /// offered: the status menu, the workspace's Session menu and F4, the
+    /// command palette, and the global shortcut in Settings.
+    static let commandTitle = "Next Waiting Session"
+
     /// One session across Kitty instances and backends.
     struct Key: Hashable {
         let socket: String

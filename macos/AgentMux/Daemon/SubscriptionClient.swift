@@ -142,9 +142,12 @@ final class SubscriptionClient {
         thread.start()
     }
 
-    /// Ends the subscription. No event is reported after it returns; the
-    /// thread closes its connection within one poll slice. It does not wait
-    /// for that, so a main-thread caller never blocks on the utility thread.
+    /// Ends the subscription: no event is reported once the thread sees it,
+    /// and the thread closes its connection within one poll slice. It does
+    /// not wait for that, so a main-thread caller never blocks on the
+    /// utility thread; an event the thread was already reporting when this
+    /// was called can still reach `onEvent` after it returns, so an owner
+    /// that must hear nothing after stopping checks that itself.
     func stop() {
         lock.lock()
         guard !stopped else { lock.unlock(); return }
@@ -153,7 +156,9 @@ final class SubscriptionClient {
         wake.signal()
     }
 
-    /// Reports `event` unless the client has been stopped.
+    /// Reports `event` unless the client has been stopped. The check and
+    /// the call are not atomic: `onEvent` runs outside the lock, so it never
+    /// holds it, and a `stop()` in between does not hold this event back.
     private func emit(_ event: Event) {
         lock.lock()
         let live = !stopped

@@ -387,15 +387,23 @@ extension AppDelegate {
         case let .failure(error):
             Self.logger.error("\(label, privacy: .public) on tmux: \(error.message, privacy: .public)")
             reportFailure(title: "Could not \(label)", error.message)
-        case let .success(runtimeSessionID), let .partial(runtimeSessionID, _):
+        case let .success(runtimeSessionID):
             Self.logger.notice("\(label, privacy: .public) on tmux as \(runtimeSessionID, privacy: .public)")
-            let controller = workspaceController()
-            controller.show()
-            guard !runtimeSessionID.isEmpty else { return }
-            controller.open(WorkspaceViewRequest(
-                kind: WorkspaceViewRequest.sessionKind, runtimeSessionID: runtimeSessionID, awaited: true
-            ))
+            showInWorkspace(runtimeSessionID)
+        case let .partial(runtimeSessionID, status):
+            Self.logger.notice("\(label, privacy: .public) on tmux as \(runtimeSessionID, privacy: .public) exited \(status)")
+            report("\(label) finished, but a later step failed.")
+            showInWorkspace(runtimeSessionID)
         }
+    }
+
+    private func showInWorkspace(_ runtimeSessionID: String) {
+        let controller = workspaceController()
+        controller.show()
+        guard !runtimeSessionID.isEmpty else { return }
+        controller.open(WorkspaceViewRequest(
+            kind: WorkspaceViewRequest.sessionKind, runtimeSessionID: runtimeSessionID, awaited: true
+        ))
     }
 
     /// Recent: a conversation a live session runs is focused where it runs,
@@ -560,14 +568,18 @@ extension AppDelegate {
 
     /// A launch, continue, or restart that failed after the menu closed: the
     /// menu line says why, and the operator hears of it at once, by a
-    /// notification when app notifications are on and allowed, else by a
-    /// beep and the icon blinking.
+    /// notification when app notifications are on and allowed, else (or
+    /// when the notification could not be added) by a beep and the icon
+    /// blinking.
     func reportFailure(title: String, _ message: String) {
         let line = Self.failureLine(title: title, message: message)
         report(line)
-        if notifications?.presentApp(title: title, body: message) != true {
+        let fallBack = { [weak self] in
             NSSound.beep()
-            statusItem?.flash()
+            self?.statusItem?.flash()
+        }
+        if notifications?.presentApp(title: title, body: message, failed: fallBack) != true {
+            fallBack()
         }
     }
 
