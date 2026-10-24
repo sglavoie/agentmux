@@ -53,6 +53,7 @@ has_more, hidden_automated, sessions}.`,
   amx session list --here --since 2d
   amx session list --project api --harness claude -n 10
   amx session list --live --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := sessionCommandsLoadConfig()

@@ -182,6 +182,7 @@ installed one, and says so.`,
 	Example: `  amx config hooks-status
   amx config hooks-status --json
   amx config hooks-status | awk -F'\t' '$3 != "in_sync"'`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := cli.LoadRunnableConfig()
 		if err != nil {

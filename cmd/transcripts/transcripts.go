@@ -50,6 +50,7 @@ In a terminal the report is a summary; piped, it is one key: value line per
 field with raw byte counts. With --json it reports the same fields.`,
 	Example: `  amx transcripts status
   amx transcripts status --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		status, err := transcript.Status(transcriptsIndexPath())
@@ -77,6 +78,7 @@ orphan_sidecar_size_removed, before, after, warnings}, where before and
 after are the status reports around the compaction.`,
 	Example: `  amx transcripts compact
   amx transcripts compact --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		result, err := transcript.Compact(transcriptsIndexPath())
@@ -124,6 +126,7 @@ Only the cache is rewritten; the transcript files themselves never are.`,
 	Example: `  amx transcripts rebuild
   amx transcripts rebuild --all
   amx transcripts rebuild --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		cfg, err := transcriptsLoadConfig()

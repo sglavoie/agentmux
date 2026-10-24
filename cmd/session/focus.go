@@ -41,6 +41,7 @@ KITTY_WINDOW_ID must be set (provided automatically by Kitty launches),
 or supply --window-id explicitly.` + focusRuntimeHelp,
 	Example: `  amx focus-prev-managed
   amx focus-prev-managed --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if id, ok := focusRuntimeSession(cmd, focusPrevManagedWindowID); ok {
 			return runFocusRuntime(cmd, id, neighborSession(-1))
@@ -59,6 +60,7 @@ KITTY_WINDOW_ID must be set (provided automatically by Kitty launches),
 or supply --window-id explicitly.` + focusRuntimeHelp,
 	Example: `  amx focus-next-managed
   amx focus-next-managed --window-id 12`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if id, ok := focusRuntimeSession(cmd, focusNextManagedWindowID); ok {
 			return runFocusRuntime(cmd, id, neighborSession(1))
@@ -78,6 +80,7 @@ KITTY_WINDOW_ID must be set (provided automatically by harness hooks),
 or supply --window-id explicitly.` + focusRuntimeHelp,
 	Example: `  amx focus-next
   amx focus-next --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --client /dev/ttys004`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if id, ok := focusRuntimeSession(cmd, focusNextWindowID); ok {
 			return runFocusRuntime(cmd, id, nextAttentionSession)

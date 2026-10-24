@@ -26,6 +26,7 @@ var resortCmd = &cobra.Command{
 Only Kitty tabs are moved; tmux sessions have no tab order to change. It
 needs a reachable Kitty.`,
 	Example: `  amx resort`,
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := resortLoadConfig()
 		if err != nil {

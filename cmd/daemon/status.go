@@ -35,6 +35,7 @@ With --json it reports {alive, socket, pid, uptime_seconds, ready,
 degraded_reason, build, notification, asl, asl_reconcile, companion}.`,
 	Example: `  amx daemon status
   amx daemon status --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		out := cmd.OutOrStdout()
 		health := newDaemonExportClient().Health()

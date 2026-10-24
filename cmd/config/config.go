@@ -40,6 +40,7 @@ An existing config is never overwritten: the command fails instead. For a
 guided setup that adds a first profile and project, use ` + "`amx config setup`" + `.`,
 	Example: `  amx config init
   AMX_CONFIG=~/tmp/amx.toml amx config init`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := config.DefaultConfigPath()
 		if _, err := os.Stat(path); err == nil {
@@ -64,6 +65,7 @@ editor to exit. $EDITOR may carry its own arguments, quoted as a shell would
 ("code --wait"). Run ` + "`amx config validate`" + ` afterwards to check the result.`,
 	Example: `  amx config edit
   EDITOR="code --wait" amx config edit`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := config.DefaultConfigPath()
 		name, editorArgs, err := resolveEditorCommand(os.Getenv("EDITOR"), path)
@@ -174,6 +176,7 @@ not validate it; ` + "`amx config validate`" + ` does.
 With --json it reports {path, content}: content is the file's text, unparsed.`,
 	Example: `  amx config show
   amx config show --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		data, err := config.ReadDefault()
@@ -202,6 +205,7 @@ var configPathCmd = &cobra.Command{
 ~/.config/agent-mux/config.toml. The file need not exist.`,
 	Example: `  amx config path
   $EDITOR "$(amx config path)"`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), config.DefaultConfigPath())
 		return err
@@ -227,6 +231,7 @@ invalid_project_directories}.`,
 	// Failures are printed by ccerrors.Print and returned quiet; printing
 	// them a second time only repeats the line that matters.
 	SilenceErrors: true,
+	Args:          cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		strict, _ := cmd.Flags().GetBool("strict")
