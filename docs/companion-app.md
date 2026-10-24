@@ -140,10 +140,13 @@ has.
 ## Workspace
 
 Lifecycle labels match the TUI: **Detach Terminal** leaves the agent running,
-**End Session** stops it, and **Close View** ends a utility program. Native
-menus/sidebar use **Confirm before closing views or ending sessions** in
-Preferences. The embedded Dashboard and Overview use `confirm_destructive`
-in `config.toml`; those preferences retain their separate scopes.
+**End Session** stops it, and **Close View** ends a utility program. Preferences › Workspace offers **Follow config.toml**, **Always — app override**,
+and **Never — app override** for confirmations. The policy applies to native
+controls and the embedded Dashboard, Overview, and conversation actions, including
+views already open. Follow config.toml rereads `defaults.confirm_destructive` before
+a destructive action. Existing explicit app choices migrate to Always or Never;
+new installations inherit config.toml. An unreadable policy asks for confirmation.
+Terminals outside the app retain their own configuration.
 
 
 **Open Workspace** in the menu shows a window with every live session in a
@@ -182,6 +185,13 @@ the tab titles use and a count of waiting sessions beside each project.
 While the window is open the app has a Dock icon and a menu bar; closing the
 window makes it a menu bar app again.
 
+Session rows use neutral backgrounds and a small profile-color marker. The system
+accent identifies selection; status appears in words as well as an icon. A completed
+turn uses a checkmark in the native app. Sessions with duplicate display names gain
+a distinguishing branch or short runtime identity, also used by the switcher,
+Waiting, the inspector, and session dialogs. Long duplicate names truncate in the
+middle to retain their distinguishing suffix.
+
 ### Dashboard and utility views
 
 Above the projects the sidebar lists the workspace's own views. They are
@@ -196,10 +206,13 @@ terminals of their own beside the agents, and none of them needs Kitty.
   New agents launch on tmux.
 - **Overview** (⌘O) is the live session overview. Enter on a tile goes to the
   session's view the same way.
-- **Past Sessions** (⌘Y, **View › Past Sessions**, or *Open Past Sessions* in
-  the palette) is the dashboard's Past Sessions over every conversation, with
-  no Dashboard behind it. Continuing, resuming, or forking goes to the
-  session's view; leaving it closes the view.
+- **Find or Resume a Conversation…** (⌘Y) opens native Conversation History,
+  the main place to search, read, resume, or fork a conversation. The older
+  configurable ⌘⇧H shortcut is an alias to the same browser. **Handoff / More…**
+  opens the existing terminal conversation actions on the selected conversation
+  and committed search. ⌘Y returns to History with its selection and reading
+  position retained. Past Sessions remains available inside the Dashboard and
+  through `amx past-sessions`.
 - **Shell**, **editor**, and **scrollback** views open when the Dashboard asks
   for them (*Open shell*, *Open editor*, *Peek scrollback*, the plan and
   worktree editors) and from **View › New Shell** (⌘T). Each is listed while
@@ -302,8 +315,7 @@ Whatever has the keyboard decides where a key goes.
   goes to what is already running.
 - **⌘R** names the session shown (**Session › Name Session…**), and so does
   **Name Session…** in the menu a right-click on a session's line opens. A
-  named session has the name on a first line of its own, bold and dark blue,
-  above its profile; one with no name looks as it always did. An empty name
+  named session has its name on a bold first line above its profile. An empty name
   removes it. The name is kept with the session (`amx name-session`), so it
   is still there after the app was quit, and shows about two seconds after
   it was given. Only a session embedded here can be named.
@@ -461,7 +473,7 @@ labels; raw protocol reasons remain in the session inspector.
 
 ### Conversation History
 
-**View › Conversation History…** (⌘⇧H) searches full transcripts, scoped to all history,
+**View › Find or Resume a Conversation…** (⌘Y, also ⌘⇧H) searches full transcripts, scoped to all history,
 the selected session's project, or its conversation. Resume, fork, or focus a live
 session from the preview. Search opens around its first matching prose message,
 even outside the latest 50 messages. Highlighted terms and previous/next match
@@ -859,3 +871,17 @@ read's exact timestamp, missing reads, and retry actions. Updating a run list
 alone cannot make older plan details appear new. **Show in Finder** reveals the
 selected plan session file; **Stop After Session…** requests a stop after the
 current session finishes.
+
+### Resolved action feedback
+
+Retained warnings and errors show **Needs attention** until matching evidence
+resolves them. A successful readiness check resolves only the same plan and options;
+a successful resume resolves only that conversation and operation; a new
+worktree review resolves a changed-review warning; a successful landing resolves
+that worktree's landing failure. A matching final receipt resolves an unknown
+receipt outcome, including when the receipt reports rejection (the rejection remains
+a separate warning). Unrelated successes and ordinary refreshes do not clear action
+failures. A later fork can create a different conversation, so it does not resolve
+an earlier fork's failure or unknown outcome. Resolved notices retain their original message, resolution evidence, and
+time across restarts, subject to the existing 30-entry bound. Repeated failures
+reopen the notice. Older notices without an exact issue identity remain dismissible.

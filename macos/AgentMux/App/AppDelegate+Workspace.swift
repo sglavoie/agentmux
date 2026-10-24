@@ -23,6 +23,7 @@ extension AppDelegate {
         if let workspace { return workspace }
         let controller = WorkspaceWindowController(delegate: self)
         controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing
+        controller.readConfirmation = { [weak self] done in self?.readWorkspaceConfirmation(done) }
         workspace = controller
         if !Self.isRunningTests {
             controller.onLayoutChanged = { WorkspaceRestoration.saveLayout($0) }
@@ -335,7 +336,7 @@ extension AppDelegate {
     @objc func openDashboardFromMenu(_ sender: Any?) { showWorkspaceView(.dashboard) }
     @objc func openOverviewFromMenu(_ sender: Any?) { showWorkspaceView(.overview) }
     /// ⌘Y: Past Sessions over every conversation, with no Dashboard behind it.
-    @objc func openPastSessionsFromMenu(_ sender: Any?) { showWorkspaceView(.pastSessions) }
+    @objc func openPastSessionsFromMenu(_ sender: Any?) { openHistory(conversation: nil) }
     @objc func newShellFromMenu(_ sender: Any?) {
         let home = command?.launchEnvironment.home ?? NSHomeDirectory()
         let controller = workspaceController()
@@ -596,6 +597,11 @@ extension AppDelegate {
                    !view.isHiddenOrHasHiddenAncestor { app.workspace?.window.makeFirstResponder(view) }
             }
         }
+        controller.model.onAdvanced = { [weak self] identity, query in
+            var view = WorkspaceUtilityView(kind: .history, target: identity.encoded, title: "Conversation Actions")
+            view.historyQuery = query
+            self?.showWorkspaceView(view)
+        }
         controller.model.onAction = { [weak self] conversation, fork, completion in
             self?.openHistoryConversation(conversation, fork: fork, completion: completion)
         }
@@ -607,7 +613,8 @@ extension AppDelegate {
             controller.model.scope = .conversation
             controller.model.includeAutomated = true
         }
-        controller.show(project: workspace.shownSessionRow?.project ?? "", conversation: conversation ?? workspace.shownSessionRow?.conversation, eventTime: eventTime)
+        controller.show(project: controller.model.project.isEmpty ? (workspace.shownSessionRow?.project ?? "") : controller.model.project,
+                        conversation: conversation ?? controller.model.currentConversation ?? workspace.shownSessionRow?.conversation, eventTime: eventTime)
     }
 
     func openHistoryConversation(_ conversation: RecentConversation, fork: Bool, completion: @escaping (String?) -> Void) {
@@ -651,14 +658,13 @@ extension AppDelegate {
             entry(.focusOtherPane, "Focus Other Pane", reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
             entry(.swapPanes, "Swap Panes", reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
             entry(.collapsePane, "Hide Other Pane", reason: workspace?.isSplit == true ? (workspace?.canHideOtherPane == true ? nil : "Wait for the checkout operation to finish") : "Open a second pane first"),
-            entry(.history, "Search Conversation History", key(.history)),
             entry(.activity, "Since Last Looked", key(.activity)),
             entry(.runs, "Open ASL Runs", key(.runs)),
             entry(.runPlan, "Run a Plan…", key(.runPlan), reason: command == nil ? AMXWording.unavailable(notFound: preferences.binaryMenuProblem) : nil),
             entry(.changes, "Checkout Changes", key(.changes)),
             entry(.dashboard, "Open Dashboard", "⌘D"),
             entry(.overview, "Open Overview", "⌘O"),
-            entry(.pastSessions, "Open Past Sessions", "⌘Y"),
+            entry(.pastSessions, "Find or Resume a Conversation", "⌘Y"),
             entry(.nextWaiting, "Next Waiting Session", "⌘⇧A", reason: store.feed != .live ? "Waiting for a live session list" : (AttentionCycler.ordered(store.sessions).isEmpty ? "No sessions are waiting" : nil)),
             entry(.settings, "Settings…", "⌘,"),
         ]

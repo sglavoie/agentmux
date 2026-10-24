@@ -56,7 +56,7 @@ extension WorkspaceWindowController {
             waiting: WorkspaceInspector.waiting(
                 sessions, asl: store.snapshot?.asl.waiting ?? [], snapshotSocket: socket, now: now(), glyphs: glyphs, order: order
             ),
-            inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs) },
+            inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs, displayName: shownSessionRow?.displayName) },
             current: state.current,
             feedNotice: WorkspaceSidebar.feedNotice(store.feed)
         ))

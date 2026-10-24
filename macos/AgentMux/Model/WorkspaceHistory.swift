@@ -130,6 +130,13 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var currentConversation: ConversationIdentity?
     var revealFeedback: (() -> Void)?
     var onAction: ((RecentConversation, Bool, @escaping (String?) -> Void) -> Void)?
+    var onAdvanced: ((ConversationIdentity, String) -> Void)?
+
+    func openAdvancedActions() {
+        guard canAct, let selected else { return }
+        saveReview()
+        onAdvanced?(selected.conversation.identity, resultsQuery)
+    }
 
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner
@@ -449,11 +456,16 @@ final class WorkspaceHistoryModel: ObservableObject {
         onAction(selected.conversation, fork) { [weak self] problem in
             guard let self else { return }
             self.acting = false
+            let issue = WorkspaceFeedbackIssue(operation: fork ? .fork : .resume, target: [selected.id])
+            // Resuming/focusing confirms this exact conversation is available.
+            // A second fork may create a different conversation and cannot settle
+            // an earlier fork's unknown outcome.
+            if !fork && problem == nil { self.feedbackHistory.resolve(issue, evidence: "The conversation opened successfully.") }
             let feedback = WorkspaceFeedback(target: "\(selected.conversation.displayName) · \(selected.id)",
                 message: problem ?? (fork ? "Fork opened in the workspace." : "Conversation opened."),
                 kind: problem == nil ? .success : .error,
                 nextStep: problem == nil ? "" : "Refresh to check whether the conversation is already live before trying again.",
-                recovery: problem == nil ? nil : .refresh)
+                recovery: problem == nil ? nil : .refresh, issue: issue)
             self.actionFeedback = feedback
             let identity = selected.conversation.identity
             self.feedbackHistory.record(feedback, destination: .conversation(identity.encoded), available: { [weak self] in self != nil && self?.acting == false }) { [weak self] in

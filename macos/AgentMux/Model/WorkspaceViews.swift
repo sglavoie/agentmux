@@ -83,12 +83,14 @@ struct WorkspaceUtilityView: Equatable, Codable {
     var ordinal = 0
     /// Optional so layouts saved before terminal naming still decode.
     var name: String? = nil
+    var historyQuery: String? = nil
 
     var canName: Bool { kind == .terminal || kind == .shell }
     var displayName: String { name.flatMap { $0.isEmpty ? nil : $0 } ?? title }
 
     /// What tells one view from another: its kind and what it is about.
     var id: String {
+        if kind == .history, let historyQuery, !historyQuery.isEmpty { return "history:\(target)#query:\(historyQuery)" }
         if target.isEmpty { return kind.rawValue }
         return ordinal == 0 ? "\(kind.rawValue):\(target)" : "\(kind.rawValue):\(target)#\(ordinal)"
     }
@@ -137,7 +139,11 @@ struct WorkspaceUtilityView: Equatable, Codable {
         case .editor: return ["workspace-view", "edit", target]
         case .pager: return ["workspace-view", "pager", target]
         case .terminal: return ["workspace-view", "session-shell", target]
-        case .history: return target.isEmpty ? ["workspace-view", "history"] : ["workspace-view", "history", target]
+        case .history:
+            var args = ["workspace-view", "history"]
+            if let historyQuery, !historyQuery.isEmpty { args += ["--query", historyQuery] }
+            if !target.isEmpty { args += ["--", target] }
+            return args
         case .keybindings: return ["workspace-view", "keybindings"]
         case .iconPicker: return ["workspace-view", "icon-picker", target]
         case .colorPicker: return ["workspace-view", "color-picker", target]

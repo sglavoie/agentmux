@@ -153,12 +153,19 @@ enum WorkspaceMenu {
         // The digits are all the sessions'.
         view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
         view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
-        view.addItem(item("Past Sessions", #selector(AppDelegate.openPastSessionsFromMenu(_:)), "y", target: target))
+        view.addItem(item("Find or Resume a Conversation…", #selector(AppDelegate.openPastSessionsFromMenu(_:)), "y", target: target))
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
         // The review windows: ⌘⇧ and a letter by default
         // (`WorkspaceShortcut.defaultCombo`), reassignable in Settings.
         for shortcut in [WorkspaceShortcut.runs, .runPlan, .activity, .history, .changes] {
-            view.addItem(item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target))
+            let command = item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target)
+            if shortcut == .history {
+                // Keep the configurable older shortcut as an alias to the same
+                // browser, without presenting two competing history entries.
+                command.isHidden = true
+                command.allowsKeyEquivalentWhenHidden = true
+            }
+            view.addItem(command)
         }
         view.addItem(.separator())
         view.addItem(item("Split with Shell", #selector(AppDelegate.splitWorkspaceShell(_:)), "", target: target))

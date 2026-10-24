@@ -201,20 +201,20 @@ final class WorkspaceSidebarTests: XCTestCase {
         let personal = built[1].rows[0]
         XCTAssertEqual(personal.target, .embedded(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(personal.key, .embedded(F.runtimeID(2)))
-        XCTAssertEqual(personal.glyph, "🛑")
+        XCTAssertEqual(personal.glyph, "✓")
         XCTAssertTrue(personal.attention)
-        XCTAssertEqual(personal.detail, "claude · now")
+        XCTAssertEqual(personal.detail, "Turn complete · claude · now")
         XCTAssertEqual(personal.toolTip, "tmux %2")
 
         let work = built[0].rows[0]
         XCTAssertEqual(work.target, .kitty(socket: "", windowID: 4))
         XCTAssertEqual(work.key, AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
-        XCTAssertEqual(work.detail, "claude · 4m · Needs permission · Kitty", "a Kitty row says where it opens")
+        XCTAssertEqual(work.detail, "Needs permission · claude · 4m · Kitty", "a Kitty row says where it opens")
         XCTAssertTrue(work.muted)
         XCTAssertEqual(work.toolTip, "window 4")
 
         let web = built[3].rows[0]
-        XCTAssertEqual(web.detail, "codex · main*")
+        XCTAssertEqual(web.detail, "working · codex · main*")
         XCTAssertTrue(web.working)
         XCTAssertFalse(web.attention)
     }

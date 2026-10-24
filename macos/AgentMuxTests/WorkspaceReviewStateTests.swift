@@ -98,7 +98,7 @@ final class WorkspacePastSessionsViewTests: XCTestCase {
         XCTAssertFalse(view.isPermanent)
         XCTAssertFalse(view.asksBeforeClosing)
         let one = WorkspaceUtilityView(kind: .history, target: "claude:abc", title: "Past Sessions")
-        XCTAssertEqual(one.arguments, ["workspace-view", "history", "claude:abc"])
+        XCTAssertEqual(one.arguments, ["workspace-view", "history", "--", "claude:abc"])
         XCTAssertNotEqual(one.id, view.id)
     }
 }

@@ -30,6 +30,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
@@ -640,7 +641,7 @@ func (c Controller[M]) confirms(m M, action commands.ID) bool {
 		return false
 	}
 	env := c.env(m)
-	return env.Config != nil && env.Config.Defaults.ConfirmDestructive
+	return config.WorkspaceConfirmation(env.Config != nil && env.Config.Defaults.ConfirmDestructive)
 }
 
 // dispatch mints a request, records it for correlation, leaves the action

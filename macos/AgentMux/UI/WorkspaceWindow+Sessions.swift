@@ -663,7 +663,20 @@ extension WorkspaceWindowController {
     /// is enabled; an attachment's close only detaches, so it is never
     /// asked about.
     func terminalAskedToClose(_ view: NSView, needsConfirm: Bool) {
-        guard confirmBeforeClosing, needsConfirm, let id = viewTerminals.first(where: { $0.value.view === view })?.key,
+        guard needsConfirm,
+              let id = viewTerminals.first(where: { $0.value.view === view })?.key,
+              views.view(id)?.asksBeforeClosing == true else {
+            terminalEnded(view)
+            return
+        }
+        withConfirmationPolicy("terminal:" + String(describing: ObjectIdentifier(view))) { [weak self, weak view] required in
+            guard let self, let view else { return }
+            self.terminalAskedToClose(view, needsConfirm: needsConfirm, confirming: required)
+        }
+    }
+
+    private func terminalAskedToClose(_ view: NSView, needsConfirm: Bool, confirming: Bool) {
+        guard confirming, needsConfirm, let id = viewTerminals.first(where: { $0.value.view === view })?.key,
               let utility = views.view(id), utility.asksBeforeClosing else {
             terminalEnded(view)
             return

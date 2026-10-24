@@ -443,16 +443,14 @@ ASL answer panel work the same either way.
   keyboard: when a terminal it would have gone to ends, the pane's terminal,
   the placeholder's button, or the window takes it instead, so the arrow keys
   never switch sessions in a list that cannot be seen.
-- **Session colors.** An embedded session's line is drawn on its color
-  (`WorkspaceRowView`): the profile's color, or the one F6 picked, in the
-  palette's `bright_bg`, with black text; a palette test holds every
-  `bright_bg` to a 7:1 contrast with black. The selected line shows the list's own
-  selection, with a border in the accent
-  color around it (any selected line has one, a view's too). The daemon publishes the color
-  as the session's `tab_color` (`#rrggbb`) and reads the pick from the pane
-  on every reconciliation pass, so a pick shows within about two seconds. A
-  Kitty session's color stays on its tab in Kitty, and the workspace's own
-  views (Dashboard, Overview, shells) take none.
+- **Session colors.** `WorkspaceRowView` draws neutral rows with a small
+  profile-color marker. Child terminals share that marker; selection always
+  uses the system accent. Text follows the native appearance. The daemon's
+  `tab_color` still supplies the profile or F6-picked color. Native completed
+  turns use a checkmark; every session row also describes status in words.
+  Duplicate display names gain a branch or short runtime suffix consistently
+  across sidebar, switcher, Waiting, inspector, and dialogs.
+
 - **Harness icons.** An embedded session's line starts with its harness
   icon, ahead of the profile: the `[harness_emojis]` emoji its launch put in
   its title, with nothing to set up, until F5 picks another or clears it.
@@ -467,9 +465,12 @@ ASL answer panel work the same either way.
   Its conversation stays on disk. ⌘W's menu item says **Detach Terminal** on
   a session and **Close View** on a utility view. Closing a utility view ends
   its program, asking first when Ghostty reports it still needs confirmation.
-  Turn off **Confirm before closing views or ending sessions** in Settings →
-  Workspace to skip both close confirmations immediately, including the same
-  actions in menus and the sidebar. This choice persists across launches;
+  Settings → Workspace offers Follow config.toml and Always/Never app
+  overrides. Native actions read `amx config confirmation --json` when inheriting.
+  Embedded management views read an app-owned policy file at action time through
+  `AMX_WORKSPACE_CONFIRMATION_FILE`; shells and attachments receive no override.
+  Thus open native and embedded views follow changes without restarting. Failed
+  reads confirm conservatively. Existing explicit Boolean choices migrate;
   app quit confirmation remains enabled.
   Kitty sessions, Dashboard, and Overview have no sidebar ×.
 
@@ -573,8 +574,8 @@ ASL answer panel work the same either way.
   the pane's `cc_name`; an empty name removes it. The daemon reads it on
   every reconciliation pass and publishes it as the v2 snapshot's `name`, so
   the line changes with the next snapshot and not before. A named row is
-  taller by one line (`WorkspaceRowCellView.nameLabel`, bold, dark blue on
-  the session's color and a lighter blue on a dark list). A Kitty session is
+  taller by one line (`WorkspaceRowCellView.nameLabel`, bold, with a blue
+  appropriate to the current appearance). A Kitty session is
   not named here: its item is listed and disabled. A session is called by
   its name, else "project — profile" (`WorkspaceRow.displayName`), in the
   window title, the inspector, and the end, name, and failure sheets.

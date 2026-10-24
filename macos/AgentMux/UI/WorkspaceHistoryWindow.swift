@@ -152,6 +152,9 @@ struct WorkspaceHistoryView: View {
                                 .buttonStyle(.borderedProminent).fixedSize()
                                 .help("Resume or focus the selected session (⌘Return)").disabled(!model.canAct)
                             Button("Fork") { model.act(fork: true) }.fixedSize().help("Fork the selected conversation (⌘⇧Return)").disabled(!model.canAct)
+                            Button("Handoff / More…") { model.openAdvancedActions() }
+                                .help("Open terminal conversation actions with this conversation and search. ⌘Y returns here.")
+                                .disabled(!model.canAct || model.onAdvanced == nil)
                             Button { model.refreshTranscript() } label: { Image(systemName: "arrow.clockwise") }
                                 .help("Refresh conversation without moving your place (⌘R)")
                                 .accessibilityLabel("Refresh conversation").disabled(!model.canRefreshTranscript)

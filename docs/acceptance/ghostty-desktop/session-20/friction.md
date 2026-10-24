@@ -37,3 +37,8 @@ F-001 is the first operator-confirmed fix; no comparative frequency ranking is
 available from one report. The implemented event navigation,
 Runs evidence, status toolbar, filter hints, and launch summaries are candidates
 for real-use evaluation, not recorded trial successes.
+
+The [consistent-workflows pass](../../consistent-workflows/README.md#real-work-evaluation)
+adds observation tasks for session recognition, visual hierarchy, shared confirmations,
+conversation navigation, and resolved feedback. Record actual interruptions in the
+same register; the new checklist adds no observed occurrences or completed workdays.

@@ -129,6 +129,8 @@ final class WorkspaceRunsTests: XCTestCase {
         XCTAssertEqual(model.actionFeedback?.kind, .warning)
         XCTAssertEqual(model.actionFeedback?.recovery, .receipt)
         XCTAssertTrue(model.actionFeedback?.target.contains("run-one") == true)
+        let noticeID = model.feedbackHistory.entries.first?.id
+        XCTAssertTrue(model.feedbackHistory.entries.first?.unresolved == true)
         let original = model.pending
         XCTAssertNotNil(original)
         model.select("two")
@@ -141,6 +143,9 @@ final class WorkspaceRunsTests: XCTestCase {
         model.retryReceipt()
         XCTAssertEqual(service.requests, [original!, original!])
         XCTAssertNil(model.pending)
+        let resolved = model.feedbackHistory.entries.first { $0.id == noticeID }
+        XCTAssertNotNil(resolved?.resolvedAt)
+        XCTAssertTrue(resolved?.resolution?.contains("accepted") == true)
     }
 
     func testDuplicateClickWhileReauthorizingDoesNotSubmitTwice() {

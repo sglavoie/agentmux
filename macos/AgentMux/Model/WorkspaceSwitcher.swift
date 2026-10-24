@@ -143,7 +143,7 @@ extension WorkspaceCommand {
         case .settings: return ["preferences", "configuration"]
         case .newShell, .newTerminal, .splitShell: return ["terminal", "shell", "console"]
         case .history: return ["transcript", "conversation", "search"]
-        case .pastSessions: return ["history", "resume", "continue", "fork"]
+        case .pastSessions: return ["history", "transcript", "conversation", "search", "past sessions", "resume", "continue", "fork"]
         case .activity: return ["unread", "activity", "recent"]
         case .nextWaiting: return ["attention", "inbox", "question", "permission"]
         default: return []

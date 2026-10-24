@@ -213,8 +213,8 @@ final class MenuBuilderTests: XCTestCase {
 
     func testTitleStyles() {
         let attention = CompanionAttention(total: 3, stop: 1, key: 1, error: 0, question: 1, working: 2)
-        XCTAssertEqual(StatusTitle.text(for: attention, style: .glyphs, glyphs: .fallback), "⚡2 🛑1 🔑1 ❓1")
-        XCTAssertEqual(StatusTitle.text(for: attention, style: .glyphs, showWorking: false, glyphs: .fallback), "🛑1 🔑1 ❓1")
+        XCTAssertEqual(StatusTitle.text(for: attention, style: .glyphs, glyphs: .fallback), "⚡2 ✓1 🔑1 ❓1")
+        XCTAssertEqual(StatusTitle.text(for: attention, style: .glyphs, showWorking: false, glyphs: .fallback), "✓1 🔑1 ❓1")
         XCTAssertEqual(StatusTitle.text(for: attention, style: .compact, glyphs: .fallback), "3")
         XCTAssertEqual(StatusTitle.text(for: attention, style: .iconOnly, glyphs: .fallback), "")
         XCTAssertEqual(StatusTitle.text(for: CompanionAttention(), style: .glyphs, glyphs: .fallback), "", "zero counts are not shown")

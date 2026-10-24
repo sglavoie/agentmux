@@ -76,6 +76,7 @@ var (
 // desktopViews is the workspace hosting this process's surface, or nil. It is
 // set by `amx workspace-view` before the surface selects its terminals.
 var desktopViews func(protocol.WorkspaceViewRequest) error
+var workspaceHistoryQuery string
 
 // WorkspaceViewCommand returns the hidden `workspace-view` command so the
 // root command can register it. Root assembly is the only consumer.
@@ -184,6 +185,11 @@ func init() {
 			},
 		},
 	)
+	for _, command := range workspaceViewCmd.Commands() {
+		if command.Name() == "history" {
+			command.Flags().StringVar(&workspaceHistoryQuery, "query", "", "conversation search carried from the native browser")
+		}
+	}
 }
 
 // Keep the summary (including partial setup failures) readable until the
@@ -212,9 +218,11 @@ func utilityIdentityVariable(key string) bool {
 
 // scrubUtilityEnvironment removes every identity variable from this process,
 // and so from whatever it starts.
-func scrubUtilityEnvironment() {
+func scrubUtilityEnvironment() { scrubViewEnvironment(false) }
+
+func scrubViewEnvironment(management bool) {
 	for _, kv := range workspaceViewEnviron() {
-		if key, _, _ := strings.Cut(kv, "="); utilityIdentityVariable(key) {
+		if key, _, _ := strings.Cut(kv, "="); utilityIdentityVariable(key) || (!management && key == config.WorkspaceConfirmationEnv) {
 			_ = workspaceViewUnsetenv(key)
 		}
 	}
@@ -223,7 +231,7 @@ func scrubUtilityEnvironment() {
 // hostedByWorkspace prepares a surface the workspace embeds: no borrowed
 // identity, and the workspace as the place its sessions and utilities show.
 func hostedByWorkspace() {
-	scrubUtilityEnvironment()
+	scrubViewEnvironment(true)
 	desktopViews = workspaceViewRequest
 }
 
@@ -239,7 +247,7 @@ func runWorkspaceHistory(wanted conversation.Identity) error {
 	if err != nil {
 		return err
 	}
-	return tui.RunHistory(cfg, client, wanted)
+	return tui.RunHistorySearch(cfg, client, wanted, workspaceHistoryQuery)
 }
 
 // runWorkspaceShell replaces this process with the operator's login shell in

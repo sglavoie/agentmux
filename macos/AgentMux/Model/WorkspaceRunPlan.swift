@@ -156,7 +156,8 @@ final class WorkspaceRunPlanModel: ObservableObject {
 
     func check() {
         guard !checking, !launching, !selector.isEmpty, projectProblem == nil, profileProblem == nil else { return }
-        guard let command = command() else { feedback = WorkspaceFeedback(target: selector, message: AMXWording.current, nextStep: "Check readiness again once amx is found.", recovery: .readiness); return }
+        let issue = WorkspaceFeedbackIssue(operation: .readiness, target: arguments)
+        guard let command = command() else { feedback = WorkspaceFeedback(target: selector, message: AMXWording.current, nextStep: "Check readiness again once amx is found.", recovery: .readiness, issue: issue); return }
         let args = arguments
         checking = true; feedback = nil; preview = nil; checkedArguments = nil
         var checkArgs = args
@@ -167,13 +168,16 @@ final class WorkspaceRunPlanModel: ObservableObject {
             guard self.arguments == args else { return }
             switch result {
             case let .success(value):
+                if value.readiness.state == "ready", !value.started {
+                    self.feedbackHistory.resolve(issue, evidence: "A fresh check confirmed this plan and configuration are ready.")
+                }
                 self.preview = value; self.checkedArguments = value.started ? nil : args
-                self.feedback = value.message.map { WorkspaceFeedback(target: self.selector, message: $0, kind: value.readiness.state == "ready" ? .information : .warning, recovery: .readiness) }
+                self.feedback = value.message.map { WorkspaceFeedback(target: self.selector, message: $0, kind: value.readiness.state == "ready" ? .information : .warning, recovery: .readiness, issue: issue) }
             case let .partial(value, _):
                 self.preview = value
                 self.checkedArguments = value.readiness.state == "ready" ? nil : args
-                self.feedback = WorkspaceFeedback(target: self.selector, message: value.message ?? "The readiness check did not finish successfully.", kind: .warning, nextStep: "Address the findings, then check readiness again.", recovery: .readiness)
-            case let .failure(error): self.feedback = WorkspaceFeedback(target: self.selector, message: error.message, nextStep: "Check the plan directory and Settings, then check readiness again.", recovery: .readiness)
+                self.feedback = WorkspaceFeedback(target: self.selector, message: value.message ?? "The readiness check did not finish successfully.", kind: .warning, nextStep: "Address the findings, then check readiness again.", recovery: .readiness, issue: issue)
+            case let .failure(error): self.feedback = WorkspaceFeedback(target: self.selector, message: error.message, nextStep: "Check the plan directory and Settings, then check readiness again.", recovery: .readiness, issue: issue)
             }
         }
     }

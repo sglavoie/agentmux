@@ -105,8 +105,17 @@ extension WorkspaceWindowController {
     /// shows it. A shell, editor, or pager whose program still needs it is
     /// confirmed first when the close confirmation setting is enabled.
     func closeView(_ id: String) {
+        guard needsConfirmBeforeClosing(id) else { closeViewNow(id); return }
+        let terminal = viewTerminals[id]?.view
+        withConfirmationPolicy("view:" + id) { [weak self] required in
+            guard let self, self.viewTerminals[id]?.view === terminal else { return }
+            self.closeView(id, confirming: required)
+        }
+    }
+
+    private func closeView(_ id: String, confirming: Bool) {
         guard let view = views.view(id) else { return }
-        guard confirmBeforeClosing, needsConfirmBeforeClosing(id) else {
+        guard confirming, needsConfirmBeforeClosing(id) else {
             closeViewNow(id)
             return
         }
@@ -179,8 +188,12 @@ extension WorkspaceWindowController {
     /// snapshot drops it; if the pane was on the session it goes to the
     /// Dashboard.
     func closeSession(_ key: AttentionCycler.Key) {
+        withConfirmationPolicy("session:" + WorkspaceOrder.token(key)) { [weak self] required in self?.closeSession(key, confirming: required) }
+    }
+
+    private func closeSession(_ key: AttentionCycler.Key, confirming: Bool) {
         guard let row = state.row(key), let id = row.embeddedRuntimeSessionID, closing[id] == nil else { return }
-        guard confirmBeforeClosing else {
+        guard confirming else {
             endSession(row, id)
             return
         }
@@ -192,7 +205,7 @@ extension WorkspaceWindowController {
 
     /// What ending a session keeps. It names Past Sessions, where the pane
     /// sends the operator once an agent has stopped (`resumeTitle`).
-    static let conversationKept = "The conversation stays on disk and can be resumed from Past Sessions."
+    static let conversationKept = "The conversation stays on disk and can be resumed from Conversation History (⌘Y)."
 
     private func askToClose(_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) {
         let alert = NSAlert()

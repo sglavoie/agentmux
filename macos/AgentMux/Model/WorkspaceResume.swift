@@ -64,13 +64,17 @@ final class WorkspaceResumeModel: ObservableObject {
             onResume(current) { [weak self] problem in
                 guard let self else { return }
                 self.acting = false
+                let issue = WorkspaceFeedbackIssue(operation: .resume, target: [self.identity.encoded])
                 if let problem {
                     self.error = problem
                     self.feedbackHistory.record(.init(target: self.identity.encoded, message: problem,
-                        nextStep: "Open the conversation to check whether it is already running.", recovery: .transcript),
+                        nextStep: "Open the conversation to check whether it is already running.", recovery: .transcript, issue: issue),
                         destination: .conversation(self.identity.encoded), available: { [weak self] in self?.acting == false },
                         recover: { [weak self] in self?.load() })
-                } else { self.onFinished?() }
+                } else {
+                    self.feedbackHistory.resolve(issue, evidence: "The conversation opened successfully.")
+                    self.onFinished?()
+                }
             }
         }
     }

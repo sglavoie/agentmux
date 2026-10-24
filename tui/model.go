@@ -450,6 +450,8 @@ type Model struct {
 	// history view was opened on. Results select it the first time they list
 	// it, or until the operator moves; then it is spent.
 	sessionWantedKey string
+	// Exact conversation scope for the native browser's specialized actions.
+	historyConversation string
 	// historyOnly marks a model started in Past Sessions with no session
 	// list behind it (NewHistoryModel).
 	historyOnly         bool

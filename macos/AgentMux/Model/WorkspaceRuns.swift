@@ -384,7 +384,8 @@ final class WorkspaceRunsModel: ObservableObject {
 
     private func receiptFeedback(_ params: ASLRequestParams, _ message: String) -> WorkspaceFeedback {
         WorkspaceFeedback(target: params.planDir + " · " + params.runID, message: message, kind: .warning,
-            nextStep: "Retry Receipt checks operation \(params.operationID). It does not create a new request.", recovery: .receipt)
+            nextStep: "Retry Receipt checks operation \(params.operationID). It does not create a new request.", recovery: .receipt,
+            issue: .init(operation: .receipt, target: [params.runID, params.operationID, params.method]))
     }
 
     private func submit(_ params: ASLRequestParams) {
@@ -404,6 +405,8 @@ final class WorkspaceRunsModel: ObservableObject {
                     self.actionFeedback = self.receiptFeedback(params, "The receipt did not match this operation. Its outcome is unknown; use Retry Receipt."); return
                 }
                 if ["accepted", "consumed", "rejected", "expired", "superseded"].contains(receipt.status) {
+                    self.feedbackHistory.resolve(.init(operation: .receipt, target: [params.runID, params.operationID, params.method]),
+                        evidence: "The matching operation receipt now reports: \(receipt.status).")
                     self.pending = nil
                     self.actionFeedback = WorkspaceFeedback(target: params.planDir + " · " + params.runID,
                         message: "\(ASLRefusal.methodLabel(params.method).capitalized): \(receipt.status).",

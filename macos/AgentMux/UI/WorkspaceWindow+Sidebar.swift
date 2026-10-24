@@ -66,7 +66,7 @@ extension WorkspaceWindowController {
     }
 
     /// What a line draws that its item does not carry: a session's ⌘ digit,
-    /// or the name and selection color inherited by a view.
+    /// or the name and profile marker inherited by a view.
     private func decoration(_ item: Item) -> LineDecoration {
         let label: String?
         switch item {
@@ -74,7 +74,7 @@ extension WorkspaceWindowController {
         case let .view(view): label = view.aboutRuntimeSessionID.flatMap { sessionNames[$0] }
         case .section, .group: label = nil
         }
-        return LineDecoration(label: label, selectionColor: selectionColor(of: item))
+        return LineDecoration(label: label, profileColor: profileColor(of: item))
     }
 
     func syncSidebarSelection() {
@@ -179,8 +179,8 @@ extension WorkspaceWindowController {
         }
     }
 
-    /// A session's line is drawn on the session's color; every other line,
-    /// the Dashboard and the Overview among them, on the list's own.
+    /// Session and child-terminal rows carry a small profile-color marker.
+    /// Every selection uses the same system accent.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let view: WorkspaceRowView
         if case let .view(utility) = items[row], utility.kind == .terminal {
@@ -192,13 +192,13 @@ extension WorkspaceWindowController {
         } else {
             view = WorkspaceRowView()
         }
-        view.tabColor = Self.tabColor(of: items[row])
-        view.selectionBorder.color = selectionColor(of: items[row]) ?? .controlAccentColor
+        view.tabColor = profileColor(of: items[row])
+        view.selectionBorder.color = .controlAccentColor
         return view
     }
 
-    /// Terminals listed beneath a session share its focus border color.
-    func selectionColor(of item: Item) -> NSColor? {
+    /// Terminals listed beneath a session share its profile marker.
+    func profileColor(of item: Item) -> NSColor? {
         if case let .view(view) = item,
            let id = view.besideRuntimeSessionID,
            let row = state.row(.embedded(id)) {

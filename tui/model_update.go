@@ -52,6 +52,14 @@ func NewHistoryModel(cfg *config.Config, client kitty.KittyClient, wanted conver
 	return entered.(Model)
 }
 
+// NewHistoryModelWithQuery is the native browser's exact-conversation bridge.
+func NewHistoryModelWithQuery(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity, query string) Model {
+	m := NewHistoryModel(cfg, client, wanted)
+	m.sessionQuery = query
+	m.historyConversation = m.sessionWantedKey
+	return m
+}
+
 func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode) Model {
 	interval := time.Duration(cfg.Defaults.RefreshInterval) * time.Second
 	if interval <= 0 {

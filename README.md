@@ -107,7 +107,7 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 | --- | --- |
 | Find sessions needing input | Dashboard, or `F4` while attached |
 | See every live pane | `F2` or `amx overview` |
-| Resume or fork a conversation | `s` for project history, `S` for all history; straight there with `ctrl+shift+y`, `⌘Y` in the app, or `amx past-sessions` |
+| Resume or fork a conversation | `s` for project history, `S` for all history; straight there with `ctrl+shift+y`, native Conversation History with `⌘Y` in the app, or `amx past-sessions` |
 | Read an action failure | `:` → **Show Action Feedback**; notices remain until dismissed |
 | Work with plans and worktrees | `:` → **Search Plans** or **Manage Worktrees** |
 | Check installation health | `amx doctor --strict` |

@@ -216,7 +216,7 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         workspace.activate(work)
         workspace.terminalEnded(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))))
         XCTAssertTrue(workspace.placeholder.messageLabel.stringValue.hasPrefix("This window let go of the session"))
-        XCTAssertTrue(WorkspaceWindowController.conversationKept.hasSuffix("resumed from Past Sessions."))
+        XCTAssertTrue(WorkspaceWindowController.conversationKept.hasSuffix("resumed from Conversation History (⌘Y)."))
     }
 
     func testTheMainMenuHasTheStandardItems() throws {

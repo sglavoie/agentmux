@@ -147,8 +147,10 @@ enum WorkspaceInspector {
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceWaitingRow] {
         let runs = MenuBuilder.waitingBySession(asl, sessions: sessions, snapshotSocket: snapshotSocket).bySession
+        let rows = WorkspaceSidebar.rows(sessions, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
         return AttentionCycler.ordered(sessions, snapshotSocket: snapshotSocket, order: order).map { session in
-            let row = WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
+            let key = AttentionCycler.key(session, snapshotSocket: snapshotSocket)
+            let row = rows.first { $0.key == key } ?? WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
             var answer: WorkspaceWaitingAnswer?
             if let run = runs[row.key] {
                 answer = .asl(MenuBuilder.target(run))
@@ -160,7 +162,7 @@ enum WorkspaceInspector {
             if row.embeddedRuntimeSessionID == nil { detail.append(WorkspaceSidebar.kittyBadge) }
             return WorkspaceWaitingRow(
                 key: row.key,
-                title: "\(row.project) — \(row.name.isEmpty ? row.label : row.name)",
+                title: row.name.isEmpty ? row.displayName : "\(row.project) — \(row.namedLabel)",
                 detail: detail.joined(separator: " · "),
                 glyph: row.glyph,
                 toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)",
@@ -178,7 +180,8 @@ enum WorkspaceInspector {
         _ session: CompanionSession,
         snapshotSocket: String = "",
         now: Date = Date(),
-        glyphs: Glyphs = .bundled
+        glyphs: Glyphs = .bundled,
+        displayName: String? = nil
     ) -> WorkspaceInspection {
         typealias Field = WorkspaceInspection.Field
         let row = WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
@@ -233,7 +236,7 @@ enum WorkspaceInspector {
         }
         return WorkspaceInspection(
             key: row.key,
-            title: row.displayName,
+            title: displayName ?? row.displayName,
             glyph: row.glyph,
             sections: sections,
             embedded: row.embeddedRuntimeSessionID != nil,

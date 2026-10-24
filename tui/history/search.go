@@ -16,8 +16,10 @@ type SearchInput struct {
 	Cursor  int
 	Offset  int
 
-	Query      string
-	SearchMode bool
+	// ConversationScope is set only by the native browser's exact-source bridge.
+	ConversationScope string
+	Query             string
+	SearchMode        bool
 
 	// Loading, CacheLoadInFlight, and IndexReady together decide which
 	// in-progress label the header and the empty list show.
@@ -88,6 +90,9 @@ func (in SearchInput) Render() string {
 	var sb strings.Builder
 
 	header := "Past Sessions"
+	if in.ConversationScope != "" {
+		header = "Conversation Actions · selected conversation · ⌘Y History"
+	}
 	count := len(in.Results)
 	if count > 0 || !in.Loading {
 		header += fmt.Sprintf("  [%d result%s]", count, plural(count))

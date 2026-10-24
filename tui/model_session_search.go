@@ -442,7 +442,7 @@ func loadTranscriptCache() (*transcript.Index, map[string]transcript.Reader, err
 }
 
 func sessionQueryIsEmpty(q transcript.Query) bool {
-	return q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0 && (q.MessageSource == "" || q.MessageSource == "any")
+	return q.Conversation == "" && q.Text == "" && len(q.Harness) == 0 && len(q.Profile) == 0 && len(q.Project) == 0 && (q.MessageSource == "" || q.MessageSource == "any")
 }
 
 func buildTranscriptReaders() map[string]transcript.Reader {
@@ -535,7 +535,8 @@ func (m Model) currentSessionQuery() transcript.Query {
 		Harness:       m.filterHarness,
 		Profile:       m.filterProfile,
 		Project:       m.filterProject,
-		MainOnly:      true,
+		MainOnly:      m.historyConversation == "",
+		Conversation:  m.historyConversation,
 	}
 }
 

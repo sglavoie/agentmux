@@ -261,7 +261,11 @@ final class WorkspaceChangesModel: ObservableObject {
             self.reviewing = false
             switch result {
             case let .failure(error): self.worktreeError = error.message
-            case let .success(value): self.worktree = value?.review
+            case let .success(value):
+                self.worktree = value?.review
+                if let review = value?.review {
+                    self.feedbackHistory.resolve(.init(operation: .review, target: [review.path]), evidence: "The worktree review was read again successfully.")
+                }
             }
         }
     }
@@ -276,10 +280,12 @@ final class WorkspaceChangesModel: ObservableObject {
     /// clean/inactive/fast-forward conditions again at execution time.
     func land(target: WorkspaceWorktreeReview.Review? = nil) {
         if let target, target != worktree {
-            landFeedback = WorkspaceFeedback(target: target.path, message: "The worktree review changed. Review it again before confirming a landing.", kind: .warning)
+            landFeedback = WorkspaceFeedback(target: target.path, message: "The worktree review changed. Review it again before confirming a landing.", kind: .warning,
+                issue: .init(operation: .review, target: [target.path]))
             return
         }
         guard canLand, let worktree, let command = command() else { return }
+        let issue = WorkspaceFeedbackIssue(operation: .land, target: [worktree.path, worktree.id])
         landing = true
         landFeedback = nil
         runner.run({ command.json(WorkspaceLandResult.self, ["worktree", "land", "--json", "--yes", "--", worktree.id], timeout: 60, mutates: true) }) { [weak self] result in
@@ -287,12 +293,14 @@ final class WorkspaceChangesModel: ObservableObject {
             self.landing = false
             switch result {
             case let .failure(error): self.landFeedback = WorkspaceFeedback(target: worktree.path, message: error.message,
-                nextStep: "Refresh and inspect the source branch before trying to land again.")
-            case let .success(value): self.landFeedback = WorkspaceFeedback(target: worktree.path,
+                nextStep: "Refresh and inspect the source branch before trying to land again.", issue: issue)
+            case let .success(value):
+                self.feedbackHistory.resolve(issue, evidence: "Landing this worktree succeeded.")
+                self.landFeedback = WorkspaceFeedback(target: worktree.path,
                 message: value.message ?? (value.changed ? "Worktree landed." : "No branch change was needed."), kind: .success, recovery: nil)
             case let .partial(value, _): self.landFeedback = WorkspaceFeedback(target: worktree.path,
                 message: (value.message ?? "The branch may have moved.") + " Check the checkout before retrying.", kind: .warning,
-                nextStep: "Refresh only reads the checkout; it does not repeat the landing.")
+                nextStep: "Refresh only reads the checkout; it does not repeat the landing.", issue: issue)
             }
             self.refresh()
         }

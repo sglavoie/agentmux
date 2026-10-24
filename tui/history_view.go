@@ -87,6 +87,7 @@ func historySearchInput(m Model) history.SearchInput {
 		Cursor:            m.sessionCursor,
 		Offset:            m.sessionOffset,
 		Query:             m.sessionQuery,
+		ConversationScope: m.historyConversation,
 		SearchMode:        m.sessionSearchMode,
 		Loading:           m.sessionLoading,
 		CacheLoadInFlight: m.sessionCacheLoadInFlight,

@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
 // historyModel is a history view opened on a conversation, before its cache
@@ -119,5 +121,28 @@ func TestHistoryViewSettlesOnPastSessionsWhereTheDashboardSettlesOnItsList(t *te
 	}
 	if got.sessionCursor != 1 {
 		t.Fatalf("cursor = %d, want the selection kept", got.sessionCursor)
+	}
+}
+
+func TestNativeHistoryQuerySurvivesInitialCacheAndSelectsTheConversation(t *testing.T) {
+	fixture := sessionSearchFilterModel(t)
+	m := NewHistoryModelWithQuery(testModel().cfg, nil, conversation.Identity{Harness: harness.Claude, SessionID: "hit"}, "needle")
+	updated, cmd := m.handleSessionCacheLoadDone(sessionCacheLoadDoneMsg{seq: m.sessionSearchSeq, idx: fixture.transcriptIndex, readers: fixture.transcriptReaders, results: fixture.sessionResults})
+	m = updated.(Model)
+	if m.sessionQuery != "needle" || m.sessionWantedKey != "claude:hit" || cmd == nil {
+		t.Fatalf("query/selection was lost: %q %q", m.sessionQuery, m.sessionWantedKey)
+	}
+	// Exercise the same indexed search the pending command dispatches.
+	results, err := transcript.Search(fixture.transcriptIndex, fixture.transcriptReaders, m.currentSessionQuery())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.publishSessionResults(results)
+	m.width, m.height = 120, 30
+	if !strings.Contains(stripAnsi(renderSessionSearch(m)), "Conversation Actions") {
+		t.Fatal("exact conversation scope must be visible")
+	}
+	if len(m.sessionResults) != 1 || m.sessionResults[m.sessionCursor].Meta.ID != "hit" {
+		t.Fatal("transferred query did not select its matching conversation")
 	}
 }

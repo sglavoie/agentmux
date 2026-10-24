@@ -36,6 +36,13 @@ extension AppDelegate {
 
     func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
+        if old.confirmationPolicy != new.confirmationPolicy {
+            do { try workspaceConfirmationFile.write(new.confirmationPolicy) }
+            catch {
+                try? FileManager.default.removeItem(at: workspaceConfirmationFile.url)
+                Self.logger.error("Could not update workspace confirmation policy: \(error.localizedDescription, privacy: .public)")
+            }
+        }
         switch Self.terminalReload(from: old, to: new) {
         case .resetFontSize: applyDefaultFontSize()
         case .keepZoom: terminals?.reloadConfig()

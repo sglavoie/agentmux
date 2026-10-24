@@ -393,3 +393,21 @@ func TestWorkspaceKeybindingsViewListsTheWorkspaceKeys(t *testing.T) {
 		t.Fatalf("keybindings view: err=%v shown=%d", err, shown)
 	}
 }
+
+func TestWorkspacePolicyStaysOnlyInManagementViews(t *testing.T) {
+	for _, kv := range os.Environ() {
+		key, value, _ := strings.Cut(kv, "=")
+		if utilityIdentityVariable(key) {
+			t.Setenv(key, value)
+		}
+	}
+	t.Setenv(config.WorkspaceConfirmationEnv, "/app/policy")
+	scrubViewEnvironment(true)
+	if os.Getenv(config.WorkspaceConfirmationEnv) != "/app/policy" {
+		t.Fatal("management view lost live policy")
+	}
+	scrubUtilityEnvironment()
+	if os.Getenv(config.WorkspaceConfirmationEnv) != "" {
+		t.Fatal("utility program inherited app policy")
+	}
+}

@@ -17,7 +17,7 @@ import (
 // Config leaves that share the retained command envelope. `asl-sync` has its
 // own audit in asl_sync_json_test.go; this one covers the rest of the family.
 func TestConfigJSONCommandSurfaceIsVersioned(t *testing.T) {
-	for _, command := range []*cobra.Command{configValidateCmd, configProfilesCmd, configDaemonStatusCmd, configShowCmd, configASLSyncCmd, hooks.SyncCommand(), hooks.StatusCommand()} {
+	for _, command := range []*cobra.Command{confirmationCmd, configValidateCmd, configProfilesCmd, configDaemonStatusCmd, configShowCmd, configASLSyncCmd, hooks.SyncCommand(), hooks.StatusCommand()} {
 		if command.Flags().Lookup("json") == nil {
 			t.Errorf("%s does not declare --json", command.CommandPath())
 		}

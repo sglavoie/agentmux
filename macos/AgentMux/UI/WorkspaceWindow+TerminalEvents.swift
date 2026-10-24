@@ -97,8 +97,8 @@ extension WorkspaceWindowController {
             if let sessionView = rowView as? WorkspaceSessionRowView, case let .row(session) = items[index] {
                 sessionView.hasStateGlyph = !session.glyph.isEmpty
             }
-            rowView.tabColor = Self.tabColor(of: items[index])
-            rowView.selectionBorder.color = selectionColor(of: items[index]) ?? .controlAccentColor
+            rowView.tabColor = profileColor(of: items[index])
+            rowView.selectionBorder.color = .controlAccentColor
         }
         syncHover(indexes)
     }

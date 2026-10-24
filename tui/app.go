@@ -29,6 +29,15 @@ func RunFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID 
 func RunHistory(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity) error {
 	m := NewHistoryModel(cfg, client, wanted)
 	m.configPath = config.DefaultConfigPath()
+	_, err := tea.NewProgram(m).Run()
+	return err
+}
+
+// RunHistorySearch carries the native conversation browser's query into the
+// existing terminal actions without losing the selected conversation.
+func RunHistorySearch(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity, query string) error {
+	m := NewHistoryModelWithQuery(cfg, client, wanted, query)
+	m.configPath = config.DefaultConfigPath()
 	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err

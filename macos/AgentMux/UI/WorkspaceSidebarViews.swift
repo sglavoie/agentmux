@@ -65,17 +65,13 @@ final class WorkspaceSidebarView: NSTableView {
     }
 }
 
-/// A line of the session list, drawn on its session's color when unselected.
-/// Selection contrasts the space around its rounded pill in either theme.
+/// Neutral session rows keep profile color in a small leading marker.
+/// Selection uses the system accent independently of the profile's color.
 @MainActor
 class WorkspaceRowView: NSTableRowView {
-    /// The text on a session's color. The daemon publishes colors bright
-    /// enough for it.
-    static let tabText = NSColor.black
-
     var tabColor: NSColor? {
         didSet {
-            selectionBorder.color = tabColor ?? .controlAccentColor
+            selectionBorder.color = .controlAccentColor
             needsDisplay = true
             syncCell()
         }
@@ -89,33 +85,27 @@ class WorkspaceRowView: NSTableRowView {
         }
     }
 
-    /// Whether the color is what the line shows now.
-    var showsTabColor: Bool { tabColor != nil && !isSelected }
+    /// Profile color remains a marker, including on the selected row.
+    var showsTabColor: Bool { tabColor != nil }
 
     /// Tells the line's cell what it is drawn on, so its text stays legible.
     func syncCell() {
         guard numberOfColumns > 0 else { return }
         guard let cell = view(atColumn: 0) as? WorkspaceRowCellView else { return }
-        cell.setTabText(showsTabColor ? Self.tabText : nil, selected: isSelected)
+        cell.setTabText(nil, selected: isSelected)
         cell.setStateGlyphOutsidePill((self as? WorkspaceSessionRowView)?.hasStateGlyph == true)
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
         if isSelected {
-            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            (dark ? NSColor.white : NSColor.black).setFill()
-            bounds.fill()
-
-            NSColor.windowBackgroundColor.setFill()
+            NSColor.controlAccentColor.withAlphaComponent(0.12).setFill()
             outline().fill()
-            return
         }
-        guard showsTabColor, let tabColor else {
-            super.drawBackground(in: dirtyRect)
-            return
+        if let tabColor {
+            tabColor.setFill()
+            NSBezierPath(roundedRect: NSRect(x: bounds.minX + 3, y: bounds.midY - 8,
+                                            width: 4, height: 16), xRadius: 2, yRadius: 2).fill()
         }
-        tabColor.setFill()
-        outline().fill()
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -123,12 +113,11 @@ class WorkspaceRowView: NSTableRowView {
         needsDisplay = true
     }
 
-    /// The selected line keeps its session's color as a border around the
-    /// pill, falling back to the accent color for uncolored rows.
-    /// It is a view over the line so background drawing cannot cover it.
+    /// System-accent selection stays distinct from the profile marker.
+    /// Draw over the cell so its contents cannot cover the border.
     let selectionBorder = WorkspaceSelectionBorderView()
 
-    static let selectionBorderWidth: CGFloat = 3
+    static let selectionBorderWidth: CGFloat = 2
     /// How far the list's selection is inset from the row's sides, and how
     /// round its corners are.
     static let selectionInset: CGFloat = 10
@@ -159,9 +148,8 @@ class WorkspaceRowView: NSTableRowView {
     }
 }
 
-/// A session's state emoji always sits to the left of its pill.
-/// The session text and border stay in the pill.
-/// Sessions without a state emoji keep a border in either theme.
+/// Session state sits to the left of the selected row's outline.
+/// Unselected rows stay neutral in either appearance.
 @MainActor
 final class WorkspaceSessionRowView: WorkspaceRowView {
     var hasStateGlyph = false {
@@ -176,8 +164,8 @@ final class WorkspaceSessionRowView: WorkspaceRowView {
 
     override func layout() {
         super.layout()
-        selectionBorder.usesAppearanceColor = !hasStateGlyph
-        selectionBorder.isHidden = hasStateGlyph && !isSelected
+        selectionBorder.usesAppearanceColor = false
+        selectionBorder.isHidden = !isSelected
     }
 
     override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
@@ -188,7 +176,7 @@ final class WorkspaceSessionRowView: WorkspaceRowView {
     override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
 }
 
-/// An attached terminal uses only the session-colored border for selection.
+/// An attached terminal uses the same accent selection as a session.
 /// AppKit reapplies the table's highlight style when focus changes, so keep
 /// the override on this row rather than changing the whole sidebar.
 @MainActor
@@ -201,7 +189,7 @@ final class WorkspaceTerminalRowView: WorkspaceRowView {
     override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
 }
 
-/// The border of a selected line or a session without a state emoji.
+/// The border of a selected line.
 /// It takes no clicks.
 @MainActor
 final class WorkspaceSelectionBorderView: NSView {
@@ -255,14 +243,12 @@ final class WorkspaceGroupCellView: NSTableCellView {
     var onToggle: (() -> Void)?
     private var labelLeading: NSLayoutConstraint!
 
-    /// Keep the warning bright in both appearances, with dark text on it.
+    /// Attention is a clear heading, not a competing full-width highlight.
     private func setWarning(_ enabled: Bool) {
-        layer?.backgroundColor = enabled
-            ? NSColor(srgbRed: 1, green: 0.9, blue: 0, alpha: 1).cgColor
-            : nil
-        nameLabel.textColor = enabled ? .black : .secondaryLabelColor
-        countLabel.textColor = enabled ? .black : .systemOrange
-        labelLeading.constant = enabled ? 8 : 2
+        layer?.backgroundColor = nil
+        nameLabel.textColor = enabled ? .labelColor : .secondaryLabelColor
+        countLabel.textColor = enabled ? .labelColor : .secondaryLabelColor
+        labelLeading.constant = 2
     }
 
     init() {
@@ -272,7 +258,7 @@ final class WorkspaceGroupCellView: NSTableCellView {
         layer?.cornerRadius = 6
         disclosureLabel.textColor = .secondaryLabelColor
         disclosureLabel.isHidden = true
-        nameLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         nameLabel.textColor = .secondaryLabelColor
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -507,6 +493,7 @@ final class WorkspaceRowCellView: NSTableCellView {
               progress: Ghostty.Progress? = nil) {
         nameLabel.stringValue = ""
         nameLabel.isHidden = true
+        titleLabel.lineBreakMode = .byTruncatingTail
         glyphLabel.stringValue = view.glyph
         titleLabel.stringValue = bell ? "\(view.displayName) \(Self.bellGlyph)" : view.displayName
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
@@ -531,17 +518,19 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// once it was asked to be. `sessionKey` is the digit that goes to the
     /// session with ⌘, when it has one.
     func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil, bell: Bool = false) {
-        nameLabel.stringValue = row.name
+        nameLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
+        titleLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
+        nameLabel.stringValue = row.namedLabel
         nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
         // A pinned or promoted session names the project it is away from.
-        let place = row.pinned || row.needsAttention ? "\(row.project) — \(row.label)" : row.label
+        let place = row.pinned || row.needsAttention ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
         let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
         titleLabel.font = .systemFont(ofSize: 12, weight: row.attention ? .semibold : .regular)
         detailLabel.stringValue = closing ? Self.closingDetail : row.detail
-        toolTip = row.toolTip
+        toolTip = row.displayName + " · " + row.toolTip
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
         setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))
         closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
@@ -568,7 +557,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// detail, as the line shows it.
     nonisolated static func accessibilityLabel(_ row: WorkspaceRow, closing: Bool = false, sessionKey: String? = nil,
                                    bell: Bool = false) -> String {
-        var spoken = (row.name.isEmpty ? [] : [row.name]) + [row.project, row.label]
+        var spoken = (row.name.isEmpty ? [] : [row.namedLabel]) + [row.project, row.sessionLabel]
         if row.pinned { spoken.append("pinned") }
         if row.muted { spoken.append("muted") }
         if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }

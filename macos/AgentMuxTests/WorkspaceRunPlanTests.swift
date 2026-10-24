@@ -182,3 +182,24 @@ extension WorkspaceRunPlanTests {
         XCTAssertTrue(model.isPresented)
     }
 }
+
+extension WorkspaceRunPlanTests {
+    func testOnlyFreshMatchingReadinessResolvesReadinessFailure() {
+        let runner = PlanWorkRunner()
+        var fail = true
+        let amx = command { _ in fail ? .timedOut : self.reply() }
+        let feedback = WorkspaceFeedbackHistory()
+        let model = WorkspaceRunPlanModel(command: { amx }, runner: runner, feedbackHistory: feedback)
+        model.plan = "/original"
+        model.check(); runner.release()
+        XCTAssertTrue(feedback.entries.first?.unresolved == true)
+        fail = false
+        model.plan = "/different"
+        model.check(); runner.release()
+        XCTAssertTrue(feedback.entries.first?.unresolved == true)
+        model.plan = "/original"
+        model.check(); runner.release()
+        XCTAssertNotNil(feedback.entries.first?.resolvedAt)
+        XCTAssertTrue(feedback.entries.first?.resolution?.contains("fresh check") == true)
+    }
+}

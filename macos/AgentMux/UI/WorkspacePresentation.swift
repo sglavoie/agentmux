@@ -379,15 +379,22 @@ struct WorkspaceFeedbackHistoryView: View {
                         Text(entry.feedback.target).fontWeight(.semibold)
                         Text(entry.occurred.formatted(.dateTime.month().day().hour().minute().second().timeZone())).font(.caption).foregroundStyle(.secondary)
                         if entry.occurrences > 1 { Text("Repeated \(entry.occurrences) times · latest occurrence shown").font(.caption).foregroundStyle(.secondary) }
+                        if let resolved = entry.resolvedAt {
+                            Label("Resolved " + resolved.formatted(.dateTime.month().day().hour().minute()), systemImage: "checkmark.circle")
+                                .font(.caption).foregroundStyle(.secondary)
+                            if let evidence = entry.resolution { Text(evidence).font(.caption).foregroundStyle(.secondary) }
+                        } else if entry.unresolved {
+                            Label("Needs attention", systemImage: "exclamationmark.circle").font(.caption)
+                        }
                         Text(entry.feedback.message)
-                        if !entry.feedback.nextStep.isEmpty { Text(entry.feedback.nextStep).foregroundStyle(.secondary) }
+                        if entry.resolvedAt == nil && !entry.feedback.nextStep.isEmpty { Text(entry.feedback.nextStep).foregroundStyle(.secondary) }
                         HStack {
-                            if let recovery = entry.feedback.recovery {
+                            if entry.resolvedAt == nil, let recovery = entry.feedback.recovery {
                                 Button(recovery.title) { entry.recover() }.disabled(!entry.available())
                             }
                             Button(copied == entry.id ? "Copied" : "Copy") {
                                 var feedback = WorkspaceCopyFeedback()
-                                feedback.copy(entry.feedback.target + "\n" + entry.occurred.formatted() + "\n" + entry.feedback.message + "\n" + entry.feedback.nextStep)
+                                feedback.copy(entry.feedback.target + "\n" + entry.occurred.formatted() + "\n" + entry.feedback.message + "\n" + (entry.resolution ?? entry.feedback.nextStep))
                                 copied = feedback.succeeded ? entry.id : nil
                                 copyError = feedback.succeeded ? nil : feedback.message
                             }

@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var workspaceProjectMenu: NSMenu?
     var recent = RecentSessions()
     /// Lists the projects again when `config.toml` changes.
+    let workspaceConfirmationFile = WorkspaceConfirmationFile()
     var configWatcher: ConfigWatcher?
 
     var workspaceVisible = false
@@ -418,11 +419,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// its environment first. Nil until amx is resolved.
     func utilityConfiguration(for view: WorkspaceUtilityView) -> Ghostty.SurfaceConfiguration? {
         guard let command else { return nil }
-        return Ghostty.SurfaceConfiguration(
-            program: command.binary,
-            arguments: view.arguments,
-            environment: command.launchEnvironment.commandEnvironment
-        )
+        var environment = command.launchEnvironment.commandEnvironment
+        environment.removeValue(forKey: WorkspaceConfirmationFile.environmentKey)
+        if [.dashboard, .overview, .history].contains(view.kind) {
+            do { try workspaceConfirmationFile.write(preferencesModel.preferences.confirmationPolicy) }
+            catch {
+                try? FileManager.default.removeItem(at: workspaceConfirmationFile.url)
+                Self.logger.error("Could not write workspace confirmation policy: \(error.localizedDescription, privacy: .public)")
+            }
+            // A missing file makes embedded views confirm conservatively.
+            environment[WorkspaceConfirmationFile.environmentKey] = workspaceConfirmationFile.url.path
+        }
+        return Ghostty.SurfaceConfiguration(program: command.binary, arguments: view.arguments, environment: environment)
     }
 
 }

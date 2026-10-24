@@ -24,7 +24,7 @@ struct LaunchEnvironment: Equatable {
     }
 
     static func isForwarded(_ name: String) -> Bool {
-        forwardedPrefixes.contains { name.hasPrefix($0) && name.count > $0.count }
+        name != WorkspaceConfirmationFile.environmentKey && forwardedPrefixes.contains { name.hasPrefix($0) && name.count > $0.count }
     }
 
     static func current(processEnvironment: [String: String] = ProcessInfo.processInfo.environment) -> LaunchEnvironment {

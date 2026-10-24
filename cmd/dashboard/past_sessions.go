@@ -32,7 +32,8 @@ does, but with no dashboard behind it: leaving Past Sessions quits. Continue,
 resume, and fork work as they do there.
 
 It is bound to ctrl+shift+y in Kitty and in a terminal attached to a tmux
-session (a popup there), and to ⌘Y in the desktop workspace.`,
+session (a popup there). In the desktop workspace, ⌘Y opens native
+Conversation History; Handoff / More opens these terminal actions.`,
 	Example: `  amx past-sessions
   amx past-sessions --backend tmux`,
 	Args: cobra.NoArgs,

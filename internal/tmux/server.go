@@ -493,7 +493,7 @@ func clientEnv(environ []string) []string {
 
 func strippedEnv(key string) bool {
 	switch key {
-	case "TMUX", "TMUX_PANE", "WINDOWID", "CLAUDECODE", runtimesession.EnvVar, WorkspaceHostEnv:
+	case "TMUX", "TMUX_PANE", "WINDOWID", "CLAUDECODE", runtimesession.EnvVar, WorkspaceHostEnv, "AMX_WORKSPACE_CONFIRMATION_FILE":
 		return true
 	}
 	return strings.HasPrefix(key, "KITTY_")

@@ -111,5 +111,35 @@ final class WorkspaceHistoryTests: XCTestCase {
         finish?("Outcome unknown; check the workspace")
         XCTAssertEqual(model.actionNotice, "Outcome unknown; check the workspace")
         XCTAssertFalse(model.acting)
+        let failureID = model.feedbackHistory.entries.first?.id
+        XCTAssertTrue(model.feedbackHistory.entries.first?.unresolved == true)
+        model.act(fork: true)
+        finish?(nil)
+        XCTAssertTrue(model.feedbackHistory.entries.first { $0.id == failureID }?.unresolved == true,
+                      "another fork does not settle the first fork's unknown outcome")
+    }
+}
+
+extension WorkspaceHistoryTests {
+    func testAdvancedActionsKeepSelectedConversationAndCommittedQuery() {
+        let runner = HistoryWorkRunner()
+        let amx = command { args in
+            if args[1] == "show" {
+                return #"{"schema_version":1,"data":{"session":{"id":"chosen","harness":"codex"},"messages":[]}}"#
+            }
+            return #"{"schema_version":1,"data":{"results":[{"id":"chosen","harness":"codex","preview":"needle"}],"total":1}}"#
+        }
+        let model = WorkspaceHistoryModel(command: { amx }, runner: runner)
+        model.query = "needle"
+        model.search(); runner.release(); runner.release()
+        var transferred: (ConversationIdentity, String)?
+        model.onAdvanced = { transferred = ($0, $1) }
+        let selection = model.selection
+        model.openAdvancedActions()
+        XCTAssertEqual(transferred?.0.encoded, "codex:chosen")
+        XCTAssertEqual(transferred?.1, "needle")
+        XCTAssertEqual(model.selection, selection)
+        XCTAssertEqual(model.query, "needle")
+        XCTAssertNotNil(model.transcript)
     }
 }

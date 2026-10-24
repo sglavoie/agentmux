@@ -782,9 +782,12 @@ struct PreferencesView: View {
         ScrollViewReader { proxy in
             Form {
                 Section("Workspace") {
-                    Toggle("Confirm before closing views or ending sessions", isOn: $model.preferences.confirmBeforeClosing)
-                    note("When off, Close View (⌘W) ends its program and End Session (⌘⇧W) stops the agent immediately. "
-                        + "This applies to native menus and the sidebar. Detach Terminal leaves the agent running. The embedded Dashboard and Overview follow config.toml’s confirm_destructive setting.")
+                    Picker("Confirm before ending sessions or closing programs", selection: $model.preferences.confirmationPolicy) {
+                        ForEach(WorkspaceConfirmationPolicy.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    note("Applies to native controls and the embedded Dashboard, Overview, and conversation actions. "
+                        + "Follow config.toml uses defaults.confirm_destructive. Always and Never override it only inside this app. "
+                        + "Changes apply to open views. Detach Terminal always leaves the agent running.")
                     Picker("Launch projects in", selection: $model.preferences.launchBackend) {
                         ForEach(LaunchBackendPreference.allCases, id: \.self) { Text($0.label).tag($0) }
                     }.id("launch-destination").focused($launchFieldFocused)

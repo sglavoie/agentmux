@@ -34,8 +34,8 @@ pressing `l` to launch.
 
 This opens the dashboard, or focuses the existing dashboard tab if one is
 already running. To go straight to Past Sessions with no dashboard behind it,
-run `amx past-sessions` or press `Ctrl+Shift+Y` (`⌘Y` in Agent Mux.app);
-leaving Past Sessions then closes it. When opened with the bundled `Ctrl+Shift+D` binding, the
+run `amx past-sessions` or press `Ctrl+Shift+Y` in a terminal; leaving Past
+Sessions then closes it. `⌘Y` in Agent Mux.app opens native Conversation History. When opened with the bundled `Ctrl+Shift+D` binding, the
 dashboard selects the session it was opened from: the attached tmux session
 or the Kitty tab. An unmanaged source leaves the current/default selection alone.
 

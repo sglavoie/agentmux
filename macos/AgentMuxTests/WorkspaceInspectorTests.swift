@@ -40,7 +40,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         let waiting = WorkspaceInspector.waiting(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
         XCTAssertEqual(waiting.map(\.title), ["api — personal", "web — work"], "not the one that waited longest first")
         XCTAssertEqual(waiting.map(\.detail), ["Turn complete · 5m", "Needs permission · 9m · Kitty"])
-        XCTAssertEqual(waiting.map(\.glyph), ["🛑", "🔑"])
+        XCTAssertEqual(waiting.map(\.glyph), ["✓", "🔑"])
         XCTAssertEqual(waiting.map(\.key), [
             .embedded(F.runtimeID(2)), AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4),
         ])
@@ -250,7 +250,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.setInspectorCollapsed(false)
         XCTAssertEqual(workspace.inspector.tabs.label(forSegment: 0), "Waiting 2")
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 web — work", "🛑 api — personal"])
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 web — work", "✓ api — personal"])
 
         lines[1].press()
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
@@ -279,7 +279,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.window.layoutIfNeeded()
 
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 api — personal", "🔑 web — work", "🛑 docs — work"])
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 api — personal", "🔑 web — work", "✓ docs — work"])
         XCTAssertEqual(lines.map { $0.answerButton?.title }, ["Answer…", nil, nil], "only what can be answered from here has the button")
 
         let button = try XCTUnwrap(lines[0].answerButton)

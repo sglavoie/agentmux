@@ -267,6 +267,18 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Settings controls close actions, including Ghostty's close callback.
     /// App quit confirmation remains independent of this preference.
     var confirmBeforeClosing = true
+    var readConfirmation: ((@escaping (Bool) -> Void) -> Void)?
+    var checkingConfirmation: Set<String> = []
+
+    func withConfirmationPolicy(_ target: String, action: @escaping (Bool) -> Void) {
+        guard checkingConfirmation.insert(target).inserted else { return }
+        let done: (Bool) -> Void = { [weak self] required in
+            self?.checkingConfirmation.remove(target)
+            guard self != nil else { return }
+            action(required)
+        }
+        if let readConfirmation { readConfirmation(done) } else { done(confirmBeforeClosing) }
+    }
     /// Stands in for the sheet that asks before a session is closed, for
     /// tests. Answers on the main actor.
     var confirmClose: ((_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) -> Void)?
@@ -298,7 +310,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Each sidebar line's `decoration` as last drawn.
     struct LineDecoration: Equatable {
         let label: String?
-        let selectionColor: NSColor?
+        let profileColor: NSColor?
     }
     var drawnDecorations: [LineDecoration] = []
     /// The font size each session's last terminal had when it was let go,

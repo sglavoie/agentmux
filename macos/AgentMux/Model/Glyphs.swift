@@ -68,6 +68,7 @@ struct Glyphs: Equatable {
 
     /// The glyph for `state`; empty for an idle session or an unknown state.
     func glyph(for state: String) -> String {
-        states[state] ?? ""
+        // A completed turn is a successful outcome, not a stopped process.
+        state == "stop" ? "✓" : states[state] ?? ""
     }
 }

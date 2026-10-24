@@ -110,9 +110,9 @@ final class WorkspaceWindowTests: XCTestCase {
             switch item {
             case .section, .group:
                 let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceGroupCellView)
-                XCTAssertEqual(cell.nameLabel.font?.pointSize, 16, "Heading: \(cell.nameLabel.stringValue)")
+                XCTAssertEqual(cell.nameLabel.font?.pointSize, 13, "Heading: \(cell.nameLabel.stringValue)")
                 let drawnFont = cell.nameLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-                XCTAssertEqual(drawnFont?.pointSize, 16, "Rendered heading: \(cell.nameLabel.stringValue)")
+                XCTAssertEqual(drawnFont?.pointSize, 13, "Rendered heading: \(cell.nameLabel.stringValue)")
             case .row:
                 let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceRowCellView)
                 let drawnFont = cell.titleLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
@@ -261,7 +261,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(header.countLabel.stringValue, "1", "one of the project's sessions waits")
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "personal")
-        XCTAssertEqual(cell.glyphLabel.stringValue, "🛑")
+        XCTAssertEqual(cell.glyphLabel.stringValue, "✓")
         let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 7) as? WorkspaceRowCellView)
         XCTAssertEqual(kitty.titleLabel.stringValue, "work")
         XCTAssertTrue(kitty.detailLabel.stringValue.hasSuffix("Kitty"))
@@ -271,7 +271,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No session selected")
     }
 
-    func testASessionLineIsDrawnOnItsColorUnlessSelected() throws {
+    func testSessionColorIsAMarkerAndSelectionUsesTheSystemAccent() throws {
         var colored = sessions
         colored[0].tabColor = "#1a3655"
         app.store.apply(snapshot: F.snapshot(colored))
@@ -285,7 +285,7 @@ final class WorkspaceWindowTests: XCTestCase {
         var (rowView, cell) = try line(work)
         XCTAssertEqual(rowView.tabColor, NSColor(srgbRed: 0x1a / 255.0, green: 0x36 / 255.0, blue: 0x55 / 255.0, alpha: 1))
         XCTAssertTrue(rowView.showsTabColor)
-        XCTAssertEqual(cell.titleLabel.textColor, .black, "the text is black on the color")
+        XCTAssertEqual(cell.titleLabel.textColor, .labelColor, "text uses the system color on a neutral background")
         let (plainView, plainCell) = try line(personal)
         XCTAssertNil(plainView.tabColor)
         XCTAssertEqual(plainCell.titleLabel.textColor, .labelColor)
@@ -299,10 +299,11 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.select(.embedded(F.runtimeID(1)))
         (rowView, cell) = try line(work)
         XCTAssertNotNil(rowView.tabColor)
-        XCTAssertFalse(rowView.showsTabColor)
+        XCTAssertTrue(rowView.showsTabColor)
         rowView.layoutSubtreeIfNeeded()
         XCTAssertTrue(rowView.subviews.last === rowView.selectionBorder, "the border is over the line")
         XCTAssertFalse(rowView.selectionBorder.isHidden, "the selected line has a border")
+        XCTAssertEqual(rowView.selectionBorder.color, .controlAccentColor, "selection is independent of profile color")
         let unselected = try line(personal).0
         unselected.layoutSubtreeIfNeeded()
         XCTAssertTrue(unselected.selectionBorder.isHidden)
@@ -310,14 +311,14 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.select(.embedded(F.runtimeID(2)))
         (rowView, cell) = try line(work)
         XCTAssertTrue(rowView.showsTabColor)
-        XCTAssertEqual(cell.titleLabel.textColor, .black)
+        XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
 
         // Another pick repaints the line; a pick taken back leaves none.
         colored[0].tabColor = "#c8c848"
         app.store.apply(snapshot: F.snapshot(colored))
         (rowView, cell) = try line(work)
         XCTAssertEqual(rowView.tabColor, NSColor(srgbRed: 0xc8 / 255.0, green: 0xc8 / 255.0, blue: 0x48 / 255.0, alpha: 1))
-        XCTAssertEqual(cell.titleLabel.textColor, .black)
+        XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
         colored[0].tabColor = ""
         app.store.apply(snapshot: F.snapshot(colored))
         (rowView, cell) = try line(work)
@@ -360,7 +361,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(cell.nameLabel.stringValue, "billing fix")
         XCTAssertEqual(cell.titleLabel.stringValue, "work", "the profile stays on its own line")
         XCTAssertTrue(cell.nameLabel.font?.fontDescriptor.symbolicTraits.contains(.bold) == true)
-        XCTAssertEqual(cell.nameLabel.textColor, WorkspaceRowCellView.nameOnTabColor, "dark blue on the session's color")
+        XCTAssertEqual(cell.nameLabel.textColor, WorkspaceRowCellView.nameColor, "name follows the current appearance")
         XCTAssertTrue((cell.nameLabel.superview as? NSStackView)?.arrangedSubviews.first === cell.nameLabel, "the name is the first line")
         XCTAssertGreaterThan(workspace.sidebar.rect(ofRow: work).height, workspace.sidebar.rect(ofRow: personal).height,
                              "the named line is taller by its first line")
@@ -1866,5 +1867,26 @@ final class WorkspaceStreamTests: XCTestCase {
         ghosttyWait("the workspace to notice") { self.workspace.content == .detached(runtimeSessionID: work) }
         XCTAssertNil(surface.surface)
         XCTAssertEqual(workspace.state.selection, .embedded(work), "the session is still listed and selected")
+    }
+}
+
+extension WorkspaceWindowTests {
+    func testClosingRechecksPolicyAndTargetAfterAsynchronousRead() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let key = AttentionCycler.Key.embedded(F.runtimeID(1))
+        var reads: [(Bool) -> Void] = []
+        var asked: [WorkspaceRow] = []
+        workspace.readConfirmation = { reads.append($0) }
+        workspace.confirmClose = { row, answer in asked.append(row); answer(false) }
+        workspace.closeSession(key)
+        workspace.closeSession(key)
+        XCTAssertEqual(reads.count, 1, "duplicate clicks share the pending policy check")
+        XCTAssertTrue(asked.isEmpty)
+        reads.removeFirst()(true)
+        XCTAssertEqual(asked.map(\.key), [key])
+        workspace.closeSession(key)
+        app.store.apply(snapshot: F.snapshot([]))
+        reads.removeFirst()(false)
+        XCTAssertEqual(asked.count, 1, "a late policy response cannot act on an ended target")
     }
 }

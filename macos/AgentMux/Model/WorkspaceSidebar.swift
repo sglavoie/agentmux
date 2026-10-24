@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// Where focusing a session goes.
 enum WorkspaceTarget: Equatable {
@@ -64,11 +65,20 @@ struct WorkspaceRow: Equatable {
     /// The conversation the session's agent is having, once the daemon knows
     /// it: what Past Sessions is opened on if the agent stops.
     var conversation: ConversationIdentity?
+    /// A stable discriminator when several live rows have the same name.
+    var qualifier = ""
+    var branch = ""
+
+    var sessionLabel: String { qualified(label) }
+    var namedLabel: String { name.isEmpty ? "" : qualified(name) }
+    private func qualified(_ value: String) -> String {
+        qualifier.isEmpty ? value : "\(value) · \(qualifier)"
+    }
 
     /// What the session is called in titles, alerts, and the inspector:
     /// its name when it was given one, else its project and profile.
     var displayName: String {
-        name.isEmpty ? "\(project) — \(label)" : name
+        name.isEmpty ? "\(project) — \(sessionLabel)" : namedLabel
     }
 
     var embeddedRuntimeSessionID: String? {
@@ -239,7 +249,38 @@ enum WorkspaceSidebar {
         glyphs: Glyphs = .bundled,
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceGroup] {
-        groups(sessions.map { row($0, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs) }, order: order)
+        groups(rows(sessions, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs), order: order)
+    }
+
+    /// Use the complete snapshot, including collapsed and non-waiting sessions,
+    /// so every surface gives an agent the same name. Ordering and age never
+    /// participate in its identity. A branch distinguishes different worktrees;
+    /// a short runtime identity distinguishes agents sharing the same branch.
+    static func rows(_ sessions: [CompanionSession], snapshotSocket: String = "", now: Date = Date(),
+                     glyphs: Glyphs = .bundled) -> [WorkspaceRow] {
+        var rows = sessions.map { row($0, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs) }
+        // Kitty's identity contains a socket path. Hash that tuple so a long
+        // common path cannot hide the distinguishing window number in a row.
+        let tokens = rows.map { row -> String in
+            if !row.key.runtimeSessionID.isEmpty { return row.key.runtimeSessionID }
+            return SHA256.hash(data: Data(WorkspaceOrder.token(row.key).utf8)).map { String(format: "%02x", $0) }.joined()
+        }
+        let duplicates = Dictionary(grouping: rows.indices, by: { rows[$0].displayName })
+        for indices in duplicates.values where indices.count > 1 {
+            for index in indices {
+                let branch = rows[index].branch
+                if !branch.isEmpty, !branch.hasPrefix("#"), indices.filter({ rows[$0].branch == branch }).count == 1 {
+                    rows[index].qualifier = branch
+                    continue
+                }
+                let token = tokens[index]
+                let others = indices.filter { $0 != index }.map { tokens[$0] }
+                var length = min(6, token.count)
+                while length < token.count && others.contains(where: { $0.hasSuffix(token.suffix(length)) }) { length += 1 }
+                rows[index].qualifier = "#" + token.suffix(length)
+            }
+        }
+        return rows
     }
 
     /// Rows as the sidebar groups them: attention, pinned, then projects.
@@ -299,7 +340,8 @@ enum WorkspaceSidebar {
         if !session.harness.isEmpty, session.harness != label { detail.append(session.harness) }
         if !session.branch.isEmpty { detail.append("\(session.branch)\(session.dirty ? "*" : "")") }
         if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
-        if session.attention, !session.reason.isEmpty { detail.append(WorkspaceWording.status(session.reason)) }
+        // State remains readable without interpreting an emoji or profile color.
+        detail.insert(session.reason.isEmpty ? WorkspaceInspector.word(for: session.iconState) : WorkspaceWording.status(session.reason), at: 0)
         if embedded == nil { detail.append(kittyBadge) }
 
         var tip = [MenuBuilder.place(of: session)]
@@ -323,7 +365,8 @@ enum WorkspaceSidebar {
             harnessIcon: embedded == nil ? "" : session.harnessIcon,
             harness: session.harness,
             needsAttention: session.needsAttention,
-            conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil }
+            conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil },
+            branch: session.branch
         )
     }
 
