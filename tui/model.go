@@ -840,7 +840,7 @@ func (m Model) hasActivePulse(windowID int) bool {
 	if !ok {
 		return false
 	}
-	return time.Since(t) < pulseDecay
+	return modelNow(m).Sub(t) < pulseDecay
 }
 
 // modelNow reads the render clock, falling back to the wall clock for a Model

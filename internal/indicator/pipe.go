@@ -75,14 +75,6 @@ func DiscoverHarnessProcess(producerHarness string) HarnessProcessDiscovery {
 	return discoverHarnessProcess(os.Getpid(), producer, psProcessSnapshot)
 }
 
-// IsPipeMode reports whether the current process tree contains a non-interactive
-// harness invocation such as `claude -p`, `copilot --prompt`, or `codex exec`.
-// It remains the compatibility wrapper for callers that do not declare a
-// producer; production hook delivery uses DiscoverHarnessProcess instead.
-func IsPipeMode() bool {
-	return discoverHarnessProcess(os.Getpid(), "", psProcessSnapshot).PipeMode
-}
-
 // discoverHarnessProcess is the process-discovery test seam. The snapshot
 // function supplies one bounded observation per ancestor in production and
 // deterministic process trees in tests.
@@ -117,9 +109,9 @@ func discoverHarnessProcess(pid int, producerHarness string, snapshot processSna
 				}
 			}
 		} else {
-			// Compatibility mode keeps walking past an interactive inner harness
-			// so an outer pipe invocation is still detected, matching IsPipeMode's
-			// historical any-ancestor behavior.
+			// Compatibility mode, for a hook that names no producer, keeps
+			// walking past an interactive inner harness so an outer pipe
+			// invocation is still detected: the historical any-ancestor rule.
 			if matchedHarness, pipeMode, matched := classifyHarnessInvocation(observed.CommandLine, "", true); matched {
 				startToken := normalizeStartToken(observed.StartToken)
 				return HarnessProcessDiscovery{

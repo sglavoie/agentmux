@@ -247,19 +247,19 @@ func FindByWindowID(sessions []RunningSession, windowID int) (RunningSession, bo
 }
 
 // GroupRef is the backend group (Kitty tab) hosting the session.
-func (r RunningSession) GroupRef() backend.Ref {
-	if !r.Group.IsZero() {
-		return r.Group
+func (rs RunningSession) GroupRef() backend.Ref {
+	if !rs.Group.IsZero() {
+		return rs.Group
 	}
-	return kitty.GroupRef(r.TabID)
+	return kitty.GroupRef(rs.TabID)
 }
 
 // PaneRef is the backend pane (Kitty window) the session is anchored to.
-func (r RunningSession) PaneRef() backend.Ref {
-	if !r.Pane.IsZero() {
-		return r.Pane
+func (rs RunningSession) PaneRef() backend.Ref {
+	if !rs.Pane.IsZero() {
+		return rs.Pane
 	}
-	return kitty.PaneRef(r.WindowID)
+	return kitty.PaneRef(rs.WindowID)
 }
 
 // PaneRef is the backend pane (Kitty window) the ghost tab is anchored to.
@@ -285,14 +285,14 @@ func KittyPaneTarget(windowID int) PaneTarget {
 
 // PaneTarget is the session's pane in its recorded backend. A session with no
 // addressable pane yields the zero target.
-func (r RunningSession) PaneTarget() PaneTarget {
-	if r.BackendKind() == runtimesession.BackendKitty {
-		return KittyPaneTarget(r.WindowID)
+func (rs RunningSession) PaneTarget() PaneTarget {
+	if rs.BackendKind() == runtimesession.BackendKitty {
+		return KittyPaneTarget(rs.WindowID)
 	}
-	if r.Pane.Scope != backend.ScopePane || r.Pane.ID == "" {
+	if rs.Pane.Scope != backend.ScopePane || rs.Pane.ID == "" {
 		return PaneTarget{}
 	}
-	return PaneTarget{Backend: r.BackendKind(), Pane: r.Pane}
+	return PaneTarget{Backend: rs.BackendKind(), Pane: rs.Pane}
 }
 
 // IsZero reports a target that names no pane.

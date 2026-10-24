@@ -77,16 +77,6 @@ func PayloadHMAC(key, payload []byte) string {
 	return "hmac-sha256:" + hex.EncodeToString(mac.Sum(nil))
 }
 
-// HashLocalIdentifier applies the private diagnostic HMAC key to an operator
-// identifier before it leaves the machine in a shareable bundle.
-func HashLocalIdentifier(paths Paths, value string) (string, error) {
-	key, err := loadOrCreateHMACKey(paths.HMACKey)
-	if err != nil {
-		return "", err
-	}
-	return localIdentifierHash(key, value), nil
-}
-
 // LocalIdentifierHasher returns a reusable private HMAC function so archive
 // generation does not reopen and relock the diagnostic key for every field.
 func LocalIdentifierHasher(paths Paths) (func(string) string, error) {

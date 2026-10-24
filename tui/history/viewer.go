@@ -219,13 +219,6 @@ func CollapseWhitespace(s string) string {
 	return strings.TrimSpace(sb.String())
 }
 
-// ComputeMatches scans msgs for a case-insensitive substring of query and
-// returns the indices of matching messages. Returns nil when query is empty so
-// n/N have no effect.
-func ComputeMatches(msgs []transcript.Message, query string) []int {
-	return ComputeMatchesForSource(msgs, query, "any")
-}
-
 // ComputeMatchesForSource limits match navigation while leaving all messages visible.
 func ComputeMatchesForSource(msgs []transcript.Message, query, source string) []int {
 	terms := searchquery.Parse(query)

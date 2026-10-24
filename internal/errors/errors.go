@@ -62,13 +62,6 @@ func (e *KittyError) Unwrap() error {
 	return e.Err
 }
 
-// Fatal prints an "error: " prefixed message to stderr and exits 1.
-func Fatal(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintf(os.Stderr, "%s %s\n", errorPrefix(os.Stderr), msg)
-	os.Exit(1)
-}
-
 // Print prints an error to stderr without exiting.
 func Print(err error) {
 	if err == nil {

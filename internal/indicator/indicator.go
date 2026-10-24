@@ -44,13 +44,6 @@ type indicatorDaemonClient interface {
 var getenv = os.Getenv
 var discoverHarnessProcessForDelivery = DiscoverHarnessProcess
 
-// Run is the hook entry point. Hooks are fire-and-forget: all event-processing
-// failures are logged and intentionally reported as success to the harness.
-func Run(event string, windowID int, producerHarness, amxBin string) error {
-	_ = Deliver(event, windowID, producerHarness, amxBin, DeliveryOptions{})
-	return nil
-}
-
 // Deliver executes one hook delivery and returns its structured outcome. The
 // trace/request identity is allocated before stdin is read, so even unreadable
 // input can be correlated with a durable final result.

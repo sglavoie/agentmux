@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"unicode"
 
@@ -97,24 +96,6 @@ type HookPayload struct {
 	SourceEventIDCamel             string `json:"sourceEventId"`
 	EmittedTime                    string `json:"emitted_time"`
 	EmittedTimeCamel               string `json:"emittedTime"`
-}
-
-// ReadHookPayload decodes hook JSON from stdin when stdin is piped. Interactive
-// invocations (stdin attached to a TTY) return an empty payload.
-func ReadHookPayload(stdin *os.File) (HookPayload, error) {
-	if stdin == nil {
-		return HookPayload{}, nil
-	}
-
-	info, err := stdin.Stat()
-	if err != nil {
-		return HookPayload{}, fmt.Errorf("stat stdin: %w", err)
-	}
-	if info.Mode()&os.ModeCharDevice != 0 {
-		return HookPayload{}, nil
-	}
-
-	return DecodeHookPayload(stdin)
 }
 
 // DecodeHookPayload decodes a hook payload from r. Empty input yields a zero

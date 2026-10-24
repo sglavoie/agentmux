@@ -23,7 +23,7 @@ func Prune(idx *Index, cfg *config.Config, now time.Time) (int, error) {
 	return idx.pruneFilesystem(cfg, now)
 }
 
-func (idx *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int, retErr error) {
+func (i *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int, retErr error) {
 	if cfg == nil {
 		return 0, errors.New("transcript: Prune requires a non-nil config")
 	}
@@ -32,22 +32,22 @@ func (idx *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int
 		return 0, nil
 	}
 	cutoff := now.Add(-time.Duration(keepDays) * 24 * time.Hour)
-	err := cachefile.WithExclusive(idx.path, func() error {
-		idx.mu.Lock()
-		defer idx.mu.Unlock()
-		canPersist, warning := idx.reloadFilesystemLocked()
+	err := cachefile.WithExclusive(i.path, func() error {
+		i.mu.Lock()
+		defer i.mu.Unlock()
+		canPersist, warning := i.reloadFilesystemLocked()
 		if !canPersist {
 			return warning
 		}
-		for key, meta := range idx.entries {
+		for key, meta := range i.entries {
 			if meta.HiddenFromIndex || meta.LastAt.IsZero() || !meta.LastAt.Before(cutoff) {
 				continue
 			}
 			meta.HiddenFromIndex = true
 			meta.SearchText = ""
-			idx.entries[key] = meta
-			idx.filesystemDirty = true
-			if sidecarErr := idx.DeleteSearchText(key); sidecarErr != nil {
+			i.entries[key] = meta
+			i.filesystemDirty = true
+			if sidecarErr := i.DeleteSearchText(key); sidecarErr != nil {
 				return errors.Join(warning, sidecarErr)
 			}
 			hidden++
@@ -55,7 +55,7 @@ func (idx *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int
 		if hidden == 0 {
 			return warning
 		}
-		persistWarning, persistErr := idx.persistFilesystemLocked()
+		persistWarning, persistErr := i.persistFilesystemLocked()
 		return errors.Join(warning, persistWarning, persistErr)
 	})
 	return hidden, err

@@ -335,23 +335,23 @@ const (
 
 // readSearchCorpus reuses decoded sidecars between keystrokes. A changed
 // transcript metadata generation or sidecar write invalidates the cached text.
-func (idx *Index) readSearchCorpus(key string, meta SessionMeta, source string) (string, bool, error) {
-	if text, sourceAware, ok := idx.searchCache.getSource(key, meta, source); ok {
+func (i *Index) readSearchCorpus(key string, meta SessionMeta, source string) (string, bool, error) {
+	if text, sourceAware, ok := i.searchCache.getSource(key, meta, source); ok {
 		return text, sourceAware, nil
 	}
-	generation := idx.searchCache.version()
-	raw, err := idx.ReadSearchText(key)
+	generation := i.searchCache.version()
+	raw, err := i.ReadSearchText(key)
 	if err != nil {
 		return "", false, err
 	}
 	if data, ok := decodeSourceSidecar(raw); ok {
-		idx.searchCache.put(key, meta, raw, data, true, generation)
+		i.searchCache.put(key, meta, raw, data, true, generation)
 		return sidecarText(data, source), true, nil
 	}
 	if strings.HasPrefix(raw, sourceSidecarPrefix) {
 		return "", false, fs.ErrNotExist
 	}
-	idx.searchCache.put(key, meta, raw, sourceSidecar{}, false, generation)
+	i.searchCache.put(key, meta, raw, sourceSidecar{}, false, generation)
 	return raw, false, nil
 }
 

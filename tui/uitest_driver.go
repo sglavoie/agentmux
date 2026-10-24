@@ -180,9 +180,6 @@ func (d *uitestDriver) Close() error {
 	return d.closeErr
 }
 
-// Size returns the terminal size the model is currently rendered at.
-func (d *uitestDriver) Size() UITestSize { return d.size }
-
 // Observe captures a normalized snapshot of the current model and size.
 func (d *uitestDriver) Observe() UITestObservation {
 	return observeUITest(d.model, d.size)

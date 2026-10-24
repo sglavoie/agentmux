@@ -58,17 +58,6 @@ func Tail(ctx context.Context, journal *diagnostics.Journal, options TailOptions
 	}, nil
 }
 
-// Follow emits the initial tail and then new records until ctx is cancelled.
-// Callers that need per-poll snapshot metadata can use FollowWithMetadata.
-func Follow(ctx context.Context, journal *diagnostics.Journal, options TailOptions, emit func(diagnostics.TraceEnvelope) error) error {
-	if emit == nil {
-		return fmt.Errorf("debugger: tail emitter is nil")
-	}
-	return FollowWithMetadata(ctx, journal, options, func(wrapper TailFollowRecord) error {
-		return emit(wrapper.Record)
-	})
-}
-
 // FollowWithMetadata emits the v2 JSONL-shaped record wrapper used by the CLI.
 func FollowWithMetadata(ctx context.Context, journal *diagnostics.Journal, options TailOptions, emit func(TailFollowRecord) error) error {
 	if journal == nil {

@@ -356,16 +356,3 @@ func (in PickerInput) renderHeader(header string) string {
 	}
 	return left + strings.Repeat(" ", pad) + right + "\n"
 }
-
-// DirectoryProblems applies problem (config.ProjectDirectoryProblem, or a
-// test's replacement) to every project's directory once, when the launcher
-// opens, so rendering never touches the filesystem.
-func DirectoryProblems(sessions []config.Session, problem func(string) string) map[int]string {
-	problems := make(map[int]string)
-	for i, sess := range sessions {
-		if p := problem(sess.Directory); p != "" {
-			problems[i] = p
-		}
-	}
-	return problems
-}

@@ -281,14 +281,6 @@ type Snapshot struct {
 	socket string
 }
 
-// NewSnapshot binds an already-available window tree to reducer receipts
-// sampled by the caller. It carries no freshness epochs, so bindings derived
-// from it skip epoch validation entirely; the shared cache is the only source
-// of epoch-bearing snapshots.
-func NewSnapshot(windows []kitty.OSWindow, reducerReceipts map[int]uint64) Snapshot {
-	return Snapshot{windows: windows, reducerReceipts: reducerReceipts}
-}
-
 func NewSnapshotWithSocket(windows []kitty.OSWindow, reducerReceipts map[int]uint64, socket string) Snapshot {
 	return Snapshot{windows: windows, reducerReceipts: reducerReceipts, socket: socket}
 }

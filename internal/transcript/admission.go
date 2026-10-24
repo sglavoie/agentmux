@@ -162,12 +162,6 @@ type Authorizer interface {
 	Authorize(directory string) Admission
 }
 
-// AuthorizerFunc adapts a plain function to Authorizer.
-type AuthorizerFunc func(directory string) Admission
-
-// Authorize calls f.
-func (f AuthorizerFunc) Authorize(directory string) Admission { return f(directory) }
-
 // HistoryLimits bounds one history answer.
 type HistoryLimits struct {
 	Conversations int
