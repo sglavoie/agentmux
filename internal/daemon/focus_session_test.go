@@ -169,3 +169,49 @@ func TestFocusSessionSwitchesTheTerminalUsedLast(t *testing.T) {
 	w.requireSameAgent(alpha, "its terminal was switched away")
 	w.requireSameAgent(bravo, "a terminal was switched to it")
 }
+
+// TestFocusSessionNeverSwitchesAWorkspaceTerminal: with no workspace taking
+// the request, a terminal the desktop workspace hosts is still the
+// workspace's. It is never switched, even when it is the one used last, and
+// its hosted owner record stays; a plain terminal is switched instead, and
+// with none the request finds no viewer.
+func TestFocusSessionNeverSwitchesAWorkspaceTerminal(t *testing.T) {
+	w := newRuntimeFaultWorld(t)
+	alpha, bravo, charlie := w.launch("alpha"), w.launch("bravo"), w.launch("charlie")
+	h, _ := w.startDaemon(time.Now())
+	h.SetRuntimeSessionSwitcher(NewTmuxRuntimeSwitcher(w.tmux.Registry))
+
+	hostedViewer, hosted := w.attach(alpha, 100, 30)
+	defer hostedViewer.Close()
+	owner := runtimesession.Attachment{ID: tmux.AttachmentID(true, "workspace"), Client: "tmux client " + hosted.Name}
+	if err := w.tmux.Registry.Update(func(registry *runtimesession.Registry) error {
+		_, err := registry.Attach(alpha.id, owner, time.Now())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if resp := h.Handle(focusSession(string(bravo.id))); resp.OK || resp.Error != protocol.FocusSessionErrorNoViewer {
+		t.Fatalf("with only a workspace terminal attached: %+v; want %s", resp, protocol.FocusSessionErrorNoViewer)
+	}
+	if on := w.survey().ClientsOf(alpha.launched.Pane); len(on) != 1 || on[0].Name != hosted.Name {
+		t.Fatalf("the workspace terminal moved: %+v", w.survey().Clients)
+	}
+	if record := w.record(alpha.id); record.Attachment == nil || *record.Attachment != owner {
+		t.Fatalf("the workspace's owner record was replaced: %+v", record.Attachment)
+	}
+
+	plainViewer, plain := w.attach(charlie, 100, 30)
+	defer plainViewer.Close()
+	resp := h.Handle(focusSession(string(bravo.id)))
+	if !resp.OK || resp.FocusedSession == nil || resp.FocusedSession.Client != plain.Name {
+		t.Fatalf("focus_session = %+v; want the plain terminal %s switched", resp, plain.Name)
+	}
+	s := w.survey()
+	if on := s.ClientsOf(alpha.launched.Pane); len(on) != 1 || on[0].Name != hosted.Name {
+		t.Fatalf("the workspace terminal moved: %+v", s.Clients)
+	}
+	if on := s.ClientsOf(bravo.launched.Pane); len(on) != 1 || on[0].Name != plain.Name {
+		t.Fatalf("clients = %+v; want the plain terminal on bravo", s.Clients)
+	}
+}

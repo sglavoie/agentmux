@@ -155,6 +155,32 @@ func TestFetchNamesEveryDegradedCondition(t *testing.T) {
 			reason: ReasonUnsupported, detail: "invalid choice",
 		},
 		{
+			// Only argparse's status 2 says the subcommand is unknown; a
+			// crash writes nothing to stdout either.
+			name:       "crashed without output",
+			executable: "/opt/bin/asl",
+			run: func([]string) ([]byte, string, int, error) {
+				return nil, "Traceback (most recent call last): boom", 1, nil
+			},
+			reason: ReasonFailed, detail: "status 1",
+		},
+		{
+			name:       "could not be executed",
+			executable: "/opt/bin/asl",
+			run: func([]string) ([]byte, string, int, error) {
+				return nil, "", 0, errors.New("fork/exec /opt/bin/asl: permission denied")
+			},
+			reason: ReasonFailed, detail: "permission denied",
+		},
+		{
+			name:       "canceled",
+			executable: "/opt/bin/asl",
+			run: func([]string) ([]byte, string, int, error) {
+				return nil, "", 0, context.Canceled
+			},
+			reason: ReasonFailed, detail: "canceled",
+		},
+		{
 			name:       "hung",
 			executable: "/opt/bin/asl",
 			run: func([]string) ([]byte, string, int, error) {

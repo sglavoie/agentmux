@@ -321,8 +321,10 @@ Shared and domain packages (`internal/...`):
   and records each operation on the pane before and after writing so a
   repeat writes nothing twice. The text travels on tmux's standard input and
   must never reach an argument list, an error, a log, or a journal. It is
-  not an agent-session-loop reply: a session with a supervisor question open
-  is refused, since that answer belongs to the run's mailbox. The
+  not an agent-session-loop reply: a session the daemon reports as having a
+  supervisor question open is always refused, since that answer belongs to
+  the run's mailbox; with the daemon unreachable, `--yes` sends without that
+  check. The
   dashboard's send form (`t`, `tui/model_send.go`, `tui/sendform`) reaches
   it through `commands.Portable.Send`, which runs `amx send --json`, so a
   surface never holds a second copy of that decision. The app's prompt

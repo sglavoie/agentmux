@@ -271,12 +271,22 @@ func defaultDefinitions() []Definition {
 				}
 				// A confirmed close ends the runtime session the launch
 				// registered; the registry is otherwise left to retirement.
+				result := Result{Changed: true, Message: "ended session", Data: map[string]any{DataCloseConfirmed: true}}
 				if request.Session.RuntimeSessionID != "" {
 					if rt, rtErr := deps.runtimeFor(Close, *request.Session); rtErr == nil {
-						_ = session.EndRuntimeSession(rt, request.Session.RuntimeSessionID)
+						// The session is gone either way, but a record left
+						// live is later found stale, and attach and history
+						// then call an agent the operator ended lost. That is
+						// worth saying now rather than leaving to reconcile.
+						if err := session.EndRuntimeSession(rt, request.Session.RuntimeSessionID); err != nil {
+							return result, &PartialResultError{ActionError: &Error{
+								Code: "registry_update_failed", Action: Close, Cause: err,
+								Message: fmt.Sprintf("ended session, but runtime session %s could not be recorded as ended: %v", request.Session.RuntimeSessionID, err),
+							}}
+						}
 					}
 				}
-				return Result{Changed: true, Message: "ended session", Data: map[string]any{DataCloseConfirmed: true}}, nil
+				return result, nil
 			},
 		},
 		{

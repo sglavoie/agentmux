@@ -226,6 +226,41 @@ func (s Switcher) Hosted(id runtimesession.ID) (bool, error) {
 	return strings.HasPrefix(record.Attachment.ID, hostedAttachmentPrefix), nil
 }
 
+// LastActivePlain returns the terminal the operator used last on survey's
+// server among those the desktop workspace does not host. A terminal shows a
+// hosted session when the registry records a hosted owner for the live
+// session on its pane, and such a terminal is the workspace's to move, as
+// Hosted explains; switching it would also record a plain owner over the
+// workspace's. With no other terminal attached it returns ErrNoClient.
+func (s Switcher) LastActivePlain(survey Survey) (Client, error) {
+	registry, err := s.Store.Load()
+	if err != nil {
+		return Client{}, err
+	}
+	hosted := map[string]bool{}
+	for _, record := range registry.List() {
+		if record.State != runtimesession.StateLive || record.Target == nil || record.Attachment == nil ||
+			record.Target.Instance.Kind != runtimesession.BackendTmux || record.Target.Instance.Address != s.Backend.server.socket ||
+			!strings.HasPrefix(record.Attachment.ID, hostedAttachmentPrefix) {
+			continue
+		}
+		for _, client := range survey.ClientsOf(recordPane(record)) {
+			hosted[client.Name] = true
+		}
+	}
+	var plain Survey
+	for _, client := range survey.Clients {
+		if !hosted[client.Name] {
+			plain.Clients = append(plain.Clients, client)
+		}
+	}
+	client, ok := plain.LastActive()
+	if !ok {
+		return Client{}, ErrNoClient
+	}
+	return client, nil
+}
+
 // owner is the client that attached last, by the same order Competing keeps
 // its owner by.
 func (s Survey) owner() (Client, bool) {

@@ -189,11 +189,21 @@ func Fetch(ctx context.Context, options Options) (Result, error) {
 	// An ASL predating the subcommand exits 2 from argparse with an unknown-
 	// command diagnostic and writes nothing to stdout. That is a version fact,
 	// not a failure, and it is the case a paired install hits during a staggered
-	// upgrade — so it is named rather than reported as unreadable output.
+	// upgrade — so it is named rather than reported as unreadable output. Only
+	// that exit status says so: a crash, a refusal to execute, or a canceled
+	// request also writes nothing, and calling those an old ASL would send the
+	// operator to upgrade something that is current.
 	if len(strings.TrimSpace(string(stdout))) == 0 {
-		if exitCode == 2 || err != nil {
+		switch {
+		case err == nil && exitCode == 2:
 			return Result{Availability: unavailable(ReasonUnsupported,
 				summarize(stderr))}, nil
+		case err != nil:
+			return Result{Availability: unavailable(ReasonFailed,
+				"the export could not run: "+err.Error())}, nil
+		case exitCode != 0:
+			return Result{Availability: unavailable(ReasonFailed,
+				fmt.Sprintf("the export exited with status %d: %s", exitCode, summarize(stderr)))}, nil
 		}
 		return Result{Availability: unavailable(ReasonMalformed, "the export wrote no output")}, nil
 	}
@@ -280,8 +290,10 @@ func runCommand(
 	if out.exceeded {
 		return out.data, errBuf.String(), 0, errOversize
 	}
-	if ctx.Err() != nil {
-		return out.data, errBuf.String(), 0, context.DeadlineExceeded
+	// The deadline is a timeout; a caller that canceled is not one, and is
+	// reported as the cancellation it is.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return out.data, errBuf.String(), 0, ctxErr
 	}
 	var exit *exec.ExitError
 	if errors.As(runErr, &exit) {

@@ -19,7 +19,8 @@ import (
 // another backend has no window behind its slot, so it is named by its
 // runtime session and shown wherever something can show it: a connected
 // workspace is asked for its native view of the session, and with none the
-// terminal the operator used last on the session's server is switched to it.
+// terminal the operator used last on the session's server, among those the
+// workspace does not host, is switched to it.
 //
 // The second path selects the session in a terminal; it does not bring that
 // terminal's window forward. The daemon knows a tmux client by its tty and
@@ -56,11 +57,17 @@ func NewTmuxRuntimeSwitcher(store *runtimesession.Store) RuntimeSessionSwitcher 
 		if err != nil {
 			return "", err
 		}
-		client, attached := survey.LastActive()
-		if !attached {
-			return "", tmux.ErrNoClient
+		// This path runs only when no workspace took the request, which does
+		// not mean none is there: one reconnecting still has its terminals
+		// attached. Those are never switched behind its back, so the terminal
+		// used last is chosen among the others, and with none the request
+		// finds no viewer.
+		switcher := tmux.Switcher{Store: store, Backend: terminal}
+		client, err := switcher.LastActivePlain(survey)
+		if err != nil {
+			return "", err
 		}
-		return client.Name, tmux.Switcher{Store: store, Backend: terminal}.Switch(client.Name, record.ID)
+		return client.Name, switcher.Switch(client.Name, record.ID)
 	}
 }
 

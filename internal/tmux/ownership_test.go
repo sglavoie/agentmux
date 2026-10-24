@@ -2,6 +2,8 @@ package tmux_test
 
 import (
 	"fmt"
+	"net"
+	"os"
 	"os/exec"
 	"slices"
 	"syscall"
@@ -299,6 +301,59 @@ func TestReconcileTellsExitedFromLostAndLaunchesNothing(t *testing.T) {
 	}
 	if report, err = reconciler.Reconcile(time.Now()); err != nil || !report.Empty() {
 		t.Fatalf("pass with nothing live = %+v, %v; want no change", report, err)
+	}
+}
+
+// TestReconcileEndsNothingOverASocketThatStillListens: a client turned away
+// by something that still listens on the socket is not evidence that the
+// server is gone, so no session is ended over it; a socket a crashed server
+// left behind, with nothing listening, still is.
+func TestReconcileEndsNothingOverASocketThatStillListens(t *testing.T) {
+	f := tmuxtest.New(t)
+	start := time.Now().Add(-time.Minute)
+	agent := register(t, f, launchAgent(t, f), start)
+	reconciler := tmux.NewReconciler(f.Registry, nil)
+	if err := f.Server.Kill(); err != nil {
+		t.Fatal(err)
+	}
+
+	// A listener that hangs up on every client is what a server too busy to
+	// answer looks like to one: tmux reports it as gone.
+	if err := os.Remove(f.Server.Socket()); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", f.Server.Socket())
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener.(*net.UnixListener).SetUnlinkOnClose(false)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	report, err := reconciler.Reconcile(time.Now())
+	if err == nil || len(report.Ended) != 0 {
+		t.Fatalf("pass over a socket that still listens = %+v, %v; want an unreadable server and nothing ended", report, err)
+	}
+	if got := get(t, f, agent.ID); got.State != runtimesession.StateLive {
+		t.Fatalf("agent = %s %q, want live", got.State, got.StaleReason)
+	}
+
+	// The listener goes and its socket stays, as a crashed server's does.
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(f.Server.Socket()); err != nil {
+		t.Fatalf("the socket was removed: %v", err)
+	}
+	report, err = reconciler.Reconcile(time.Now())
+	if err != nil || len(report.Ended) != 1 || report.Ended[0].ID != agent.ID || report.Ended[0].Outcome != runtimesession.OutcomeLost {
+		t.Fatalf("pass over a dead socket = %+v, %v; want the session lost", report, err)
 	}
 }
 

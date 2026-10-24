@@ -6,8 +6,11 @@ package session
 //
 // It is not a way to answer an agent-session-loop supervisor question. That
 // answer is the run's, travels by its mailbox, and is given from the Runs
-// view, the app's answer panel, or the Workbench; a session with such a
-// question open is refused here whatever flags are passed.
+// view, the app's answer panel, or the Workbench; a session the daemon
+// reports as having such a question open is refused here whatever flags are
+// passed. Only the daemon can say so: when it does not answer, the send is
+// refused unless --yes is passed, and with --yes it goes ahead without that
+// check.
 
 import (
 	"crypto/rand"
@@ -75,7 +78,7 @@ A session running an agent-session-loop run needs --yes, since what is typed
 there reaches the run's supervisor. One with a supervisor question open is
 always refused (asl_question_open): answer it from the Runs view, the app, or
 the Workbench, so the run records the reply. When the daemon cannot be asked,
---yes is needed too.
+--yes is needed too, and sends without knowing whether a question is open.
 
 --operation-id names the send so that asking twice writes once: a repeat of a
 finished operation reports delivery "replayed", and a repeat of one that was
@@ -374,7 +377,9 @@ func sendSlotState(id runtimesession.ID) (sendSlot, bool) {
 
 // sendASLGuard keeps typed input out of agent-session-loop's lane. A run
 // reaches its session's slot only through that session's own hooks, so a
-// session with no slot runs none.
+// session with no slot runs none. With the daemon unreachable there is no
+// slot to read, and --yes is the operator taking that on: the send goes ahead
+// without the open-question check.
 func sendASLGuard(record runtimesession.Record, slot sendSlot, known, yes bool) (string, error) {
 	switch {
 	case !known && !yes:

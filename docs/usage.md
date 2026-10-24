@@ -1191,11 +1191,12 @@ before writing with the same classifiers the daemon uses:
 **agent-session-loop.** `amx send` types at a terminal; it is not a reply to
 a run. A supervisor question is answered through the run's mailbox, from the
 Runs view, Agent Mux.app's answer panel, or the Workbench, so that the run
-records the reply. A session with such a question open is therefore refused
-whatever is passed (`asl_question_open`). A session that runs a run with no
-question open needs `--yes`, because what is typed reaches the run's
-supervisor, and so does any session while the daemon cannot be asked
-(`daemon_unavailable`).
+records the reply. A session the daemon reports as having such a question
+open is therefore refused whatever is passed (`asl_question_open`). A session
+that runs a run with no question open needs `--yes`, because what is typed
+reaches the run's supervisor, and so does any session while the daemon cannot
+be asked (`daemon_unavailable`); with the daemon unreachable, `--yes` sends
+without knowing whether a question is open.
 
 **Once.** `--operation-id` names a send; without one a name is made up and
 reported. The operation is recorded on the pane before its input is written

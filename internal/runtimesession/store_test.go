@@ -122,6 +122,46 @@ func TestFailedUpdatesPublishNothing(t *testing.T) {
 	}
 }
 
+// An update whose rename landed is an update made, even when the directory
+// cannot be synced afterwards: a caller told otherwise would undo a commit
+// every reader already sees. The directory here can be written and searched
+// but not opened, which is exactly what an fsync of it needs.
+func TestAnUpdateThatLandedSucceedsWithoutADirectorySync(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root opens a directory whatever its mode")
+	}
+	store := testStore(t)
+	var pending Record
+	if err := store.Update(func(registry *Registry) error {
+		var err error
+		pending, err = registry.Begin(BeginRequest{Project: "API", LaunchID: "launch-1", Relation: RelationFresh}, testEpoch)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(store.Path())
+	if err := os.Chmod(dir, 0o300); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	if _, err := os.Open(dir); err == nil {
+		t.Skip("this filesystem opens a directory without read permission")
+	}
+	if err := store.Update(func(registry *Registry) error {
+		_, err := registry.Commit(pending.ID, testTarget("gen-1", "%1"), testProcess(100, "a"), testEpoch.Add(time.Second))
+		return err
+	}); err != nil {
+		t.Fatalf("Update = %v; want the landed commit reported as made", err)
+	}
+	reloaded, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := reloaded.Get(pending.ID); err != nil || got.State != StateLive {
+		t.Fatalf("reloaded = %+v, %v; want the commit", got, err)
+	}
+}
+
 // A writer killed mid-replacement leaves its temporary file beside the
 // registry. Readers ignore it, and the next writer neither adopts nor trips
 // over it.

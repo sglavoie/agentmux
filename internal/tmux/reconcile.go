@@ -3,6 +3,7 @@ package tmux
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -158,6 +159,32 @@ func (r *Reconciler) Reconcile(now time.Time) (Report, error) {
 	return report, errors.Join(failures...)
 }
 
+// confirmedSurvey surveys server, and does not take one refused connection
+// for a server that is gone. A survey that finds no server ends every session
+// on it, so "not running" is believed at once only when the socket is gone
+// too. Over a socket that is still there it may be a server too busy to take
+// the connection, so the survey is asked once more; a second refusal is
+// believed only when nothing listens on the socket, which is what a server
+// that crashed and left its socket behind looks like. One that still listens
+// is reported as unreadable, and missing evidence ends nothing.
+func confirmedSurvey(server *Backend) (Survey, error) {
+	survey, err := server.Survey()
+	if err != nil || survey.Running {
+		return survey, err
+	}
+	socket := server.server.socket
+	if _, err := os.Lstat(socket); err != nil {
+		return survey, nil
+	}
+	if survey, err = server.Survey(); err != nil || survey.Running {
+		return survey, err
+	}
+	if Listening(socket) {
+		return Survey{}, fmt.Errorf("tmux: the server at %s refused a survey twice but still accepts connections", socket)
+	}
+	return survey, nil
+}
+
 func (r *Reconciler) reconcileServer(address string, records []runtimesession.Record, now time.Time, report *Report) error {
 	survey := Survey{Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendTmux, Address: address}}
 	server, err := r.open(address)
@@ -166,7 +193,7 @@ func (r *Reconciler) reconcileServer(address string, records []runtimesession.Re
 	case err != nil:
 		return err
 	default:
-		if survey, err = server.Survey(); err != nil {
+		if survey, err = confirmedSurvey(server); err != nil {
 			return err
 		}
 	}

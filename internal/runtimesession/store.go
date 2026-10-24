@@ -80,7 +80,13 @@ func (s *Store) Update(fn func(*Registry) error) error {
 		if err != nil {
 			return err
 		}
-		if err := atomicfile.Write(s.path, data, fileMode); err != nil {
+		// Once the rename lands, every reader sees the new registry, and
+		// callers act on what Update returns: a launch that reads a failed
+		// Commit closes the agent it registered and ends its record. So a
+		// directory fsync that fails after the rename is not reported as a
+		// failed update; the change is made, and only its survival of a power
+		// cut is less certain than it would otherwise be.
+		if err := atomicfile.Write(s.path, data, fileMode, atomicfile.WithDirSync(atomicfile.SyncDirBestEffort)); err != nil {
 			return fmt.Errorf("runtimesession: writing %s: %w", s.path, err)
 		}
 		return nil

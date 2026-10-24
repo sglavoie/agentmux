@@ -468,16 +468,29 @@ func (s *Server) runChainInput(cmds [][]string, stdin []byte) (string, error) {
 	if stdin != nil {
 		c.Stdin = bytes.NewReader(stdin)
 	}
-	err = c.Run()
-	timedOut := ctx.Err() != nil
-	if timedOut {
-		err = fmt.Errorf("timed out after %s: %w", s.timeout, ctx.Err())
-	}
+	err, timedOut := clientOutcome(c.Run(), ctx.Err(), s.timeout)
 	release(err != nil, timedOut)
 	if err != nil {
 		return stdout.String(), &CommandError{Args: shown, Stderr: stderr.String(), Err: err}
 	}
 	return stdout.String(), nil
+}
+
+// clientOutcome is how a client that ran ended: runErr is what running it
+// returned and ctxErr the state of its deadline afterwards. An expired
+// deadline is a timeout only for a client that failed. One that succeeded
+// right at the deadline (the wait for a slot counts against the same budget)
+// did what it was asked, and reporting it as failed would have a caller undo
+// or distrust a change the server made: a switch that moved, a session that
+// launched, a send that was written.
+func clientOutcome(runErr, ctxErr error, timeout time.Duration) (err error, timedOut bool) {
+	if runErr == nil {
+		return nil, false
+	}
+	if ctxErr != nil {
+		return fmt.Errorf("timed out after %s: %w", timeout, ctxErr), true
+	}
+	return runErr, false
 }
 
 // redactedArg stands in for an argument a CommandError must not show.

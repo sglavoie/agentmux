@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -170,6 +171,36 @@ func TestSessionActionsFollowTheRecordedBackend(t *testing.T) {
 		if record.State != runtimesession.StateEnded {
 			t.Fatalf("record %s is %s after restart and close, want ended", record.ID, record.State)
 		}
+	}
+}
+
+// TestCloseReportsARuntimeSessionItCouldNotEnd: a close that ended the agent
+// but could not record its runtime session as ended says so as a partial
+// result, rather than leaving reconcile to call the session lost later.
+func TestCloseReportsARuntimeSessionItCouldNotEnd(t *testing.T) {
+	f := tmuxtest.New(t)
+	cfg := continuityConfig(harness.Claude)
+	cfg.Projects[0].Directory = t.TempDir()
+	if _, err := session.LaunchOn(session.Runtime{Tmux: f.Backend, Registry: f.Registry}, cfg.Projects[0], cfg.Accounts[0], cfg); err != nil {
+		t.Fatal(err)
+	}
+	running := tmuxSessions(t, f, cfg)[0]
+	// A registry this build cannot read is never rewritten, so ending the
+	// record fails while the close itself does not need the registry.
+	if err := os.WriteFile(f.Registry.Path(), []byte("not a registry"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := DefaultRegistry().Execute(context.Background(), tmuxDeps(f, cfg), Close, Request{Session: &running, Confirmed: true})
+	var partial *PartialResultError
+	if !errors.As(err, &partial) || partial.ActionError.Code != "registry_update_failed" || !errors.Is(err, runtimesession.ErrCorrupt) {
+		t.Fatalf("close = %v; want a partial result naming the registry failure", err)
+	}
+	if !result.Changed || !CloseConfirmed(result) || result.Action != Close {
+		t.Fatalf("result = %+v; want the confirmed close kept", result)
+	}
+	if len(tmuxSessions(t, f, cfg)) != 0 {
+		t.Fatal("the session is still running")
 	}
 }
 

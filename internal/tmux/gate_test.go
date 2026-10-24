@@ -195,3 +195,20 @@ func TestFailureClassIsAFixedVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// A client that succeeded is a success even when its deadline expired as it
+// finished: only a client that failed past its deadline timed out.
+func TestClientOutcomeTimesOutOnlyAFailedClient(t *testing.T) {
+	t.Parallel()
+
+	if err, timedOut := clientOutcome(nil, context.DeadlineExceeded, time.Second); err != nil || timedOut {
+		t.Fatalf("a client that succeeded at its deadline = %v, %v; want success", err, timedOut)
+	}
+	killed := errors.New("signal: killed")
+	if err, timedOut := clientOutcome(killed, context.DeadlineExceeded, time.Second); !timedOut || !errors.Is(err, context.DeadlineExceeded) || FailureClass(err) != "timeout" {
+		t.Fatalf("a client killed at its deadline = %v, %v; want a timeout", err, timedOut)
+	}
+	if err, timedOut := clientOutcome(killed, nil, time.Second); timedOut || err != killed {
+		t.Fatalf("a client that failed in time = %v, %v; want its own error", err, timedOut)
+	}
+}
