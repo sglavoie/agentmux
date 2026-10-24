@@ -44,9 +44,12 @@ func AcquireDaemonLock(socketPath string) (*os.File, error) {
 	return f, nil
 }
 
-// ReleaseDaemonLock unlinks and unlocks the single-instance lock file.
-func ReleaseDaemonLock(socketPath string, f *os.File) {
-	_ = os.Remove(DaemonLockPath(socketPath))
+// ReleaseDaemonLock unlocks the single-instance lock file and leaves it in
+// place. The lock is the flock, never the file's existence: unlinking it
+// would let a starter that opened the old file before the release lock that
+// orphaned inode while another locks a newly created file, and both would
+// believe they own the socket.
+func ReleaseDaemonLock(_ string, f *os.File) {
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	_ = f.Close()
 }
@@ -72,9 +75,8 @@ func AcquireAutoStartLock(socketPath string) (*os.File, error) {
 	return f, nil
 }
 
-// ReleaseAutoStartLock unlocks the auto-start lock file. Unlike the
-// single-instance lock the file itself is left in place: it is a pure
-// serialization point, not an ownership marker.
+// ReleaseAutoStartLock unlocks the auto-start lock file and, like the
+// single-instance lock, leaves the file in place.
 func ReleaseAutoStartLock(f *os.File) {
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	_ = f.Close()

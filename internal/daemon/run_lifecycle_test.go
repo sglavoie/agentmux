@@ -143,9 +143,13 @@ func TestRun_RemovesSocketOnShutdown(t *testing.T) {
 	if _, err := os.Stat(socketPath); !os.IsNotExist(err) {
 		t.Fatalf("socket file should have been removed; stat err = %v", err)
 	}
-	if _, err := os.Stat(process.DaemonLockPath(socketPath)); !os.IsNotExist(err) {
-		t.Fatalf("lock file should have been removed; stat err = %v", err)
+	// The lock file stays (removing it would let two daemons lock different
+	// inodes), but nothing holds it any more.
+	lock, err := process.AcquireDaemonLock(socketPath)
+	if err != nil {
+		t.Fatalf("lock should be free after shutdown: %v", err)
 	}
+	process.ReleaseDaemonLock(socketPath, lock)
 }
 
 func TestRun_ShutdownAcceptedDuringStartupReturnsCleanly(t *testing.T) {
