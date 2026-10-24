@@ -208,7 +208,7 @@ func TestClientOutcomeTimesOutOnlyAFailedClient(t *testing.T) {
 	if err, timedOut := clientOutcome(killed, context.DeadlineExceeded, time.Second); !timedOut || !errors.Is(err, context.DeadlineExceeded) || FailureClass(err) != "timeout" {
 		t.Fatalf("a client killed at its deadline = %v, %v; want a timeout", err, timedOut)
 	}
-	if err, timedOut := clientOutcome(killed, nil, time.Second); timedOut || err != killed {
+	if err, timedOut := clientOutcome(killed, nil, time.Second); timedOut || !errors.Is(err, killed) {
 		t.Fatalf("a client that failed in time = %v, %v; want its own error", err, timedOut)
 	}
 }

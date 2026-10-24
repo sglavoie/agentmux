@@ -528,7 +528,7 @@ func TestAFailedReadRetainsTheListAndWaitsForTheNextTick(t *testing.T) {
 	if !m.topologyObservedAt.Equal(stamped) {
 		t.Fatal("a failure restamped the freshness reading; the rows would stop aging out of their own last capture")
 	}
-	if m.err != outage {
+	if !errors.Is(m.err, outage) {
 		t.Fatalf("a failure recorded %v, want the outage", m.err)
 	}
 

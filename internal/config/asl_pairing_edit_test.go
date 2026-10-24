@@ -5,6 +5,7 @@ package config
 // asked to change, and the result still parses.
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -177,7 +178,7 @@ func TestDottedKeysUnderDefaultsAreRefusedWithRemediation(t *testing.T) {
 	input := "[defaults]\nasl.command = \"asl\"\n"
 	_, err := ApplyASLPairing([]byte(input), ASLPairing{Command: "/bin/asl"})
 	var ambiguous *ErrASLTableAmbiguous
-	if !asASLAmbiguous(err, &ambiguous) {
+	if !errors.As(err, &ambiguous) {
 		t.Fatalf("ApplyASLPairing() = %v, want an ambiguity refusal", err)
 	}
 	if !strings.Contains(ambiguous.Remediation, "[defaults.asl]") {
@@ -191,7 +192,7 @@ func TestADuplicateKeyIsRefusedRatherThanRewrittenTwice(t *testing.T) {
 	input := "[defaults.asl]\ncommand = \"asl\"\ncommand = \"other\"\n"
 	_, err := ApplyASLPairing([]byte(input), ASLPairing{Command: "/bin/asl"})
 	var ambiguous *ErrASLTableAmbiguous
-	if !asASLAmbiguous(err, &ambiguous) {
+	if !errors.As(err, &ambiguous) {
 		t.Fatalf("ApplyASLPairing() = %v, want a duplicate-key refusal", err)
 	}
 }
@@ -260,15 +261,4 @@ func TestAnEmptyPairingReturnsTheFileUnchanged(t *testing.T) {
 	if string(out) != input {
 		t.Errorf("out = %q, want the input unchanged", out)
 	}
-}
-
-func asASLAmbiguous(err error, target **ErrASLTableAmbiguous) bool {
-	if err == nil {
-		return false
-	}
-	ambiguous, ok := err.(*ErrASLTableAmbiguous)
-	if ok {
-		*target = ambiguous
-	}
-	return ok
 }

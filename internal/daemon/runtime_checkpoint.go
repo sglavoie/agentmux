@@ -135,7 +135,7 @@ func loadRuntimeCheckpoint(path string) ([]runtimeCheckpointEntry, error) {
 	dec.DisallowUnknownFields()
 	var file runtimeCheckpointFile
 	if err := dec.Decode(&file); err != nil {
-		return nil, fmt.Errorf("%w: %v", errRuntimeCheckpointCorrupt, err)
+		return nil, fmt.Errorf("%w: %w", errRuntimeCheckpointCorrupt, err)
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("%w: trailing data", errRuntimeCheckpointCorrupt)

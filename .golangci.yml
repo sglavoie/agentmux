@@ -1,0 +1,34 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    # An error compared with == or asserted to a type stops matching the
+    # moment someone wraps it.
+    - errorlint
+    # A nil return under a non-nil error is usually a failure reported as
+    # success; the deliberate ones are listed below with their reason.
+    - nilerr
+  exclusions:
+    rules:
+      # An unreadable config is reported by the hooks check, not twice.
+      - path: cmd/debug/doctor_checks\.go
+        linters: [nilerr]
+      # Fetch never fails for a condition a bundle should survive; the
+      # failure travels as an availability reason instead.
+      - path: internal/aslexport/export\.go
+        linters: [nilerr]
+      # Bundle collection is best effort: a member that cannot be read is
+      # left out rather than failing the bundle.
+      - path: internal/debugger/bundle_members\.go
+        linters: [nilerr]
+      # A socket file that is gone is the proof a server is absent.
+      - path: internal/tmux/reconcile\.go
+        linters: [nilerr]
+      # Registry.Get fails only with ErrNotFound, and an unknown session is
+      # not hosted.
+      - path: internal/tmux/switch\.go
+        linters: [nilerr]
+      # A transcript that vanishes between the walk and its Stat is skipped.
+      - path: internal/transcript/admission_metadata\.go
+        linters: [nilerr]

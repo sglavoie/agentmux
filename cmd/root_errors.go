@@ -134,7 +134,7 @@ func plainFlagError(err error) error {
 			return fmt.Errorf("invalid value %q for --%s: want %s", invalid.GetValue(), flag.Name, want)
 		}
 		if cause := errors.Unwrap(invalid); cause != nil {
-			return fmt.Errorf("invalid value %q for --%s: %v", invalid.GetValue(), flag.Name, cause)
+			return fmt.Errorf("invalid value %q for --%s: %w", invalid.GetValue(), flag.Name, cause)
 		}
 	}
 	return err

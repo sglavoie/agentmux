@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -251,7 +252,8 @@ func (w *aslWorld) supervise(id runtimesession.ID, args ...string) map[string]an
 	out, err := cmd.Output()
 	if err != nil {
 		stderr := ""
-		if exit, ok := err.(*exec.ExitError); ok {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
 			stderr = string(exit.Stderr)
 		}
 		w.t.Fatalf("asl %s: %v\n%s\n%s", strings.Join(args, " "), err, out, stderr)
