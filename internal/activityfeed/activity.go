@@ -28,10 +28,15 @@ type Entry struct {
 	TraceID          string    `json:"trace_id"`
 }
 
+// Report is one read of the activity history. EarliestAvailable is the
+// oldest record the journal still holds, in RFC 3339, and empty when it holds
+// none: a zero time ("0001-01-01T00:00:00Z") would read as a journal that goes
+// back two thousand years. The key stays present, empty, because Agent
+// Mux.app decodes it as a required string.
 type Report struct {
 	Entries           []Entry   `json:"entries"`
 	Since             time.Time `json:"since"`
-	EarliestAvailable time.Time `json:"earliest_available"`
+	EarliestAvailable string    `json:"earliest_available"`
 	Truncated         bool      `json:"truncated"`
 	CorruptLines      int       `json:"corrupt_lines"`
 	Matched           int       `json:"matched"`
@@ -49,9 +54,12 @@ func Read(ctx context.Context, journal *diagnostics.Journal, since time.Time, li
 	if err != nil {
 		return Report{}, err
 	}
-	report := Report{Entries: []Entry{}, Since: since, EarliestAvailable: snapshot.Health.EarliestObservedAt,
+	report := Report{Entries: []Entry{}, Since: since,
 		Truncated: snapshot.Statistics.RecordsMatched > limit, Matched: snapshot.Statistics.RecordsMatched,
 		CorruptLines: snapshot.Statistics.CorruptLines}
+	if earliest := snapshot.Health.EarliestObservedAt; !earliest.IsZero() {
+		report.EarliestAvailable = earliest.Format(time.RFC3339Nano)
+	}
 	for i := len(snapshot.Records) - 1; i >= 0; i-- {
 		if entry, ok := Project(snapshot.Records[i]); ok {
 			report.Entries = append(report.Entries, entry)

@@ -294,6 +294,47 @@ func TestSessionShowLastPrintsTheClosingMessages(t *testing.T) {
 
 }
 
+// Each way of choosing messages wrongly is named on its own, --at included,
+// rather than one message restating every rule.
+func TestSessionShowNamesEachMessageFlagMistake(t *testing.T) {
+	t.Parallel()
+
+	type flags struct {
+		last          int
+		query         string
+		match, from   int
+		count         int
+		at            string
+		wantErrSubstr string
+	}
+	ok := flags{match: 1, from: -1, count: 20}
+	for name, tc := range map[string]flags{
+		"negative last":      {last: -1, match: 1, from: -1, count: 20, wantErrSubstr: "--last -1"},
+		"negative from":      {match: 1, from: -2, count: 20, wantErrSubstr: "--from -2"},
+		"count too large":    {match: 1, from: -1, count: 501, wantErrSubstr: "--count must be from 1 to 500, got 501"},
+		"count zero":         {match: 1, from: -1, count: 0, wantErrSubstr: "--count must be from 1 to 500, got 0"},
+		"match zero":         {query: "x", match: 0, from: -1, count: 20, wantErrSubstr: "--match 0"},
+		"match without find": {match: 2, from: -1, count: 20, wantErrSubstr: "--match picks among the matches of --find"},
+		"last with find":     {last: 3, query: "x", match: 1, from: -1, count: 20, wantErrSubstr: "--last cannot be combined with --find or --from"},
+		"last with from":     {last: 3, match: 1, from: 0, count: 20, wantErrSubstr: "--last cannot be combined"},
+		"at with find":       {query: "x", match: 1, from: -1, count: 20, at: "2026-10-24T09:30:00Z", wantErrSubstr: "--at cannot be combined with --find"},
+		"at with from+last":  {last: 1, match: 1, from: 0, count: 20, at: "2026-10-24T09:30:00Z", wantErrSubstr: "--at cannot be combined with --from or --last"},
+		"at unparseable":     {match: 1, from: -1, count: 20, at: "yesterday", wantErrSubstr: `--at "yesterday": want an RFC 3339 time`},
+	} {
+		_, err := sessionShowMessageFlags(tc.last, tc.query, tc.match, tc.from, tc.count, tc.at)
+		if err == nil || !strings.Contains(err.Error(), tc.wantErrSubstr) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.wantErrSubstr)
+		}
+	}
+	at, err := sessionShowMessageFlags(ok.last, ok.query, ok.match, ok.from, ok.count, "2026-10-24T09:30:00Z")
+	if err != nil || !at.Equal(time.Date(2026, 10, 24, 9, 30, 0, 0, time.UTC)) {
+		t.Fatalf("valid --at: %v %v", at, err)
+	}
+	if _, err := sessionShowMessageFlags(0, "x", 2, 5, 20, ""); err != nil {
+		t.Fatalf("--find with --from and --match: %v", err)
+	}
+}
+
 func TestConversationMatchWindowsKeepProseIdentityAndBoundaries(t *testing.T) {
 	t.Parallel()
 

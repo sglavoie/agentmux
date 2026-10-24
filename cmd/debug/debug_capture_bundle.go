@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -76,7 +77,8 @@ needs --yes when there is no terminal to ask in.`,
   amx debug capture start --include-hook-payloads --harness codex --duration 30m --yes`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugCaptureStart,
+	RunE:         debugJSONFailures(&debugCaptureJSON, "capture_failed", runDebugCaptureStart),
+	Annotations:  map[string]string{debugSelectorsAnnotation: strings.Join(debugCaptureSelectors, ",")},
 }
 
 var debugCaptureStopCmd = &cobra.Command{
@@ -86,7 +88,7 @@ var debugCaptureStopCmd = &cobra.Command{
 	Example:      "  amx debug capture stop",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugCaptureStop,
+	RunE:         debugJSONFailures(&debugCaptureJSON, "capture_failed", runDebugCaptureStop),
 	Annotations:  map[string]string{debugNoSelectorsAnnotation: "true"},
 }
 
@@ -97,7 +99,7 @@ var debugCaptureStatusCmd = &cobra.Command{
 	Example:      "  amx debug capture status --json",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugCaptureStatus,
+	RunE:         debugJSONFailures(&debugCaptureJSON, "capture_failed", runDebugCaptureStatus),
 	Annotations:  map[string]string{debugNoSelectorsAnnotation: "true"},
 }
 
@@ -115,7 +117,7 @@ Either mode is redacted. --mode share (the default) can be passed on;
   amx debug bundle --after 2h --include-asl --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugBundle,
+	RunE:         debugJSONFailures(&debugBundleJSON, "bundle_failed", runDebugBundle),
 }
 
 func init() {
@@ -147,16 +149,14 @@ func captureService() (*debugger.CaptureService, error) {
 
 func runDebugCaptureStart(cmd *cobra.Command, _ []string) error {
 	if !debugCaptureInclude {
-		return fmt.Errorf("raw capture requires --include-hook-payloads")
+		return debugCodedError{code: "confirmation_required", err: errors.New("raw capture requires --include-hook-payloads")}
 	}
 	selector, err := debugSelector(debugNow().UTC())
 	if err != nil {
 		return err
 	}
-	if selector.Profile != "" || selector.SessionID != "" || selector.ASLRunID != "" || selector.Event != "" ||
-		selector.TraceID != "" || selector.RequestID != "" || selector.SourceEventID != "" || len(selector.Outcomes) != 0 ||
-		len(selector.Stages) != 0 || !selector.After.IsZero() || !selector.Before.IsZero() {
-		return fmt.Errorf("capture scope accepts only --window, --%s, and/or --harness selectors", debugRuntimeSessionFlag)
+	if len(debugSetSelectors(debugCaptureSelectors...)) != 0 {
+		return debugInvalid(fmt.Errorf("capture scope accepts only --window, --%s, and/or --harness selectors", debugRuntimeSessionFlag))
 	}
 	// A capture scoped by harness alone is machine-wide for that harness; the
 	// current session is the default only when nothing else scopes it.
@@ -170,7 +170,7 @@ func runDebugCaptureStart(cmd *cobra.Command, _ []string) error {
 	authorized := debugCaptureYes
 	if !authorized {
 		if !debugInputInteractive(cmd.InOrStdin()) {
-			return fmt.Errorf("raw capture requires --yes in non-interactive use")
+			return debugCodedError{code: "confirmation_required", err: errors.New("raw capture requires --yes in non-interactive use")}
 		}
 		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Raw hook payloads may contain prompts, tool arguments, credentials, and other sensitive text."); err != nil {
 			return err
@@ -184,7 +184,7 @@ func runDebugCaptureStart(cmd *cobra.Command, _ []string) error {
 		}
 		authorized = strings.EqualFold(strings.TrimSpace(answer), "yes")
 		if !authorized {
-			return fmt.Errorf("raw capture was not confirmed")
+			return debugCodedError{code: "confirmation_required", err: errors.New("raw capture was not confirmed")}
 		}
 	}
 	service, err := captureService()
@@ -207,6 +207,9 @@ func runDebugCaptureStop(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	report, err := service.Stop(cmd.Context())
+	if errors.Is(err, diagnostics.ErrNoCapture) {
+		return debugCodedError{code: "no_capture", err: err}
+	}
 	if err != nil {
 		return err
 	}
@@ -248,6 +251,12 @@ func writeCaptureReport(out io.Writer, report debugger.CaptureReport) error {
 
 func runDebugBundle(cmd *cobra.Command, _ []string) error {
 	now := debugNow().UTC()
+	// The mode is checked before anything is collected: a bundle is slow to
+	// assemble, and the mistake is the caller's.
+	mode := debugger.BundleMode(strings.ToLower(strings.TrimSpace(debugBundleMode)))
+	if mode != debugger.BundleModeShare && mode != debugger.BundleModeForensic {
+		return debugInvalid(fmt.Errorf("--mode must be %s or %s, got %q", debugger.BundleModeShare, debugger.BundleModeForensic, debugBundleMode))
+	}
 	selector, err := debugSelector(now)
 	if err != nil {
 		return err
@@ -282,7 +291,7 @@ func runDebugBundle(cmd *cobra.Command, _ []string) error {
 	}
 	doctor := collectDoctorSnapshotForBundle(cmd)
 	result, err := debugger.CreateBundle(cmd.Context(), debugger.BundleOptions{
-		Paths: paths, OutputPath: debugBundleOutput, Mode: debugger.BundleMode(strings.ToLower(strings.TrimSpace(debugBundleMode))),
+		Paths: paths, OutputPath: debugBundleOutput, Mode: mode,
 		Selector: selector, Now: now, Journal: journal, Config: cfg, ConfigError: configErr,
 		Status: &status, Doctor: doctor, Build: buildinfo.Current(), NativeSessions: status.Native.Sessions,
 		ASL:              fetchASLExportForBundle(cmd.Context(), cfg, selector),

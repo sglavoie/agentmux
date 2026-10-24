@@ -36,6 +36,30 @@ func TestPlanStatusSchemaAndNoLaunch(t *testing.T) {
 	}
 }
 
+// A missing PLAN is named, like `plans run` names it, rather than cobra's
+// "accepts 1 arg(s)".
+func TestPlanStatusNamesAMissingPlan(t *testing.T) {
+	world := newPlanWorld(t)
+	cmd := newStatusCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	if err := cmd.ParseFlags([]string{"--json"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Args(cmd, cmd.Flags().Args()); err != nil {
+		t.Fatalf("args were refused before the command could name PLAN: %v", err)
+	}
+	if err := cmd.RunE(cmd, cmd.Flags().Args()); err == nil {
+		t.Fatal("ran without a plan")
+	}
+	if failure := decodeError(t, out.String()); failure.Code != "missing_parameter" || len(failure.Parameters) != 1 || failure.Parameters[0].Name != "PLAN" {
+		t.Fatalf("failure = %+v", failure)
+	}
+	if len(world.asl.asked) != 0 {
+		t.Fatalf("asked ASL %v without a plan", world.asl.asked)
+	}
+}
+
 func TestDisabledPlanStatusDoesNotStartASL(t *testing.T) {
 	world := newPlanWorld(t)
 	disabled := false

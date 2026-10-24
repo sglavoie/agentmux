@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -26,6 +27,9 @@ func resetNotificationsTestState(t *testing.T) {
 	// No test may reach the operator's daemon: by default the daemon is
 	// unreachable, which is what a missing daemon looks like.
 	notificationsSnoozeClient = func() snoozeClient { return &fakeSnoozeClient{err: errors.New("dial unix: no such file")} }
+	oldHealth := notificationsHealth
+	notificationsHealth = func() ipc.Health { return ipc.Health{} }
+	t.Cleanup(func() { notificationsHealth = oldHealth })
 	notificationsAppTest = func() (protocol.NotificationTestResult, error) {
 		return protocol.NotificationTestResult{}, errors.New("dial unix: no such file")
 	}

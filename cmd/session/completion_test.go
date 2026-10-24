@@ -76,6 +76,19 @@ func TestCompleteConversationOffersTheWholeIDPastItsShortPrefix(t *testing.T) {
 	}
 }
 
+// --conversation matches no prefix, so it is offered whole identities.
+func TestCompleteExactConversationOffersWholeIdentities(t *testing.T) {
+	stubCompletionIndex(t, nil, completionMetas()...)
+	got, _ := completeExactConversation(nil, nil, "codex:01a112")
+	want := []string{
+		"codex:01a11269-0000\tcodex · 📝tt · Supervise the run",
+		"codex:01a112bc-0000\tcodex · dev-helpers · Resolve bootstrap",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("completions =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
 func TestCompleteOneConversationOffersNoHarnessNames(t *testing.T) {
 	stubCompletionIndex(t, nil, completionMetas()...)
 	got, _ := completeOneConversation(nil, nil, "c")

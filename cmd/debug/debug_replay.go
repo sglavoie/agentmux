@@ -1,8 +1,10 @@
 package debug
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -22,9 +24,9 @@ outcomes from an immutable journal directory, a diagnostic bundle, or an
 Replay never connects to Kitty or the daemon and has no live-apply mode.`,
 	Example: `  amx debug replay agent-mux-debug.tar.gz
   amx debug replay ~/.local/state/agent-mux/journal --trace <trace-id> --json`,
-	Args:         cobra.ExactArgs(1),
+	Args:         cobra.MaximumNArgs(1),
 	SilenceUsage: true,
-	RunE:         runDebugReplay,
+	RunE:         debugJSONFailures(&debugReplayJSON, "replay_failed", runDebugReplay),
 	// The argument is a file, so it keeps the shell's file completion that
 	// root assembly turns off for every command that does not ask for it.
 	ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
@@ -41,11 +43,18 @@ func init() {
 }
 
 func runDebugReplay(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cli.MissingParameter(cmd, debugReplayJSON, "JOURNAL_OR_BUNDLE",
+			"a journal directory, a diagnostic bundle, or an `amx daemon export-events` file")
+	}
 	selector, err := debugSelector(debugNow().UTC())
 	if err != nil {
 		return err
 	}
 	report, err := debugger.Replay(cmd.Context(), config.ExpandTilde(args[0]), debugger.ReplayOptions{Selector: selector})
+	if errors.Is(err, fs.ErrNotExist) {
+		return debugCodedError{code: "not_found", err: err}
+	}
 	if err != nil {
 		return err
 	}

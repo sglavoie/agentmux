@@ -2,7 +2,9 @@ package activityfeed
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,5 +104,32 @@ func TestJournalFiltersNoiseBeforeLimitAndReportsTruncation(t *testing.T) {
 	again, err := Read(context.Background(), journal, report.Since, 2)
 	if err != nil || again.Entries[0].ID != report.Entries[0].ID {
 		t.Fatal("reread identity unstable", err)
+	}
+}
+
+// An empty journal has no earliest record: the report says so with an empty
+// earliest_available, never the zero time, and keeps the key for the app.
+func TestEmptyJournalReportsNoEarliestRecord(t *testing.T) {
+	journal, err := diagnostics.NewJournal(diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state")), diagnostics.JournalOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	since := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+	report, err := Read(context.Background(), journal, since, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"earliest_available":""`) || strings.Contains(string(encoded), "0001-01-01") {
+		t.Fatalf("empty journal report = %s", encoded)
+	}
+	if err := journal.Append(context.Background(), transition(1, "bolt", "stop")); err != nil {
+		t.Fatal(err)
+	}
+	if report, err = Read(context.Background(), journal, since, 10); err != nil || report.EarliestAvailable != "2026-10-15T01:00:01Z" {
+		t.Fatalf("earliest = %q, err = %v", report.EarliestAvailable, err)
 	}
 }

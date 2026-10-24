@@ -28,7 +28,7 @@ func runDebugTail(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if debugTailLimit < 0 {
-		return fmt.Errorf("--last must not be negative")
+		return debugInvalid(errors.New("--last must not be negative"))
 	}
 	paths, err := debugPaths()
 	if err != nil {
@@ -89,6 +89,12 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 	selector, err := debugSelector(now)
 	if err != nil {
 		return err
+	}
+	// A probe is one fresh request, not a search of recorded ones: a selector
+	// it cannot put on that request would be silently ignored.
+	if unsupported := debugSetSelectors(debugProbeSelectors...); len(unsupported) != 0 {
+		return debugInvalid(fmt.Errorf("debug probe does not take %s; it accepts only --window, --%s, --harness, --trace, and --request",
+			strings.Join(unsupported, ", "), debugRuntimeSessionFlag))
 	}
 	windowID, runtimeSession, err := debugSessionTarget(selector.WindowID)
 	if err != nil {
@@ -155,16 +161,16 @@ func runDebugExplain(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if debugExplainLast < 0 {
-		return fmt.Errorf("--last must not be negative")
+		return debugInvalid(errors.New("--last must not be negative"))
 	}
 	if debugExplainGraphDepth < debugger.MinExplainGraphDepth || debugExplainGraphDepth > debugger.MaxExplainGraphDepth {
-		return fmt.Errorf("--graph-depth must be between %d and %d", debugger.MinExplainGraphDepth, debugger.MaxExplainGraphDepth)
+		return debugInvalid(fmt.Errorf("--graph-depth must be between %d and %d", debugger.MinExplainGraphDepth, debugger.MaxExplainGraphDepth))
 	}
 	if debugExplainMaxNodes < debugger.MinExplainMaxNodes || debugExplainMaxNodes > debugger.MaxExplainMaxNodes {
-		return fmt.Errorf("--max-nodes must be between %d and %d", debugger.MinExplainMaxNodes, debugger.MaxExplainMaxNodes)
+		return debugInvalid(fmt.Errorf("--max-nodes must be between %d and %d", debugger.MinExplainMaxNodes, debugger.MaxExplainMaxNodes))
 	}
 	if debugExplainMaxEdges < debugger.MinExplainMaxEdges || debugExplainMaxEdges > debugger.MaxExplainMaxEdges {
-		return fmt.Errorf("--max-edges must be between %d and %d", debugger.MinExplainMaxEdges, debugger.MaxExplainMaxEdges)
+		return debugInvalid(fmt.Errorf("--max-edges must be between %d and %d", debugger.MinExplainMaxEdges, debugger.MaxExplainMaxEdges))
 	}
 	paths, err := debugPaths()
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // runMuteToggleJSON runs the real RunE against client with --json set, the
@@ -66,11 +67,40 @@ func TestMuteToggleJSONContract(t *testing.T) {
 	}
 }
 
-func TestMuteToggleTextModePrintsNothing(t *testing.T) {
+// Text mode says what changed in one line, and stays silent for the no-op of
+// a window that is not a managed session.
+func TestMuteToggleTextModeSaysWhatChanged(t *testing.T) {
 	client := &fakeMuteClient{windows: []kitty.OSWindow{{ID: 1, Tabs: []kitty.Tab{testManagedTabWithBase(10, 101, "api")}}}}
 	out, err := runMuteToggleJSON(t, client, 101, false)
-	if err != nil || out != "" {
-		t.Fatalf("text mode: out = %q, err = %v; want silence", out, err)
+	if err != nil || out != "muted Kitty window 101\n" {
+		t.Fatalf("text mode: out = %q, err = %v", out, err)
+	}
+	unmanaged := &fakeMuteClient{windows: []kitty.OSWindow{{ID: 1, Tabs: []kitty.Tab{testUnmanagedTab(20, 201, "shell")}}}}
+	if out, err := runMuteToggleJSON(t, unmanaged, 201, false); err != nil || out != "" {
+		t.Fatalf("unmanaged: out = %q, err = %v; want silence", out, err)
+	}
+	if got := muteToggleSummary(muteToggleResult{RuntimeSessionID: "rs-1", Changed: true}); got != "unmuted rs-1" {
+		t.Fatalf("runtime summary = %q", got)
+	}
+}
+
+// With no window and no runtime session there is nothing to mute: that is a
+// missing parameter, not a silent success.
+func TestMuteToggleWithNoTargetIsAMissingParameter(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Setenv(runtimesession.EnvVar, "")
+	client := &fakeMuteClient{}
+	out, err := runMuteToggleJSON(t, client, 0, true)
+	var exit *cli.ExitError
+	if !errors.As(err, &exit) || !exit.Quiet {
+		t.Fatalf("err = %v; want a quiet nonzero exit", err)
+	}
+	var envelope cli.JSONErrorEnvelope
+	if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil || envelope.Error.Code != "missing_parameter" {
+		t.Fatalf("output = %q (%v)", out, decodeErr)
+	}
+	if out, err := runMuteToggleJSON(t, client, 0, false); err == nil || out != "" || !strings.Contains(err.Error(), "--window-id is required") {
+		t.Fatalf("text: out = %q, err = %v", out, err)
 	}
 }
 

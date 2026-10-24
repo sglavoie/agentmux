@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -46,15 +47,33 @@ func init() {
 // it would ignore every one.
 const debugNoSelectorsAnnotation = "amx_debug_no_selectors"
 
+// debugSelectorsAnnotation lists, comma-separated, the only selectors a
+// debug leaf accepts (capture start, probe); it refuses the others, and its
+// help lists only these.
+const debugSelectorsAnnotation = "amx_debug_selectors"
+
+// The selectors capture start and probe accept; each refuses any other.
+var (
+	debugCaptureSelectors = []string{"window", "harness"}
+	debugProbeSelectors   = []string{"window", "harness", "trace", "request"}
+)
+
 // inheritedFlagUsages renders the visible flags cmd inherits, keeping either
 // the selectors `amx debug` declares or everything else.
 func inheritedFlagUsages(cmd *cobra.Command, selectors bool) string {
 	if selectors && cmd.Annotations[debugNoSelectorsAnnotation] != "" {
 		return ""
 	}
+	var accepted []string
+	if list := cmd.Annotations[debugSelectorsAnnotation]; selectors && list != "" {
+		accepted = strings.Split(list, ",")
+	}
 	kept := pflag.NewFlagSet(cmd.Name(), pflag.ContinueOnError)
 	cmd.InheritedFlags().VisitAll(func(flag *pflag.Flag) {
-		if (debugCmd.PersistentFlags().Lookup(flag.Name) != nil) == selectors {
+		if (debugCmd.PersistentFlags().Lookup(flag.Name) != nil) != selectors {
+			return
+		}
+		if accepted == nil || slices.Contains(accepted, flag.Name) {
 			kept.AddFlag(flag)
 		}
 	})

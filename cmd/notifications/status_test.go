@@ -51,7 +51,8 @@ func TestNotificationsStatusNamesTheBackendAndTheSnooze(t *testing.T) {
 }
 
 // A bare `amx notifications` answers the question the family exists for and
-// still lists the subcommands, rather than printing only help.
+// names the subcommands in one line, rather than printing only help or
+// appending the whole usage to a status that may be piped.
 func TestBareNotificationsPrintsStatusThenSubcommands(t *testing.T) {
 	old := notificationsHealth
 	t.Cleanup(func() { notificationsHealth = old })
@@ -65,12 +66,9 @@ func TestBareNotificationsPrintsStatusThenSubcommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "Notifications go through Alerter; no Agent Mux app is connected.\nNotifications are not snoozed.\n\nUsage:") {
-		t.Fatalf("output starts wrong:\n%s", got)
-	}
-	for _, leaf := range []string{"snooze", "test"} {
-		if !strings.Contains(got, leaf) {
-			t.Fatalf("output does not list %q:\n%s", leaf, got)
-		}
+	want := "Notifications go through Alerter; no Agent Mux app is connected.\nNotifications are not snoozed.\n" +
+		"Subcommands: snooze, test; `notifications --help` describes them.\n"
+	if got != want {
+		t.Fatalf("output =\n%s\nwant\n%s", got, want)
 	}
 }

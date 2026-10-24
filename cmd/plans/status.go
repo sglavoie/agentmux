@@ -20,10 +20,13 @@ directory or a plan name, as for ` + "`amx plans run`" + `. --json carries the
 complete status, including each session's recorded verification.`,
 		Example: `  amx plans status 2e774ec64570
   amx plans status ~/.local/share/agent-plans/2e774ec64570-1a09b1daef1c --json`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completePlans,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jsonOutput, _ := cmd.Flags().GetBool("json")
+			if len(args) == 0 {
+				return cli.MissingParameter(cmd, jsonOutput, "PLAN", "a plan directory, or the name of one under the configured plans directory")
+			}
 			cfg, err := planLoadConfig()
 			if err != nil {
 				return cli.ConfigFailure(cmd, jsonOutput, err)

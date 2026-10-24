@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
@@ -28,8 +29,21 @@ func runNotificationsStatus(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
-	_, err := fmt.Fprint(out, "\n"+cmd.UsageString())
+	_, err := fmt.Fprintln(out, notificationsSubcommandHint(cmd))
 	return err
+}
+
+// notificationsSubcommandHint is the one line that points from the status to
+// the subcommands, rather than the whole usage, which a status piped into
+// another program has no use for.
+func notificationsSubcommandHint(cmd *cobra.Command) string {
+	var names []string
+	for _, sub := range cmd.Commands() {
+		if sub.IsAvailableCommand() {
+			names = append(names, sub.Name())
+		}
+	}
+	return fmt.Sprintf("Subcommands: %s; `%s --help` describes them.", strings.Join(names, ", "), cmd.CommandPath())
 }
 
 // notificationsStatusJSON is a bare `amx notifications --json`.

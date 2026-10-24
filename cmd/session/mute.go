@@ -31,8 +31,10 @@ var muteToggleCmd = &cobra.Command{
 	Long: `Flips the cc_mute user var on the window identified by --window-id
 (or $KITTY_WINDOW_ID when the flag is zero) and rewrites the tab title so
 the 🔇 glyph appears or disappears immediately. Muted sessions suppress all
-macOS notifications originating from that window. If the active window is
-not a managed Agent Mux session, the command is a silent no-op.
+macOS notifications originating from that window. It prints what it changed;
+if the window is not a managed Agent Mux session, the command is a silent
+no-op. With no window and no runtime session to go by, it fails
+(missing_parameter).
 
 With --runtime-session the session is named by its runtime session instead,
 which is how one on the tmux backend is muted: it has no Kitty window, and
@@ -60,8 +62,8 @@ func init() {
 }
 
 // muteToggleResult is the `mute-toggle --json` data. Muted is the state the
-// window is left in; Changed is false when the command was a no-op because no
-// window was named or the window is not a managed session.
+// window is left in; Changed is false when the command was a no-op because
+// the window is not a managed session.
 type muteToggleResult struct {
 	WindowID         int    `json:"window_id"`
 	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
@@ -108,7 +110,14 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 			return cli.CommandFailure(cmd, muteToggleJSON, "not_found", err)
 		}
 	} else {
-		result, err = muteToggle(muteToggleClient(), cli.WindowIDOrEnv(muteToggleWindowID))
+		windowID := cli.WindowIDOrEnv(muteToggleWindowID)
+		if windowID == 0 {
+			// Nothing names a session at all: not the no-op of a Kitty window
+			// that is not managed, but a command that cannot know what it is for.
+			return cli.MissingParameter(cmd, muteToggleJSON, "--window-id",
+				"the Kitty window of the session to mute (default: $KITTY_WINDOW_ID), or --runtime-session for a tmux session")
+		}
+		result, err = muteToggle(muteToggleClient(), windowID)
 	}
 	if err != nil && result.Changed && muteToggleJSON {
 		// The mute itself landed; only the title glyph did not. Report the
@@ -121,7 +130,24 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 	if muteToggleJSON {
 		return cli.WriteJSON(cmd, result)
 	}
-	return nil
+	if !result.Changed {
+		// A window that is not a managed session: the documented silent no-op.
+		return nil
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), muteToggleSummary(result))
+	return err
+}
+
+// muteToggleSummary is the one line text mode prints for a mute that changed.
+func muteToggleSummary(result muteToggleResult) string {
+	target := fmt.Sprintf("Kitty window %d", result.WindowID)
+	if result.RuntimeSessionID != "" {
+		target = result.RuntimeSessionID
+	}
+	if result.Muted {
+		return "muted " + target
+	}
+	return "unmuted " + target
 }
 
 func muteToggle(client kitty.KittyClient, windowID int) (muteToggleResult, error) {

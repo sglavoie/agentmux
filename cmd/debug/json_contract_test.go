@@ -1,11 +1,17 @@
 package debug
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/debugger"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/spf13/cobra"
 )
 
@@ -156,6 +162,113 @@ func TestDaemonAuditJSONCommandSurfaceIsVersioned(t *testing.T) {
 	for _, field := range []string{`"schema_version":1`, `"started_at"`, `"finished_at"`, `"samples"`, `"findings":[]`, `"healthy"`} {
 		if !strings.Contains(string(encoded), field) {
 			t.Errorf("daemon audit report %s lacks %s", encoded, field)
+		}
+	}
+}
+
+// A debug leaf whose report could not be produced has no report version to
+// speak of, so under --json it fails with the common error envelope, and
+// never with a bare stderr line a script cannot parse.
+func TestDebugJSONFailuresUseTheErrorEnvelope(t *testing.T) {
+	resetDebugTestState(t)
+	oldCaptureJSON, oldBundleJSON, oldBundleMode := debugCaptureJSON, debugBundleJSON, debugBundleMode
+	oldStopOut, oldBundleOut := debugCaptureStopCmd.OutOrStdout(), debugBundleCmd.OutOrStdout()
+	t.Cleanup(func() {
+		debugCaptureJSON, debugBundleJSON, debugBundleMode = oldCaptureJSON, oldBundleJSON, oldBundleMode
+		debugCaptureStopCmd.SetOut(oldStopOut)
+		debugBundleCmd.SetOut(oldBundleOut)
+	})
+	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	debugPaths = func() (diagnostics.Paths, error) { return paths, nil }
+
+	cases := []struct {
+		name     string
+		command  *cobra.Command
+		args     []string
+		prepare  func()
+		wantCode string
+		wantText string
+	}{
+		{name: "capture stop with nothing to stop", command: debugCaptureStopCmd,
+			prepare: func() { debugCaptureJSON = true }, wantCode: "no_capture", wantText: "no capture"},
+		{name: "tail with a negative --last", command: debugTailCmd,
+			prepare: func() { debugTailJSON, debugTailLimit = true, -1 }, wantCode: "invalid_arguments", wantText: "--last"},
+		{name: "tail with a bad time bound", command: debugTailCmd,
+			prepare: func() { debugTailJSON, debugSelectorFlags.after = true, "yesterday" }, wantCode: "invalid_arguments", wantText: "--after"},
+		{name: "explain with an out-of-range limit", command: debugExplainCmd,
+			prepare: func() { debugExplainJSON, debugExplainMaxNodes = true, 0 }, wantCode: "invalid_arguments", wantText: "--max-nodes"},
+		{name: "probe with a selector it ignores", command: debugProbeCmd,
+			prepare: func() { debugProbeJSON, debugSelectorFlags.profile = true, "work" }, wantCode: "invalid_arguments", wantText: "--profile"},
+		{name: "bundle with an unknown mode", command: debugBundleCmd,
+			prepare: func() { debugBundleJSON, debugBundleMode = true, "bogus" }, wantCode: "invalid_arguments", wantText: "--mode"},
+		{name: "replay of a missing input", command: debugReplayCmd, args: []string{filepath.Join(t.TempDir(), "missing")},
+			prepare: func() { debugReplayJSON = true }, wantCode: "not_found", wantText: "missing"},
+		{name: "replay with no input", command: debugReplayCmd,
+			prepare: func() { debugReplayJSON = true }, wantCode: "missing_parameter", wantText: "JOURNAL_OR_BUNDLE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			debugSelectorFlags = debugSelectorFlagValues{}
+			debugTailJSON, debugExplainJSON, debugProbeJSON, debugReplayJSON = false, false, false, false
+			debugCaptureJSON, debugBundleJSON = false, false
+			debugTailLimit, debugExplainMaxNodes = 50, debugger.DefaultExplainMaxNodes
+			debugBundleMode = string(debugger.BundleModeShare)
+			tc.prepare()
+			var out bytes.Buffer
+			tc.command.SetOut(&out)
+			err := tc.command.RunE(tc.command, tc.args)
+			var exit *cli.ExitError
+			if !errors.As(err, &exit) || !exit.Quiet {
+				t.Fatalf("err = %#v, want a quiet exit after the envelope", err)
+			}
+			var envelope cli.JSONErrorEnvelope
+			if decodeErr := json.Unmarshal(out.Bytes(), &envelope); decodeErr != nil {
+				t.Fatalf("decode %q: %v", out.String(), decodeErr)
+			}
+			if envelope.SchemaVersion != cli.JSONSchemaVersion || envelope.Error.Code != tc.wantCode ||
+				!strings.Contains(envelope.Error.Message, tc.wantText) {
+				t.Fatalf("envelope = %+v, want code %q mentioning %q", envelope, tc.wantCode, tc.wantText)
+			}
+		})
+	}
+}
+
+// Probe and capture start refuse the record selectors they cannot honour, and
+// their help lists only the ones they take.
+func TestDebugProbeAndCaptureRefuseSelectorsTheyIgnore(t *testing.T) {
+	resetDebugTestState(t)
+	ignored := map[string]func(*debugSelectorFlagValues){
+		"profile":      func(f *debugSelectorFlagValues) { f.profile = "work" },
+		"session":      func(f *debugSelectorFlagValues) { f.sessionID = "s-1" },
+		"asl-run":      func(f *debugSelectorFlagValues) { f.aslRunID = "run-1" },
+		"event":        func(f *debugSelectorFlagValues) { f.event = "Stop" },
+		"source-event": func(f *debugSelectorFlagValues) { f.sourceEventID = "src-1" },
+		"outcome":      func(f *debugSelectorFlagValues) { f.outcomes = []string{"error"} },
+		"stage":        func(f *debugSelectorFlagValues) { f.stages = []string{"hook.delivery"} },
+		"after":        func(f *debugSelectorFlagValues) { f.after = "30m" },
+		"before":       func(f *debugSelectorFlagValues) { f.before = "30m" },
+	}
+	for name, set := range ignored {
+		debugSelectorFlags = debugSelectorFlagValues{windowID: 7}
+		set(&debugSelectorFlags)
+		probed := false
+		debugProbeClient = func() debugger.ProbeClient { probed = true; return debugTestProbe{} }
+		err := debugProbeCmd.RunE(debugProbeCmd, nil)
+		if err == nil || !strings.Contains(err.Error(), "--"+name) || probed {
+			t.Errorf("probe with --%s: err = %v, probed = %t", name, err, probed)
+		}
+	}
+
+	root := &cobra.Command{Use: "amx"}
+	root.AddCommand(debugCmd)
+	t.Cleanup(func() { root.RemoveCommand(debugCmd) })
+	for leaf, want := range map[*cobra.Command][]string{debugProbeCmd: debugProbeSelectors, debugCaptureStartCmd: debugCaptureSelectors} {
+		usage := inheritedFlagUsages(leaf, true)
+		for _, flag := range []string{"harness", "profile", "window", "trace", "request", "stage", "after"} {
+			listed := strings.Contains(usage, "--"+flag+" ")
+			if listed != slices.Contains(want, flag) {
+				t.Errorf("%s help lists --%s = %t:\n%s", leaf.CommandPath(), flag, listed, usage)
+			}
 		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
@@ -139,17 +140,22 @@ func jsonInt(v int64) string {
 
 func TestSnoozeCommandFailuresUseTheErrorEnvelope(t *testing.T) {
 	cases := map[string]struct {
-		client *fakeSnoozeClient
-		args   []string
-		code   string
+		client  *fakeSnoozeClient
+		args    []string
+		alive   bool
+		code    string
+		message string
 	}{
-		"invalid":     {&fakeSnoozeClient{}, []string{"soon"}, "invalid_arguments"},
-		"unreachable": {&fakeSnoozeClient{err: errors.New("dial unix: no such file")}, []string{"1h"}, "daemon_unavailable"},
-		"refused":     {&fakeSnoozeClient{err: errors.New("daemon error: notification_snooze: unknown snooze mode")}, []string{"1h"}, "snooze_refused"},
+		"invalid": {&fakeSnoozeClient{}, []string{"soon"}, true, "invalid_arguments", "not a duration"},
+		// A daemon that is not there is said in plain words, never as the
+		// socket error that revealed it.
+		"not running": {&fakeSnoozeClient{err: errors.New("dial unix /tmp/amx.sock: no such file")}, []string{"1h"}, false, "daemon_not_running", cli.DaemonNotRunningMessage},
+		"refused":     {&fakeSnoozeClient{err: errors.New("daemon error: notification_snooze: unknown snooze mode")}, []string{"1h"}, true, "daemon_error", "unknown snooze mode"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			useSnoozeClient(t, tc.client)
+			notificationsHealth = func() ipc.Health { return ipc.Health{Alive: tc.alive} }
 			out, err := runSnooze(t, true, tc.args...)
 			var exit *cli.ExitError
 			if !errors.As(err, &exit) || exit.Code == 0 || !exit.Quiet {
@@ -159,8 +165,8 @@ func TestSnoozeCommandFailuresUseTheErrorEnvelope(t *testing.T) {
 			if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil {
 				t.Fatalf("decoding %q: %v", out, decodeErr)
 			}
-			if envelope.SchemaVersion != 1 || envelope.Error.Code != tc.code {
-				t.Fatalf("envelope = %+v; want code %s", envelope, tc.code)
+			if envelope.SchemaVersion != 1 || envelope.Error.Code != tc.code || !strings.Contains(envelope.Error.Message, tc.message) {
+				t.Fatalf("envelope = %+v; want code %s mentioning %q", envelope, tc.code, tc.message)
 			}
 			if name == "invalid" && len(tc.client.requests) != 0 {
 				t.Fatal("an invalid argument still reached the daemon")
@@ -168,9 +174,10 @@ func TestSnoozeCommandFailuresUseTheErrorEnvelope(t *testing.T) {
 
 			// Text mode fails with the same nonzero status and no envelope.
 			useSnoozeClient(t, tc.client)
+			notificationsHealth = func() ipc.Health { return ipc.Health{Alive: tc.alive} }
 			out, err = runSnooze(t, false, tc.args...)
-			if err == nil || out != "" {
-				t.Fatalf("text mode: out = %q, err = %v; want a bare error", out, err)
+			if err == nil || out != "" || !strings.Contains(err.Error(), tc.message) {
+				t.Fatalf("text mode: out = %q, err = %v; want a bare error mentioning %q", out, err, tc.message)
 			}
 		})
 	}

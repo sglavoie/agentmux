@@ -19,7 +19,9 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/sglavoie/agentmux/cmd/config"
 	"github.com/sglavoie/agentmux/cmd/daemon"
 	"github.com/sglavoie/agentmux/cmd/dashboard"
@@ -207,6 +209,7 @@ func init() {
 	completeNoFilesByDefault(rootCmd)
 	completeSharedFlags(rootCmd)
 	aliasWindowFlags(rootCmd)
+	completeFlagsWithoutFiles(rootCmd)
 	wrapLongHelp(rootCmd)
 	// The dashboard's own flags are accepted as before but left out of
 	// `amx --help`, where they read as flags of every command; the
@@ -220,10 +223,10 @@ func init() {
 // helpWidth is the column a command description is wrapped at.
 const helpWidth = 80
 
-// wrapLongHelp wraps every description line wider than helpWidth at word
-// boundaries, so `--help` reads in a terminal of ordinary width whichever way
-// a family wrote its description (some build it from one-line strings).
-// Indented lines (lists, aligned tables, commands) are kept as written.
+// wrapLongHelp fills every description paragraph to helpWidth columns, so
+// `--help` reads in a terminal of ordinary width whichever way a family wrote
+// its description: built from one-line strings, assembled from shared
+// sentences, or wrapped by hand at another width.
 func wrapLongHelp(command *cobra.Command) {
 	command.Long = wrapHelpText(command.Long, helpWidth)
 	for _, child := range command.Commands() {
@@ -231,30 +234,89 @@ func wrapLongHelp(command *cobra.Command) {
 	}
 }
 
+// wrapHelpText refills each paragraph of text — a run of consecutive lines
+// that are neither blank nor indented — to width display columns. Breaking
+// each long line on its own would leave a short orphan wherever a family's
+// line ran a word or two over, so the paragraph is joined and filled as one.
+// Blank and indented lines (lists, aligned tables, commands) are kept as
+// written and end a paragraph. Width is measured in terminal columns, not
+// bytes, so a line with an emoji or an accented letter is not broken early.
 func wrapHelpText(text string, width int) string {
 	lines := strings.Split(text, "\n")
 	wrapped := make([]string, 0, len(lines))
+	var paragraph []string
+	flush := func() {
+		if len(paragraph) != 0 {
+			wrapped = append(wrapped, fillHelpParagraph(helpWords(strings.Join(paragraph, " ")), width)...)
+			paragraph = paragraph[:0]
+		}
+	}
 	for _, line := range lines {
-		if len(line) <= width || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			flush()
 			wrapped = append(wrapped, line)
 			continue
 		}
-		current := ""
-		for _, word := range strings.Fields(line) {
-			if current != "" && len(current)+1+len(word) > width {
-				wrapped = append(wrapped, current)
-				current = word
-				continue
-			}
-			if current == "" {
-				current = word
-			} else {
-				current += " " + word
-			}
-		}
-		wrapped = append(wrapped, current)
+		paragraph = append(paragraph, line)
 	}
+	flush()
 	return strings.Join(wrapped, "\n")
+}
+
+// fillHelpParagraph lays words out greedily in lines of at most width
+// columns; a word wider than width gets a line of its own.
+func fillHelpParagraph(words []string, width int) []string {
+	var lines []string
+	current, columns := "", 0
+	for _, word := range words {
+		wordColumns := runewidth.StringWidth(word)
+		if current != "" && columns+1+wordColumns > width {
+			lines = append(lines, current)
+			current, columns = "", 0
+		}
+		if current == "" {
+			current, columns = word, wordColumns
+			continue
+		}
+		current += " " + word
+		columns += 1 + wordColumns
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return lines
+}
+
+// helpWords splits prose at spaces, except inside a `code span`, which stays
+// on one line: `amx session list` broken after `amx` reads as two commands.
+// Text whose backticks do not pair up is split at every space.
+func helpWords(text string) []string {
+	var words []string
+	var current strings.Builder
+	inCode := false
+	for _, r := range text {
+		switch {
+		case r == '`':
+			inCode = !inCode
+			current.WriteRune(r)
+		case unicode.IsSpace(r) && inCode:
+			current.WriteRune(' ')
+		case unicode.IsSpace(r):
+			if current.Len() != 0 {
+				words = append(words, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+	if inCode {
+		return strings.Fields(text)
+	}
+	if current.Len() != 0 {
+		words = append(words, current.String())
+	}
+	return words
 }
 
 // aliasWindowFlags makes --window and --window-id, which name the same Kitty
@@ -282,11 +344,12 @@ func aliasWindowFlags(command *cobra.Command) {
 
 // completeSharedFlags gives the flags that mean the same thing on every
 // command one completion each, wherever a family did not register its own:
-// --runtime-session completes the running runtime sessions and --backend the
-// two backends.
+// --runtime-session and a surface's --select complete the running runtime
+// sessions, and --backend the two backends.
 func completeSharedFlags(command *cobra.Command) {
 	shared := map[string]cobra.CompletionFunc{
 		cli.RuntimeSessionFlag: cli.CompleteRuntimeSessions,
+		"select":               cli.CompleteRuntimeSessions,
 		cli.BackendFlag:        cli.CompleteBackends,
 	}
 	for name, complete := range shared {
@@ -299,6 +362,32 @@ func completeSharedFlags(command *cobra.Command) {
 	}
 	for _, child := range command.Commands() {
 		completeSharedFlags(child)
+	}
+}
+
+// pathFlags are the flags whose value is a file or directory, which keep the
+// shell's file completion.
+var pathFlags = map[string]bool{
+	"output": true, "file": true, "directory": true, "command": true,
+	"evidence-dir": true, "signing-key": true, "asl-root": true, "amx-root": true,
+}
+
+// completeFlagsWithoutFiles gives every flag that takes a value and has no
+// completion of its own no completion at all, as completeNoFilesByDefault
+// does for arguments: cobra's default is the shell's file completion, so
+// <Tab> after --limit or --trace offered the files in the current directory.
+// A flag that does take a path is named in pathFlags and left alone.
+func completeFlagsWithoutFiles(command *cobra.Command) {
+	command.NonInheritedFlags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Value.Type() == "bool" || pathFlags[flag.Name] {
+			return
+		}
+		if _, ok := command.GetFlagCompletionFunc(flag.Name); !ok {
+			_ = command.RegisterFlagCompletionFunc(flag.Name, cobra.NoFileCompletions)
+		}
+	})
+	for _, child := range command.Commands() {
+		completeFlagsWithoutFiles(child)
 	}
 }
 

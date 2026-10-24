@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,8 +56,9 @@ func TestActivityCommandRejectsUnboundedReads(t *testing.T) {
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs(args)
-		if err := cmd.Execute(); err == nil {
-			t.Fatalf("accepted %v", args)
+		// Each mistake is named on its own, rather than one message for both.
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), args[0]+" must be from") {
+			t.Fatalf("%v: err = %v", args, err)
 		}
 	}
 }

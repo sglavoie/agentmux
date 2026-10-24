@@ -215,6 +215,7 @@ func addSessionSelectionFlags(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc("project", completeSessionProjects)
 	cmd.Flags().Int("offset", 0, "skip this many matching sessions before applying --limit")
 	cmd.Flags().String("conversation", "", "only this exact harness:session-id (no prefix matching)")
+	_ = cmd.RegisterFlagCompletionFunc("conversation", completeExactConversation)
 	cmd.Flags().IntP("limit", "n", 0, "show at most this many of the most recent sessions (0 for all; a terminal shows 25 unless given)")
 	cmd.Flags().BoolP("all", "a", false, "include automated sessions (ASL runs, subagents, exec) and unclassified ones")
 }

@@ -203,7 +203,7 @@ var configASLSyncCmd = &cobra.Command{
 
 func init() {
 	configASLSyncCmd.Flags().StringVar(&configASLSyncCommand, "command", "",
-		"executable to pair with; defaults to defaults.asl.command, then `asl`")
+		"executable to pair with (default: [defaults.asl] command, else asl)")
 	configASLSyncCmd.Flags().BoolVar(&configASLSyncCheck, "check", false,
 		"run the full preflight and report what would change, without writing")
 	configASLSyncCmd.Flags().BoolVar(&configASLSyncJSON, "json", false, "emit schema-v1 JSON")

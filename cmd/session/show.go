@@ -57,21 +57,11 @@ fields are present only when messages were read.`,
 		from := int(sessionShowFrom)
 		count, _ := cmd.Flags().GetInt("count")
 		atText, _ := cmd.Flags().GetString("at")
-		var at time.Time
-		if atText != "" {
-			var err error
-			at, err = time.Parse(time.RFC3339Nano, atText)
-			if err != nil || query != "" || from >= 0 || last != 0 {
-				return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--at requires an RFC3339 timestamp and cannot be combined with --find, --from, or --last"))
-			}
+		at, err := sessionShowMessageFlags(last, query, match, from, count, atText)
+		if err != nil {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", err)
 		}
 		windowed := query != "" || from >= 0 || atText != ""
-		if from < -1 || count < 1 || count > 500 || match < 1 || (last != 0 && windowed) || (match != 1 && query == "") {
-			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("use --last alone, or --find/--from with --count 1–500 and a positive --match (requires --find)"))
-		}
-		if last < 0 {
-			return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--last %d: want 0 (metadata only) or a positive count", last))
-		}
 		identity, err := conversationIdentityFromArgs(cmd, jsonOutput, "show", args)
 		if err != nil {
 			return err
@@ -123,6 +113,50 @@ fields are present only when messages were read.`,
 		}
 		return writeSessionMessages(cmd.OutOrStdout(), *tail, sessionCommandsNow())
 	},
+}
+
+// sessionShowMessageFlags checks the flags that choose which messages show
+// reads, naming the one mistake made rather than restating every rule, and
+// returns the --at time when one was given. --last reads the end alone;
+// --find, --from, and --at each open a window of --count messages, and --at
+// stands alone; --match picks among --find's matches.
+func sessionShowMessageFlags(last int, query string, match, from, count int, atText string) (time.Time, error) {
+	if last < 0 {
+		return time.Time{}, fmt.Errorf("--last %d: want 0 (metadata only) or a positive count", last)
+	}
+	if from < -1 {
+		return time.Time{}, fmt.Errorf("--from %d: want a message index of 0 or more", from)
+	}
+	if count < 1 || count > 500 {
+		return time.Time{}, fmt.Errorf("--count must be from 1 to 500, got %d", count)
+	}
+	if match < 1 {
+		return time.Time{}, fmt.Errorf("--match %d: want a match number of 1 or more", match)
+	}
+	if match != 1 && query == "" {
+		return time.Time{}, errors.New("--match picks among the matches of --find, which was not given")
+	}
+	var at time.Time
+	if atText != "" {
+		var others []string
+		for flag, set := range map[string]bool{"--find": query != "", "--from": from >= 0, "--last": last != 0} {
+			if set {
+				others = append(others, flag)
+			}
+		}
+		if len(others) != 0 {
+			slices.Sort(others)
+			return time.Time{}, fmt.Errorf("--at cannot be combined with %s", strings.Join(others, " or "))
+		}
+		var err error
+		if at, err = time.Parse(time.RFC3339Nano, atText); err != nil {
+			return time.Time{}, fmt.Errorf("--at %q: want an RFC 3339 time, such as 2026-10-24T09:30:00Z", atText)
+		}
+	}
+	if last != 0 && (query != "" || from >= 0) {
+		return time.Time{}, errors.New("--last cannot be combined with --find or --from: it reads the end of the conversation, they open a window elsewhere")
+	}
+	return at, nil
 }
 
 type sessionShowData struct {

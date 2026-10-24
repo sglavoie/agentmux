@@ -3,7 +3,6 @@ package notifications
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -41,7 +40,8 @@ and restarting the daemon forgets it. Quiet hours are configuration and are
 unaffected. The daemon is not started on your behalf, because a snooze in a
 daemon that was not running would change nothing.
 
-With --json it reports {snoozed, indefinite, snoozed_until, until}.`,
+With --json it reports {snoozed, indefinite, snoozed_until, until}; a failure
+is a structured error (invalid_arguments, daemon_not_running, daemon_error).`,
 	Example: `  amx notifications snooze 1h
   amx notifications snooze until 08:30
   amx notifications snooze off --json`,
@@ -86,11 +86,13 @@ func runNotificationsSnooze(cmd *cobra.Command, args []string) error {
 	}
 	state, err := notificationsSnoozeClient().NotificationSnooze(req)
 	if err != nil {
-		code := "daemon_unavailable"
-		if strings.HasPrefix(err.Error(), "daemon error: ") {
-			code = "snooze_refused"
+		// As `amx daemon stop` does, the daemon's health tells a daemon that
+		// is not there from one that failed the request: the first is said in
+		// plain words, not as the socket error that revealed it.
+		if !notificationsHealth().Alive {
+			return cli.CommandFailure(cmd, snoozeJSON, "daemon_not_running", errors.New(cli.DaemonNotRunningMessage))
 		}
-		return cli.CommandFailure(cmd, snoozeJSON, code, fmt.Errorf("snooze notifications: %w", err))
+		return cli.CommandFailure(cmd, snoozeJSON, "daemon_error", fmt.Errorf("snooze notifications: %w", err))
 	}
 	if snoozeJSON {
 		return cli.WriteJSON(cmd, snoozePayloadOf(state))

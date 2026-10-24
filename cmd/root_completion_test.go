@@ -73,6 +73,17 @@ func TestStaticAndRuntimeSessionCompletions(t *testing.T) {
 		// --harness names a harness whatever positional arguments come first.
 		{[]string{"session", "search", "billing", "--harness", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"claude", "codex"}},
 		{[]string{"debug", "--harness", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"copilot"}},
+		// A surface's --select names a runtime session, and --conversation an
+		// exact conversation.
+		{[]string{"overview", "--select", ""}, runtimeDirective, nil},
+		{[]string{"past-sessions", "--select", ""}, runtimeDirective, nil},
+		{[]string{"session", "list", "--conversation", ""}, runtimeDirective, nil},
+		{[]string{"session", "search", "billing", "--conversation", ""}, runtimeDirective, nil},
+		// A flag that takes no path offers no files; one that does keeps them.
+		{[]string{"debug", "tail", "--trace", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"session", "list", "--limit", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"overview", "--client", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
+		{[]string{"debug", "bundle", "--output", ""}, cobra.ShellCompDirectiveDefault, nil},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			stdout, _, err := runRootArgs(t, append([]string{cobra.ShellCompNoDescRequestCmd}, tc.args...)...)

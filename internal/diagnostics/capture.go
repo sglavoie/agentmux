@@ -20,6 +20,9 @@ const (
 	CapturePayloadKeep   = 24 * time.Hour
 )
 
+// ErrNoCapture is what stopping returns when no capture was ever started.
+var ErrNoCapture = errors.New("diagnostics: no capture has been started")
+
 // CaptureScope limits a temporary raw-payload capture. At least one field is
 // required so an operator cannot accidentally enable a machine-wide capture.
 //
@@ -179,7 +182,7 @@ func (s *CaptureStore) Stop(ctx context.Context) (CaptureDescriptor, error) {
 		return CaptureDescriptor{}, errors.New("diagnostics: nil capture store")
 	}
 	if _, err := os.Lstat(s.descriptor); errors.Is(err, os.ErrNotExist) {
-		return CaptureDescriptor{}, errors.New("diagnostics: no capture has been started")
+		return CaptureDescriptor{}, ErrNoCapture
 	}
 	var stopped CaptureDescriptor
 	err := s.withLock(ctx, func() error {
@@ -189,7 +192,7 @@ func (s *CaptureStore) Stop(ctx context.Context) (CaptureDescriptor, error) {
 			return err
 		}
 		if current == nil {
-			return errors.New("diagnostics: no capture has been started")
+			return ErrNoCapture
 		}
 		stopped = *current
 		if stopped.Active() {

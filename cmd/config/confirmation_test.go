@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -43,8 +44,14 @@ func TestConfirmationReportsFreshConfigAndRejectsUnknownPolicy(t *testing.T) {
 			t.Fatalf("required=%t want %t", result.Data.Required, required)
 		}
 	}
+	// An unknown policy is the caller's mistake, not an unavailable answer.
 	_ = confirmationCmd.Flags().Set("policy", "typo")
+	var out bytes.Buffer
+	confirmationCmd.SetOut(&out)
 	if err := confirmationCmd.RunE(confirmationCmd, nil); err == nil {
 		t.Fatal("unknown policy accepted")
+	}
+	if !strings.Contains(out.String(), `"code":"invalid_arguments"`) || !strings.Contains(out.String(), "--policy") {
+		t.Fatalf("unknown policy output = %s", out.String())
 	}
 }

@@ -2,7 +2,6 @@ package session
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -29,8 +28,11 @@ earliest_available, truncated, corrupt_lines, matched}.`,
 			jsonOutput, _ := cmd.Flags().GetBool("json")
 			days, _ := cmd.Flags().GetInt("days")
 			limit, _ := cmd.Flags().GetInt("limit")
-			if days < 1 || days > 90 || limit < 1 || limit > 1000 {
-				return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", errors.New("days must be 1–90 and limit must be 1–1000"))
+			if days < 1 || days > 90 {
+				return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--days must be from 1 to 90, got %d", days))
+			}
+			if limit < 1 || limit > 1000 {
+				return cli.CommandFailure(cmd, jsonOutput, "invalid_arguments", fmt.Errorf("--limit must be from 1 to 1000, got %d", limit))
 			}
 			paths, err := diagnostics.DefaultPaths()
 			if err != nil {
@@ -62,7 +64,7 @@ earliest_available, truncated, corrupt_lines, matched}.`,
 		},
 	}
 	cli.AddJSONFlag(cmd, nil)
-	cmd.Flags().Int("days", 7, "look back this many days within retained journal history")
+	cmd.Flags().Int("days", 7, "look back this many days (1–90) within retained journal history")
 	cmd.Flags().Int("limit", 500, "maximum activity records (1–1000)")
 	return cmd
 }

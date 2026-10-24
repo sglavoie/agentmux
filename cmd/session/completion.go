@@ -56,6 +56,26 @@ func completeOneConversation(_ *cobra.Command, args []string, toComplete string)
 	return conversationSuggestions("", toComplete), conversationDirective
 }
 
+// completeExactConversation suggests what --conversation takes: the most
+// recent conversations as whole harness:session-id identities, since that
+// flag matches no prefix.
+func completeExactConversation(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	idx := completionIndex()
+	if idx == nil {
+		return nil, conversationDirective
+	}
+	var suggestions []string
+	for _, meta := range idx.List(transcript.ListFilter{MainOnly: true}) {
+		if len(suggestions) == sessionCompletionLimit {
+			break
+		}
+		if identity := meta.Harness + ":" + meta.ID; strings.HasPrefix(identity, toComplete) {
+			suggestions = append(suggestions, identity+"\t"+conversationDescription(meta))
+		}
+	}
+	return suggestions, conversationDirective
+}
+
 // conversationDirective keeps the most recent conversation first rather than
 // letting the shell sort the IDs, which would order them at random.
 const conversationDirective = cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveKeepOrder

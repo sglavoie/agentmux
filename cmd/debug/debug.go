@@ -12,10 +12,12 @@
 package debug
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -99,7 +101,7 @@ func addDebugRuntimeSessionFlag(cmd *cobra.Command) {
 func debugSessionTarget(windowID int) (int, string, error) {
 	named := strings.TrimSpace(debugRuntimeSession)
 	if named != "" && windowID != 0 {
-		return 0, "", fmt.Errorf("--%s cannot be used with --window", debugRuntimeSessionFlag)
+		return 0, "", debugInvalid(fmt.Errorf("--%s cannot be used with --window", debugRuntimeSessionFlag))
 	}
 	if windowID != 0 {
 		return windowID, "", nil
@@ -113,7 +115,7 @@ func debugSessionTarget(windowID int) (int, string, error) {
 	}
 	id, err := runtimesession.ParseID(named)
 	if err != nil {
-		return 0, "", fmt.Errorf("%s requires a valid runtime session ID, got %q; %s", source, named, cli.RuntimeSessionHint)
+		return 0, "", debugInvalid(fmt.Errorf("%s requires a valid runtime session ID, got %q; %s", source, named, cli.RuntimeSessionHint))
 	}
 	return 0, string(id), nil
 }
@@ -166,7 +168,7 @@ with stable identifiers. Selectors narrow the last-seen events it lists.`,
   amx debug status --profile work --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugStatus,
+	RunE:         debugJSONFailures(&debugStatusJSON, "status_unavailable", runDebugStatus),
 }
 
 var debugTailCmd = &cobra.Command{
@@ -182,7 +184,7 @@ and needs no running daemon.
   amx debug tail --follow --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugTail,
+	RunE:         debugJSONFailures(&debugTailJSON, "journal_unavailable", runDebugTail),
 }
 
 var debugProbeCmd = &cobra.Command{
@@ -192,13 +194,15 @@ var debugProbeCmd = &cobra.Command{
 report each stage it passed, the route it took, and whether it succeeded. The
 target is --runtime-session, or --window with --kitty-socket outside that
 Kitty, and otherwise the session this is typed in. Nothing is delivered to the
-session. It exits 2 when the probe fails.`,
+session. --harness, --trace, and --request label the request; the selectors
+that search recorded ones are refused. It exits 2 when the probe fails.`,
 	Example: `  amx debug probe
   amx debug probe --runtime-session rs-0123456789abcdef0123456789abcdef
   amx debug probe --window 12 --kitty-socket unix:/tmp/kitty-1234`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugProbe,
+	RunE:         debugJSONFailures(&debugProbeJSON, "probe_failed", runDebugProbe),
+	Annotations:  map[string]string{debugSelectorsAnnotation: strings.Join(debugProbeSelectors, ",")},
 }
 
 var debugExplainCmd = &cobra.Command{
@@ -216,7 +220,7 @@ links up to --graph-depth hops within --max-nodes and --max-edges.
   amx debug explain --request <request-id> --json`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE:         runDebugExplain,
+	RunE:         debugJSONFailures(&debugExplainJSON, "journal_unavailable", runDebugExplain),
 }
 
 func init() {
@@ -258,11 +262,11 @@ func init() {
 func debugSelector(now time.Time) (debugger.Selector, error) {
 	after, err := debugger.ParseTimeBound(debugSelectorFlags.after, now)
 	if err != nil {
-		return debugger.Selector{}, fmt.Errorf("--after: %w", err)
+		return debugger.Selector{}, debugInvalid(fmt.Errorf("--after: %w", err))
 	}
 	before, err := debugger.ParseTimeBound(debugSelectorFlags.before, now)
 	if err != nil {
-		return debugger.Selector{}, fmt.Errorf("--before: %w", err)
+		return debugger.Selector{}, debugInvalid(fmt.Errorf("--before: %w", err))
 	}
 	selector := debugger.Selector{
 		Harness: debugSelectorFlags.harness, Profile: debugSelectorFlags.profile,
@@ -273,9 +277,73 @@ func debugSelector(now time.Time) (debugger.Selector, error) {
 		Stages: append([]string(nil), debugSelectorFlags.stages...), After: after, Before: before,
 	}
 	if err := selector.Normalize(); err != nil {
-		return debugger.Selector{}, err
+		return debugger.Selector{}, debugInvalid(err)
 	}
 	return selector, nil
+}
+
+// debugSetSelectors names the selectors given a value that are not in
+// allowed, in the order `amx debug` declares them.
+func debugSetSelectors(allowed ...string) []string {
+	flags := debugSelectorFlags
+	selectors := []struct {
+		name string
+		set  bool
+	}{
+		{"harness", flags.harness != ""}, {"profile", flags.profile != ""}, {"window", flags.windowID != 0},
+		{"session", flags.sessionID != ""}, {"asl-run", flags.aslRunID != ""}, {"event", flags.event != ""},
+		{"trace", flags.traceID != ""}, {"request", flags.requestID != ""}, {"source-event", flags.sourceEventID != ""},
+		{"outcome", len(flags.outcomes) != 0}, {"stage", len(flags.stages) != 0},
+		{"after", flags.after != ""}, {"before", flags.before != ""},
+	}
+	var names []string
+	for _, selector := range selectors {
+		if selector.set && !slices.Contains(allowed, selector.name) {
+			names = append(names, "--"+selector.name)
+		}
+	}
+	return names
+}
+
+// debugCodedError is a debug failure whose error-envelope code is not the
+// command's default one: a mistake in the invocation, or a named condition.
+type debugCodedError struct {
+	code string
+	err  error
+}
+
+func (e debugCodedError) Error() string { return e.err.Error() }
+func (e debugCodedError) Unwrap() error { return e.err }
+
+// debugInvalid marks err as a mistake in the invocation (invalid_arguments).
+func debugInvalid(err error) error {
+	return debugCodedError{code: "invalid_arguments", err: err}
+}
+
+// debugJSONFailures gives a debug leaf the common error envelope on failure.
+// Its --json success output is a report with its own schema version, but a
+// report that could not be produced has no version to speak of, so a JSON
+// caller gets the structured error every other command emits instead of a
+// bare stderr line: the code of a debugCodedError, else the leaf's own. An
+// *cli.ExitError passes through, having already said what it had to (a
+// failed probe prints its report).
+func debugJSONFailures(jsonOutput *bool, code string, run func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		err := run(cmd, args)
+		if err == nil {
+			return nil
+		}
+		var exit *cli.ExitError
+		if errors.As(err, &exit) {
+			return err
+		}
+		failure := code
+		var coded debugCodedError
+		if errors.As(err, &coded) {
+			failure = coded.code
+		}
+		return cli.CommandFailure(cmd, *jsonOutput, failure, err)
+	}
 }
 
 func runDebugStatus(cmd *cobra.Command, _ []string) error {
