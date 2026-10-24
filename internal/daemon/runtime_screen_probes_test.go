@@ -64,6 +64,10 @@ type probedSession struct {
 	hook        func(event string) protocol.Response
 	// tick is one pass of the daemon's screen probes.
 	tick func(now time.Time)
+	// end closes the session the way its backend reports it gone: Kitty
+	// lists the window no more, or the registry records the runtime session
+	// ended and maintenance retires its slot.
+	end func()
 }
 
 const probedGeneration = "tmux-t-1"
@@ -174,6 +178,7 @@ func newProbedKittySessionOf(t *testing.T, agent probedHarness) *probedSession {
 			return h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: event, Harness: agent.name,
 				PayloadJSON: hookPayloadJSON(t, agent.payload(event))})
 		},
+		end: func() { h.pruneClosedWindows(time.Now(), map[int]bool{}) },
 	}
 }
 
@@ -209,6 +214,10 @@ func newProbedTmuxSessionOf(t *testing.T, agent probedHarness) (*probedSession, 
 			req := runtimeHook(t, runtime, event, agent.payload(event))
 			req.Harness = agent.name
 			return h.Handle(req)
+		},
+		end: func() {
+			directory.setState(runtime, runtimesession.StateEnded)
+			h.retireEndedRuntimeSessions(time.Now())
 		},
 	}
 	// The first hook is what gives the session its slot.
@@ -348,6 +357,35 @@ func TestHeldStopOfAnUnreadablePaneIsReleasedAtTheDeadlineOnEitherBackend(t *tes
 		ev := lastStopEvent(t, s.h, s.slot)
 		if ev.StopHoldOutcome != protocol.StopHoldOutcomeDeadline || ev.StopConfirmedBy != protocol.StopConfirmedByDeadline {
 			t.Fatalf("released stop = %q by %q; want the deadline", ev.StopHoldOutcome, ev.StopConfirmedBy)
+		}
+	})
+}
+
+// A session that ends while its stop is held is gone before the hold could
+// release it: the stop neither paints nor notifies, and the closed slot does
+// not come back. On tmux the binding that named the session goes with the
+// slot, so a release would notify under no session's name.
+func TestHeldStopOfASessionThatEndsIsDroppedOnEitherBackend(t *testing.T) {
+	eachProbedBackend(t, func(t *testing.T, s *probedSession) {
+		s.unreadable()
+		s.startTurn()
+		s.stopHeld()
+
+		s.end()
+		if _, held := terminalHoldPending(t, s.h, s.slot); held {
+			t.Fatal("the stop of an ended session stayed held")
+		}
+
+		time.Sleep(terminalHoldTestTimeout + time.Second)
+		synctest.Wait()
+		if got := s.rec.len(); got != 0 {
+			t.Fatalf("notifications = %d; want 0 (%+v)", got, s.rec.snapshot())
+		}
+		s.h.stateMu.Lock()
+		_, revived := s.h.store[s.slot]
+		s.h.stateMu.Unlock()
+		if revived {
+			t.Fatal("the held stop brought the closed slot's state back")
 		}
 	})
 }

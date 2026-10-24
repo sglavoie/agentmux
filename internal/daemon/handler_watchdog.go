@@ -757,6 +757,16 @@ func (h *Handler) dropClosedWindowsLocked(now time.Time, closed map[int]struct{}
 		delete(h.kittyRestored, id)
 		h.runtimeRoutes.releaseKittySlot(id)
 		h.recordWindowClosedLocked(id, now)
+		// A stop still held for the window has nothing left to paint. Left
+		// armed it would commit after the close, bring the window's state
+		// back, and notify about a session that is gone: for a runtime slot,
+		// with the binding that named it already released.
+		if pending, held := h.pendingStopHolds[id]; held {
+			if pending.timer != nil {
+				pending.timer.Stop()
+			}
+			delete(h.pendingStopHolds, id)
+		}
 	}
 	// ASL miss streaks and supervision records are per-window leases; a closed
 	// window can never corroborate a run again, so both go with it.
