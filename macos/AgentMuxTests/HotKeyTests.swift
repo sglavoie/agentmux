@@ -148,20 +148,22 @@ final class HotKeyTests: XCTestCase {
     /// A menu item keyed `!` or `}` with ⌘ alone is ⌘⇧1 or ⌘⇧], as AppKit
     /// matches it, so a shortcut on those keys collides with it.
     @MainActor
+    /// "Bigger Sidebars" is ⌥ and `+`, which is ⌥⇧= on the keyboard: a global
+    /// ⌥⇧= takes it, though the menu spells the key as the shifted character.
     func testShiftedPunctuationMenuKeysCollideWithTheirShiftCombos() throws {
-        for (name, base, shiftedKey) in [("1", "1", "!"), ("rightbracket", "]", "}")] {
-            let combo = try XCTUnwrap(HotKeyCombo(string: "shift+cmd+" + name))
+        for (name, base, shiftedKey) in [("equal", "=", "+"), ("minus", "-", "_")] {
+            let combo = try XCTUnwrap(HotKeyCombo(string: "shift+opt+" + name))
             guard combo.menuKeyEquivalent?.key == base else {
                 throw XCTSkip("the current keyboard layout does not put \(base) on that key")
             }
-            let keys = [HotKeyConflicts.MenuKey(title: "Item \(shiftedKey)", key: shiftedKey, modifiers: [.command])]
+            let keys = [HotKeyConflicts.MenuKey(title: "Item \(shiftedKey)", key: shiftedKey, modifiers: [.option])]
             XCTAssertEqual(
                 HotKeyConflicts.menuCollision(combo, menuKeys: keys),
                 "\(combo.displayString) is also the menu key for “Item \(shiftedKey)”, which stops working while this shortcut is set."
             )
-            XCTAssertNil(HotKeyConflicts.menuCollision(HotKeyCombo(string: "cmd+" + name), menuKeys: keys))
-            XCTAssertEqual(HotKeyConflicts.normalized(shiftedKey, [.command]),
-                           HotKeyConflicts.normalized(base, [.command, .shift]))
+            XCTAssertNil(HotKeyConflicts.menuCollision(HotKeyCombo(string: "opt+" + name), menuKeys: keys))
+            XCTAssertEqual(HotKeyConflicts.normalized(shiftedKey, [.option]),
+                           HotKeyConflicts.normalized(base, [.option, .shift]))
         }
     }
 
