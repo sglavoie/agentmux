@@ -41,10 +41,17 @@ func KittyUnreachable(err error) bool {
 // any other error alone.
 func PlainKittyError(err error) error {
 	if KittyUnreachable(err) {
-		return errors.New(KittyUnreachableMessage) //nolint:staticcheck // it opens with the name Kitty
+		return kittyUnreachableError{}
 	}
 	return err
 }
+
+// kittyUnreachableError is KittyUnreachableMessage as an error. The message
+// opens with the name Kitty, so it is a type of its own rather than an
+// errors.New string, which by convention starts in lower case.
+type kittyUnreachableError struct{}
+
+func (kittyUnreachableError) Error() string { return KittyUnreachableMessage }
 
 // KittyWindowLister is the read-only slice of the Kitty client that the
 // diagnostic and export surfaces need: they only ever enumerate the window

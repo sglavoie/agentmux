@@ -265,8 +265,8 @@ func TestFetchToleratesANilContext(t *testing.T) {
 	fakeRunner(t, func([]string) ([]byte, string, int, error) {
 		return mustJSON(t, validDocument()), "", 0, nil
 	})
-	//nolint:staticcheck // the nil context is the condition under test.
-	result, err := Fetch(nil, Options{Executable: "/opt/bin/asl", ContractSetID: testContractSet})
+	var unset context.Context // a nil context is the condition under test
+	result, err := Fetch(unset, Options{Executable: "/opt/bin/asl", ContractSetID: testContractSet})
 	if err != nil || !result.Availability.Available {
 		t.Fatalf("result = %+v err = %v", result.Availability, err)
 	}
