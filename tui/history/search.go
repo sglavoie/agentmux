@@ -191,7 +191,7 @@ func (in SearchInput) renderChips() string {
 func (in SearchInput) emptyHint() string {
 	var ways []string
 	if in.Query != "" {
-		ways = append(ways, "esc clears the query")
+		ways = append(ways, "esc clears the search")
 	}
 	if in.HarnessChip != "" || in.ProfileChip != "" || in.ProjectChip != "" || in.MessageSourceChip != "" {
 		ways = append(ways, "h/p/r/m change the filters")

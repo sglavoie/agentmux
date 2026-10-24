@@ -130,6 +130,34 @@ func TestFormatRowKeepsColumnsAlignedForLongAndWideValues(t *testing.T) {
 	}
 }
 
+// TestFormatRowKeepsBadgesWholeOnNarrowTerminals pins that the state badges,
+// which a row is triaged by, survive at every layout's narrowest width instead
+// of being the first thing truncated, and that the columns before them still
+// line up at each width.
+func TestFormatRowKeepsBadgesWholeOnNarrowTerminals(t *testing.T) {
+	entry := validView()
+	entry.ProjectLabel = "a-rather-long-project-name"
+	entry.Branch = "feature/a-rather-long-branch-name"
+	entry.Profile = "removed-profile-with-a-long-name"
+	entry.Classification = worktree.ClassificationMetadataInvalid
+	entry.Warnings = []string{"metadata unreadable"}
+	short := validView()
+	for _, width := range []int{60, 79, 80, 109, 110} {
+		row := FormatRow(entry, width)
+		if !strings.Contains(row, "[metadata_invalid][clean][warning]") {
+			t.Errorf("width %d: badges truncated: %q", width, row)
+		}
+		if got := layout.Width(row); got > width {
+			t.Errorf("width %d: row is %d cells wide", width, got)
+		}
+		a := layout.Width(row[:strings.Index(row, "[")])
+		other := FormatRow(short, width)
+		if b := layout.Width(other[:strings.Index(other, "[")]); a != b {
+			t.Errorf("width %d: badge column starts at %d and %d", width, a, b)
+		}
+	}
+}
+
 // TestFormatRowPlaceholdersAndTruncation checks that empty columns keep the
 // row aligned and that the row is truncated to the caller's width, including
 // the pre-resize fallback that must not collapse to zero.

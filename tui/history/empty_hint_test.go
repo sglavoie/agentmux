@@ -18,9 +18,9 @@ func TestEmptyResultsNameTheWayOut(t *testing.T) {
 		want string
 	}{
 		{"nothing to undo", SearchInput{}, "(no past sessions found — each profile's home_dir in config.toml says where to look)"},
-		{"query only", SearchInput{Query: "x"}, "(no sessions match — esc clears the query)"},
+		{"query only", SearchInput{Query: "x"}, "(no sessions match — esc clears the search)"},
 		{"chip only", SearchInput{ProjectChip: "api"}, "(no sessions match — h/p/r/m change the filters)"},
-		{"both", SearchInput{Query: "x", HarnessChip: "codex"}, "(no sessions match — esc clears the query · h/p/r/m change the filters)"},
+		{"both", SearchInput{Query: "x", HarnessChip: "codex"}, "(no sessions match — esc clears the search · h/p/r/m change the filters)"},
 		{"load failed", SearchInput{RefreshErr: errors.New("permission denied"), RefreshErrLabel: "Refresh error"}, "(could not load past sessions — esc, then reopen Past Sessions to retry)"},
 	}
 	for _, tc := range cases {

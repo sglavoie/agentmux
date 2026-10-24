@@ -271,7 +271,7 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 			matches = append(matches, candidate)
 		}
 	}
-	sort.Slice(matches, func(i, j int) bool { return matches[i].TabID < matches[j].TabID })
+	sortLiveSessions(matches)
 	requestedSession := strings.TrimSpace(request.Parameters["session"])
 	if requestedSession != "" {
 		for _, candidate := range matches {

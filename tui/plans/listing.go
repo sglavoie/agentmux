@@ -25,10 +25,15 @@ func NextSortMode(mode planindex.SortMode) planindex.SortMode {
 	}
 }
 
+// UnknownProject is how a plan with no project, and the project filter that
+// selects such plans, read. Past Sessions names a transcript with no project
+// the same way.
+const UnknownProject = "(unknown)"
+
 // projectLabel returns the project a plan belongs to for display in the Plans
 // list and viewer header. A plan whose metadata names no project falls back to
-// its first discovered project name, then to "Unknown", so a row never renders
-// an empty column.
+// its first discovered project name, then to UnknownProject, so a row never
+// renders an empty column.
 func projectLabel(meta planindex.PlanMeta) string {
 	if meta.Project != "" {
 		return meta.Project
@@ -36,5 +41,5 @@ func projectLabel(meta planindex.PlanMeta) string {
 	if projects := meta.ProjectNames(); len(projects) > 0 {
 		return projects[0]
 	}
-	return "Unknown"
+	return UnknownProject
 }

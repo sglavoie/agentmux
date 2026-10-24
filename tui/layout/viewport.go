@@ -46,9 +46,28 @@ type ListWindow struct {
 	ShowBottom bool
 }
 
+// MaxListOffset is the furthest a list of total rows can usefully be scrolled
+// inside a body height rows tall: the offset whose window ends on the last row.
+// Scrolled any further, the window would leave rows hidden above it while the
+// body had room for them below. A list that fits has nowhere to scroll, and
+// once scrolled the window spends a row on its ▲ marker, which is why the
+// answer is one past total-height; a one-row body draws no marker. A
+// non-positive height is unbounded.
+func MaxListOffset(total, height int) int {
+	if total <= 0 || height <= 0 || total <= height {
+		return 0
+	}
+	if height == 1 {
+		return total - 1
+	}
+	return total - height + 1
+}
+
 // ListWindowFor computes the visible ListWindow for a flat list of total rows
 // scrolled to offset inside a body height rows tall. A non-positive height
-// means "unbounded" and suppresses the scroll indicators.
+// means "unbounded" and suppresses the scroll indicators. An offset past
+// MaxListOffset is drawn from MaxListOffset, so a list that shrank under its
+// offset (a filter, a refresh) fills the body instead of hiding rows above.
 func ListWindowFor(total, offset, height int) ListWindow {
 	window := ListWindow{Start: 0, End: total}
 	if total <= 0 {
@@ -62,8 +81,8 @@ func ListWindowFor(total, offset, height int) ListWindow {
 	if offset < 0 {
 		offset = 0
 	}
-	if offset > total {
-		offset = total
+	if maxOffset := MaxListOffset(total, height); offset > maxOffset {
+		offset = maxOffset
 	}
 	window.Start = offset
 

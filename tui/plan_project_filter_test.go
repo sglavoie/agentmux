@@ -71,13 +71,13 @@ func TestPlanSearchAndViewerRenderProjectLabels(t *testing.T) {
 	if got := stripAnsi(tuiplans.FormatRow(plans.Result{Meta: known}, 100)); !strings.Contains(got, "[Primary]") {
 		t.Fatalf("known row missing project label: %q", got)
 	}
-	if got := stripAnsi(tuiplans.FormatRow(plans.Result{Meta: plans.PlanMeta{Name: "legacy"}}, 100)); !strings.Contains(got, "[Unknown]") {
+	if got := stripAnsi(tuiplans.FormatRow(plans.Result{Meta: plans.PlanMeta{Name: "legacy"}}, 100)); !strings.Contains(got, "  (unknown)  legacy") {
 		t.Fatalf("unknown row missing project label: %q", got)
 	}
 
 	m := planProjectFilterTestModel()
 	m.planFilterProject = plans.ProjectFilter{Kind: plans.ProjectUnknown}
-	if got := stripAnsi(renderPlanSearch(m)); !strings.Contains(got, "[r] project: Unknown") {
+	if got := stripAnsi(renderPlanSearch(m)); !strings.Contains(got, "[r] project: (unknown)") {
 		t.Fatalf("plan search missing active project chip:\n%s", got)
 	}
 	viewer := Model{width: 100, height: 20, viewerPlan: &known}

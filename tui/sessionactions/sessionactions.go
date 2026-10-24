@@ -339,7 +339,7 @@ func Definitions() []Definition {
 			ID:                 commands.CloseSession,
 			MenuGroup:          MenuGroupLifecycle,
 			Mnemonic:           Mnemonic{Display: "X", Key: "X"},
-			MenuLabel:          "End Session",
+			MenuLabel:          "End session",
 			MenuDescription:    "exit the harness process; transcript persists",
 			PaletteTitle:       static("End Session"),
 			PaletteDescription: "Exit the harness process while preserving its transcript.",

@@ -9,16 +9,22 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/worktree"
 )
 
-// WorktreeLiveSession is the stable, presentation-neutral subset of a Kitty
-// session exposed by worktree list/show and ambiguity errors.
+// WorktreeLiveSession is the stable, presentation-neutral subset of a live
+// session exposed by worktree list/show and ambiguity errors. ID is what
+// --live-session takes: a Kitty session's tab ID, or the runtime session of a
+// session on another backend, whose tab and window IDs mean nothing outside
+// the process that listed it. Backend is empty for Kitty.
 type WorktreeLiveSession struct {
 	ID               string `json:"id"`
 	TabID            int    `json:"tab_id"`
 	WindowID         int    `json:"window_id"`
+	Backend          string `json:"backend,omitempty"`
+	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
 	Project          string `json:"project,omitempty"`
 	Profile          string `json:"profile,omitempty"`
 	Harness          string `json:"harness,omitempty"`
@@ -70,9 +76,7 @@ func probeWorktreeUsage(deps Dependencies, entries []worktree.Entry) usageSnapsh
 				snapshot.live[entryKey(entry)] = append(snapshot.live[entryKey(entry)], candidate)
 			}
 		}
-		sort.Slice(snapshot.live[entryKey(entry)], func(i, j int) bool {
-			return snapshot.live[entryKey(entry)][i].TabID < snapshot.live[entryKey(entry)][j].TabID
-		})
+		sortLiveSessions(snapshot.live[entryKey(entry)])
 	}
 
 	loopProbe := deps.ActiveLoops
@@ -110,11 +114,42 @@ func worktreeView(entry worktree.Entry, snapshot usageSnapshot) WorktreeView {
 }
 
 func liveSessionView(value session.RunningSession) WorktreeLiveSession {
-	return WorktreeLiveSession{
-		ID: strconv.Itoa(value.TabID), TabID: value.TabID, WindowID: value.WindowID,
-		Project: value.EffectiveProject(), Profile: value.EffectiveProfile(),
+	view := WorktreeLiveSession{
+		ID: liveSessionID(value), TabID: value.TabID, WindowID: value.WindowID,
+		RuntimeSessionID: string(value.RuntimeSessionID),
+		Project:          value.EffectiveProject(), Profile: value.EffectiveProfile(),
 		Harness: value.Harness, HarnessSessionID: value.HarnessSessionID, Directory: value.Directory,
 	}
+	if value.BackendKind() != runtimesession.BackendKitty {
+		view.Backend = string(value.BackendKind())
+	}
+	return view
+}
+
+// liveSessionID is the candidate ID a live session is chosen by. A Kitty
+// session is named by its tab. A session on another backend has no tab the
+// CLI can name (it lists every tmux session at tab 0), so it is named by its
+// runtime session, or by its pane when it registered none.
+func liveSessionID(value session.RunningSession) string {
+	if value.BackendKind() == runtimesession.BackendKitty {
+		return strconv.Itoa(value.TabID)
+	}
+	if value.RuntimeSessionID != "" {
+		return string(value.RuntimeSessionID)
+	}
+	return value.PaneTarget().String()
+}
+
+// sortLiveSessions orders live sessions by tab and then by candidate ID, so
+// sessions that share a tab (every tmux session the CLI lists) come out in
+// the same order every time and a chosen candidate stays the one chosen.
+func sortLiveSessions(values []session.RunningSession) {
+	sort.SliceStable(values, func(i, j int) bool {
+		if values[i].TabID != values[j].TabID {
+			return values[i].TabID < values[j].TabID
+		}
+		return liveSessionID(values[i]) < liveSessionID(values[j])
+	})
 }
 
 func liveSessionCandidates(values []session.RunningSession) []Candidate {
@@ -124,6 +159,9 @@ func liveSessionCandidates(values []session.RunningSession) []Candidate {
 		label := strings.TrimSpace(view.Project)
 		if label == "" {
 			label = "Kitty tab " + view.ID
+			if view.Backend != "" {
+				label = view.Backend + " session " + view.ID
+			}
 		}
 		if view.Profile != "" {
 			label += " (" + view.Profile + ")"

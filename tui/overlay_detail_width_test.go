@@ -58,7 +58,7 @@ func TestConfirmHeaderPadsEmojiTitleIcon(t *testing.T) {
 		},
 	}
 	out := stripAnsi(renderConfirm(m))
-	if !strings.Contains(out, `End Session "🗣commscoach"?`) {
+	if !strings.Contains(out, `End session "🗣commscoach"?`) {
 		t.Errorf("expected title-icon column without phantom space in confirm header, got:\n%s", out)
 	}
 }

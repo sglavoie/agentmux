@@ -120,7 +120,7 @@ var helpSections = []struct {
 	}},
 	{"Health details", []string{
 		"  :         then \"Show Health Details\" (no dashboard key of its own)",
-		"  j/k ↑/↓   scroll; g/G jump to the ends; pgup/pgdn page",
+		"  j/k ↑/↓   scroll; g/G jump to the ends; ctrl+f/b page",
 		"  d         dismiss the configuration notice for this session",
 		"  esc/q     close",
 		"  (reads the cached checks; it never triggers a health refresh)",
@@ -138,7 +138,7 @@ var helpSections = []struct {
 		"  l         open session launcher (live filter + preview)",
 		"  /         filter launcher projects (DSL: @profile, word)",
 		"  space     select / deselect the highlighted project (in the launcher)",
-		"  enter     launch every selected project (in the launcher)",
+		"  enter     launch the selected projects, else the highlighted one",
 		"  f         cycle the launch profile (in the launcher)",
 		"  C         choose a profile for this launch (in the launcher)",
 		"  ctrl+e    edit launch settings in config.toml (in the launcher)",
@@ -160,7 +160,7 @@ var helpSections = []struct {
 		"  :         then \"Show Session Details\" to open it",
 		"  m         full session metadata ↔ event list",
 		"  t         flat event list ↔ phase timeline",
-		"  j/k ↑/↓   scroll; g/G jump to the ends; pgup/pgdn page",
+		"  j/k ↑/↓   scroll; g/G jump to the ends; ctrl+f/b page",
 		"  enter     fold / unfold the phase under the cursor (timeline)",
 		"  [ / ]     previous / next phase header (timeline)",
 		"  z / Z     collapse all / expand all phases (timeline)",
@@ -267,11 +267,11 @@ var helpPaletteSections = []struct {
 	palettes []helpPalette
 }{
 	{"Past Sessions", []helpPalette{
-		{"search", sessionSearchFooterPalette},
+		{"list", sessionSearchFooterPalette},
 		{"viewer", sessionViewFooterPalette},
 	}},
 	{"Plans", []helpPalette{
-		{"search", planSearchFooterPalette},
+		{"list", planSearchFooterPalette},
 		{"viewer", planViewFooterPalette},
 	}},
 	{"Worktrees", []helpPalette{

@@ -1582,7 +1582,7 @@ func TestAcceptanceAClosedSessionLeavesTheTreeAndIsRestoredByUndo(t *testing.T) 
 	// none of its own — says how to answer it.
 	frame := s.frame()
 	for _, want := range []string{
-		`End Session "svc02"?`,
+		`End session "svc02"?`,
 		"The harness process exits; its transcript is preserved.",
 		"y confirm",
 		"cancel",
@@ -1992,7 +1992,7 @@ func TestAcceptanceClosingTheHostingTabWarnsAndOffersNoUndo(t *testing.T) {
 	// whole or it does not arrive.
 	said := s.prose()
 	for _, want := range []string{
-		`End Session "` + acceptanceProject(1) + `"?`,
+		`End session "` + acceptanceProject(1) + `"?`,
 		"The harness process exits; its transcript is preserved.",
 		hostTabConsequence,
 	} {

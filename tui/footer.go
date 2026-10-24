@@ -25,7 +25,7 @@ func renderFooter(m Model) string {
 	case ModeSearch:
 		lines = nonEmptyFooterLines(
 			footerLine(m.width, " · ", "filter: @profile", "#project", "%harness", "!state (!attention)", "word", "\\@ \\# \\% \\! literal"),
-			footerStyledLine(m.width, "  ", chrome.Binding("enter", "apply"), chrome.Binding("esc", "cancel")),
+			footerStyledLine(m.width, " · ", chrome.Binding("enter", "apply"), chrome.Binding("esc", "cancel")),
 		)
 	case ModeConfirm:
 		lines = nonEmptyFooterLines(footerStyledLine(m.width, "   ",
@@ -36,7 +36,7 @@ func renderFooter(m Model) string {
 	case ModePicker:
 		if m.pickerDirMode {
 			lines = nonEmptyFooterLines(
-				footerStyledLine(m.width, "  ",
+				footerStyledLine(m.width, " · ",
 					chrome.Binding("enter", "apply"), chrome.Binding("tab", "complete"),
 					chrome.Binding("ctrl+u", "clear"), chrome.Binding("esc", "cancel"),
 				),
@@ -46,13 +46,13 @@ func renderFooter(m Model) string {
 		}
 		if m.pickerSearchMode {
 			lines = nonEmptyFooterLines(
-				footerStyledLine(m.width, "  ", chrome.Binding("enter", "apply"), chrome.Binding("esc", "cancel")),
-				footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word")),
+				footerStyledLine(m.width, " · ", chrome.Binding("enter", "apply"), chrome.Binding("esc", "cancel")),
+				footerStyledLine(m.width, " · ", styleFooter.Render("DSL: @profile, word")),
 			)
 			break
 		}
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ",
+			footerStyledLine(m.width, " · ",
 				chrome.Binding("space", "toggle"), chrome.Binding("enter", "launch"),
 				chrome.Binding("ctrl+e", "settings"),
 				chrome.Binding("f", "profile"), chrome.Binding("P", "pin"),
@@ -62,20 +62,20 @@ func renderFooter(m Model) string {
 				chrome.Binding("p", "preview"), chrome.Binding("esc", "clear/back"),
 				chrome.Binding("?", "help"),
 			),
-			footerStyledLine(m.width, "  ", styleFooter.Render("DSL: @profile, word"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom")),
+			footerStyledLine(m.width, " · ", styleFooter.Render("DSL: @profile, word"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom")),
 		)
 	case ModeConfigPicker:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", chrome.Binding("enter", "select"), chrome.Binding("esc/q", "cancel")),
-			footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down")),
+			footerStyledLine(m.width, " · ", chrome.Binding("enter", "select"), chrome.Binding("esc/q", "cancel")),
+			footerStyledLine(m.width, " · ", chrome.Binding("j/k", "up/down")),
 		)
 	case ModeLiveSessionPicker:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", chrome.Binding("enter", "focus"), chrome.Binding("esc/q", "cancel")),
-			footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down")),
+			footerStyledLine(m.width, " · ", chrome.Binding("enter", "focus"), chrome.Binding("esc/q", "cancel")),
+			footerStyledLine(m.width, " · ", chrome.Binding("j/k", "up/down")),
 		)
 	case ModeHelp:
-		lines = nonEmptyFooterLines(footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("esc/?/q", "close")))
+		lines = nonEmptyFooterLines(footerStyledLine(m.width, " · ", chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("esc/?/q", "close")))
 	case ModeActions:
 		// The menu carries its own hint line — select, run, the letters, and how
 		// to close — so this row said the same three things a second time, in a
@@ -94,23 +94,23 @@ func renderFooter(m Model) string {
 		lines = nil
 	case ModeChipPicker:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", chrome.Binding("enter", "select"), chrome.Binding("esc/q", "cancel")),
-			footerStyledLine(m.width, "  ", chrome.Binding("/", "search"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("pgup/pgdn", "page")),
+			footerStyledLine(m.width, " · ", chrome.Binding("enter", "select"), chrome.Binding("esc/q", "cancel")),
+			footerStyledLine(m.width, " · ", chrome.Binding("/", "search"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("ctrl+f/b", "page")),
 		)
 	case ModeProjectSwitcher:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", chrome.Binding("enter", "apply scope"), chrome.Binding("esc/q/p", "cancel")),
-			footerStyledLine(m.width, "  ", chrome.Binding("/", "search"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("pgup/pgdn", "page")),
+			footerStyledLine(m.width, " · ", chrome.Binding("enter", "apply scope"), chrome.Binding("esc/q/p", "cancel")),
+			footerStyledLine(m.width, " · ", chrome.Binding("/", "search"), chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("ctrl+f/b", "page")),
 		)
 	case ModeFeedback:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", chrome.Binding("tab", "next notice"), chrome.Binding("j/k", "scroll"), chrome.Binding("enter", "inspect"), chrome.Binding("u", "recover")),
-			footerStyledLine(m.width, "  ", chrome.Binding("y/Y", "copy/all"), chrome.Binding("d/D", "dismiss/all"), chrome.Binding("h", "health"), chrome.Binding("esc/q", "close")),
+			footerStyledLine(m.width, " · ", chrome.Binding("tab", "next notice"), chrome.Binding("j/k", "scroll"), chrome.Binding("enter", "inspect"), chrome.Binding("u", "recover")),
+			footerStyledLine(m.width, " · ", chrome.Binding("y/Y", "copy/all"), chrome.Binding("d/D", "dismiss/all"), chrome.Binding("h", "health"), chrome.Binding("esc/q", "close")),
 		)
 	case ModeHealth:
 		lines = nonEmptyFooterLines(
-			footerStyledLine(m.width, "  ", chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("pgup/pgdn", "page")),
-			footerStyledLine(m.width, "  ", healthDismissFooterBinding(m), chrome.Binding("esc/q", "close")),
+			footerStyledLine(m.width, " · ", chrome.Binding("j/k", "up/down"), chrome.Binding("g/G", "top/bottom"), chrome.Binding("ctrl+f/b", "page")),
+			footerStyledLine(m.width, " · ", healthDismissFooterBinding(m), chrome.Binding("esc/q", "close")),
 		)
 	case ModeSessionSearch:
 		if m.sessionSearchMode {

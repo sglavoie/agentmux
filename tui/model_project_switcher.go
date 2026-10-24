@@ -24,6 +24,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // projectScopes is the contextual project aggregation the switcher lists. Only
@@ -198,10 +199,10 @@ func (m Model) handleProjectSwitcherNavKey(msg tea.KeyPressMsg) (tea.Model, tea.
 	case keyGG, keyEnd:
 		m.selectProjectScopeAt(len(projectSwitcherScopes(m)) - 1)
 		return m, nil
-	case keyPgDown:
+	case keyPgDown, keyCtrlF:
 		m.moveProjectSwitcherCursor(fullPageStep(projectSwitcherVisibleHeight(m)))
 		return m, nil
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		m.moveProjectSwitcherCursor(-fullPageStep(projectSwitcherVisibleHeight(m)))
 		return m, nil
 	case keyCtrlD:
@@ -245,6 +246,11 @@ func scrollProjectSwitcherToCursor(m *Model) {
 			break
 		}
 		m.projectSwitcherOffset++
+	}
+	// A list that shrank under the offset is drawn from its furthest useful
+	// offset; holding the same one keeps the next move from jumping.
+	if maxOffset := layout.MaxListOffset(total, height); m.projectSwitcherOffset > maxOffset {
+		m.projectSwitcherOffset = maxOffset
 	}
 	if m.projectSwitcherOffset < 0 {
 		m.projectSwitcherOffset = 0

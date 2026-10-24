@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/layout"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
 )
 
@@ -273,8 +274,9 @@ func scrollWorktreesToCursor(m *Model) {
 		}
 		m.worktreeOffset++
 	}
-	maxOffset := total - 1
-	if m.worktreeOffset > maxOffset {
+	// A list that shrank under the offset (a filter, a refresh) is drawn from
+	// its furthest useful offset rather than hiding rows above the window.
+	if maxOffset := layout.MaxListOffset(total, height); m.worktreeOffset > maxOffset {
 		m.worktreeOffset = maxOffset
 	}
 	if m.worktreeOffset < 0 {
@@ -566,18 +568,21 @@ func (m Model) handleWorktreeReopenDone(msg worktreeActionDoneMsg) (tea.Model, t
 	if msg.err == nil {
 		m.actionErr = nil
 		m.worktreeActionTarget = nil
+		// A reopen changes what the list shows (the live-session count, the
+		// state badge), so it refreshes like remove, forget, and land do.
 		// A live session on a backend with no view of its own was found, not
 		// focused: show it by attaching this terminal.
 		if msg.result.Data["continuation"] == actions.DataContinuationAttach {
 			if live, ok := msg.result.Data["session"].(actions.WorktreeLiveSession); ok {
-				return m, commands.Focus(m.client, live.TabID)
+				updated, refresh := m.startWorktreeRefresh()
+				return updated, tea.Batch(refresh, commands.Focus(m.client, live.TabID))
 			}
 		}
 		text := msg.result.Message
 		if text == "" {
 			text = "Worktree reopened"
 		}
-		return m, m.pushToast(Toast{Severity: toastSuccess, Text: text})
+		return m.refreshWorktreesWithToast(Toast{Severity: toastSuccess, Text: text})
 	}
 	var actionErr *actions.Error
 	if errors.As(msg.err, &actionErr) {

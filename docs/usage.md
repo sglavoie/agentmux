@@ -785,7 +785,9 @@ its own badge/metadata columns.
 - `f` cycles project visibility through each default profile and back to all,
 - `g` / `G` jump to the top / bottom,
 - `space` toggles selection,
-- `enter` launches the selected projects,
+- `enter` launches the selected projects, or the highlighted one when nothing
+  is selected. A selected project the `/` filter hides is skipped and the
+  launcher says how many; with nothing to launch it stays open and says why,
 - `P` pins or unpins the highlighted project so pinned projects stay at the top,
 - `s` searches past session transcripts for the highlighted project,
 - `C` chooses a **one-time profile override** for the highlighted project,
@@ -1463,7 +1465,7 @@ background. A missing or malformed cache is quarantined and rebuilt from the
 plan directories; an unreadable plan never blanks rows that were read
 successfully. Each row and viewer header shows the associated configured
 project title. Press `r` to filter by the projects represented in the index or
-by `Unknown`; equally specific configuration aliases are separate filter
+by `(unknown)`; equally specific configuration aliases are separate filter
 choices and match the same plans. `/` searches, `o` cycles the result sort
 between match count and recency, `O` (or `e`) opens
 the selected plan directory in your editor, `Y` copies the plan directory, and `enter` opens the viewer. The viewer

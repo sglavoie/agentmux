@@ -1,6 +1,9 @@
 package tui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // ---- Empty-filter cursor safety tests (picker) ----
 //
@@ -23,8 +26,8 @@ func pressKeyPickerSafe(t *testing.T, m Model, key string) Model {
 }
 
 // TestPickerEmptyFilterNavigationIsSafe drives every navigation key after
-// narrowing the picker filter to zero rows. Excludes `enter` because it
-// intentionally exits to ModeList — that path is covered separately.
+// narrowing the picker filter to zero rows. Excludes `enter`, whose
+// nothing-to-launch warning is covered separately.
 func TestPickerEmptyFilterNavigationIsSafe(t *testing.T) {
 	t.Parallel()
 
@@ -56,10 +59,10 @@ func TestPickerEmptyFilterNavigationIsSafe(t *testing.T) {
 	}
 }
 
-// TestPickerEnterOnEmptyFilterExitsCleanly drives `enter` while the picker
-// filter matches zero rows. With nothing selectable the launch is a no-op,
-// but the handler must still cleanly exit to ModeList and not panic.
-func TestPickerEnterOnEmptyFilterExitsCleanly(t *testing.T) {
+// TestPickerEnterOnEmptyFilterStaysWithWarning drives `enter` while the
+// picker filter matches zero rows. With nothing to launch the launcher stays
+// open, does not panic, and says why in a warning toast.
+func TestPickerEnterOnEmptyFilterStaysWithWarning(t *testing.T) {
 	t.Parallel()
 
 	m := pickerModel(t)
@@ -71,13 +74,68 @@ func TestPickerEnterOnEmptyFilterExitsCleanly(t *testing.T) {
 		t.Fatalf("setup: expected 0 matches, got %d", len(m.pickerFilteredIdx))
 	}
 	m = pressKey(m, "enter") // search → nav
-	updated, cmd := m.Update(keyPress("enter"))
+	updated, _ := m.Update(keyPress("enter"))
 	m2 := updated.(Model)
-	if m2.mode != ModeList {
-		t.Errorf("expected ModeList after enter on empty-filter picker, got %d", m2.mode)
+	if m2.mode != ModePicker {
+		t.Errorf("expected ModePicker after enter with nothing to launch, got %d", m2.mode)
 	}
-	if cmd != nil {
-		t.Errorf("expected nil cmd from empty-selection launch, got non-nil")
+	if n := len(m2.toasts); n == 0 || m2.toasts[n-1].Severity != toastWarning ||
+		!strings.Contains(m2.toasts[n-1].Text, "Nothing to launch") {
+		t.Errorf("expected a 'Nothing to launch' warning toast, got %+v", m2.toasts)
+	}
+	if m2.launchBatchID != m.launchBatchID {
+		t.Errorf("expected no launch batch, batch ID moved %d → %d", m.launchBatchID, m2.launchBatchID)
+	}
+}
+
+// TestPickerEnterLaunchesHighlightedWithNothingChecked pins the README's
+// "highlight your project, and press Enter": with no checkbox ticked, Enter
+// launches the highlighted project rather than nothing.
+func TestPickerEnterLaunchesHighlightedWithNothingChecked(t *testing.T) {
+	t.Parallel()
+
+	m := pickerModel(t)
+	if len(m.pickerFilteredIdx) == 0 {
+		t.Fatal("setup: expected visible projects")
+	}
+	todo, hidden := m.pickerInput().LaunchQueue()
+	if len(todo) != 1 || hidden != 0 {
+		t.Fatalf("expected the highlighted project queued, got %d (hidden %d)", len(todo), hidden)
+	}
+	want := m.pickerSessions[m.pickerFilteredIdx[m.pickerCursor]].Title
+	if todo[0].Session.Title != want {
+		t.Errorf("queued %q, want highlighted %q", todo[0].Session.Title, want)
+	}
+	updated, cmd := m.Update(keyPress("enter"))
+	if updated.(Model).mode != ModeList || cmd == nil {
+		t.Errorf("expected a launch and ModeList, got mode=%d cmd=%v", updated.(Model).mode, cmd != nil)
+	}
+}
+
+// TestPickerEnterSkipsCheckedProjectsTheFilterHides verifies a checked
+// project the filter hides is not launched, and is counted for the warning.
+func TestPickerEnterSkipsCheckedProjectsTheFilterHides(t *testing.T) {
+	t.Parallel()
+
+	m := pickerModel(t)
+	if len(m.pickerSessions) < 2 {
+		t.Fatal("setup: expected at least two projects")
+	}
+	m.pickerSelected = map[int]bool{0: true, 1: true}
+	m.pickerFilteredIdx = []int{1}
+	m.pickerCursor = 0
+	todo, hidden := m.pickerInput().LaunchQueue()
+	if len(todo) != 1 || hidden != 1 {
+		t.Fatalf("expected 1 queued and 1 hidden, got %d and %d", len(todo), hidden)
+	}
+	if todo[0].Session.Title != m.pickerSessions[1].Title {
+		t.Errorf("queued %q, want the visible checked %q", todo[0].Session.Title, m.pickerSessions[1].Title)
+	}
+
+	m.pickerFilteredIdx = nil
+	todo, hidden = m.pickerInput().LaunchQueue()
+	if len(todo) != 0 || hidden != 2 {
+		t.Fatalf("expected nothing queued and 2 hidden, got %d and %d", len(todo), hidden)
 	}
 }
 

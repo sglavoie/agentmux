@@ -28,6 +28,17 @@ type DetailInput struct {
 	Cfg      *config.Config
 	Watchdog map[int]protocol.WatchdogState
 
+	// LastActivity and IdleThreshold group the session the way its dashboard
+	// row is, so the header names its state in the row's words.
+	LastActivity  map[int]time.Time
+	IdleThreshold time.Duration
+
+	// Location names the session when it is no longer listed: its Kitty
+	// window, its backend and runtime session, or nothing when neither is
+	// known. The root resolves it, since only the root can tell a
+	// process-local portable ID from a Kitty window ID.
+	Location string
+
 	Err     error
 	Loading bool
 	Scroll  int

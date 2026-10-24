@@ -267,8 +267,8 @@ func TestHelpPreservesModeSpecificMeaning(t *testing.T) {
 
 	// The three meanings F-002 reported as suppressed by first-label-wins.
 	for _, want := range []string{
-		"enter     view (search) · view message (viewer)",
-		"/         filter (search) · refine query (viewer)",
+		"enter     view (list) · view message (viewer)",
+		"/         search (list) · refine query (viewer)",
 		"j/k       up/down",
 	} {
 		if !strings.Contains(out, want) {
@@ -345,8 +345,8 @@ func TestHelpScopesModeExclusiveKeys(t *testing.T) {
 
 	// The four mode-exclusive keys F-002 named as rendered without a scope.
 	for _, want := range []string{
-		"d         delete (search)",
-		"o         sort (search)",
+		"d         delete (list)",
+		"o         sort (list)",
 		"n/N       match (viewer)",
 		"y         copy (viewer)",
 	} {

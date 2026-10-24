@@ -21,6 +21,7 @@ func planSearchInput(m Model) tuiplans.SearchInput {
 		Query:         m.planQuery,
 		SearchMode:    m.planSearchMode,
 		Loading:       m.planLoading,
+		Scanning:      planScanning(m),
 		Results:       m.planResults,
 		Cursor:        m.planCursor,
 		Offset:        m.planOffset,
@@ -29,6 +30,12 @@ func planSearchInput(m Model) tuiplans.SearchInput {
 		RefreshErr:    m.planRefreshErr,
 		SearchErr:     m.planSearchErr,
 	}
+}
+
+// planScanning reports whether the plan files themselves are being read: the
+// warm cache load or the source refresh, rather than a query alone.
+func planScanning(m Model) bool {
+	return m.planLoading && (m.planCacheLoadInFlight || m.planScanSeq != 0)
 }
 
 // planViewerInput projects the model onto the plan viewer's input value.

@@ -367,6 +367,11 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case keyEnter:
+		// With nothing to launch the launcher stays open and says why, rather
+		// than closing as though something had started.
+		if todo, hidden := m.pickerInput().LaunchQueue(); len(todo) == 0 {
+			return m, m.pushToast(Toast{Severity: toastWarning, Text: launch.NothingToLaunchText(hidden)})
+		}
 		cmd := m.dispatchPickerLaunch()
 		m.mode = ModeList
 		m.pickerSelected = nil
@@ -539,11 +544,17 @@ func (m *Model) dashboardLaunchWithProfileCmd(rs session.RunningSession, profile
 
 // dispatchPickerLaunch starts a multi-session launch and returns a batch of
 // per-session commands. Each command emits a launchProgressMsg the model
-// uses to drive the progress toast (1/N, 2/N, …). Returns nil when no session
-// is selected so the caller doesn't dispatch a dud cmd. Running picker rows
-// are explicit requests for another same-key tab.
+// uses to drive the progress toast (1/N, 2/N, …). Returns nil when there is
+// nothing to launch so the caller doesn't dispatch a dud cmd. Running picker
+// rows are explicit requests for another same-key tab. Checked projects the
+// filter hides are skipped, and a warning says how many.
 func (m *Model) dispatchPickerLaunch() tea.Cmd {
-	return m.launchBatchCmd(m.pickerInput().LaunchQueue(), true)
+	todo, hidden := m.pickerInput().LaunchQueue()
+	cmd := m.launchBatchCmd(todo, true)
+	if cmd == nil || hidden == 0 {
+		return cmd
+	}
+	return tea.Batch(cmd, m.pushToast(Toast{Severity: toastWarning, Text: launch.HiddenSkippedText(hidden)}))
 }
 
 // handleLaunchProgress updates the progress toast for a finished

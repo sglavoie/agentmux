@@ -59,7 +59,7 @@ func (in DetailInput) renderMetadata() string {
 	} else {
 		lines = append(lines, "")
 	}
-	lines = append(lines, "m events · ↑/↓ scroll · pgup/pgdn page · esc close")
+	lines = append(lines, "m events · ↑/↓ scroll · ctrl+f/b page · esc close")
 	// Bound the footer/header too; the root compositor constrains the overlay.
 	for i, line := range lines {
 		lines[i] = layout.Truncate(line, max(1, in.detailRowWidth()), "…")

@@ -228,7 +228,7 @@ func TestActionsOverlayReflectsDashboardRemap(t *testing.T) {
 		rows[key] = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(line), key))
 	}
 	for key, label := range map[string]string{
-		"C": "Launch another session", "x": "Clear status", "X": "End Session",
+		"C": "Launch another session", "x": "Clear status", "X": "End session",
 	} {
 		if got := rows[key]; got != label {
 			t.Errorf("actions overlay row for %q = %q, want %q; got:\n%s", key, got, label, out)
@@ -236,13 +236,13 @@ func TestActionsOverlayReflectsDashboardRemap(t *testing.T) {
 	}
 	// The remap is a swap, so the stale pairings are the interesting negative:
 	// `x` used to close and `C` used to clear.
-	if rows["x"] == "End Session" || rows["C"] == "Clear status" {
+	if rows["x"] == "End session" || rows["C"] == "Clear status" {
 		t.Errorf("stale key mapping survives in:\n%s", out)
 	}
 	if strings.Index(out, "Launch another session") > strings.Index(out, "Clear status") {
 		t.Errorf("expected dashboard launch to appear before clear icon, got:\n%s", out)
 	}
-	if strings.Index(out, "Clear status") > strings.Index(out, "End Session") {
+	if strings.Index(out, "Clear status") > strings.Index(out, "End session") {
 		t.Errorf("expected clear icon to appear before close, got:\n%s", out)
 	}
 }
@@ -329,7 +329,7 @@ func TestActionsMenuEnterRunsTheSelectedEntry(t *testing.T) {
 	if out.mode != ModeConfirm {
 		t.Fatalf("mode after enter = %d, want ModeConfirm", out.mode)
 	}
-	if body := stripAnsi(renderConfirm(out)); !strings.Contains(body, "End Session") {
+	if body := stripAnsi(renderConfirm(out)); !strings.Contains(body, "End session") {
 		t.Errorf("the confirmation does not name the selected action:\n%s", body)
 	}
 }

@@ -1,0 +1,48 @@
+{
+  "name": "picker-enter-nothing-to-launch-narrow-fit",
+  "fixture": "basic",
+  "size": {
+    "width": 60,
+    "height": 24
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "l"
+    },
+    {
+      "type": "key",
+      "key": "/"
+    },
+    {
+      "type": "text",
+      "text": "zzzz"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "picker"
+    },
+    {
+      "type": "contains_text",
+      "text": "Nothing to launch: no project matches"
+    },
+    {
+      "type": "kitty_calls",
+      "op": "LaunchTab",
+      "count": 0
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

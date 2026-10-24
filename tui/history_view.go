@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/history"
 )
@@ -25,6 +27,9 @@ func historyDetailInput(m Model) history.DetailInput {
 		Sessions:       m.sessions,
 		Cfg:            m.cfg,
 		Watchdog:       m.watchdog,
+		LastActivity:   m.lastActivity,
+		IdleThreshold:  m.idleThreshold,
+		Location:       detailLocation(m),
 		Err:            m.detailErr,
 		Loading:        m.detailLoading,
 		Scroll:         m.detailScroll,
@@ -39,6 +44,28 @@ func historyDetailInput(m Model) history.DetailInput {
 		ShowTimestamps: m.detailShowTimestamps,
 		Now:            time.Now(),
 	}
+}
+
+// detailLocation names the session the detail overlay is open on: its Kitty
+// window, or its backend and runtime session. A portable ID whose session is
+// no longer listed names nothing, since the number is this process's own.
+func detailLocation(m Model) string {
+	id := m.detailWindowID
+	if id <= 0 {
+		return ""
+	}
+	for _, s := range m.sessions {
+		if s.WindowID == id {
+			return dashboard.SessionLocation(s)
+		}
+	}
+	if rs, ok := commands.PortableSession(id); ok {
+		return dashboard.SessionLocation(rs)
+	}
+	if id >= commands.PortableIDBase {
+		return ""
+	}
+	return fmt.Sprintf("window %d", id)
 }
 
 func renderDetail(m Model) string {

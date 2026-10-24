@@ -30,7 +30,11 @@ type SearchInput struct {
 
 	Query      string
 	SearchMode bool
-	Loading    bool
+	// Loading is any search or scan in flight; Scanning is the part of it
+	// that reads the plan files themselves (the cache load and the source
+	// refresh), as opposed to a query being matched against the index.
+	Loading  bool
+	Scanning bool
 
 	Results []planindex.Result
 	Cursor  int
@@ -76,13 +80,17 @@ func (in SearchInput) errorLines() int {
 func (in SearchInput) Render() string {
 	var sb strings.Builder
 
+	// The count and sort stay up while a query or a scan runs, as Past
+	// Sessions' do: the rows below are still the last answer, and a header
+	// that blanked on every keystroke would flicker while typing.
 	header := "Plans"
 	count := len(in.Results)
-	if in.Loading {
-		header += "  " + styleDim.Render("(scanning…)")
-	} else {
+	if count > 0 || !in.Loading {
 		header += "  " + styleDim.Render(fmt.Sprintf("[%d result%s · sort: %s]",
 			count, plural(count), sortLabel(in.SortMode)))
+	}
+	if label := in.LoadingLabel(); label != "" {
+		header += "  " + styleDim.Render("("+label+")")
 	}
 	sb.WriteString(layout.ClampLine(styleHeader.Render(header), in.Width))
 	sb.WriteByte('\n')
@@ -122,6 +130,19 @@ func (in SearchInput) Render() string {
 	return sb.String()
 }
 
+// LoadingLabel names what is in flight: "scanning…" only while the plan files
+// themselves are read, "searching…" while a query is matched, and nothing at
+// rest.
+func (in SearchInput) LoadingLabel() string {
+	switch {
+	case in.Scanning:
+		return "scanning…"
+	case in.Loading:
+		return "searching…"
+	}
+	return ""
+}
+
 func (in SearchInput) renderProjectChip() string {
 	label := "any"
 	active := false
@@ -130,7 +151,7 @@ func (in SearchInput) renderProjectChip() string {
 		label = in.FilterProject.Name
 		active = true
 	case planindex.ProjectUnknown:
-		label = "Unknown"
+		label = UnknownProject
 		active = true
 	}
 	chip := "[r] project: " + label
@@ -147,7 +168,7 @@ func (in SearchInput) renderProjectChip() string {
 func (in SearchInput) emptyHint() string {
 	var ways []string
 	if in.Query != "" {
-		ways = append(ways, "esc clears the query")
+		ways = append(ways, "esc clears the search")
 	}
 	if in.FilterProject.Kind != planindex.ProjectAny {
 		ways = append(ways, "r changes the project")
@@ -237,7 +258,11 @@ func FormatRow(res planindex.Result, maxWidth int) string {
 
 	project := projectLabel(res.Meta)
 	projectFrag := styleChip.Render("[" + project + "]")
-	if len(res.Meta.ProjectNames()) == 0 {
+	switch {
+	case project == UnknownProject:
+		// Already parenthesized; brackets around it would read as a name.
+		projectFrag = styleDim.Render(project)
+	case len(res.Meta.ProjectNames()) == 0:
 		projectFrag = styleDim.Render("[" + project + "]")
 	}
 	head := fmt.Sprintf("  %s  %s  %s  %s", when, projectFrag, name, styleDim.Render(fileFrag))

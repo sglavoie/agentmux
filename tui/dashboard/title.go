@@ -1,12 +1,40 @@
 package dashboard
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 )
+
+// SessionLocation names where a running session lives, for the surfaces that
+// name one session back to the operator. A Kitty session is its window. A
+// session on another backend is its backend and runtime session: the window
+// ID this process lists it under is a process-local stand-in and means
+// nothing to the operator.
+func SessionLocation(sess session.RunningSession) string {
+	kind := sess.BackendKind()
+	if kind == runtimesession.BackendKitty {
+		return fmt.Sprintf("window %d", sess.WindowID)
+	}
+	if sess.RuntimeSessionID != "" {
+		return fmt.Sprintf("%s session %s", kind, sess.RuntimeSessionID)
+	}
+	return string(kind) + " session"
+}
+
+// SessionStateLabel is a session's state in the words its dashboard row uses
+// ("Needs permission", "Working", "Idle"), grouped the way the row is.
+// A state this build does not know reads as its raw name rather than nothing.
+func SessionStateLabel(sess session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) string {
+	if label := StatusText(sess, StateGroup(sess, lastActivity, threshold)); label != "" {
+		return label
+	}
+	return sess.State
+}
 
 // SessionDisplayTitle is the name a running session shows under in every
 // dashboard-derived surface: the row title column, the filter's substring

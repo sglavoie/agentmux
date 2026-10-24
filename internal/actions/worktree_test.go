@@ -13,6 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -145,6 +146,43 @@ func TestWorktreeReopenDisambiguatesFreshLiveMatches(t *testing.T) {
 	}
 	if result.Data["continuation"] != "focused" || len(client.focuses) != 1 || client.focuses[0] != "id:22" {
 		t.Fatalf("selected result = %+v focuses=%v", result, client.focuses)
+	}
+}
+
+// TestWorktreeReopenNamesTmuxCandidatesByRuntimeSession pins that two tmux
+// sessions in one worktree, which the CLI lists at tab 0, are told apart by
+// their runtime sessions, in a stable order, and that --live-session picks the
+// one named.
+func TestWorktreeReopenNamesTmuxCandidatesByRuntimeSession(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	source := t.TempDir()
+	entry := worktree.Entry{ID: "wt-1", Path: root, SourceRoot: source, ProjectLabel: "api", Exists: true}
+	manager := &actionWorktreeManager{entries: []worktree.Entry{entry}}
+	running := []session.RunningSession{
+		{Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-b", Directory: root},
+		{Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-a", Project: "api", Directory: root},
+	}
+	deps := Dependencies{
+		Kitty: &continuityKitty{}, Config: worktreeActionConfig(source), WorktreeManager: manager,
+		LiveSessions: func(*config.Config) ([]session.RunningSession, error) { return running, nil },
+	}
+	_, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID})
+	var actionErr *Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "ambiguous_live_sessions" || len(actionErr.Candidates) != 2 {
+		t.Fatalf("ambiguous error = %#v", err)
+	}
+	if got := actionErr.Candidates; got[0].ID != "rs-a" || got[1].ID != "rs-b" || got[1].DisplayName != "tmux session rs-b" {
+		t.Fatalf("candidates = %+v, want rs-a then rs-b named as a tmux session", got)
+	}
+	result, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID, Parameters: map[string]string{"session": "rs-b"}})
+	if err != nil {
+		t.Fatalf("selected reopen: %v", err)
+	}
+	live, ok := result.Data["session"].(WorktreeLiveSession)
+	if !ok || live.RuntimeSessionID != "rs-b" || live.Backend != "tmux" || result.Data["runtime_session_id"] != "rs-b" {
+		t.Fatalf("selected result = %+v", result.Data)
 	}
 }
 

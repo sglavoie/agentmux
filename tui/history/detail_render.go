@@ -30,15 +30,20 @@ func sessionEndedSeparator(width int) string {
 }
 
 // Header renders the two-line pane header: badge + state icon + title +
-// window id on line 1, and a dim metadata line on line 2 carrying the current
-// state, threshold age (when known), and event count.
+// location on line 1, and a dim metadata line on line 2 carrying the current
+// state in the dashboard row's words, threshold age (when known), and event
+// count. The location is a Kitty window, or a tmux runtime session, never the
+// process-local ID a portable session is listed under.
 func (in DetailInput) Header() string {
 	s, ok := in.detailSession()
 	if !ok {
 		// Fallback: the session disappeared between query dispatch and
 		// render (closed mid-flight). Keep the pane usable instead of
 		// blanking the header.
-		header := fmt.Sprintf("session detail — window %d", in.WindowID)
+		header := "session detail"
+		if in.Location != "" {
+			header += " — " + in.Location
+		}
 		meta := fmt.Sprintf("session not found · %d events", len(in.Events))
 		return styleHeader.Render(header) + "\n" + styleDim.Render(meta)
 	}
@@ -55,13 +60,9 @@ func (in DetailInput) Header() string {
 		icon = palette.StateIcon(s.State) + " "
 	}
 
-	line1 := fmt.Sprintf("%s %s%s — window %d", badge, icon, layout.RenderTitleIcon(dashboard.SessionDisplayTitle(s)), s.WindowID)
+	line1 := fmt.Sprintf("%s %s%s — %s", badge, icon, layout.RenderTitleIcon(dashboard.SessionDisplayTitle(s)), dashboard.SessionLocation(s))
 
-	state := s.State
-	if state == "" {
-		state = "idle"
-	}
-	meta := []string{fmt.Sprintf("state=%s", state)}
+	meta := []string{dashboard.SessionStateLabel(s, in.LastActivity, in.IdleThreshold)}
 	if ws, found := in.Watchdog[s.WindowID]; found && ws.LastAction != "" {
 		meta = append(meta, fmt.Sprintf("age=%s", dashboard.FormatAge(ws, time.Now())))
 	}
@@ -159,7 +160,7 @@ func (in DetailInput) Footer(total, visible int) string {
 		chrome.Binding("m", "metadata"),
 		chrome.Binding("t", "timeline"),
 		chrome.Binding("↑/↓", "scroll"),
-		chrome.Binding("pgup/pgdn", "page"),
+		chrome.Binding("ctrl+f/b", "page"),
 		chrome.Binding("g/G", "top/bottom"),
 		chrome.Binding("?", "help"),
 		chrome.Binding("esc/q/d", "close"),

@@ -10,6 +10,8 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -113,6 +115,14 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 		{name: "config picker", m: Model{mode: ModeConfigPicker, width: 80, configPickerReturnMode: ModePicker}, want: "Choose launch profile"},
 		{name: "help", m: Model{mode: ModeHelp, width: 80}, want: "Help"},
 		{name: "detail", m: Model{mode: ModeDetail, width: 80, detailWindowID: 17}, want: "Session details: window 17"},
+		{
+			name: "detail on a tmux session",
+			m: Model{mode: ModeDetail, width: 80, detailWindowID: commands.PortableIDBase + 7, sessions: []session.RunningSession{{
+				WindowID: commands.PortableIDBase + 7, Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-7",
+			}}},
+			want: "Session details: tmux session rs-7",
+		},
+		{name: "detail on an unlisted tmux session", m: Model{mode: ModeDetail, width: 80, detailWindowID: commands.PortableIDBase + 9}, want: "Session details"},
 		{name: "actions", m: Model{mode: ModeActions, width: 80}, want: "Session actions"},
 		{name: "command palette", m: Model{mode: ModeCommandPalette, width: 80, commandResults: make([]commands.Command[Model], 3)}, want: "Command Palette: 3 results"},
 		{name: "session search", m: Model{mode: ModeSessionSearch, width: 80, sessionResults: []transcript.Result{{}, {}}}, want: "Past Sessions: 2 results"},
@@ -139,6 +149,8 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 			want: "Message detail: 2/2",
 		},
 		{name: "plan search", m: Model{mode: ModePlanSearch, width: 80, planResults: []plans.Result{{}, {}}}, want: "Plans: 2 results"},
+		{name: "plan search while a query runs", m: Model{mode: ModePlanSearch, width: 80, planLoading: true, planResults: []plans.Result{{}, {}}}, want: "Plans: 2 results · searching"},
+		{name: "plan search while scanning", m: Model{mode: ModePlanSearch, width: 80, planLoading: true, planScanSeq: 3}, want: "Plans: scanning"},
 		{name: "plan view", m: Model{mode: ModePlanView, width: 80, viewerPlan: &plans.PlanMeta{Name: "plan-a"}}, want: "Plan: plan-a"},
 	}
 

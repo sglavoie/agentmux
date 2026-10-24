@@ -52,12 +52,18 @@ func TestWorktreeReopenFocusedResumeAndFreshOutcomes(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			driver, client := lifecycleDriver(t)
 			filterLifecycleWorktree(t, driver, tc.id)
+			seq := driver.Model().worktreeRefreshSeq
 			if err := driver.Key("enter"); err != nil {
 				t.Fatalf("reopen: %v", err)
 			}
 			model := driver.Model()
 			if model.mode != ModeWorktrees || model.worktreeActionInFlight {
 				t.Fatalf("reopen left mode=%v inFlight=%v", model.mode, model.worktreeActionInFlight)
+			}
+			// A successful reopen refreshes the list like the other lifecycle
+			// actions, so the row's live count and state are not left stale.
+			if model.worktreeRefreshSeq <= seq || model.worktreeLoading {
+				t.Fatalf("reopen did not refresh the list: seq %d → %d loading=%v", seq, model.worktreeRefreshSeq, model.worktreeLoading)
 			}
 			if len(model.toasts) == 0 {
 				t.Fatal("reopen result did not publish a toast")

@@ -96,7 +96,7 @@ func worktreeForgettable(m Model) bool {
 }
 
 var sessionSearchFooterPalette = []footerEntry{
-	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"/", "search", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"h/p/r/m", "filters", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"enter", "view", footerSectionRow, hasSessionResult, footerPriorityEssential},
 	{"c", "continue", footerSectionRow, hasSessionResult, footerPriorityPrimary},
@@ -122,7 +122,12 @@ var sessionSearchFooterPalette = []footerEntry{
 // footerEscClearFilter is what esc does first while a view's `/` filter is
 // set: the handlers clear the filter before they leave the view, so the
 // footer must not promise "back" until there is nothing left to clear.
-const footerEscClearFilter = "clear filter"
+// footerEscClearSearch is the same for the views whose `/` searches content
+// (Past Sessions and Plans) rather than filtering the rows by name.
+const (
+	footerEscClearFilter = "clear filter"
+	footerEscClearSearch = "clear search"
+)
 
 // withEscLabel returns a copy of palette whose esc entry reads label.
 func withEscLabel(palette []footerEntry, label string) []footerEntry {
@@ -143,7 +148,7 @@ func withEscLabel(palette []footerEntry, label string) []footerEntry {
 func sessionSearchFooter(m Model) []footerEntry {
 	switch {
 	case m.sessionQuery != "":
-		return withEscLabel(sessionSearchFooterPalette, footerEscClearFilter)
+		return withEscLabel(sessionSearchFooterPalette, footerEscClearSearch)
 	case m.historyOnly:
 		return withEscLabel(sessionSearchFooterPalette, "quit")
 	default:
@@ -164,7 +169,7 @@ var queryTypingFooterPalette = []footerEntry{
 // set, esc clears it before it leaves the view.
 func planSearchFooter(m Model) []footerEntry {
 	if m.planQuery != "" {
-		return withEscLabel(planSearchFooterPalette, footerEscClearFilter)
+		return withEscLabel(planSearchFooterPalette, footerEscClearSearch)
 	}
 	return planSearchFooterPalette
 }
@@ -208,7 +213,7 @@ var sessionViewFooterPalette = []footerEntry{
 }
 
 var planSearchFooterPalette = []footerEntry{
-	{"/", "filter", footerSectionApp, footerAlways, footerPrioritySecondary},
+	{"/", "search", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"r", "project filter", footerSectionApp, footerAlways, footerPrioritySecondary},
 	{"enter", "view", footerSectionRow, hasPlanResult, footerPriorityEssential},
 	{"o", "sort", footerSectionApp, footerAlways, footerPriorityPrimary},

@@ -12,6 +12,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/layout"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
 // chipPickerKind identifies which search-view chip filter the picker edits.
@@ -25,8 +27,9 @@ const (
 )
 
 // chipPickerUnknownProjectValue is an internal option value whose display
-// label is "Unknown". A sentinel keeps a configured project literally named
-// "Unknown" distinct from plans that have no configured-project match.
+// label is tuiplans.UnknownProject. A sentinel keeps a configured project
+// literally named that distinct from plans that have no configured-project
+// match.
 const chipPickerUnknownProjectValue = "\x00plans-project-unknown"
 
 // enterChipPicker opens the chip picker overlay for the given kind. The
@@ -149,7 +152,7 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 		scrollChipPickerToCursor(&m)
 		return m, nil
-	case keyPgDown:
+	case keyPgDown, keyCtrlF:
 		step := chipPickerVisibleHeight(m) - 1
 		if step < 1 {
 			step = 1
@@ -157,7 +160,7 @@ func (m Model) handleChipPickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.chipPickerCursor = clamp(m.chipPickerCursor+step, 0, len(m.chipPickerOptions)-1)
 		scrollChipPickerToCursor(&m)
 		return m, nil
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		step := chipPickerVisibleHeight(m) - 1
 		if step < 1 {
 			step = 1
@@ -239,7 +242,7 @@ func chipPickerSourceMode(m Model) Mode {
 
 func chipPickerOptionLabel(option string) string {
 	if option == chipPickerUnknownProjectValue {
-		return "Unknown"
+		return tuiplans.UnknownProject
 	}
 	return option
 }
@@ -341,6 +344,11 @@ func scrollChipPickerToCursor(m *Model) {
 			break
 		}
 		m.chipPickerOffset++
+	}
+	// A list that shrank under the offset is drawn from its furthest useful
+	// offset; holding the same one keeps the next move from jumping.
+	if maxOffset := layout.MaxListOffset(total, height); m.chipPickerOffset > maxOffset {
+		m.chipPickerOffset = maxOffset
 	}
 	if m.chipPickerOffset < 0 {
 		m.chipPickerOffset = 0

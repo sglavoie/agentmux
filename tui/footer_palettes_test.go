@@ -66,7 +66,7 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 		{
 			name:    "session search",
 			palette: sessionSearchFooterPalette,
-			wants: []string{"/ filter", "h/p/r/m filters", "enter view", "c continue", "f fork",
+			wants: []string{"/ search", "h/p/r/m filters", "enter view", "c continue", "f fork",
 				"w worktree", "H handoff", "E edit handoff", "d delete", "i ID", "Y path", "esc back"},
 		},
 		{
@@ -78,7 +78,7 @@ func TestFooterHintPalettesAdvertiseModeHints(t *testing.T) {
 		{
 			name:    "plan search",
 			palette: planSearchFooterPalette,
-			wants:   []string{"/ filter", "r project", "enter view", "o sort", "O editor", "Y path", "esc back"},
+			wants:   []string{"/ search", "r project", "enter view", "o sort", "O editor", "Y path", "esc back"},
 		},
 		{
 			name:    "plan view",
@@ -185,7 +185,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   210,
 		want: []string{
-			"  / filter · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page",
+			"  / search · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page",
 			"  g/G top/bottom",
 		},
 	},
@@ -194,7 +194,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff",
+			"  / search · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff",
 			"  E edit handoff · d delete · i ID · Y path · esc back · j/k up/down · ? more",
 		},
 	},
@@ -203,7 +203,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   40,
 		want: []string{
-			"  / filter · enter view · c continue",
+			"  / search · enter view · c continue",
 			"  f fork · esc back · ? more",
 		},
 	},
@@ -212,7 +212,7 @@ var footerHintCharacterizations = []struct {
 		entries: sessionSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
+			"  / search · h/p/r/m filters · enter view · c continue · f fork · w worktree · H handoff · E edit handoff · d delete · i ID · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -255,7 +255,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   200,
 		want: []string{
-			"  / filter · r project filter · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
+			"  / search · r project filter · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{
@@ -263,7 +263,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   90,
 		want: []string{
-			"  / filter · r project filter · enter view · o sort · O editor · R run · Y path · ? help",
+			"  / search · r project filter · enter view · o sort · O editor · R run · Y path · ? help",
 			"  esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
@@ -272,7 +272,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   40,
 		want: []string{
-			"  / filter · enter view · o sort",
+			"  / search · enter view · o sort",
 			"  O editor · esc back · ? more",
 		},
 	},
@@ -281,7 +281,7 @@ var footerHintCharacterizations = []struct {
 		entries: planSearchFooterPalette,
 		width:   0,
 		want: []string{
-			"  / filter · r project filter · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
+			"  / search · r project filter · enter view · o sort · O editor · R run · Y path · ? help · esc back · j/k up/down · g/G top/bottom · ctrl+d/u half · ctrl+f/b page",
 		},
 	},
 	{

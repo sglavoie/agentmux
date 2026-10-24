@@ -1,0 +1,31 @@
+{
+  "name": "asl-runs-reason-narrow-fit",
+  "fixture": "asl_runs",
+  "size": {
+    "width": 60,
+    "height": 18
+  },
+  "actions": [
+    {
+      "type": "command",
+      "command_id": "explore.show-runs"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "asl_runs"
+    },
+    {
+      "type": "contains_text",
+      "text": "reason: awaiting an answer to the migration question"
+    },
+    {
+      "type": "contains_text",
+      "text": "binding: api"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

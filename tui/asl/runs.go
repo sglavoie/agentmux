@@ -124,9 +124,11 @@ func (in RunsInput) renderUnavailable() string {
 	return sb.String()
 }
 
-// detailPanel describes the selected run. The binding line shows at every width
-// because ownership is re-derived per snapshot; the remaining fields are
-// narrow-only, since a wide row already carries them inline.
+// detailPanel describes the selected run. The reason and binding lines show at
+// every width: a wide row spends its last column on the workspace rather than
+// on why the run is listed, and ownership is re-derived per snapshot. The
+// remaining fields are narrow-only, since a wide row already carries them
+// inline.
 func (in RunsInput) detailPanel() []string {
 	if in.View() == ViewUnavailable {
 		return nil
@@ -135,7 +137,11 @@ func (in RunsInput) detailPanel() []string {
 	if !ok {
 		return nil
 	}
-	lines := []string{"", styleDim.Render("  binding: ") + in.bindingText(row)}
+	lines := []string{
+		"",
+		styleDim.Render("  reason: ") + reasonText(row),
+		styleDim.Render("  binding: ") + in.bindingText(row),
+	}
 	if in.wide() {
 		return lines
 	}

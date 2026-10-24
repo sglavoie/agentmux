@@ -13,6 +13,13 @@ import (
 // profile/harness identity, age, and state badges, truncated to width. Empty
 // fields fall back to a parenthesized placeholder so the columns never
 // collapse and misalign the rows below.
+//
+// The badges are what a row is triaged by, so a narrower terminal spends its
+// columns on them first. Below wideRowWidth the identity, the column of least
+// use for choosing a worktree, moves after the badges where truncation takes
+// it first; below narrowRowWidth the age joins it there and the text columns
+// shrink. Either way a row at the tier's narrowest width (60 at the least)
+// keeps "[metadata_invalid][clean][warning]" whole.
 func formatRow(entry actions.WorktreeView, width int) string {
 	width = layout.WrapWidth(width)
 	project := strings.TrimSpace(entry.ProjectLabel)
@@ -33,11 +40,27 @@ func formatRow(entry actions.WorktreeView, width int) string {
 	if identity == "" {
 		identity = "unknown profile"
 	}
-	age := layout.CompactAge(entry.CreatedAt, time.Now())
+	age := layout.PadLeft(layout.CompactAge(entry.CreatedAt, time.Now()), 6)
 	badges := BadgeText(entry)
-	row := "  " + column(project, 18) + "  " + column(branch, 24) + "  " + column(identity, 18) + "  " + layout.PadLeft(age, 6) + "  " + badges
+	var row string
+	switch {
+	case width >= wideRowWidth:
+		row = "  " + column(project, 18) + "  " + column(branch, 24) + "  " + column(identity, 18) + "  " + age + "  " + badges
+	case width >= narrowRowWidth:
+		row = "  " + column(project, 14) + "  " + column(branch, 14) + "  " + age + "  " + badges + "  " + identity
+	default:
+		row = "  " + column(project, 9) + "  " + column(branch, 10) + "  " + badges + "  " + strings.TrimSpace(age) + "  " + identity
+	}
 	return layout.StyledTruncate(row, width, "…")
 }
+
+// wideRowWidth is the terminal width at which a row keeps every column in
+// line; below it the identity trails the badges, and below narrowRowWidth the
+// age does too.
+const (
+	wideRowWidth   = 110
+	narrowRowWidth = 80
+)
 
 // column fits s to exactly width display cells, truncating a long value
 // instead of letting it push every later column right, and measuring by

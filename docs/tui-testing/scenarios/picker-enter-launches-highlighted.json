@@ -1,0 +1,31 @@
+{
+  "name": "picker-enter-launches-highlighted",
+  "fixture": "basic",
+  "size": {
+    "width": 120,
+    "height": 40
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "l"
+    },
+    {
+      "type": "key",
+      "key": "enter"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "contains_text",
+      "text": "Launched 1/1 · dotfiles"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

@@ -13,20 +13,63 @@ type Queued struct {
 	Title   string
 }
 
-// LaunchQueue returns the launcher's checked projects in stable launcher
-// order, each stamped with the profile it will actually launch under. Running
-// launcher rows are included: a checked row that already has a live instance
-// is an explicit request for another same-key tab.
-func (in PickerInput) LaunchQueue() []Queued {
-	var todo []Queued
+// LaunchQueue returns what Enter in the launcher starts, in stable launcher
+// order, each stamped with the profile it will actually launch under. Checked
+// projects the current filter shows are queued; with none checked, the
+// highlighted project is, as the footer's "enter launch" promises. A checked
+// project the filter hides is never launched blind: it is left out and counted
+// in hidden so the caller can say so. Running launcher rows are included: a
+// checked row that already has a live instance is an explicit request for
+// another same-key tab.
+func (in PickerInput) LaunchQueue() (todo []Queued, hidden int) {
+	visible := make(map[int]bool, len(in.FilteredIdx))
+	for _, idx := range in.FilteredIdx {
+		visible[idx] = true
+	}
+	checked := 0
 	for i := range in.Sessions {
 		if !in.Selected[i] {
+			continue
+		}
+		checked++
+		if !visible[i] {
+			hidden++
 			continue
 		}
 		sess := in.SessionWithResolvedProfile(i)
 		todo = append(todo, Queued{Session: sess, Title: configSessionDisplayTitle(sess)})
 	}
-	return todo
+	if checked > 0 {
+		return todo, hidden
+	}
+	if in.Cursor < 0 || in.Cursor >= len(in.FilteredIdx) {
+		return nil, 0
+	}
+	origIdx := in.FilteredIdx[in.Cursor]
+	if origIdx < 0 || origIdx >= len(in.Sessions) {
+		return nil, 0
+	}
+	sess := in.SessionWithResolvedProfile(origIdx)
+	return []Queued{{Session: sess, Title: configSessionDisplayTitle(sess)}}, 0
+}
+
+// HiddenSkippedText is the warning shown when checked projects were left out
+// of a launch because the current filter hides them.
+func HiddenSkippedText(hidden int) string {
+	if hidden == 1 {
+		return "Skipped 1 checked project hidden by the filter"
+	}
+	return fmt.Sprintf("Skipped %d checked projects hidden by the filter", hidden)
+}
+
+// NothingToLaunchText is the warning shown when Enter finds nothing to
+// launch, which keeps the launcher open. It is short enough to survive a
+// 60-column status bar.
+func NothingToLaunchText(hidden int) string {
+	if hidden > 0 {
+		return fmt.Sprintf("Nothing to launch: the filter hides %d checked", hidden)
+	}
+	return "Nothing to launch: no project matches"
 }
 
 // OpenTargets returns every selected launcher project in stable launcher

@@ -13,6 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
+	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
 
@@ -320,7 +321,8 @@ func fallbackStatusText(m Model) string {
 		return "Filter sessions"
 	case ModeConfirm:
 		if verb, ok := sessionactions.ConfirmVerbText(m.confirmAction); ok {
-			return "Confirm " + verb
+			// Mid-sentence, so the verb loses its leading capital.
+			return "Confirm " + strings.ToLower(verb[:1]) + verb[1:]
 		}
 		if strings.TrimSpace(m.confirmAction) != "" {
 			return "Confirm " + m.confirmAction
@@ -339,8 +341,8 @@ func fallbackStatusText(m Model) string {
 	case ModeHelp:
 		return "Help"
 	case ModeDetail:
-		if m.detailWindowID > 0 {
-			return fmt.Sprintf("Session details: window %d", m.detailWindowID)
+		if location := detailLocation(m); location != "" {
+			return "Session details: " + location
 		}
 		return "Session details"
 	case ModeActions:
@@ -379,11 +381,17 @@ func fallbackStatusText(m Model) string {
 		}
 		return "Message detail"
 	case ModePlanSearch:
-		if m.planLoading {
-			return "Plans: loading"
-		}
+		// The same count and in-flight word the header shows.
 		n := len(m.planResults)
-		return fmt.Sprintf("Plans: %d result%s", n, plural(n))
+		label := strings.TrimSuffix(tuiplans.SearchInput{Loading: m.planLoading, Scanning: planScanning(m)}.LoadingLabel(), "…")
+		if label != "" && n == 0 {
+			return "Plans: " + label
+		}
+		text := fmt.Sprintf("Plans: %d result%s", n, plural(n))
+		if label != "" {
+			text += " · " + label
+		}
+		return text
 	case ModePlanView:
 		return planViewStatusText(m)
 	case ModeWorktrees:

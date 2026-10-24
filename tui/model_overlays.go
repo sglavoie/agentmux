@@ -354,12 +354,12 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if m.detailTimelineScroll > 0 {
 				m.detailTimelineScroll--
 			}
-		case keyPgDown:
+		case keyPgDown, keyCtrlF:
 			m.detailTimelineScroll += tlVisible
 			if m.detailTimelineScroll > tlMax {
 				m.detailTimelineScroll = tlMax
 			}
-		case keyPgUp:
+		case keyPgUp, keyCtrlB:
 			m.detailTimelineScroll -= tlVisible
 			if m.detailTimelineScroll < 0 {
 				m.detailTimelineScroll = 0
@@ -381,12 +381,12 @@ func (m Model) handleDetailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.detailScroll > 0 {
 			m.detailScroll--
 		}
-	case keyPgDown:
+	case keyPgDown, keyCtrlF:
 		m.detailScroll += visible
 		if m.detailScroll > maxOffset {
 			m.detailScroll = maxOffset
 		}
-	case keyPgUp:
+	case keyPgUp, keyCtrlB:
 		m.detailScroll -= visible
 		if m.detailScroll < 0 {
 			m.detailScroll = 0
@@ -747,11 +747,24 @@ func formatLiveSessionCandidate(candidate actions.WorktreeLiveSession, width int
 	if identity == "" {
 		identity = "unknown profile"
 	}
+	// A Kitty session is its tab and window. A session on another backend is
+	// named by its backend: its tab and window are this process's stand-ins,
+	// and its candidate ID already is its runtime session.
 	location := fmt.Sprintf("tab %d", candidate.TabID)
 	if candidate.WindowID != 0 {
 		location += fmt.Sprintf(" / window %d", candidate.WindowID)
 	}
-	line := fmt.Sprintf("%-18s  %-20s  %-22s  candidate %s", project, identity, location, candidate.ID)
+	switch {
+	case candidate.Backend != "":
+		location = candidate.Backend
+	case candidate.TabID == 0:
+		// Resolved from the error alone, with no listing to place it.
+		location = "-"
+	}
+	column := func(value string, width int) string {
+		return layout.PadRight(layout.Truncate(value, width, "…"), width)
+	}
+	line := column(project, 18) + "  " + column(identity, 20) + "  " + column(location, 22) + "  candidate " + candidate.ID
 	if candidate.HarnessSessionID != "" {
 		line += "  native " + candidate.HarnessSessionID
 	}

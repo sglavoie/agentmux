@@ -18,6 +18,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
+	"github.com/sglavoie/agentmux/tui/layout"
 )
 
 // sessionSearchDebounce is the wait between the user's last keystroke and
@@ -577,6 +578,11 @@ func scrollSessionSearchToCursor(m *Model) {
 			break
 		}
 		m.sessionOffset++
+	}
+	// A list that shrank under the offset is drawn from its furthest useful
+	// offset; holding the same one keeps the next move from jumping.
+	if maxOffset := layout.MaxListOffset(total, height); m.sessionOffset > maxOffset {
+		m.sessionOffset = maxOffset
 	}
 	if m.sessionOffset < 0 {
 		m.sessionOffset = 0

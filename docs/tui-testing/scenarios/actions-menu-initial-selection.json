@@ -8,6 +8,6 @@
     { "type": "no_layout_issues" },
     { "type": "selected_action", "value": "session.focus" },
     { "type": "contains_text", "text": "Open session" },
-    { "type": "contains_text", "text": "End Session" }
+    { "type": "contains_text", "text": "End session" }
   ]
 }

@@ -47,7 +47,7 @@ func TestDefinitionsInventory(t *testing.T) {
 		{commands.LaunchAnother, MenuGroupOpen, Mnemonic{"C", "C"}, "Launch another session", "Launch Another Session", []string{"duplicate", "new"}},
 		{commands.ClearStatusIcon, MenuGroupStatus, Mnemonic{"x", "x"}, "Clear status", "Clear Status Icon", []string{"attention", "badge", "icon"}},
 		{commands.MarkActiveIcon, MenuGroupStatus, Mnemonic{"b", "b"}, "Mark active", "Mark Session Active", []string{"bolt", "busy", "working"}},
-		{commands.CloseSession, MenuGroupLifecycle, Mnemonic{"X", "X"}, "End Session", "End Session", []string{"close", "exit", "kill"}},
+		{commands.CloseSession, MenuGroupLifecycle, Mnemonic{"X", "X"}, "End session", "End Session", []string{"close", "exit", "kill"}},
 		{commands.OpenDirectoryID, MenuGroupOpen, Mnemonic{"o", "o"}, "Open shell", "Open Directory in Shell", []string{"directory", "shell", "terminal"}},
 		{commands.OpenEditorID, MenuGroupOpen, Mnemonic{"O", "O"}, "Open editor", "Open in Editor", []string{"directory", "edit"}},
 		{commands.CopyTitleID, MenuGroupOpen, Mnemonic{"y", "y"}, "Copy title", "Copy Session Title", []string{"clipboard", "yank"}},
@@ -227,7 +227,7 @@ func TestLookup(t *testing.T) {
 	if !ok {
 		t.Fatal("close session is not in the vocabulary")
 	}
-	if definition.MenuLabel != "End Session" {
+	if definition.MenuLabel != "End session" {
 		t.Fatalf("close session label = %q", definition.MenuLabel)
 	}
 	if _, ok := Lookup(commands.Quit); ok {

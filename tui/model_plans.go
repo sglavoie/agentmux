@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
+	"github.com/sglavoie/agentmux/tui/layout"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
@@ -378,6 +379,11 @@ func scrollPlanSearchToCursor(m *Model) {
 			break
 		}
 		m.planOffset++
+	}
+	// A list that shrank under the offset is drawn from its furthest useful
+	// offset; holding the same one keeps the next move from jumping.
+	if maxOffset := layout.MaxListOffset(total, height); m.planOffset > maxOffset {
+		m.planOffset = maxOffset
 	}
 	if m.planOffset < 0 {
 		m.planOffset = 0
