@@ -72,3 +72,33 @@ func TestSortPickerSessions_EmojiAndCaseInsensitive(t *testing.T) {
 		}
 	}
 }
+
+// TestSortPickerSessions_GroupsProfilesAcrossHarnesses pins that profiles
+// differing only by harness suffix form one group, sorted by title within it.
+func TestSortPickerSessions_GroupsProfilesAcrossHarnesses(t *testing.T) {
+	in := []config.Session{
+		{Title: "AiBroker", Profile: "tradition-claude"},
+		{Title: "Therapy Prep", Profile: "personal-claude"},
+		{Title: "🧠BrainNotes", Profile: "personal-codex"},
+		{Title: "ASL", Profile: "personal-claude"},
+		{Title: "zeta", Profile: "copilot"},
+		{Title: "🐱amx", Profile: "personal-claude"},
+		{Title: "docs", Profile: "vta-codex"},
+		{Title: "Homebrew Tap", Profile: "personal-claude"},
+		{Title: "🧬curator", Profile: "personal-codex"},
+		{Title: "Api", Profile: "vta-claude"},
+		{Title: "diffusion", Profile: "tradition-codex"},
+	}
+	wantTitles := []string{
+		"zeta",
+		"🐱amx", "ASL", "🧠BrainNotes", "🧬curator", "Homebrew Tap", "Therapy Prep",
+		"AiBroker", "diffusion",
+		"Api", "docs",
+	}
+	got := SortSessions(in)
+	for i, want := range wantTitles {
+		if got[i].Title != want {
+			t.Errorf("SortSessions[%d]: got %q, want %q", i, got[i].Title, want)
+		}
+	}
+}
