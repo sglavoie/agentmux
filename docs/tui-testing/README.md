@@ -549,6 +549,8 @@ inventory is:
 | [`needs-you-reveals-folded-target.json`](scenarios/needs-you-reveals-folded-target.json) | `project_families` | `N` reaches an attention row folded inside a collapsed project: the family unfolds, the cursor lands on the row itself, and no tab is focused and no pager opens — finding a waiting session is not answering it |
 | [`paused-output-follows-tail.json`](scenarios/paused-output-follows-tail.json) | `paused_output` | the inspector opens over a scrollback longer than the pane: the six-line metadata block is drawn above the divider and the output below it follows the tail, so the last lines are on screen, the first are gone, and nothing says Paused because no key yet holds a position — the quiet chrome having handed the viewport two more rows of it |
 | [`picker-dsl-narrow-fit.json`](scenarios/picker-dsl-narrow-fit.json) | `basic` | launcher DSL/help text clamps at narrow width |
+| [`picker-long-filter-narrow-fit.json`](scenarios/picker-long-filter-narrow-fit.json) | `paused_queue` | a 70-character launcher `/` filter at 40 columns drops its start behind `…` so the filter line fits and the end of the filter and the cursor stay visible |
+| [`picker-long-filter-wide.json`](scenarios/picker-long-filter-wide.json) | `paused_queue` | the same at 120 columns with a 150-character filter |
 | [`portable-dashboard-narrow-fit.json`](scenarios/portable-dashboard-narrow-fit.json) | `portable_tmux` | at 80 columns the selection moves onto a tmux-hosted row and its actions menu opens over it with the full session vocabulary, the focus entry saying it attaches here rather than jumping to a tab |
 | [`portable-dashboard-wide.json`](scenarios/portable-dashboard-wide.json) | `portable_tmux` | with no Kitty client the queue still buckets tmux-hosted rows by the daemon state keyed to them, selects the one that needs the operator, and fills the inspector from that pane's own scrollback |
 | [`portable-launch-picker-narrow-fit.json`](scenarios/portable-launch-picker-narrow-fit.json) | `portable_tmux` | at 80 columns **Launch another session** on a tmux-hosted row opens the profile picker with no Kitty client: both profiles are offered, the row's own marked current, and nothing asks for Kitty |
@@ -599,6 +601,8 @@ inventory is:
 | [`filter-hint-wide.json`](scenarios/filter-hint-wide.json) | `basic` | Committed unknown state stays explained at 120 columns |
 | [`filter-incomplete-project.json`](scenarios/filter-incomplete-project.json) | `basic` | Unclosed project quote is visibly not applied |
 | [`search-narrow-fit.json`](scenarios/search-narrow-fit.json) | `basic` | live-list filter rows truncate at a sub-floor terminal after `/` |
+| [`search-long-query-narrow-fit.json`](scenarios/search-long-query-narrow-fit.json) | `paused_queue` | a 70-character `/` query at 40 columns drops its start behind `…` so the input line fits and the end of the query and the cursor stay visible |
+| [`search-long-query-wide.json`](scenarios/search-long-query-wide.json) | `paused_queue` | the same at 120 columns with a 150-character query |
 | [`session-fork-continuity.json`](scenarios/session-fork-continuity.json) | `basic` | Past Sessions dispatches a native fork through the shared action registry |
 | [`session-search-chips-fit.json`](scenarios/session-search-chips-fit.json) | `basic` | session-search filter chips clamp to width after Past Sessions is opened by name |
 | [`project-session-shortcut.json`](scenarios/project-session-shortcut.json) | `basic` | dashboard `s` opens Past Sessions with the selected project filter |

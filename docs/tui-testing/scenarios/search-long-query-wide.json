@@ -1,0 +1,35 @@
+{
+  "name": "search-long-query-wide",
+  "fixture": "paused_queue",
+  "size": {
+    "width": 120,
+    "height": 30
+  },
+  "actions": [
+    {
+      "type": "key",
+      "key": "/"
+    },
+    {
+      "type": "text",
+      "text": "overflowing-filter-query-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-tailend"
+    }
+  ],
+  "assertions": [
+    {
+      "type": "mode_equals",
+      "mode": "search"
+    },
+    {
+      "type": "contains_text",
+      "text": "/…xxx"
+    },
+    {
+      "type": "contains_text",
+      "text": "-tailend█"
+    },
+    {
+      "type": "no_layout_issues"
+    }
+  ]
+}

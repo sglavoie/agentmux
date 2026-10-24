@@ -119,21 +119,54 @@ var sessionSearchFooterPalette = []footerEntry{
 	{"g/G", "top/bottom", footerSectionApp, footerAlways, footerPriorityNav},
 }
 
-// sessionSearchFooter is the Past Sessions palette as this model reads it.
-// Opened on its own (`amx history`, no dashboard behind it), esc with no query
-// to clear ends the program, so the footer says quit rather than back.
-func sessionSearchFooter(m Model) []footerEntry {
-	if !m.historyOnly || m.sessionQuery != "" {
-		return sessionSearchFooterPalette
-	}
-	entries := make([]footerEntry, len(sessionSearchFooterPalette))
-	copy(entries, sessionSearchFooterPalette)
+// footerEscClearFilter is what esc does first while a view's `/` filter is
+// set: the handlers clear the filter before they leave the view, so the
+// footer must not promise "back" until there is nothing left to clear.
+const footerEscClearFilter = "clear filter"
+
+// withEscLabel returns a copy of palette whose esc entry reads label.
+func withEscLabel(palette []footerEntry, label string) []footerEntry {
+	entries := make([]footerEntry, len(palette))
+	copy(entries, palette)
 	for i := range entries {
 		if entries[i].key == "esc" {
-			entries[i].label = "quit"
+			entries[i].label = label
 		}
 	}
 	return entries
+}
+
+// sessionSearchFooter is the Past Sessions palette as this model reads it.
+// With a query set, esc clears it first. Opened on its own (`amx history`, no
+// dashboard behind it), esc with no query to clear ends the program, so the
+// footer says quit rather than back.
+func sessionSearchFooter(m Model) []footerEntry {
+	switch {
+	case m.sessionQuery != "":
+		return withEscLabel(sessionSearchFooterPalette, footerEscClearFilter)
+	case m.historyOnly:
+		return withEscLabel(sessionSearchFooterPalette, "quit")
+	default:
+		return sessionSearchFooterPalette
+	}
+}
+
+// planSearchFooter is the Plans palette as this model reads it: with a query
+// set, esc clears it before it leaves the view.
+func planSearchFooter(m Model) []footerEntry {
+	if m.planQuery != "" {
+		return withEscLabel(planSearchFooterPalette, footerEscClearFilter)
+	}
+	return planSearchFooterPalette
+}
+
+// worktreesFooter is the Worktrees palette as this model reads it: with a
+// filter set, esc clears it before it leaves the view.
+func worktreesFooter(m Model) []footerEntry {
+	if m.worktreeFilter != "" {
+		return withEscLabel(worktreesFooterPalette, footerEscClearFilter)
+	}
+	return worktreesFooterPalette
 }
 
 // The viewers' `/` leaves for the result list with its query open, so it is
@@ -305,7 +338,7 @@ var planRunFooterPalette = []footerEntry{
 }
 
 // aslFocusAvailable mirrors what f actually does: it is offered only when the
-// selected run resolves to at least one live Kitty session.
+// selected run resolves to at least one live session, Kitty or tmux.
 func aslFocusAvailable(m Model) bool {
 	row, ok := m.selectedASLRow()
 	if !ok {
