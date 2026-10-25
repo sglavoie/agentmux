@@ -10,6 +10,12 @@ final class WorkspaceSidebarZoomView: NSView {
     var zoom: CGFloat = 1 {
         didSet { needsLayout = true }
     }
+    /// Paints pure white over the source-list material in the light
+    /// appearance, so the left sidebar matches the inspector; the dark
+    /// appearance keeps the material.
+    var opaqueInLight = false {
+        didSet { updateFill() }
+    }
 
     init(content: NSView) {
         self.content = content
@@ -25,6 +31,17 @@ final class WorkspaceSidebarZoomView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateFill()
+    }
+
+    private func updateFill() {
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        wantsLayer = true
+        layer?.backgroundColor = opaqueInLight && !dark ? NSColor.white.cgColor : nil
+    }
 
     override func layout() {
         // A collapsed split item can briefly have no extent. Keep its last

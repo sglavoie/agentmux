@@ -588,6 +588,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, feedLabel: feedLabel, feedButton: feedButton)
         let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)
         sidebarZoomView.zoom = sidebarZoom
+        sidebarZoomView.opaqueInLight = true
         sidebarController.view = sidebarZoomView
         self.sidebarZoomView = sidebarZoomView
         sidebar.dataSource = self
