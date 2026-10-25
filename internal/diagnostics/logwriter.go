@@ -90,8 +90,9 @@ func (w *DaemonLogWriter) Write(record []byte) (int, error) {
 		_ = file.Close()
 		return 0, err
 	}
+	// One slog record per call, so no fsync here: see appendLineLocked.
 	n, writeErr := file.Write(record)
-	err = errors.Join(writeErr, file.Sync(), file.Close())
+	err = errors.Join(writeErr, file.Close())
 	if err != nil {
 		return n, err
 	}

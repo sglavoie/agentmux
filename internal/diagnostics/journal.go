@@ -274,7 +274,11 @@ func (j *Journal) appendLineLocked(record []byte) error {
 	if writeErr == nil && written != len(record) {
 		writeErr = io.ErrShortWrite
 	}
-	return errors.Join(writeErr, file.Sync(), file.Close())
+	// No fsync per record: an O_APPEND write already survives the writer's
+	// crash, and on darwin each Sync is an F_FULLFSYNC that flushes the whole
+	// drive cache from inside every hook. Only a power loss can take the tail;
+	// rotateLocked syncs a segment once, as it is sealed.
+	return errors.Join(writeErr, file.Close())
 }
 
 func (j *Journal) Maintain(ctx context.Context) (MaintenanceReport, error) {

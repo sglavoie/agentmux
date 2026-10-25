@@ -44,14 +44,16 @@ func WithExclusive(path string, fn func() error) (retErr error) {
 
 // WriteFileAtomic replaces path with data using a sibling temporary file.
 // The unique temporary name avoids collisions with stale files from crashed
-// older writers. Syncing both the file and its parent directory makes the
-// replacement durable across a power loss on filesystems that support it.
+// older writers. The file is synced so a reader never sees torn bytes, but
+// the parent directory is not (atomicfile.SyncDirNone): a rename lost to a
+// power cut only means the cache is rebuilt, and a directory F_FULLFSYNC per
+// write is the expensive part on darwin.
 //
 // The mechanism now lives in internal/atomicfile, which authoritative source
 // artifacts use too. This remains the cache-facing name so callers keep reading
 // as cache code.
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
-	return atomicfile.Write(path, data, perm)
+	return atomicfile.Write(path, data, perm, atomicfile.WithDirSync(atomicfile.SyncDirNone))
 }
 
 // Quarantine renames a corrupt metadata file beside its original using a

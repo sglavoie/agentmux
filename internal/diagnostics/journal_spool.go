@@ -69,7 +69,8 @@ func (j *Journal) appendSpoolWithOpenHook(ctx context.Context, record []byte, af
 		if writeErr == nil && written != len(record) {
 			writeErr = io.ErrShortWrite
 		}
-		return errors.Join(writeErr, file.Sync(), unix.Flock(int(file.Fd()), unix.LOCK_UN), file.Close())
+		// Unsynced, like appendLineLocked; promotion syncs what it publishes.
+		return errors.Join(writeErr, unix.Flock(int(file.Fd()), unix.LOCK_UN), file.Close())
 	}
 }
 
@@ -464,6 +465,9 @@ func (j *Journal) publishSpoolClaim(ctx context.Context, claim string) (string, 
 	segment := filepath.Join(j.paths.JournalDir, fmt.Sprintf(
 		"events-spool-%s-%d-%06d.jsonl", timestamp(j.opts.Now()), os.Getpid(), rotationSequence.Add(1),
 	))
+	if err := syncFile(claim); err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("diagnostics: syncing spool claim: %w", err)
+	}
 	if err := os.Rename(claim, segment); err != nil {
 		if os.IsNotExist(err) {
 			return "", fmt.Errorf("diagnostics: spool claim disappeared before publication: %w", err)

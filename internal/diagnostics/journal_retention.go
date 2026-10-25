@@ -105,6 +105,9 @@ func (j *Journal) rotateLocked() (string, error) {
 	rotated := filepath.Join(j.paths.JournalDir, fmt.Sprintf(
 		"events-%s-%d-%06d.jsonl", timestamp(j.opts.Now()), os.Getpid(), rotationSequence.Add(1),
 	))
+	if err := syncFile(j.current); err != nil {
+		return "", fmt.Errorf("diagnostics: syncing journal before rotation: %w", err)
+	}
 	if err := os.Rename(j.current, rotated); err != nil {
 		return "", fmt.Errorf("diagnostics: rotating journal: %w", err)
 	}
