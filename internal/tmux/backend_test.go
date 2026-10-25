@@ -29,6 +29,9 @@ func requireTmux(t *testing.T) string {
 	if err != nil {
 		t.Skip("tmux is not installed; the private tmux backend needs it")
 	}
+	if version, err := binaryVersion(path); err != nil || !SupportedVersion(version) {
+		t.Skipf("tmux at %s is not %s or newer (%q, %v); the private tmux backend needs it", path, MinVersion, version, err)
+	}
 	return path
 }
 

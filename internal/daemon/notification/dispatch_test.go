@@ -190,8 +190,8 @@ func TestNotifier_ParentContextCancellationStopsDispatch(t *testing.T) {
 		synctest.Wait()
 
 		select {
-		case <-returned:
-			t.Fatal("dispatch returned before parent cancel; the timeout fired instead of cancellation propagating")
+		case err := <-returned:
+			t.Fatalf("dispatch returned (%v) before parent cancel; the timeout fired instead of cancellation propagating", err)
 		default:
 		}
 

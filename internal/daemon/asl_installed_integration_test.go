@@ -732,7 +732,9 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 
 	// Both workers finish their sessions; each run's end releases its lease.
 	select {
-	case <-kittyExited:
+	case err := <-kittyExited:
+		// The leases below are what this checks; how the run ended is context.
+		t.Logf("the Kitty session's run exited: %v", err)
 	case <-time.After(120 * time.Second):
 		t.Fatalf("the Kitty session's run did not exit; log:\n%s", w.readLog("run-plan-kitty.out"))
 	}

@@ -25,13 +25,18 @@ type Fixture struct {
 }
 
 // New starts nothing (the first launch starts the server) and skips the test
-// when tmux is not installed. It points SHELL at a stand-in login shell that
+// when tmux is not installed or is older than tmux.MinVersion. It points SHELL at a stand-in login shell that
 // records the runtime session it was launched for and then sleeps, so every
 // launch's `$SHELL -lic <harness command>` runs that instead of a harness.
 func New(t *testing.T) *Fixture {
 	t.Helper()
-	if _, err := exec.LookPath("tmux"); err != nil {
+	path, err := exec.LookPath("tmux")
+	if err != nil {
 		t.Skip("tmux is not installed; the private tmux backend needs it")
+	}
+	out, err := exec.Command(path, "-V").Output()
+	if version := strings.TrimPrefix(strings.TrimSpace(string(out)), "tmux "); err != nil || !tmux.SupportedVersion(version) {
+		t.Skipf("tmux at %s is not %s or newer (%q, %v); the private tmux backend needs it", path, tmux.MinVersion, version, err)
 	}
 	// Socket paths are length-limited, so the server lives under a short
 	// directory rather than t.TempDir().

@@ -32,6 +32,13 @@ func TestDeleteChoiceMutationWaitsForCacheLockOutsideUpdate(t *testing.T) {
 			return nil
 		})
 	}()
+	release := func() {
+		close(releaseLock)
+		if err := <-lockDone; err != nil {
+			t.Errorf("releasing cache lock: %v", err)
+		}
+	}
+
 	select {
 	case <-lockHeld:
 	case err := <-lockDone:
@@ -54,18 +61,15 @@ func TestDeleteChoiceMutationWaitsForCacheLockOutsideUpdate(t *testing.T) {
 	select {
 	case result = <-updateDone:
 	case <-time.After(500 * time.Millisecond):
-		close(releaseLock)
-		<-lockDone
+		release()
 		t.Fatal("delete key blocked Update on the cache advisory lock")
 	}
 	if got := result.model.(Model); got.mode != ModeSessionSearch {
-		close(releaseLock)
-		<-lockDone
+		release()
 		t.Fatalf("mode = %v, want ModeSessionSearch", got.mode)
 	}
 	if result.cmd == nil {
-		close(releaseLock)
-		<-lockDone
+		release()
 		t.Fatal("delete key returned nil mutation command")
 	}
 
@@ -73,15 +77,14 @@ func TestDeleteChoiceMutationWaitsForCacheLockOutsideUpdate(t *testing.T) {
 	go func() { mutationDone <- result.cmd() }()
 	select {
 	case msg := <-mutationDone:
-		close(releaseLock)
-		<-lockDone
+		release()
 		t.Fatalf("mutation completed while cache lock was held: %T", msg)
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	close(releaseLock)
-	if err := <-lockDone; err != nil {
-		t.Fatalf("releasing cache lock: %v", err)
+	release()
+	if t.Failed() {
+		t.FailNow()
 	}
 	select {
 	case msg := <-mutationDone:

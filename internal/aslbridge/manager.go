@@ -283,8 +283,13 @@ func (m *Manager) runSession(ctx context.Context) (time.Duration, error) {
 	tail := newStderrTail()
 	go tail.consume(child.Stderr)
 
-	exited := make(chan error, 1)
-	go func() { exited <- child.Wait() }()
+	// The exit status is not read: by the time anything waits on exited, the
+	// bridge is being torn down and how it ended changes nothing.
+	exited := make(chan struct{})
+	go func() {
+		_ = child.Wait()
+		close(exited)
+	}()
 
 	c := newConn(child.Stdin, child.Stdout, m.handleEvent, m.counters)
 

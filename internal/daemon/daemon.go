@@ -357,7 +357,9 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 			// an owned join too: Serve drains its in-flight handlers and returns
 			// before run does.
 			server.Close()
-			<-serveErr
+			if err := <-serveErr; err != nil {
+				slog.Warn("daemon: server stopped with an error during shutdown", "err", err)
+			}
 			return nil
 		}
 	}
