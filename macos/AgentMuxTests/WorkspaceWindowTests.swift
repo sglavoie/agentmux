@@ -906,6 +906,29 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(Item.bands(in: [.section("Views"), .group(WorkspaceGroup(project: "api", rows: []))]).isEmpty)
     }
 
+    func testSessionsUnderAProjectAreTintedByStateButNotInsideATintedSection() throws {
+        typealias Item = WorkspaceWindowController.Item
+        func row(_ id: String, _ state: String) -> WorkspaceRow {
+            var row = WorkspaceRow(key: .embedded(id), target: .embedded(runtimeSessionID: id), project: "api", label: "work",
+                                   detail: "", glyph: "", attention: false, working: false, muted: false, toolTip: "")
+            row.iconState = state
+            return row
+        }
+        let beside = WorkspaceUtilityView(kind: .terminal, target: "rs-1", title: "Terminal")
+        let items: [Item] = [
+            .group(WorkspaceGroup(project: WorkspaceSidebar.pinnedSection, rows: [], pinned: true)), .row(row("p", "stop")),
+            .group(WorkspaceGroup(project: "api", rows: [])),
+            .row(row("rs-1", "stop")), .view(beside),
+            .row(row("rs-2", "bolt")), .row(row("rs-3", "subagent")), .row(row("rs-4", "compact")),
+            .row(row("rs-5", "")), .row(row("rs-6", "key")), .row(row("rs-7", "question")),
+        ]
+        let bands = Item.bands(in: items)
+        XCTAssertEqual(bands.map(\.lines), [0..<2, 3..<5, 5..<6, 6..<7, 7..<8, 8..<9, 9..<10, 10..<11])
+        XCTAssertEqual(bands.map(\.band), [.pinned, .stopped, .running, .running, .running, .idle, .attention, .attention])
+        XCTAssertEqual(WorkspaceSidebarBand(state: "warning"), .attention)
+        XCTAssertEqual(WorkspaceSidebarBand(state: "error"), .attention)
+    }
+
     func testOnlyTheSidebarLinesThatChangedAreDrawnAgain() throws {
         typealias Item = WorkspaceWindowController.Item
         app.store.apply(snapshot: F.snapshot(sessions))

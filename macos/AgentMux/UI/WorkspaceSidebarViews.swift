@@ -17,7 +17,8 @@ final class WorkspaceSidebarView: NSTableView {
             let rect = rect(ofRow: lines.lowerBound).union(rect(ofRow: lines.upperBound - 1))
             guard rect.intersects(clipRect) else { continue }
             band.color.setFill()
-            NSRect(x: bounds.minX, y: rect.minY, width: bounds.width, height: rect.height).fill()
+            let gap: CGFloat = band.isSection ? 0 : 1
+            NSRect(x: bounds.minX, y: rect.minY + gap, width: bounds.width, height: rect.height - 2 * gap).fill()
         }
     }
 

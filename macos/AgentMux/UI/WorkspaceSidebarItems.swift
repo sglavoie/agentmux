@@ -83,16 +83,25 @@ enum WorkspaceSidebarItem: Equatable {
         return slot == index || slot == after ? nil : slot
     }
 
-    /// The lines a tinted section spans: its heading, its sessions, and the
-    /// terminals beside them, up to the next heading.
+    /// The lines drawn on a background: a tinted section from its heading
+    /// to the next one, and under a project each session with the terminals
+    /// beside it, by its state.
     static func bands(in items: [Self]) -> [(lines: Range<Int>, band: WorkspaceSidebarBand)] {
         var bands: [(lines: Range<Int>, band: WorkspaceSidebarBand)] = []
         var open: (start: Int, band: WorkspaceSidebarBand)?
+        // Inside a tinted section its own color wins over a session's.
+        var inSection = false
         for (index, item) in items.enumerated() {
             let band: WorkspaceSidebarBand?
             switch item {
-            case .section: band = nil
-            case let .group(group): band = group.needsAttention ? .attention : group.pinned ? .pinned : nil
+            case .section:
+                band = nil
+                inSection = false
+            case let .group(group):
+                band = group.needsAttention ? .attention : group.pinned ? .pinned : nil
+                inSection = band != nil
+            case let .row(row) where !inSection:
+                band = WorkspaceSidebarBand(state: row.iconState)
             case .view, .row: continue
             }
             if let open { bands.append((open.start..<index, open.band)) }
@@ -103,24 +112,49 @@ enum WorkspaceSidebarItem: Equatable {
     }
 }
 
-/// The background a section of the sidebar is set apart by.
+/// The background a section or a session of the sidebar is set apart by.
 enum WorkspaceSidebarBand: Equatable {
-    /// Needs attention: #FFF659.
+    /// Needs attention, and a session waiting on the operator: #FFF659.
     case attention
     /// Pinned: #98E7FF.
     case pinned
+    /// A session whose turn ended (✓): #FFC0C0.
+    case stopped
+    /// A session at work (⚡, 🤖, 🌀): #EAFFEA.
+    case running
+    /// A session with no state glyph: #E5E5E5.
+    case idle
 
-    /// The hue, softened so the lines on it stay legible in either
-    /// appearance.
+    /// A section's heading and lines are one block; sessions are set apart
+    /// from their neighbours.
+    var isSection: Bool { self == .attention || self == .pinned }
+
+    /// What a session's icon state is drawn on under its project.
+    init(state: String) {
+        switch state {
+        case "": self = .idle
+        case "stop": self = .stopped
+        case "key", "question", "warning", "error": self = .attention
+        default: self = .running
+        }
+    }
+
+    /// The hue, softened in dark mode, and for the two strong section hues
+    /// in light mode too, so the lines on it stay legible.
     var color: NSColor {
         let (red, green, blue): (CGFloat, CGFloat, CGFloat)
         switch self {
         case .attention: (red, green, blue) = (0xFF, 0xF6, 0x59)
         case .pinned: (red, green, blue) = (0x98, 0xE7, 0xFF)
+        case .stopped: (red, green, blue) = (0xFF, 0xC0, 0xC0)
+        case .running: (red, green, blue) = (0xEA, 0xFF, 0xEA)
+        case .idle: (red, green, blue) = (0xE5, 0xE5, 0xE5)
         }
+        let strong = isSection
         return NSColor(name: nil, dynamicProvider: { appearance in
             let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            return NSColor(srgbRed: red / 255, green: green / 255, blue: blue / 255, alpha: dark ? 0.2 : 0.3)
+            let alpha: CGFloat = dark ? (strong ? 0.2 : 0.12) : (strong ? 0.3 : 1)
+            return NSColor(srgbRed: red / 255, green: green / 255, blue: blue / 255, alpha: alpha)
         })
     }
 }

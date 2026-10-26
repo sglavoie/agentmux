@@ -69,6 +69,9 @@ struct WorkspaceRow: Equatable {
     /// A stable discriminator when several live rows have the same name.
     var qualifier = ""
     var branch = ""
+    /// The session's icon state (`stop`, `bolt`, …); empty when idle. What
+    /// the line's background under a project says.
+    var iconState = ""
 
     var sessionLabel: String { qualified(label) }
     var namedLabel: String { name.isEmpty ? "" : qualified(name) }
@@ -387,7 +390,8 @@ enum WorkspaceSidebar {
             pinned: session.pinned,
             needsAttention: session.needsAttention,
             conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil },
-            branch: session.branch
+            branch: session.branch,
+            iconState: session.iconState
         )
     }
 
