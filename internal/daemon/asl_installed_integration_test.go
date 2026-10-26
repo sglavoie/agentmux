@@ -318,6 +318,12 @@ type aslDaemon struct {
 	once   sync.Once
 }
 
+// aslWorldKittySocket is the one Kitty instance of the world: the socket its
+// Kitty runtime session is registered on, and the one the daemon's snapshot is
+// published for. A managed hook names its session's socket, and the daemon
+// reads the tab title only from a snapshot of that same instance.
+const aslWorldKittySocket = "unix:/tmp/amx-s10-kitty"
+
 func (w *aslWorld) startDaemon(kittyWindows []kitty.OSWindow) *aslDaemon {
 	w.t.Helper()
 	notifier, calls := newTestNotifier(&config.NotificationConfig{Permission: true})
@@ -328,6 +334,7 @@ func (w *aslWorld) startDaemon(kittyWindows []kitty.OSWindow) *aslDaemon {
 	h.SetASLStateRoot(w.stateRoot)
 	if kittyWindows != nil {
 		h.SetKittyClient(&fakeKittyClient{windows: kittyWindows})
+		h.lastKittyListenOn = aslWorldKittySocket
 	}
 	report := h.restoreRuntimeCheckpoint(time.Now())
 	if report.Corrupt {
@@ -638,7 +645,7 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 		}
 		onKitty = record.ID
 		_, err = registry.Commit(record.ID, runtimesession.Target{
-			Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendKitty, Address: "unix:/tmp/amx-s10-kitty", Generation: "kitty-s10-1"},
+			Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendKitty, Address: aslWorldKittySocket, Generation: "kitty-s10-1"},
 			Ref:      "43",
 		}, runtimesession.ProcessFingerprint{PID: os.Getpid(), StartToken: "s10-test-process"}, time.Now())
 		return err
@@ -680,7 +687,7 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	second.h.maintenanceTick(time.Now().Add(22 * time.Second))
 	time.Sleep(500 * time.Millisecond)
 	kittyTarget := second.h.notificationTarget(43, "work")
-	if !kittyTarget.Navigable || kittyTarget.KittyListenOn != "unix:/tmp/amx-s10-kitty" || kittyTarget.RuntimeSessionID != string(onKitty) {
+	if !kittyTarget.Navigable || kittyTarget.KittyListenOn != aslWorldKittySocket || kittyTarget.RuntimeSessionID != string(onKitty) {
 		t.Fatalf("Kitty notification target = %+v", kittyTarget)
 	}
 	if got := second.notificationsFor(43); len(got) != 1 || got[0].title != "kitty-session" {
