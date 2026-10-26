@@ -281,6 +281,11 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health,
 		// by a daemon predating it, and the retained evidence must not fail
 		// strict doctor for a window that has already recovered.
 		stuckOnScreen := screenDeclineStillCurrent(meta, liveByID, id)
+		// A stop held over background work declines the same screen for as long
+		// as that work runs, and does so because the classifier DID match it.
+		if hold := meta.Shadow.PendingTerminalStop; hold != nil && hold.BackgroundWork {
+			stuckOnScreen = false
+		}
 		for _, decline := range meta.Watchdog.ScreenDeclines {
 			if !stuckOnScreen || !decline.StableFingerprint || decline.Streak < screenDeclinePersistentStreak {
 				continue

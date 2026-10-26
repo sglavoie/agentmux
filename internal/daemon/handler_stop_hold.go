@@ -51,17 +51,24 @@ const stopHoldRetryInterval = rendering.Interval
 // rule: the hold commits only once the quiet period has elapsed *and* the
 // harness's own idle probe has confirmed, with deadline as the hard convergence
 // bound for a window nothing ever confirms.
+//
+// backgroundWork is set once the probe has seen the pane still running work in
+// the background (screenstate.VetoBackgroundTask) since the hold armed. From
+// then on every such reading pushes deadline back (holdStopForBackgroundWork),
+// so the stop paints only once that work is gone from the screen or the pane
+// can no longer be read.
 type pendingStopHold struct {
-	timer       *time.Timer
-	seq         uint64
-	claimed     bool
-	class       stopHoldClass
-	req         protocol.Request
-	armedAt     time.Time
-	quietUntil  time.Time
-	deadline    time.Time
-	confirmed   bool
-	confirmedBy protocol.StopConfirmedBy
+	timer          *time.Timer
+	seq            uint64
+	claimed        bool
+	class          stopHoldClass
+	req            protocol.Request
+	armedAt        time.Time
+	quietUntil     time.Time
+	deadline       time.Time
+	confirmed      bool
+	confirmedBy    protocol.StopConfirmedBy
+	backgroundWork bool
 }
 
 func (h *Handler) holdStopForConfirmation(req protocol.Request, payload hookevent.HookPayload) bool {
@@ -108,6 +115,11 @@ func (h *Handler) holdStopForConfirmation(req protocol.Request, payload hookeven
 	deadline := quietUntil
 	if class == stopHoldClassTerminal {
 		deadline = armedAt.Add(h.stopConfirmTimeout)
+		if rearm && previous.backgroundWork && previous.deadline.After(deadline) {
+			// The background work that pushed the first stop's deadline back is
+			// still the reason this one waits.
+			deadline = previous.deadline
+		}
 		if deadline.Before(quietUntil) {
 			quietUntil = deadline
 		}
@@ -133,15 +145,16 @@ func (h *Handler) holdStopForConfirmation(req protocol.Request, payload hookeven
 		h.stopHoldTimerFired(req.WindowID, seq)
 	})
 	h.pendingStopHolds[req.WindowID] = pendingStopHold{
-		timer:       timer,
-		seq:         seq,
-		class:       class,
-		req:         req,
-		armedAt:     armedAt,
-		quietUntil:  quietUntil,
-		deadline:    deadline,
-		confirmed:   previous.confirmed,
-		confirmedBy: previous.confirmedBy,
+		timer:          timer,
+		seq:            seq,
+		class:          class,
+		req:            req,
+		armedAt:        armedAt,
+		quietUntil:     quietUntil,
+		deadline:       deadline,
+		confirmed:      previous.confirmed,
+		confirmedBy:    previous.confirmedBy,
+		backgroundWork: previous.backgroundWork,
 	}
 	h.stateMu.Unlock()
 
@@ -213,6 +226,41 @@ func (h *Handler) confirmStopHoldLocked(windowID int, source protocol.SourceID) 
 		pending.timer.Reset(0)
 	}
 	return true
+}
+
+// holdStopForBackgroundWork records that the pane behind a withheld terminal
+// stop still shows work running in the background — Claude's "· 1 shell" mode
+// line, Codex's "1 background terminal running". The harness's turn really did
+// end, so the stop is honest, but nobody has anything to answer yet: the
+// deadline moves to a full stop_confirm.timeout from now, and any confirmation
+// gathered before the work showed up is dropped. The probe reads a held pane
+// every tick, well inside that timeout, so the hold lasts exactly as long as the
+// work stays on screen and then gets a whole timeout to confirm the idle pane or
+// be superseded by the turn the finished work starts. A pane that can no longer
+// be read stops pushing, and the native stop paints at the deadline as before.
+// Safe to call off the state lock.
+func (h *Handler) holdStopForBackgroundWork(windowID int) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	pending, ok := h.pendingStopHolds[windowID]
+	if !ok || pending.class != stopHoldClassTerminal || pending.claimed {
+		return
+	}
+	pending.backgroundWork = true
+	pending.confirmed = false
+	pending.confirmedBy = ""
+	if deadline := time.Now().Add(h.stopConfirmTimeout); deadline.After(pending.deadline) {
+		pending.deadline = deadline
+	}
+	h.pendingStopHolds[windowID] = pending
+}
+
+// stopHoldWaitsOnBackgroundLocked reports whether windowID's ⚡ is a terminal
+// stop being withheld over background work. Such a window is bounded by its
+// hold's deadline, not by the watchdog. Callers hold stateMu.
+func (h *Handler) stopHoldWaitsOnBackgroundLocked(windowID int) bool {
+	pending, ok := h.pendingStopHolds[windowID]
+	return ok && pending.class == stopHoldClassTerminal && pending.backgroundWork
 }
 
 // stopConfirmedByProbe spells one probe source as the release evidence of a held
@@ -453,11 +501,12 @@ func (h *Handler) pendingTerminalStopSnapshotLocked(windowID int) *protocol.Pend
 		return nil
 	}
 	return &protocol.PendingTerminalStop{
-		ArmedAt:    pending.armedAt.Unix(),
-		QuietUntil: pending.quietUntil.Unix(),
-		Deadline:   pending.deadline.Unix(),
-		Confirmed:  pending.confirmed,
-		Class:      protocol.StopHoldClassTerminal,
+		ArmedAt:        pending.armedAt.Unix(),
+		QuietUntil:     pending.quietUntil.Unix(),
+		Deadline:       pending.deadline.Unix(),
+		Confirmed:      pending.confirmed,
+		Class:          protocol.StopHoldClassTerminal,
+		BackgroundWork: pending.backgroundWork,
 	}
 }
 

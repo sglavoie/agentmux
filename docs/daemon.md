@@ -639,7 +639,10 @@ event name and source key:
   whose composer is idle, or that shows Claude's interruption marker. The
   classification itself lives in `internal/screenstate`, which computes every
   veto first and unconditionally — a live status line (progress ellipsis plus a
-  parenthesized elapsed timer), a background-task hint, a blocking prompt, a
+  parenthesized elapsed timer), a background-task hint or a background shell
+  still counted on the mode line (`· 1 shell`; not the finished line's
+  `1 shell still running`, which is transcript, and not `← 1 agent`, which
+  every pane with an agent view shows), a blocking prompt, a
   context-limit marker, or a busy composer — and only then consults positive
   terminal evidence. Every tier needs **at least two consecutive samples that
   agree on the same normalized screen fingerprint**, so a pane still repainting
@@ -675,7 +678,15 @@ acceptable; a false `🛑` is not), and it is bounded on two sides. When a nativ
 terminal hook *was* received and is being held for probe confirmation, the hold
 rides to its deadline and **commits anyway** at `stop_confirm.timeout` (15s by
 default), so the fingerprint gate can never indefinitely suppress a real
-terminal stop. When there was no hook at all, only the watchdog clears the tab:
+terminal stop. The one exception is background work: a held stop whose pane the
+probe reads as still running it (the `background_task` veto: Claude's
+`· 1 shell`, Codex's `1 background terminal running`) has its deadline moved a
+full timeout past each such reading. The turn ended, but nobody has anything to
+answer while that work runs, so the tab keeps `⚡`, the active watchdog leaves
+it alone, and the export marks the hold `background_work`. Once the work is off
+the screen, the probe confirms the stop or the turn the finished work starts
+supersedes it. A pane that can no longer be read stops pushing the deadline,
+and the stop paints a timeout later. When there was no hook at all, only the watchdog clears the tab:
 `sweepStale` clears a stale window to the **empty** icon and never to `🛑`,
 firing its one-shot "Session idle" notification. The sweep always runs: with
 no `[defaults.watchdog]` threshold configured, `active` defaults to 600 seconds

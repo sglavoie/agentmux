@@ -222,6 +222,9 @@ type PendingTerminalStop struct {
 	Deadline   int64  `json:"deadline"`
 	Confirmed  bool   `json:"confirmed"`
 	Class      string `json:"class"`
+	// BackgroundWork reports that the pane was seen running background work
+	// while the stop was held, which keeps pushing Deadline back.
+	BackgroundWork bool `json:"background_work,omitempty"`
 }
 
 // ShadowMismatch is one recorded divergence between the legacy render decision

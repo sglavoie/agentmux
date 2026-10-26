@@ -386,8 +386,12 @@ func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, 
 		}
 
 		account := st.LastAccount
+		// A stop withheld while its pane still shows background work running is
+		// bounded by its own deadline, which the probe pushes back only while
+		// that work is on screen: the ⚡ it keeps is not an idle window.
+		backgroundHeld := h.stopHoldWaitsOnBackgroundLocked(windowID)
 		expired, aslExecuting := 0, false
-		if staleThresholdsEnabled {
+		if staleThresholdsEnabled && !backgroundHeld {
 			expired, aslExecuting = h.expireStaleFactsLocked(windowID, st, now, credit, gapTick)
 		}
 
@@ -399,7 +403,7 @@ func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, 
 				// An authoritative ASL turn or verification lease is live
 				// evidence the loop is still working this window; the bolt is
 				// not cleared out from under it.
-				windowStale = idle >= threshold && (action != "active" || !aslExecuting)
+				windowStale = idle >= threshold && (action != "active" || !aslExecuting) && !backgroundHeld
 			}
 		} else if staleThresholdsEnabled {
 			st.ResetIdle()

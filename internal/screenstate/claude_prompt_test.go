@@ -324,12 +324,11 @@ func claudePreSplitPatternFile(t *testing.T) string {
 	t.Helper()
 	set := embeddedClaudePatterns(t)
 
-	// The only group the shipped file defines is the one this session added.
-	// Anything else would have to be carried over by hand, so fail loudly
-	// rather than silently emit a file that is missing it.
-	if groups := set.GroupNames(); len(groups) != 1 || groups[0] != claudeClauseBlockingPrompt {
-		t.Fatalf("embedded claude groups = %v, want only %q; this helper needs updating",
-			groups, claudeClauseBlockingPrompt)
+	// blocking_prompt is the group the split added and the one replaced below;
+	// every other group is carried over as shipped.
+	if _, ok := set.Group(claudeClauseBlockingPrompt); !ok {
+		t.Fatalf("embedded claude groups = %v, want %q among them; this helper needs updating",
+			set.GroupNames(), claudeClauseBlockingPrompt)
 	}
 
 	var body strings.Builder
@@ -356,6 +355,20 @@ func claudePreSplitPatternFile(t *testing.T) string {
 		writeClaudePhraseList(&body, name, set.Phrases(name))
 	}
 	writeClaudePhraseList(&body, claudeClauseBlockingPrompt, claudePreSplitBlockingPrompts)
+
+	for _, name := range set.GroupNames() {
+		if name == claudeClauseBlockingPrompt {
+			continue
+		}
+		group, _ := set.Group(name)
+		fmt.Fprintf(&body, "\n[group.%s]\n", name)
+		if len(group.All) > 0 {
+			writeClaudePhraseList(&body, "all", group.All)
+		}
+		if len(group.Any) > 0 {
+			writeClaudePhraseList(&body, "any", group.Any)
+		}
+	}
 	return body.String()
 }
 

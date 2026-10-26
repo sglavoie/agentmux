@@ -74,6 +74,23 @@ working_status_line = '^(?:[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\x{2026}\s*\(\s*\d+[h
 # stabilization samples on a screen that is not finished.
 completed_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s+for\s+(?:\d+[hms]\s*)+$'
 
+# background_shell_footer matches the running-shell count Claude puts on its
+# mode line once a background shell outlives the turn that started it
+# ("⏵⏵ bypass permissions on · 1 shell · ← 1 agent"). The turn really is over
+# there — "✻ Worked for 21m 42s · done 12:58 PM" is honest — so this count is
+# the only evidence the pane still owns running work.
+#
+# The count must be a whole footer item: a non-zero number and "shell(s)",
+# opened by the line start or a "·" separator and closed by another "·" or the
+# end of the line. That is what keeps "Ran 2 shell commands" and the finished
+# line's "· 1 shell still running" out; the second is transcript, which Claude
+# does not repaint when the shell ends, so trusting it would hold ⚡ forever.
+#
+# "← 1 agent" is deliberately NOT matched. Claude shows it on every screen of a
+# pane with an agent view, finished turns included (tmux capture
+# claude_idle_completed_t0), so it says nothing about running work.
+background_shell_footer = '(?m)(?:^|\x{00b7})[\t \x{00a0}]*[1-9]\d*[\t \x{00a0}]+shells?[\t \x{00a0}]*(?:\x{00b7}|$)'
+
 [phrases]
 
 # Legacy backstop only. Claude Code 2.1.x no longer renders "esc to interrupt"
@@ -82,7 +99,7 @@ completed_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s+for\s+(?:\d+[hms]\s
 interrupt_hint = ["esc to interrupt"]
 
 # The ctrl+b form is rendered by a live Bash tool run.
-background_task = ["ctrl+b to"]
+background_task_hint = ["ctrl+b to"]
 
 # Claude permission, elicitation, and other user-blocking choice prompts. The
 # hook path normally paints these as key/question; the screen read is a second
@@ -142,6 +159,12 @@ prompt_elicitation = ["would you like to"]
 # claudeRequirements asks for it as AnyClause, and Patterns.Match resolves a
 # regex, a phrase list and a group alike. Such a set still vetoes correctly and
 # simply yields no kind.
+# background_task is the clause claude.go's veto reads: the ctrl+b hint of a
+# live Bash run, or a background shell still counted on the mode line. An
+# override may define it as a flat phrase list instead, as it used to be.
+[group.background_task]
+any = ["background_task_hint", "background_shell_footer"]
+
 [group.blocking_prompt]
 any = [
     "prompt_permission",

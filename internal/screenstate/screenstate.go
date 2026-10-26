@@ -107,8 +107,10 @@ const (
 	// available.
 	VetoLiveStatusLine
 	// VetoBackgroundTask is a detached background-task or running-agent manager
-	// hint ("ctrl+b to …"). A pane whose main composer looks idle can still own
-	// running work.
+	// hint ("ctrl+b to …"), or a count of background work still running (Claude's
+	// "· 1 shell" mode-line item, Codex's "1 background terminal running"). A
+	// pane whose main composer looks idle can still own running work, and the
+	// daemon keeps a held stop from painting for as long as this is on screen.
 	VetoBackgroundTask
 	// VetoBlockingPrompt is a permission, elicitation, or choice prompt waiting
 	// on the user.

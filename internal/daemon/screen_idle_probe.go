@@ -156,6 +156,11 @@ func (h *Handler) probeScreenIdleWindow(
 	// gate compares. Splitting these across boolean shims would let the answers
 	// be computed from different readings of the same capture.
 	obs := activity.ClassifyScreenState(spec.harness, screen)
+	if obs.Vetoes&screenstate.VetoBackgroundTask != 0 {
+		// The turn ended but the pane still runs work it started: a native stop
+		// being withheld waits for that work rather than for its deadline.
+		h.holdStopForBackgroundWork(targetWindowID)
+	}
 	if fields.marked {
 		if obs.State == screenstate.Working {
 			// The pane was seen working since the operator forced ⚡: arm the

@@ -87,6 +87,18 @@ func TestClassifyClaudeIdleScreen(t *testing.T) {
 			want:   false, state: Working, tier: TierNone, vetoes: VetoBackgroundTask,
 		},
 		{
+			name: "background shell counted on the mode line", fixture: true,
+			screen: "claude_idle_background_shell.txt",
+			want:   false, state: Working, tier: TierNone, vetoes: VetoBackgroundTask,
+		},
+		{
+			// The finished line still says "1 shell still running": it is
+			// transcript, and only the mode line's count is live.
+			name: "background shell gone from the mode line", fixture: true,
+			screen: "claude_idle_background_shell_done.txt",
+			want:   true, state: Terminal, tier: TierQuiescent,
+		},
+		{
 			name:   "no composer at all",
 			screen: claudeNoComposerScreen,
 			want:   false, state: Unknown, tier: TierNone, vetoes: VetoComposerBusy,
@@ -451,3 +463,33 @@ const claudeWorkingThenInterruptedScreen = `✽ Pouncing… (5m 40s · ↓ 28.5k
 │ ❯                                                  │
 ╰──────────────────────────────────────────────────╯
 `
+
+// TestClaudeBackgroundShellFooterIsAWholeFooterItem pins what the mode line's
+// shell count must look like to veto. A false veto here holds a finished pane
+// on ⚡ for as long as the screen stays put, so prose that merely mentions
+// shells, and the agent-view hint every pane shows, must not match.
+func TestClaudeBackgroundShellFooterIsAWholeFooterItem(t *testing.T) {
+	composer := "\n\u276f \n"
+	cases := []struct {
+		name   string
+		footer string
+		veto   bool
+	}{
+		{name: "between items", footer: "  ⏵⏵ bypass permissions on · 1 shell · ← 1 agent", veto: true},
+		{name: "last item", footer: "  ⏸ manual mode on · 2 shells", veto: true},
+		{name: "last item with padding", footer: "  ⏸ manual mode on · 3 shells   ", veto: true},
+		{name: "first item", footer: "  2 shells · ← 1 agent", veto: true},
+		{name: "agent view hint only", footer: "  ⏸ manual mode on · ← 1 agent"},
+		{name: "finished line transcript", footer: "✻ Worked for 3s · done 1:00 PM · 1 shell still running"},
+		{name: "tool summary", footer: "  Ran 2 shell commands"},
+		{name: "zero count", footer: "  ⏸ manual mode on · 0 shells"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := claudeObservation(t, composer+tc.footer+"\n")
+			if vetoed := got.Vetoes&VetoBackgroundTask != 0; vetoed != tc.veto {
+				t.Fatalf("background veto = %v, want %v (vetoes %s)", vetoed, tc.veto, got.Vetoes)
+			}
+		})
+	}
+}
