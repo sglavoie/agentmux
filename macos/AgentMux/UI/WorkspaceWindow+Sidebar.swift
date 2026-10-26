@@ -337,10 +337,15 @@ extension WorkspaceWindowController {
         return moveItem(at: index, to: row)
     }
 
-    /// A click on a row focuses it; one on a project's header collapses or
-    /// expands the project.
+    /// A click on a row focuses it and scrolls the whole line into view; one
+    /// on a project's header collapses or expands the project.
     @objc func rowClicked(_ sender: Any?) {
-        focusItem(at: sidebar.clickedRow)
+        let index = sidebar.clickedRow
+        focusItem(at: index)
+        guard index >= 0, index < items.count, tableView(sidebar, shouldSelectRow: index) else { return }
+        // Focusing may have reloaded the list: scroll to where the line is now.
+        let selected = sidebar.selectedRow
+        sidebar.scrollRowToVisible(selected >= 0 ? selected : index)
     }
 
     /// Gives the keyboard to the session list: the arrow keys then move the
