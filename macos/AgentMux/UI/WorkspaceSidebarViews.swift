@@ -6,6 +6,21 @@ import AppKit
 @MainActor
 final class WorkspaceSidebarView: NSTableView {
     private(set) var pointerInside = false
+    /// The sections drawn on a background of their own, behind their lines.
+    var bands: [(lines: Range<Int>, band: WorkspaceSidebarBand)] = [] {
+        didSet { needsDisplay = true }
+    }
+
+    override func drawBackground(inClipRect clipRect: NSRect) {
+        super.drawBackground(inClipRect: clipRect)
+        for (lines, band) in bands where !lines.isEmpty && lines.upperBound <= numberOfRows {
+            let rect = rect(ofRow: lines.lowerBound).union(rect(ofRow: lines.upperBound - 1))
+            guard rect.intersects(clipRect) else { continue }
+            band.color.setFill()
+            NSRect(x: bounds.minX, y: rect.minY, width: bounds.width, height: rect.height).fill()
+        }
+    }
+
     var onPointerChanged: (() -> Void)?
     private var pointerTracking: NSTrackingArea?
 

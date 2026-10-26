@@ -48,6 +48,7 @@ extension WorkspaceWindowController {
                 changed?.formUnion(IndexSet(decorations.indices.filter { decorations[$0] != drawnDecorations[$0] }))
             }
             items = wanted
+            sidebar.bands = Item.bands(in: wanted)
             drawnDecorations = decorations
             sidebar.alphaValue = dimmed
             if let changed {

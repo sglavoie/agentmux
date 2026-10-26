@@ -890,6 +890,22 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNil(workspace.feedLabel.toolTip)
     }
 
+    func testNeedsAttentionAndPinnedSectionsAreTintedThroughTheirLastLine() throws {
+        typealias Item = WorkspaceWindowController.Item
+        let view = WorkspaceUtilityView(kind: .shell, target: "/repo", title: "Shell")
+        let items: [Item] = [
+            .section("Views"), .view(view),
+            .group(WorkspaceGroup(project: WorkspaceSidebar.pinnedSection, rows: [], pinned: true)), .view(view), .view(view),
+            .group(WorkspaceGroup(project: WorkspaceSidebar.attentionSection, rows: [], needsAttention: true)), .view(view),
+            .group(WorkspaceGroup(project: "api", rows: [])), .view(view),
+            .group(WorkspaceGroup(project: WorkspaceSidebar.attentionSection, rows: [], needsAttention: true)),
+        ]
+        let bands = Item.bands(in: items)
+        XCTAssertEqual(bands.map(\.lines), [2..<5, 5..<7, 9..<10])
+        XCTAssertEqual(bands.map(\.band), [.pinned, .attention, .attention])
+        XCTAssertTrue(Item.bands(in: [.section("Views"), .group(WorkspaceGroup(project: "api", rows: []))]).isEmpty)
+    }
+
     func testOnlyTheSidebarLinesThatChangedAreDrawnAgain() throws {
         typealias Item = WorkspaceWindowController.Item
         app.store.apply(snapshot: F.snapshot(sessions))
