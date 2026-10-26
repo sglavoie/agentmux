@@ -383,6 +383,9 @@ struct CompanionSession: Decodable, Equatable {
     var muted = false
     var locked = false
     var looping = false
+    /// The ★ in front of the session's tab or group title (`amx pin-session`):
+    /// listed above every other session, here and in the dashboard.
+    var pinned = false
     var busySinceAt: Int64 = 0
     var lastEventAt: Int64 = 0
     var presentationChangedAtMS: Int64 = 0
@@ -418,7 +421,7 @@ struct CompanionSession: Decodable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, branch, dirty, name
+        case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, pinned, branch, dirty, name
         case statusEvidence = "status_evidence"
         case runtime
         case windowID = "window_id"
@@ -455,6 +458,7 @@ struct CompanionSession: Decodable, Equatable {
         muted = c.lenient(.muted, false)
         locked = c.lenient(.locked, false)
         looping = c.lenient(.looping, false)
+        pinned = c.lenient(.pinned, false)
         busySinceAt = c.lenient(.busySinceAt, 0)
         lastEventAt = c.lenient(.lastEventAt, 0)
         presentationChangedAtMS = c.lenient(.presentationChangedAtMS, 0)

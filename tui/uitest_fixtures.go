@@ -198,6 +198,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"asl_runs":           aslRunsFixture,
 	"run_timers":         runTimersFixture,
 	"unseen_stops":       unseenStopsFixture,
+	"pinned_sessions":    pinnedSessionsFixture,
 	"blocked_reasons":    blockedReasonsFixture,
 	"worktree_branches":  worktreeBranchesFixture,
 	"project_families":   projectFamiliesFixture,
@@ -562,6 +563,52 @@ func unseenStopsFixture() uitestFixture {
 			11: {IconState: "stop", Unseen: true},
 			21: {IconState: "stop"},
 			31: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-42 * time.Second).Unix()},
+		},
+	}
+}
+
+// pinnedSessionsFixture is two pinned sessions — one waiting on a permission
+// prompt, one working — beside an unpinned waiting, working, and rested row.
+// The pin is the ★ in front of the tab title, which `amx pin-session` and the
+// workspace sidebar write. It exists so scenarios can pin the band order: the
+// pins lead under Pinned, the waiting pin stays there rather than joining
+// Needs you, and Needs you follows them above Running and Idle.
+func pinnedSessionsFixture() uitestFixture {
+	cfg := &config.Config{
+		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
+		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
+		HarnessColors: map[string]string{"claude": "blue", "codex": "green"},
+		Accounts: []config.Account{
+			{Name: "work", Harness: "claude", HomeDir: "~/.config/agent-mux/homes/work", Color: "blue"},
+			{Name: "personal", Harness: "codex", HomeDir: "~/.config/agent-mux/homes/personal", Color: "green"},
+		},
+		Sessions: []config.Session{
+			{Title: "pinwait", Directory: "~/projects/pinwait", Profile: "work"},
+			{Title: "pinwork", Directory: "~/projects/pinwork", Profile: "personal"},
+			{Title: "asks", Directory: "~/projects/asks", Profile: "work"},
+			{Title: "busy", Directory: "~/projects/busy", Profile: "personal"},
+			{Title: "rested", Directory: "~/projects/rested", Profile: "work"},
+		},
+	}
+	windows := []kitty.OSWindow{uitestOSWindow(
+		uitestTab(1, 11, "★🔑🦊pinwait", false, managedVars("work", "claude", "pinwait", "~/projects/pinwait")),
+		uitestTab(2, 21, "★⚡🤖pinwork", false, managedVars("personal", "codex", "pinwork", "~/projects/pinwork")),
+		uitestTab(3, 31, "🔑🦊asks", false, managedVars("work", "claude", "asks", "~/projects/asks")),
+		uitestTab(4, 41, "⚡🤖busy", true, managedVars("personal", "codex", "busy", "~/projects/busy")),
+		uitestTab(5, 51, "🛑🦊rested", false, managedVars("work", "claude", "rested", "~/projects/rested")),
+	)}
+	return uitestFixture{
+		Name:        "pinned_sessions",
+		Description: "two pinned rows (one waiting, one working) above an unpinned waiting, working, and rested row",
+		Size:        UITestSize{Width: 100, Height: 32},
+		Config:      cfg,
+		Windows:     windows,
+		States: map[int]protocol.WindowStateSnapshot{
+			11: {IconState: "key"},
+			21: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-90 * time.Second).Unix()},
+			31: {IconState: "key"},
+			41: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-42 * time.Second).Unix()},
+			51: {IconState: "stop"},
 		},
 	}
 }

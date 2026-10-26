@@ -1,0 +1,19 @@
+{
+  "name": "pinned-band-narrow-fit",
+  "fixture": "pinned_sessions",
+  "size": { "width": 34, "height": 30 },
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "cursor_equals", "cursor": 0 },
+    { "type": "selected_title", "value": "pinwait" },
+    { "type": "contains_text", "text": "Pinned (2)" },
+    { "type": "contains_text", "text": "Needs you (1)" },
+    { "type": "contains_text", "text": "Running (1)" },
+    { "type": "contains_text", "text": "Idle (1)" },
+    { "type": "contains_text", "text": "▌ pinwait   Needs permission" },
+    { "type": "contains_text", "text": "▌ pinwork   Working" },
+    { "type": "contains_text", "text": "▌ asks      Needs permission" },
+    { "type": "excludes_text", "text": "Needs you (2)" },
+    { "type": "no_layout_issues" }
+  ]
+}

@@ -328,15 +328,17 @@ extension WorkspaceWindowController {
 
     /// Pins a listed session, which then leaves its project for the Pinned
     /// group above them all, or unpins it, which puts it back. Any session
-    /// can be pinned, a Kitty one too: a pin is a place in this list.
+    /// can be pinned, a Kitty one too. The pin is the session's own (the ★
+    /// in its title), so the dashboard lists it above Needs you as well;
+    /// what is kept here is only where it goes among the pinned.
     func setPinned(_ key: AttentionCycler.Key, _ pinned: Bool) {
         guard let row = state.row(key), row.pinned != pinned else { return }
-        // Only a live snapshot says a session is gone, and its pin with it.
+        // Only a live snapshot says a session is gone, and its place with it.
         if state.current { order.forgetPins(notAmong: state.rows.map(\.key)) }
         order.setPinned(key, pinned)
-        state.arrange(order)
         delegate?.workspaceOrderChanged(order)
-        reloadSidebar()
+        // The store shows the pin at once, which refreshes the sidebar.
+        delegate?.workspaceSetPinned(row, pinned)
     }
 
     /// Pins the session the pane is on, or unpins it when it is pinned, and

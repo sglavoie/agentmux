@@ -142,8 +142,8 @@ final class WorkspaceSidebarTests: XCTestCase {
             F.kitty(4, project: "Needs attention", icon: "question", attention: true),
         ]
         sessions[1].unseen = true
+        sessions[0].pinned = true
         var order = WorkspaceOrder()
-        order.setPinned(.embedded(F.runtimeID(1)), true)
         order.set([.embedded(F.runtimeID(3)), .embedded(F.runtimeID(2))], for: "web")
         order.setCollapsed(project: "web", pinned: false, true)
         func built() -> [WorkspaceGroup] {
@@ -269,7 +269,7 @@ final class WorkspaceSidebarTests: XCTestCase {
     }
 
     func testPinnedSessionsLeaveTheirProjectsForAGroupListedFirst() throws {
-        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web"),
+        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web"),
                         F.tmux(3, project: "Pinned")]
         let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
         var order = WorkspaceOrder()
@@ -277,7 +277,13 @@ final class WorkspaceSidebarTests: XCTestCase {
             WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order)
         }
         XCTAssertEqual(built(sessions).map(\.pinned), [false, false, false], "nothing is pinned until asked")
+        order.setPinned(.embedded(F.runtimeID(2)), true)
+        XCTAssertEqual(built(sessions).map(\.pinned), [false, false, false], "a place among the pinned is not a pin")
 
+        // The pin is the session's (the ★ in its title); the order is where
+        // it was pinned or dragged to here.
+        sessions[2].pinned = true
+        sessions[0].pinned = true
         order.setPinned(kitty, true)
         order.setPinned(.embedded(F.runtimeID(1)), true)
         var groups = built(sessions)
@@ -290,23 +296,29 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceSidebar.ordered(sessions, snapshotSocket: "unix:/tmp/kitty-1", order: order).first?.windowID, 4,
                        "what follows sidebar order starts with the pinned")
 
+        // Pinned in the dashboard, and unpinned there: the pins follow the
+        // sessions, and one placed nowhere here follows the ones that are.
+        var elsewhere = sessions
+        elsewhere[2].pinned = false
+        elsewhere[3].pinned = true
+        XCTAssertEqual(built(elsewhere)[0].rows.map(\.key), [.embedded(F.runtimeID(1)), .embedded(F.runtimeID(3))])
+
         order.setPinned([.embedded(F.runtimeID(1)), kitty])
         XCTAssertEqual(built(sessions)[0].rows.map(\.key), [.embedded(F.runtimeID(1)), kitty])
         XCTAssertEqual(built([sessions[1], sessions[2]])[0].rows.map(\.key), [kitty], "one that ended leaves no gap")
         XCTAssertFalse(built([sessions[1]])[0].pinned, "and no heading when none is listed")
 
-        // Held rows are grouped again without a snapshot.
+        // Held rows are arranged again without a snapshot, and keep their pins.
         var state = WorkspaceState()
         state.apply(built(sessions))
-        order.setPinned(kitty, false)
+        order.setPinned([kitty, .embedded(F.runtimeID(1))])
         state.arrange(order)
         XCTAssertEqual(state.groups, built(sessions))
         groups = state.groups
-        XCTAssertEqual(groups.map(\.project), ["Pinned", "api", "Pinned", "web"])
+        XCTAssertEqual(groups[0].rows.map(\.key), [kitty, .embedded(F.runtimeID(1))])
 
-        order.setPinned(kitty, true)
         order.forgetPins(notAmong: [kitty])
-        XCTAssertEqual(order.pinned, [WorkspaceOrder.token(kitty)], "the pin of a session that ended is forgotten")
+        XCTAssertEqual(order.pinned, [WorkspaceOrder.token(kitty)], "the place of a session that ended is forgotten")
 
         let suite = "amx.tests.pins.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -315,8 +327,26 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
     }
 
+    /// Pins this app kept by itself, before pins were the sessions' own,
+    /// are pinned once after upgrading: the ones listed and not yet pinned,
+    /// in the order they were pinned.
+    func testPinsKeptBeforeSharingAreTheOnesToPin() {
+        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web")]
+        sessions[0].pinned = true
+        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        var order = WorkspaceOrder()
+        order.setPinned(kitty, true)
+        order.setPinned(.embedded(F.runtimeID(9)), true)
+        order.setPinned(.embedded(F.runtimeID(1)), true)
+        order.setPinned(.embedded(F.runtimeID(2)), true)
+        let rows = WorkspaceSidebar.rows(sessions, snapshotSocket: "unix:/tmp/kitty-1")
+        XCTAssertEqual(order.unsharedPins(rows).map(\.key), [kitty, .embedded(F.runtimeID(2))],
+                       "neither the session that ended nor the one already pinned")
+        XCTAssertTrue(WorkspaceOrder().unsharedPins(rows).isEmpty)
+    }
+
     func testCollapsedGroupsAreKeptAndStillCountWhatWaits() throws {
-        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal", attention: true),
+        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal", attention: true),
                         F.tmux(3, project: "Pinned")]
         var order = WorkspaceOrder()
         func built() -> [WorkspaceGroup] {
@@ -325,7 +355,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(built().map(\.collapsed), [false, false], "nothing is collapsed until asked")
 
         order.setCollapsed(project: "api", pinned: false, true)
-        order.setPinned(.embedded(F.runtimeID(1)), true)
+        sessions[0].pinned = true
         var groups = built()
         XCTAssertEqual(groups.map(\.project), ["Pinned", "api", "Pinned"])
         XCTAssertEqual(groups.map(\.collapsed), [false, true, false], "the pinned group is not the project called Pinned")
@@ -345,7 +375,6 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(defaults.stringArray(forKey: WorkspaceOrder.collapsedDefaultsKey), ["pinned", "project:api"])
 
         order.setCollapsed(project: "api", pinned: false, false)
-        order.setPinned(.embedded(F.runtimeID(1)), true)
         groups = built()
         XCTAssertEqual(groups.map(\.collapsed), [true, false, false])
     }

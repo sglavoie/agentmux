@@ -97,6 +97,9 @@ final class SessionStore {
     private(set) var expectedMutes: [AttentionCycler.Key: (muted: Bool, until: Date)] = [:]
     /// How long an expected mute outranks snapshots that do not show it yet.
     static let expectedMuteHold: TimeInterval = 5
+    /// Pins the app has just asked for, held the same way as mutes: the
+    /// daemon reads a tmux session's title on its next maintenance pass.
+    private(set) var expectedPins: [AttentionCycler.Key: (pinned: Bool, until: Date)] = [:]
 
     var onChange: (() -> Void)?
     private let now: () -> Date
@@ -186,6 +189,11 @@ final class SessionStore {
             let shown = snapshot.sessions.first { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) == key }
             return shown?.muted != expected.muted
         }
+        expectedPins = expectedPins.filter { key, expected in
+            guard expected.until > current, listed.contains(key) else { return false }
+            let shown = snapshot.sessions.first { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) == key }
+            return shown?.pinned != expected.pinned
+        }
         if noticeSeen, now().timeIntervalSince(noticeSince) >= Self.noticeHold {
             notice = nil
         }
@@ -235,6 +243,19 @@ final class SessionStore {
         onChange?()
     }
 
+    /// Shows the session `key` names as `pinned` right away, ahead of the
+    /// snapshot that will confirm it.
+    func expectPin(_ key: AttentionCycler.Key, pinned: Bool) {
+        expectedPins[key] = (pinned, now().addingTimeInterval(Self.expectedMuteHold))
+        onChange?()
+    }
+
+    /// Withdraws an expected pin, for a pin that failed.
+    func dropExpectedPin(_ key: AttentionCycler.Key) {
+        guard expectedPins.removeValue(forKey: key) != nil else { return }
+        onChange?()
+    }
+
     func show(notice: String?) {
         setNotice(notice)
         onChange?()
@@ -279,9 +300,9 @@ final class SessionStore {
         return snapshot.sessions.compactMap { session in
             let key = AttentionCycler.key(session, snapshotSocket: snapshot.kitty.socket)
             if staleWindows.contains(key) { return nil }
-            guard let expected = expectedMutes[key], expected.until > current else { return session }
             var session = session
-            session.muted = expected.muted
+            if let expected = expectedMutes[key], expected.until > current { session.muted = expected.muted }
+            if let expected = expectedPins[key], expected.until > current { session.pinned = expected.pinned }
             return session
         }
     }

@@ -53,6 +53,10 @@ protocol WorkspaceDelegate: AnyObject {
     /// Mutes a listed session, or unmutes it: the right-click menu's Mute,
     /// for a line that may not be the one the pane is on.
     func workspaceToggleMute(_ row: WorkspaceRow)
+    /// Pins a listed session, or unpins it (`amx pin-session`), showing the
+    /// change in the store at once. The pin is the session's, so the
+    /// dashboard lists it the same way.
+    func workspaceSetPinned(_ row: WorkspaceRow, _ pinned: Bool)
     /// Answer… on a waiting session of the inspector: opens the panel that
     /// answers it. The pane stays where it is.
     func workspaceAnswer(_ answer: WorkspaceWaitingAnswer)

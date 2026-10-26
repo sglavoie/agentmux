@@ -1,0 +1,21 @@
+{
+  "name": "pinned-band-wide",
+  "fixture": "pinned_sessions",
+  "size": { "width": 120, "height": 30 },
+  "actions": [
+    { "type": "key", "key": "n" }
+  ],
+  "assertions": [
+    { "type": "mode_equals", "mode": "list" },
+    { "type": "selected_title", "value": "asks" },
+    { "type": "contains_text", "text": "Pinned (2)" },
+    { "type": "contains_text", "text": "Needs you (1)" },
+    { "type": "contains_text", "text": "Running (1)" },
+    { "type": "contains_text", "text": "Idle (1)" },
+    { "type": "contains_text", "text": "▌ pinwait   Needs permission      —" },
+    { "type": "contains_text", "text": "▌ pinwork   Working            1:30" },
+    { "type": "contains_text", "text": "▌ asks      Needs permission      —" },
+    { "type": "contains_text", "text": "Dir     ~/projects/asks" },
+    { "type": "no_layout_issues" }
+  ]
+}

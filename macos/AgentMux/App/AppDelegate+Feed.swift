@@ -68,6 +68,7 @@ extension AppDelegate: DaemonConnectionDelegate {
         snoozes.reconcile()
         statusItem?.refresh()
         workspace?.refresh()
+        sharePinsOnce()
         // Only a live snapshot can say a question is no longer open.
         if store.feed == .live, let snapshot = store.snapshot {
             aslPanel?.flow.observe(waiting: snapshot.asl.waiting)
@@ -76,6 +77,22 @@ extension AppDelegate: DaemonConnectionDelegate {
         if preferencesModel.kittyInUse != kitty { preferencesModel.kittyInUse = kitty }
         preferences.daemonStatus = store.daemonStatus
         publishPreferences()
+    }
+
+    /// Pins the sessions this app pinned by itself before pins were the
+    /// sessions' own (the ★ in the title, which the dashboard reads too),
+    /// once, at the first live snapshot. A session not listed then keeps
+    /// only its place among the pinned.
+    func sharePinsOnce() {
+        let defaults = UserDefaults.standard
+        guard !Self.isRunningTests, !defaults.bool(forKey: WorkspaceOrder.pinsSharedDefaultsKey),
+              store.feed == .live, let snapshot = store.snapshot, command != nil else { return }
+        defaults.set(true, forKey: WorkspaceOrder.pinsSharedDefaultsKey)
+        let rows = WorkspaceSidebar.rows(store.sessions, snapshotSocket: snapshot.kitty.socket)
+        for row in attentionOrder.unsharedPins(rows) {
+            Self.logger.notice("workspace: sharing the pin of \(WorkspaceOrder.token(row.key), privacy: .public)")
+            workspaceSetPinned(row, true)
+        }
     }
 
     /// Whether any Kitty is in use, for Settings' Kitty-only fields: the

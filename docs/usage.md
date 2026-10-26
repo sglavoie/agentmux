@@ -1073,6 +1073,14 @@ What changes for a tmux session, and only for it:
   so a slip never erases a name. Agent Mux.app
   shows the name above the session's profile in its sidebar, and names a
   session itself with ⌘R or a right-click on its line.
+- **A session can be pinned above every other.** The pin is the `★` in front
+  of the session's title, Kitty tab or tmux session alike, so the dashboard
+  and Agent Mux.app list the same pins: the dashboard under a **Pinned**
+  heading above Needs you, the app in its **Pinned** group above Needs
+  attention. A pinned session that is waiting stays under Pinned; it still
+  counts as waiting, and `n`/`N` still reach it. Pin from the dashboard's
+  command palette (`:` then *Pin Session*), from the app (⌘. or a right-click),
+  or with `amx pin-session [--runtime-session <id>] [--unpin]`.
 - **A tmux outage keeps the list.** When tmux stops answering, the tmux rows
   stay as last listed and the dashboard's health indicator (the overview's
   status line) says they are kept. When the tmux server itself is gone, the

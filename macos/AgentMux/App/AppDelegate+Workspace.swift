@@ -313,6 +313,48 @@ extension AppDelegate {
         })
     }
 
+    /// Pins a listed session with `amx pin-session`, or unpins it. The pin
+    /// is the ★ in the session's title, so the dashboard lists it the same
+    /// way. Like a mute, it is shown at once, so a second click before the
+    /// daemon publishes it does not undo the first.
+    func workspaceSetPinned(_ row: WorkspaceRow, _ pinned: Bool) {
+        guard let command else {
+            return actionFailed(Self.pinFailedTitle, AMXWording.unavailable(notFound: preferences.binaryMenuProblem), banner: false)
+        }
+        let key = row.key
+        let arguments: [String]
+        var socket: String?
+        switch row.target {
+        case let .kitty(rowSocket, windowID):
+            let named = rowSocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : rowSocket
+            guard !named.isEmpty else { return actionFailed(Self.pinFailedTitle, KittyEndpoint.listenOnMissing, banner: false) }
+            socket = named
+            arguments = PinSessionResult.arguments(windowID: windowID, pinned: pinned)
+        case let .embedded(id):
+            arguments = PinSessionResult.arguments(runtimeSessionID: id, pinned: pinned)
+        }
+        store.expectPin(key, pinned: pinned)
+        amxRunner.run({ command.json(PinSessionResult.self, arguments, kittyListenOn: socket) }, onMain: { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case let .success(value), let .partial(value, _):
+                Self.logger.notice("pin-session \(arguments.dropFirst().joined(separator: " "), privacy: .public): pinned=\(value.pinned)")
+                // A window that is not a managed session changes nothing.
+                if value.pinned == pinned {
+                    self.store.expectPin(key, pinned: value.pinned)
+                } else {
+                    self.store.dropExpectedPin(key)
+                }
+            case let .failure(error):
+                Self.logger.error("pin-session \(arguments.dropFirst().joined(separator: " "), privacy: .public): \(error.message, privacy: .public)")
+                self.store.dropExpectedPin(key)
+                self.actionFailed(Self.pinFailedTitle, error.message, banner: false)
+            }
+        })
+    }
+
+    static let pinFailedTitle = "Could not pin the session"
+
     @objc func openWorkspace(_ sender: Any?) { showWorkspace() }
     @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
     @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }

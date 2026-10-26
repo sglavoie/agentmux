@@ -55,6 +55,7 @@ enum WorkspaceFixture {
             #""icon_state":"\#(session.iconState)""#, #""attention":\#(session.attention)"#,
             #""presentation_changed_at_ms":\#(session.presentationChangedAtMS)"#,
         ]
+        if session.pinned { fields.append(#""pinned":true"#) }
         if session.windowID > 0 {
             fields.append(#""window_id":\#(session.windowID)"#)
             fields.append(#""kitty_socket":"\#(session.kittySocket)""#)
@@ -178,6 +179,14 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     /// The sessions the right-click menu muted or unmuted, in order.
     private(set) var muteToggles: [WorkspaceRow] = []
     func workspaceToggleMute(_ row: WorkspaceRow) { muteToggles.append(row) }
+
+    /// The pins asked for, in order. Each is shown in the store the way the
+    /// app shows one before the daemon publishes it.
+    private(set) var pins: [(key: AttentionCycler.Key, pinned: Bool)] = []
+    func workspaceSetPinned(_ row: WorkspaceRow, _ pinned: Bool) {
+        pins.append((row.key, pinned))
+        store.expectPin(row.key, pinned: pinned)
+    }
 
     /// What the inspector's Answer… buttons asked to answer, in order.
     private(set) var answers: [WorkspaceWaitingAnswer] = []

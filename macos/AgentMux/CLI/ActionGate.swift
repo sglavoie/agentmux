@@ -110,6 +110,38 @@ struct NameSessionResult: Decodable, Equatable {
     }
 }
 
+/// `amx pin-session --json`'s data.
+struct PinSessionResult: Decodable, Equatable {
+    var pinned = false
+    var changed = false
+
+    init(pinned: Bool = false, changed: Bool = false) {
+        self.pinned = pinned
+        self.changed = changed
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pinned, changed
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        pinned = c.lenient(.pinned, false)
+        changed = c.lenient(.changed, false)
+    }
+
+    /// A Kitty session is named by its window, in the Kitty amx is pointed at.
+    static func arguments(windowID: Int, pinned: Bool) -> [String] {
+        ["pin-session", "--window-id", String(windowID)] + (pinned ? [] : ["--unpin"])
+    }
+
+    /// A session the workspace embeds has no window; its runtime session
+    /// names it.
+    static func arguments(runtimeSessionID: String, pinned: Bool) -> [String] {
+        ["pin-session", "--runtime-session", runtimeSessionID] + (pinned ? [] : ["--unpin"])
+    }
+}
+
 /// An amx command that dials Kitty itself, run against each candidate socket
 /// in turn. Only `kitty_unavailable` — a socket nobody answers on, such as one
 /// a crashed Kitty left behind — moves on to the next: any other answer,

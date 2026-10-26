@@ -38,7 +38,7 @@ func TestUITestFixtureNamesAreSortedAndKnown(t *testing.T) {
 	t.Parallel()
 
 	names := UITestFixtureNames()
-	want := []string{"action_feedback", "actions", "asl_question", "asl_runs", "attention_overlap", "basic", "blocked_reasons", "duplicate_names", "family_unread", "health_states", "no_sessions", "paused_output", "paused_queue", "portable_tmux", "preview_failure", "project_families", "run_timers", "setup_profile", "setup_project", "triage_integration", "triage_vertical", "unseen_stops", "wide_profiles", "worktree_branches", "worktree_lifecycle", "worktrees"}
+	want := []string{"action_feedback", "actions", "asl_question", "asl_runs", "attention_overlap", "basic", "blocked_reasons", "duplicate_names", "family_unread", "health_states", "no_sessions", "paused_output", "paused_queue", "pinned_sessions", "portable_tmux", "preview_failure", "project_families", "run_timers", "setup_profile", "setup_project", "triage_integration", "triage_vertical", "unseen_stops", "wide_profiles", "worktree_branches", "worktree_lifecycle", "worktrees"}
 	if len(names) != len(want) {
 		t.Fatalf("expected %d fixtures, got %v", len(want), names)
 	}

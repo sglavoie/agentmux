@@ -412,11 +412,16 @@ ASL answer panel work the same either way.
   which already leads the list; only while that group is collapsed does it
   appear in **Needs attention**, keeping its pin. Pinned sessions keep the order
   they were pinned in until they are dragged among themselves, and **Unpin**
-  puts one back under its project. The pins are part of the `WorkspaceOrder`, kept in the
-  `amxWorkspacePinnedSessions` preference, and everything that follows
+  puts one back under its project. A pin is the session's own: the `★` in
+  front of its title, written by `amx pin-session` and reported in the
+  snapshot as `pinned`, so the dashboard lists the same pins above its Needs
+  you. Only their order is the `WorkspaceOrder`'s, kept in the
+  `amxWorkspacePinnedSessions` preference; the pins this app kept there before
+  pins were shared are pinned once at the first live snapshot
+  (`amxWorkspacePinsShared`). Everything that follows
   sidebar order (⌘1 to ⌘0, the next-attention shortcut, the inspector's
-  waiting list) follows them. Any session can be pinned, a Kitty one too. A
-  pin of a session that ended is forgotten the next time a pin changes while
+  waiting list) follows them. Any session can be pinned, a Kitty one too. The
+  place of a session that ended is forgotten the next time a pin changes while
   the feed is live.
 - **Selecting and focusing.** Selecting a row (arrow keys, **Session ›
   Next/Previous Session or Terminal**) shows what there is to show and never leaves

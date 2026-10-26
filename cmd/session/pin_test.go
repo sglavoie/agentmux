@@ -94,9 +94,9 @@ func TestPinSessionTextModeSaysWhatChanged(t *testing.T) {
 		}
 	}
 	for result, want := range map[pinSessionResult]string{
-		{RuntimeSessionID: "rs-1", Changed: true}:                "unpinned rs-1",
-		{RuntimeSessionID: "rs-1", Pinned: true}:                 "rs-1 is already pinned",
-		{WindowID: 7}:                                            "Kitty window 7 is not pinned",
+		{RuntimeSessionID: "rs-1", Changed: true}:               "unpinned rs-1",
+		{RuntimeSessionID: "rs-1", Pinned: true}:                "rs-1 is already pinned",
+		{WindowID: 7}:                                           "Kitty window 7 is not pinned",
 		{RuntimeSessionID: "rs-1", Pinned: true, Changed: true}: "pinned rs-1",
 	} {
 		if got := pinSessionSummary(result); got != want {

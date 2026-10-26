@@ -56,9 +56,10 @@ struct WorkspaceRow: Equatable {
     var harnessIcon = ""
     /// The session's harness, which orders rows of one profile.
     var harness = ""
-    /// Whether the operator pinned the session: it is then listed under
-    /// `WorkspaceSidebar.pinnedSection`, above every project, instead of
-    /// under its own, unless promoted for attention while that group is collapsed.
+    /// Whether the session is pinned (the ★ in its title, which the dashboard
+    /// reads too): it is then listed under `WorkspaceSidebar.pinnedSection`,
+    /// above every project, instead of under its own, unless promoted for
+    /// attention while that group is collapsed.
     var pinned = false
     /// Temporarily listed below pinned sessions and above projects until acknowledged.
     var needsAttention = false
@@ -106,7 +107,9 @@ struct WorkspaceGroup: Equatable {
 }
 
 /// Where the operator put sessions: the order they dragged the sessions of
-/// each project into, and the sessions they pinned above every project.
+/// each project into, and the order of the sessions pinned above every
+/// project. Whether a session is pinned is not kept here: it is the ★ in the
+/// session's title, which the snapshot reports and the dashboard reads too.
 ///
 /// It names sessions, never positions: a session that is not named, one
 /// launched since the drag, follows the named ones in the order
@@ -114,12 +117,17 @@ struct WorkspaceGroup: Equatable {
 struct WorkspaceOrder: Equatable {
     static let defaultsKey = "amxWorkspaceSessionOrder"
     static let pinnedDefaultsKey = "amxWorkspacePinnedSessions"
+    /// Set once the pins this app kept by itself, before pins were shared,
+    /// have been written to the sessions' titles.
+    static let pinsSharedDefaultsKey = "amxWorkspacePinsShared"
     static let collapsedDefaultsKey = "amxWorkspaceCollapsedProjects"
 
     /// The sessions of each project that was dragged in, first to last.
     private(set) var projects: [String: [String]] = [:]
-    /// The pinned sessions, first to last: in the order they were pinned,
-    /// until they are dragged.
+    /// The pinned sessions, first to last: in the order they were pinned
+    /// here, until they are dragged. Only their order: a session pinned
+    /// elsewhere follows these, and one named here that is no longer pinned
+    /// is not listed as pinned.
     private(set) var pinned: [String] = []
     /// The groups the operator collapsed (`groupToken`). A project with no
     /// session listed stays collapsed: projects are few, and one launched
@@ -147,11 +155,8 @@ struct WorkspaceOrder: Equatable {
         }.map(\.element)
     }
 
-    func isPinned(_ key: AttentionCycler.Key) -> Bool {
-        pinned.contains(Self.token(key))
-    }
-
-    /// Pins a session below the ones already pinned, or unpins it.
+    /// Places a session pinned here below the ones already pinned, or takes
+    /// an unpinned one out of their order.
     mutating func setPinned(_ key: AttentionCycler.Key, _ wanted: Bool) {
         let token = Self.token(key)
         pinned.removeAll { $0 == token }
@@ -162,6 +167,15 @@ struct WorkspaceOrder: Equatable {
     /// Every pin is named, so one left out is no longer pinned.
     mutating func setPinned(_ keys: [AttentionCycler.Key]) {
         pinned = keys.map(Self.token)
+    }
+
+    /// The listed sessions this app pinned by itself, before pins were the
+    /// sessions' own, that are not pinned yet: what is pinned once, at the
+    /// first live snapshot after upgrading, so no pin is lost. In the order
+    /// they were pinned.
+    func unsharedPins(_ listed: [WorkspaceRow]) -> [WorkspaceRow] {
+        let byToken = Dictionary(listed.map { (Self.token($0.key), $0) }, uniquingKeysWith: { first, _ in first })
+        return pinned.compactMap { byToken[$0] }.filter { !$0.pinned }
     }
 
     /// Forgets the pins of sessions that are not among `listed`: a session
@@ -291,8 +305,7 @@ enum WorkspaceSidebar {
     static func groups(_ rows: [WorkspaceRow], order: WorkspaceOrder, prioritizeAttention: Bool = true) -> [WorkspaceGroup] {
         var pinned: [WorkspaceRow] = []
         var byProject: [String: [WorkspaceRow]] = [:]
-        for var row in rows.sorted(by: rowOrder) {
-            row.pinned = order.isPinned(row.key)
+        for row in rows.sorted(by: rowOrder) {
             if row.pinned {
                 pinned.append(row)
             } else {
@@ -371,6 +384,7 @@ enum WorkspaceSidebar {
             name: embedded == nil ? "" : session.name,
             harnessIcon: embedded == nil ? "" : session.harnessIcon,
             harness: session.harness,
+            pinned: session.pinned,
             needsAttention: session.needsAttention,
             conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil },
             branch: session.branch
