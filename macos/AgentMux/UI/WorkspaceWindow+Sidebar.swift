@@ -78,18 +78,49 @@ extension WorkspaceWindowController {
     }
 
     func syncSidebarSelection() {
-        let index = items.firstIndex { item in
+        let wanted = shownLine.map { IndexSet(integer: $0) } ?? IndexSet()
+        guard sidebar.selectedRowIndexes != wanted else { return }
+        applying = true
+        sidebar.selectRowIndexes(wanted, byExtendingSelection: false)
+        applying = false
+    }
+
+    /// The line of what the pane is on, if the list has it.
+    private var shownLine: Int? {
+        items.firstIndex { item in
             switch item {
             case let .view(view): return view.id == viewSelection
             case let .row(row): return viewSelection == nil && row.key == state.selection
             case .section, .group: return false
             }
         }
-        let wanted = index.map { IndexSet(integer: $0) } ?? IndexSet()
-        guard sidebar.selectedRowIndexes != wanted else { return }
-        applying = true
-        sidebar.selectRowIndexes(wanted, byExtendingSelection: false)
-        applying = false
+    }
+
+    /// The session the pane is on, or the one a terminal it is on is beside.
+    private var shownSessionKey: AttentionCycler.Key? {
+        guard let viewSelection else { return state.selection }
+        return views.all.first { $0.id == viewSelection }?.besideRuntimeSessionID.map { .embedded($0) }
+    }
+
+    /// Finds what the pane is on in the list: a hidden sidebar is shown, a
+    /// collapsed project holding the line is expanded, and the line is
+    /// scrolled into view and flashes. The keyboard stays where it is.
+    /// False when the list has no line for it.
+    @discardableResult
+    func revealInSidebar() -> Bool {
+        if isSidebarCollapsed {
+            setSidebarCollapsed(false)
+            window.layoutIfNeeded()
+        }
+        if shownLine == nil, let key = shownSessionKey,
+           let group = state.groups.first(where: { $0.collapsed && !$0.needsAttention && $0.rows.contains { $0.key == key } }) {
+            setCollapsed(project: group.project, pinned: group.pinned, false)
+        }
+        guard let index = shownLine else { return false }
+        syncSidebarSelection()
+        sidebar.scrollRowToVisible(index)
+        (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash()
+        return true
     }
 
     func numberOfRows(in tableView: NSTableView) -> Int { items.count }

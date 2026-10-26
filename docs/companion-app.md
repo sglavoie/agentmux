@@ -264,6 +264,10 @@ Whatever has the keyboard decides where a key goes.
 - In the **session list** the arrow keys move the selection and Return goes
   into the selected row. Nothing typed there reaches a program.
   **Window › Session List** (⌘⇧L) puts the keyboard there.
+  **View › Reveal in Sidebar** (⌘J) finds what the pane is on in the
+  list instead, leaving the keyboard where it is: it shows a hidden
+  sidebar, expands a collapsed project holding the line, scrolls the line
+  into view, and flashes it.
 - The button in the title bar, or **View › Toggle Sidebar** (⌘B), hides the
   sidebar so the terminal has the whole window, and brings it back; ⌘⇧L
   shows it too. The choice is kept across launches, and so is the width

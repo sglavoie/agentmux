@@ -151,6 +151,8 @@ enum WorkspaceMenu {
         let inspector = item("Toggle Inspector", #selector(AppDelegate.toggleWorkspaceInspector(_:)), "B", target: target)
         inspector.identifier = toggleInspectorIdentifier
         view.addItem(inspector)
+        // ⌘J, free in Ghostty, which binds ⌘⇧J.
+        view.addItem(item("Reveal in Sidebar", #selector(AppDelegate.revealInWorkspaceSidebar(_:)), "j", target: target))
         view.addItem(.separator())
         // The digits are all the sessions'.
         view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))

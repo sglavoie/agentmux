@@ -709,6 +709,30 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.sidebarCollapses, [true, false, true, false])
     }
 
+    /// ⌘J finds the shown session in the list: a hidden sidebar comes back,
+    /// a collapsed project opens, and the line flashes, while the keyboard
+    /// stays with the terminal.
+    func testRevealInSidebarShowsAndFlashesTheShownLine() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let shown = try row("api", "work")
+        workspace.activate(shown)
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        workspace.window.makeFirstResponder(terminal)
+        workspace.setCollapsed(project: "api", pinned: false, true)
+        workspace.setSidebarCollapsed(true)
+        XCTAssertFalse(workspace.items.contains { if case let .row(row) = $0 { return row.key == shown.key }; return false },
+                       "the collapse took the line off the list")
+
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertFalse(workspace.isSidebarCollapsed)
+        let line = try index(of: shown.key)
+        XCTAssertEqual(workspace.sidebar.selectedRow, line)
+        let rowView = try XCTUnwrap(workspace.sidebar.rowView(atRow: line, makeIfNecessary: false) as? WorkspaceRowView)
+        XCTAssertTrue(rowView.isFlashing)
+        XCTAssertTrue(workspace.window.firstResponder === terminal, "revealing does not take the keyboard")
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
+    }
+
     func testAKittySessionIsRaisedInKittyOnlyWhenFocused() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, kitty) = (try row("api", "work"), try row("web", "work"))

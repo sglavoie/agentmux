@@ -21,7 +21,7 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(selectNextProjectTab(_:)), #selector(selectPreviousProjectTab(_:)),
         #selector(showNextSessionInKitty(_:)), #selector(showPreviousSessionInKitty(_:)),
         #selector(toggleRecentPlace(_:)),
-        #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)),
+        #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)), #selector(revealInWorkspaceSidebar(_:)),
         #selector(biggerWorkspaceSidebars(_:)), #selector(smallerWorkspaceSidebars(_:)), #selector(resetWorkspaceSidebars(_:)),
         #selector(newSessionTerminal(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
         #selector(endWorkspaceSession(_:)), #selector(searchConversation(_:)),

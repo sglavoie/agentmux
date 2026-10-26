@@ -423,6 +423,9 @@ extension AppDelegate {
     }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
     @objc func toggleWorkspaceInspector(_ sender: Any?) { workspace?.toggleInspector() }
+    @objc func revealInWorkspaceSidebar(_ sender: Any?) {
+        if workspace?.revealInSidebar() != true { NSSound.beep() }
+    }
     @objc func biggerWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.bigger) }
     @objc func smallerWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.smaller) }
     @objc func resetWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.reset) }

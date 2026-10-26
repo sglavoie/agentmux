@@ -147,7 +147,37 @@ class WorkspaceRowView: NSTableRowView {
         }
         selectionBorder.frame = pillRect(verticalInset: 0)
         selectionBorder.isHidden = !isSelected
+        flashView.frame = pillRect(verticalInset: 1)
     }
+
+    /// The accent drawn over the line while it flashes, under its border.
+    private let flashView: NSView = {
+        let view = NSView()
+        view.wantsLayer = true
+        view.layer?.opacity = 0
+        view.layer?.cornerRadius = WorkspaceRowView.selectionRadius
+        return view
+    }()
+
+    static let flashKey = "amx.row.flash"
+
+    /// Pulses the accent over the line twice, so the eye finds it (once with
+    /// Reduce Motion), then leaves it as it was.
+    func flash() {
+        if flashView.superview !== self { addSubview(flashView, positioned: .below, relativeTo: selectionBorder) }
+        flashView.frame = pillRect(verticalInset: 1)
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            flashView.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor
+        }
+        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
+        let animation = CAKeyframeAnimation(keyPath: "opacity")
+        animation.values = [0] + Array(repeating: [1, 0], count: pulses).flatMap { $0 }
+        animation.duration = 0.4 * Double(pulses)
+        flashView.layer?.add(animation, forKey: Self.flashKey)
+    }
+
+    /// Whether the line is flashing now.
+    var isFlashing: Bool { flashView.layer?.animation(forKey: Self.flashKey) != nil }
 
     /// The shape a line's color follows: the selection's, a point shorter so
     /// two colored lines do not run together.
