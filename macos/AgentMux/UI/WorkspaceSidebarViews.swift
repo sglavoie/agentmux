@@ -322,6 +322,8 @@ final class WorkspaceGroupCellView: NSTableCellView {
             return
         }
         setWarning(false)
+        // A project's name reads as a heading; the sections' stay muted.
+        nameLabel.textColor = .labelColor
         nameLabel.stringValue = group.project
         let waiting = group.attention
         countLabel.stringValue = waiting > 0 ? String(waiting) : ""

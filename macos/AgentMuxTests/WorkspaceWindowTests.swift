@@ -1344,6 +1344,7 @@ final class WorkspaceWindowTests: XCTestCase {
         }
 
         var shown = try cell()
+        XCTAssertEqual(shown.nameLabel.textColor, .labelColor, "a project's name reads as a heading")
         XCTAssertFalse(shown.disclosureLabel.isHidden, "an expanded project shows its disclosure too")
         XCTAssertEqual(shown.disclosureLabel.stringValue, WorkspaceGroupCellView.expandedDisclosure)
         XCTAssertTrue(shown.isAccessibilityDisclosed())
