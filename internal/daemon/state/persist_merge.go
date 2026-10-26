@@ -49,9 +49,7 @@ func (r *Reducer) reconcileMergedFact(f *sourceFact) {
 			ackedAt = r.promptCutoff.at
 		}
 	}
-	if f.source.Kind == protocol.SourceHarness && !f.pipeMode &&
-		(f.icon == "bolt" || f.icon == "compact") &&
-		r.interactiveCutoff.notNewerThan(f) {
+	if interactiveActive(f) && r.interactiveCutoff.notNewerThan(f) {
 		acknowledge = true
 		if r.interactiveCutoff.at > ackedAt {
 			ackedAt = r.interactiveCutoff.at

@@ -239,6 +239,50 @@ func TestInteractiveTerminalDoesNotRetirePipeActive(t *testing.T) {
 	}
 }
 
+// TestInteractiveTerminalRetiresProbeBusyActive is the stuck ⚡ seen live: a
+// clear emptied the tab mid-turn, the busy-title probe restored ⚡ under its own
+// fact, and the turn's real Stop then lost to it (bolt > stop) until the probe
+// fact went stale ten minutes later.
+func TestInteractiveTerminalRetiresProbeBusyActive(t *testing.T) {
+	r := NewReducer(zeroCfg)
+	probe := protocol.SourceID{Kind: protocol.SourceProbe, Key: "claude_screen"}
+	r.Apply(harnessEvent("cur", "active", 1, 100, false))
+	r.Apply(harnessEvent("cur", "clear", 2, 110, false))
+	r.Apply(protocol.ReducerEvent{Source: probe, Action: "active", Prompt: true, Seq: 1, At: 113})
+	r.Apply(harnessEvent("cur", "stop", 3, 400, false))
+
+	if got := r.Reduce(400); got.Icon != "stop" || got.Source.Key != "claude:cur" {
+		t.Fatalf("reduce = %+v, want the turn's stop over the probe's busy bolt", got)
+	}
+	if f := r.facts[probe]; f == nil || !f.acked {
+		t.Fatalf("probe busy fact was not retired: %+v", f)
+	}
+}
+
+// TestInteractiveTerminalKeepsNewerProbeBusyActive holds recency for the probe
+// stand-in too: a busy title promoted after an older stop is current work.
+func TestInteractiveTerminalKeepsNewerProbeBusyActive(t *testing.T) {
+	r := NewReducer(zeroCfg)
+	r.Apply(harnessEvent("cur", "stop", 1, 100, false))
+	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "claude_screen"}, Action: "active", Prompt: true, Seq: 1, At: 200})
+
+	if got := r.Reduce(200); got.Icon != "bolt" {
+		t.Fatalf("reduce = %+v, want the newer probe bolt", got)
+	}
+}
+
+// TestInteractiveTerminalLeavesUserActiveToItsOwnRetirement keeps the
+// operator's forced ⚡ out of the stand-in rule: RetireUserActive owns it.
+func TestInteractiveTerminalLeavesUserActiveToItsOwnRetirement(t *testing.T) {
+	r := NewReducer(zeroCfg)
+	r.Apply(protocol.ReducerEvent{Source: protocol.UserActionSource(), Action: "user_active", Seq: 1, At: 100})
+	r.Apply(harnessEvent("cur", "stop", 1, 200, false))
+
+	if f := r.facts[protocol.UserActiveSource()]; f == nil || f.acked {
+		t.Fatalf("user_active retired by an interactive stop: %+v", f)
+	}
+}
+
 // TestPipeTerminalDoesNotRetireInteractiveActive proves only interactive owners
 // supersede: a pipe-mode child's stop must never retire the interactive
 // session's active work.

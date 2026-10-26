@@ -338,12 +338,20 @@ func (h *Handler) recordBypassedStopHold(pending pendingStopHold) {
 // Reset-flow cleanup (req.ResetFlow) is deliberately excluded: the held stop is
 // kept so applyResetFlowLocked can fold it into the same user_clear when the
 // hold commits.
+//
+// A clean SubagentStop is excluded too. It reaches here as the legacy "active"
+// scalar, but it reports a subagent finishing — typically a background agent
+// that outlived its parent's turn — not the parent working again. Cancelling on
+// it drops the parent's only Stop, leaving its ⚡ for a screen probe to settle.
 func supersedesStopHold(req protocol.Request) bool {
 	if req.ResetFlow {
 		return false
 	}
 	if req.IsPrompt {
 		return true
+	}
+	if req.Action == "active" && req.Normalized != nil && events.IsSubagentStopEvent(req.Normalized.Event) {
+		return false
 	}
 	switch req.Action {
 	case "user_clear", "user_active", "clear", "active", "subagent", "compact", "permission", "elicitation", "failure":

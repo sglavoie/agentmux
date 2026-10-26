@@ -245,10 +245,14 @@ func TestMergeDisjointHonorsSupersessionCutoffs(t *testing.T) {
 			snapshot(protocol.SourceHarness, "claude:att", "key", 1, 100),                                       // preserved (attention)
 			{Kind: protocol.SourceHarness, Key: "claude:err", Icon: "error", Seq: 1, At: 100, Terminated: true}, // preserved (no prompt)
 			snapshot(protocol.SourceHarness, "claude:new", "bolt", 1, 300),                                      // newer than cutoff: survives
+			snapshot(protocol.SourceProbe, "claude_screen", "bolt", 1, 100),                                     // retired (stands in for the turn)
+			snapshot(protocol.SourceProbe, "user_active", "bolt", 1, 100),                                       // preserved (RetireUserActive owns it)
 		}
 		if got := r.MergeDisjoint(imports); got != len(imports) {
 			t.Fatalf("merged %d facts, want %d", got, len(imports))
 		}
+		acked(t, r, protocol.SourceID{Kind: protocol.SourceProbe, Key: "claude_screen"}, true)
+		acked(t, r, protocol.UserActiveSource(), false)
 		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}, true)
 		acked(t, r, protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}, false)
 		acked(t, r, protocol.SourceID{Kind: protocol.SourceSubagent, Key: "a1"}, false)

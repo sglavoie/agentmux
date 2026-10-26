@@ -52,11 +52,11 @@ func (r *Reducer) supersedeInteractiveActive(applied *sourceFact, ev protocol.Re
 	r.retireOlderInteractiveActive(applied)
 }
 
-// retireOlderInteractiveActive acknowledges every OTHER interactive harness
-// active-class fact (bolt/compact) that is not more recent than `applied`, so a
-// current interactive terminal/prompt event, an authoritative idle observation
-// whose probe fact stands in for `applied`, or a finished ASL run can no longer
-// be masked by a stale session's ⚡. Pipe-mode `claude -p` children, subagents,
+// retireOlderInteractiveActive acknowledges every OTHER interactive active-class
+// fact (bolt/compact) that is not more recent than `applied`, so a current
+// interactive terminal/prompt event, an authoritative idle observation whose
+// probe fact stands in for `applied`, or a finished ASL run can no longer be
+// masked by a stale session's ⚡. Pipe-mode `claude -p` children, subagents,
 // ASL leases, attention icons (key/question), warnings, and terminal errors are
 // concurrent background/protected state a stale-session cleanup must never
 // retire, so they are left untouched.
@@ -69,12 +69,7 @@ func (r *Reducer) retireOlderInteractiveActive(applied *sourceFact) {
 		if f == applied || !f.set || f.acked {
 			continue
 		}
-		if f.source.Kind != protocol.SourceHarness || f.pipeMode {
-			continue
-		}
-		switch f.icon {
-		case "bolt", "compact":
-		default:
+		if !interactiveActive(f) {
 			continue
 		}
 		// A newer interactive session is genuine current work, not a stale bolt:
@@ -84,6 +79,29 @@ func (r *Reducer) retireOlderInteractiveActive(applied *sourceFact) {
 		}
 		f.acknowledge(applied.at)
 	}
+}
+
+// interactiveActive reports whether a fact is the interactive session's own
+// active-class work: an interactive harness bolt/compact, or a probe's ⚡ that
+// stands in for one (the busy-title recovery promotes a pane whose hooks went
+// missing). The probe's ⚡ describes the same foreground turn the harness fact
+// does, so whatever ends that turn must retire it too; otherwise it outranks the
+// turn's own 🛑 (bolt > stop) until it goes stale. The operator's user_active
+// mark is a probe ⚡ too, but RetireUserActive owns its retirement.
+func interactiveActive(f *sourceFact) bool {
+	switch f.source.Kind {
+	case protocol.SourceHarness:
+		if f.pipeMode {
+			return false
+		}
+	case protocol.SourceProbe:
+		if f.source == protocol.UserActiveSource() {
+			return false
+		}
+	default:
+		return false
+	}
+	return f.icon == "bolt" || f.icon == "compact"
 }
 
 // SettleAuthoritativeIdle folds an authoritative idle observation into the

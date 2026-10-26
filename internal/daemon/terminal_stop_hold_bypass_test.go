@@ -203,6 +203,10 @@ func TestSupersedesStopHold(t *testing.T) {
 		{"elicitation", protocol.Request{Action: "elicitation"}, true},
 		{"failure", protocol.Request{Action: "failure"}, true},
 		{"stop", protocol.Request{Action: "stop"}, false},
+		// A clean SubagentStop rides the legacy "active" scalar, but a background
+		// agent finishing is not its parent working again.
+		{"subagent_stop", protocol.Request{Action: "active", Normalized: &protocol.NormalizedEvent{Event: "SubagentStop"}}, false},
+		{"subagent_stop_failure", protocol.Request{Action: "failure", Normalized: &protocol.NormalizedEvent{Event: "SubagentStop"}}, true},
 		{"loop_marker", protocol.Request{Action: "loop_marker"}, false},
 		// Reset-flow cleanup keeps the hold so the stop can fold into the same
 		// user_clear when it commits.
@@ -245,6 +249,30 @@ func TestTerminalStopHold_SupersededByPromptAndClear(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestTerminalStopHold_SurvivesBackgroundSubagentStop drives the live case: a
+// background agent finishing inside the parent's hold must not cancel the
+// parent's only Stop and strand its ⚡.
+func TestTerminalStopHold_SurvivesBackgroundSubagentStop(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, _ := newTerminalHoldTestHandler(t)
+		armTerminalHold(t, h)
+
+		time.Sleep(terminalHoldTestDelay / 3)
+		if resp := h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: "SubagentStop"}); !resp.OK {
+			t.Fatalf("SubagentStop response = %+v", resp)
+		}
+		if _, armed := terminalHoldPending(t, h, 42); !armed {
+			t.Fatal("a clean SubagentStop cancelled the parent's held stop")
+		}
+
+		time.Sleep(2 * terminalHoldTestTimeout)
+		synctest.Wait()
+		if eff, _ := windowEffective(t, h, 42); eff.Icon != "stop" {
+			t.Fatalf("icon after the hold = %q, want stop", eff.Icon)
+		}
+	})
 }
 
 // TestTerminalStopHold_BypassMatrix pins the arm-time decisions that keep a
