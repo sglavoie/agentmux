@@ -90,7 +90,7 @@ func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 	for _, name := range []string{
 		"backend", "color-picker", "config", "daemon", "debug", "doctor",
 		"focus-next", "focus-next-managed", "focus-prev-managed",
-		"hook-indicator", "icon-picker", "keybindings", "mute-toggle", "name-session",
+		"hook-indicator", "icon-picker", "keybindings", "mute-toggle", "name-session", "pin-session",
 		"notifications", "open-dashboard", "overseer", "overview", "past-sessions", "plans", "project",
 		"desktop-release-gate", "release-gate", "resort",
 		"session", "transcripts", "tui-test", "workspace-view", "worktree",

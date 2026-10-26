@@ -54,7 +54,7 @@ func goldenCompanionSnapshot() CompanionSnapshot {
 			Harness: "claude", Profile: "work", Project: "API", BaseTitle: "W:api",
 			Conversation: &conversation.Identity{Harness: "claude", SessionID: "0b5c-session"},
 			ASLRunID:     "run-1", IconState: "question", Reason: "supervisor", Unseen: true, Attention: true,
-			Muted: true, Locked: true, Looping: true, BusySinceAt: 1_699_999_000, LastEventAt: 1_700_000_050,
+			Muted: true, Locked: true, Looping: true, Pinned: true, BusySinceAt: 1_699_999_000, LastEventAt: 1_700_000_050,
 			PresentationChangedAtMS: 1_700_000_050_123, Branch: "main", Dirty: true,
 		}},
 		Truncated: true,

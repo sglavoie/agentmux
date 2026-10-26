@@ -218,27 +218,21 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.made, made)
     }
 
-    func testDraggingKeepsTheSavedPositionAndPinOfPromotedSiblings() throws {
-        for pinned in [false, true] {
-            var live = (1...3).map { F.tmux($0, project: "api", profile: String($0)) }
-            let keys = (1...3).map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
-            app.store.apply(snapshot: F.snapshot(live))
-            for key in keys { workspace.setPinned(key, pinned) }
-            live[1].iconState = "stop"
-            live[1].unseen = true
-            live[1].attention = true
-            app.store.apply(snapshot: F.snapshot(live))
-            XCTAssertTrue(workspace.moveItem(at: try index(of: keys[2]), to: try index(of: keys[0])))
-            let saved = try XCTUnwrap(app.orders.last)
-            XCTAssertEqual(pinned ? saved.pinned : saved.projects["api"], [keys[2], keys[1], keys[0]].map(WorkspaceOrder.token))
-            live[1].unseen = false
-            app.store.apply(snapshot: F.snapshot(live))
-            XCTAssertEqual(workspace.state.rows.map(\.key), [keys[2], keys[1], keys[0]])
-            XCTAssertEqual(workspace.state.rows.map(\.pinned), [pinned, pinned, pinned])
-            // Restore the initial order before exercising the other group.
-            XCTAssertTrue(workspace.moveItem(at: try index(of: keys[0]), to: try index(of: keys[2])))
-            XCTAssertTrue(workspace.moveItem(at: try index(of: keys[1]), to: try index(of: keys[2])))
-        }
+    func testDraggingKeepsTheSavedPositionOfPromotedSiblings() throws {
+        // Only a project's rows are promoted while they can be dragged: an
+        // open Pinned group keeps its waiting rows.
+        var live = (1...3).map { F.tmux($0, project: "api", profile: String($0)) }
+        let keys = (1...3).map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
+        live[1].iconState = "stop"
+        live[1].unseen = true
+        live[1].attention = true
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertTrue(workspace.moveItem(at: try index(of: keys[2]), to: try index(of: keys[0])))
+        let saved = try XCTUnwrap(app.orders.last)
+        XCTAssertEqual(saved.projects["api"], [keys[2], keys[1], keys[0]].map(WorkspaceOrder.token))
+        live[1].unseen = false
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertEqual(workspace.state.rows.map(\.key), [keys[2], keys[1], keys[0]])
     }
 
     func testSidebarListsProjectsThenTheirSessions() throws {

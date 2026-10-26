@@ -16,6 +16,6 @@
     { "type": "contains_text", "text": "─ Application ─" },
     { "type": "contains_text", "text": "Choose configured projects to launch." },
     { "type": "excludes_text", "text": "Browse all projects and harnesses" },
-    { "type": "contains_text", "text": "Command Palette: 33 results" }
+    { "type": "contains_text", "text": "Command Palette: 34 results" }
   ]
 }

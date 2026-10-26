@@ -81,7 +81,7 @@ func TestSessionActionsNameTheBackendTheyLack(t *testing.T) {
 		runtimesession.BackendKitty: "Kitty client",
 	} {
 		running := session.RunningSession{Project: "api", Profile: "work", Backend: kind, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef"}
-		for _, id := range []ID{Focus, ToggleLock, ToggleMute, Close} {
+		for _, id := range []ID{Focus, ToggleLock, ToggleMute, TogglePin, Close} {
 			_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg}, id, Request{Session: &running, Confirmed: true})
 			var actionErr *Error
 			if !errors.As(err, &actionErr) || actionErr.Code != "missing_dependency" || !strings.Contains(actionErr.Message, want) {

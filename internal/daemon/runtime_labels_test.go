@@ -284,15 +284,23 @@ func TestRuntimeSessionHarnessIconFollowsTheTitle(t *testing.T) {
 	if got := tmuxSessionIn(t, h, onTmux).HarnessIcon; got != "" {
 		t.Fatalf("icon before the title was read = %q", got)
 	}
-	for _, step := range []struct{ title, want string }{
-		{"🦊API", "🦊"},
-		{palette.BuildTitleParts(palette.TitleParts{Base: "📟API", Starred: true}), "📟"},
-		{"🚁API", ""},
-		{"API", ""},
+	for _, step := range []struct {
+		title, want string
+		pinned      bool
+	}{
+		{"🦊API", "🦊", false},
+		{palette.BuildTitleParts(palette.TitleParts{Base: "📟API", Starred: true}), "📟", true},
+		{"🚁API", "", false},
+		{"API", "", false},
 	} {
 		h.observeRuntimeTitles([]tmux.Titled{{ID: onTmux, Title: step.title}, {ID: newRuntimeID(t), Title: "🦊stray"}})
-		if got := tmuxSessionIn(t, h, onTmux).HarnessIcon; got != step.want {
-			t.Fatalf("icon for title %q = %q; want %q", step.title, got, step.want)
+		s := tmuxSessionIn(t, h, onTmux)
+		if s.HarnessIcon != step.want {
+			t.Fatalf("icon for title %q = %q; want %q", step.title, s.HarnessIcon, step.want)
+		}
+		// The star in front of the title is the session's pin.
+		if s.Pinned != step.pinned {
+			t.Fatalf("pinned for title %q = %v; want %v", step.title, s.Pinned, step.pinned)
 		}
 	}
 	h.observeRuntimeTitles([]tmux.Titled{{ID: onTmux, Title: "🦊API"}})

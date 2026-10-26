@@ -141,6 +141,16 @@ func ToggleLock(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
 	}
 }
 
+// TogglePin pins the session above every other, or unpins it. The pin is the
+// ★ in front of the title, which the dashboard, the workspace sidebar, and the
+// session order all read.
+func TogglePin(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
+	return func() tea.Msg {
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, nil), actions.TogglePin, actions.Request{Session: &rs})
+		return ActionDoneMsg{Err: err}
+	}
+}
+
 // ToggleMute flips the mute state on the session's anchor window. Muted
 // sessions suppress macOS notifications across every notify path in the daemon.
 // After flipping the user var, the tab title is rebuilt with the new muted flag

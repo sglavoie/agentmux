@@ -15,7 +15,7 @@ func TestSessionJSONCommandSurfaceIsVersioned(t *testing.T) {
 
 	commands := []*cobra.Command{
 		sessionListCmd, sessionSearchCmd, sessionShowCmd, sessionContinueCmd, sessionForkCmd,
-		sessionForkWorktreeCmd, sessionHandoffCmd, muteToggleCmd, nameSessionCmd, backendStatusCmd, backendStopCmd, closeCmd, sendCmd,
+		sessionForkWorktreeCmd, sessionHandoffCmd, muteToggleCmd, nameSessionCmd, pinSessionCmd, backendStatusCmd, backendStopCmd, closeCmd, sendCmd,
 		attachCmd,
 	}
 	// activity and changes are built by constructors, so they are found by

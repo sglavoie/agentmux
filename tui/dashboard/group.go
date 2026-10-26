@@ -33,6 +33,23 @@ const (
 	idleGroup      = 2
 )
 
+// pinnedBand is the heading pinned sessions are listed under, above Needs you.
+// It is a band and never a bucket: StateGroup does not answer it, so a pinned
+// session still counts, filters, navigates, and wears its border by its
+// urgency. Only the urgency view's order and headings know it (bandOf).
+const pinnedBand = 3
+
+// bandOf is the heading a session is listed under in the urgency view: Pinned
+// for a pinned session (the ★ in front of its title), else its urgency bucket.
+// A pinned session that needs the operator stays under Pinned, which already
+// leads the list, as it does in the workspace sidebar.
+func bandOf(s session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) int {
+	if s.Starred {
+		return pinnedBand
+	}
+	return StateGroup(s, lastActivity, threshold)
+}
+
 // StateGroup classifies a session into one of three buckets:
 //
 //	0 → Needs Attention (key, error, question, or an UNSEEN stop)
@@ -119,6 +136,8 @@ func groupBorder(group int) string {
 // looks the same wherever it is named.
 func groupLabelStyle(group int) lipgloss.Style {
 	switch group {
+	case pinnedBand:
+		return styleGroupLabelPinned
 	case 0:
 		return styleGroupLabelAttention
 	case 1:
@@ -153,7 +172,10 @@ func renderGroupLabel(group, count, indent int) string {
 // property of the session. `Running` rather than `Active` because a row in that
 // bucket is one the harness is working on and the operator is not — `Active` was
 // ambiguous between the two in exactly the moment the distinction matters.
-var groupLabels = [3]string{"Needs you", "Running", "Idle"}
+//
+// `Pinned` is not a bucket but the band above them (pinnedBand), named here so
+// the heading is spelled where the others are.
+var groupLabels = [4]string{"Needs you", "Running", "Idle", "Pinned"}
 
 // compareRowPriority compares the operational priority of two rows. A negative
 // result means a should precede b; zero deliberately leaves their incoming
@@ -228,11 +250,22 @@ func rowSubtypeRank(s session.RunningSession, group int) int {
 	return 0
 }
 
-// SortRows applies the shared priority relation as a stable in-place sort.
-// Sessions with no state icon are bucketed with the activity map and idle
-// threshold; ties preserve the incoming session.SortRunning order.
+// SortRows applies the shared priority relation as a stable in-place sort,
+// after putting pinned sessions first: they lead the list whatever their
+// urgency, and keep the session order among themselves. Sessions with no
+// state icon are bucketed with the activity map and idle threshold; ties
+// preserve the incoming session.SortRunning order.
+//
+// The pin is applied here rather than in compareRowPriority, which also picks
+// a family's lead: a pin places a row, it does not make it more urgent.
 func SortRows(rows []session.RunningSession, lastActivity map[int]time.Time, threshold time.Duration) {
 	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Starred != rows[j].Starred {
+			return rows[i].Starred
+		}
+		if rows[i].Starred {
+			return false
+		}
 		return compareRowPriority(rows[i], rows[j], lastActivity, threshold) < 0
 	})
 }

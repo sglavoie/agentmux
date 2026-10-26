@@ -43,7 +43,7 @@ func (in ScrollInput) LineCost(offset, cursor int) int {
 	prevGroup := -1
 	for i := offset; i <= cursor; i++ {
 		if in.GroupHeadings {
-			g := in.Items.GroupAt(i, in.LastActivity, in.IdleThreshold)
+			g := in.Items.BandAt(i, in.LastActivity, in.IdleThreshold)
 			if g != prevGroup {
 				if prevGroup != -1 {
 					cost++ // blank separator before a subsequent group
@@ -132,7 +132,7 @@ func (in ScrollInput) FitRows(startIdx, budget int) int {
 		cost := 1
 		var g int
 		if in.GroupHeadings {
-			g = in.Items.GroupAt(i, in.LastActivity, in.IdleThreshold)
+			g = in.Items.BandAt(i, in.LastActivity, in.IdleThreshold)
 			if g != prevGroup {
 				cost++
 				if prevGroup != -1 {

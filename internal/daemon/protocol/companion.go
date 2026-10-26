@@ -396,29 +396,32 @@ type CompanionASLWaiting struct {
 // fields are set exactly when the session lives in Kitty; in a v2 snapshot a
 // session on another backend has only Runtime to be addressed by.
 type CompanionSession struct {
-	StatusEvidence          *StatusEvidence        `json:"status_evidence,omitempty"`
-	WindowID                int                    `json:"window_id,omitempty"`
-	TabID                   int                    `json:"tab_id,omitempty"`
-	OSWindowID              int                    `json:"os_window_id,omitempty"`
-	KittySocket             string                 `json:"kitty_socket,omitempty"`
-	Harness                 string                 `json:"harness,omitempty"`
-	Profile                 string                 `json:"profile,omitempty"`
-	Project                 string                 `json:"project,omitempty"`
-	BaseTitle               string                 `json:"base_title,omitempty"`
-	Conversation            *conversation.Identity `json:"conversation,omitempty"`
-	ASLRunID                string                 `json:"asl_run_id,omitempty"`
-	IconState               string                 `json:"icon_state,omitempty"`
-	Reason                  string                 `json:"reason,omitempty"`
-	Unseen                  bool                   `json:"unseen,omitempty"`
-	Attention               bool                   `json:"attention,omitempty"`
-	Muted                   bool                   `json:"muted,omitempty"`
-	Locked                  bool                   `json:"locked,omitempty"`
-	Looping                 bool                   `json:"looping,omitempty"`
-	BusySinceAt             int64                  `json:"busy_since_at,omitempty"`
-	LastEventAt             int64                  `json:"last_event_at,omitempty"`
-	PresentationChangedAtMS int64                  `json:"presentation_changed_at_ms,omitempty"`
-	Branch                  string                 `json:"branch,omitempty"`
-	Dirty                   bool                   `json:"dirty,omitempty"`
+	StatusEvidence *StatusEvidence        `json:"status_evidence,omitempty"`
+	WindowID       int                    `json:"window_id,omitempty"`
+	TabID          int                    `json:"tab_id,omitempty"`
+	OSWindowID     int                    `json:"os_window_id,omitempty"`
+	KittySocket    string                 `json:"kitty_socket,omitempty"`
+	Harness        string                 `json:"harness,omitempty"`
+	Profile        string                 `json:"profile,omitempty"`
+	Project        string                 `json:"project,omitempty"`
+	BaseTitle      string                 `json:"base_title,omitempty"`
+	Conversation   *conversation.Identity `json:"conversation,omitempty"`
+	ASLRunID       string                 `json:"asl_run_id,omitempty"`
+	IconState      string                 `json:"icon_state,omitempty"`
+	Reason         string                 `json:"reason,omitempty"`
+	Unseen         bool                   `json:"unseen,omitempty"`
+	Attention      bool                   `json:"attention,omitempty"`
+	Muted          bool                   `json:"muted,omitempty"`
+	Locked         bool                   `json:"locked,omitempty"`
+	Looping        bool                   `json:"looping,omitempty"`
+	// Pinned is the ★ in front of the session's tab or group title
+	// (`amx pin-session`): the operator listed it above every other session.
+	Pinned                  bool   `json:"pinned,omitempty"`
+	BusySinceAt             int64  `json:"busy_since_at,omitempty"`
+	LastEventAt             int64  `json:"last_event_at,omitempty"`
+	PresentationChangedAtMS int64  `json:"presentation_changed_at_ms,omitempty"`
+	Branch                  string `json:"branch,omitempty"`
+	Dirty                   bool   `json:"dirty,omitempty"`
 	// TabColor is the background a session with no Kitty tab is listed on,
 	// as "#rrggbb": its palette color's bright background, which black text
 	// reads on. Only a v2 snapshot carries it, and the daemon leaves it empty

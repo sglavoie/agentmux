@@ -83,6 +83,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.CopyTitleID, commands.GroupSession, "Copy Session Title", []string{"clipboard", "yank"}, ""},
 		{commands.ToggleLockID, commands.GroupSession, "Lock Session", []string{"protect", "unlock", "close"}, ""},
 		{commands.ToggleMuteID, commands.GroupSession, "Mute Session", []string{"notifications", "unmute"}, ""},
+		{commands.TogglePinID, commands.GroupSession, "Pin Session", []string{"star", "top", "unpin"}, ""},
 		{commands.SendToSession, commands.GroupSession, "Send to Session", []string{"answer", "keys", "prompt", "reply", "type"}, keySend},
 		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, keyProjectSessionSearch},
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
@@ -185,6 +186,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.CopyTitleID:        noDashboardKey,
 		commands.ToggleLockID:       noDashboardKey,
 		commands.ToggleMuteID:       noDashboardKey,
+		commands.TogglePinID:        noDashboardKey,
 		commands.ShowDetails:        noDashboardKey,
 		commands.ShowTimeline:       noDashboardKey,
 		commands.CycleProfileFilter: noDashboardKey,
@@ -250,6 +252,7 @@ func TestCommandCatalogDynamicTitles(t *testing.T) {
 	}{
 		{commands.ToggleLockID, func(_ *Model, ctx *commands.Context) { ctx.Target.Locked = true }, "Unlock Session"},
 		{commands.ToggleMuteID, func(_ *Model, ctx *commands.Context) { ctx.Target.Muted = true }, "Unmute Session"},
+		{commands.TogglePinID, func(_ *Model, ctx *commands.Context) { ctx.Target.Starred = true }, "Unpin Session"},
 		// The inspector reads the other way round from the two above it: its
 		// resting state is ON, so the edit that changes the title is the hide.
 		{commands.ToggleInspector, func(m *Model, _ *commands.Context) { m.inspectorDisplay = inspectorHidden }, "Show Inspector"},
@@ -393,7 +396,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 33 {
-		t.Fatalf("clean catalog has %d visible commands, want 33", visible)
+	if visible != 34 {
+		t.Fatalf("clean catalog has %d visible commands, want 34", visible)
 	}
 }

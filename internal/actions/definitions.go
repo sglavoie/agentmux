@@ -244,6 +244,28 @@ func defaultDefinitions() []Definition {
 			},
 		},
 		{
+			ID: TogglePin, Label: "pin/unpin", Description: "pin the session above every other, or unpin it", Requires: sessionRequirement,
+			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
+				term := deps.sessionTerminal(*request.Session)
+				if term == nil {
+					return Result{}, missingTerminal(TogglePin, *request.Session)
+				}
+				// The pin is the title's star, so every surface that reads
+				// the title (the dashboard, the workspace, the session order)
+				// sees the same pins.
+				parts := request.Session.TitleParts()
+				parts.Starred = !request.Session.Starred
+				if err := term.SetTitle(request.Session.PaneRef(), palette.BuildTitleParts(parts)); err != nil {
+					return Result{}, err
+				}
+				message := "pinned session"
+				if request.Session.Starred {
+					message = "unpinned session"
+				}
+				return Result{Changed: true, Message: message}, nil
+			},
+		},
+		{
 			ID: Close, Label: "End Session", Description: "end the live agent; preserve its transcript", Requires: sessionRequirement,
 			Confirmation: Confirmation{Required: true, Prompt: "end the session?"},
 			available: func(_ Dependencies, request Request) Availability {

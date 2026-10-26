@@ -42,6 +42,7 @@ const (
 	MarkActive     ID = "session.mark_active"
 	ToggleLock     ID = "session.toggle_lock"
 	ToggleMute     ID = "session.toggle_mute"
+	TogglePin      ID = "session.toggle_pin"
 	Close          ID = "session.close"
 	Restart        ID = "session.restart"
 	WorktreeList   ID = "worktree.list"

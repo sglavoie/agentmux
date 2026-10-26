@@ -352,6 +352,7 @@ func windowSession(osw kitty.OSWindow, tab kitty.Tab, parts palette.TitleParts, 
 		Muted:       parts.Muted || vars.Mute != "",
 		Locked:      parts.Locked || vars.Locked,
 		Looping:     parts.Looping,
+		Pinned:      parts.Starred,
 		ASLRunID:    identifier(runs[slot]),
 	}
 }
@@ -473,6 +474,7 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 			TabColor:    tabColor(in.Runtime[slot].Color),
 			Name:        display(in.Runtime[slot].Name),
 			HarnessIcon: harnessIcon(in.Runtime[slot].Title, in.HarnessIcons),
+			Pinned:      palette.ParseTitleParts(in.Runtime[slot].Title).Starred,
 			Project:     display(in.Runtime[slot].Project),
 			ASLRunID:    identifier(runs[slot]),
 			Runtime:     companionRuntime(in.Runtime[slot]),

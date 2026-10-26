@@ -53,6 +53,7 @@ func TestDefinitionsInventory(t *testing.T) {
 		{commands.CopyTitleID, MenuGroupOpen, Mnemonic{"y", "y"}, "Copy title", "Copy Session Title", []string{"clipboard", "yank"}},
 		{commands.ToggleLockID, MenuGroupStatus, Mnemonic{"L", "L"}, "Lock/Unlock", "Lock Session", []string{"protect", "unlock", "close"}},
 		{commands.ToggleMuteID, MenuGroupStatus, Mnemonic{"m", "m"}, "Mute/Unmute", "Mute Session", []string{"notifications", "unmute"}},
+		{commands.TogglePinID, MenuGroupNone, Mnemonic{}, "", "Pin Session", []string{"star", "top", "unpin"}},
 		{commands.SendToSession, MenuGroupNone, Mnemonic{}, "", "Send to Session", []string{"answer", "keys", "prompt", "reply", "type"}},
 		{commands.SearchProject, MenuGroupNone, Mnemonic{}, "", "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}},
 		{commands.ShowDetails, MenuGroupNone, Mnemonic{}, "", "Show Session Details", []string{"events", "hooks"}},
@@ -296,6 +297,7 @@ func TestAvailabilityMatrix(t *testing.T) {
 		// runaway tab are exactly what a locked row still has to allow.
 		{"lock a locked row", commands.ToggleLockID, withLock(), testEnv(), commands.Available()},
 		{"mute a locked row", commands.ToggleMuteID, withLock(), testEnv(), commands.Available()},
+		{"pin a locked row", commands.TogglePinID, withLock(), testEnv(), commands.Available()},
 		{"launch from a locked row", commands.LaunchAnother, withLock(), testEnv(), commands.Available()},
 		{"clear an attention row", commands.ClearStatusIcon, withState("key"), testEnv(), commands.Available()},
 		{"clear an active row", commands.ClearStatusIcon, withState("bolt"), testEnv(), commands.Unavailable(commands.ReasonStatusNotClear)},
@@ -344,6 +346,7 @@ func TestDynamicPaletteTitles(t *testing.T) {
 		{commands.ToggleLockID, Capture(locked), "Unlock Session"},
 		{commands.ToggleMuteID, Capture(testRow()), "Mute Session"},
 		{commands.ToggleMuteID, Capture(muted), "Unmute Session"},
+		{commands.TogglePinID, Capture(testRow()), "Pin Session"},
 		// With nothing captured the title names the direction an operator would
 		// be offered once a row is selected, not a blank.
 		{commands.ToggleLockID, Target{}, "Lock Session"},

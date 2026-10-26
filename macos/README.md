@@ -387,8 +387,9 @@ ASL answer panel work the same either way.
   profile, sorted by profile. A row shows the state glyph the tab title and
   the menu use, the harness, branch, age, and the reason it waits; a Kitty
   session is marked `Kitty`. A project's line counts its sessions that wait on
-  you. Sessions needing attention temporarily move into **Needs attention**
-  above the pinned and project groups, even when their project is collapsed.
+  you. Sessions needing attention temporarily move into **Needs attention**,
+  below the **Pinned** group and above every project, even when their project
+  is collapsed.
   Like Overview, this includes permission requests, errors, questions, and
   unread completed turns. When the daemon marks a completion seen or resolves
   the waiting status, the session returns to its saved position. Its terminal,
@@ -407,8 +408,9 @@ ASL answer panel work the same either way.
   Pin or Unpin Session** (⌘.) for the one the pane is on, moves the session out of
   its project into a **Pinned** group listed above every project
   (`WorkspaceSidebar.groups(_:order:)`, `setPinned(_:_:)`); its line then
-  names its project. A pinned session needing attention temporarily appears
-  in **Needs attention** while keeping its pin. Pinned sessions keep the order
+  names its project. A pinned session needing attention stays in **Pinned**,
+  which already leads the list; only while that group is collapsed does it
+  appear in **Needs attention**, keeping its pin. Pinned sessions keep the order
   they were pinned in until they are dragged among themselves, and **Unpin**
   puts one back under its project. The pins are part of the `WorkspaceOrder`, kept in the
   `amxWorkspacePinnedSessions` preference, and everything that follows

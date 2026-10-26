@@ -108,14 +108,14 @@ func TestProject_TitleAndUserVarFlags(t *testing.T) {
 	muted := managed(103, "work", "claude")
 	muted.UserVars.Mute = "1"
 	snap := Project(Input{Kitty: tree(sockA,
-		kitty.Tab{ID: 10, Title: palette.BuildTitleParts(palette.TitleParts{Base: "W:a", Muted: true, Looping: true}), Windows: []kitty.Window{managed(101, "work", "claude")}},
+		kitty.Tab{ID: 10, Title: palette.BuildTitleParts(palette.TitleParts{Base: "W:a", Muted: true, Looping: true, Starred: true}), Windows: []kitty.Window{managed(101, "work", "claude")}},
 		kitty.Tab{ID: 20, Title: "W:b", Windows: []kitty.Window{locked}},
 		kitty.Tab{ID: 30, Title: "W:c", Windows: []kitty.Window{muted, {ID: 104}}},
 	)})
-	if s := sessionByWindow(t, snap, sockA, 101); !s.Muted || !s.Looping || s.BaseTitle != "W:a" {
+	if s := sessionByWindow(t, snap, sockA, 101); !s.Muted || !s.Looping || !s.Pinned || s.BaseTitle != "W:a" {
 		t.Fatalf("title flags lost: %+v", s)
 	}
-	if s := sessionByWindow(t, snap, sockA, 102); !s.Locked {
+	if s := sessionByWindow(t, snap, sockA, 102); !s.Locked || s.Pinned {
 		t.Fatalf("amx_locked lost: %+v", s)
 	}
 	if s := sessionByWindow(t, snap, sockA, 103); !s.Muted {

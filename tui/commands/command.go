@@ -26,6 +26,7 @@ const (
 	CopyTitleID        ID = "session.copy-title"
 	ToggleLockID       ID = "session.toggle-lock"
 	ToggleMuteID       ID = "session.toggle-mute"
+	TogglePinID        ID = "session.toggle-pin"
 	SearchProject      ID = "session.search-project-history"
 	ShowDetails        ID = "session.show-details"
 	ShowTimeline       ID = "session.show-timeline"

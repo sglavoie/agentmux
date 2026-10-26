@@ -78,6 +78,7 @@ func TestCommandRowSideEffects(t *testing.T) {
 		{"peek", commands.PeekScrollback, "LaunchOverlayPager", kitty.MatchWindowByID(202), ""},
 		{"lock", commands.ToggleLockID, "SetUserVars", kitty.MatchWindowByID(202), "amx_locked"},
 		{"mute", commands.ToggleMuteID, "SetUserVars", kitty.MatchWindowByID(202), "cc_mute"},
+		{"pin", commands.TogglePinID, "SetTabTitle", kitty.MatchTabByWindowID(202), ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

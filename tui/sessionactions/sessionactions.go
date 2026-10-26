@@ -412,9 +412,23 @@ func Definitions() []Definition {
 			Availability:       requiresSession,
 		},
 
-		// Palette-only from here down. Each opens a surface of its own rather
-		// than acting on the row, which is why the per-row menu — a list an
-		// operator runs one entry from and closes — does not carry them.
+		// Palette-only from here down. Pin acts on the row, but the menu
+		// already fills an 80x24 terminal; the rest each open a surface of
+		// their own rather than acting on the row, which is why the per-row
+		// menu — a list an operator runs one entry from and closes — does not
+		// carry them.
+		{
+			ID: commands.TogglePinID,
+			PaletteTitle: func(target Target) string {
+				if target.HasSession && target.Session.Starred {
+					return "Unpin Session"
+				}
+				return "Pin Session"
+			},
+			PaletteDescription: "Pin the selected session above every other, here and in the workspace.",
+			PaletteAliases:     []string{"star", "top", "unpin"},
+			Availability:       requiresSession,
+		},
 		{
 			ID:                 commands.SendToSession,
 			PaletteTitle:       static("Send to Session"),

@@ -134,7 +134,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         }
     }
 
-    func testAttentionFloatsAboveAllProjectsAndPinsUntilAcknowledged() {
+    func testAttentionFloatsBelowPinsAboveAllProjectsUntilAcknowledged() {
         var sessions = [
             F.tmux(1, project: "api", profile: "a", icon: "bolt"),
             F.tmux(2, project: "web", profile: "b", icon: "stop", attention: true),
@@ -152,9 +152,10 @@ final class WorkspaceSidebarTests: XCTestCase {
         var state = WorkspaceState()
         state.apply(built())
         let key = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
-        XCTAssertEqual(state.groups.map(\.project), ["Needs attention", "Pinned", "web"])
-        XCTAssertEqual(state.groups[0].rows.map(\.key), [key, .embedded(F.runtimeID(2))])
-        XCTAssertFalse(state.groups[0].collapsed, "waiting sessions escape collapsed projects")
+        XCTAssertEqual(state.groups.map(\.project), ["Pinned", "Needs attention", "web"])
+        XCTAssertTrue(state.groups[1].needsAttention, "pinned sessions stay above Needs attention")
+        XCTAssertEqual(state.groups[1].rows.map(\.key), [key, .embedded(F.runtimeID(2))])
+        XCTAssertFalse(state.groups[1].collapsed, "waiting sessions escape collapsed projects")
         XCTAssertEqual(state.rows.count, sessions.count, "sessions appear exactly once")
         state.select(.embedded(F.runtimeID(2)))
         let saved = order
@@ -174,6 +175,10 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(order, saved, "promotion never rewrites the saved order")
 
         sessions[0].iconState = "error"
+        XCTAssertEqual(built().map(\.needsAttention), [false, false, false], "a waiting pin stays in an open Pinned group")
+        XCTAssertTrue(built()[0].pinned && built()[0].rows[0].needsAttention)
+        order.setCollapsed(project: WorkspaceSidebar.pinnedSection, pinned: true, true)
+        XCTAssertEqual(built().map(\.needsAttention), [true, false, false], "a collapsed Pinned group cannot hide it")
         XCTAssertTrue(built()[0].rows[0].pinned, "a promoted pin remains pinned")
         sessions[0].iconState = "bolt"
         XCTAssertTrue(built()[0].pinned, "it returns to Pinned when resolved")

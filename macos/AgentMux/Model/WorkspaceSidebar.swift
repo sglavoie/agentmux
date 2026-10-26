@@ -58,9 +58,9 @@ struct WorkspaceRow: Equatable {
     var harness = ""
     /// Whether the operator pinned the session: it is then listed under
     /// `WorkspaceSidebar.pinnedSection`, above every project, instead of
-    /// under its own, unless temporarily promoted for attention.
+    /// under its own, unless promoted for attention while that group is collapsed.
     var pinned = false
-    /// Temporarily listed above pinned sessions and projects until acknowledged.
+    /// Temporarily listed below pinned sessions and above projects until acknowledged.
     var needsAttention = false
     /// The conversation the session's agent is having, once the daemon knows
     /// it: what Past Sessions is opened on if the agent stops.
@@ -229,8 +229,9 @@ struct WorkspaceOrder: Equatable {
 /// The sidebar as data, built from a snapshot so it can be tested without
 /// AppKit: sessions grouped by project, each labeled with its profile.
 ///
-/// Sessions needing attention temporarily lead the list. Their underlying
-/// order is preserved: pinned sessions first, then projects by name and rows
+/// Pinned sessions lead the list, waiting ones included while the group is
+/// open. Other sessions needing attention temporarily follow them, above every
+/// project. Their underlying order is preserved: projects by name and rows
 /// by profile, harness, and identity, or the operator's dragged order.
 /// Acknowledgment restores that position without changing saved preferences.
 enum WorkspaceSidebar {
@@ -283,7 +284,7 @@ enum WorkspaceSidebar {
         return rows
     }
 
-    /// Rows as the sidebar groups them: attention, pinned, then projects.
+    /// Rows as the sidebar groups them: pinned, attention, then projects.
     /// With promotion disabled this returns their saved arrangement, which
     /// dragging uses to preserve the places of temporarily promoted siblings.
     /// It needs no snapshot, so held rows can be grouped again.
@@ -307,14 +308,20 @@ enum WorkspaceSidebar {
             collapsed: order.isCollapsed(project: pinnedSection, pinned: true)
         )]) + projects
         guard prioritizeAttention else { return base }
-        let waiting = base.flatMap(\.rows).filter(\.needsAttention)
+        // An open Pinned group keeps its waiting rows: it already leads.
+        func promoted(_ row: WorkspaceRow, in group: WorkspaceGroup) -> Bool {
+            row.needsAttention && !(group.pinned && !group.collapsed)
+        }
+        let waiting = base.flatMap { group in group.rows.filter { promoted($0, in: group) } }
         guard !waiting.isEmpty else { return base }
         let remaining = base.compactMap { group -> WorkspaceGroup? in
-            let rows = group.rows.filter { !$0.needsAttention }
+            let rows = group.rows.filter { !promoted($0, in: group) }
             guard !rows.isEmpty else { return nil }
             return WorkspaceGroup(project: group.project, rows: rows, pinned: group.pinned, collapsed: group.collapsed)
         }
-        return [WorkspaceGroup(project: attentionSection, rows: waiting, needsAttention: true)] + remaining
+        let attention = WorkspaceGroup(project: attentionSection, rows: waiting, needsAttention: true)
+        let pins = remaining.prefix { $0.pinned }
+        return pins + [attention] + remaining.dropFirst(pins.count)
     }
 
     /// The sessions in the order `groups` lists them, which is the order the

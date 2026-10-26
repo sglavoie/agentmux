@@ -105,6 +105,12 @@ func (in ListInput) groupAt(i int) int {
 	return in.Items.GroupAt(i, in.LastActivity, in.IdleThreshold)
 }
 
+// bandAt is the heading the line at i is listed under; its border stays
+// groupAt's, so a pinned row still shows how urgent it is.
+func (in ListInput) bandAt(i int) int {
+	return in.Items.BandAt(i, in.LastActivity, in.IdleThreshold)
+}
+
 func (in ListInput) pulsing(windowID int) bool {
 	return in.ActivePulse != nil && in.ActivePulse(windowID)
 }
@@ -180,15 +186,15 @@ func RenderListWithHits(in ListInput) ListRender {
 		item, _ := in.Items.At(i)
 		s, isSession := in.Items.Session(item)
 		g := in.groupAt(i)
-		if headings && g != prevGroup {
+		if band := in.bandAt(i); headings && band != prevGroup {
 			if prevGroup != -1 {
 				sb.WriteByte('\n')
 				y++
 			}
-			sb.WriteString(renderGroupLabel(g, in.Items.countInGroup(g, in.LastActivity, in.IdleThreshold), headingIndent))
+			sb.WriteString(renderGroupLabel(band, in.Items.countInGroup(band, in.LastActivity, in.IdleThreshold), headingIndent))
 			sb.WriteByte('\n')
 			y++
-			prevGroup = g
+			prevGroup = band
 		}
 		rowWidth := in.Width
 		if multiGroup && rowWidth > 0 {

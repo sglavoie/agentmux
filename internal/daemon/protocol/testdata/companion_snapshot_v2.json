@@ -91,6 +91,7 @@
       "muted": true,
       "locked": true,
       "looping": true,
+      "pinned": true,
       "busy_since_at": 1699999000,
       "last_event_at": 1700000050,
       "presentation_changed_at_ms": 1700000050123,

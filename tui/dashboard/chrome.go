@@ -52,6 +52,7 @@ var (
 	styleGroupLabelAttention = lipgloss.NewStyle().Foreground(theme.Color(theme.Amber)).Bold(true)
 	styleGroupLabelActive    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 	styleGroupLabelIdle      = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
+	styleGroupLabelPinned    = lipgloss.NewStyle().Foreground(theme.Color(theme.Secondary)).Bold(true)
 
 	// styleChip is the neutral base for substring chips. Account chips use
 	// accountStyle(colorName) on top; state chips with attention semantics

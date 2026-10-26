@@ -165,6 +165,17 @@ func (l ItemList) GroupAt(i int, lastActivity map[int]time.Time, threshold time.
 	return group
 }
 
+// BandAt is the heading the item at i is listed under in the urgency view:
+// Pinned for a pinned session leaf, else GroupAt's bucket. A summary is never
+// pinned: it speaks for a family, and the Projects view that draws summaries
+// draws no headings.
+func (l ItemList) BandAt(i int, lastActivity map[int]time.Time, threshold time.Duration) int {
+	if s, ok := l.SessionAt(i); ok && s.Starred {
+		return pinnedBand
+	}
+	return l.GroupAt(i, lastActivity, threshold)
+}
+
 // HasUnreadNotice reports whether the item carries a completion the operator
 // has not looked at yet: a session leaf resting on an unseen stop, or a
 // COLLAPSED summary at least one of whose members is one.
@@ -295,10 +306,13 @@ func (l ItemList) CountGroups(lastActivity map[int]time.Time, threshold time.Dur
 // operator folded things away, which is the one thing a count above a folded
 // list must not do. Rows is the filtered set, so the heading still answers for
 // what the active filter kept and nothing more.
+//
+// It counts by band, so a pinned session is counted under Pinned, where it is
+// listed, and not again under its urgency.
 func (l ItemList) countInGroup(group int, lastActivity map[int]time.Time, threshold time.Duration) int {
 	n := 0
 	for i := range l.Rows {
-		if StateGroup(l.Rows[i], lastActivity, threshold) == group {
+		if bandOf(l.Rows[i], lastActivity, threshold) == group {
 			n++
 		}
 	}
