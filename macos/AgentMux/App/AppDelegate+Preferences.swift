@@ -214,6 +214,7 @@ extension AppDelegate {
             return
         }
         Self.logger.notice("next attention: \(MenuBuilder.place(of: session), privacy: .public) (\(session.iconState, privacy: .public))")
+        revealOnShow = session.embeddedRuntimeSessionID
         focus(.focusing(session))
     }
 

@@ -49,6 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var dashboardHotKey: HotKeyCenter?
     var attentionHotKey: HotKeyCenter?
     var cycler = AttentionCycler()
+    /// The session Next Waiting Session last went to: the workspace reveals
+    /// it in the sidebar when it shows it, as Reveal in Sidebar (⌘J) does.
+    var revealOnShow: String?
     /// True while a Preferences recorder listens for a shortcut.
     var isRecordingHotKey = false
     var wakeObserver: NSObjectProtocol?

@@ -1145,7 +1145,7 @@ permission:
 | Default | Does |
 | --- | --- |
 | ⌃⌥⌘A | Shows the workspace's Dashboard. With `amxDashboardPlace` set to `kitty`, runs `amx open-dashboard --json`, which focuses the running dashboard or opens one, then brings that Kitty forward. |
-| ⌃⌥⌘N | Focuses the next session needing attention (`Model/AttentionCycler.swift`). |
+| ⌃⌥⌘N | Focuses the next session needing attention (`Model/AttentionCycler.swift`) and reveals a workspace session in the sidebar, as ⌘J does. |
 
 Sent to Kitty, the dashboard shortcut names a socket the same way focus does: the
 Preferences override, the running dashboard's Kitty, the snapshot's, then each

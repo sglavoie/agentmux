@@ -696,7 +696,7 @@ Refreshes retain selection and focus; toggling a sidebar retains reading positio
 | Default | Does |
 | --- | --- |
 | ⌃⌥⌘A | Shows the workspace's Dashboard. Sent to Kitty in Preferences, it brings the dashboard running there forward, or opens one (`amx open-dashboard`). |
-| ⌃⌥⌘N | Focuses the next session needing attention, in the order the workspace lists sessions (projects by name, then each project's sessions as arranged there), across Kitty instances and the workspace: a tmux session opens in the workspace, a Kitty session in Kitty. Beeps when nothing waits. |
+| ⌃⌥⌘N | Focuses the next session needing attention, in the order the workspace lists sessions (projects by name, then each project's sessions as arranged there), across Kitty instances and the workspace: a tmux session opens in the workspace and is revealed in its sidebar as ⌘J does, a Kitty session in Kitty. Beeps when nothing waits. |
 
 Change or clear them in Preferences. They are Carbon hotkeys and need no
 Accessibility permission. Preferences warns when a shortcut is taken by the

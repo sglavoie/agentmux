@@ -12,11 +12,20 @@ extension AppDelegate {
         refreshProjects()
         if let runtimeSessionID {
             controller.focus(runtimeSessionID: runtimeSessionID)
+            revealIfAsked(runtimeSessionID, in: controller)
         } else {
             controller.show()
             // A restore under way, or an agent said to be gone, is a place.
             if !controller.state.rows.isEmpty { controller.showDashboardUnlessPlaced() }
         }
+    }
+
+    /// Reveals the session Next Waiting Session went to once the workspace
+    /// shows it. Any other session shown from outside drops the request.
+    private func revealIfAsked(_ runtimeSessionID: String, in controller: WorkspaceWindowController) {
+        guard let wanted = revealOnShow else { return }
+        revealOnShow = nil
+        if wanted == runtimeSessionID { controller.revealInSidebar() }
     }
 
     func workspaceController() -> WorkspaceWindowController {
@@ -82,6 +91,7 @@ extension AppDelegate {
             let controller = workspaceController()
             controller.show()
             controller.open(request)
+            revealIfAsked(request.runtimeSessionID, in: controller)
             return
         }
         guard let workspace, workspace.isOpen else {
