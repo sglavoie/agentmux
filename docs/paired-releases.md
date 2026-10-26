@@ -336,34 +336,59 @@ touch it. Then re-run the gate.
 
 ## Publishing on GitHub
 
-The gate tags locally and pushes nothing. `just release` is the one step that
-also publishes:
+The gates tag locally and push nothing. `just release` is the one step that
+runs both and publishes:
 
 ```bash
 just bump 0.9.0 && git commit -am "chore: Bump version to 0.9.0" && git push
-just release asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
+AMX_MAC_TEST_HOST=user@other-mac AMX_UI_TEST_REMOTE_ONLY=1 \
+  just release asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
 ```
 
-It runs `scripts/publish-release preflight` first, which fails in seconds when
-`gh` is not signed in, either tree is dirty or its HEAD is not on `origin/main`,
-or the version already has a GitHub release (`amx <version>`). Then it runs
-`paired-release-gate` with `tag=yes`, and on a pass publishes the record that
-run wrote: the pair tag is pushed to both repositories' `origin`, and a GitHub
-release named `amx <version>` is created on the pair tag in Agent Mux's
-repository, carrying `amx-<version>-darwin-<arch>.tar.gz`, the evidence
-record, and its signature. agent-session-loop gets the tag, not a release.
-
-Publishing reads only the record. It refuses anything but a `"passed"`,
-signed record whose signature checks, naming the tag in both repositories on
-the revisions the record names, and an `amx` in the checkout whose hash is the
-one the gate recorded. It is re-runnable: when a push or the upload fails after
-the gate passed, fix the cause and run
+It needs a Developer ID Application identity in this Mac's keychain and a
+notary profile, stored once (`macos/README.md`, "Notarizing a release build"):
 
 ```bash
-just publish-release record=~/.local/share/agent-mux/release-evidence/<pair-id>.json
+xcrun notarytool store-credentials agentmux-notary --apple-id you@example.com --team-id TEAMID
 ```
 
-rather than the gate again. A tag already on `origin` is not pushed twice, and
+`AMX_CODESIGN_IDENTITY` defaults to the keychain's first Developer ID
+Application identity and `AMX_NOTARY_PROFILE` to `agentmux-notary`.
+
+`scripts/publish-release preflight` runs first and fails in seconds when `gh`
+is not signed in, either tree is dirty or its HEAD is not on `origin/main`, the
+version already has a GitHub release (`amx <version>`), or
+`release-gate.sh toolchain --notarized` reports something missing: no Mac to
+build on, no Xcode there, or no Developer ID or notary profile here. Then it
+runs `paired-release-gate` with `tag=yes` and `mac-release-gate --notarized`
+over the same revision, and on two passes publishes what they wrote:
+
+- the pair tag, pushed to both repositories' `origin`;
+- a GitHub release named `amx <version>` on the pair tag in Agent Mux's
+  repository, carrying `Agent-Mux-<version>-macos.zip` (the notarized,
+  stapled app), `amx-<version>-darwin-<arch>.zip` (amx signed with Developer
+  ID and notarized on its own), and both evidence records with their
+  signatures. agent-session-loop gets the tag, not a release.
+
+Publishing reads only the records. It refuses a pair record that is not a
+`"passed"`, signed record naming the tag in both repositories on the revisions
+it names, a desktop record that is not a signed, notarized, non-rehearsal pass
+of the same Agent Mux revision, an `amx` whose hash is not the one the pair
+gate recorded, and an app that is not the bundle the desktop gate passed (its
+executable's hash, the bundled amx's Go build ID, its stapled ticket, and
+Gatekeeper). The standalone amx's signature changes the file, so it is tied
+to the record by Go build ID, as the bundled copy is. Everything is checked
+and amx is notarized before anything is pushed.
+
+It is re-runnable: when notarization, a push, or the upload fails after both
+gates passed, fix the cause and run
+
+```bash
+just publish-release record=~/.local/share/agent-mux/release-evidence/<pair-id>.json \
+  desktop_record=~/.local/share/agent-mux/release-evidence/<record-id>.json
+```
+
+rather than the gates again. A tag already on `origin` is not pushed twice, and
 a release that already exists only has its assets replaced.
 
 ## Rolling back

@@ -87,8 +87,18 @@ records what that was in `bundle`:
 
 `--notarized` requires the last. Set `AMX_CODESIGN_IDENTITY` and
 `AMX_NOTARY_PROFILE` as `macos/README.md` describes; the gate then fails on a
-bundle that is anything else, and is pending when the keychain has no Developer
-ID to sign with.
+bundle that is anything else, and is pending when either is unset, when this
+Mac's keychain has no Developer ID to sign with, or when Apple does not accept
+the notary profile.
+
+Signing with a named identity and notarizing happen on this Mac even when
+`AMX_MAC_TEST_HOST` builds the app elsewhere: the other Mac builds with its own
+default signature, and `build-app.sh` re-signs the bundle here, inside out,
+once it is back. So the certificate and the notary credentials live in one
+keychain that ssh never has to unlock, and the toolchain step asks this
+keychain, not the build Mac's. `just release` runs this gate with
+`--notarized` and publishes the app it passed ([Paired
+releases](paired-releases.md#publishing-on-github)).
 
 ## Rehearsals
 

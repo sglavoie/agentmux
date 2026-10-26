@@ -556,14 +556,20 @@ paired-release-gate asl_root signing_key="" tag="no":
     go run . "${args[@]}"
 
 # The one-step release: everything paired-release-gate does with tag=yes, then
-# the pair tag pushed to both repositories' origin and a GitHub release for
-# Agent Mux with the binary, the evidence record, and its signature. A signing
-# key is required, never optional: an unsigned run is a rehearsal and has
-# nothing to publish. scripts/publish-release preflights first, so an unpushed
-# main or an already-released version fails in seconds rather than after the
-# gate.
+# the desktop gate with --notarized over the same revision, then the pair tag
+# pushed to both repositories' origin and a GitHub release for Agent Mux with
+# the notarized app, a notarized amx, and both evidence records. A signing key
+# is required, never optional: an unsigned run is a rehearsal and has nothing
+# to publish. scripts/publish-release preflights first, so an unpushed main, an
+# already-released version, or a missing Developer ID or notary profile fails
+# in seconds rather than after the gates.
 #
-# Release the pair: gate, tag, push both tags, and publish the GitHub release
+# AMX_CODESIGN_IDENTITY defaults to this Mac's first Developer ID Application
+# identity and AMX_NOTARY_PROFILE to agentmux-notary. Set AMX_MAC_TEST_HOST
+# (and AMX_UI_TEST_REMOTE_ONLY) as for `just mac-test`: Xcode and the hosted
+# suite run there, signing and notarization here.
+#
+# Release the pair and the app: both gates, tag, push both tags, publish the GitHub release
 release asl_root signing_key:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -571,6 +577,12 @@ release asl_root signing_key:
     asl_root="$("$named_arg" asl_root "{{ asl_root }}")"
     signing_key="$("$named_arg" signing_key "{{ signing_key }}")"
     publish="{{ root }}/scripts/publish-release"
+    if [ -z "${AMX_CODESIGN_IDENTITY:-}" ]; then
+        AMX_CODESIGN_IDENTITY="$(security find-identity -v -p codesigning |
+            sed -n 's/^ *[0-9][0-9]*) \([0-9A-F]\{40\}\) "Developer ID Application: .*/\1/p' | head -n 1)"
+    fi
+    export AMX_CODESIGN_IDENTITY
+    export AMX_NOTARY_PROFILE="${AMX_NOTARY_PROFILE:-agentmux-notary}"
 
     "$publish" preflight "{{ root }}" "$asl_root" "$signing_key"
 
@@ -579,13 +591,28 @@ release asl_root signing_key:
     "{{ just_executable() }}" --justfile "{{ justfile() }}" \
         paired-release-gate "$asl_root" "$signing_key" yes | tee "$summary"
     record="$(sed -n 's/^  evidence //p' "$summary")"
-    [ -n "$record" ] || { echo "release: the gate named no evidence record" >&2; exit 1; }
+    [ -n "$record" ] || { echo "release: the paired gate named no evidence record" >&2; exit 1; }
 
-    "$publish" publish "{{ root }}" "$record"
+    "{{ just_executable() }}" --justfile "{{ justfile() }}" \
+        mac-release-gate --notarized --signing-key "$signing_key" | tee "$summary"
+    desktop="$(sed -n 's/^  evidence //p' "$summary")"
+    [ -n "$desktop" ] || { echo "release: the desktop gate named no evidence record" >&2; exit 1; }
 
-# Publish a pair the gate already passed and tagged (re-runnable): push both tags, create the GitHub release
-publish-release record:
-    "{{ root }}/scripts/publish-release" publish "{{ root }}" "$("{{ root }}/scripts/named-arg" record "{{ record }}")"
+    "$publish" publish "{{ root }}" "$record" "$desktop"
+
+# Publish what both gates already passed (re-runnable): push both tags, create the GitHub release
+publish-release record desktop_record:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    named_arg="{{ root }}/scripts/named-arg"
+    if [ -z "${AMX_CODESIGN_IDENTITY:-}" ]; then
+        AMX_CODESIGN_IDENTITY="$(security find-identity -v -p codesigning |
+            sed -n 's/^ *[0-9][0-9]*) \([0-9A-F]\{40\}\) "Developer ID Application: .*/\1/p' | head -n 1)"
+    fi
+    export AMX_CODESIGN_IDENTITY
+    export AMX_NOTARY_PROFILE="${AMX_NOTARY_PROFILE:-agentmux-notary}"
+    "{{ root }}/scripts/publish-release" publish "{{ root }}" \
+        "$("$named_arg" record "{{ record }}")" "$("$named_arg" desktop_record "{{ desktop_record }}")"
 
 # fmt-check leads because it is the cheapest gate here and the one whose
 # failure says the least about the change: a formatting drift found after a

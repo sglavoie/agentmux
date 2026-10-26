@@ -7,7 +7,8 @@
 # With AMX_MAC_TEST_HOST set, Xcode runs on that Mac instead (remote-ui.sh):
 # amx and the tmux runtime built here travel with the checkout, and the signed
 # product is brought back to macos/build/, so the result is in the same place
-# either way. With AMX_UI_TEST_REMOTE_ONLY=1 nothing of Xcode's ever runs here.
+# either way. AMX_CODESIGN_IDENTITY and AMX_NOTARY_PROFILE are then applied
+# here, to the bundle that came back, never on the other Mac. With AMX_UI_TEST_REMOTE_ONLY=1 nothing of Xcode's ever runs here.
 #
 # Usage: build-app.sh [Debug|Release]   (default Debug)
 #
@@ -19,6 +20,7 @@
 #                           run time
 #   AMX_MACOS_CACHE         cache root (default macos/.cache, gitignored)
 #   AMX_CODESIGN_IDENTITY   see sign.sh (default Apple Development, else ad-hoc)
+#   AMX_NOTARY_PROFILE      see sign.sh
 #   AMX_MAC_TEST_HOST       see remote-ui.sh
 #   AMX_UI_TEST_REMOTE_ONLY see remote-ui.sh
 
@@ -65,14 +67,17 @@ remote)
 		"$script_dir/remote-ui.sh" put "$amx_binary" macos/build/.input/amx
 		remote_command="AMX_BINARY=\"\$PWD/macos/build/.input/amx\" $remote_command"
 	fi
-	# The identity names a certificate in the keychain of the Mac that signs.
-	if [ -n "${AMX_CODESIGN_IDENTITY:-}" ]; then
-		remote_command="AMX_CODESIGN_IDENTITY='$AMX_CODESIGN_IDENTITY' $remote_command"
-	fi
+	# A named identity, and notarization, are this Mac's: the other Mac
+	# builds with its own default signature, and the bundle is re-signed here
+	# once it is back. Signing shows no UI, and a Developer ID certificate and
+	# a notary profile then live in one keychain, which ssh need not unlock.
 	echo "build-app: building on ${AMX_MAC_TEST_HOST}" >&2
 	"$script_dir/remote-ui.sh" sh "$remote_command"
 	rm -rf "$macos_dir/build/Agent Mux.app"
 	"$script_dir/remote-ui.sh" get "macos/build/Agent Mux.app" "$macos_dir/build"
+	if [ -n "${AMX_CODESIGN_IDENTITY:-}" ] || [ -n "${AMX_NOTARY_PROFILE:-}" ]; then
+		"$script_dir/sign.sh" "$macos_dir/build/Agent Mux.app"
+	fi
 	codesign --verify --strict --deep "$macos_dir/build/Agent Mux.app"
 	echo "Built $macos_dir/build/Agent Mux.app ($configuration, on ${AMX_MAC_TEST_HOST})"
 	exit 0

@@ -610,10 +610,11 @@ func TestReleaseEvidenceDefaultsUnderTheDataDirectory(t *testing.T) {
 }
 
 // TestJustReleasePublishesOnlyAfterTheGateTags keeps the one-step release a
-// wrapper around the gate rather than a second release procedure: it requires a
-// signing key, preflights before the gate so an unpushed main fails in seconds,
-// runs paired-release-gate with tagging on, and publishes the record that run
-// wrote, in that order.
+// wrapper around the two gates rather than a release procedure of its own: it
+// requires a signing key, preflights before either gate so an unpushed main
+// fails in seconds, runs paired-release-gate with tagging on, then the desktop
+// gate requiring notarization, and publishes the records those runs wrote, in
+// that order.
 func TestJustReleasePublishesOnlyAfterTheGateTags(t *testing.T) {
 	justfile := readJustfile(t)
 	recipe := justfileParameterizedRecipe(t, justfile, "release")
@@ -621,7 +622,12 @@ func TestJustReleasePublishesOnlyAfterTheGateTags(t *testing.T) {
 	if strings.Contains(recipe, `signing_key=""`) {
 		t.Errorf("release lets the signing key default to empty; an unsigned run has nothing to publish:\n%s", recipe)
 	}
-	order := []string{"publish\" preflight", "paired-release-gate \"$asl_root\" \"$signing_key\" yes", "publish\" publish"}
+	order := []string{
+		`publish" preflight`,
+		`paired-release-gate "$asl_root" "$signing_key" yes`,
+		`mac-release-gate --notarized --signing-key "$signing_key"`,
+		`publish" publish "{{ root }}" "$record" "$desktop"`,
+	}
 	last := -1
 	for _, want := range order {
 		at := strings.Index(recipe, want)
@@ -634,64 +640,95 @@ func TestJustReleasePublishesOnlyAfterTheGateTags(t *testing.T) {
 		last = at
 	}
 	if publish := justfileParameterizedRecipe(t, justfile, "publish-release"); strings.Contains(publish, "release-gate") {
-		t.Errorf("publish-release reaches the gate; it publishes a record that already exists:\n%s", publish)
+		t.Errorf("publish-release reaches a gate; it publishes records that already exist:\n%s", publish)
 	}
 }
 
-// TestPublishReleaseRefusesAnythingButASignedPass runs the publish half against
-// records the gate can write but that are not releases. Each refusal has to come
-// before the script touches Git or GitHub: no gh is on PATH, so reaching it fails
-// differently from the refusal the case expects.
-func TestPublishReleaseRefusesAnythingButASignedPass(t *testing.T) {
+// TestPublishReleaseRefusesAnythingButSignedPasses runs the publish half against
+// records the gates can write but that are not releases. Each refusal has to
+// come before the script touches Git, GitHub, or Apple: the gh, git, codesign,
+// and xcrun on PATH fail loudly, so reaching one fails differently from the
+// refusal the case expects.
+func TestPublishReleaseRefusesAnythingButSignedPasses(t *testing.T) {
 	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "publish-release"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	bin := t.TempDir()
+	for _, tool := range []string{"jq", "ssh-keygen"} {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			t.Skipf("%s is not installed", tool)
+		}
+		if err := os.Symlink(path, filepath.Join(bin, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tool := range []string{"gh", "git", "codesign", "xcrun"} {
+		stub := "#!/bin/sh\necho " + tool + " was reached >&2\nexit 99\n"
+		if err := os.WriteFile(filepath.Join(bin, tool), []byte(stub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key := filepath.Join(t.TempDir(), "key")
+	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key).CombinedOutput(); err != nil {
+		t.Fatalf("ssh-keygen: %v\n%s", err, out)
+	}
+	sign := func(t *testing.T, path, namespace string) {
+		t.Helper()
+		if out, err := exec.Command("ssh-keygen", "-q", "-Y", "sign", "-f", key, "-n", namespace, path).CombinedOutput(); err != nil {
+			t.Fatalf("ssh-keygen -Y sign: %v\n%s", err, out)
+		}
+	}
+	const (
+		pairNS    = "agentmux-asl-release"
+		desktopNS = "agentmux-desktop-release"
+		passed    = `{"result":"passed","signature":{"signed":true}}`
+	)
+	type record struct {
+		body      string
+		namespace string // "" leaves it without a signature; "junk" writes one that is not
+	}
 	for _, tc := range []struct {
-		name   string
-		record string
-		sig    bool
-		want   string
+		name          string
+		pair, desktop record
+		want          string
 	}{
-		{"failed", `{"result":"failed","signature":{"signed":true}}`, true, "is failed, not passed"},
-		{"partial", `{"result":"partial","signature":{"signed":true}}`, true, "is partial, not passed"},
-		{"unsigned", `{"result":"passed","signature":{"signed":false}}`, false, "unsigned: a rehearsal"},
-		{"signature missing", `{"result":"passed","signature":{"signed":true}}`, false, "no signature beside"},
-		{"signature wrong", `{"result":"passed","signature":{"signed":true,"namespace":"agentmux-asl-release"}}`, true, "does not verify"},
+		{"failed", record{`{"result":"failed","signature":{"signed":true}}`, "junk"}, record{passed, desktopNS}, "is failed, not passed"},
+		{"partial", record{`{"result":"partial","signature":{"signed":true}}`, "junk"}, record{passed, desktopNS}, "is partial, not passed"},
+		{"unsigned", record{`{"result":"passed","signature":{"signed":false}}`, ""}, record{passed, desktopNS}, "unsigned: a rehearsal"},
+		{"signature missing", record{passed, ""}, record{passed, desktopNS}, "no signature beside"},
+		{"signature wrong", record{passed, "junk"}, record{passed, desktopNS}, "does not verify"},
+		{"desktop failed", record{passed, pairNS}, record{`{"result":"pending","signature":{"signed":true}}`, desktopNS}, "is pending, not passed"},
+		{"desktop unsigned", record{passed, pairNS}, record{`{"result":"passed","signature":{"signed":false}}`, ""}, "unsigned: a rehearsal"},
+		{"desktop signed as a pair", record{passed, pairNS}, record{passed, pairNS}, "under " + desktopNS},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			record := filepath.Join(dir, "amx-asl-1.test.json")
-			if err := os.WriteFile(record, []byte(tc.record), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if tc.sig {
-				if err := os.WriteFile(record+".sig", []byte("not a signature"), 0o644); err != nil {
+			paths := []string{filepath.Join(dir, "amx-asl-1.test.json"), filepath.Join(dir, "amx-desktop-1.test.json")}
+			for i, r := range []record{tc.pair, tc.desktop} {
+				if err := os.WriteFile(paths[i], []byte(r.body), 0o644); err != nil {
 					t.Fatal(err)
 				}
-			}
-			bin := t.TempDir()
-			for _, tool := range []string{"jq", "ssh-keygen"} {
-				path, err := exec.LookPath(tool)
-				if err != nil {
-					t.Skipf("%s is not installed", tool)
+				switch r.namespace {
+				case "":
+				case "junk":
+					if err := os.WriteFile(paths[i]+".sig", []byte("not a signature"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				default:
+					sign(t, paths[i], r.namespace)
 				}
-				if err := os.Symlink(path, filepath.Join(bin, tool)); err != nil {
-					t.Fatal(err)
-				}
 			}
-			gh := filepath.Join(bin, "gh")
-			if err := os.WriteFile(gh, []byte("#!/bin/sh\necho gh was reached >&2\nexit 99\n"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			cmd := exec.Command(script, "publish", dir, record)
-			cmd.Env = append(os.Environ(), "PATH="+bin+":/usr/bin:/bin")
+			cmd := exec.Command(script, "publish", dir, paths[0], paths[1])
+			cmd.Env = append(os.Environ(), "PATH="+bin+":/usr/bin:/bin",
+				"AMX_CODESIGN_IDENTITY=Developer ID Application: Test", "AMX_NOTARY_PROFILE=test")
 			out, err := cmd.CombinedOutput()
 			if err == nil {
 				t.Fatalf("publish-release accepted a %s record:\n%s", tc.name, out)
 			}
-			if !strings.Contains(string(out), tc.want) || strings.Contains(string(out), "gh was reached") {
-				t.Errorf("publish-release on a %s record said %q, want %q before reaching gh", tc.name, out, tc.want)
+			if !strings.Contains(string(out), tc.want) || strings.Contains(string(out), "was reached") {
+				t.Errorf("publish-release on a %s record said %q, want %q before reaching any tool", tc.name, out, tc.want)
 			}
 		})
 	}

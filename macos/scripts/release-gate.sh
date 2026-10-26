@@ -14,7 +14,9 @@
 # AMX_MAC_TEST_HOST names another (remote-ui.sh). It exits 75 when there is
 # nothing to build with: no Xcode, a remote Mac that does not answer, UI
 # refused here with no remote Mac named, or, with --notarized, no Developer ID
-# identity in that Mac's keychain. The gate records that as pending: a release
+# identity named (AMX_CODESIGN_IDENTITY) and in this Mac's keychain, or no
+# notary profile (AMX_NOTARY_PROFILE) that Apple accepts: signing and
+# notarization happen here even when another Mac builds. The gate records that as pending: a release
 # that could not be judged, which is never a release that passed.
 #
 # bundle shows no UI, so it runs here on the bundle `just mac-app Release`
@@ -46,8 +48,7 @@ probe='printf "build_host: %s\n" "$(scutil --get ComputerName 2>/dev/null || hos
 printf "build_os_version: %s\n" "$(sw_vers -productVersion)"
 printf "build_arch: %s\n" "$(uname -m)"
 xcode=$(xcodebuild -version 2>/dev/null | tr "\n" " " | sed "s/ *$//") || xcode=""
-printf "xcode: %s\n" "$xcode"
-printf "developer_id_identities: %s\n" "$(security find-identity -v -p codesigning 2>/dev/null | grep -c "Developer ID Application" || true)"'
+printf "xcode: %s\n" "$xcode"'
 
 toolchain() {
 	mode=$("$script_dir/remote-ui.sh" mode) || mode=refuse
@@ -73,10 +74,30 @@ toolchain() {
 		echo "pending: no Xcode on the Mac that builds" >&2
 		exit "$missing"
 	fi
-	if [ "$notarized" = yes ] && echo "$report" | grep -q '^developer_id_identities: 0$'; then
-		echo "pending: a notarized release needs a Developer ID Application identity on the Mac that builds, and it has none" >&2
+	# Signing and notarization happen on this Mac whichever Mac builds
+	# (build-app.sh), so these are asked of this keychain.
+	identities=$(security find-identity -v -p codesigning 2>/dev/null | grep -c "Developer ID Application" || true)
+	echo "developer_id_identities: $identities"
+	if [ "$notarized" = no ]; then
+		return
+	fi
+	if [ "$identities" = 0 ]; then
+		echo "pending: a notarized release needs a Developer ID Application identity on this Mac, and it has none" >&2
 		exit "$missing"
 	fi
+	if [ -z "${AMX_CODESIGN_IDENTITY:-}" ]; then
+		echo "pending: a notarized release needs AMX_CODESIGN_IDENTITY to name the Developer ID Application identity" >&2
+		exit "$missing"
+	fi
+	if [ -z "${AMX_NOTARY_PROFILE:-}" ]; then
+		echo "pending: a notarized release needs AMX_NOTARY_PROFILE (xcrun notarytool store-credentials)" >&2
+		exit "$missing"
+	fi
+	if ! xcrun notarytool history --keychain-profile "$AMX_NOTARY_PROFILE" >/dev/null 2>&1; then
+		echo "pending: the notary profile $AMX_NOTARY_PROFILE is not in this keychain or Apple refused it" >&2
+		exit "$missing"
+	fi
+	echo "notary_profile: $AMX_NOTARY_PROFILE"
 }
 
 bundle() {

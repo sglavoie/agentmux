@@ -1,20 +1,29 @@
 #!/usr/bin/env bash
 # publish-release preflight AMX_ROOT ASL_ROOT SIGNING_KEY
-# publish-release publish AMX_ROOT RECORD
+# publish-release publish AMX_ROOT PAIR_RECORD DESKTOP_RECORD
 #
 # The GitHub half of a release. The paired release gate decides whether a pair
-# is releasable and tags it locally; this script only publishes what a passed,
-# signed gate already claimed: it pushes the pair tag to both repositories'
-# `origin` and creates (or completes) the GitHub release for Agent Mux.
+# is releasable and tags it locally, and the desktop gate whether the notarized
+# app is; this script only publishes what both already claimed: it pushes the
+# pair tag to both repositories' `origin` and creates (or completes) the GitHub
+# release for Agent Mux, with the notarized app, a notarized amx, and both
+# evidence records.
 #
-# `preflight` runs before the gate and checks what would otherwise fail only
-# after twenty minutes of it: gh is signed in, both trees are clean and their
-# HEAD is already on origin/main, and this version has no release yet.
+# `preflight` runs before the gates and checks what would otherwise fail only
+# after an hour of them: gh is signed in, both trees are clean and their HEAD
+# is already on origin/main, this version has no release yet, and the app can
+# be built, signed with Developer ID, and notarized (release-gate.sh
+# toolchain --notarized).
 #
-# `publish` reads everything from the evidence record, never from the current
-# checkout, and refuses a record that is not a signed pass naming both tags. It
-# is safe to re-run: a tag already on origin is not pushed again, and a release
-# that already exists only has its assets replaced.
+# `publish` reads everything from the two evidence records, never from the
+# current checkout, and refuses a pair record that is not a signed pass naming
+# both tags or a desktop record that is not a signed, notarized, non-rehearsal
+# pass of the same revision. It is safe to re-run: a tag already on origin is
+# not pushed again, and a release that already exists only has its assets
+# replaced.
+#
+# Both need AMX_CODESIGN_IDENTITY (a Developer ID Application identity) and
+# AMX_NOTARY_PROFILE (an `xcrun notarytool store-credentials` profile).
 set -euo pipefail
 
 die() {
@@ -47,6 +56,25 @@ version_at() {
     git -C "$1" show "$2:cmd/root.go" | sed -n 's/^const version = "\(.*\)"$/\1/p'
 }
 
+# require_signed_record RECORD NAMESPACE refuses a record that is not a
+# signed pass whose detached signature covers it under NAMESPACE.
+require_signed_record() {
+    local record="$1" namespace="$2"
+    [ -f "$record" ] || die "no evidence record at $record"
+    local result
+    result="$(jq -r .result "$record")"
+    [ "$result" = passed ] || die "$record is $result, not passed; nothing to publish"
+    [ "$(jq -r .signature.signed "$record")" = true ] || die "$record is unsigned: a rehearsal, not a release"
+    [ -f "$record.sig" ] || die "no signature beside $record"
+    ssh-keygen -Y check-novalidate -n "$namespace" -s "$record.sig" <"$record" >/dev/null 2>&1 ||
+        die "$record.sig does not verify $record under $namespace"
+}
+
+require_signing_env() {
+    [ -n "${AMX_CODESIGN_IDENTITY:-}" ] || die "AMX_CODESIGN_IDENTITY must name the Developer ID Application identity"
+    [ -n "${AMX_NOTARY_PROFILE:-}" ] || die "AMX_NOTARY_PROFILE must name a notarytool keychain profile"
+}
+
 preflight() {
     local amx_root="$1" asl_root="$2" signing_key="$3"
     need gh
@@ -70,26 +98,21 @@ preflight() {
     if gh release list --repo "$repo" --limit 1000 --json name --jq '.[].name' | grep -qxF "amx $version"; then
         die "$repo already has a release for amx $version; run just bump first"
     fi
+    require_signing_env
+    "$amx_root/macos/scripts/release-gate.sh" toolchain --notarized >/dev/null ||
+        die "the app cannot be built, signed, and notarized (above)"
     echo "preflight: releasing amx $version from $repo"
 }
 
 publish() {
-    local amx_root="$1" record="$2"
+    local amx_root="$1" record="$2" desktop="$3"
     need gh
     need jq
-    [ -f "$record" ] || die "no evidence record at $record"
-    local sig="$record.sig"
-
-    local result signed namespace pair_id
-    result="$(jq -r .result "$record")"
-    signed="$(jq -r .signature.signed "$record")"
-    namespace="$(jq -r .signature.namespace "$record")"
+    require_signing_env
+    require_signed_record "$record" agentmux-asl-release
+    require_signed_record "$desktop" agentmux-desktop-release
+    local sig="$record.sig" pair_id
     pair_id="$(jq -r .pair_id "$record")"
-    [ "$result" = passed ] || die "$record is $result, not passed; nothing to publish"
-    [ "$signed" = true ] || die "$record is unsigned: a rehearsal, not a release"
-    [ -f "$sig" ] || die "no signature beside $record"
-    ssh-keygen -Y check-novalidate -n "$namespace" -s "$sig" <"$record" >/dev/null 2>&1 ||
-        die "$sig does not verify $record"
     [ "$(jq '.tags | length' "$record")" -eq 2 ] || die "$record does not name a tag in both repositories"
 
     # Every repository the record names has to carry the pair tag on the
@@ -103,8 +126,8 @@ publish() {
         require_on_origin_main "$root" "$rev"
     done < <(jq -r '.repositories[] | [.repo, .root, .revision] | @tsv' "$record")
 
-    # The binary uploaded is the one the gate hashed, or nothing is uploaded.
-    local amx_rev amx_sha arch version
+    # The amx released is the one the pair gate hashed, or nothing is released.
+    local amx_rev amx_sha arch version build_id
     amx_rev="$(jq -r '.repositories[] | select(.repo == "agentmux") | .revision' "$record")"
     amx_sha="$(jq -r '.artifacts[] | select(.name == "amx") | .sha256' "$record")"
     arch="$(jq -r .environment.arch "$record")"
@@ -114,18 +137,54 @@ publish() {
     if [ "$(shasum -a 256 "$amx_root/amx" | cut -d' ' -f1)" != "$amx_sha" ]; then
         die "$amx_root/amx is not the binary the gate released; check out ${amx_rev:0:12} and run just build"
     fi
+    build_id="$(go tool buildid "$amx_root/amx")"
+
+    # The app is the one the desktop gate passed: same revision, notarization
+    # required, not a rehearsal, bundling this amx, and still stapled.
+    local app="$amx_root/macos/build/Agent Mux.app"
+    fact() { jq -r --arg n "$1" '.bundle[] | select(.name == $n) | .value' "$desktop"; }
+    [ "$(jq -r .gate "$desktop")" = desktop ] || die "$desktop is not a desktop record"
+    [ "$(jq -r .rehearsal "$desktop")" = false ] || die "$desktop is a rehearsal"
+    [ "$(jq -r .notarized_required "$desktop")" = true ] || die "$desktop did not require notarization"
+    [ "$(jq -r .repository.revision "$desktop")" = "$amx_rev" ] ||
+        die "$desktop is of another revision than the pair's agentmux ${amx_rev:0:12}"
+    [ "$(fact distribution)" = notarized ] || die "$desktop does not record a notarized bundle"
+    [ "$(fact amx_go_build_id)" = "$build_id" ] || die "the app in $desktop bundles another amx than the pair released"
+    [ -d "$app" ] || die "no app at $app; run the desktop gate again"
+    if [ "$(shasum -a 256 "$app/Contents/MacOS/Agent Mux" | cut -d' ' -f1)" != "$(fact bundle_executable_sha256)" ]; then
+        die "$app is not the bundle the desktop gate passed; run it again"
+    fi
+    xcrun stapler validate "$app" >/dev/null 2>&1 || die "$app carries no notarization ticket"
+    spctl --assess --type execute "$app" 2>/dev/null || die "Gatekeeper refuses $app"
+
+    local cli_zip app_zip
+    stage="$(mktemp -d)" # global: the EXIT trap runs after publish returns
+    trap 'rm -rf "$stage"' EXIT
+    app_zip="$stage/Agent-Mux-$version-macos.zip"
+    ditto -c -k --keepParent "$app" "$app_zip"
+
+    # The standalone amx gets a Developer ID signature and its own
+    # notarization. That changes the file, so it is tied to the record by Go
+    # build ID, as the bundled copy is; a bare Mach-O cannot be stapled, so
+    # Gatekeeper looks its ticket up online.
+    mkdir "$stage/cli"
+    cp "$amx_root/amx" "$stage/cli/amx"
+    codesign --force --sign "$AMX_CODESIGN_IDENTITY" --options runtime --timestamp \
+        --identifier io.github.sglavoie.agentmux.cli "$stage/cli/amx"
+    [ "$(go tool buildid "$stage/cli/amx")" = "$build_id" ] || die "signing changed amx's build ID"
+    cli_zip="$stage/amx-$version-darwin-$arch.zip"
+    ditto -c -k "$stage/cli" "$cli_zip"
+    echo "notarizing amx"
+    xcrun notarytool submit "$cli_zip" --keychain-profile "$AMX_NOTARY_PROFILE" --wait |
+        tee "$stage/notary.log"
+    grep -q 'status: Accepted' "$stage/notary.log" || die "Apple did not accept amx for notarization"
 
     while IFS=$'\t' read -r repo root; do
         echo "pushing $pair_id to $repo's origin"
         git -C "$root" push --quiet origin "refs/tags/$pair_id"
     done < <(jq -r '.repositories[] | [.repo, .root] | @tsv' "$record")
 
-    local tarball
-    stage="$(mktemp -d)" # global: the EXIT trap runs after publish returns
-    trap 'rm -rf "$stage"' EXIT
-    tarball="$stage/amx-$version-darwin-$arch.tar.gz"
-    tar -czf "$tarball" -C "$amx_root" amx
-    cp "$record" "$sig" "$stage/"
+    cp "$record" "$sig" "$desktop" "$desktop.sig" "$stage/"
 
     local notes="$stage/notes.md"
     {
@@ -137,19 +196,31 @@ publish() {
         jq -r '"| contract set | `\(.contract.set_id)` |"' "$record"
         jq -r '.artifacts[] | "| \(.name) sha256 | `\(.sha256)` |"' "$record"
         echo
-        echo "The evidence record and its signature are attached. Verify them with:"
+        echo "| amx Go build ID | \`$build_id\` |"
+        echo
+        echo "Both downloads are signed with Developer ID and notarized by Apple, for macOS on $arch."
+        echo "\`Agent-Mux-$version-macos.zip\` is the app, with this \`amx\` and its tmux runtime inside."
+        echo "\`amx-$version-darwin-$arch.zip\` is the command line alone. The sha256 above is of"
+        echo "the unsigned build the gate tested; the signed copy differs only in its signature,"
+        echo "and \`go tool buildid amx\` prints the same build ID."
+        echo
+        echo "The two evidence records and their signatures are attached. Verify them with:"
         echo
         echo '```bash'
-        echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n $namespace \\"
+        echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n agentmux-asl-release \\"
         echo "  -s $(basename "$sig") < $(basename "$record")"
+        echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n agentmux-desktop-release \\"
+        echo "  -s $(basename "$desktop").sig < $(basename "$desktop")"
         echo '```'
-        echo
-        echo "The \`amx\` binary is built for macOS ($arch) and is not notarized."
     } >"$notes"
 
     local gh_repo_name
     gh_repo_name="$(gh_repo "$amx_root")"
-    local assets=("$tarball" "$stage/$(basename "$record")" "$stage/$(basename "$sig")")
+    local assets=("$app_zip" "$cli_zip")
+    local file
+    for file in "$record" "$sig" "$desktop" "$desktop.sig"; do
+        assets+=("$stage/$(basename "$file")")
+    done
     if gh release view "$pair_id" --repo "$gh_repo_name" >/dev/null 2>&1; then
         echo "release $pair_id exists; replacing its assets"
         gh release upload "$pair_id" --repo "$gh_repo_name" --clobber "${assets[@]}"
@@ -166,8 +237,8 @@ case "${1:-}" in
         preflight "$2" "$3" "$4"
         ;;
     publish)
-        [ "$#" -eq 3 ] || die "usage: publish-release publish AMX_ROOT RECORD"
-        publish "$2" "$3"
+        [ "$#" -eq 4 ] || die "usage: publish-release publish AMX_ROOT PAIR_RECORD DESKTOP_RECORD"
+        publish "$2" "$3" "$4"
         ;;
     *)
         die "usage: publish-release preflight|publish ..."

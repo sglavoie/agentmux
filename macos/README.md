@@ -146,7 +146,8 @@ the running server is on an earlier one.
   failure stops the build instead of silently falling back to ad-hoc.
 - **`AMX_CODESIGN_IDENTITY`.** Overrides the identity by certificate name or
   SHA-1 fingerprint. Names are resolved to valid fingerprints before reaching
-  Xcode. `-` forces ad-hoc.
+  Xcode. `-` forces ad-hoc. It names a certificate in this Mac's keychain even
+  for a remote build, which is re-signed here.
 - **Xcode's own products.** `generate-project.sh` records the resolved signing
   identity and team in the generated project, so direct `xcodebuild` and Xcode
   GUI builds use the same certificate as `build-app.sh` and `test-app.sh`
@@ -234,7 +235,12 @@ AMX_CODESIGN_IDENTITY="Developer ID Application: …" \
 ```
 
 `sign.sh` then submits the signed app, waits for the verdict, and staples the
-ticket. An Apple Development build is enough for your own machine; notarize
+ticket. With `AMX_MAC_TEST_HOST` set, the other Mac builds with its own default
+signature and the bundle is re-signed and notarized here once it is back, so
+the certificate and the profile belong in this Mac's keychain, not that one's.
+`just release` does all of this, and publishes the result
+([docs/paired-releases.md](../docs/paired-releases.md#publishing-on-github)).
+An Apple Development build is enough for your own machine; notarize
 only to hand the app to someone else.
 
 ## Layout
