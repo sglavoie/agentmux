@@ -334,6 +334,38 @@ with `git -C <root> update-ref -d refs/tags/<pair-id> <oid>`. If the annotation
 says something else, the ref is somebody else's and the gate was right not to
 touch it. Then re-run the gate.
 
+## Publishing on GitHub
+
+The gate tags locally and pushes nothing. `just release` is the one step that
+also publishes:
+
+```bash
+just bump 0.9.0 && git commit -am "chore: Bump version to 0.9.0" && git push
+just release asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
+```
+
+It runs `scripts/publish-release preflight` first, which fails in seconds when
+`gh` is not signed in, either tree is dirty or its HEAD is not on `origin/main`,
+or the version already has a GitHub release (`amx <version>`). Then it runs
+`paired-release-gate` with `tag=yes`, and on a pass publishes the record that
+run wrote: the pair tag is pushed to both repositories' `origin`, and a GitHub
+release named `amx <version>` is created on the pair tag in Agent Mux's
+repository, carrying `amx-<version>-darwin-<arch>.tar.gz`, the evidence
+record, and its signature. agent-session-loop gets the tag, not a release.
+
+Publishing reads only the record. It refuses anything but a `"passed"`,
+signed record whose signature checks, naming the tag in both repositories on
+the revisions the record names, and an `amx` in the checkout whose hash is the
+one the gate recorded. It is re-runnable: when a push or the upload fails after
+the gate passed, fix the cause and run
+
+```bash
+just publish-release record=~/.local/share/agent-mux/release-evidence/<pair-id>.json
+```
+
+rather than the gate again. A tag already on `origin` is not pushed twice, and
+a release that already exists only has its assets replaced.
+
 ## Rolling back
 
 Rollback is the install phase in reverse, in the reverse order — Agent Mux

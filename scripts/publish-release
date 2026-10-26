@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# publish-release preflight AMX_ROOT ASL_ROOT SIGNING_KEY
+# publish-release publish AMX_ROOT RECORD
+#
+# The GitHub half of a release. The paired release gate decides whether a pair
+# is releasable and tags it locally; this script only publishes what a passed,
+# signed gate already claimed: it pushes the pair tag to both repositories'
+# `origin` and creates (or completes) the GitHub release for Agent Mux.
+#
+# `preflight` runs before the gate and checks what would otherwise fail only
+# after twenty minutes of it: gh is signed in, both trees are clean and their
+# HEAD is already on origin/main, and this version has no release yet.
+#
+# `publish` reads everything from the evidence record, never from the current
+# checkout, and refuses a record that is not a signed pass naming both tags. It
+# is safe to re-run: a tag already on origin is not pushed again, and a release
+# that already exists only has its assets replaced.
+set -euo pipefail
+
+die() {
+    echo "publish-release: $*" >&2
+    exit 1
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 is required"
+}
+
+# gh_repo prints owner/name of the GitHub repository a checkout's origin is.
+gh_repo() {
+    (cd "$1" && gh repo view --json nameWithOwner --jq .nameWithOwner)
+}
+
+# require_on_origin_main refuses a revision GitHub's main does not contain: a
+# release tag on a commit nobody can reach from the default branch is a release
+# of something that was never published.
+require_on_origin_main() {
+    local root="$1" rev="$2"
+    git -C "$root" fetch --quiet origin main
+    if ! git -C "$root" merge-base --is-ancestor "$rev" origin/main; then
+        die "$root: ${rev:0:12} is not on origin/main; push main first"
+    fi
+}
+
+# version_at prints Agent Mux's version constant as of a revision.
+version_at() {
+    git -C "$1" show "$2:cmd/root.go" | sed -n 's/^const version = "\(.*\)"$/\1/p'
+}
+
+preflight() {
+    local amx_root="$1" asl_root="$2" signing_key="$3"
+    need gh
+    need jq
+    gh auth status >/dev/null 2>&1 || die "gh is not signed in (gh auth login)"
+    [ -f "$signing_key" ] || die "no signing key at $signing_key"
+
+    local root
+    for root in "$amx_root" "$asl_root"; do
+        [ -d "$root/.git" ] || die "$root is not a Git checkout"
+        if [ -n "$(git -C "$root" status --porcelain)" ]; then
+            die "$root has uncommitted changes"
+        fi
+        require_on_origin_main "$root" "$(git -C "$root" rev-parse HEAD)"
+    done
+
+    local repo version
+    repo="$(gh_repo "$amx_root")"
+    version="$(version_at "$amx_root" HEAD)"
+    [ -n "$version" ] || die "cannot read the version from cmd/root.go"
+    if gh release list --repo "$repo" --limit 1000 --json name --jq '.[].name' | grep -qxF "amx $version"; then
+        die "$repo already has a release for amx $version; run just bump first"
+    fi
+    echo "preflight: releasing amx $version from $repo"
+}
+
+publish() {
+    local amx_root="$1" record="$2"
+    need gh
+    need jq
+    [ -f "$record" ] || die "no evidence record at $record"
+    local sig="$record.sig"
+
+    local result signed namespace pair_id
+    result="$(jq -r .result "$record")"
+    signed="$(jq -r .signature.signed "$record")"
+    namespace="$(jq -r .signature.namespace "$record")"
+    pair_id="$(jq -r .pair_id "$record")"
+    [ "$result" = passed ] || die "$record is $result, not passed; nothing to publish"
+    [ "$signed" = true ] || die "$record is unsigned: a rehearsal, not a release"
+    [ -f "$sig" ] || die "no signature beside $record"
+    ssh-keygen -Y check-novalidate -n "$namespace" -s "$sig" <"$record" >/dev/null 2>&1 ||
+        die "$sig does not verify $record"
+    [ "$(jq '.tags | length' "$record")" -eq 2 ] || die "$record does not name a tag in both repositories"
+
+    # Every repository the record names has to carry the pair tag on the
+    # revision the record says, and that revision has to be on origin/main,
+    # before anything is pushed anywhere.
+    local repo root rev tagged
+    while IFS=$'\t' read -r repo root rev; do
+        tagged="$(git -C "$root" rev-parse --verify --quiet "refs/tags/$pair_id^{commit}")" ||
+            die "$root has no tag $pair_id"
+        [ "$tagged" = "$rev" ] || die "$root: $pair_id is on ${tagged:0:12}, the record says ${rev:0:12}"
+        require_on_origin_main "$root" "$rev"
+    done < <(jq -r '.repositories[] | [.repo, .root, .revision] | @tsv' "$record")
+
+    # The binary uploaded is the one the gate hashed, or nothing is uploaded.
+    local amx_rev amx_sha arch version
+    amx_rev="$(jq -r '.repositories[] | select(.repo == "agentmux") | .revision' "$record")"
+    amx_sha="$(jq -r '.artifacts[] | select(.name == "amx") | .sha256' "$record")"
+    arch="$(jq -r .environment.arch "$record")"
+    version="$(version_at "$amx_root" "$amx_rev")"
+    [ -n "$amx_rev" ] && [ -n "$amx_sha" ] && [ -n "$version" ] || die "$record does not name the amx revision, hash, and version"
+    [ -f "$amx_root/amx" ] || die "no amx in $amx_root; check out ${amx_rev:0:12} and run just build"
+    if [ "$(shasum -a 256 "$amx_root/amx" | cut -d' ' -f1)" != "$amx_sha" ]; then
+        die "$amx_root/amx is not the binary the gate released; check out ${amx_rev:0:12} and run just build"
+    fi
+
+    while IFS=$'\t' read -r repo root; do
+        echo "pushing $pair_id to $repo's origin"
+        git -C "$root" push --quiet origin "refs/tags/$pair_id"
+    done < <(jq -r '.repositories[] | [.repo, .root] | @tsv' "$record")
+
+    local tarball
+    stage="$(mktemp -d)" # global: the EXIT trap runs after publish returns
+    trap 'rm -rf "$stage"' EXIT
+    tarball="$stage/amx-$version-darwin-$arch.tar.gz"
+    tar -czf "$tarball" -C "$amx_root" amx
+    cp "$record" "$sig" "$stage/"
+
+    local notes="$stage/notes.md"
+    {
+        echo "Agent Mux $version, released as pair \`$pair_id\` with agent-session-loop."
+        echo
+        echo "| | |"
+        echo "| --- | --- |"
+        jq -r '.repositories[] | "| \(.repo) | `\(.revision)` |"' "$record"
+        jq -r '"| contract set | `\(.contract.set_id)` |"' "$record"
+        jq -r '.artifacts[] | "| \(.name) sha256 | `\(.sha256)` |"' "$record"
+        echo
+        echo "The evidence record and its signature are attached. Verify them with:"
+        echo
+        echo '```bash'
+        echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n $namespace \\"
+        echo "  -s $(basename "$sig") < $(basename "$record")"
+        echo '```'
+        echo
+        echo "The \`amx\` binary is built for macOS ($arch) and is not notarized."
+    } >"$notes"
+
+    local gh_repo_name
+    gh_repo_name="$(gh_repo "$amx_root")"
+    local assets=("$tarball" "$stage/$(basename "$record")" "$stage/$(basename "$sig")")
+    if gh release view "$pair_id" --repo "$gh_repo_name" >/dev/null 2>&1; then
+        echo "release $pair_id exists; replacing its assets"
+        gh release upload "$pair_id" --repo "$gh_repo_name" --clobber "${assets[@]}"
+    else
+        gh release create "$pair_id" --repo "$gh_repo_name" --verify-tag --latest \
+            --title "amx $version" --notes-file "$notes" --generate-notes "${assets[@]}"
+    fi
+    gh release view "$pair_id" --repo "$gh_repo_name" --json url --jq .url
+}
+
+case "${1:-}" in
+    preflight)
+        [ "$#" -eq 4 ] || die "usage: publish-release preflight AMX_ROOT ASL_ROOT SIGNING_KEY"
+        preflight "$2" "$3" "$4"
+        ;;
+    publish)
+        [ "$#" -eq 3 ] || die "usage: publish-release publish AMX_ROOT RECORD"
+        publish "$2" "$3"
+        ;;
+    *)
+        die "usage: publish-release preflight|publish ..."
+        ;;
+esac

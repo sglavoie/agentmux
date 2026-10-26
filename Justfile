@@ -555,6 +555,38 @@ paired-release-gate asl_root signing_key="" tag="no":
 
     go run . "${args[@]}"
 
+# The one-step release: everything paired-release-gate does with tag=yes, then
+# the pair tag pushed to both repositories' origin and a GitHub release for
+# Agent Mux with the binary, the evidence record, and its signature. A signing
+# key is required, never optional: an unsigned run is a rehearsal and has
+# nothing to publish. scripts/publish-release preflights first, so an unpushed
+# main or an already-released version fails in seconds rather than after the
+# gate.
+#
+# Release the pair: gate, tag, push both tags, and publish the GitHub release
+release asl_root signing_key:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    named_arg="{{ root }}/scripts/named-arg"
+    asl_root="$("$named_arg" asl_root "{{ asl_root }}")"
+    signing_key="$("$named_arg" signing_key "{{ signing_key }}")"
+    publish="{{ root }}/scripts/publish-release"
+
+    "$publish" preflight "{{ root }}" "$asl_root" "$signing_key"
+
+    summary="$(mktemp)"
+    trap 'rm -f "$summary"' EXIT
+    "{{ just_executable() }}" --justfile "{{ justfile() }}" \
+        paired-release-gate "$asl_root" "$signing_key" yes | tee "$summary"
+    record="$(sed -n 's/^  evidence //p' "$summary")"
+    [ -n "$record" ] || { echo "release: the gate named no evidence record" >&2; exit 1; }
+
+    "$publish" publish "{{ root }}" "$record"
+
+# Publish a pair the gate already passed and tagged (re-runnable): push both tags, create the GitHub release
+publish-release record:
+    "{{ root }}/scripts/publish-release" publish "{{ root }}" "$("{{ root }}/scripts/named-arg" record "{{ record }}")"
+
 # fmt-check leads because it is the cheapest gate here and the one whose
 # failure says the least about the change: a formatting drift found after a
 # twenty-minute race suite is a twenty-minute wait for a one-command fix.

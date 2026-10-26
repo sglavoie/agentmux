@@ -3,6 +3,7 @@ package release
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -605,5 +606,93 @@ func TestReleaseEvidenceDefaultsUnderTheDataDirectory(t *testing.T) {
 	want := filepath.Join(home, ".local", "share", "agent-mux", "release-evidence")
 	if dir != want {
 		t.Errorf("default evidence dir = %q, want %q", dir, want)
+	}
+}
+
+// TestJustReleasePublishesOnlyAfterTheGateTags keeps the one-step release a
+// wrapper around the gate rather than a second release procedure: it requires a
+// signing key, preflights before the gate so an unpushed main fails in seconds,
+// runs paired-release-gate with tagging on, and publishes the record that run
+// wrote, in that order.
+func TestJustReleasePublishesOnlyAfterTheGateTags(t *testing.T) {
+	justfile := readJustfile(t)
+	recipe := justfileParameterizedRecipe(t, justfile, "release")
+
+	if strings.Contains(recipe, `signing_key=""`) {
+		t.Errorf("release lets the signing key default to empty; an unsigned run has nothing to publish:\n%s", recipe)
+	}
+	order := []string{"publish\" preflight", "paired-release-gate \"$asl_root\" \"$signing_key\" yes", "publish\" publish"}
+	last := -1
+	for _, want := range order {
+		at := strings.Index(recipe, want)
+		if at < 0 {
+			t.Fatalf("release recipe missing %q:\n%s", want, recipe)
+		}
+		if at < last {
+			t.Errorf("release recipe runs %q out of order (want %q):\n%s", want, order, recipe)
+		}
+		last = at
+	}
+	if publish := justfileParameterizedRecipe(t, justfile, "publish-release"); strings.Contains(publish, "release-gate") {
+		t.Errorf("publish-release reaches the gate; it publishes a record that already exists:\n%s", publish)
+	}
+}
+
+// TestPublishReleaseRefusesAnythingButASignedPass runs the publish half against
+// records the gate can write but that are not releases. Each refusal has to come
+// before the script touches Git or GitHub: no gh is on PATH, so reaching it fails
+// differently from the refusal the case expects.
+func TestPublishReleaseRefusesAnythingButASignedPass(t *testing.T) {
+	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "publish-release"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		record string
+		sig    bool
+		want   string
+	}{
+		{"failed", `{"result":"failed","signature":{"signed":true}}`, true, "is failed, not passed"},
+		{"partial", `{"result":"partial","signature":{"signed":true}}`, true, "is partial, not passed"},
+		{"unsigned", `{"result":"passed","signature":{"signed":false}}`, false, "unsigned: a rehearsal"},
+		{"signature missing", `{"result":"passed","signature":{"signed":true}}`, false, "no signature beside"},
+		{"signature wrong", `{"result":"passed","signature":{"signed":true,"namespace":"agentmux-asl-release"}}`, true, "does not verify"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			record := filepath.Join(dir, "amx-asl-1.test.json")
+			if err := os.WriteFile(record, []byte(tc.record), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if tc.sig {
+				if err := os.WriteFile(record+".sig", []byte("not a signature"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bin := t.TempDir()
+			for _, tool := range []string{"jq", "ssh-keygen"} {
+				path, err := exec.LookPath(tool)
+				if err != nil {
+					t.Skipf("%s is not installed", tool)
+				}
+				if err := os.Symlink(path, filepath.Join(bin, tool)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			gh := filepath.Join(bin, "gh")
+			if err := os.WriteFile(gh, []byte("#!/bin/sh\necho gh was reached >&2\nexit 99\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(script, "publish", dir, record)
+			cmd.Env = append(os.Environ(), "PATH="+bin+":/usr/bin:/bin")
+			out, err := cmd.CombinedOutput()
+			if err == nil {
+				t.Fatalf("publish-release accepted a %s record:\n%s", tc.name, out)
+			}
+			if !strings.Contains(string(out), tc.want) || strings.Contains(string(out), "gh was reached") {
+				t.Errorf("publish-release on a %s record said %q, want %q before reaching gh", tc.name, out, tc.want)
+			}
+		})
 	}
 }
