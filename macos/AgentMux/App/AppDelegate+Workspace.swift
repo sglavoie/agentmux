@@ -367,21 +367,31 @@ extension AppDelegate {
 
     @objc func openWorkspace(_ sender: Any?) { showWorkspace() }
     @objc func nextAttention(_ sender: Any?) { focusNextAttention() }
-    @objc func selectNextSession(_ sender: Any?) { workspace?.selectNeighbor(1) }
-    @objc func selectPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1) }
-    @objc func selectNextProjectTab(_ sender: Any?) { workspace?.selectProjectTab(1) }
-    @objc func selectPreviousProjectTab(_ sender: Any?) { workspace?.selectProjectTab(-1) }
-    @objc func showNextSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(1, raising: true) }
-    @objc func showPreviousSessionInKitty(_ sender: Any?) { workspace?.selectNeighbor(-1, raising: true) }
+    @objc func selectNextSession(_ sender: Any?) { followingFocus { $0.selectNeighbor(1) } }
+    @objc func selectPreviousSession(_ sender: Any?) { followingFocus { $0.selectNeighbor(-1) } }
+    @objc func selectNextProjectTab(_ sender: Any?) { followingFocus { $0.selectProjectTab(1) } }
+    @objc func selectPreviousProjectTab(_ sender: Any?) { followingFocus { $0.selectProjectTab(-1) } }
+    @objc func showNextSessionInKitty(_ sender: Any?) { followingFocus { $0.selectNeighbor(1, raising: true) } }
+    @objc func showPreviousSessionInKitty(_ sender: Any?) { followingFocus { $0.selectNeighbor(-1, raising: true) } }
     /// ⌘1 to ⌘0: the item's tag is the session's place in the sidebar.
     @objc func goToSession(_ sender: Any?) {
         guard let item = sender as? NSMenuItem else { return }
-        workspace?.selectSession(at: item.tag)
+        followingFocus { $0.selectSession(at: item.tag) }
     }
     /// ⌘⇧1 to ⌘⇧0.
     @objc func showSessionInKitty(_ sender: Any?) {
         guard let item = sender as? NSMenuItem else { return }
-        workspace?.selectSession(at: item.tag, raising: true)
+        followingFocus { $0.selectSession(at: item.tag, raising: true) }
+    }
+
+    /// A key that moves the pane to another session or terminal reveals
+    /// where it went, as ⌘J does, so the sidebar follows the keyboard. A
+    /// key that went nowhere reveals nothing.
+    func followingFocus(_ step: (WorkspaceWindowController) -> Void) {
+        guard let workspace else { return }
+        let before = workspace.place
+        step(workspace)
+        if workspace.place != before { workspace.revealInSidebar() }
     }
     /// The workspace's own Dashboard: the main menu's, as opposed to the
     /// global shortcut, which goes where `amxDashboardPlace` says.
@@ -440,7 +450,9 @@ extension AppDelegate {
     @objc func smallerWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.smaller) }
     @objc func resetWorkspaceSidebars(_ sender: Any?) { workspace?.zoomSidebars(.reset) }
     @objc func toggleRecentPlace(_ sender: Any?) {
-        if workspace?.toggleRecentPlace() != true { NSSound.beep() }
+        var moved = false
+        followingFocus { moved = $0.toggleRecentPlace() }
+        if !moved { NSSound.beep() }
     }
     /// ⌘P: the list of sessions and views to go to by name.
     @objc func showSwitcher(_ sender: Any?) {

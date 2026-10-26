@@ -267,7 +267,9 @@ Whatever has the keyboard decides where a key goes.
   **View › Reveal in Sidebar** (⌘J) finds what the pane is on in the
   list instead, leaving the keyboard where it is: it shows a hidden
   sidebar, expands a collapsed project holding the line, scrolls the line
-  into view, and flashes it.
+  into view, and flashes it. Every key that moves the pane to another
+  session or terminal (⌘] and ⌘[, ⌘⇧← and ⌘⇧→, ⌘← and ⌘→, ⌘1 to ⌘0, ⌘L,
+  F7 and F9, and their Shift forms) does the same once it has moved.
 - The button in the title bar, or **View › Toggle Sidebar** (⌘B), hides the
   sidebar so the terminal has the whole window, and brings it back; ⌘⇧L
   shows it too. The choice is kept across launches, and so is the width

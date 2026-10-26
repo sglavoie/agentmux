@@ -8,8 +8,8 @@ extension AppDelegate {
     // The ones about a session act on the one the pane is on.
 
     @objc func showKeybindings(_ sender: Any?) { showWorkspaceView(.keybindings) }
-    @objc func focusNextSession(_ sender: Any?) { workspace?.selectNeighbor(1, sessionsOnly: true) }
-    @objc func focusPreviousSession(_ sender: Any?) { workspace?.selectNeighbor(-1, sessionsOnly: true) }
+    @objc func focusNextSession(_ sender: Any?) { followingFocus { $0.selectNeighbor(1, sessionsOnly: true) } }
+    @objc func focusPreviousSession(_ sender: Any?) { followingFocus { $0.selectNeighbor(-1, sessionsOnly: true) } }
     @objc func pickSessionIcon(_ sender: Any?) { openPicker(.iconPicker) }
     @objc func pickSessionColor(_ sender: Any?) { openPicker(.colorPicker) }
     @objc func clearSessionState(_ sender: Any?) { sendOperatorEvent("user_clear") }
