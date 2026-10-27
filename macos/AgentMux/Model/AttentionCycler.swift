@@ -58,6 +58,11 @@ struct AttentionCycler {
     /// often settles it) still has its place, and one that is gone leaves the
     /// places of those that followed it, so the cycle goes on from where it
     /// stood rather than starting over.
+    ///
+    /// The places are those the sidebar listed at that press. Settling moves
+    /// the focused row out of Needs attention into its project, so where it
+    /// is listed now would skip the rows that followed it then. Sessions
+    /// listed only since come after those, in the order listed now.
     func next(
         in sessions: [CompanionSession],
         snapshotSocket: String = "",
@@ -66,8 +71,9 @@ struct AttentionCycler {
         let listed = WorkspaceSidebar.ordered(sessions, snapshotSocket: snapshotSocket, order: order)
         let waiting = listed.filter(\.attention)
         guard let last, !waiting.isEmpty else { return waiting.first }
-        let following = Self.following(last.key, in: listed.map { Self.key($0, snapshotSocket: snapshotSocket) }) ?? last.following
-        for key in following + [last.key] {
+        let known = Set(last.following + [last.key])
+        let added = listed.map { Self.key($0, snapshotSocket: snapshotSocket) }.filter { !known.contains($0) }
+        for key in last.following + added + [last.key] {
             if let session = waiting.first(where: { Self.key($0, snapshotSocket: snapshotSocket) == key }) { return session }
         }
         return waiting[0]

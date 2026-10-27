@@ -61,6 +61,39 @@ final class AttentionCyclerTests: XCTestCase {
         XCTAssertNil(AttentionCycler().next(in: sessions.map { var s = $0; s.attention = false; return s }))
     }
 
+    func testContinuesPastASettledSessionThatLeftNeedsAttention() {
+        // A finished unseen and waits under Needs attention, above B, which
+        // waits for a key; C finished too, but was seen, so it stays in web.
+        var a = session(1, project: "web")
+        a.iconState = "stop"
+        a.unseen = true
+        var b = session(2, project: "zed")
+        b.iconState = "key"
+        var c = session(3, project: "web")
+        c.iconState = "stop"
+        var sessions = [a, b, c]
+        XCTAssertEqual(ids(WorkspaceSidebar.ordered(sessions)), [1, 2, 3])
+        var cycler = AttentionCycler()
+        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1)
+        // Focusing A marked it seen: it goes back to web, just above C.
+        sessions[0].unseen = false
+        XCTAssertEqual(ids(WorkspaceSidebar.ordered(sessions)), [2, 1, 3])
+        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 2, "B stood right after A")
+        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1)
+        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 3)
+    }
+
+    func testASessionListedSinceComesAfterThoseThatWere() {
+        let sessions = [session(1), session(3)]
+        var cycler = AttentionCycler()
+        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1)
+        // 2 is listed between them now, but 3 was already waiting after 1.
+        let more = [session(1), session(2), session(3)]
+        XCTAssertEqual(cycler.advance(in: more)?.windowID, 3)
+        XCTAssertEqual(cycler.advance(in: more)?.windowID, 1)
+        XCTAssertEqual(cycler.advance(in: more)?.windowID, 2)
+    }
+
     func testContinuesFromWhereAClosedSessionStood() {
         let sessions = [session(1), session(2), session(3), session(4)]
         var cycler = AttentionCycler()
