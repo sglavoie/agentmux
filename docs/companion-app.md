@@ -615,9 +615,10 @@ runs use the workspace. Submitted or uncertain launches are not repeated by the 
 
 ### Reading, status, and feedback
 
-History, Activity, and Waiting share a **Reading text size** menu. Prose size is
-remembered independently from code, diff, and terminal-preview size. The same menu
-contains **Wrap code and diff lines**; open readers update immediately. Transcripts
+History and Activity share a **Reading text size** menu, and a Waiting row's
+context follows it. Prose size is remembered independently from code, diff, and
+terminal-preview size. The same menu contains **Wrap code and diff lines**; open
+readers update immediately. Transcripts
 render headings, lists, nested indentation, tables, blockquotes, inline formatting,
 and fenced code while preserving search highlights. Each code block keeps just its
 language and **Copy code**, which copies original text without Markdown fences.

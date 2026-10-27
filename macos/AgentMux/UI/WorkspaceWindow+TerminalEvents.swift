@@ -121,12 +121,16 @@ extension WorkspaceWindowController {
         }
     }
 
-    /// A utility view's program set its title. A session's terminal shows
-    /// what tmux titles it, which says nothing the sidebar does not.
-    func terminalTitleChanged(_ view: NSView, title: String) {
-        guard let id = viewID(of: view) else { return }
-        guard programTitles[id] != title else { return }
-        programTitles[id] = title.isEmpty ? nil : title
+    /// A utility view's program set its title, or its shell reported the
+    /// directory it is in (`directory`), which decides whether the title
+    /// says anything (`WorkspaceUtilityView.programTitle`). A session's
+    /// terminal shows what tmux titles it, which says nothing the sidebar
+    /// does not.
+    func terminalTitleChanged(_ view: NSView, title: String, directory: String? = nil) {
+        guard let id = viewID(of: view), let utility = views.view(id) else { return }
+        let program = utility.programTitle(title, directory: directory)
+        guard programTitles[id] != program else { return }
+        programTitles[id] = program
         reloadLines()
         if viewSelection == id { window.title = windowTitle }
     }
@@ -136,7 +140,7 @@ extension WorkspaceWindowController {
     var windowTitle: String {
         if reviewSelected { return "Checkout Changes — Agent Mux" }
         if let view = views.view(viewSelection) {
-            guard let program = programTitles[view.id], program != view.displayName else { return view.displayName }
+            guard let program = programTitles[view.id], !program.isEmpty, program != view.displayName else { return view.displayName }
             return "\(view.displayName) — \(program)"
         }
         return state.selectedRow?.displayName ?? "Agent Mux"
@@ -404,7 +408,15 @@ extension WorkspaceWindowController: GhosttySurfaceDelegate {
     }
 
     nonisolated func surfaceDidChangeTitle(_ surface: Ghostty.SurfaceView) {
-        MainActor.assumeIsolated { terminalTitleChanged(surface, title: surface.title) }
+        MainActor.assumeIsolated {
+            terminalTitleChanged(surface, title: surface.title, directory: surface.workingDirectory)
+        }
+    }
+
+    nonisolated func surfaceDidChangeWorkingDirectory(_ surface: Ghostty.SurfaceView) {
+        MainActor.assumeIsolated {
+            terminalTitleChanged(surface, title: surface.title, directory: surface.workingDirectory)
+        }
     }
 
     nonisolated func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) {

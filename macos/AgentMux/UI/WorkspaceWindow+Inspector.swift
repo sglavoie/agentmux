@@ -75,7 +75,7 @@ extension WorkspaceWindowController {
             if let current = state.row(row.key) { activate(current, reattaching: true) }
         case let .view(view): showView(view.id, focus: true)
         case let .group(group):
-            if !group.needsAttention { setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed) }
+            if !group.needsAttention { setCollapsed(group, !group.collapsed) }
         case .section: break
         }
     }

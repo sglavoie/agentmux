@@ -171,15 +171,10 @@ final class WorkspaceInspectorView: NSView {
             inboxControls.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: inboxControls.widthAnchor).isActive = true
         }
-        let readingMenu = NSHostingView(rootView: WorkspaceReadingMenu(preferences: preferences))
-        readingMenu.translatesAutoresizingMaskIntoConstraints = false
-        readingMenu.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        readingMenu.heightAnchor.constraint(equalToConstant: 24).isActive = true
-        let tabRow = NSStackView(views: [tabs, readingMenu])
         readerHint.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         readerHint.textColor = .secondaryLabelColor
         readerHint.isHidden = true
-        let header = NSStackView(views: [tabRow, inboxControls, readerHint])
+        let header = NSStackView(views: [tabs, inboxControls, readerHint])
         header.orientation = .vertical
         header.alignment = .leading
         header.spacing = 6
@@ -190,7 +185,7 @@ final class WorkspaceInspectorView: NSView {
             header.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
             header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
-            tabRow.widthAnchor.constraint(equalTo: header.widthAnchor),
+            tabs.widthAnchor.constraint(equalTo: header.widthAnchor),
             inboxControls.widthAnchor.constraint(equalTo: header.widthAnchor),
             scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),

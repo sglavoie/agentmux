@@ -19,9 +19,9 @@ extension WorkspaceWindowController {
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
         let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
         var wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
-            + state.groups.flatMap { group in
+            + state.listedGroups.flatMap { group in
                 // A collapsed project lists its header only, which still
-                // counts what waits under it.
+                // counts what waits under it; so does a state section.
                 [Item.group(group)] + (group.collapsed ? [] : group.rows).flatMap { row in
                     [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
                 }
@@ -103,7 +103,7 @@ extension WorkspaceWindowController {
     }
 
     /// Finds what the pane is on in the list: a hidden sidebar is shown, a
-    /// collapsed project holding the line is expanded, and the line is
+    /// collapsed project or state section holding the line is expanded, and the line is
     /// scrolled into view and flashes. The keyboard stays where it is.
     /// False when the list has no line for it.
     @discardableResult
@@ -112,10 +112,7 @@ extension WorkspaceWindowController {
             setSidebarCollapsed(false)
             window.layoutIfNeeded()
         }
-        if shownLine == nil, let key = shownSessionKey,
-           let group = state.groups.first(where: { $0.collapsed && !$0.needsAttention && $0.rows.contains { $0.key == key } }) {
-            setCollapsed(project: group.project, pinned: group.pinned, false)
-        }
+        if shownLine == nil, let key = shownSessionKey { expandGroups(of: key) }
         guard let index = shownLine else { return false }
         syncSidebarSelection()
         sidebar.scrollRowToVisible(index)
@@ -190,7 +187,7 @@ extension WorkspaceWindowController {
                 ?? WorkspaceGroupCellView()
             cell.show(group)
             cell.onToggle = group.needsAttention ? nil : { [weak self] in
-                self?.setCollapsed(project: group.project, pinned: group.pinned, !group.collapsed)
+                self?.setCollapsed(group, !group.collapsed)
             }
             return cell
         case let .row(row):
@@ -292,18 +289,19 @@ extension WorkspaceWindowController {
         case .section, .group:
             return false
         case let .row(row):
-            guard let group = state.groups.first(where: { !$0.needsAttention && $0.pinned == row.pinned && (row.pinned || $0.project == row.project) })
-            else { return false }
+            guard let group = group(of: row.key), !group.needsAttention else { return false }
             var keys = group.rows.map(\.key).filter { $0 != row.key }
             var at = keys.count
             if slot < items.count, case let .row(next) = items[slot] { at = keys.firstIndex(of: next.key) ?? at }
             keys.insert(row.key, at: at)
-            // Keep the saved places of siblings temporarily in Needs attention.
-            let base = WorkspaceSidebar.groups(state.rows, order: order, prioritizeAttention: false)
-                .first { $0.pinned == row.pinned && (row.pinned || $0.project == row.project) }
+            // Keep the saved places of siblings temporarily in Needs
+            // attention, and of the project's sessions in other states.
+            let base = row.pinned
+                ? WorkspaceSidebar.groups(state.rows, order: order, prioritizeAttention: false).first(where: \.pinned)?.rows
+                : WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order)
             let moved = Set(keys)
             var next = keys.makeIterator()
-            let saved = (base?.rows.map(\.key) ?? keys).map { moved.contains($0) ? next.next() ?? $0 : $0 }
+            let saved = (base?.map(\.key) ?? keys).map { moved.contains($0) ? next.next() ?? $0 : $0 }
             if row.pinned {
                 order.setPinned(saved)
             } else {

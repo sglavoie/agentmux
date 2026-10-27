@@ -33,6 +33,31 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertEqual(views.view(WorkspaceUtilityView.dashboard.id), .dashboard)
     }
 
+    /// A shell titles itself with its directory at its prompt and with the
+    /// command while one runs: only the command is worth a line.
+    func testAShellsPromptTitleSaysNothing() {
+        let home = NSHomeDirectory()
+        let shell = WorkspaceUtilityView(kind: .shell, target: home + "/api", title: "Shell")
+        XCTAssertEqual(shell.programTitle("me@host:~/api", directory: nil), "", "before OSC 7, where it was opened")
+        XCTAssertEqual(shell.programTitle("~/api", directory: nil), "")
+        XCTAssertEqual(shell.programTitle(home + "/api", directory: nil), "")
+        XCTAssertEqual(shell.programTitle("me@host:/tmp", directory: "/tmp"), "", "where it went")
+        XCTAssertEqual(shell.programTitle("me@host:/tmp", directory: "file://host/tmp/"), "")
+        XCTAssertEqual(shell.programTitle("me@host:~/api", directory: "/tmp"), "", "not yet where it went")
+        XCTAssertEqual(shell.programTitle("vim ~/api", directory: home + "/api"), "vim ~/api")
+        XCTAssertEqual(shell.programTitle("make test", directory: nil), "make test")
+        XCTAssertNil(shell.programTitle("", directory: "/tmp"), "a cleared title")
+
+        let terminal = WorkspaceUtilityView(kind: .terminal, target: F.runtimeID(1), title: "Terminal")
+        XCTAssertEqual(terminal.programTitle("me@host:/tmp", directory: nil), "", "its directory is unknown")
+        XCTAssertEqual(terminal.programTitle("/usr/bin/top", directory: nil), "/usr/bin/top", "a command run by its path")
+        XCTAssertEqual(terminal.programTitle("ssh me@host:22", directory: nil), "ssh me@host:22")
+        XCTAssertEqual(terminal.detail(session: "release notes", program: nil), "", "untitled yet")
+        XCTAssertEqual(terminal.programTitle("me@host:/tmp", directory: "/tmp"), "")
+        XCTAssertEqual(terminal.detail(session: "release notes", program: ""), "")
+        XCTAssertEqual(shell.detail(session: nil, program: ""), "")
+    }
+
     func testDecodesAForwardedViewFrame() throws {
         let line = Data(#"{"v":1,"seq":9,"type":"workspace_view","data":{"kind":"session","runtime_session_id":"\#(F.runtimeID(3))","await":true}}"#.utf8)
         XCTAssertEqual(
@@ -236,8 +261,9 @@ final class WorkspaceViewsWindowTests: XCTestCase {
     private var workspace: WorkspaceWindowController!
     private var clock = Date(timeIntervalSince1970: 1_800_000_000)
 
+    /// Every turn ended, so all three are listed under Done.
     private let sessions = [
-        F.tmux(1, project: "api", profile: "work"),
+        F.tmux(1, project: "api", profile: "work", icon: "stop"),
         F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 2000),
         F.kitty(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000),
     ]
@@ -302,7 +328,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(workspace.sidebar.selectedRow, top + 3)
 
         // The order holds over snapshots, and a new session follows it.
-        app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "alpha")]))
+        app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "alpha", icon: "stop")]))
         XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, F.runtimeID(3), nil])
 
         XCTAssertFalse(workspace.moveItem(at: top + 3, to: top + 5), "a terminal does not leave its session")
@@ -422,7 +448,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(workspace.sidebar.selectedRow, try index(ofView: "shell:/work/api"))
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try index(ofView: "shell:/work/api")) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "api")
-        XCTAssertEqual(cell.detailLabel.stringValue, "Shell · /work/api")
+        XCTAssertEqual(cell.detailLabel.stringValue, "", "a shell running nothing has a blank line")
 
         // The same shell asked for again is the same view.
         workspace.showView("dashboard")

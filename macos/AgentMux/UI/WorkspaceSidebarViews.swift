@@ -395,17 +395,27 @@ final class WorkspaceGroupCellView: NSTableCellView {
             return
         }
         setWarning(false)
-        // A project's name reads as a heading; the sections' stay muted.
-        nameLabel.textColor = .labelColor
-        nameLabel.stringValue = group.project
-        let waiting = group.attention
-        countLabel.stringValue = waiting > 0 ? String(waiting) : ""
-        countLabel.toolTip = waiting > 0 ? "\(waiting) waiting on you" : nil
+        var label: String
+        if group.isSectionHeading {
+            // A state section stays muted, like the other sections, and
+            // counts the sessions it holds rather than the waiting ones.
+            nameLabel.stringValue = group.project
+            countLabel.stringValue = String(group.sessions)
+            countLabel.toolTip = group.sessions == 1 ? "1 session" : "\(group.sessions) sessions"
+            label = "\(group.project), \(countLabel.toolTip ?? "")"
+        } else {
+            // A project's name reads as a heading; the sections' stay muted.
+            nameLabel.textColor = .labelColor
+            nameLabel.stringValue = group.project
+            let waiting = group.attention
+            countLabel.stringValue = waiting > 0 ? String(waiting) : ""
+            countLabel.toolTip = waiting > 0 ? "\(waiting) waiting on you" : nil
+            label = waiting > 0 ? "\(group.project), \(waiting) waiting" : group.project
+        }
         disclosureLabel.isHidden = false
         disclosureLabel.stringValue = group.collapsed ? Self.collapsedDisclosure : Self.expandedDisclosure
         disclosureLabel.toolTip = group.collapsed ? "Collapsed: click to expand" : "Click to collapse"
         disclosureLabel.setAccessibilityLabel(group.collapsed ? "collapsed" : "expanded")
-        var label = waiting > 0 ? "\(group.project), \(waiting) waiting" : group.project
         label += group.collapsed ? ", collapsed" : ", expanded"
         setAccessibilityLabel(label)
         setAccessibilityDisclosed(!group.collapsed)
@@ -601,8 +611,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         glyphLabel.stringValue = view.glyph
         titleLabel.stringValue = bell ? "\(view.displayName) \(Self.bellGlyph)" : view.displayName
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .bold)
-        let program = program.flatMap { $0.isEmpty ? nil : $0 }
         let detail = view.detail(session: session, program: program)
+        let program = program.flatMap { $0.isEmpty ? nil : $0 }
         let progressText = progress.map(Self.progressText)
         detailLabel.stringValue = progressText.map { "\($0) · \(detail)" } ?? detail
         toolTip = view.toolTip(session: session)

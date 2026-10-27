@@ -11,8 +11,10 @@ final class WorkspaceWindowTests: XCTestCase {
     private var app: FakeWorkspaceApp!
     private var workspace: WorkspaceWindowController!
 
+    /// Every turn ended, so all three are listed under Done, below its
+    /// heading, and the layout tests have one state section.
     private let sessions = [
-        F.tmux(1, project: "api", profile: "work"),
+        F.tmux(1, project: "api", profile: "work", icon: "stop"),
         F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 2000),
         // A seen completion stays in its project; attention transitions are
         // exercised separately below so layout tests have a fixed baseline.
@@ -224,8 +226,10 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.select(selected)
         let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
         let made = app.made
+        // Both finished unseen: under Needs attention they keep the order
+        // of their sections and projects.
         live[1].unseen = true
-        live[2].iconState = "key"
+        live[2].unseen = true
         app.store.apply(snapshot: F.snapshot(live))
 
         XCTAssertEqual(workspace.state.rows.map(\.key), [waiting, AttentionCycler.key(live[2], snapshotSocket: "unix:/tmp/kitty-1"), selected])
@@ -247,6 +251,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(app.orders.isEmpty, "attention cannot be collapsed")
 
         live[1].unseen = false
+        live[2].unseen = false
         live[2].iconState = "bolt"
         live[2].attention = false
         app.store.apply(snapshot: F.snapshot(live))
@@ -261,9 +266,9 @@ final class WorkspaceWindowTests: XCTestCase {
     func testDraggingKeepsTheSavedPositionOfPromotedSiblings() throws {
         // Only a project's rows are promoted while they can be dragged: an
         // open Pinned group keeps its waiting rows.
-        var live = (1...3).map { F.tmux($0, project: "api", profile: String($0)) }
+        // All three finished, so they share a state section once seen.
+        var live = (1...3).map { F.tmux($0, project: "api", profile: String($0), icon: "stop") }
         let keys = (1...3).map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
-        live[1].iconState = "stop"
         live[1].unseen = true
         live[1].attention = true
         app.store.apply(snapshot: F.snapshot(live))
@@ -281,22 +286,30 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Connecting to the daemon…")
 
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(workspace.sidebar.numberOfRows, 8)
-        guard case let .group(api) = workspace.items[3], case let .group(web) = workspace.items[6] else {
+        XCTAssertEqual(workspace.sidebar.numberOfRows, 9)
+        guard case let .group(done) = workspace.items[3], case let .group(api) = workspace.items[4],
+              case let .group(web) = workspace.items[7] else {
             return XCTFail("expected a project line before its sessions: \(workspace.items)")
         }
+        XCTAssertTrue(done.isSectionHeading && done.stateSection == .done, "the projects are listed under their state")
         XCTAssertEqual([api.project, web.project], ["api", "web"])
         XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 3))
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 3), "a project line is not a session")
-        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 4))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 3), "a section line is not a session")
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 4))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 4), "a project line is not a session")
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 5))
 
-        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 3) as? WorkspaceGroupCellView)
+        let section = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 3) as? WorkspaceGroupCellView)
+        XCTAssertEqual(section.nameLabel.stringValue, "Done")
+        XCTAssertEqual(section.countLabel.stringValue, "3", "a section counts its sessions")
+        XCTAssertFalse(section.disclosureLabel.isHidden, "and collapses")
+        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceGroupCellView)
         XCTAssertEqual(header.nameLabel.stringValue, "api")
         XCTAssertEqual(header.countLabel.stringValue, "1", "one of the project's sessions waits")
-        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceRowCellView)
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 5) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "personal")
         XCTAssertEqual(cell.glyphLabel.stringValue, "✓")
-        let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 7) as? WorkspaceRowCellView)
+        let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 8) as? WorkspaceRowCellView)
         XCTAssertEqual(kitty.titleLabel.stringValue, "work")
         XCTAssertTrue(kitty.detailLabel.stringValue.hasSuffix("Kitty"))
 
@@ -560,12 +573,12 @@ final class WorkspaceWindowTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(lines(), ["[api]", "api/personal", "api/work", "[web]", "web/work"])
+        XCTAssertEqual(lines(), ["[Done]", "[api]", "api/personal", "api/work", "[web]", "web/work"])
 
         // The right-click menu pins the session under the pointer.
         var items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
         _ = try XCTUnwrap(items[4].target).perform(try XCTUnwrap(items[4].action), with: items[4])
-        XCTAssertEqual(lines(), ["[Pinned]", "web/work", "[api]", "api/personal", "api/work"],
+        XCTAssertEqual(lines(), ["[Pinned]", "web/work", "[Done]", "[api]", "api/personal", "api/work"],
                        "a project with nothing left under it is not listed")
         XCTAssertEqual(workspace.sessionKey(of: kitty.key), "1", "the digits follow the list")
         XCTAssertEqual(workspace.state.selection, work.key, "the pane stays where it is")
@@ -573,26 +586,26 @@ final class WorkspaceWindowTests: XCTestCase {
 
         // The menu pins the one the pane is on, below the ones pinned before.
         XCTAssertTrue(workspace.togglePinOfShownSession())
-        XCTAssertEqual(lines(), ["[Pinned]", "web/work", "api/work", "[api]", "api/personal"])
+        XCTAssertEqual(lines(), ["[Pinned]", "web/work", "api/work", "[Done]", "[api]", "api/personal"])
 
         // Pinned sessions are dragged among themselves and nowhere else.
         let top = try index(of: kitty.key)
         XCTAssertEqual(workspace.dropSlots(forItemAt: top), [top, top + 1, top + 2])
         XCTAssertTrue(workspace.moveItem(at: top, to: top + 2))
-        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[api]", "api/personal"])
+        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[Done]", "[api]", "api/personal"])
         XCTAssertEqual(app.orders.last?.pinned, [WorkspaceOrder.token(work.key), WorkspaceOrder.token(kitty.key)])
 
         // A snapshot keeps them there, and unpinning puts one back.
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.refresh()
-        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[api]", "api/personal"])
+        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[Done]", "[api]", "api/personal"])
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Unpin", "", "Show in Kitty"],
                        "a Kitty session is ended, and has its terminals, in Kitty")
         workspace.setPinned(kitty.key, false)
-        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[api]", "api/personal", "[web]", "web/work"])
+        XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[Done]", "[api]", "api/personal", "[web]", "web/work"])
         XCTAssertTrue(workspace.togglePinOfShownSession())
-        XCTAssertEqual(lines(), ["[api]", "api/personal", "api/work", "[web]", "web/work"])
+        XCTAssertEqual(lines(), ["[Done]", "[api]", "api/personal", "api/work", "[web]", "web/work"])
         XCTAssertEqual(app.orders.last?.pinned, [])
     }
 
@@ -925,7 +938,7 @@ final class WorkspaceWindowTests: XCTestCase {
 
         // Only the collapsed header's count changes; the web line's own
         // item does not, but its digit does.
-        app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "spare")]))
+        app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "spare", icon: "stop")]))
         XCTAssertEqual(workspace.sessionKey(of: web), "4")
         XCTAssertEqual(try cell(web).keyLabel.stringValue, "⌘4")
     }
@@ -1054,8 +1067,9 @@ final class WorkspaceWindowTests: XCTestCase {
         let items = workspace.items
         XCTAssertEqual(WorkspaceWindowController.changedLines(from: items, to: items), IndexSet())
 
+        // Muted in place: a new state would move the line to another section.
         var changed = sessions
-        changed[1].iconState = "bolt"
+        changed[1].muted = true
         app.store.apply(snapshot: F.snapshot(changed))
         let moved = try index(of: .embedded(F.runtimeID(2)))
         XCTAssertEqual(WorkspaceWindowController.changedLines(from: items, to: workspace.items).map(Array.init),
@@ -1076,8 +1090,9 @@ final class WorkspaceWindowTests: XCTestCase {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try cell(.embedded(F.runtimeID(1)))
         work.isHovered = true
+        // Muted in place: a new state would move the line to another section.
         var changed = sessions
-        changed[1].iconState = "bolt"
+        changed[1].muted = true
         app.store.apply(snapshot: F.snapshot(changed))
         let line = try index(of: .embedded(F.runtimeID(1)))
         XCTAssertTrue(workspace.sidebar.view(atColumn: 0, row: line, makeIfNecessary: false) === work, "the line was not drawn again")
@@ -1395,7 +1410,7 @@ final class WorkspaceWindowTests: XCTestCase {
         var items = workspace.contextMenuItems(forRow: try header("api"))
         XCTAssertEqual(items.map(\.title), ["Collapse Project"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
-        XCTAssertEqual(lines(), ["[api]+", "[web]", "web/work"])
+        XCTAssertEqual(lines(), ["[Done]", "[api]+", "[web]", "web/work"])
         XCTAssertEqual(app.orders.last?.collapsed, [WorkspaceOrder.groupToken(project: "api", pinned: false)])
         XCTAssertEqual(workspace.state.selection, work.key, "the pane stays where it is")
         XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(), "with no line to select")
@@ -1405,22 +1420,38 @@ final class WorkspaceWindowTests: XCTestCase {
 
         // A new snapshot keeps it collapsed.
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(lines(), ["[api]+", "[web]", "web/work"])
+        XCTAssertEqual(lines(), ["[Done]", "[api]+", "[web]", "web/work"])
 
         // The pinned group collapses apart from the projects.
         workspace.setPinned(try row("web", "work").key, true)
         items = workspace.contextMenuItems(forRow: try header("Pinned"))
         XCTAssertEqual(items.map(\.title), ["Collapse Pinned"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
-        XCTAssertEqual(lines(), ["[Pinned]+", "[api]+"])
+        XCTAssertEqual(lines(), ["[Pinned]+", "[Done]", "[api]+"])
 
         items = workspace.contextMenuItems(forRow: try header("api"))
         XCTAssertEqual(items.map(\.title), ["Expand Project"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
-        XCTAssertEqual(lines(), ["[Pinned]+", "[api]", "api/personal", "api/work"])
+        XCTAssertEqual(lines(), ["[Pinned]+", "[Done]", "[api]", "api/personal", "api/work"])
         XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(integer: try index(of: work.key)))
         XCTAssertEqual(app.orders.last?.collapsed, [WorkspaceOrder.groupToken(project: "Pinned", pinned: true)])
         XCTAssertEqual(workspace.order, app.orders.last)
+
+        // A state section collapses to its heading, which counts its sessions.
+        items = workspace.contextMenuItems(forRow: try header("Done"))
+        XCTAssertEqual(items.map(\.title), ["Collapse Section"])
+        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        XCTAssertEqual(lines(), ["[Pinned]+", "[Done]+"])
+        XCTAssertEqual(app.orders.last?.collapsed, [WorkspaceOrder.groupToken(project: "Pinned", pinned: true),
+                                                    WorkspaceOrder.groupToken(section: .done)])
+        let section = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try header("Done")) as? WorkspaceGroupCellView)
+        XCTAssertEqual(section.countLabel.stringValue, "2")
+        XCTAssertEqual(section.accessibilityLabel(), "Done, 2 sessions, collapsed")
+        XCTAssertEqual(workspace.state.selection, work.key, "the pane stays where it is")
+
+        // Going to a session in it expands the section.
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertEqual(lines(), ["[Pinned]+", "[Done]", "[api]", "api/personal", "api/work"])
     }
 
     /// ⌘1 to ⌘0 count the sessions of a collapsed project, so going to one

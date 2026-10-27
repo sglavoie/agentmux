@@ -37,12 +37,16 @@ final class WorkspaceInspectorTests: XCTestCase {
     // MARK: Data
 
     func testWaitingListsTheSessionsThatWaitInSidebarOrder() {
-        let waiting = WorkspaceInspector.waiting(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
-        XCTAssertEqual(waiting.map(\.title), ["api — personal", "web — work"], "not the one that waited longest first")
-        XCTAssertEqual(waiting.map(\.detail), ["Turn complete · 5m", "Needs permission · 9m · Kitty"])
-        XCTAssertEqual(waiting.map(\.glyph), ["✓", "🔑"])
+        // The permission request waits under Waiting, above the turn that
+        // completed under Done, though it has waited the least.
+        var listed = sessions
+        listed[2].presentationChangedAtMS = 540_000
+        let waiting = WorkspaceInspector.waiting(listed, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
+        XCTAssertEqual(waiting.map(\.title), ["web — work", "api — personal"], "not the one that waited longest first")
+        XCTAssertEqual(waiting.map(\.detail), ["Needs permission · 1m · Kitty", "Turn complete · 5m"])
+        XCTAssertEqual(waiting.map(\.glyph), ["🔑", "✓"])
         XCTAssertEqual(waiting.map(\.key), [
-            .embedded(F.runtimeID(2)), AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4),
+            AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4), .embedded(F.runtimeID(2)),
         ])
     }
 
@@ -91,11 +95,15 @@ final class WorkspaceInspectorTests: XCTestCase {
     }
 
     func testInboxFiltersAndOldestOrderDoNotChangeSidebarOrder() {
-        let rows = WorkspaceInspector.waiting(sessions, now: now, glyphs: .fallback)
-        XCTAssertEqual(WorkspaceWaitingFilter.all.apply(rows, oldestFirst: true).map(\.key), [rows[1].key, rows[0].key])
-        XCTAssertEqual(WorkspaceWaitingFilter.permission.apply(rows, oldestFirst: false), [rows[1]])
-        XCTAssertEqual(WorkspaceWaitingFilter.completed.apply(rows, oldestFirst: false), [rows[0]])
-        app.store.apply(snapshot: F.snapshot(sessions))
+        var listed = sessions
+        listed[2].presentationChangedAtMS = 540_000
+        let rows = WorkspaceInspector.waiting(listed, now: now, glyphs: .fallback)
+        XCTAssertEqual(rows.map(\.category), [.permission, .completed])
+        XCTAssertEqual(WorkspaceWaitingFilter.all.apply(rows, oldestFirst: true).map(\.key), [rows[0].key, rows[1].key],
+                       "a permission still leads a completion")
+        XCTAssertEqual(WorkspaceWaitingFilter.permission.apply(rows, oldestFirst: false), [rows[0]])
+        XCTAssertEqual(WorkspaceWaitingFilter.completed.apply(rows, oldestFirst: false), [rows[1]])
+        app.store.apply(snapshot: F.snapshot(listed))
         let before = workspace.state.rows
         workspace.inspector.setWaitingFilter(.permission, oldestFirst: true)
         XCTAssertEqual(workspace.inspector.visibleWaiting.count, 1)
@@ -110,7 +118,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         inspector.toggleContext(try XCTUnwrap(inspector.model.waiting.first))
         XCTAssertEqual(inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first { $0.row.key == inspector.model.waiting.first?.key }?.contextStatus.stringValue, "Loading context…")
         var changed = sessions
-        changed[1].iconState = "question"
+        changed[2].iconState = "question"
         app.store.apply(snapshot: F.snapshot(changed))
         finish?(.loaded(SecretText("old prompt")))
         XCTAssertFalse(inspector.lines.compactMap { ($0 as? WorkspaceWaitingRowView)?.contextLabel.stringValue }.contains("old prompt"))
@@ -321,9 +329,9 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.setInspectorCollapsed(false)
 
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        try XCTUnwrap(lines.first?.answerButton).performClick(nil)
+        try XCTUnwrap(lines.first { $0.row.key == .embedded(F.runtimeID(2)) }?.answerButton).performClick(nil)
         XCTAssertEqual(app.answers, [.asl(ASLAnswerTarget(runID: "run-2", planDir: "/plans/api"))])
-        XCTAssertNil(lines.last?.answerButton, "the Kitty session next to it has no run and no button")
+        XCTAssertNil(lines.first { $0.row.key.windowID == 4 }?.answerButton, "the Kitty session next to it has no run and no button")
     }
 
     func testTheSessionTabFollowsThePaneAndItsButtonsAskTheApp() throws {

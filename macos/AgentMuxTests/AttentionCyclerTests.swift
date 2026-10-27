@@ -62,13 +62,14 @@ final class AttentionCyclerTests: XCTestCase {
     }
 
     func testContinuesPastASettledSessionThatLeftNeedsAttention() {
-        // A finished unseen and waits under Needs attention, above B, which
-        // waits for a key; C finished too, but was seen, so it stays in web.
+        // A and B finished unseen and wait under Needs attention, A's web
+        // above B's zed; C finished too, but was seen, so it stays in web.
         var a = session(1, project: "web")
         a.iconState = "stop"
         a.unseen = true
         var b = session(2, project: "zed")
-        b.iconState = "key"
+        b.iconState = "stop"
+        b.unseen = true
         var c = session(3, project: "web")
         c.iconState = "stop"
         var sessions = [a, b, c]

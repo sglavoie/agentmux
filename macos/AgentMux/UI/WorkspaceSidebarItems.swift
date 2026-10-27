@@ -14,6 +14,7 @@ enum WorkspaceSidebarItem: Equatable {
         case let (.view(a), .view(b)): return a.id == b.id
         case let (.group(a), .group(b)):
             return a.project == b.project && a.pinned == b.pinned && a.needsAttention == b.needsAttention
+                && a.stateSection == b.stateSection && a.isSectionHeading == b.isSectionHeading
         case let (.row(a), .row(b)): return a.key == b.key && a.name.isEmpty == b.name.isEmpty
         default: return false
         }
@@ -151,13 +152,14 @@ enum WorkspaceSidebarBand: Equatable {
     /// from their neighbours.
     var isSection: Bool { self == .attention || self == .pinned }
 
-    /// What a session's icon state is drawn on under its project.
+    /// What a session's icon state is drawn on under its project: the hue
+    /// of the state section it is listed in.
     init(state: String) {
-        switch state {
-        case "": self = .idle
-        case "stop": self = .stopped
-        case "key", "question", "warning", "error": self = .attention
-        default: self = .running
+        switch WorkspaceStateSection(iconState: state) {
+        case .idle: self = .idle
+        case .done: self = .stopped
+        case .waiting: self = .attention
+        case .working: self = .running
         }
     }
 

@@ -136,6 +136,26 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertEqual(try viewCell(id).detailLabel.stringValue, WorkspaceUtilityView.dashboard.detail)
     }
 
+    func testAnIdleShellsLineIsBlankAndARunningCommandIsShown() throws {
+        workspace.open(WorkspaceUtilityView(kind: .shell, target: "/tmp", title: "Shell"))
+        guard case let .view(id) = workspace.content else { return XCTFail("the shell is shown") }
+        let shell = try XCTUnwrap(workspace.utilityTerminalView(for: id))
+        XCTAssertEqual(try viewCell(id).detailLabel.stringValue, "", "nothing runs yet")
+
+        workspace.terminalTitleChanged(shell, title: "me@host:/tmp")
+        XCTAssertEqual(try viewCell(id).detailLabel.stringValue, "", "at its prompt")
+        XCTAssertEqual(workspace.window.title, "Shell")
+
+        workspace.terminalTitleChanged(shell, title: "make test", directory: "/tmp")
+        XCTAssertEqual(try viewCell(id).detailLabel.stringValue, "make test")
+        XCTAssertEqual(workspace.window.title, "Shell — make test")
+
+        // After a cd the title names the new directory before the shell
+        // reports it: still a prompt.
+        workspace.terminalTitleChanged(shell, title: "me@host:/var", directory: "/tmp")
+        XCTAssertEqual(try viewCell(id).detailLabel.stringValue, "")
+    }
+
     func testProgramTitlePreservesSessionName() throws {
         var named = sessions
         named[0].name = "release notes"
@@ -146,7 +166,7 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         workspace.openTerminalBesideSession()
         let first = "terminal:\(F.runtimeID(1))#1"
         let firstTerminal = try XCTUnwrap(workspace.utilityTerminalView(for: first))
-        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "Shell · release notes")
+        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "")
         workspace.terminalTitleChanged(firstTerminal, title: "zsh")
         XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "zsh · release notes")
         XCTAssertEqual(try viewCell(first).toolTip, "Shell · release notes")
@@ -160,9 +180,9 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertEqual(try viewCell(second).detailLabel.stringValue, "zsh · api — personal")
         XCTAssertEqual(try viewCell(second).toolTip, "Shell · api — personal")
 
-        // The title cleared, the line is the view's own again.
+        // The title cleared, the line is blank again.
         workspace.terminalTitleChanged(firstTerminal, title: "")
-        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "Shell · release notes")
+        XCTAssertEqual(try viewCell(first).detailLabel.stringValue, "")
 
         // Its session ends: neither its terminal nor its program title remains.
         app.store.apply(snapshot: F.snapshot([named[1]]))

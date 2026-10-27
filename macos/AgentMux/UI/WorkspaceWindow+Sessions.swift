@@ -171,27 +171,32 @@ extension WorkspaceWindowController {
 
     static let expandPinnedTitle = "Expand Pinned"
 
+    static let collapseSectionTitle = "Collapse Section"
+
+    static let expandSectionTitle = "Expand Section"
+
     static let showInKittyTitle = "Show in Kitty"
 
     static let reattachTitle = "Reattach"
 
     private func groupMenuItems(_ group: WorkspaceGroup) -> [NSMenuItem] {
         guard !group.needsAttention else { return [] }
-        let title = group.pinned
+        let title = group.isSectionHeading
+            ? (group.collapsed ? Self.expandSectionTitle : Self.collapseSectionTitle)
+            : group.pinned
             ? (group.collapsed ? Self.expandPinnedTitle : Self.collapsePinnedTitle)
             : (group.collapsed ? Self.expandProjectTitle : Self.collapseProjectTitle)
         let toggle = NSMenuItem(title: title, action: #selector(toggleClickedGroup(_:)), keyEquivalent: "")
-        toggle.representedObject = [group.project, group.pinned] as [Any]
+        toggle.representedObject = WorkspaceOrder.groupToken(group)
         toggle.target = self
         return [toggle]
     }
 
     @objc private func toggleClickedGroup(_ sender: Any?) {
-        guard let named = (sender as? NSMenuItem)?.representedObject as? [Any],
-              let project = named.first as? String, let pinned = named.last as? Bool,
-              let group = state.groups.first(where: { !$0.needsAttention && $0.project == project && $0.pinned == pinned })
+        guard let token = (sender as? NSMenuItem)?.representedObject as? String,
+              let group = state.groups.first(where: { !$0.needsAttention && WorkspaceOrder.groupToken($0) == token })
         else { return }
-        setCollapsed(project: project, pinned: pinned, !group.collapsed)
+        setCollapsed(group, !group.collapsed)
     }
 
     /// Collapses a project's group, or the pinned one, to its header, or
@@ -199,8 +204,33 @@ extension WorkspaceWindowController {
     /// it outlasts the window and the app. The pane stays where it is, even
     /// on a session the collapse took off the list.
     func setCollapsed(project: String, pinned: Bool, _ collapsed: Bool) {
-        guard order.isCollapsed(project: project, pinned: pinned) != collapsed else { return }
-        order.setCollapsed(project: project, pinned: pinned, collapsed)
+        changeCollapsed { $0.setCollapsed(project: project, pinned: pinned, collapsed) }
+    }
+
+    /// Collapses or expands a listed group: a project's, the pinned one, or
+    /// a state section.
+    func setCollapsed(_ group: WorkspaceGroup, _ collapsed: Bool) {
+        guard group.isSectionHeading, let section = group.stateSection else {
+            return setCollapsed(project: group.project, pinned: group.pinned, collapsed)
+        }
+        changeCollapsed { $0.setCollapsed(section, collapsed) }
+    }
+
+    /// Expands what keeps a session's line off the list: its project's
+    /// group, the pinned one, and the state section it is in.
+    func expandGroups(of key: AttentionCycler.Key?) {
+        guard let group = group(of: key), !group.needsAttention else { return }
+        changeCollapsed { order in
+            order.setCollapsed(project: group.project, pinned: group.pinned, false)
+            if let section = group.stateSection { order.setCollapsed(section, false) }
+        }
+    }
+
+    private func changeCollapsed(_ change: (inout WorkspaceOrder) -> Void) {
+        var changed = order
+        change(&changed)
+        guard changed != order else { return }
+        order = changed
         state.arrange(order)
         delegate?.workspaceOrderChanged(order)
         reloadSidebar(allowReorder: true)
@@ -504,9 +534,7 @@ extension WorkspaceWindowController {
         case let .view(view): key = view.besideRuntimeSessionID.map { .embedded($0) }
         case .section, .group: return
         }
-        if let group = group(of: key), group.collapsed {
-            setCollapsed(project: group.project, pinned: group.pinned, false)
-        }
+        expandGroups(of: key)
         switch next {
         case let .row(row): go(to: row, raising: false)
         case let .view(view): showView(view.id, focus: true)
@@ -545,7 +573,7 @@ extension WorkspaceWindowController {
             case .row: return [item]
             case let .view(view): return !skipping && view.besideRuntimeSessionID.map(listed.contains) ?? false ? [item] : []
             case let .group(group) where group.collapsed:
-                return group.rows.filter { row in
+                return state.rows(under: group).filter { row in
                     if let beside { return row.embeddedRuntimeSessionID == beside }
                     return viewSelection == nil && row.key == state.selection
                 }.map(Item.row)
@@ -571,15 +599,13 @@ extension WorkspaceWindowController {
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer
     /// sessions are listed. A Kitty row stays in the app unless `raising`.
-    /// The sessions of a collapsed project keep their places, so going to
-    /// one expands its project.
+    /// The sessions of a collapsed project or state section keep their
+    /// places, so going to one expands what holds it.
     func selectSession(at index: Int, raising: Bool = false) {
         let rows = state.rows
         guard rows.indices.contains(index) else { return }
         let row = rows[index]
-        if let group = group(of: row.key), group.collapsed {
-            setCollapsed(project: group.project, pinned: group.pinned, false)
-        }
+        expandGroups(of: row.key)
         go(to: row, raising: raising)
     }
 

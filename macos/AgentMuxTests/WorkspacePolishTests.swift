@@ -125,7 +125,7 @@ final class WorkspacePolishTests: XCTestCase {
         func cell() throws -> WorkspaceRowCellView {
             try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try index(ofView: id)) as? WorkspaceRowCellView)
         }
-        XCTAssertEqual(try cell().detailLabel.stringValue, "Shell · release notes")
+        XCTAssertEqual(try cell().detailLabel.stringValue, "", "a shell running nothing has a blank line")
         XCTAssertEqual(try cell().toolTip, "Shell · release notes")
 
         workspace.toggleSwitcher()

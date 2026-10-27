@@ -7,8 +7,14 @@ final class WorkspaceSidebarTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_000_000)
     private func ms(secondsAgo: Int) -> Int64 { Int64((now.timeIntervalSince1970 - Double(secondsAgo)) * 1000) }
 
+    /// The groups of the pinned, the waiting, and the projects, without the
+    /// state sections' headings, which `testStateSectionsListTheProjectsOfTheirSessionsByName` covers.
     private func groups(_ sessions: [CompanionSession]) -> [WorkspaceGroup] {
-        WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
+        projects(WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback))
+    }
+
+    private func projects(_ groups: [WorkspaceGroup]) -> [WorkspaceGroup] {
+        groups.filter { !$0.isSectionHeading }
     }
 
     // MARK: Wire
@@ -61,7 +67,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(snapshot.sessions.map(\.tabColor), ["#1a3655", "", "blue", "#551a1a"])
 
-        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions)[0].rows.map { ($0.label, $0) })
+        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions).flatMap(\.rows).map { ($0.label, $0) })
         let color = try XCTUnwrap(rows["work"]?.tabColor)
         XCTAssertEqual([color.red, color.green, color.blue], [0x1a / 255.0, 0x36 / 255.0, 0x55 / 255.0])
         XCTAssertNil(rows["plain"]?.tabColor, "a session with no color is drawn on the list's own")
@@ -83,7 +89,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(snapshot.sessions.map(\.name), ["billing fix", "", "stray"])
 
-        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions)[0].rows.map { ($0.label, $0) })
+        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions).flatMap(\.rows).map { ($0.label, $0) })
         XCTAssertEqual(rows["work"]?.name, "billing fix")
         XCTAssertEqual(rows["plain"]?.name, "", "a session nobody named has none")
         XCTAssertEqual(rows["kitty"]?.name, "", "a Kitty session is named by its tab, in Kitty")
@@ -102,7 +108,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(snapshot.sessions.map(\.harnessIcon), ["🦊", "", "📟"])
 
-        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions)[0].rows.map { ($0.label, $0) })
+        let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions).flatMap(\.rows).map { ($0.label, $0) })
         XCTAssertEqual(rows["work"]?.harnessIcon, "🦊")
         XCTAssertEqual(rows["plain"]?.harnessIcon, "", "a session whose icon was cleared has none")
         XCTAssertEqual(rows["kitty"]?.harnessIcon, "", "a Kitty session's icon is on its tab, in Kitty")
@@ -152,7 +158,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         var state = WorkspaceState()
         state.apply(built())
         let key = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
-        XCTAssertEqual(state.groups.map(\.project), ["Pinned", "Needs attention", "web"])
+        XCTAssertEqual(state.groups.map(\.project), ["Pinned", "Needs attention", "Working", "web"])
         XCTAssertTrue(state.groups[1].needsAttention, "pinned sessions stay above Needs attention")
         XCTAssertEqual(state.groups[1].rows.map(\.key), [key, .embedded(F.runtimeID(2))])
         XCTAssertFalse(state.groups[1].collapsed, "waiting sessions escape collapsed projects")
@@ -168,17 +174,20 @@ final class WorkspaceSidebarTests: XCTestCase {
         sessions[3].attention = false
         state.apply(built())
         XCTAssertFalse(state.groups.contains(where: \.needsAttention))
-        XCTAssertEqual(state.groups.map(\.project), ["Pinned", "Needs attention", "web"])
-        XCTAssertEqual(state.groups.last?.rows.map(\.key), [.embedded(F.runtimeID(3)), .embedded(F.runtimeID(2))])
+        XCTAssertEqual(state.groups.map(\.project), ["Pinned", "Done", "web", "Working", "Needs attention", "web"],
+                       "back in their sections; the project called Needs attention is still a project")
+        XCTAssertEqual(state.groups[2].rows.map(\.key), [.embedded(F.runtimeID(2))])
+        XCTAssertEqual(state.groups.last?.rows.map(\.key), [.embedded(F.runtimeID(3))])
         XCTAssertTrue(state.groups.last?.collapsed ?? false)
+        XCTAssertTrue(state.groups[2].collapsed, "a collapsed project is collapsed in every section")
         XCTAssertEqual(state.selection, .embedded(F.runtimeID(2)))
         XCTAssertEqual(order, saved, "promotion never rewrites the saved order")
 
         sessions[0].iconState = "error"
-        XCTAssertEqual(built().map(\.needsAttention), [false, false, false], "a waiting pin stays in an open Pinned group")
+        XCTAssertEqual(projects(built()).map(\.needsAttention), [false, false, false, false], "a waiting pin stays in an open Pinned group")
         XCTAssertTrue(built()[0].pinned && built()[0].rows[0].needsAttention)
         order.setCollapsed(project: WorkspaceSidebar.pinnedSection, pinned: true, true)
-        XCTAssertEqual(built().map(\.needsAttention), [true, false, false], "a collapsed Pinned group cannot hide it")
+        XCTAssertEqual(projects(built()).map(\.needsAttention), [true, false, false, false], "a collapsed Pinned group cannot hide it")
         XCTAssertTrue(built()[0].rows[0].pinned, "a promoted pin remains pinned")
         sessions[0].iconState = "bolt"
         XCTAssertTrue(built()[0].pinned, "it returns to Pinned when resolved")
@@ -198,10 +207,10 @@ final class WorkspaceSidebarTests: XCTestCase {
         reasoned[0].dirty = true
         let built = groups(reasoned)
 
-        XCTAssertEqual(built.map(\.project), ["Needs attention", "api", "API tools", "web"])
+        XCTAssertEqual(built.map(\.project), ["Needs attention", "api", "web", "API tools"], "by state, then by name")
         XCTAssertEqual(built.map(\.attention), [1, 1, 0, 0])
         XCTAssertEqual(built[0].rows.map(\.label), ["work"], "the permission request floats above the seen completion")
-        XCTAssertEqual(built[2].rows.map(\.label), ["copilot"], "a session with no profile is labeled by its harness")
+        XCTAssertEqual(built[3].rows.map(\.label), ["copilot"], "a session with no profile is labeled by its harness")
 
         let personal = built[1].rows[0]
         XCTAssertEqual(personal.target, .embedded(runtimeSessionID: F.runtimeID(2)))
@@ -218,10 +227,48 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertTrue(work.muted)
         XCTAssertEqual(work.toolTip, "window 4")
 
-        let web = built[3].rows[0]
+        let web = built[2].rows[0]
         XCTAssertEqual(web.detail, "working · codex · main*")
         XCTAssertTrue(web.working)
         XCTAssertFalse(web.attention)
+    }
+
+    func testStateSectionsListTheProjectsOfTheirSessionsByName() throws {
+        let sessions = [
+            F.tmux(1, project: "web", icon: "bolt"),
+            F.tmux(2, project: "api", profile: "personal", icon: "stop"),
+            F.tmux(3, project: "API tools", icon: "bolt"),
+            F.tmux(4, project: "docs"),
+            // A warning waits on the operator without being promoted.
+            F.tmux(5, project: "api", profile: "other", icon: "warning"),
+            F.tmux(6, project: "api", profile: "work", icon: "robot"),
+        ]
+        func lines(_ groups: [WorkspaceGroup]) -> [String] {
+            groups.map { $0.isSectionHeading ? "\($0.project) (\($0.sessions))\($0.collapsed ? "+" : "")" : $0.project }
+        }
+        var order = WorkspaceOrder()
+        func built() -> [WorkspaceGroup] {
+            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order)
+        }
+        XCTAssertEqual(lines(built()), ["Waiting (1)", "api", "Done (1)", "api", "Working (3)", "api", "API tools", "web",
+                                        "Idle (1)", "docs"],
+                       "most urgent first, a project in every state its sessions are in, projects by name")
+        XCTAssertEqual(built().filter { !$0.isSectionHeading }.map(\.stateSection),
+                       [.waiting, .done, .working, .working, .working, .idle])
+        XCTAssertTrue(built().filter(\.isSectionHeading).allSatisfy(\.rows.isEmpty), "a heading holds no row")
+
+        order.setCollapsed(.working, true)
+        var state = WorkspaceState()
+        state.apply(built())
+        XCTAssertEqual(lines(state.listedGroups), ["Waiting (1)", "api", "Done (1)", "api", "Working (3)+", "Idle (1)", "docs"])
+        XCTAssertEqual(state.rows.count, sessions.count, "a collapsed section keeps its rows")
+        let working = try XCTUnwrap(state.groups.first { $0.isSectionHeading && $0.stateSection == .working })
+        XCTAssertEqual(state.rows(under: working).map(\.key), [.embedded(F.runtimeID(6)), .embedded(F.runtimeID(3)), .embedded(F.runtimeID(1))])
+        XCTAssertEqual(order.collapsed, [WorkspaceOrder.groupToken(section: .working)], "not the project called Working")
+
+        order.setCollapsed(project: "api", pinned: false, true)
+        XCTAssertEqual(built().filter { $0.project == "api" }.map(\.collapsed), [true, true, true],
+                       "a project collapses in every section at once")
     }
 
     func testProjectsSortByNameNotByTheIconTheyLeadWith() {
@@ -258,7 +305,8 @@ final class WorkspaceSidebarTests: XCTestCase {
         var state = WorkspaceState()
         state.apply(groups(sessions))
         state.arrange(order)
-        XCTAssertEqual(state.groups[0].rows.map(\.key), keys(sessions), "held rows are arranged without a snapshot")
+        XCTAssertEqual(state.groups.first { $0.project == "api" }?.rows.map(\.key), keys(sessions),
+                       "held rows are arranged without a snapshot")
 
         let suite = "amx.tests.order.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -274,7 +322,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
         var order = WorkspaceOrder()
         func built(_ sessions: [CompanionSession]) -> [WorkspaceGroup] {
-            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order)
+            projects(WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order))
         }
         XCTAssertEqual(built(sessions).map(\.pinned), [false, false, false], "nothing is pinned until asked")
         order.setPinned(.embedded(F.runtimeID(2)), true)
@@ -313,7 +361,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         state.apply(built(sessions))
         order.setPinned([kitty, .embedded(F.runtimeID(1))])
         state.arrange(order)
-        XCTAssertEqual(state.groups, built(sessions))
+        XCTAssertEqual(projects(state.groups), built(sessions))
         groups = state.groups
         XCTAssertEqual(groups[0].rows.map(\.key), [kitty, .embedded(F.runtimeID(1))])
 
@@ -350,7 +398,7 @@ final class WorkspaceSidebarTests: XCTestCase {
                         F.tmux(3, project: "Pinned")]
         var order = WorkspaceOrder()
         func built() -> [WorkspaceGroup] {
-            WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback, order: order)
+            projects(WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback, order: order))
         }
         XCTAssertEqual(built().map(\.collapsed), [false, false], "nothing is collapsed until asked")
 
@@ -502,7 +550,7 @@ final class WorkspaceSidebarTests: XCTestCase {
 
     func testNextAttentionCyclesAcrossBackendsInSidebarOrder() {
         var sessions = [
-            F.tmux(1, project: "a", icon: "stop", attention: true, changedAtMS: ms(secondsAgo: 100)),
+            F.tmux(1, project: "a", icon: "question", attention: true, changedAtMS: ms(secondsAgo: 100)),
             F.kitty(4, project: "b", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 300)),
             F.tmux(2, project: "c", icon: "question", attention: true, changedAtMS: ms(secondsAgo: 200)),
             F.tmux(3, project: "d", icon: "bolt"),

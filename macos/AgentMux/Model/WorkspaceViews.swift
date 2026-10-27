@@ -192,10 +192,52 @@ struct WorkspaceUtilityView: Equatable, Codable {
     /// The line under the title once the view's program set a title: that
     /// title, still followed by the session's name when the view is about
     /// one, so terminals with the same program stay told apart.
+    /// A shell or a terminal says only what it runs: an empty `program` is
+    /// one at its prompt (`programTitle`), and so is one whose shell has
+    /// not titled it yet. Its line is then blank, so it reads as running
+    /// nothing.
     func detail(session name: String?, program: String?) -> String {
-        guard let program, !program.isEmpty else { return detail(session: name) }
-        guard aboutRuntimeSessionID != nil, let name, !name.isEmpty else { return program }
+        guard let program else { return canName ? "" : detail(session: name) }
+        guard !program.isEmpty, aboutRuntimeSessionID != nil, let name, !name.isEmpty else { return program }
         return "\(program) · \(name)"
+    }
+
+    /// What the view's line shows of a title its program set: nil when the
+    /// title was cleared, and empty while it names only the directory the
+    /// shell is in, which is how a shell titles itself at its prompt
+    /// ("~/api", "me@host:~/api"). Anything else is the command it runs.
+    /// `directory` is the one the shell last reported (OSC 7); before it
+    /// does, or when the terminal ignored the report, a shell view is where
+    /// it was opened, and a title that is only a home-relative path, or a
+    /// path after "me@host:", is taken for a directory.
+    func programTitle(_ title: String, directory: String?) -> String? {
+        guard !title.isEmpty else { return nil }
+        let shown = title.trimmingCharacters(in: .whitespaces)
+        if Self.namesADirectory(shown) { return "" }
+        let directory = directory.map(Self.path(reported:)) ?? (kind == .shell ? target : nil)
+        guard let directory, !directory.isEmpty else { return title }
+        let trimmed = directory.count > 1 && directory.hasSuffix("/") ? String(directory.dropLast()) : directory
+        for form in Set([trimmed, Self.abbreviated(trimmed)]) {
+            if shown == form || shown.hasSuffix(":" + form) || shown.hasSuffix(": " + form) { return "" }
+        }
+        return title
+    }
+
+    /// A prompt's title whatever the directory: "~", "~/api", or a path
+    /// after a "me@host:" prefix. A bare absolute path is not one, since a
+    /// command run by its path is titled the same way.
+    private static func namesADirectory(_ title: String) -> Bool {
+        if title == "~" || title.hasPrefix("~/") { return true }
+        guard let colon = title.firstIndex(of: ":") else { return false }
+        let prefix = title[..<colon], path = title[title.index(after: colon)...].drop { $0 == " " }
+        guard prefix.contains("@"), !prefix.contains(" ") else { return false }
+        return path == "~" || path.hasPrefix("~/") || path.hasPrefix("/")
+    }
+
+    /// A directory as a shell reports it: a path, or a `file://` URL.
+    private static func path(reported: String) -> String {
+        guard reported.hasPrefix("file://"), let url = URL(string: reported) else { return reported }
+        return url.path
     }
 
     /// What the pointer shows over the view's line: the session it is about

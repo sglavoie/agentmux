@@ -91,9 +91,34 @@ struct WorkspaceRow: Equatable {
     }
 }
 
-/// The sessions of one project, or the pinned ones of every project.
+/// The state section of the sidebar a session is listed under, by its icon
+/// state, most urgent first. `WorkspaceSidebarBand` draws a session's line
+/// by the same reading.
+enum WorkspaceStateSection: String, CaseIterable, Equatable {
+    /// Waiting on the operator: a permission, a question, a warning, an error.
+    case waiting = "Waiting"
+    /// Its turn ended (✓).
+    case done = "Done"
+    /// At work (⚡, 🤖, 🌀).
+    case working = "Working"
+    /// No state glyph.
+    case idle = "Idle"
+
+    init(iconState: String) {
+        switch iconState {
+        case "": self = .idle
+        case "stop": self = .done
+        case "key", "question", "warning", "error": self = .waiting
+        default: self = .working
+        }
+    }
+}
+
+/// The sessions of one project in one state section, the pinned ones of
+/// every project, or the heading of a state section.
 struct WorkspaceGroup: Equatable {
-    /// The project's name; `WorkspaceSidebar.pinnedSection` for the pinned.
+    /// The project's name; `WorkspaceSidebar.pinnedSection` for the pinned,
+    /// and the section's title for a state section's heading.
     let project: String
     let rows: [WorkspaceRow]
     /// True for the group of pinned sessions, whose rows keep the project
@@ -104,6 +129,14 @@ struct WorkspaceGroup: Equatable {
     var collapsed = false
     /// The temporary attention section is always visible and cannot collapse.
     var needsAttention = false
+    /// The state section a project's group is listed under, and the one a
+    /// heading heads; nil for Pinned and Needs attention.
+    var stateSection: WorkspaceStateSection?
+    /// True for a state section's heading. It holds no rows: the groups of
+    /// its section follow it, and it stands for them while collapsed.
+    var isSectionHeading = false
+    /// How many sessions a state section's heading stands for.
+    var sessions = 0
 
     /// How many of the project's sessions wait on a human.
     var attention: Int { rows.filter(\.attention).count }
@@ -209,13 +242,38 @@ struct WorkspaceOrder: Equatable {
         pinned ? "pinned" : "project:\(project)"
     }
 
+    /// What a state section is named by among the collapsed.
+    static func groupToken(section: WorkspaceStateSection) -> String {
+        "state:\(section.rawValue)"
+    }
+
+    /// What a listed group is named by among the collapsed. A project's
+    /// groups in every state section share one: collapsing it in one
+    /// collapses it in all, so a session changing state never opens it.
+    static func groupToken(_ group: WorkspaceGroup) -> String {
+        if group.isSectionHeading, let section = group.stateSection { return groupToken(section: section) }
+        return groupToken(project: group.project, pinned: group.pinned)
+    }
+
     func isCollapsed(project: String, pinned: Bool) -> Bool {
         collapsed.contains(Self.groupToken(project: project, pinned: pinned))
     }
 
+    func isCollapsed(_ section: WorkspaceStateSection) -> Bool {
+        collapsed.contains(Self.groupToken(section: section))
+    }
+
     /// Collapses a group, or expands it.
     mutating func setCollapsed(project: String, pinned: Bool, _ wanted: Bool) {
-        let token = Self.groupToken(project: project, pinned: pinned)
+        setCollapsed(token: Self.groupToken(project: project, pinned: pinned), wanted)
+    }
+
+    /// Collapses a state section to its heading, or expands it.
+    mutating func setCollapsed(_ section: WorkspaceStateSection, _ wanted: Bool) {
+        setCollapsed(token: Self.groupToken(section: section), wanted)
+    }
+
+    private mutating func setCollapsed(token: String, _ wanted: Bool) {
         if wanted { collapsed.insert(token) } else { collapsed.remove(token) }
     }
 
@@ -244,13 +302,17 @@ struct WorkspaceOrder: Equatable {
 }
 
 /// The sidebar as data, built from a snapshot so it can be tested without
-/// AppKit: sessions grouped by project, each labeled with its profile.
+/// AppKit: sessions grouped by state, then by project, each labeled with its
+/// profile.
 ///
 /// Pinned sessions lead the list, waiting ones included while the group is
 /// open. Other sessions needing attention temporarily follow them, above every
-/// project. Their underlying order is preserved: projects by name and rows
-/// by profile, harness, and identity, or the operator's dragged order.
-/// Acknowledgment restores that position without changing saved preferences.
+/// state section. The sections follow in `WorkspaceStateSection` order, each
+/// heading the projects with a session in that state, so a project is listed
+/// once in every state its sessions are in. Their underlying order is
+/// preserved: projects by name and rows by profile, harness, and identity, or
+/// the operator's dragged order. Acknowledgment restores that position
+/// without changing saved preferences.
 enum WorkspaceSidebar {
     static let attentionSection = "Needs attention"
     /// The heading the pinned sessions are listed under.
@@ -301,43 +363,55 @@ enum WorkspaceSidebar {
         return rows
     }
 
-    /// Rows as the sidebar groups them: pinned, attention, then projects.
-    /// With promotion disabled this returns their saved arrangement, which
-    /// dragging uses to preserve the places of temporarily promoted siblings.
-    /// It needs no snapshot, so held rows can be grouped again.
+    /// Rows as the sidebar groups them: pinned, attention, then each state
+    /// section's heading and its projects. With promotion disabled this
+    /// returns their saved arrangement, which dragging uses to preserve the
+    /// places of temporarily promoted siblings. It needs no snapshot, so
+    /// held rows can be grouped again.
     static func groups(_ rows: [WorkspaceRow], order: WorkspaceOrder, prioritizeAttention: Bool = true) -> [WorkspaceGroup] {
-        var pinned: [WorkspaceRow] = []
-        var byProject: [String: [WorkspaceRow]] = [:]
-        for row in rows.sorted(by: rowOrder) {
-            if row.pinned {
-                pinned.append(row)
-            } else {
-                byProject[row.project, default: []].append(row)
-            }
-        }
-        let projects = byProject.keys.sorted(by: projectOrder).map { project in
-            WorkspaceGroup(project: project, rows: order.arranged(byProject[project] ?? [], in: project),
-                           collapsed: order.isCollapsed(project: project, pinned: false))
-        }
-        let base = (pinned.isEmpty ? [] : [WorkspaceGroup(
-            project: pinnedSection, rows: order.arrangedPins(pinned), pinned: true,
-            collapsed: order.isCollapsed(project: pinnedSection, pinned: true)
-        )]) + projects
-        guard prioritizeAttention else { return base }
+        let pinnedCollapsed = order.isCollapsed(project: pinnedSection, pinned: true)
         // An open Pinned group keeps its waiting rows: it already leads.
-        func promoted(_ row: WorkspaceRow, in group: WorkspaceGroup) -> Bool {
-            row.needsAttention && !(group.pinned && !group.collapsed)
+        func promoted(_ row: WorkspaceRow) -> Bool {
+            prioritizeAttention && row.needsAttention && !(row.pinned && !pinnedCollapsed)
         }
-        let waiting = base.flatMap { group in group.rows.filter { promoted($0, in: group) } }
-        guard !waiting.isEmpty else { return base }
-        let remaining = base.compactMap { group -> WorkspaceGroup? in
-            let rows = group.rows.filter { !promoted($0, in: group) }
-            guard !rows.isEmpty else { return nil }
-            return WorkspaceGroup(project: group.project, rows: rows, pinned: group.pinned, collapsed: group.collapsed)
+        let pins = order.arrangedPins(rows.filter(\.pinned).sorted(by: rowOrder))
+        var waiting = pins.filter(promoted)
+        let kept = pins.filter { !promoted($0) }
+        var listed = kept.isEmpty ? [] : [WorkspaceGroup(
+            project: pinnedSection, rows: kept, pinned: true, collapsed: pinnedCollapsed
+        )]
+        let projects = Set(rows.filter { !$0.pinned }.map(\.project)).sorted(by: projectOrder)
+        let arranged = projects.map { projectRows(rows, in: $0, order: order) }
+        var sections: [WorkspaceGroup] = []
+        for section in WorkspaceStateSection.allCases {
+            var groups: [WorkspaceGroup] = []
+            for (project, rows) in zip(projects, arranged) {
+                let inSection = rows.filter { WorkspaceStateSection(iconState: $0.iconState) == section }
+                waiting += inSection.filter(promoted)
+                let kept = inSection.filter { !promoted($0) }
+                guard !kept.isEmpty else { continue }
+                groups.append(WorkspaceGroup(project: project, rows: kept,
+                                             collapsed: order.isCollapsed(project: project, pinned: false),
+                                             stateSection: section))
+            }
+            guard !groups.isEmpty else { continue }
+            sections.append(WorkspaceGroup(
+                project: section.rawValue, rows: [], collapsed: order.isCollapsed(section),
+                stateSection: section, isSectionHeading: true, sessions: groups.reduce(0) { $0 + $1.rows.count }
+            ))
+            sections += groups
         }
-        let attention = WorkspaceGroup(project: attentionSection, rows: waiting, needsAttention: true)
-        let pins = remaining.prefix { $0.pinned }
-        return pins + [attention] + remaining.dropFirst(pins.count)
+        if !waiting.isEmpty {
+            listed.append(WorkspaceGroup(project: attentionSection, rows: waiting, needsAttention: true))
+        }
+        return listed + sections
+    }
+
+    /// A project's sessions that are not pinned, in every state, in the
+    /// order they were dragged into: what a drag among the ones of one state
+    /// section reorders.
+    static func projectRows(_ rows: [WorkspaceRow], in project: String, order: WorkspaceOrder) -> [WorkspaceRow] {
+        order.arranged(rows.filter { !$0.pinned && $0.project == project }.sorted(by: rowOrder), in: project)
     }
 
     /// The sessions in the order `groups` lists them, which is the order the
@@ -506,6 +580,20 @@ struct WorkspaceState: Equatable {
     private(set) var current = false
 
     var rows: [WorkspaceRow] { groups.flatMap(\.rows) }
+
+    /// The groups the sidebar lists a line for: all but the projects of a
+    /// collapsed state section, whose heading stands for them.
+    var listedGroups: [WorkspaceGroup] {
+        let folded = Set(groups.filter { $0.isSectionHeading && $0.collapsed }.compactMap(\.stateSection))
+        return groups.filter { $0.isSectionHeading || $0.stateSection.map { !folded.contains($0) } ?? true }
+    }
+
+    /// The rows listed under a group: a project's, or those of every
+    /// project in a state section for its heading.
+    func rows(under group: WorkspaceGroup) -> [WorkspaceRow] {
+        guard group.isSectionHeading else { return group.rows }
+        return groups.filter { !$0.isSectionHeading && $0.stateSection == group.stateSection }.flatMap(\.rows)
+    }
 
     func row(_ key: AttentionCycler.Key?) -> WorkspaceRow? {
         guard let key else { return nil }

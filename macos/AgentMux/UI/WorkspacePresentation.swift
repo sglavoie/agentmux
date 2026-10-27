@@ -68,7 +68,8 @@ enum WorkspaceReviewColors {
     static let unread = Color.accentColor
 }
 
-/// Prose is shared by History, Activity and Waiting; terminal/code sizing stays independent.
+/// Prose is shared by History, Activity and Waiting's context, which has no
+/// menu of its own; terminal/code sizing stays independent.
 struct WorkspaceReadingMenu: View {
     @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
     var body: some View {
