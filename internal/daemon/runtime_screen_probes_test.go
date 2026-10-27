@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"sync"
 	"testing"
@@ -417,6 +418,50 @@ func TestHeldStopCommittingAfterItsTmuxSessionEndsLeavesTheSlotClosed(t *testing
 			t.Fatalf("notifications = %d; want 0 (%+v)", got, s.rec.snapshot())
 		}
 	})
+}
+
+// The same stop can pass applyStateUpdate's check and lose the slot before
+// its reducer step retakes the lock: the session ended in between. Folding the
+// event then, or recording it as bypassed, must not bring the closed slot's
+// state back either.
+func TestStopFoldedAfterItsTmuxSessionEndsLeavesTheSlotClosed(t *testing.T) {
+	for _, bypassed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("bypassed=%v", bypassed), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				s, _ := newProbedTmuxSession(t)
+				s.unreadable()
+				s.startTurn()
+				s.stopHeld()
+				pending, _ := terminalHoldPending(t, s.h, s.slot)
+				req := pending.req
+				req.PreservesIcon = bypassed
+				req.Type = protocol.TypeStateUpdate
+				req.EventRef = &protocol.SessionEventReference{}
+
+				before := s.h.effectiveStateForTrace(req.WindowID)
+				resp, outcome := s.h.applyStateUpdate(req)
+				if !resp.OK || outcome.skipReduce != bypassed {
+					t.Fatalf("apply = %+v (skip %v); want it accepted", resp, outcome.skipReduce)
+				}
+				s.end()
+				if bypassed {
+					s.h.finalizeBypassedStateUpdate(req, outcome, before)
+				} else {
+					s.h.reduceStateUpdate(req, outcome, resp, time.Now())
+				}
+				synctest.Wait()
+				s.h.stateMu.Lock()
+				_, revived := s.h.store[s.slot]
+				s.h.stateMu.Unlock()
+				if revived {
+					t.Fatal("the stop folded after the close brought the slot's state back")
+				}
+				if got := s.rec.len(); got != 0 {
+					t.Fatalf("notifications = %d; want 0 (%+v)", got, s.rec.snapshot())
+				}
+			})
+		})
+	}
 }
 
 // The context-limit banner on a working agent's screen turns it to the error

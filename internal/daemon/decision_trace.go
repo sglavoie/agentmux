@@ -60,6 +60,12 @@ func (h *Handler) finalizeBypassedStateUpdate(req protocol.Request, outcome appl
 		return
 	}
 	h.stateMu.Lock()
+	// As in reduceStateUpdate: the slot may have closed since applyStateUpdate
+	// checked it, and a closed runtime slot's state must stay dropped.
+	if h.runtimeSlotClosedLocked(req.WindowID) {
+		h.stateMu.Unlock()
+		return
+	}
 	st := h.ensureWindowStateLocked(req.WindowID)
 	event := eventlog.ByReference(st, req.EventRef)
 	if event == nil {

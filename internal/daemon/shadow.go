@@ -148,6 +148,13 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 
 	notify := false
 	h.stateMu.Lock()
+	// applyStateUpdate checked the slot under a lock it has since released. A
+	// session that ended in between closed the slot, and folding the event now
+	// would bring its state back where nothing would ever drop it again.
+	if h.runtimeSlotClosedLocked(req.WindowID) {
+		h.stateMu.Unlock()
+		return
+	}
 	st := h.ensureWindowStateLocked(req.WindowID)
 	if st.Reducer == nil {
 		st.Reducer = state.NewReducer(h.reducerCfg)
