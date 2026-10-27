@@ -124,6 +124,14 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     func enter(_ query: String) {
         field.stringValue = query
         typed()
+        placeCaretAtEnd()
+    }
+
+    /// Focusing a field selects all of it, so typing would replace the `> `
+    /// that makes this the command palette: the caret goes after it instead.
+    func placeCaretAtEnd() {
+        guard let editor = field.currentEditor() else { return }
+        editor.selectedRange = NSRange(location: (field.stringValue as NSString).length, length: 0)
     }
 
     var selected: WorkspaceSwitcher.Entry? {

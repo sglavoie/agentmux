@@ -164,6 +164,13 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
         XCTAssertEqual(app.made, [F.runtimeID(1)], "looking at the list attaches nothing")
     }
 
+    func testThePaletteOpensWithTheCaretAfterItsMarker() throws {
+        workspace.toggleSwitcher(actions: true)
+        let editor = try XCTUnwrap(workspace.switcher.field.currentEditor())
+        XCTAssertEqual(workspace.switcher.field.stringValue, "> ")
+        XCTAssertEqual(editor.selectedRange, NSRange(location: 2, length: 0), "typing adds to the marker, not over it")
+    }
+
     func testUnavailableActionsExplainWithoutDispatchingOrClosing() {
         var invoked = false
         let entry = WorkspaceSwitcher.Entry(place: .command(.newTerminal), glyph: "›", title: "New Terminal Here", detail: "⌘↩",

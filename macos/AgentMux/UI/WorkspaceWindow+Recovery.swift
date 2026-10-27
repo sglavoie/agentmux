@@ -347,6 +347,7 @@ extension WorkspaceWindowController {
         if actions { switcher.enter("> ") }
         switcher.isHidden = false
         window.makeFirstResponder(switcher.field)
+        switcher.placeCaretAtEnd()
     }
 
     func switcherEntries() -> [WorkspaceSwitcher.Entry] {
