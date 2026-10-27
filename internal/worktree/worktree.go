@@ -248,11 +248,17 @@ func (w *Workflow) nextName(ctx context.Context, sourceRoot, parent, projectLabe
 		if err != nil {
 			return "", "", err
 		}
+		// A missing checkout can still have recovery metadata. Reserve its
+		// name until that record is explicitly cleaned up or forgotten.
+		metadataExists, err := pathOccupied(SidecarPath(path))
+		if err != nil {
+			return "", "", err
+		}
 		branchExists, err := gitBranchExists(ctx, sourceRoot, branch)
 		if err != nil {
 			return "", "", err
 		}
-		if !occupied && !branchExists {
+		if !occupied && !metadataExists && !branchExists {
 			return branch, path, nil
 		}
 	}
@@ -341,9 +347,11 @@ func resolveProjectLabel(request Request, sourceRoot string) string {
 // separated, and with --no-optional-locks. Without that option status takes
 // the index lock to write back a refreshed index, and the checkout it reads
 // is often one an agent is committing in at that moment; the agent's commit
-// then fails on index.lock. extra follows the porcelain options.
+// then fails on index.lock. Safety checks must also see untracked files and
+// submodule changes regardless of the user's Git display preferences. extra
+// can override the untracked mode for tracked-only or full-path probes.
 func statusArgs(extra ...string) []string {
-	return append([]string{"--no-optional-locks", "status", "--porcelain=v1", "-z"}, extra...)
+	return append([]string{"--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"}, extra...)
 }
 
 // diffArgs is a diff that leaves the index alone. A diff against the work
@@ -406,13 +414,14 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	if strings.TrimSpace(result.Path) == "" || strings.TrimSpace(result.SourceRoot) == "" {
 		return errors.New("worktree: cleanup is missing checkout path or source root")
 	}
-	var cleanupErrors []error
+	// Keep the sidecar until every Git step succeeds. A failed removal or
+	// branch deletion must remain discoverable and retryable by stable ID.
 	if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, "worktree", "remove", "--force", result.Path); err != nil {
-		cleanupErrors = append(cleanupErrors, fmt.Errorf("worktree: removing unused checkout %s: %w", result.Path, err))
+		return fmt.Errorf("worktree: removing unused checkout %s: %w", result.Path, err)
 	}
 	if branch := strings.TrimSpace(result.Branch); branch != "" {
 		if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, "branch", "-D", branch); err != nil {
-			cleanupErrors = append(cleanupErrors, fmt.Errorf("worktree: removing unused branch %s: %w", branch, err))
+			return fmt.Errorf("worktree: removing unused branch %s: %w", branch, err)
 		}
 	}
 	metadataPath := strings.TrimSpace(result.MetadataPath)
@@ -420,9 +429,9 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 		metadataPath = SidecarPath(result.Path)
 	}
 	if err := os.Remove(metadataPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		cleanupErrors = append(cleanupErrors, fmt.Errorf("worktree: removing metadata %s: %w", metadataPath, err))
+		return fmt.Errorf("worktree: removing metadata %s: %w", metadataPath, err)
 	}
-	return errors.Join(cleanupErrors...)
+	return nil
 }
 
 func runGit(ctx context.Context, directory string, timeout time.Duration, args ...string) ([]byte, error) {

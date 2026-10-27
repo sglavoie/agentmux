@@ -362,7 +362,7 @@ func TestCreatePreservesMetadataAndRollbackErrors(t *testing.T) {
 	}
 }
 
-func TestRemoveUnusedDeletesMetadataWhenGitCleanupFails(t *testing.T) {
+func TestRemoveUnusedRetainsMetadataWhenSourceIsUnavailable(t *testing.T) {
 	t.Parallel()
 
 	metadataPath := filepath.Join(t.TempDir(), "unused"+MetadataSuffix)
@@ -377,8 +377,8 @@ func TestRemoveUnusedDeletesMetadataWhenGitCleanupFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("RemoveUnused succeeded with a non-repository source root")
 	}
-	if _, statErr := os.Stat(metadataPath); !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("metadata stat error = %v, want not exist despite Git cleanup failure", statErr)
+	if contents, err := os.ReadFile(metadataPath); err != nil || string(contents) != "metadata" {
+		t.Fatalf("metadata = %q, %v; want unchanged recovery metadata", contents, err)
 	}
 }
 

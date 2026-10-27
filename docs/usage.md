@@ -466,8 +466,8 @@ Kitty cannot be asked, the column and line are left out rather than reporting
 nothing open. Native forks are used for Claude
 and Codex. Copilot forks use a portable handoff because Copilot does not expose
 native fork semantics. Worktree forks create a tracked isolated Git worktree
-and never copy uncommitted changes unless `--allow-dirty` is explicitly
-confirmed.
+from the source commit. They refuse a dirty source unless `--allow-dirty` is
+explicitly confirmed; uncommitted changes are never copied, even with that flag.
 
 ## Session lifecycle
 
@@ -1294,6 +1294,9 @@ root. Partial cleanup is reported with the durable steps that succeeded; the
 inventory refreshes and retains the recovery row instead of presenting the
 operation as all-or-nothing.
 
+Dirtiness checks include untracked files and submodule changes even when Git
+configuration hides them from ordinary `git status` output.
+
 The same lifecycle is scriptable:
 
 ```bash
@@ -1377,6 +1380,9 @@ checkouts on `amx/…` branches without sidecars remain visible as `legacy`.
 Default branch-retaining removal is available after fresh safety checks, but
 branch deletion requires validated schema-v1 provenance. Malformed sidecars
 stay visible as invalid recovery records and are never discarded automatically.
+If cleanup after a failed launch cannot remove the checkout or branch, its
+sidecar is retained for recovery. New worktrees also avoid names with retained
+sidecars, so creation cannot overwrite an earlier worktree's provenance.
 
 ## Past sessions
 

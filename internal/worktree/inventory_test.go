@@ -573,7 +573,7 @@ func fakeInventoryGit(directory, common string, args ...string) ([]byte, error) 
 		return []byte(common + "\n"), nil
 	case "worktree list --porcelain -z":
 		return []byte("worktree " + directory + "\x00HEAD " + strings.Repeat("b", 40) + "\x00branch refs/heads/amx/api/branch\x00\x00"), nil
-	case "--no-optional-locks status --porcelain=v1 -z":
+	case "--no-optional-locks status --porcelain=v1 -z --untracked-files=normal --ignore-submodules=none":
 		return nil, nil
 	case "rev-parse --verify --quiet refs/heads/main^{commit}":
 		return []byte(strings.Repeat("c", 40) + "\n"), nil
