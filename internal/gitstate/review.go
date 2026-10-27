@@ -52,7 +52,11 @@ func (b *reviewBuffer) Write(p []byte) (int, error) {
 func reviewGit(ctx context.Context, dir string, args ...string) ([]byte, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	full := append([]string{"--no-optional-locks", "--literal-pathspecs", "-C", dir}, args...)
+	// A diff against the work tree refreshes the index and writes it back
+	// under index.lock whatever --no-optional-locks says, which can fail an
+	// agent's own commit in the same checkout; diff.autoRefreshIndex=false
+	// stops the write and changes no output.
+	full := append([]string{"--no-optional-locks", "-c", "diff.autoRefreshIndex=false", "--literal-pathspecs", "-C", dir}, args...)
 	// #nosec G204 -- argv contains git operations and literal selectors, never shell code.
 	cmd := exec.CommandContext(ctx, "git", full...)
 	var out, stderr reviewBuffer

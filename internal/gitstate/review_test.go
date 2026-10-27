@@ -1,12 +1,14 @@
 package gitstate
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func reviewFixture(t *testing.T) (string, func(...string) string, func(string, string)) {
@@ -149,5 +151,30 @@ func TestReviewOutputIsBounded(t *testing.T) {
 	}
 	if n, err := b.Write([]byte("more")); err != nil || n != 4 {
 		t.Fatalf("drain: %d, %v", n, err)
+	}
+}
+
+func TestReviewLeavesTheIndexAlone(t *testing.T) {
+	t.Parallel()
+
+	dir, _, _ := reviewFixture(t)
+	stale := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, "tracked"), stale, stale); err != nil {
+		t.Fatal(err)
+	}
+	index := filepath.Join(dir, ".git", "index")
+	before, err := os.ReadFile(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ReadChanges(context.Background(), dir, "HEAD", ""); err != nil || len(got.Files) != 0 {
+		t.Fatalf("ReadChanges() = %+v, %v; want no changes", got, err)
+	}
+	after, err := os.ReadFile(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("the index was rewritten by a review")
 	}
 }
