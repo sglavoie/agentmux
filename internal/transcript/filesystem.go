@@ -343,15 +343,20 @@ func (i *Index) setHiddenFilesystem(key string, hidden bool) error {
 			if err := i.DeleteSearchText(key); err != nil {
 				return errors.Join(warning, fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err))
 			}
-			entry.SearchText = ""
+			if entry.SearchText != "" {
+				entry.SearchText = ""
+				i.filesystemDirty = true
+			}
 		}
-		if entry.HiddenFromIndex == hidden {
-			i.entries[key] = entry
+		if entry.HiddenFromIndex != hidden {
+			entry.HiddenFromIndex = hidden
+			i.filesystemDirty = true
+		}
+		i.entries[key] = entry
+		// Matching in-memory state may still be pending after a failed save.
+		if !i.filesystemDirty {
 			return warning
 		}
-		entry.HiddenFromIndex = hidden
-		i.entries[key] = entry
-		i.filesystemDirty = true
 		persistWarning, persistErr := i.persistFilesystemLocked()
 		return errors.Join(warning, persistWarning, persistErr)
 	})

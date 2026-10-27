@@ -160,6 +160,43 @@ func TestFilesystemTranscriptDeleteReportsSourceRemovedWhenPersistFails(t *testi
 	}
 }
 
+func TestFilesystemSetHiddenRetriesFailedPersistence(t *testing.T) {
+	for _, hidden := range []bool{true, false} {
+		name := "hide"
+		if !hidden {
+			name = "unhide"
+		}
+		t.Run(name, func(t *testing.T) {
+			idx := newTestIndex(t)
+			key := IndexKey(harness.Claude, "session")
+			must(t, idx.SetEntryForTest(key, SessionMeta{
+				ID: "session", Harness: harness.Claude, HiddenFromIndex: !hidden,
+			}))
+			must(t, idx.Save())
+
+			persistFailure := errors.New("disk full")
+			originalWrite := writeTranscriptIndex
+			writeTranscriptIndex = func(string, []byte, os.FileMode) error { return persistFailure }
+			t.Cleanup(func() { writeTranscriptIndex = originalWrite })
+			if err := idx.SetHidden(key, hidden); !errors.Is(err, persistFailure) {
+				t.Fatalf("SetHidden error = %v, want persistence failure", err)
+			}
+			// A retry must keep reporting the failure until it can save.
+			if err := idx.SetHidden(key, hidden); !errors.Is(err, persistFailure) {
+				t.Errorf("retry error = %v, want persistence failure", err)
+			}
+			writeTranscriptIndex = originalWrite
+			must(t, idx.SetHidden(key, hidden))
+
+			loaded, err := LoadIndexAt(idx.path)
+			must(t, err)
+			if meta, ok := loaded.Get(key); !ok || meta.HiddenFromIndex != hidden {
+				t.Fatalf("persisted entry = %+v, present = %v, want hidden = %v", meta, ok, hidden)
+			}
+		})
+	}
+}
+
 func TestFilesystemSaveRetainsInlineSearchWhenSidecarMigrationFails(t *testing.T) {
 	t.Parallel()
 

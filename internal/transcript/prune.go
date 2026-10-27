@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/cachefile"
@@ -43,16 +44,21 @@ func (i *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int, 
 			if meta.HiddenFromIndex || meta.LastAt.IsZero() || !meta.LastAt.Before(cutoff) {
 				continue
 			}
+			// A failed sidecar cleanup must leave this entry retryable without
+			// preventing the rest of the batch from being hidden and saved.
+			if sidecarErr := i.DeleteSearchText(key); sidecarErr != nil {
+				warning = errors.Join(warning, fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), sidecarErr))
+				continue
+			}
 			meta.HiddenFromIndex = true
 			meta.SearchText = ""
 			i.entries[key] = meta
 			i.filesystemDirty = true
-			if sidecarErr := i.DeleteSearchText(key); sidecarErr != nil {
-				return errors.Join(warning, sidecarErr)
-			}
 			hidden++
 		}
-		if hidden == 0 {
+		// A previous save may have failed after hiding all eligible entries.
+		// Retrying must persist that pending state even with no new changes.
+		if !i.filesystemDirty {
 			return warning
 		}
 		persistWarning, persistErr := i.persistFilesystemLocked()

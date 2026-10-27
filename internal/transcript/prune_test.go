@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,84 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 )
+
+func TestPruneRetriesFailedPersistence(t *testing.T) {
+	idx := newTestIndex(t)
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	key := IndexKey(harness.Claude, "old")
+	must(t, idx.SetEntryForTest(key, SessionMeta{
+		ID: "old", Harness: harness.Claude, LastAt: now.Add(-60 * 24 * time.Hour),
+	}))
+	must(t, idx.Save())
+	cfg := &config.Config{}
+	cfg.Defaults.SessionArchive.KeepDays = 30
+
+	persistFailure := errors.New("disk full")
+	originalWrite := writeTranscriptIndex
+	writeTranscriptIndex = func(string, []byte, os.FileMode) error { return persistFailure }
+	t.Cleanup(func() { writeTranscriptIndex = originalWrite })
+	if hidden, err := Prune(idx, cfg, now); hidden != 1 || !errors.Is(err, persistFailure) {
+		t.Fatalf("Prune = %d, %v, want 1 and persistence failure", hidden, err)
+	}
+	if hidden, err := Prune(idx, cfg, now); hidden != 0 || !errors.Is(err, persistFailure) {
+		t.Errorf("retry = %d, %v, want 0 and persistence failure", hidden, err)
+	}
+	writeTranscriptIndex = originalWrite
+	if hidden, err := Prune(idx, cfg, now); hidden != 0 || err != nil {
+		t.Fatalf("recovered retry = %d, %v, want 0 and nil", hidden, err)
+	}
+	loaded, err := LoadIndexAt(idx.path)
+	must(t, err)
+	if meta, ok := loaded.Get(key); !ok || !meta.HiddenFromIndex {
+		t.Fatalf("retry did not persist hidden entry: %+v, present = %v", meta, ok)
+	}
+}
+
+func TestPruneSidecarFailurePreservesFailedEntryAndPersistsOthers(t *testing.T) {
+	t.Parallel()
+	idx := newTestIndex(t)
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	for _, id := range []string{"blocked", "healthy"} {
+		must(t, idx.SetEntryForTest(IndexKey(harness.Claude, id), SessionMeta{
+			ID: id, Harness: harness.Claude, LastAt: now.Add(-60 * 24 * time.Hour),
+			SearchText: "searchable conversation",
+		}))
+	}
+	must(t, idx.Save())
+	blockedKey := IndexKey(harness.Claude, "blocked")
+	healthyKey := IndexKey(harness.Claude, "healthy")
+	sidecar := idx.SearchTextPath(blockedKey)
+	must(t, os.Remove(sidecar))
+	must(t, os.Mkdir(sidecar, 0o755))
+	blocker := filepath.Join(sidecar, "block-removal")
+	must(t, os.WriteFile(blocker, []byte("x"), 0o600))
+	cfg := &config.Config{}
+	cfg.Defaults.SessionArchive.KeepDays = 30
+
+	if hidden, err := Prune(idx, cfg, now); hidden != 1 || err == nil {
+		t.Errorf("Prune = %d, %v, want 1 and sidecar removal error", hidden, err)
+	}
+	loaded, err := LoadIndexAt(idx.path)
+	must(t, err)
+	for _, index := range []*Index{idx, loaded} {
+		if meta, ok := index.Get(blockedKey); !ok || meta.HiddenFromIndex {
+			t.Errorf("failed entry changed: %+v, present = %v", meta, ok)
+		}
+		if meta, ok := index.Get(healthyKey); !ok || !meta.HiddenFromIndex {
+			t.Errorf("healthy entry was not hidden: %+v, present = %v", meta, ok)
+		}
+	}
+	// Repairing the obstructed sidecar lets the next prune finish the batch.
+	must(t, os.Remove(blocker))
+	if hidden, err := Prune(idx, cfg, now); hidden != 1 || err != nil {
+		t.Fatalf("retry = %d, %v, want 1 and nil", hidden, err)
+	}
+	loaded, err = LoadIndexAt(idx.path)
+	must(t, err)
+	if meta, ok := loaded.Get(blockedKey); !ok || !meta.HiddenFromIndex {
+		t.Fatalf("retry did not persist hidden entry: %+v, present = %v", meta, ok)
+	}
+}
 
 func TestPrune_MarksOldEntriesHidden(t *testing.T) {
 	t.Parallel()
