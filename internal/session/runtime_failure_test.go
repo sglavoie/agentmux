@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
 
@@ -101,5 +103,41 @@ func TestLaunchOnTmuxUnclosableUncommittedLaunchStaysPending(t *testing.T) {
 	}
 	if strings.Contains(string(data), "/secret/path") || !strings.Contains(string(data), `"reason":"commit_failed"`) {
 		t.Fatalf("journal = %s, want a fixed commit_failed reason", data)
+	}
+}
+
+// A failed launch whose partial session could not be killed may have left its
+// agent running, so the registration stays pending and the caller is told to
+// keep what the agent may use, as for an uncommitted launch that cannot be
+// closed.
+func TestLaunchOnTmuxUnremovablePartialLaunchStaysPending(t *testing.T) {
+	f := tmuxtest.New(t)
+	cfg, project := tmuxTestConfig(t)
+	launcher := &failingLauncher{TargetLauncher: f.Backend, launchErr: fmt.Errorf(
+		"tmux: launch failed: timed out; removing partial session amx-1 also failed: timed out; %w", tmux.ErrPartialLaunchRemains)}
+
+	_, err := LaunchOn(Runtime{Tmux: launcher, Registry: f.Registry}, project, cfg.Accounts[0], cfg)
+	if !errors.Is(err, ErrAgentMayBeRunning) {
+		t.Fatalf("err = %v, want ErrAgentMayBeRunning so a caller keeps what the agent may use", err)
+	}
+	records := f.Load(t).List()
+	if len(records) != 1 || records[0].State != runtimesession.StatePending {
+		t.Fatalf("records = %+v, want one pending registration", records)
+	}
+}
+
+// A failed launch that left nothing behind ends its registration.
+func TestLaunchOnTmuxFailedLaunchEndsItsRegistration(t *testing.T) {
+	f := tmuxtest.New(t)
+	cfg, project := tmuxTestConfig(t)
+	launcher := &failingLauncher{TargetLauncher: f.Backend, launchErr: errors.New("tmux: launch failed (partial session amx-1 removed)")}
+
+	_, err := LaunchOn(Runtime{Tmux: launcher, Registry: f.Registry}, project, cfg.Accounts[0], cfg)
+	if err == nil || errors.Is(err, ErrAgentMayBeRunning) {
+		t.Fatalf("err = %v, want a failure that leaves no agent", err)
+	}
+	records := f.Load(t).List()
+	if len(records) != 1 || records[0].State != runtimesession.StateEnded {
+		t.Fatalf("records = %+v, want one ended registration", records)
 	}
 }

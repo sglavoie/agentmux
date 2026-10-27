@@ -278,7 +278,14 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 	launched, err := rt.Tmux.LaunchTarget(spec)
 	if err != nil {
 		recordHarnessLaunch(cfg, sess, acc, invocation, "error", tmuxLaunchFailureReason(err), nativeReport)
-		return tmuxLaunch{}, errors.Join(fmt.Errorf("launching session %q: %w", formattedTitle, err), end())
+		failure := fmt.Errorf("launching session %q: %w", formattedTitle, err)
+		if errors.Is(err, tmux.ErrPartialLaunchRemains) {
+			// The server may have started the agent and it could not be
+			// killed, so the record stays pending, as for an uncommitted
+			// launch that cannot be closed below.
+			return tmuxLaunch{}, fmt.Errorf("%w; %w", failure, ErrAgentMayBeRunning)
+		}
+		return tmuxLaunch{}, errors.Join(failure, end())
 	}
 	committed := func() error {
 		process, err := ProcessFingerprint(launched.PID)

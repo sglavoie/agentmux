@@ -166,6 +166,11 @@ func parsePane(line string) (backend.Pane, bool) {
 	return p, true
 }
 
+// ErrPartialLaunchRemains marks a failed launch whose session could not be
+// killed afterwards: the server may have created it, so its program may be
+// running.
+var ErrPartialLaunchRemains = errors.New("tmux: the failed launch's session may still be running")
+
 // Launched is what one launch created.
 type Launched = backend.Launched
 
@@ -182,6 +187,7 @@ func (b *Backend) Launch(spec backend.LaunchSpec) error {
 // the pane is never discoverable without its metadata. If that invocation
 // fails or times out after the server created the session, the session is
 // killed before the error is returned: a failed launch leaves nothing behind.
+// When that kill fails too, the error wraps ErrPartialLaunchRemains.
 func (b *Backend) LaunchTarget(spec backend.LaunchSpec) (Launched, error) {
 	if err := validateLaunch(spec); err != nil {
 		return Launched{}, err
@@ -222,7 +228,7 @@ func (b *Backend) LaunchTarget(spec backend.LaunchSpec) (Launched, error) {
 	}
 	if err != nil {
 		if cleanupErr := b.abandon(name); cleanupErr != nil {
-			return Launched{}, fmt.Errorf("tmux: launch failed: %w; removing partial session %s also failed: %w", err, name, cleanupErr)
+			return Launched{}, fmt.Errorf("tmux: launch failed: %w; removing partial session %s also failed: %w; %w", err, name, cleanupErr, ErrPartialLaunchRemains)
 		}
 		return Launched{}, fmt.Errorf("tmux: launch failed (partial session %s removed): %w", name, err)
 	}
