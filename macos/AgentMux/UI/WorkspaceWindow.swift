@@ -134,13 +134,15 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
 
     /// Applies a zoom, clamped to `AppPreferences.sidebarZoomRange`; false
-    /// when it was already the zoom.
+    /// when it was already the zoom. It never makes the window: one made
+    /// now would open before the saved widths are given to it.
     @discardableResult
     func setSidebarZoom(percent: Int) -> Bool {
         let percent = AppPreferences.clamp(percent, AppPreferences.sidebarZoomRange)
         guard percent != sidebarZoomPercent else { return false }
         sidebarZoomPercent = percent
-        sidebarZoomView?.zoom = sidebarZoom
+        guard let sidebarZoomView else { return true }
+        sidebarZoomView.zoom = sidebarZoom
         inspectorZoomView?.zoom = sidebarZoom
         window.contentView?.layoutSubtreeIfNeeded()
         return true
@@ -224,6 +226,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var canHideOtherPane: Bool { isSplit && (otherPlace != .review || reviewCanClose()) }
 
     private(set) lazy var window: NSWindow = makeWindow()
+    /// Where the window's frame is saved; tests name their own or none.
+    var frameAutosaveName: NSWindow.FrameAutosaveName? = AppDelegate.isRunningTests ? nil : "AgentMuxWorkspace"
 
     var terminals: [String: WorkspaceTerminal] = [:]
     /// Sessions whose terminal ended and is not remade until asked for.
@@ -722,7 +726,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         window.setContentSize(NSSize(width: 1100, height: 700))
         window.delegate = self
         window.center()
-        if !AppDelegate.isRunningTests { window.setFrameAutosaveName("AgentMuxWorkspace") }
+        if let frameAutosaveName { window.setFrameAutosaveName(frameAutosaveName) }
         let splitView = split.splitView
         splitView.layoutSubtreeIfNeeded()
         // The inspector gets its width while shown, so that showing it

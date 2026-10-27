@@ -644,6 +644,36 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertFalse(other.layoutChanges.dropFirst(reported).contains { $0.sidebar != nil && $0.sidebar != 220 })
     }
 
+    /// The window opens at the saved widths and zoom, with its saved frame,
+    /// and saves no other width over them.
+    func testSavedWidthsSurviveASavedZoomAndFrame() throws {
+        let name = "AgentMuxWorkspaceTest-\(UUID().uuidString)"
+        let key = "NSWindow Frame \(name)"
+        UserDefaults.standard.set("0 0 1500 900 0 0 1500 900 ", forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        let other = FakeWorkspaceApp()
+        let restored = WorkspaceWindowController(delegate: other, glyphs: .fallback)
+        defer { restored.window.close() }
+        restored.frameAutosaveName = name
+        // The app gives the saved zoom before the widths; that must not
+        // make the window at the default widths.
+        restored.setSidebarZoom(percent: 140)
+        restored.sidebarWidth = 494.5
+        restored.inspectorWidth = 420
+        restored.openForTesting()
+        let split = try XCTUnwrap(restored.window.contentViewController as? NSSplitViewController)
+        restored.window.layoutIfNeeded()
+        XCTAssertEqual(restored.window.frame.width, 1500, accuracy: 1, "the saved frame is applied")
+        XCTAssertEqual(restored.sidebar.convert(NSSize(width: 10, height: 10), to: nil).height, 14, accuracy: 0.01)
+        XCTAssertEqual(split.splitViewItems[0].viewController.view.frame.width, 494.5, accuracy: 0.5)
+        restored.setInspectorCollapsed(false)
+        restored.window.layoutIfNeeded()
+        XCTAssertEqual(split.splitViewItems[2].viewController.view.frame.width, 420, accuracy: 0.5)
+        XCTAssertEqual(split.splitViewItems[0].viewController.view.frame.width, 494.5, accuracy: 0.5)
+        XCTAssertFalse(other.layoutChanges.contains { $0.sidebar != nil && abs($0.sidebar! - 494.5) > 0.5 },
+                       "no narrower sidebar is saved: \(other.layoutChanges)")
+    }
+
     func testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, personal) = (try row("api", "work"), try row("api", "personal"))
