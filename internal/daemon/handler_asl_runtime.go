@@ -78,15 +78,22 @@ func (h *Handler) aslHookTargets(req protocol.Request, windows []kitty.OSWindow,
 	return loopLifecycleTargets(windows, target)
 }
 
-// aslHookOriginWindow names the pane a hook's facts originate from. A managed
-// hook originates from its own slot; a Kitty payload ID is local to its socket
-// and may also belong to another instance with the same window number.
-func aslHookOriginWindow(req protocol.Request, payload hookevent.HookPayload) int {
+// aslHookOriginWindow names the slot of the pane a hook's facts originate
+// from. A managed hook originates from its own slot. A Kitty payload ID is
+// local to its socket and may also belong to another instance with the same
+// window number, so it is read as that socket's slot, as aslHookTargets reads
+// it.
+func (h *Handler) aslHookOriginWindow(req protocol.Request, payload hookevent.HookPayload) int {
 	if origin, managed := managedHookOrigin(req); managed {
 		return origin.Slot
 	}
 	if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
-		return payloadWindowID
+		if req.KittyListenOn == "" {
+			return payloadWindowID
+		}
+		h.stateMu.Lock()
+		defer h.stateMu.Unlock()
+		return h.runtimeRoutes.kittySlotOf(req.KittyListenOn, payloadWindowID)
 	}
 	return req.WindowID
 }

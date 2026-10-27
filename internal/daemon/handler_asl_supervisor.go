@@ -163,7 +163,7 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 		targetCtx := h.loopTargetContextFor(routeTarget)
 		profile := targetCtx.profile
 		harnessName := targetCtx.harness
-		originWindowID := aslHookOriginWindow(baseReq, payload)
+		originWindowID := h.aslHookOriginWindow(baseReq, payload)
 		target := question.Target(routeTarget.windowID, originWindowID)
 		projection := question.Projection(now)
 

@@ -550,3 +550,62 @@ func TestASLHooksTranslatedBeforeTheirTmuxSessionEndsLeaveTheSlotClosed(t *testi
 		}
 	})
 }
+
+// TestLegacyASLHookFromCollidingKittyInstanceRecordsItsOwnSlotAsOrigin: a legacy
+// ASL hook names its pane by the window number its own Kitty instance gave it.
+// When another instance already holds that number, the pane's slot is a
+// collision slot, and the fact's origin must name that slot rather than the
+// other instance's window.
+func TestLegacyASLHookFromCollidingKittyInstanceRecordsItsOwnSlotAsOrigin(t *testing.T) {
+	h := newTestHandler()
+	h.SetStopConfirm(0, 0, false)
+	stubDaemonLoopDiscover(t, nil, nil)
+	projectDir := t.TempDir()
+	h.stateMu.Lock()
+	firstSlot := h.kittySlotLocked(kittyA, 42)
+	h.ensureWindowStateLocked(firstSlot)
+	h.rememberKittySocketLocked(firstSlot, kittyA)
+	h.stateMu.Unlock()
+	raw := []kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 1, Title: "api", Windows: []kitty.Window{{
+		ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: projectDir},
+	}}}}}}
+	windows := h.slotMappedKittyWindows(raw, kittyB, true)
+	h.stateMu.Lock()
+	secondSlot := h.runtimeRoutes.kittySlotOf(kittyB, 42)
+	h.stateMu.Unlock()
+	if secondSlot == firstSlot {
+		t.Fatal("colliding Kitty windows share a slot")
+	}
+
+	payload := hookevent.HookPayload{
+		Source: events.ASLHookSource, KittyWindowID: 42, CWD: projectDir, Harness: "claude", RunID: runtimeRunID,
+	}
+	req := protocol.Request{
+		Type: protocol.TypeHookEvent, Event: events.AgentSessionLoopStarted, Harness: "claude",
+		WindowID: secondSlot, KittyListenOn: kittyB,
+		PayloadJSON: hookPayloadJSON(t, payload),
+		Origin:      &protocol.HookOrigin{Backend: "kitty", Instance: kittyB, Pane: "42", Slot: secondSlot, Legacy: true},
+	}
+	if !h.handleLoopLifecycleHookEvent(events.AgentSessionLoopStarted, "loop_marker", payload, req, windows) {
+		t.Fatal("the legacy ASL hook found no target")
+	}
+	found := false
+	for _, fact := range slotFacts(h, secondSlot) {
+		if fact.Kind != protocol.SourceASL || fact.RunID != runtimeRunID {
+			continue
+		}
+		found = true
+		if fact.OriginWindowID != secondSlot {
+			t.Fatalf("origin = %d; want the hook's own collision slot %d (not %d)", fact.OriginWindowID, secondSlot, firstSlot)
+		}
+	}
+	if !found {
+		t.Fatalf("no ASL fact on slot %d: %+v", secondSlot, slotFacts(h, secondSlot))
+	}
+	h.stateMu.Lock()
+	supervised, ok := h.aslSupervisors.Target(asl.LeaseRef{WindowID: secondSlot, Key: runtimeRunID})
+	h.stateMu.Unlock()
+	if ok && supervised.OriginWindowID != secondSlot {
+		t.Fatalf("supervisor origin = %d; want %d", supervised.OriginWindowID, secondSlot)
+	}
+}

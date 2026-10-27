@@ -110,7 +110,7 @@ func (h *Handler) handleLoopLifecycleTarget(
 	}
 	// The fact lands on the managed target but retains the pane identified by
 	// the request/payload as its origin for route-aware probes and diagnostics.
-	originWindowID := aslHookOriginWindow(baseReq, payload)
+	originWindowID := h.aslHookOriginWindow(baseReq, payload)
 	normalized := events.NormalizedFromHookRequest(eventOrAction, baseReq, originWindowID)
 	req.Normalized = &normalized
 	req.NormalizationOutcome = events.NormalizationOutcomeFor(normalized)
