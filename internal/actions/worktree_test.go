@@ -93,6 +93,11 @@ func TestWorktreeDefinitionsDeclareEntitiesParametersAndConfirmation(t *testing.
 		t.Fatalf("dirty remove availability = %+v", got)
 	}
 	entry.Dirty = false
+	entry.Detached = true
+	if got := registry.Availability(Dependencies{}, WorktreeRemove, Request{Worktree: &entry}); got.Available || !strings.Contains(got.Reason, "detached") {
+		t.Fatalf("detached remove availability = %+v", got)
+	}
+	entry.Detached = false
 	if got := registry.Availability(Dependencies{}, WorktreeForget, Request{Worktree: &entry}); got.Available {
 		t.Fatalf("healthy forget availability = %+v", got)
 	}
@@ -107,6 +112,7 @@ func TestWorktreeLifecycleErrorsHaveStableCodes(t *testing.T) {
 	}{
 		{worktree.ErrWorktreeDirty, "worktree_dirty"},
 		{worktree.ErrWorktreeLocked, "worktree_locked"},
+		{worktree.ErrWorktreeDetached, "worktree_detached"},
 		{worktree.ErrBranchUnmerged, "branch_unmerged"},
 		{worktree.ErrMetadataInvalid, "metadata_invalid"},
 		{worktree.ErrGitUnavailable, "git_unavailable"},

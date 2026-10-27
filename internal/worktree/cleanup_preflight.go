@@ -72,6 +72,12 @@ func (i *Inventory) revalidatePresentCleanup(ctx context.Context, root string, s
 		}
 		return cleanupPreflight{}, ErrWorktreeLocked
 	}
+	// Keeping the named branch does not preserve a detached HEAD's commits
+	// or an in-progress rebase's state. Refuse before removing the checkout,
+	// even when branch deletion was not requested.
+	if record.Detached || record.Branch == "" {
+		return cleanupPreflight{}, ErrWorktreeDetached
+	}
 	status, err := git(ctx, path, gitProbeTimeout, statusArgs()...)
 	if err != nil {
 		return cleanupPreflight{}, fmt.Errorf("%w: checking checkout status: %w", ErrGitUnavailable, err)

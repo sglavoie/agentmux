@@ -59,6 +59,9 @@ func worktreeRemoveAvailability(request Request) Availability {
 		}
 		return Availability{Reason: "worktree checkout is missing"}
 	}
+	if entry.Detached {
+		return Availability{Reason: "worktree is detached; attach HEAD to a branch before removing it"}
+	}
 	if !entry.Actionable || !entry.GitAvailable || !entry.StatusAvailable {
 		return Availability{Reason: "worktree Git safety facts are unavailable"}
 	}
@@ -535,7 +538,7 @@ func mapLifecycleError(action ID, err error) *Error {
 		code = "source_dirty"
 	case errors.Is(err, worktree.ErrSourceBusy):
 		code = "source_busy"
-	case action == WorktreeLand && errors.Is(err, worktree.ErrWorktreeDetached):
+	case errors.Is(err, worktree.ErrWorktreeDetached):
 		code = "worktree_detached"
 	case errors.Is(err, worktree.ErrWorktreeDirty):
 		code = "worktree_dirty"

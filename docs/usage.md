@@ -1328,14 +1328,18 @@ counted, with a warning that the sessions in Kitty are not (`land` and
 `remove` refuse while any count is incomplete).
 
 `prune` selects every worktree `remove` would accept on its own — present,
-valid, clean, unlocked, and used by no live session or loop — and with
-`--merged` only those whose branch is reachable from its source. Without
-`--yes` it lists them and changes nothing. With `--yes` each one goes through
+valid, clean, unlocked, attached to a branch, and used by no live session or
+loop — and with `--merged` only those whose branch is reachable from its source.
+Without `--yes` it lists them and changes nothing. With `--yes` each one goes through
 `remove`, which re-checks everything at that moment, so a worktree that became
 active in the meantime is kept and reported. Branches are kept unless
 `--delete-branch` is given, and even then only merged branches are deleted.
 A branch checked out, being rebased, or used by an active bisect in another
 worktree is kept. Unreadable Git operation state also prevents branch deletion.
+Removal also refuses a detached HEAD, even without `--delete-branch`, so it
+preserves commits with no branch reference and paused rebases. Finish or abort
+the rebase, or attach HEAD to a branch that preserves the work, before retrying.
+The structured refusal code is `worktree_detached`.
 
 `diff` reviews what a worktree did since it left its recorded source branch:
 commits ahead and behind, each changed file with its line counts, files Git

@@ -11,8 +11,8 @@ import (
 )
 
 // worktreePruneCmd removes every managed worktree that `remove` would accept
-// without argument: present, valid, clean, unlocked, and in use by no live
-// session or loop. It selects; it does not decide. Each candidate still goes
+// without argument: present, valid, clean, unlocked, attached, and in use by
+// no live session or loop. It selects; it does not decide. Each candidate still goes
 // through the WorktreeRemove action, which re-checks all of that against the
 // live state at the moment it acts, so a worktree that became active between
 // the listing and its turn is refused there rather than removed here.
@@ -23,8 +23,8 @@ var worktreePruneCmd = &cobra.Command{
 	Use:   "prune",
 	Short: "Remove every clean, inactive managed worktree (preview without --yes)",
 	Long: `Remove every managed worktree that ` + "`amx worktree remove`" + ` would accept: present,
-valid, clean, unlocked, and in use by no live session or loop. Without --yes it
-lists them and removes nothing. Each one is checked again as it is removed, so
+valid, clean, unlocked, attached to a branch, and in use by no live session or
+loop. Without --yes it lists them and removes nothing. Each one is checked again as it is removed, so
 a worktree that became active meanwhile is kept. --merged keeps those whose
 branch is not yet reachable from its source branch, and --delete-branch also
 deletes each removed worktree's merged branch.`,
@@ -148,7 +148,7 @@ func prunable(view actions.WorktreeView, mergedOnly bool) bool {
 	if !view.Exists || !view.Actionable || view.Classification != worktree.ClassificationValid {
 		return false
 	}
-	if !view.GitAvailable || !view.StatusAvailable || view.Dirty || view.Locked {
+	if !view.GitAvailable || !view.StatusAvailable || view.Dirty || view.Locked || view.Detached {
 		return false
 	}
 	if len(view.LiveSessions) > 0 || view.LoopCount > 0 {

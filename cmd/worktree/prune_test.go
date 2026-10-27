@@ -27,6 +27,7 @@ func TestPrunableSelectsOnlyCleanInactiveValidWorktrees(t *testing.T) {
 	mutate := map[string]func(*actions.WorktreeView){
 		"dirty":        func(v *actions.WorktreeView) { v.Dirty = true },
 		"locked":       func(v *actions.WorktreeView) { v.Locked = true },
+		"detached":     func(v *actions.WorktreeView) { v.Detached = true },
 		"missing":      func(v *actions.WorktreeView) { v.Exists = false },
 		"invalid":      func(v *actions.WorktreeView) { v.Classification = worktree.ClassificationMetadataInvalid },
 		"no status":    func(v *actions.WorktreeView) { v.StatusAvailable = false },
