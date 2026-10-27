@@ -305,6 +305,27 @@ func TestSendRejectsWhatItCannotMean(t *testing.T) {
 	}
 }
 
+// Standard input longer than a send may carry is refused whole, even when it
+// is cut at a newline that trimming would remove, and nothing is typed.
+func TestSendRefusesStdinCutAtTheLimit(t *testing.T) {
+	w := newSendWorld(t)
+	for _, tail := range []string{"\nlost-marker\n", "\r\n\nlost-marker\n"} {
+		long := strings.Repeat("a", backend.InputMaxBytes) + tail
+		out, err := w.run(t, long, w.id(), "--stdin", "--json")
+		if err == nil || closeErrorCode(t, out) != "invalid_arguments" {
+			t.Fatalf("send of %d bytes ending %q: err=%v out=%s, want invalid_arguments", len(long), tail, err, out)
+		}
+	}
+	if w.queries != 0 {
+		t.Fatalf("the daemon was asked %d times about a send that was never valid", w.queries)
+	}
+	// The limit itself, with the line ending a pipe adds, still goes through.
+	exact := strings.Repeat("a", backend.InputMaxBytes) + "\r\n"
+	if out, err := w.run(t, exact, w.id(), "--stdin", "--no-enter", "--json"); err != nil {
+		t.Fatalf("send of the limit: %v\n%s", err, out)
+	}
+}
+
 func TestSendRefusesAnAgentThatStopped(t *testing.T) {
 	w := newSendWorld(t)
 	if out, err := closeRun(t, w.id(), "--yes", "--json"); err != nil {

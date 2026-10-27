@@ -332,9 +332,16 @@ func sendInput(cmd *cobra.Command, rest []string) (backend.Input, error) {
 			input.Keys = append(input.Keys, key)
 		}
 	case sendStdin:
-		text, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), backend.InputMaxBytes+1))
+		// Room for the limit, a trailing CRLF, and one byte more: input that
+		// fills it was cut short, and trimming the newline it was cut at
+		// must not let the cut prompt through as a whole one.
+		limit := int64(backend.InputMaxBytes + len("\r\n") + 1)
+		text, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), limit))
 		if err != nil {
 			return backend.Input{}, fmt.Errorf("reading standard input: %w", err)
+		}
+		if int64(len(text)) == limit {
+			return backend.Input{}, fmt.Errorf("%w: standard input is more than %d bytes", backend.ErrInvalidInput, backend.InputMaxBytes)
 		}
 		// What a pipe adds at the end is not part of the prompt.
 		input.Text, input.Submit = strings.TrimRight(string(text), "\r\n"), !sendNoEnter
