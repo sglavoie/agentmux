@@ -65,6 +65,10 @@ type Result struct {
 // Search runs q against idx and tolerates per-plan sidecar read failures by
 // falling back to the authoritative markdown files.
 func Search(idx *Index, q Query) ([]Result, error) {
+	return search(idx, q, readPlanSearchText)
+}
+
+func search(idx *Index, q Query, readSource func(PlanMeta) (string, error)) ([]Result, error) {
 	if idx == nil {
 		return nil, errors.New("plans: Search requires a non-nil index")
 	}
@@ -90,6 +94,12 @@ func Search(idx *Index, q Query) ([]Result, error) {
 		return results, nil
 	}
 
+	repairs := searchRepairs{index: idx}
+	defer func() {
+		if err := repairs.persist(); err != nil {
+			slog.Debug("plans.search: sidecar repair failed", "err", err)
+		}
+	}()
 	for _, m := range metas {
 		// Snippets are stored as written (not lowercased), so lowercase
 		// here for case-insensitive comparison. A matching snippet is a
@@ -107,14 +117,14 @@ func Search(idx *Index, q Query) ([]Result, error) {
 			if sidecarErr != nil {
 				slog.Debug("plans.search: sidecar cache miss", "path", idx.store.Path(key), "err", sidecarErr)
 				var sourceErr error
-				searchText, sourceErr = readPlanSearchText(m)
+				searchText, sourceErr = readSource(m)
 				if sourceErr != nil {
 					slog.Debug("plans.search: partial source read", "dir", m.DirPath, "err", sourceErr)
 				}
 				// Only cache a complete corpus. The current search still uses
 				// partial source text and the snippet fallback when available.
 				if sourceErr == nil {
-					if repairErr := idx.store.Write(key, searchText); repairErr != nil {
+					if repairErr := repairs.add(m, searchText); repairErr != nil {
 						slog.Debug("plans.search: sidecar repair failed", "path", idx.store.Path(key), "err", repairErr)
 					}
 				}

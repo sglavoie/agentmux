@@ -242,6 +242,51 @@ func TestFilesystemPlanSearchRepairsUnreadableSidecar(t *testing.T) {
 	}
 }
 
+func TestFilesystemPlanEmptyDiscoveryPreservesConcurrentRefresh(t *testing.T) {
+	root := t.TempDir()
+	planDir := seedPlanDir(t, root, "one", map[string]string{"manifest.md": "original plan"})
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatal(err)
+	}
+	other, err := LoadIndexAt(idx.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := filepath.Join(planDir, "manifest.md")
+	if err := os.Remove(manifest); err != nil {
+		t.Fatal(err)
+	}
+	// The first scan sees an empty directory. Before its removal merges,
+	// another process finishes writing and indexing a replacement plan.
+	originalHook := refreshPlansBeforeMergeForTest
+	t.Cleanup(func() { refreshPlansBeforeMergeForTest = originalHook })
+	refreshPlansBeforeMergeForTest = func() {
+		refreshPlansBeforeMergeForTest = nil
+		if err := os.WriteFile(manifest, []byte("replacement plan with fresh needle"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := other.Refresh(root); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := idx.Refresh(root); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := LoadIndexAt(idx.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := PlanKey(planDir)
+	if _, ok := reopened.Get(key); !ok {
+		t.Fatal("stale empty-directory discovery deleted the concurrently refreshed plan")
+	}
+	text, err := reopened.store.Read(key)
+	if err != nil || text != "replacement plan with fresh needle" {
+		t.Fatalf("concurrently refreshed sidecar = %q, %v", text, err)
+	}
+}
+
 func TestFilesystemPlanConcurrentLoadRefreshDelete(t *testing.T) {
 	t.Parallel()
 

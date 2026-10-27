@@ -233,7 +233,15 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 		for key := range removed {
 			// A directory that is not a plan is listed here on every refresh;
 			// only one the index holds is a change worth writing.
-			if _, indexed := i.entries[key]; !indexed {
+			current, indexed := i.entries[key]
+			if !indexed {
+				continue
+			}
+			// An empty-directory observation belongs to the scan's snapshot.
+			// Another refresh may have indexed new markdown in the meantime;
+			// do not delete that newer entry or its sidecar.
+			previous, existed := snapshot[key]
+			if !existed || !reflect.DeepEqual(current, previous) {
 				continue
 			}
 			delete(i.entries, key)
