@@ -584,6 +584,13 @@ func (m Model) handleWorktreeReopenDone(msg worktreeActionDoneMsg) (tea.Model, t
 		}
 		return m.refreshWorktreesWithToast(Toast{Severity: toastSuccess, Text: text})
 	}
+	if m.activeRootMode() != ModeWorktrees {
+		// The operator left the view while the reopen ran. A choice it still
+		// needs is theirs to make from the view, not a picker raised over
+		// whatever they went on to.
+		m.worktreeActionTarget = nil
+		return m, m.pushToast(Toast{Severity: toastError, Text: "Worktree reopen: " + msg.err.Error()})
+	}
 	var actionErr *actions.Error
 	if errors.As(msg.err, &actionErr) {
 		switch actionErr.Code {
@@ -602,8 +609,13 @@ func (m Model) handleWorktreeReopenDone(msg worktreeActionDoneMsg) (tea.Model, t
 }
 
 func (m Model) handleWorktreeMutationDone(msg worktreeActionDoneMsg) (tea.Model, tea.Cmd) {
-	m.mode = ModeWorktrees
 	m.worktreeActionTarget = nil
+	if m.activeRootMode() != ModeWorktrees {
+		// The operator left the view while the mutation ran: it is reported
+		// where they are, and the view refreshes when they come back to it.
+		return m, m.pushToast(worktreeMutationToast(msg))
+	}
+	m.mode = ModeWorktrees
 	if msg.err != nil {
 		var partial *actions.PartialResultError
 		if errors.As(msg.err, &partial) {
@@ -621,6 +633,23 @@ func (m Model) handleWorktreeMutationDone(msg worktreeActionDoneMsg) (tea.Model,
 		text = "Worktree lifecycle action completed"
 	}
 	return m.refreshWorktreesWithToast(Toast{Severity: toastSuccess, Text: text})
+}
+
+// worktreeMutationToast is what a remove, forget, or land came to, for an
+// operator no longer in the Worktrees view to read it there.
+func worktreeMutationToast(msg worktreeActionDoneMsg) Toast {
+	if msg.err == nil {
+		text := msg.result.Message
+		if text == "" {
+			text = "Worktree lifecycle action completed"
+		}
+		return Toast{Severity: toastSuccess, Text: text}
+	}
+	var partial *actions.PartialResultError
+	if errors.As(msg.err, &partial) {
+		return Toast{Severity: toastWarning, Text: "Partial cleanup: " + tuiworktrees.MutationSummary(msg.result) + "; recovery required: " + msg.err.Error()}
+	}
+	return Toast{Severity: toastError, Text: "Worktree action failed: " + msg.err.Error()}
 }
 
 func (m Model) refreshWorktreesWithToast(toast Toast) (tea.Model, tea.Cmd) {
