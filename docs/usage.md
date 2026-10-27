@@ -1334,7 +1334,8 @@ valid, clean, unlocked, and used by no live session or loop — and with
 `remove`, which re-checks everything at that moment, so a worktree that became
 active in the meantime is kept and reported. Branches are kept unless
 `--delete-branch` is given, and even then only merged branches are deleted.
-A branch checked out or being rebased in another worktree is kept.
+A branch checked out, being rebased, or used by an active bisect in another
+worktree is kept. Unreadable Git operation state also prevents branch deletion.
 
 `diff` reviews what a worktree did since it left its recorded source branch:
 commits ahead and behind, each changed file with its line counts, files Git
@@ -1361,7 +1362,8 @@ is advanced. A `diff` verdict of `fast_forward` is the one
 that lands; `diverged_clean` and `conflicts` are refused as `branch_diverged`.
 The other refusals are `nothing_to_land`, `worktree_dirty`, `worktree_locked`,
 `worktree_detached`, `worktree_active`, `source_dirty`, `source_busy` (the
-source branch is mid-rebase), and `source_branch_missing`. `--remove` goes on
+source branch is mid-rebase or in an active bisect), and `source_branch_missing`.
+Unreadable Git operation state prevents landing. `--remove` goes on
 to remove the worktree and delete its now-merged branch; if that second step
 is refused, the landing stands and the command reports a partial result with
 a nonzero exit.

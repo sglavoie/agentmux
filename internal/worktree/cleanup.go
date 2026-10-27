@@ -263,10 +263,13 @@ func (i *Inventory) deleteMergedBranch(ctx context.Context, control, branch, hea
 		if record.Branch == branch {
 			return fmt.Errorf("worktree: safely deleting branch %s: it is checked out at %s", branch, record.Path)
 		}
-		// Rebase detaches HEAD, so worktree list no longer names the branch.
-		// Its rebase state still owns the ref that continuation will update.
-		if rebasing(ctx, git, record.Path, "refs/heads/"+branch) {
-			return fmt.Errorf("worktree: safely deleting branch %s: it is being rebased at %s", branch, record.Path)
+		// Rebase and bisect can detach HEAD, hiding the branch from the list.
+		operation, err := branchOperation(ctx, git, record.Path, "refs/heads/"+branch)
+		if err != nil {
+			return err
+		}
+		if operation != "" {
+			return fmt.Errorf("worktree: safely deleting branch %s: it is in use by %s at %s", branch, operation, record.Path)
 		}
 	}
 	if _, err := git(ctx, control, gitCommandTimeout, "update-ref", "-m", "amx worktree remove: delete merged branch", "-d", "refs/heads/"+branch, head); err != nil {

@@ -15,7 +15,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -24,7 +23,7 @@ var (
 	ErrNothingToLand = errors.New("worktree: the checkout branch has no commit its source branch lacks")
 	ErrLandDiverged  = errors.New("worktree: the source branch has moved on; rebase the worktree branch onto it before landing")
 	ErrSourceDirty   = errors.New("worktree: the source branch's checkout has uncommitted changes")
-	ErrSourceBusy    = errors.New("worktree: the source branch is being rebased")
+	ErrSourceBusy    = errors.New("worktree: the source branch is in use by a Git operation")
 )
 
 // LandResult reports one landing. Landed is false whenever the source branch
@@ -139,17 +138,21 @@ func (i *Inventory) Land(ctx context.Context, selector string) (LandResult, erro
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrGitUnavailable, err)
 		}
+		// Rebase and bisect can detach HEAD while still owning the source
+		// branch. Bisect --no-checkout leaves HEAD attached, so check before
+		// either a checkout merge or a direct ref update.
+		for _, record := range records {
+			operation, err := branchOperation(ctx, git, record.Path, sourceRef)
+			if err != nil {
+				return err
+			}
+			if operation != "" {
+				return fmt.Errorf("%w: %s in %s", ErrSourceBusy, operation, record.Path)
+			}
+		}
 		for _, record := range records {
 			if record.Branch == source && !record.Detached {
 				return manager.landInCheckout(ctx, record.Path, from, to, &result)
-			}
-		}
-		// No worktree has the source branch checked out. One may still be in
-		// the middle of rebasing it, with HEAD detached until the rebase ends
-		// and rewrites the branch; advancing it now would be undone then.
-		for _, record := range records {
-			if rebasing(ctx, git, record.Path, sourceRef) {
-				return fmt.Errorf("%w in %s", ErrSourceBusy, record.Path)
 			}
 		}
 		// The old value makes the update conditional: if the branch moved
@@ -200,20 +203,4 @@ func (i *Inventory) landInCheckout(ctx context.Context, checkout, from, to strin
 	}
 	result.Landed = true
 	return nil
-}
-
-// rebasing reports whether the worktree at path is in a rebase of ref. Git
-// records the branch a rebase will rewrite in a head-name file of its state
-// directory.
-func rebasing(ctx context.Context, git gitExecutor, path, ref string) bool {
-	for _, state := range []string{"rebase-merge/head-name", "rebase-apply/head-name"} {
-		file, err := gitLineWith(ctx, git, path, gitProbeTimeout, "rev-parse", "--path-format=absolute", "--git-path", state)
-		if err != nil {
-			continue
-		}
-		if name, err := os.ReadFile(file); err == nil && strings.TrimSpace(string(name)) == ref {
-			return true
-		}
-	}
-	return false
 }
