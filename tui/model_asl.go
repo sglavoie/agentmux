@@ -378,6 +378,11 @@ func (m Model) openASLResponse() (tea.Model, tea.Cmd) {
 		QuestionIDs: ids,
 		Buttons:     asl.ResponseButtons(kind),
 		Drafts:      map[string]aslbridge.SecretText{},
+		// The counters carry on from the form before, which closeASLResponse
+		// kept: a fetch or a submission still out for that form must not
+		// match this one.
+		FetchSeq:  m.aslResponse.FetchSeq,
+		ActionSeq: m.aslResponse.ActionSeq,
 	}
 	for _, id := range ids {
 		if draft := m.aslReplyDrafts.get(row.PlanDir, id); draft != "" {
@@ -415,10 +420,12 @@ func (m *Model) startASLQuestionFetch() tea.Cmd {
 
 // closeASLResponse returns to the Runs list and drops the form state. The
 // fetched body goes with it; the drafts are kept per question (keepASLDrafts)
-// so esc never discards a half-written reply.
+// so esc never discards a half-written reply. The fetch and action sequences
+// survive, so an answer still in flight to the closed form cannot match the
+// next one.
 func (m *Model) closeASLResponse() {
 	m.keepASLDrafts()
-	m.aslResponse = asl.ResponseState{}
+	m.aslResponse = asl.ResponseState{FetchSeq: m.aslResponse.FetchSeq, ActionSeq: m.aslResponse.ActionSeq}
 	m.mode = ModeASLRuns
 }
 

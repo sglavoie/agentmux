@@ -413,3 +413,82 @@ func TestASLResponseFitsNarrowTerminals(t *testing.T) {
 		_ = d.Close()
 	}
 }
+
+// TestASLResponseDropsAnAnswerToAnEarlierForm: esc while a submission is out
+// closes the form, and the answer that lands later must not be taken for the
+// reply to a form opened since. It used to match, because each form counted
+// its submissions from zero, and it advanced the new form past a question
+// nobody had answered.
+func TestASLResponseDropsAnAnswerToAnEarlierForm(t *testing.T) {
+	t.Parallel()
+
+	d, _ := enterASLRunsDriver(t)
+	selectASLRun(t, d, "row-reply")
+	m := d.Model()
+	updated, _ := m.openASLResponse()
+	m = updated.(Model)
+	m.aslResponse.SetDraft("the first answer")
+	updated, _ = m.submitASLResponse(m.aslResponse.Buttons[0])
+	m = updated.(Model)
+	earlier := aslActionDoneMsg{
+		seq: m.aslResponse.ActionSeq, rowID: "row-reply", method: m.aslResponse.Pending.Method,
+		operationID: m.aslResponse.Pending.OperationID, status: asl.OpAccepted,
+	}
+	updated, _ = m.handleASLResponseKey(keyPress(keyEsc))
+	m = updated.(Model)
+
+	updated, _ = m.openASLResponse()
+	m = updated.(Model)
+	m.aslResponse.SetDraft("the second answer")
+	updated, _ = m.submitASLResponse(m.aslResponse.Buttons[0])
+	m = updated.(Model)
+	before := m.aslResponse
+
+	updated, _ = m.Update(earlier)
+	got := updated.(Model).aslResponse
+	if !got.Active || !got.InFlight || got.Target.QuestionID != before.Target.QuestionID ||
+		len(got.QuestionIDs) != len(before.QuestionIDs) {
+		t.Fatalf("an answer to a closed form changed the newer one: %+v, was %+v", got, before)
+	}
+}
+
+// TestASLResponseDropsABodyFetchedForAnEarlierForm: a body still being
+// fetched when its form closed must not reach, and so invalidate, a form
+// opened on another run since.
+func TestASLResponseDropsABodyFetchedForAnEarlierForm(t *testing.T) {
+	t.Parallel()
+
+	d, _ := enterASLRunsDriver(t)
+	selectASLRun(t, d, "row-reply")
+	m := d.Model()
+	updated, _ := m.openASLResponse()
+	m = updated.(Model)
+	earlier := aslQuestionLoadedMsg{seq: m.aslResponse.FetchSeq, body: aslbridge.QuestionBody{
+		PlanDir: m.aslResponse.Target.PlanDir, QuestionID: m.aslResponse.Target.QuestionID, Body: "an earlier body",
+	}}
+	m.closeASLResponse()
+
+	selectASLRunOnModel(t, &m, "row-paused")
+	updated, _ = m.openASLResponse()
+	m = updated.(Model)
+	if !m.aslResponse.Active {
+		t.Fatal("the paused run's form did not open")
+	}
+	updated, _ = m.Update(earlier)
+	got := updated.(Model)
+	if got.mode != ModeASLResponse || !got.aslResponse.Active || got.aslResponse.Target.RowID != "row-paused" {
+		t.Fatalf("a body fetched for a closed form closed the newer one (mode %v)", got.mode)
+	}
+}
+
+// selectASLRunOnModel puts the Runs cursor on a row by ID without a driver.
+func selectASLRunOnModel(t *testing.T, m *Model, rowID string) {
+	t.Helper()
+	for i, row := range m.aslRows {
+		if row.RowID == rowID {
+			m.aslCursor = i
+			return
+		}
+	}
+	t.Fatalf("fixture has no run %q", rowID)
+}
