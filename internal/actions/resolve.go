@@ -144,5 +144,5 @@ func continuityLaunchError(action ID, err error) error {
 	if errors.Is(err, harness.ErrUnsupportedInvocation) {
 		return &Error{Code: "capability_unavailable", Action: action, Message: err.Error()}
 	}
-	return &Error{Code: "launch_failed", Action: action, Message: err.Error()}
+	return &Error{Code: "launch_failed", Action: action, Message: err.Error(), Cause: err}
 }

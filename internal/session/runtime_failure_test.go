@@ -85,6 +85,9 @@ func TestLaunchOnTmuxUnclosableUncommittedLaunchStaysPending(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "committing runtime session") || !strings.Contains(err.Error(), "close refused") {
 		t.Fatalf("err = %v, want both the commit and the close failure", err)
 	}
+	if !errors.Is(err, ErrAgentMayBeRunning) {
+		t.Fatalf("err = %v, want ErrAgentMayBeRunning so a caller keeps what the agent may use", err)
+	}
 	if launcher.closed != 1 {
 		t.Fatalf("Close called %d times, want 1", launcher.closed)
 	}

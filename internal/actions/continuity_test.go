@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 )
@@ -368,6 +369,52 @@ func TestForkWorktreeCleansUpWhenNativeLaunchFails(t *testing.T) {
 	if !errors.As(err, &actionErr) || actionErr.Code != "launch_failed" || len(managed.removed) != 1 {
 		t.Fatalf("error=%v cleanup=%+v, want launch_failed and unused worktree cleanup", err, managed.removed)
 	}
+}
+
+// A launch that failed with its agent possibly still running keeps the
+// worktree: removing it would force the checkout and its branch out from
+// under that agent. The worktree is reported as a retained artifact instead.
+func TestForkWorktreeKeepsTheWorktreeWhenTheAgentMayStillRun(t *testing.T) {
+	t.Parallel()
+
+	mayRun := fmt.Errorf("closing uncommitted session rs-1: close refused; %w", session.ErrAgentMayBeRunning)
+	assertRetained := func(t *testing.T, result Result, err error, managed *continuityWorktree) {
+		t.Helper()
+		var partial *PartialResultError
+		if !errors.As(err, &partial) || !errors.Is(err, session.ErrAgentMayBeRunning) {
+			t.Fatalf("error = %v, want a partial result naming the possibly running agent", err)
+		}
+		if len(managed.removed) != 0 {
+			t.Fatalf("removed %+v under an agent that may still run", managed.removed)
+		}
+		worktreeData, ok := result.Data["worktree"].(map[string]any)
+		if result.Data["worktree_retained"] != true || !ok || worktreeData["path"] != managed.created.Path {
+			t.Fatalf("result data = %#v, want the retained worktree", result.Data)
+		}
+	}
+
+	t.Run("native", func(t *testing.T) {
+		client := &continuityKitty{launchErr: mayRun}
+		meta := continuityMeta(t, harness.Claude, "source-1", "work")
+		managed := &continuityWorktree{created: worktree.Result{ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: t.TempDir()}}
+		result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
+			Kitty: client, Config: continuityConfig(harness.Claude), Readers: map[string]transcript.Reader{harness.Claude: &continuityReader{harness: harness.Claude}}, Worktree: managed,
+		}, ForkWorktree, Request{Conversation: &meta, Confirmed: true})
+		assertRetained(t, result, err, managed)
+	})
+
+	t.Run("portable", func(t *testing.T) {
+		meta := continuityMeta(t, harness.Copilot, "source-1", "work")
+		managed := &continuityWorktree{created: worktree.Result{ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: t.TempDir()}}
+		runner := &continuityHandoff{
+			result: handoff.Result{Artifact: handoff.Artifact{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal}, TargetProfile: "work", TargetHarness: harness.Copilot},
+			err:    &handoff.PartialLaunchError{Err: mayRun},
+		}
+		result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
+			Kitty: &continuityKitty{}, Config: continuityConfig(harness.Copilot), Readers: map[string]transcript.Reader{harness.Copilot: &continuityReader{harness: harness.Copilot}}, Handoff: runner, Worktree: managed,
+		}, ForkWorktree, Request{Conversation: &meta, Confirmed: true})
+		assertRetained(t, result, err, managed)
+	})
 }
 
 func TestForkWorktreeReportsGitCheckoutErrorsWithoutWorkspaceConcepts(t *testing.T) {

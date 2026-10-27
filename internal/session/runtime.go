@@ -62,6 +62,13 @@ const pendingLaunchTimeout = 2 * time.Minute
 
 var errNoKittyClient = errors.New("launching session: no Kitty client")
 
+// ErrAgentMayBeRunning marks a failed launch whose agent could not be
+// stopped: the launch is reported as failed, yet its process may still be
+// running in whatever directory it was given. A caller that would clean up
+// after a failed launch (an isolated fork removing its worktree) must check
+// for it with errors.Is and keep what the agent may be using.
+var ErrAgentMayBeRunning = errors.New("the agent may still be running")
+
 // Runtime selects the terminal backend new agents launch on. Kitty stays the
 // default; a Runtime with Tmux set launches on the private tmux server and
 // records every launch as a runtime session in Registry.
@@ -296,7 +303,7 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 			// registration (AbandonInterrupted), and until then the pane
 			// still deduplicates its key.
 			return tmuxLaunch{}, errors.Join(failure,
-				fmt.Errorf("closing uncommitted session %s: %w", id, closeErr))
+				fmt.Errorf("closing uncommitted session %s: %w; %w", id, closeErr, ErrAgentMayBeRunning))
 		}
 		return tmuxLaunch{}, errors.Join(failure, end())
 	}

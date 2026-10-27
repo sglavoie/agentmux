@@ -161,6 +161,9 @@ func TestLaunchOnTmuxUncommittableLaunchIsUndone(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "committing runtime session") {
 		t.Fatalf("err = %v, want a commit failure", err)
 	}
+	if errors.Is(err, ErrAgentMayBeRunning) {
+		t.Fatalf("err = %v claims a running agent although the launch was closed", err)
+	}
 	if n := len(runningOnTmux(t, f, cfg)); n != 0 {
 		t.Fatalf("uncommitted launch left %d agents running", n)
 	}

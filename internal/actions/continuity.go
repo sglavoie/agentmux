@@ -158,7 +158,7 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 	var partial *handoff.PartialLaunchError
 	if errors.As(err, &partial) {
 		result.Message = "handoff pack finalized at " + workflowResult.Artifact.Path + "; target launch failed"
-		return result, &PartialResultError{ActionError: &Error{Code: "partial_launch_failed", Action: Handoff, Message: err.Error()}}
+		return result, &PartialResultError{ActionError: &Error{Code: "partial_launch_failed", Action: Handoff, Message: err.Error(), Cause: err}}
 	}
 	return result, &Error{Code: "handoff_failed", Action: Handoff, Message: err.Error()}
 }
@@ -192,6 +192,21 @@ func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta tra
 		return Result{}, worktreeActionError(err)
 	}
 	cleanup := func(cause error, result Result) (Result, error) {
+		if errors.Is(cause, session.ErrAgentMayBeRunning) {
+			// The launch failed but its agent could not be stopped, so it may
+			// be working in the checkout right now. Removing it would pull the
+			// tree out from under the agent (and delete its branch), so the
+			// worktree is kept and reported like any retained artifact.
+			result = addIsolatedWorktreeResult(result, isolated)
+			result.Data["worktree_retained"] = true
+			result.Message = "isolated worktree retained at " + isolated.Path + "; the fork's agent may still be running"
+			retained := &Error{Code: "launch_failed", Action: ForkWorktree, Message: cause.Error(), Cause: cause}
+			var actionErr *Error
+			if errors.As(cause, &actionErr) {
+				retained.Code = actionErr.Code
+			}
+			return result, &PartialResultError{ActionError: retained}
+		}
 		if cleanupErr := runner.RemoveUnused(context.Background(), isolated); cleanupErr != nil {
 			if result.Data == nil {
 				result.Data = map[string]any{}
