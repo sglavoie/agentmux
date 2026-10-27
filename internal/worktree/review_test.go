@@ -170,6 +170,25 @@ func TestReviewNeverRunsTextconv(t *testing.T) {
 	}
 }
 
+func TestReviewShowsCommittedSubmoduleChangesDespiteGitDisplaySettings(t *testing.T) {
+	t.Parallel()
+	_, inventory, entry := reviewFixture(t)
+	// A gitlink can point at any commit object. No checkout or network clone
+	// is needed to review its committed addition.
+	head := revision(t, entry.Path, "HEAD")
+	gitRun(t, entry.Path, "update-index", "--add", "--cacheinfo", "160000,"+head+",child")
+	gitRun(t, entry.Path, "commit", "-m", "add child")
+	gitRun(t, entry.Path, "config", "diff.ignoreSubmodules", "all")
+
+	review, err := inventory.Review(context.Background(), entry, ReviewOptions{CommittedOnly: true, Patch: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(review.Files) != 1 || review.Files[0].Path != "child" || !strings.Contains(review.Patch, "+Subproject commit "+head) {
+		t.Fatalf("review hid committed submodule changes: %+v", review)
+	}
+}
+
 func TestReviewRefusesWhatItCannotCompare(t *testing.T) {
 	t.Parallel()
 

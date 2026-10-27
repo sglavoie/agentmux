@@ -178,3 +178,26 @@ func TestReviewLeavesTheIndexAlone(t *testing.T) {
 		t.Fatal("the index was rewritten by a review")
 	}
 }
+
+func TestReviewShowsSubmoduleChangesDespiteGitDisplaySettings(t *testing.T) {
+	t.Parallel()
+	for _, setting := range []string{"diff.ignoreSubmodules", "submodule.child.ignore"} {
+		t.Run(setting, func(t *testing.T) {
+			t.Parallel()
+			dir, git, write := reviewFixture(t)
+			child, _, _ := reviewFixture(t)
+			git("-c", "protocol.file.allow=always", "submodule", "add", child, "child")
+			git("-c", "commit.gpgsign=false", "commit", "-qam", "add submodule")
+			git("config", setting, "all")
+			write("child/tracked", "submodule work\n")
+
+			got, err := ReadChanges(context.Background(), dir, "HEAD", "child")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Files) != 1 || got.Files[0].Path != "child" || !strings.Contains(got.Patch, "-dirty") {
+				t.Fatalf("review hid submodule changes: %+v", got)
+			}
+		})
+	}
+}

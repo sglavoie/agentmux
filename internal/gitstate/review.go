@@ -112,7 +112,9 @@ func ReadChanges(ctx context.Context, directory, base, file string) (Changes, er
 		return result, fmt.Errorf("comparison base %q is not a commit: %w", base, err)
 	}
 	result.Base = strings.TrimSpace(string(commit))
-	flags := []string{"diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames"}
+	// Reviews must show changed submodules even when Git's display settings
+	// hide them. Use the same policy for the file list and selected patch.
+	flags := []string{"diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--ignore-submodules=none"}
 	stats, truncated, err := reviewGit(ctx, result.Root, append(flags, "--numstat", "-z", result.Base, "--")...)
 	if err != nil || truncated {
 		if err == nil {

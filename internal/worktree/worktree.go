@@ -358,9 +358,10 @@ func statusArgs(extra ...string) []string {
 // tree refreshes the index and writes it back under index.lock whatever
 // --no-optional-locks says; diff.autoRefreshIndex=false is what stops that,
 // and it changes no output, since files whose content matches are skipped
-// either way.
+// either way. Like statusArgs, reviews include submodule changes regardless
+// of Git's display preferences.
 func diffArgs(args ...string) []string {
-	return append([]string{"-c", "diff.autoRefreshIndex=false", "diff"}, args...)
+	return append([]string{"-c", "diff.autoRefreshIndex=false", "diff", "--ignore-submodules=none"}, args...)
 }
 
 func gitDirty(ctx context.Context, directory string) (bool, error) {

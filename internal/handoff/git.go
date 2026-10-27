@@ -44,11 +44,15 @@ func (commandGitInspector) Inspect(ctx context.Context, cwd string, timeout time
 	// --no-optional-locks) covers status, but a diff against the work tree
 	// still refreshes and writes the index unless diff.autoRefreshIndex is
 	// off; turning it off changes no output.
-	status, err := run("--no-optional-locks", "status", "--short")
+	// Display preferences must not turn unfinished work into a "clean"
+	// snapshot handed to the next agent.
+	status, err := run("--no-optional-locks", "status", "--short", "--untracked-files=normal", "--ignore-submodules=none")
 	if err != nil {
 		return unavailableGit(probeCtx, err, "error", "Git status inspection failed")
 	}
-	diffStat, err := run("-c", "diff.autoRefreshIndex=false", "diff", "--stat", "--no-ext-diff", "HEAD")
+	// A session may start in a subdirectory. Keep the summary checkout-wide
+	// even when diff.relative would otherwise hide changes outside that path.
+	diffStat, err := run("-c", "diff.autoRefreshIndex=false", "diff", "--stat", "--no-ext-diff", "--no-relative", "--ignore-submodules=none", "HEAD")
 	if err != nil {
 		return unavailableGit(probeCtx, err, "error", "Git diff-stat inspection failed")
 	}
