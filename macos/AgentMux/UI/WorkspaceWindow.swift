@@ -734,12 +734,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         // takes from the sidebar too.
         let inspectorShown = Self.width(inspectorWidth, default: Self.defaultInspectorWidth, in: Self.inspectorWidths)
         splitView.setPosition(splitView.bounds.width - inspectorShown - splitView.dividerThickness, ofDividerAt: 1)
-        splitView.layoutSubtreeIfNeeded()
-        splitView.setPosition(Self.width(sidebarWidth, default: Self.defaultSidebarWidth, in: Self.sidebarWidths), ofDividerAt: 0)
         // Hidden until it is asked for. An item is collapsed for good only
         // once its split view is laid out in a window.
         splitView.layoutSubtreeIfNeeded()
         inspectorItem.isCollapsed = true
+        // The sidebar goes last, once the hidden inspector has given its
+        // room back: beside a shown one in a narrow window it would be cut
+        // to what is left, and that width saved over its own.
+        splitView.layoutSubtreeIfNeeded()
+        splitView.setPosition(Self.width(sidebarWidth, default: Self.defaultSidebarWidth, in: Self.sidebarWidths), ofDividerAt: 0)
+        splitView.layoutSubtreeIfNeeded()
         reportedSidebarWidth = sidebarWidth
         reportedInspectorWidth = inspectorWidth
         splitObservation = NotificationCenter.default.addObserver(

@@ -698,6 +698,31 @@ final class WorkspaceWindowTests: XCTestCase {
                        "no narrower sidebar is saved: \(other.layoutChanges)")
     }
 
+    /// In a window too narrow for both saved widths beside the pane, the
+    /// hidden inspector takes no room from the sidebar.
+    func testAWideSavedSidebarSurvivesAWideSavedInspectorInANarrowWindow() throws {
+        let other = FakeWorkspaceApp()
+        let restored = WorkspaceWindowController(delegate: other, glyphs: .fallback)
+        defer { restored.window.close() }
+        restored.sidebarWidth = 600
+        restored.inspectorWidth = 400
+        restored.openForTesting()
+        let split = try XCTUnwrap(restored.window.contentViewController as? NSSplitViewController)
+        restored.window.layoutIfNeeded()
+        XCTAssertEqual(restored.window.frame.width, 1100, accuracy: 1, "the default frame")
+        XCTAssertTrue(restored.isInspectorCollapsed)
+        XCTAssertEqual(split.splitViewItems[0].viewController.view.frame.width, 600, accuracy: 0.5)
+        XCTAssertTrue(other.layoutChanges.isEmpty, "opening at the saved widths reports nothing: \(other.layoutChanges)")
+
+        // Shown, it shares what the pane can spare with the sidebar.
+        restored.setInspectorCollapsed(false)
+        restored.window.layoutIfNeeded()
+        let shown = split.splitViewItems[2].viewController.view.frame.width
+        XCTAssertTrue(WorkspaceWindowController.inspectorWidths.contains(shown), "shown, the inspector has room: \(shown)")
+        XCTAssertTrue(WorkspaceWindowController.sidebarWidths.contains(split.splitViewItems[0].viewController.view.frame.width))
+        XCTAssertGreaterThanOrEqual(split.splitViewItems[1].viewController.view.frame.width, 319.5, "the pane keeps its minimum")
+    }
+
     func testSelectingATmuxSessionShowsItsTerminalAndKeepsTheOthers() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let (work, personal) = (try row("api", "work"), try row("api", "personal"))
