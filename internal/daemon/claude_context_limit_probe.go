@@ -311,9 +311,13 @@ type contextLimitProbeTarget struct {
 // is the pane that stalled (the banner is only visible there); targets are the
 // managed windows to promote on detection. For an in-pane hook the source is
 // also the sole target; for an ASL sibling hook the source is the unmanaged pane
-// and the targets are the managed title owners.
+// and the targets are the managed title owners. sourceWindowID is a reducer
+// slot; kittyWindowID is the source's real Kitty window, resolved when the
+// probe is enqueued and used only to match the screen read, since a second
+// Kitty instance's colliding window has a slot that is no Kitty window ID.
 type contextLimitProbe struct {
 	sourceWindowID int
+	kittyWindowID  int
 	req            protocol.Request
 	event          string
 	payload        hookevent.HookPayload
@@ -343,6 +347,7 @@ func (h *Handler) enqueueContextLimitProbe(p contextLimitProbe) {
 	if p.traceID == "" {
 		p.traceID = diagnostics.NewTraceID()
 	}
+	p.kittyWindowID = h.deliveryKittyWindowID(p.sourceWindowID)
 	p.parentTraceID = p.req.TraceID
 	targetIDs := make([]int, 0, len(p.targets))
 	for _, target := range p.targets {
@@ -363,7 +368,7 @@ func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
 	h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "attempted", "pending", "screen_read_started", map[string]string{
 		"event": p.event,
 	})
-	text, err := h.hookKittyClient(p.req).GetText(kitty.MatchWindowByID(p.sourceWindowID), "screen")
+	text, err := h.hookKittyClient(p.req).GetText(kitty.MatchWindowByID(p.kittyWindowID), "screen")
 	if err != nil {
 		slog.Debug("context-limit probe failed", "window_id", p.sourceWindowID, "event", p.event, "err", err)
 		h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "completed", "failed", "screen_read_failed", map[string]string{"event": p.event})

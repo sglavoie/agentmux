@@ -403,6 +403,55 @@ func TestHandler_HookEventScreenContextLimitPromotesStopFailure(t *testing.T) {
 	}
 }
 
+// Two Kitty instances each with a window 42: the second one's hook lands on
+// its collision slot, but the context-limit probe reads Kitty window 42's
+// screen, never the slot, so the stall still reaches error on that slot.
+func TestHandler_HookEventContextLimitProbeOnCollisionSlotReadsTheKittyWindow(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler()
+	h.probeRunner = func(fn func()) { fn() }
+	var matches []string
+	fake := &fakeKittyClient{
+		windows: hookEventWindows(palette.BuildTitle("api", "bolt", false), []kitty.Window{{
+			ID:       42,
+			UserVars: kitty.UserVars{Profile: "work", Harness: "claude"},
+		}}),
+		getText: map[string]string{
+			kitty.MatchWindowByID(42): "Context limit reached - /compact or /clear to continue\n",
+		},
+		beforeGetText: func(match, _ string) { matches = append(matches, match) },
+	}
+	h.SetKittyClient(fake)
+
+	requireAccepted(t, h.Handle(protocol.Request{
+		Type: protocol.TypeHookEvent, WindowID: 42, KittyListenOn: kittyA, Event: "PostToolUse", Harness: harness.Claude,
+	}))
+	matches = nil
+	requireAccepted(t, h.Handle(protocol.Request{
+		Type:          protocol.TypeHookEvent,
+		WindowID:      42,
+		KittyListenOn: kittyB,
+		Event:         "Notification",
+		Harness:       harness.Claude,
+		PayloadJSON:   hookPayloadJSON(t, hookevent.HookPayload{NotificationType: "agent_idle"}),
+	}))
+
+	h.stateMu.Lock()
+	slot := h.runtimeRoutes.kittySlotOf(kittyB, 42)
+	st := h.store[slot]
+	h.stateMu.Unlock()
+	if slot == 42 {
+		t.Fatal("the second instance's window 42 got no collision slot")
+	}
+	if len(matches) != 1 || matches[0] != kitty.MatchWindowByID(42) {
+		t.Fatalf("GetText matches = %v; want Kitty window 42 only", matches)
+	}
+	if st == nil || st.DesiredIcon != "error" {
+		t.Fatalf("collision slot %d state = %+v; want error after the context-limit probe", slot, st)
+	}
+}
+
 func TestHandler_HookEventStopReasonContextLimitSkipsScreenProbe(t *testing.T) {
 	t.Parallel()
 
