@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
@@ -83,26 +84,31 @@ func focusRuntimeSession(cmd *cobra.Command, windowID int) (string, bool) {
 }
 
 // focusChoice picks where to go from the session at index current of the
-// sessions in list order. attention reports which ones wait on the operator.
-type focusChoice func(ordered []session.RunningSession, current int, attention func(session.RunningSession) bool) (session.RunningSession, bool)
+// sessions in list order. live reports which ones still run an agent, the
+// only ones it may choose; attention reports which ones wait on the operator.
+type focusChoice func(ordered []session.RunningSession, current int, live, attention func(session.RunningSession) bool) (session.RunningSession, bool)
 
-// neighborSession is the session direction steps away, wrapping around.
+// neighborSession is the nearest running session in direction, wrapping
+// around. The current session is never chosen.
 func neighborSession(direction int) focusChoice {
-	return func(ordered []session.RunningSession, current int, _ func(session.RunningSession) bool) (session.RunningSession, bool) {
+	return func(ordered []session.RunningSession, current int, live, _ func(session.RunningSession) bool) (session.RunningSession, bool) {
 		n := len(ordered)
-		if n < 2 {
-			return session.RunningSession{}, false
+		for step := 1; step < n; step++ {
+			if candidate := ordered[((current+direction*step)%n+n)%n]; live(candidate) {
+				return candidate, true
+			}
 		}
-		return ordered[((current+direction)%n+n)%n], true
+		return session.RunningSession{}, false
 	}
 }
 
-// nextAttentionSession is the first session after the current one, wrapping
-// around, that waits on the operator. The current session is never chosen.
-func nextAttentionSession(ordered []session.RunningSession, current int, attention func(session.RunningSession) bool) (session.RunningSession, bool) {
+// nextAttentionSession is the first running session after the current one,
+// wrapping around, that waits on the operator. The current session is never
+// chosen.
+func nextAttentionSession(ordered []session.RunningSession, current int, live, attention func(session.RunningSession) bool) (session.RunningSession, bool) {
 	n := len(ordered)
 	for step := 1; step < n; step++ {
-		if candidate := ordered[(current+step)%n]; attention(candidate) {
+		if candidate := ordered[(current+step)%n]; live(candidate) && attention(candidate) {
 			return candidate, true
 		}
 	}
@@ -155,7 +161,20 @@ func runFocusRuntime(cmd *cobra.Command, named string, choose focusChoice) error
 	if cfg != nil {
 		mode = cfg.Defaults.Sort
 	}
-	ordered := session.SortRunning(session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg), mode)
+	// The session to start from may be one whose agent exited, its pane kept
+	// and still on screen, so its place comes from an order of every pane
+	// the server holds; the session to go to is chosen among the live ones.
+	running := map[runtimesession.ID]bool{}
+	for _, rs := range session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg) {
+		running[rs.RuntimeSessionID] = true
+	}
+	held := make([]backend.Pane, len(panes))
+	for i, pane := range panes {
+		pane.Exit = nil
+		held[i] = pane
+	}
+	ordered := session.SortRunning(session.RunningSessionsFromPanes(runtimesession.BackendTmux, held, cfg), mode)
+	live := func(rs session.RunningSession) bool { return rs.RuntimeSessionID != "" && running[rs.RuntimeSessionID] }
 	current := -1
 	for i, rs := range ordered {
 		if rs.RuntimeSessionID == id {
@@ -165,8 +184,8 @@ func runFocusRuntime(cmd *cobra.Command, named string, choose focusChoice) error
 	if current < 0 {
 		return cli.CommandFailure(cmd, false, "not_found", noRuntimeSession(id))
 	}
-	target, ok := choose(ordered, current, runtimeAttention())
-	if !ok || target.RuntimeSessionID == "" {
+	target, ok := choose(ordered, current, live, runtimeAttention())
+	if !ok {
 		return nil
 	}
 	store, err := runtimesession.NewStore(attachRegistryPath())

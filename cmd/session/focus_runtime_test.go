@@ -284,6 +284,39 @@ func TestFocusNeverReachesAnExitedOrLostSession(t *testing.T) {
 	}
 }
 
+// A terminal left on a session whose agent exited, its pane kept, moves on
+// from there: the exited session keeps its place in the order, and the
+// neighbour is the nearest one that runs.
+func TestFocusMovesOnFromAnExitedSession(t *testing.T) {
+	w := newFocusWorld(t)
+	client, _ := w.attach(t, "bravo")
+	panes, err := w.f.Backend.Discover()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, ok := backend.FindPane(panes, w.pane("bravo"))
+	if !ok || len(agent.Foreground) == 0 {
+		t.Fatalf("bravo's pane = %+v, %v", agent, ok)
+	}
+	if err := syscall.Kill(agent.Foreground[0].PID, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	w.eventually(t, "bravo to exit", func(s tmux.Survey) bool {
+		pane, ok := backend.FindPane(s.Panes, w.pane("bravo"))
+		return ok && pane.Exit != nil
+	})
+	currentRuntimeSession = func() string { return string(w.id("bravo")) }
+
+	if err := runFocus(t, focusNextManagedCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	w.on(t, client, "charlie", 1)
+	if err := runFocus(t, focusPrevManagedCmd, map[string]string{"runtime-session": string(w.id("bravo")), "client": client}); err != nil {
+		t.Fatal(err)
+	}
+	w.on(t, client, "alpha", 1)
+}
+
 func TestFocusHostedByTheWorkspaceAsksItToShowTheSession(t *testing.T) {
 	w := newFocusWorld(t)
 	client, _ := w.attach(t, "alpha")
