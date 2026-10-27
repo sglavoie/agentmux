@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -134,10 +134,16 @@ func continuityProject(cfg *config.Config, meta transcript.SessionMeta, account 
 	return config.Session{Title: title, Directory: meta.CWD, Profile: account.Name, Account: account.Name}
 }
 
+// sameSourceDirectory compares a configured project directory with a transcript's
+// working directory. Harnesses record the physical directory they ran in, so
+// a project configured through a symlink must be resolved the same way
+// (projectresolve.AbsPath) or it never matches.
 func sameSourceDirectory(left, right string) bool {
-	left = filepath.Clean(config.ExpandTilde(left))
-	right = filepath.Clean(config.ExpandTilde(right))
-	return left != "." && left == right
+	if strings.TrimSpace(left) == "" || strings.TrimSpace(right) == "" {
+		return false
+	}
+	left, right = projectresolve.AbsPath(left), projectresolve.AbsPath(right)
+	return left != "" && left == right
 }
 
 func continuityLaunchError(action ID, err error) error {

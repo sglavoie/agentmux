@@ -479,3 +479,31 @@ func continuityMeta(t *testing.T, harnessName, id, profile string) transcript.Se
 	}
 	return transcript.SessionMeta{ID: id, Harness: harnessName, Profile: profile, Project: "api", CWD: "/tmp/agentmux-project", Path: path}
 }
+
+// A harness records the physical directory it ran in. A project configured
+// through a symlink to that directory is still the project the conversation
+// ran in, so resume and fork carry its args forward.
+func TestContinuityProjectMatchesAProjectConfiguredThroughASymlink(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	real := filepath.Join(base, "real", "api")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
+		t.Fatal(err)
+	}
+	physical, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Projects: []config.Session{{Title: "API", Directory: filepath.Join(link, "api"), Profile: "work", Args: []string{"--project-arg"}}}}
+	account := config.Account{Name: "work", Harness: harness.Claude}
+
+	project := continuityProject(cfg, transcript.SessionMeta{ID: "s-1", Project: "API", CWD: physical}, account)
+	if project.Title != "API" || len(project.Args) != 1 || project.Args[0] != "--project-arg" || project.Directory != physical {
+		t.Fatalf("project = %+v, want the symlinked project with its args in the recorded directory", project)
+	}
+}

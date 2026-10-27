@@ -13,6 +13,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -294,10 +295,16 @@ func targetSession(cfg *config.Config, source transcript.SessionMeta, target con
 	return config.Session{Title: title, Directory: source.CWD, Profile: target.Name, Account: target.Name}
 }
 
+// sameDirectory compares a configured project directory with a transcript's
+// working directory. Harnesses record the physical directory they ran in, so
+// a project configured through a symlink must be resolved the same way
+// (projectresolve.AbsPath) or it never matches.
 func sameDirectory(left, right string) bool {
-	left = filepath.Clean(config.ExpandTilde(left))
-	right = filepath.Clean(config.ExpandTilde(right))
-	return left != "." && left == right
+	if strings.TrimSpace(left) == "" || strings.TrimSpace(right) == "" {
+		return false
+	}
+	left, right = projectresolve.AbsPath(left), projectresolve.AbsPath(right)
+	return left != "" && left == right
 }
 
 func accountByName(cfg *config.Config, profile string) (config.Account, bool) {

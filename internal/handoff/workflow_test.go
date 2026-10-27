@@ -300,3 +300,45 @@ func TestWorkflowDoesNotGuessAmongSeveralMatchingProjects(t *testing.T) {
 		t.Fatalf("launch session = %+v, want the one matching project's args under the source title", got)
 	}
 }
+
+// A harness records the physical directory it ran in; a target project
+// configured through a symlink to it is still that directory's project.
+func TestWorkflowMatchesATargetProjectConfiguredThroughASymlink(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourcePath := filepath.Join(cwd, "source.jsonl")
+	if err := os.WriteFile(sourcePath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "source", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex, HomeDir: "/tmp/target-home"}},
+		Projects: []config.Session{{Title: "api", Directory: link, Profile: "target", Args: []string{"--target-arg"}}},
+	}
+	var got config.Session
+	workflow := testWorkflow(t, func(_ kitty.KittyClient, sess config.Session, _ config.Account, _ *config.Config, _ string) error {
+		got = sess
+		return nil
+	}, nil)
+	if _, err := workflow.Run(context.Background(), Request{
+		Source: transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
+		Reader: workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Continue."}}},
+		Config: cfg, TargetProfile: "target",
+		Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got.Args) != 1 || got.Args[0] != "--target-arg" || got.Directory != cwd {
+		t.Fatalf("launch session = %+v, want the symlinked project's args in the source directory", got)
+	}
+}
