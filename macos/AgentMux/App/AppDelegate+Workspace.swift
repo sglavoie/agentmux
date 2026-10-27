@@ -32,6 +32,10 @@ extension AppDelegate {
         if let workspace { return workspace }
         let controller = WorkspaceWindowController(delegate: self)
         controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing
+        controller.setSidebarZoom(percent: preferencesModel.preferences.sidebarZoomPercent)
+        controller.onSidebarZoomChanged = { [weak self] percent in
+            self?.preferencesModel.preferences.sidebarZoomPercent = percent
+        }
         controller.readConfirmation = { [weak self] done in self?.readWorkspaceConfirmation(done) }
         workspace = controller
         if !Self.isRunningTests {

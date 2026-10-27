@@ -93,6 +93,22 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.sidebar.convert(NSSize(width: 10, height: 10), to: nil), originalSize)
     }
 
+    /// Keyboard zoom is reported for Settings to keep; a zoom Settings
+    /// applies is not reported back, and steps stay whole percents.
+    func testSidebarZoomReportsKeyboardChangesOnlyAndClamps() {
+        var reported: [Int] = []
+        workspace.onSidebarZoomChanged = { reported.append($0) }
+        workspace.setSidebarZoom(percent: 190)
+        XCTAssertEqual(reported, [])
+        workspace.zoomSidebars(.bigger)
+        workspace.zoomSidebars(.bigger)
+        XCTAssertEqual(workspace.sidebarZoomPercent, 200)
+        workspace.zoomSidebars(.reset)
+        for _ in 0..<5 { workspace.zoomSidebars(.smaller) }
+        XCTAssertEqual(workspace.sidebarZoomPercent, 70)
+        XCTAssertEqual(reported, [200, 100, 90, 80, 70])
+    }
+
     private func index(of key: AttentionCycler.Key) throws -> Int {
         try XCTUnwrap(workspace.items.firstIndex { item in
             if case let .row(row) = item { return row.key == key }

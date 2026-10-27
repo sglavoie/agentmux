@@ -36,6 +36,7 @@ extension AppDelegate {
 
     func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
+        workspace?.setSidebarZoom(percent: new.sidebarZoomPercent)
         if old.confirmationPolicy != new.confirmationPolicy {
             do { try workspaceConfirmationFile.write(new.confirmationPolicy) }
             catch {

@@ -23,6 +23,7 @@ struct AppPreferences: Equatable {
         static let launchBackend = "amxLaunchBackend"
         static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
         static let defaultFontSize = "amxDefaultFontSize"
+        static let sidebarZoomPercent = "amxSidebarZoomPercent"
         static let dashboardPlace = "amxDashboardPlace"
         static let terminalTheme = "amxTerminalTheme"
         static let confirmationPolicy = "amxConfirmationPolicy"
@@ -31,13 +32,16 @@ struct AppPreferences: Equatable {
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
-            launchBackend, openWorkspaceAtLaunch, defaultFontSize, dashboardPlace, terminalTheme, workspaceShortcuts,
+            launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, dashboardPlace, terminalTheme, workspaceShortcuts,
             confirmBeforeClosing, confirmationPolicy,
         ]
     }
 
     static let recentDaysRange = 1...90
     static let recentLimitRange = 1...50
+    /// The sidebars' zoom, in percent, in steps of `sidebarZoomStep`.
+    static let sidebarZoomRange = 70...200
+    static let sidebarZoomStep = 10
 
     /// `amxBinaryPath`: the amx to run instead of the resolver's choice; empty
     /// is automatic.
@@ -79,6 +83,9 @@ struct AppPreferences: Equatable {
     }
     /// The terminal size at launch and on ⌘⇧-; nil uses the Ghostty config.
     var defaultFontSize: Float?
+    /// `amxSidebarZoomPercent`: how large the workspace's sidebar and
+    /// inspector draw, in percent; ⌥+ and ⌥− change it, ⌥0 resets it to 100.
+    var sidebarZoomPercent = 100
     /// `amxDashboardPlace`: where the dashboard shortcut shows the dashboard.
     var dashboardPlace: DashboardPlacePreference = .workspace
     /// `amxTerminalTheme`: the Ghostty theme every terminal uses; nil uses
@@ -110,6 +117,7 @@ struct AppPreferences: Equatable {
             preferences.confirmBeforeClosing = legacy
         }
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
+        preferences.sidebarZoomPercent = int(defaults, Key.sidebarZoomPercent, in: sidebarZoomRange) ?? 100
         preferences.dashboardPlace = defaults.string(forKey: Key.dashboardPlace)
             .flatMap(DashboardPlacePreference.init(rawValue:)) ?? .workspace
         // Only a stored string: `defaults.string` would read a stray true as "1".
@@ -143,6 +151,7 @@ struct AppPreferences: Equatable {
         defaults.set(confirmationPolicy.rawValue, forKey: Key.confirmationPolicy)
         defaults.removeObject(forKey: Key.confirmBeforeClosing)
         DefaultFontSize.save(defaultFontSize, to: defaults)
+        defaults.set(Self.clamp(sidebarZoomPercent, Self.sidebarZoomRange), forKey: Key.sidebarZoomPercent)
         defaults.set(dashboardPlace.rawValue, forKey: Key.dashboardPlace)
         if let terminalTheme {
             defaults.set(terminalTheme.configValue, forKey: Key.terminalTheme)

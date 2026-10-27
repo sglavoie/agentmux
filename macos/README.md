@@ -296,10 +296,10 @@ runs without embedded terminals.
   `config-file = ~/.config/ghostty/config` to share it. The app configuration
   names no command. `reloadConfig()` rebuilds the layers and hands the result
   to every surface; a manually zoomed surface keeps its zoom until reset.
-  Preferences › Workspace › Default zoom saves a size from 6–72 points and
+  Preferences › Appearance › Default zoom saves a size from 6–72 points and
   applies it immediately to all open terminals, including hidden views.
   Reset removes that override and restores the config's `font-size`.
-  Preferences › Workspace › Theme picks one of the themes the app bundles
+  Preferences › Appearance › Theme picks one of the themes the app bundles
   (or any in `~/.config/ghostty/themes`), optionally another for Dark Mode,
   and recolors every open terminal at once without touching its zoom;
   "From the Ghostty config" removes the override. Colors the config sets one
@@ -312,8 +312,11 @@ runs without embedded terminals.
   `SurfaceView.fontSize`, which is why the overrides force
   `window-inherit-font-size = true`).
   **⌥+** (or **⌥=**) and **⌥−** zoom both sidebars together, including their
-  text, controls, and spacing; **⌥0** restores their original size. Sidebar
-  zoom works while the terminal has focus and is independent of terminal zoom.
+  text, controls, and spacing, in 10% steps from 70% to 200%; **⌥0** restores
+  100%. Sidebar zoom works while the terminal has focus, is independent of
+  terminal zoom, and is saved: Preferences › Appearance › Sidebar zoom shows
+  and sets the same value (`amxSidebarZoomPercent`), and the next launch
+  opens at it.
 - **Callbacks.** Runtime actions are sorted by `Ghostty.disposition(of:)`. The
   app answers quit (passed to `GhosttyAppDelegate`, which ignores it), open
   URL, and open and reload config. A surface-targeted title, working
@@ -1223,6 +1226,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxConfirmationPolicy` | `follow-cli` | Whether to ask before closing a running utility view (⌘W) or ending a session (⌘⇧W): `follow-cli` asks what `config.toml` says (`[defaults] confirm_destructive`, read through `amx config confirmation --json`) right before the action and asks when that cannot be read; `always` and `never` override it. Changes apply immediately to shortcuts, menus, sidebar close actions, and the embedded dashboards; app quit confirmation is separate. A stored legacy `amxConfirmBeforeClosing` Boolean is read only when this key is absent (true → `always`, false → `never`) and is removed on the next save. |
 | `amxReadingProseSize` | 13 | Prose size in History, Activity and Waiting (11–24 points), independent of code/diff/terminal-preview size. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
+| `amxSidebarZoomPercent` | 100 | Zoom of the workspace's sidebar and inspector in percent (70–200, in 10% steps from ⌥+ and ⌥−). Changes apply to the open window at once; out-of-range stored values read as 100. |
 | `amxTerminalTheme` | none | The Ghostty `theme` every terminal uses, as Ghostty writes it: `Name` or `light:Name,dark:Name`; unset uses the Ghostty config. Changes recolor all open terminals. |
 
 Preferences › Workspace also shows the backend setup, read from

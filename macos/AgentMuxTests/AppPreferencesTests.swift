@@ -72,7 +72,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
+            "amxSidebarZoomPercent", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
         ])
     }
 
@@ -172,6 +172,24 @@ final class AppPreferencesTests: XCTestCase {
         model.preferences.defaultFontSize = nil
         XCTAssertNil(AppPreferences.load(from: defaults).defaultFontSize)
         XCTAssertEqual(sizes, [18, nil])
+    }
+
+    func testSidebarZoomPersistsAndRejectsOrClampsOutOfRangeValues() {
+        let defaults = freshDefaults()
+        XCTAssertEqual(AppPreferences.load(from: defaults).sidebarZoomPercent, 100)
+        var preferences = AppPreferences()
+        preferences.sidebarZoomPercent = 130
+        preferences.save(to: defaults)
+        XCTAssertEqual(AppPreferences.load(from: defaults).sidebarZoomPercent, 130)
+        for value: Any in ["130", true, 50, 300] {
+            defaults.set(value, forKey: AppPreferences.Key.sidebarZoomPercent)
+            XCTAssertEqual(AppPreferences.load(from: defaults).sidebarZoomPercent, 100)
+        }
+        for (value, expected) in [(10, 70), (500, 200)] {
+            preferences.sidebarZoomPercent = value
+            preferences.save(to: defaults)
+            XCTAssertEqual(AppPreferences.load(from: defaults).sidebarZoomPercent, expected)
+        }
     }
 
     func testTerminalThemePersistsAsGhosttysValue() {

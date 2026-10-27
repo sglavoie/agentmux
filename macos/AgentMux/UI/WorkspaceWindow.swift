@@ -113,19 +113,37 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private(set) var isOpen = false
 
     let sidebar = WorkspaceSidebarView()
-    private(set) var sidebarZoom: CGFloat = 1
+    /// The sidebars' zoom in percent, kept whole so steps never drift.
+    private(set) var sidebarZoomPercent = 100
+    var sidebarZoom: CGFloat { CGFloat(sidebarZoomPercent) / 100 }
     private var sidebarZoomView: WorkspaceSidebarZoomView?
     private var inspectorZoomView: WorkspaceSidebarZoomView?
+    /// Told of each zoom the operator asks for with ⌥+, ⌥−, or ⌥0, so
+    /// Settings can keep it; not called by `setSidebarZoom(percent:)`.
+    var onSidebarZoomChanged: ((Int) -> Void)?
 
     func zoomSidebars(_ change: WorkspaceZoomWindow.Zoom) {
-        switch change {
-        case .bigger: sidebarZoom = min(2, sidebarZoom + 0.1)
-        case .smaller: sidebarZoom = max(0.7, sidebarZoom - 0.1)
-        case .reset: sidebarZoom = 1
+        let step = AppPreferences.sidebarZoomStep
+        let percent = switch change {
+        case .bigger: sidebarZoomPercent + step
+        case .smaller: sidebarZoomPercent - step
+        case .reset: 100
         }
+        guard setSidebarZoom(percent: percent) else { return }
+        onSidebarZoomChanged?(sidebarZoomPercent)
+    }
+
+    /// Applies a zoom, clamped to `AppPreferences.sidebarZoomRange`; false
+    /// when it was already the zoom.
+    @discardableResult
+    func setSidebarZoom(percent: Int) -> Bool {
+        let percent = AppPreferences.clamp(percent, AppPreferences.sidebarZoomRange)
+        guard percent != sidebarZoomPercent else { return false }
+        sidebarZoomPercent = percent
         sidebarZoomView?.zoom = sidebarZoom
         inspectorZoomView?.zoom = sidebarZoom
         window.contentView?.layoutSubtreeIfNeeded()
+        return true
     }
     /// Hides the sidebar and brings it back, from the title bar, so that
     /// neither the sidebar nor the pane gives up anything to it.

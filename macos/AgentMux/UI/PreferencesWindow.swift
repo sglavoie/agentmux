@@ -774,6 +774,22 @@ struct PreferencesView: View {
                     : "Overrides the Ghostty config's theme; colors it sets one by one still apply. ")
                     + "Changing this recolors all open terminals.")
             }
+
+            Section("Sidebar appearance") {
+                LabeledContent("Sidebar zoom") {
+                    HStack {
+                        if model.preferences.sidebarZoomPercent != 100 {
+                            Button("Reset") { model.preferences.sidebarZoomPercent = 100 }
+                        }
+                        Stepper("\(model.preferences.sidebarZoomPercent)%",
+                                value: $model.preferences.sidebarZoomPercent,
+                                in: AppPreferences.sidebarZoomRange,
+                                step: AppPreferences.sidebarZoomStep)
+                    }
+                }
+                note("Scales the workspace's sidebar and inspector, separately from the terminals. "
+                    + "⌥+ and ⌥− change it and ⌥0 returns to 100%; either way it is kept for the next launch.")
+            }
         }
         .formStyle(.grouped)
     }
