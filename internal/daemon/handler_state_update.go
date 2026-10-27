@@ -464,6 +464,13 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 func (h *Handler) handleLoopMarkerStateUpdate(req protocol.Request) protocol.Response {
 	receivedAt := time.Now()
 	h.stateMu.Lock()
+	// A loop marker returns before applyStateUpdate's closed-slot check, so it
+	// makes its own: an ASL hook translated before its session ended must not
+	// bring the closed slot's state back.
+	if h.runtimeSlotClosedLocked(req.WindowID) {
+		h.stateMu.Unlock()
+		return protocol.Response{OK: false, Error: "runtime slot is closed"}
+	}
 	h.touchWindowMetadataLocked(req)
 	h.rememberKittySocketLocked(req.WindowID, req.KittyListenOn)
 	st := h.ensureWindowStateLocked(req.WindowID)

@@ -496,3 +496,57 @@ func TestOperatorClearReachesARuntimeSlot(t *testing.T) {
 		})
 	}
 }
+
+// TestASLHooksTranslatedBeforeTheirTmuxSessionEndsLeaveTheSlotClosed: a hook
+// translated while its session was live can still be handled after the
+// maintenance pass ended the session and closed its slot. Neither a lifecycle
+// hook (a loop marker) nor a supervisor question may bring the slot's state
+// back, claim the run for it, register its supervision, or notify: nothing
+// would ever drop any of it again.
+func TestASLHooksTranslatedBeforeTheirTmuxSessionEndsLeaveTheSlotClosed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h, directory, calls, _, projectDir := aslRuntimeFixture(t)
+		onTmux := newRuntimeID(t)
+		directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%3")
+		statePath := filepath.Join(t.TempDir(), "state.json")
+		requireAccepted(t, h.Handle(aslRuntimeHook(t, onTmux, events.AgentSessionLoopTurnStarted, hookevent.HookPayload{
+			CWD: projectDir, RunID: runtimeRunID, StatePath: statePath,
+		})))
+		slot := slotOf(t, h, onTmux)
+
+		translate := func(event string, payload hookevent.HookPayload) protocol.Request {
+			t.Helper()
+			req, rejection := h.translateHookOrigin(aslRuntimeHook(t, onTmux, event, payload))
+			if rejection != nil {
+				t.Fatalf("%s translation refused: %+v", event, rejection)
+			}
+			return req
+		}
+		heartbeat := translate(events.AgentSessionLoopTurnHeartbeat, hookevent.HookPayload{
+			CWD: projectDir, RunID: runtimeRunID, StatePath: statePath,
+		})
+		question := translate(events.AgentSessionLoopMailboxQuestion,
+			aslRuntimeQuestion(projectDir, statePath, supervisorQuestionID, 7, time.Now().UTC().Truncate(time.Second)))
+
+		directory.setState(onTmux, runtimesession.StateEnded)
+		h.retireEndedRuntimeSessions(time.Now())
+		h.handleHookEvent(heartbeat)
+		h.handleHookEvent(question)
+		synctest.Wait()
+
+		h.stateMu.Lock()
+		_, revived := h.store[slot]
+		_, claimed := h.aslRuntimeRuns[runtimeRunID]
+		_, supervised := h.aslSupervisors.Target(asl.LeaseRef{WindowID: slot, Key: runtimeRunID})
+		h.stateMu.Unlock()
+		if revived {
+			t.Fatalf("a late ASL hook brought the closed slot's state back: %+v", slotFacts(h, slot))
+		}
+		if claimed || supervised {
+			t.Fatalf("closed slot kept the run: claimed %v, supervised %v", claimed, supervised)
+		}
+		if got := calls.len(); got != 0 {
+			t.Fatalf("notifications = %d; want 0 (%+v)", got, calls.snapshot())
+		}
+	})
+}

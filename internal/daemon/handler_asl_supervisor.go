@@ -52,6 +52,10 @@ func (h *Handler) registerASLSupervisorLifecycleTarget(windowID, originWindowID 
 		return
 	}
 	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	if h.runtimeSlotClosedLocked(windowID) {
+		return
+	}
 	h.aslSupervisors.Register(asl.SupervisorTarget{
 		WindowID:       windowID,
 		OriginWindowID: originWindowID,
@@ -60,7 +64,6 @@ func (h *Handler) registerASLSupervisorLifecycleTarget(windowID, originWindowID 
 			StateDir: stateDir,
 		},
 	})
-	h.stateMu.Unlock()
 }
 
 // refreshASLSupervisorQuestions polls only registered 512-byte lease records.
@@ -167,6 +170,12 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 		h.stateMu.Lock()
 		ref := asl.LeaseRef{WindowID: target.WindowID, Key: question.RunID}
 		if h.aslSupervisors.ClosureBlocks(ref, question.ProjectionSeq) {
+			h.stateMu.Unlock()
+			continue
+		}
+		if h.runtimeSlotClosedLocked(target.WindowID) {
+			// The session ended after its hook was translated; a question
+			// must not reopen its closed slot or notify about it.
 			h.stateMu.Unlock()
 			continue
 		}

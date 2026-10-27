@@ -126,6 +126,12 @@ func (h *Handler) handleLoopLifecycleTarget(
 	runID := payload.EffectiveRunID()
 	if target.runtime != "" {
 		h.stateMu.Lock()
+		if h.runtimeSlotClosedLocked(target.windowID) {
+			// The session ended after its hook was translated. Its slot is
+			// closed: no claim, supervision, or loop marker may reopen it.
+			h.stateMu.Unlock()
+			return
+		}
 		if eventOrAction == events.AgentSessionLoopFinished {
 			h.releaseASLRunLocked(runID, target.windowID)
 		} else {
@@ -146,6 +152,10 @@ func (h *Handler) handleLoopLifecycleTarget(
 
 	if marker := loopMarkerForLifecycleTarget(eventOrAction, target, openTargets, h.aslStateRoot()); marker != nil {
 		h.stateMu.Lock()
+		if h.runtimeSlotClosedLocked(target.windowID) {
+			h.stateMu.Unlock()
+			return
+		}
 		st := h.ensureWindowStateLocked(target.windowID)
 		// The reducer's per-run leases are authoritative once any ASL fact has
 		// reached it (reduceStateUpdate already published the reduced verdict
