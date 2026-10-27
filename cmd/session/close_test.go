@@ -3,6 +3,7 @@ package session
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -150,6 +151,21 @@ func TestCloseNeverKillsAPaneItDidNotRegister(t *testing.T) {
 	}
 	if record, _ := f.Load(t).Get(successor.RuntimeSessionID); record.State != runtimesession.StateLive {
 		t.Fatalf("successor record = %+v, want live", record)
+	}
+}
+
+// A server that turns a connection away while its socket still listens is
+// unreadable, not gone: close says the backend is unavailable and ends
+// nothing, so the agent is never left running under an ended session.
+func TestCloseThroughAServerThatRefusesEndsNothing(t *testing.T) {
+	f, launched := attachLaunchAgent(t)
+	f.Refuse(t)
+	out, err := closeRun(t, string(launched.RuntimeSessionID), "--yes", "--json")
+	if err == nil || closeErrorCode(t, out) != "backend_unavailable" || !strings.Contains(out, "still accepts connections") {
+		t.Fatalf("close through a server that refused: %v %s", err, out)
+	}
+	if record, _ := f.Load(t).Get(launched.RuntimeSessionID); record.State != runtimesession.StateLive {
+		t.Fatalf("record = %s %q, want live", record.State, record.StaleReason)
 	}
 }
 

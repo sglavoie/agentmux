@@ -65,7 +65,7 @@ type closeData struct {
 // tmuxCloser is what closing needs from the tmux backend.
 type tmuxCloser interface {
 	session.CloseBackend
-	Survey() (tmux.Survey, error)
+	ConfirmedSurvey() (tmux.Survey, error)
 }
 
 func runClose(cmd *cobra.Command, args []string) error {
@@ -107,7 +107,10 @@ func runClose(cmd *cobra.Command, args []string) error {
 	if !ok {
 		return cli.CommandFailure(cmd, closeJSON, "backend_unavailable", errors.New("tmux backend cannot close sessions"))
 	}
-	survey, err := server.Survey()
+	// A server that turned one connection away while its socket still
+	// listens is unreadable, not gone: ending the record on what it showed
+	// would leave its agent running under a session called ended.
+	survey, err := server.ConfirmedSurvey()
 	if err != nil {
 		return cli.CommandFailure(cmd, closeJSON, "backend_unavailable", fmt.Errorf("reading tmux server: %w", err))
 	}
