@@ -428,6 +428,141 @@ final class WorkspaceGroupCellView: NSTableCellView {
     }
 }
 
+/// The line above the sessions: one chip per section listed below it, with
+/// how many sessions it holds. A click on a chip goes to the section's first
+/// session. The chips wrap onto more rows when the sidebar is narrow.
+@MainActor
+final class WorkspaceOverviewCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("workspace.overview")
+    static let chipHeight: CGFloat = 20
+    static let spacing: CGFloat = 4
+    static let inset = NSEdgeInsets(top: 6, left: 2, bottom: 6, right: 8)
+    static let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+    /// Goes to the first session of the section a chip counts.
+    var onSelect: ((WorkspaceSectionCount) -> Void)?
+    private(set) var chips: [WorkspaceOverviewChip] = []
+    private var counts: [WorkspaceSectionCount] = []
+
+    init() {
+        super.init(frame: .zero)
+        identifier = Self.identifier
+        setAccessibilityRole(.group)
+        setAccessibilityLabel("Sections")
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported for this view")
+    }
+
+    static func title(_ count: WorkspaceSectionCount) -> String { "\(count.title) \(count.count)" }
+
+    /// Where each chip goes in a line `width` wide.
+    static func frames(for counts: [WorkspaceSectionCount], width: CGFloat) -> [NSRect] {
+        let available = max(width - inset.left - inset.right, 0)
+        var frames: [NSRect] = []
+        var x: CGFloat = 0, y: CGFloat = 0
+        for count in counts {
+            let text = (title(count) as NSString).size(withAttributes: [.font: font]).width
+            let chip = min(ceil(text) + 12, available)
+            if x > 0, x + chip > available {
+                x = 0
+                y += chipHeight + spacing
+            }
+            frames.append(NSRect(x: inset.left + x, y: inset.top + y, width: chip, height: chipHeight))
+            x += chip + spacing
+        }
+        return frames
+    }
+
+    /// How tall the line is with its chips wrapped to `width`.
+    static func height(for counts: [WorkspaceSectionCount], width: CGFloat) -> CGFloat {
+        let bottom = frames(for: counts, width: width).map(\.maxY).max() ?? inset.top + chipHeight
+        return bottom + inset.bottom
+    }
+
+    override var isFlipped: Bool { true }
+
+    func show(_ counts: [WorkspaceSectionCount]) {
+        self.counts = counts
+        while chips.count > counts.count { chips.removeLast().removeFromSuperview() }
+        while chips.count < counts.count {
+            let chip = WorkspaceOverviewChip()
+            chip.target = self
+            chip.action = #selector(chipClicked(_:))
+            addSubview(chip)
+            chips.append(chip)
+        }
+        for (chip, count) in zip(chips, counts) { chip.show(count) }
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        for (chip, frame) in zip(chips, Self.frames(for: counts, width: bounds.width)) { chip.frame = frame }
+    }
+
+    @objc private func chipClicked(_ sender: WorkspaceOverviewChip) {
+        guard let index = chips.firstIndex(of: sender), counts.indices.contains(index) else { return }
+        onSelect?(counts[index])
+    }
+}
+
+/// One section's chip on the overview line, on its band's hue.
+@MainActor
+final class WorkspaceOverviewChip: NSButton {
+    private(set) var band: WorkspaceSidebarBand = .idle
+
+    init() {
+        super.init(frame: .zero)
+        isBordered = false
+        bezelStyle = .regularSquare
+        focusRingType = .none
+        // Dark text on a bright hue, as on the sidebar's bands.
+        appearance = NSAppearance(named: .aqua)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported for this view")
+    }
+
+    func show(_ count: WorkspaceSectionCount) {
+        switch count.kind {
+        case .attention: band = .attention
+        case .pinned: band = .pinned
+        case let .state(section):
+            switch section {
+            case .waiting: band = .attention
+            case .done: band = .stopped
+            case .working: band = .running
+            case .idle: band = .idle
+            }
+        }
+        attributedTitle = NSAttributedString(string: WorkspaceOverviewCellView.title(count), attributes: [
+            .font: WorkspaceOverviewCellView.font, .foregroundColor: NSColor.labelColor,
+        ])
+        let sessions = count.count == 1 ? "1 session" : "\(count.count) sessions"
+        toolTip = "\(count.title): \(sessions). Click to go to the first."
+        setAccessibilityLabel("\(count.title), \(sessions)")
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        band.stripColor.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+        if isHighlighted {
+            NSColor.black.withAlphaComponent(0.12).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+        }
+        let title = attributedTitle
+        let size = title.size()
+        title.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
 /// A session's line: its state glyph, its profile, and a line of detail,
 /// with a × in the top right corner while the pointer is over a line that can
 /// be closed. A session

@@ -76,7 +76,7 @@ extension WorkspaceWindowController {
         case let .view(view): showView(view.id, focus: true)
         case let .group(group):
             if !group.needsAttention { setCollapsed(group, !group.collapsed) }
-        case .section: break
+        case .section, .overview: break
         }
     }
 
@@ -90,7 +90,7 @@ extension WorkspaceWindowController {
             switch items[index] {
             case let .row(row): key = row.key
             case let .view(view): key = view.besideRuntimeSessionID.map(AttentionCycler.Key.embedded)
-            case .section, .group: key = nil
+            case .section, .overview, .group: key = nil
             }
         } else if let beside = views.view(viewSelection)?.besideRuntimeSessionID {
             key = .embedded(beside)

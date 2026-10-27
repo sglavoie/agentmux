@@ -92,6 +92,8 @@ extension WorkspaceWindowController {
         applying = true
         sidebar.reloadData(forRowIndexes: indexes, columnIndexes: IndexSet(integer: 0))
         applying = false
+        // A count that changed may wrap the overview's chips differently.
+        noteOverviewHeight(in: indexes)
         for index in indexes {
             guard let rowView = sidebar.rowView(atRow: index, makeIfNecessary: false) as? WorkspaceRowView else { continue }
             if let sessionView = rowView as? WorkspaceSessionRowView, case let .row(session) = items[index] {

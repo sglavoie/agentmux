@@ -301,6 +301,22 @@ struct WorkspaceOrder: Equatable {
     }
 }
 
+/// One section of the sidebar as the overview line above the sessions
+/// counts it. A click on it goes to the section's first session.
+struct WorkspaceSectionCount: Equatable {
+    enum Kind: Equatable {
+        case attention
+        case pinned
+        case state(WorkspaceStateSection)
+    }
+
+    let title: String
+    let kind: Kind
+    let count: Int
+    /// The session listed first in the section, collapsed or not.
+    let first: AttentionCycler.Key
+}
+
 /// The sidebar as data, built from a snapshot so it can be tested without
 /// AppKit: sessions grouped by state, then by project, each labeled with its
 /// profile.
@@ -593,6 +609,19 @@ struct WorkspaceState: Equatable {
     func rows(under group: WorkspaceGroup) -> [WorkspaceRow] {
         guard group.isSectionHeading else { return group.rows }
         return groups.filter { !$0.isSectionHeading && $0.stateSection == group.stateSection }.flatMap(\.rows)
+    }
+
+    /// The sections the sidebar lists, in its order, each with how many
+    /// sessions it holds: what the overview line above them counts.
+    var sectionCounts: [WorkspaceSectionCount] {
+        groups.compactMap { group in
+            guard group.pinned || group.needsAttention || group.isSectionHeading,
+                  let first = rows(under: group).first else { return nil }
+            let kind: WorkspaceSectionCount.Kind = group.needsAttention ? .attention
+                : group.pinned ? .pinned : .state(group.stateSection ?? .idle)
+            return WorkspaceSectionCount(title: group.project, kind: kind,
+                                         count: rows(under: group).count, first: first.key)
+        }
     }
 
     func row(_ key: AttentionCycler.Key?) -> WorkspaceRow? {

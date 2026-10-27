@@ -18,7 +18,9 @@ extension WorkspaceWindowController {
         let about = Set(views.all.compactMap(\.aboutRuntimeSessionID))
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
         let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
+        let counts = state.sectionCounts
         var wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
+            + (counts.isEmpty ? [] : [Item.overview(counts)])
             + state.listedGroups.flatMap { group in
                 // A collapsed project lists its header only, which still
                 // counts what waits under it; so does a state section.
@@ -72,7 +74,7 @@ extension WorkspaceWindowController {
         switch item {
         case let .row(row): label = sessionKey(of: row.key)
         case let .view(view): label = view.aboutRuntimeSessionID.flatMap { sessionNames[$0] }
-        case .section, .group: label = nil
+        case .section, .overview, .group: label = nil
         }
         return LineDecoration(label: label, profileColor: profileColor(of: item))
     }
@@ -91,7 +93,7 @@ extension WorkspaceWindowController {
             switch item {
             case let .view(view): return view.id == viewSelection
             case let .row(row): return viewSelection == nil && row.key == state.selection
-            case .section, .group: return false
+            case .section, .overview, .group: return false
             }
         }
     }
@@ -120,17 +122,28 @@ extension WorkspaceWindowController {
         return true
     }
 
+    /// The overview line wraps its chips to the sidebar's width, so its
+    /// height follows a new width or new counts.
+    func noteOverviewHeight(in indexes: IndexSet? = nil) {
+        guard let line = items.firstIndex(where: { if case .overview = $0 { return true } else { return false } }),
+              indexes?.contains(line) ?? true else { return }
+        sidebar.noteHeightOfRows(withIndexesChanged: IndexSet(integer: line))
+    }
+
     func numberOfRows(in tableView: NSTableView) -> Int { items.count }
 
     func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
         switch items[row] {
         case .section, .group: return true
-        case .view, .row: return false
+        case .overview, .view, .row: return false
         }
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        !self.tableView(tableView, isGroupRow: row)
+        switch items[row] {
+        case .section, .overview, .group: return false
+        case .view, .row: return true
+        }
     }
 
     /// What the operator's click or key may select: never a heading, and
@@ -155,13 +168,15 @@ extension WorkspaceWindowController {
         switch item {
         case let .row(row): return row.displayName
         case let .view(view): return view.displayName
-        case .section, .group: return nil
+        case .section, .overview, .group: return nil
         }
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         switch items[row] {
         case .section, .group: return 34
+        case let .overview(counts):
+            return WorkspaceOverviewCellView.height(for: counts, width: tableView.tableColumns.first?.width ?? tableView.bounds.width)
         case let .row(row) where !row.name.isEmpty: return 54
         case .view, .row: return 38
         }
@@ -173,6 +188,12 @@ extension WorkspaceWindowController {
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
                 ?? WorkspaceGroupCellView()
             cell.show(section: title)
+            return cell
+        case let .overview(counts):
+            let cell = tableView.makeView(withIdentifier: WorkspaceOverviewCellView.identifier, owner: nil) as? WorkspaceOverviewCellView
+                ?? WorkspaceOverviewCellView()
+            cell.show(counts)
+            cell.onSelect = { [weak self] count in self?.selectSection(count) }
             return cell
         case let .view(view):
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
@@ -257,7 +278,7 @@ extension WorkspaceWindowController {
         switch items[index] {
         case let .row(row): select(row.key)
         case let .view(view): showView(view.id, focus: false)
-        case .section, .group: select(nil)
+        case .section, .overview, .group: select(nil)
         }
     }
 
@@ -286,7 +307,7 @@ extension WorkspaceWindowController {
     func moveItem(at index: Int, to proposed: Int) -> Bool {
         guard let slot = dropSlot(forItemAt: index, proposed: proposed) else { return false }
         switch items[index] {
-        case .section, .group:
+        case .section, .overview, .group:
             return false
         case let .row(row):
             guard let group = group(of: row.key), !group.needsAttention else { return false }
@@ -328,7 +349,7 @@ extension WorkspaceWindowController {
             switch item {
             case let .row(row): return dragged == .session(row.key)
             case let .view(view): return dragged == .view(view.id)
-            case .section, .group: return false
+            case .section, .overview, .group: return false
             }
         }
     }
@@ -347,7 +368,7 @@ extension WorkspaceWindowController {
         switch items[index] {
         case let .row(row): dragged = .session(row.key)
         case let .view(view): dragged = .view(view.id)
-        case .section, .group: break
+        case .section, .overview, .group: break
         }
     }
 
@@ -469,7 +490,10 @@ extension WorkspaceWindowController {
         let sidebarChanged = sidebar != nil && sidebar != reportedSidebarWidth
         let inspectorChanged = inspector != nil && inspector != reportedInspectorWidth
         guard sidebarChanged || inspectorChanged else { return }
-        if sidebarChanged { reportedSidebarWidth = sidebar }
+        if sidebarChanged {
+            reportedSidebarWidth = sidebar
+            noteOverviewHeight()
+        }
         if inspectorChanged { reportedInspectorWidth = inspector }
         delegate?.workspaceLayoutChanged(sidebarWidth: sidebarChanged ? sidebar : nil,
                                          inspectorWidth: inspectorChanged ? inspector : nil)

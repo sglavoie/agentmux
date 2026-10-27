@@ -135,6 +135,9 @@ final class WorkspaceWindowTests: XCTestCase {
                 let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceRowCellView)
                 let drawnFont = cell.titleLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
                 XCTAssertEqual(drawnFont?.pointSize, 12, "Rendered session: \(cell.titleLabel.stringValue)")
+            case .overview:
+                let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceOverviewCellView)
+                XCTAssertFalse(cell.chips.isEmpty)
             case .view: break
             }
         }
@@ -241,13 +244,14 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.made, made, "reordering must not attach or acknowledge sessions")
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try index(of: waiting)) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "api — personal")
-        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 3) as? WorkspaceGroupCellView)
+        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceGroupCellView)
         XCTAssertEqual(header.nameLabel.stringValue, "Needs attention")
         XCTAssertEqual(header.countLabel.stringValue, "2")
         XCTAssertTrue(header.disclosureLabel.isHidden)
-        XCTAssertTrue(workspace.contextMenuItems(forRow: 3).isEmpty)
+        XCTAssertTrue(workspace.contextMenuItems(forRow: 3).isEmpty, "the overview has no menu")
+        XCTAssertTrue(workspace.contextMenuItems(forRow: 4).isEmpty)
         XCTAssertEqual(workspace.dropSlots(forItemAt: try index(of: waiting)), [])
-        workspace.focusItem(at: 3)
+        workspace.focusItem(at: 4)
         XCTAssertTrue(app.orders.isEmpty, "attention cannot be collapsed")
 
         live[1].unseen = false
@@ -286,30 +290,33 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Connecting to the daemon…")
 
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(workspace.sidebar.numberOfRows, 9)
-        guard case let .group(done) = workspace.items[3], case let .group(api) = workspace.items[4],
-              case let .group(web) = workspace.items[7] else {
-            return XCTFail("expected a project line before its sessions: \(workspace.items)")
+        XCTAssertEqual(workspace.sidebar.numberOfRows, 10)
+        guard case let .overview(counts) = workspace.items[3], case let .group(done) = workspace.items[4],
+              case let .group(api) = workspace.items[5], case let .group(web) = workspace.items[8] else {
+            return XCTFail("expected the overview, then a project line before its sessions: \(workspace.items)")
         }
+        XCTAssertEqual(counts.map(\.title), ["Done"], "the overview counts the sections listed below it")
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, isGroupRow: 3))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 3), "the overview is not a session")
         XCTAssertTrue(done.isSectionHeading && done.stateSection == .done, "the projects are listed under their state")
         XCTAssertEqual([api.project, web.project], ["api", "web"])
-        XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 3))
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 3), "a section line is not a session")
         XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 4))
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 4), "a project line is not a session")
-        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 5))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 4), "a section line is not a session")
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 5))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 5), "a project line is not a session")
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 6))
 
-        let section = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 3) as? WorkspaceGroupCellView)
+        let section = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceGroupCellView)
         XCTAssertEqual(section.nameLabel.stringValue, "Done")
         XCTAssertEqual(section.countLabel.stringValue, "3", "a section counts its sessions")
         XCTAssertFalse(section.disclosureLabel.isHidden, "and collapses")
-        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceGroupCellView)
+        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 5) as? WorkspaceGroupCellView)
         XCTAssertEqual(header.nameLabel.stringValue, "api")
         XCTAssertEqual(header.countLabel.stringValue, "1", "one of the project's sessions waits")
-        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 5) as? WorkspaceRowCellView)
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 6) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "personal")
         XCTAssertEqual(cell.glyphLabel.stringValue, "✓")
-        let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 8) as? WorkspaceRowCellView)
+        let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 9) as? WorkspaceRowCellView)
         XCTAssertEqual(kitty.titleLabel.stringValue, "work")
         XCTAssertTrue(kitty.detailLabel.stringValue.hasSuffix("Kitty"))
 
@@ -569,7 +576,7 @@ final class WorkspaceWindowTests: XCTestCase {
                 switch item {
                 case let .group(group): return "[\(group.project)]"
                 case let .row(row): return "\(row.project)/\(row.label)"
-                case .section, .view: return nil
+                case .section, .overview, .view: return nil
                 }
             }
         }
@@ -1400,7 +1407,7 @@ final class WorkspaceWindowTests: XCTestCase {
                 switch item {
                 case let .group(group): return group.collapsed ? "[\(group.project)]+" : "[\(group.project)]"
                 case let .row(row): return "\(row.project)/\(row.label)"
-                case .section, .view: return nil
+                case .section, .overview, .view: return nil
                 }
             }
         }
@@ -1452,6 +1459,45 @@ final class WorkspaceWindowTests: XCTestCase {
         // Going to a session in it expands the section.
         XCTAssertTrue(workspace.revealInSidebar())
         XCTAssertEqual(lines(), ["[Pinned]+", "[Done]", "[api]", "api/personal", "api/work"])
+    }
+
+    /// The overview above the sessions counts every section listed, Needs
+    /// attention and Pinned included, and a click on one goes to its first
+    /// session, expanding what holds it.
+    func testTheOverviewCountsEachSectionAndGoesToItsFirstSession() throws {
+        let live = [
+            F.tmux(1, project: "api", profile: "work", icon: "bolt"),
+            F.tmux(2, project: "web", profile: "work", icon: "bolt"),
+            F.tmux(3, project: "api", profile: "personal", icon: "stop"),
+            F.tmux(4, project: "docs", profile: "work"),
+            F.tmux(5, project: "api", profile: "other", icon: "key", attention: true, changedAtMS: 1000),
+        ]
+        app.store.apply(snapshot: F.snapshot(live))
+        func overview() throws -> (index: Int, counts: [WorkspaceSectionCount]) {
+            let index = try XCTUnwrap(workspace.items.firstIndex { if case .overview = $0 { return true } else { return false } })
+            guard case let .overview(counts) = workspace.items[index] else { throw XCTSkip("unreachable") }
+            return (index, counts)
+        }
+        var (index, counts) = try overview()
+        XCTAssertEqual(counts.map { "\($0.title) \($0.count)" }, ["Needs attention 1", "Done 1", "Working 2", "Idle 1"])
+        guard case .group = workspace.items[index + 1] else { return XCTFail("the overview leads the sessions") }
+        XCTAssertEqual(counts[2].first, .embedded(F.runtimeID(1)), "a section's first session as listed")
+
+        workspace.setCollapsed(project: "api", pinned: false, true)
+        if let working = workspace.state.groups.first(where: { $0.isSectionHeading && $0.stateSection == .working }) {
+            workspace.setCollapsed(working, true)
+        }
+        (index, counts) = try overview()
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: index) as? WorkspaceOverviewCellView)
+        XCTAssertEqual(cell.chips.count, 4)
+        XCTAssertEqual(cell.chips[2].accessibilityLabel(), "Working, 2 sessions")
+        cell.chips[2].performClick(nil)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+        XCTAssertFalse(workspace.state.groups.contains { $0.collapsed && ($0.project == "api" || $0.stateSection == .working && $0.isSectionHeading) },
+                       "going to the session expands its project and its section")
+
+        XCTAssertGreaterThan(WorkspaceOverviewCellView.height(for: counts, width: 120),
+                             WorkspaceOverviewCellView.height(for: counts, width: 600), "narrow, the chips wrap")
     }
 
     /// ⌘1 to ⌘0 count the sessions of a collapsed project, so going to one
@@ -1869,7 +1915,7 @@ final class WorkspaceWindowTests: XCTestCase {
             switch item {
             case let .row(row): XCTAssertEqual(string, row.displayName)
             case let .view(view): XCTAssertEqual(string, view.title)
-            case .section, .group: XCTAssertNil(string)
+            case .section, .overview, .group: XCTAssertNil(string)
             }
         }
         XCTAssertTrue(strings.contains("Dashboard"))

@@ -150,8 +150,14 @@ Terminals outside the app retain their own configuration.
 
 
 **Open Workspace** in the menu shows a window with every live session in a
-sidebar, grouped by project and labeled by profile, with the same state glyphs
-the tab titles use and a count of waiting sessions beside each project.
+sidebar, grouped by state (Waiting, Done, Working, Idle) and then by project,
+labeled by profile, with the same state glyphs the tab titles use and a count
+of waiting sessions beside each project. Pinned sessions and those needing
+attention lead the list.
+
+- A line of chips above the sessions counts each section listed below it,
+  Needs attention and Pinned included. A click on one goes to that section's
+  first session, expanding its section and project if they are collapsed.
 
 - A click on a **tmux** session shows its terminal in the window and puts the
   keyboard in it. The terminal is a view of the agent, not the agent: closing

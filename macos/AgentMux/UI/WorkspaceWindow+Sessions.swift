@@ -138,7 +138,7 @@ extension WorkspaceWindowController {
             }
             return [close]
         case let .group(group): return groupMenuItems(group)
-        case .section: return []
+        case .section, .overview: return []
         }
     }
 
@@ -496,7 +496,7 @@ extension WorkspaceWindowController {
         switch neighborStop(offset, skipping: raising || sessionsOnly) {
         case let .row(row)?: go(to: row, raising: raising)
         case let .view(view)?: showView(view.id, focus: true)
-        case .section?, .group?, nil: break
+        case .section?, .overview?, .group?, nil: break
         }
     }
 
@@ -524,7 +524,7 @@ extension WorkspaceWindowController {
             switch item {
             case let .row(row): return viewSelection == nil && row.key == state.selection
             case let .view(view): return view.id == viewSelection
-            case .section, .group: return false
+            case .section, .overview, .group: return false
             }
         }) else { return }
         let next = stops[((here + offset) % stops.count + stops.count) % stops.count]
@@ -532,13 +532,13 @@ extension WorkspaceWindowController {
         switch next {
         case let .row(row): key = row.key
         case let .view(view): key = view.besideRuntimeSessionID.map { .embedded($0) }
-        case .section, .group: return
+        case .section, .overview, .group: return
         }
         expandGroups(of: key)
         switch next {
         case let .row(row): go(to: row, raising: false)
         case let .view(view): showView(view.id, focus: true)
-        case .section, .group: break
+        case .section, .overview, .group: break
         }
     }
 
@@ -552,7 +552,7 @@ extension WorkspaceWindowController {
         switch neighborStop(offset, skipping: false) {
         case let .row(row)?: select(row.key)
         case let .view(view)?: showView(view.id, focus: false)
-        case .section?, .group?, nil: return false
+        case .section?, .overview?, .group?, nil: return false
         }
         return true
     }
@@ -577,7 +577,7 @@ extension WorkspaceWindowController {
                     if let beside { return row.embeddedRuntimeSessionID == beside }
                     return viewSelection == nil && row.key == state.selection
                 }.map(Item.row)
-            case .section, .group: return []
+            case .section, .overview, .group: return []
             }
         }
         guard !stops.isEmpty else { return nil }
@@ -587,7 +587,7 @@ extension WorkspaceWindowController {
                 if let beside { return row.embeddedRuntimeSessionID == beside }
                 return viewSelection == nil && row.key == state.selection
             case let .view(view): return view.id == viewSelection
-            case .section, .group: return false
+            case .section, .overview, .group: return false
             }
         }
         // Up from a terminal, the nearest session is its own.
@@ -595,6 +595,14 @@ extension WorkspaceWindowController {
         let next = here.map { (($0 + step) % stops.count + stops.count) % stops.count }
             ?? (offset < 0 ? stops.count - 1 : 0)
         return stops[next]
+    }
+
+    /// Goes to the first session of a section the overview line counts,
+    /// expanding what holds it, as a ⌘ digit does.
+    func selectSection(_ count: WorkspaceSectionCount) {
+        guard let row = state.row(count.first) else { return }
+        expandGroups(of: row.key)
+        go(to: row, raising: false)
     }
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer
