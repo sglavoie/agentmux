@@ -93,14 +93,23 @@ func (b *Backend) switchSurveyed(survey Survey, client string, target backend.Re
 		"switch-client -c " + quoteArg(client) + " -t " + quoteArg(target.ID),
 		"set-option -t " + quoteArg(target.ID) + " status on",
 	}, " ; ")
+	// The read back names the client with -t: -c only says which client a
+	// message would go to, and the format is then resolved in the session the
+	// server used last, which may be the target even when the move was skipped.
 	out, err := b.server.runChain([][]string{
 		{"if-shell", "-F", "-t", target.ID, alive, move},
-		{"display-message", "-p", "-c", client, "#{pane_id}"},
+		{"display-message", "-p", "-t", client, "#{pane_id}"},
 	})
 	if err != nil {
 		var cmdErr *CommandError
 		if errors.As(err, &cmdErr) && strings.Contains(cmdErr.Stderr, "can't find client") {
 			return fmt.Errorf("%w: %s", ErrNoClient, client)
+		}
+		// The target went away after the survey. tmux 3.8 resolves the
+		// guard's missing pane to another, which the guard then refuses, but
+		// a tmux that reports it instead says the same thing.
+		if errors.As(err, &cmdErr) && strings.Contains(cmdErr.Stderr, "can't find pane") {
+			return fmt.Errorf("%w: %s", ErrPaneGone, target.ID)
 		}
 		return err
 	}
