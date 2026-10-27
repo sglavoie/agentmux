@@ -1491,8 +1491,12 @@ final class WorkspaceWindowTests: XCTestCase {
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: index) as? WorkspaceOverviewCellView)
         XCTAssertEqual(cell.chips.count, 4)
         XCTAssertEqual(cell.chips[2].accessibilityLabel(), "Working, 2 sessions")
+        workspace.sidebar.scrollRowToVisible(0)
         cell.chips[2].performClick(nil)
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+        let line = try XCTUnwrap(workspace.items.firstIndex { if case let .row(row) = $0 { return row.key == .embedded(F.runtimeID(1)) } else { return false } })
+        XCTAssertEqual(workspace.sidebar.selectedRow, line, "its line is selected, as ⌘J leaves it")
+        XCTAssertTrue(workspace.sidebar.visibleRect.contains(workspace.sidebar.rect(ofRow: line)), "and scrolled into view")
         XCTAssertFalse(workspace.state.groups.contains { $0.collapsed && ($0.project == "api" || $0.stateSection == .working && $0.isSectionHeading) },
                        "going to the session expands its project and its section")
 

@@ -598,11 +598,12 @@ extension WorkspaceWindowController {
     }
 
     /// Goes to the first session of a section the overview line counts,
-    /// expanding what holds it, as a ⌘ digit does.
+    /// and finds its line as ⌘J does: expanded, scrolled into view, flashed.
     func selectSection(_ count: WorkspaceSectionCount) {
         guard let row = state.row(count.first) else { return }
         expandGroups(of: row.key)
         go(to: row, raising: false)
+        revealInSidebar()
     }
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer

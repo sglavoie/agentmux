@@ -157,7 +157,8 @@ attention lead the list.
 
 - A line of chips above the sessions counts each section listed below it,
   Needs attention and Pinned included. A click on one goes to that section's
-  first session, expanding its section and project if they are collapsed.
+  first session and finds its line as **Reveal in Sidebar** (⌘J) does,
+  expanding its section and project if they are collapsed.
 
 - A click on a **tmux** session shows its terminal in the window and puts the
   keyboard in it. The terminal is a view of the agent, not the agent: closing
