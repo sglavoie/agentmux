@@ -96,7 +96,7 @@ func (m Model) pickerSessionWithResolvedProfile(origIdx int) config.Session {
 	return m.pickerInput().SessionWithResolvedProfile(origIdx)
 }
 
-func (m Model) pickerOpenTargets() []config.Session {
+func (m Model) pickerOpenTargets() ([]config.Session, int) {
 	return m.pickerInput().OpenTargets()
 }
 

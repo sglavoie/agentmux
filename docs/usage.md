@@ -804,8 +804,9 @@ its own badge/metadata columns.
   directory. The override is never saved: it is gone once the launch is sent
   or the launcher is closed. A directory that is not there is refused at the
   prompt,
-- `o` opens every selected project's directory; with no selection, it opens
-  the highlighted project's directory instead.
+- `o` opens the directory of every project `enter` would launch: the selected
+  projects the filter shows, or the highlighted one when nothing is selected,
+  skipping hidden selections and staying open when there is nothing to open.
 - `?` shows the keymap,
 - `esc` clears an active filter first and leaves the launcher on a second
   press; `q` leaves it in one step. Neither quits Agent Mux — `Ctrl+C` does.

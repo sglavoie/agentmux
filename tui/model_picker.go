@@ -338,7 +338,20 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		resume := next.returnPreviewToDashboard()
 		return next, tea.Batch(cmd, resume)
 	case keyO:
-		return m, pickerOpenCmd(m, m.pickerOpenTargets())
+		// `o` opens what Enter would launch: ticked projects the filter hides
+		// are skipped and counted, and with nothing to open the launcher stays
+		// open and says why.
+		targets, hidden := m.pickerOpenTargets()
+		if len(targets) == 0 {
+			warn := m.pushToast(Toast{Severity: toastWarning, Text: launch.NothingToOpenText(hidden)})
+			return m, warn
+		}
+		cmd := pickerOpenCmd(m, targets)
+		if hidden == 0 {
+			return m, cmd
+		}
+		warn := m.pushToast(Toast{Severity: toastWarning, Text: launch.HiddenSkippedText(hidden)})
+		return m, tea.Batch(cmd, warn)
 	case keyOpenEditor:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]

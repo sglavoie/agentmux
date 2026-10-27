@@ -88,34 +88,39 @@ func TestPickerOKeyEmitsCmd(t *testing.T) {
 	}
 }
 
-func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
+func TestPickerOKeyOpensSelectedProjectsTheFilterShows(t *testing.T) {
 	t.Parallel()
 
 	client := &fakePickerOpenClient{}
 	m := pickerOpenModel(t, client)
 	apiIdx := pickerProjectIndex(t, m, "api")
 	backendIdx := pickerProjectIndex(t, m, "backend")
+	dotfilesIdx := pickerProjectIndex(t, m, "dotfiles")
 	m.pickerSelected[apiIdx] = true
 	m.pickerSelected[backendIdx] = true
+	m.pickerSelected[dotfilesIdx] = true
 	m.pickerProfileOverride[backendIdx] = "alternate"
 
-	// Keep only api visible. The selected backend must still be opened, while
-	// the unselected dotfiles row must not be included.
-	m.pickerFilter = "api"
-	m.pickerFilteredIdx = m.pickerFilteredIndices(m.pickerFilter)
+	// Hide dotfiles. Like Enter, o opens only the checked projects the filter
+	// shows, and says the hidden one was skipped.
+	m.pickerFilteredIdx = []int{apiIdx, backendIdx}
 	m.pickerCursor = 0
 
+	if targets, hidden := m.pickerOpenTargets(); len(targets) != 2 || hidden != 1 {
+		t.Fatalf("open targets = %d (hidden %d), want 2 and 1 hidden", len(targets), hidden)
+	}
 	updated, cmd := m.Update(keyPress("o"))
 	if updated.(Model).mode != ModePicker {
 		t.Fatalf("mode after o = %v, want ModePicker", updated.(Model).mode)
 	}
+	if toasts := updated.(Model).toasts; len(toasts) == 0 || toasts[len(toasts)-1].Severity != toastWarning ||
+		toasts[len(toasts)-1].Text != "Skipped 1 checked project hidden by the filter" {
+		t.Errorf("expected a hidden-skipped warning toast, got %+v", toasts)
+	}
 	if cmd == nil {
 		t.Fatal("o returned nil cmd for selected projects")
 	}
-	done, ok := cmd().(commands.PickerOpenDoneMsg)
-	if !ok {
-		t.Fatalf("o cmd returned %T, want commands.PickerOpenDoneMsg", done)
-	}
+	done := pickerOpenDone(t, cmd)
 	if done.Err != nil {
 		t.Fatalf("opening selected projects: %v", done.Err)
 	}
@@ -126,7 +131,7 @@ func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
 	}
 	wantDirs := make([]string, 0, 2)
 	for i, sess := range m.pickerSessions {
-		if m.pickerSelected[i] {
+		if m.pickerSelected[i] && i != dotfilesIdx {
 			wantDirs = append(wantDirs, sess.Directory)
 		}
 	}
@@ -141,7 +146,7 @@ func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
 			t.Errorf("api title = %q, want project title without a harness icon", opts.Title)
 		}
 		if opts.Directory == "/projects/dotfiles" {
-			t.Error("opened unselected dotfiles project")
+			t.Error("opened dotfiles, which the filter hides")
 		}
 	}
 
@@ -151,6 +156,65 @@ func TestPickerOKeyOpensAllSelectedProjectsIncludingFilteredRows(t *testing.T) {
 	}
 	if _, ok := quitCmd().(tea.QuitMsg); !ok {
 		t.Fatal("successful selected-project batch did not quit")
+	}
+}
+
+// pickerOpenDone runs an o command, which may be batched with a warning
+// toast's command, and returns its completion message.
+func pickerOpenDone(t *testing.T, cmd tea.Cmd) commands.PickerOpenDoneMsg {
+	t.Helper()
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			if c == nil {
+				continue
+			}
+			if done, ok := c().(commands.PickerOpenDoneMsg); ok {
+				return done
+			}
+		}
+		t.Fatal("o batch carried no commands.PickerOpenDoneMsg")
+	}
+	done, ok := msg.(commands.PickerOpenDoneMsg)
+	if !ok {
+		t.Fatalf("o cmd returned %T, want commands.PickerOpenDoneMsg", msg)
+	}
+	return done
+}
+
+// TestPickerOKeyOpensNothingWhenTheFilterHidesEveryCheckedProject pins the
+// reported case: tick api and backend, filter down to dotfiles, press o. No
+// tab opens for the hidden projects, the highlighted dotfiles is not opened
+// in their place, and the launcher stays open saying why.
+func TestPickerOKeyOpensNothingWhenTheFilterHidesEveryCheckedProject(t *testing.T) {
+	t.Parallel()
+
+	client := &fakePickerOpenClient{}
+	m := pickerOpenModel(t, client)
+	m.pickerSelected[pickerProjectIndex(t, m, "api")] = true
+	m.pickerSelected[pickerProjectIndex(t, m, "backend")] = true
+	m.pickerFilteredIdx = []int{pickerProjectIndex(t, m, "dotfiles")}
+	m.pickerCursor = 0
+
+	if targets, hidden := m.pickerOpenTargets(); len(targets) != 0 || hidden != 2 {
+		t.Fatalf("open targets = %+v (hidden %d), want none and 2 hidden", targets, hidden)
+	}
+	updated, cmd := m.Update(keyPress("o"))
+	got := updated.(Model)
+	if got.mode != ModePicker {
+		t.Fatalf("mode after o = %v, want ModePicker", got.mode)
+	}
+	if n := len(got.toasts); n == 0 || got.toasts[n-1].Severity != toastWarning ||
+		got.toasts[n-1].Text != "Nothing to open: the filter hides 2 checked" {
+		t.Errorf("expected a 'Nothing to open' warning toast, got %+v", got.toasts)
+	}
+	if cmd != nil {
+		if _, ok := cmd().(commands.PickerOpenDoneMsg); ok {
+			t.Fatal("o opened something with every checked project hidden")
+		}
+	}
+	if len(client.launched) != 0 {
+		t.Fatalf("opened tabs = %+v, want none", client.launched)
 	}
 }
 
@@ -171,10 +235,7 @@ func TestPickerOKeyWithoutSelectionOpensHighlightedProject(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("o returned nil cmd for highlighted fallback")
 	}
-	done, ok := cmd().(commands.PickerOpenDoneMsg)
-	if !ok {
-		t.Fatalf("o cmd returned %T, want commands.PickerOpenDoneMsg", done)
-	}
+	done := pickerOpenDone(t, cmd)
 	if done.Err != nil {
 		t.Fatalf("opening highlighted project: %v", done.Err)
 	}
@@ -234,16 +295,19 @@ func TestPickerOKeyBatchContinuesAfterPartialFailureAndAggregatesErrors(t *testi
 	}
 }
 
-func TestPickerOKeyEmptyIsNoOp(t *testing.T) {
+// TestPickerOKeyEmptyStaysWithWarning mirrors Enter on an empty launcher:
+// nothing opens, and the launcher stays open and says why.
+func TestPickerOKeyEmptyStaysWithWarning(t *testing.T) {
 	t.Parallel()
 
 	m := pressKey(testModel(), "l")
-	updated, cmd := m.Update(keyPress("o"))
-	if updated.(Model).mode != ModePicker {
-		t.Fatalf("expected ModePicker after o on empty picker, got %d", updated.(Model).mode)
+	updated, _ := m.Update(keyPress("o"))
+	got := updated.(Model)
+	if got.mode != ModePicker {
+		t.Fatalf("expected ModePicker after o on empty picker, got %d", got.mode)
 	}
-	if cmd != nil {
-		t.Fatal("expected nil cmd after o on empty picker")
+	if n := len(got.toasts); n == 0 || got.toasts[n-1].Text != "Nothing to open: no project matches" {
+		t.Errorf("expected a 'Nothing to open' warning toast, got %+v", got.toasts)
 	}
 }
 

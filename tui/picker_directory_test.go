@@ -50,7 +50,7 @@ func TestPickerDirectoryOverrideAppliesToOneLaunchOnly(t *testing.T) {
 	if m.pickerDirMode || m.pickerDirOverride[apiIdx] != want {
 		t.Fatalf("override = %q (prompt open %v), want %q", m.pickerDirOverride[apiIdx], m.pickerDirMode, want)
 	}
-	if queue := m.pickerInput().OpenTargets(); len(queue) != 1 || queue[0].Directory != want || queue[0].Title != "api" {
+	if queue, _ := m.pickerInput().OpenTargets(); len(queue) != 1 || queue[0].Directory != want || queue[0].Title != "api" {
 		t.Fatalf("launch target = %+v, want api in %q", queue, want)
 	}
 	if row := stripAnsi(renderPickerList(m, 0)); !strings.Contains(row, "(dir: "+want+")") {

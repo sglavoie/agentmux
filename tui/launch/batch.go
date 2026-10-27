@@ -72,27 +72,26 @@ func NothingToLaunchText(hidden int) string {
 	return "Nothing to launch: no project matches"
 }
 
-// OpenTargets returns every selected launcher project in stable launcher
-// order. With no explicit selection, it preserves the launcher's historical
-// behavior by returning only the highlighted project.
-func (in PickerInput) OpenTargets() []config.Session {
-	targets := make([]config.Session, 0, len(in.Selected))
-	for i := range in.Sessions {
-		if in.Selected[i] {
-			targets = append(targets, in.SessionWithResolvedProfile(i))
-		}
+// OpenTargets returns what `o` in the launcher opens, which is exactly what
+// Enter would launch (LaunchQueue): checked projects the current filter shows,
+// in stable launcher order, or the highlighted project when none is checked.
+// A checked project the filter hides is never opened blind: it is left out and
+// counted in hidden so the caller can say so.
+func (in PickerInput) OpenTargets() (targets []config.Session, hidden int) {
+	todo, hidden := in.LaunchQueue()
+	for _, q := range todo {
+		targets = append(targets, q.Session)
 	}
-	if len(targets) > 0 {
-		return targets
+	return targets, hidden
+}
+
+// NothingToOpenText is NothingToLaunchText for `o`, which likewise keeps the
+// launcher open with nothing to open.
+func NothingToOpenText(hidden int) string {
+	if hidden > 0 {
+		return fmt.Sprintf("Nothing to open: the filter hides %d checked", hidden)
 	}
-	if in.Cursor < 0 || in.Cursor >= len(in.FilteredIdx) {
-		return nil
-	}
-	origIdx := in.FilteredIdx[in.Cursor]
-	if origIdx < 0 || origIdx >= len(in.Sessions) {
-		return nil
-	}
-	return []config.Session{in.SessionWithResolvedProfile(origIdx)}
+	return "Nothing to open: no project matches"
 }
 
 // StartText is the progress line shown the moment a batch is dispatched,
