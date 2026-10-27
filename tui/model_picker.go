@@ -575,9 +575,15 @@ func (m *Model) dispatchPickerLaunch() tea.Cmd {
 // running session appears.
 func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) {
 	if msg.batchID != m.launchBatchID {
-		// Stale launch from a prior batch; ignore so we don't clobber a
-		// fresh batch's toast.
-		return m, m.requestTopologyRefresh()
+		// A launch from a batch a newer one has replaced. Its progress is not
+		// counted, so the fresh batch's toast is not clobbered, but a failure
+		// is still reported: nothing else would ever say it happened.
+		refresh := m.requestTopologyRefresh()
+		if msg.err == nil {
+			return m, refresh
+		}
+		failure := m.pushToast(Toast{Severity: toastError, Text: launch.FailureText(msg.title, msg.err)})
+		return m, tea.Batch(failure, refresh)
 	}
 	m.launchBatchDone++
 	var cmds []tea.Cmd

@@ -182,6 +182,31 @@ func TestLaunchProgressErrorPushesErrorToast(t *testing.T) {
 	assertStatusBarContains(t, m, "1/2")
 }
 
+// TestLaunchProgressReportsAFailureFromAReplacedBatch: a batch started while
+// another was still launching replaces it, and the older batch's progress is
+// no longer counted. A failure in it must still be reported, or a project the
+// operator asked for silently never starts.
+func TestLaunchProgressReportsAFailureFromAReplacedBatch(t *testing.T) {
+	t.Parallel()
+
+	m := testModel()
+	m.launchBatchID = 6
+	m.launchBatchDone = 1
+	updated, _ := m.Update(launchProgressMsg{batchID: 5, total: 3, title: "api", err: errors.New("boom")})
+	m = updated.(Model)
+	if m.launchBatchDone != 1 {
+		t.Errorf("a replaced batch's launch was counted: launchBatchDone=%d, want 1", m.launchBatchDone)
+	}
+	if len(m.toasts) != 1 || m.toasts[0].Severity != toastError || !strings.Contains(m.toasts[0].Text, "boom") {
+		t.Fatalf("expected one error toast for the replaced batch's failure, got %+v", m.toasts)
+	}
+
+	updated, _ = m.Update(launchProgressMsg{batchID: 5, total: 3, title: "db"})
+	if got := updated.(Model).toasts; len(got) != 1 {
+		t.Fatalf("a replaced batch's success raised a toast: %+v", got)
+	}
+}
+
 func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 	t.Parallel()
 
