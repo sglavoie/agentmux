@@ -70,11 +70,15 @@ func (i *Inventory) finishMissingCleanup(ctx context.Context, root string, entry
 		if !sourceExists {
 			return ErrSourceBranchMissing
 		}
-		if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", branchRef, sourceRef); err != nil {
+		branchHead, err := gitLineWith(ctx, i.gitRunner(), control, gitProbeTimeout, "rev-parse", "--verify", branchRef+"^{commit}")
+		if err != nil {
+			return fmt.Errorf("%w: resolving checkout branch: %w", ErrGitUnavailable, err)
+		}
+		if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", branchHead, sourceRef); err != nil {
 			return fmt.Errorf("%w: %w", ErrBranchUnmerged, err)
 		}
-		if _, err := i.gitRunner()(ctx, control, gitCommandTimeout, "branch", "-d", "--", branch); err != nil {
-			return fmt.Errorf("worktree: safely deleting branch %s: %w", branch, err)
+		if err := i.deleteMergedBranch(ctx, control, branch, branchHead); err != nil {
+			return err
 		}
 		result.BranchDeleted = true
 	}

@@ -261,8 +261,8 @@ var worktreeRemoveCmd = &cobra.Command{
 Agent Mux metadata. It asks for --yes, and it refuses a worktree that is
 dirty, locked, or used by a live session or an agent-session-loop run; each
 of those is checked again at the moment of removal. --delete-branch also
-deletes the worktree's branch with ` + "`git branch -d`" + `, which Git refuses
-unless the branch is merged. A checkout that is already gone is cleaned up
+deletes the worktree's branch, and refuses unless the branch is merged into
+the source branch it was created from and checked out nowhere. A checkout that is already gone is cleaned up
 only with --delete-branch; otherwise use ` + "`amx worktree forget`" + `.
 
 The <selector> is one of:

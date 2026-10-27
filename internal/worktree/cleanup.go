@@ -110,12 +110,12 @@ func (i *Inventory) Remove(ctx context.Context, selector string, options RemoveO
 			return err
 		}
 		result.Entry = preflight.entry
-		branch := ""
+		branch, branchHead := "", ""
 		if options.DeleteBranch {
 			if preflight.metadata == nil {
 				return fmt.Errorf("%w: branch deletion requires schema-v1 sidecar provenance", ErrMetadataInvalid)
 			}
-			branch, err = manager.preflightBranchDeletion(ctx, preflight.controlDir, preflight.entry, *preflight.metadata)
+			branch, branchHead, err = manager.preflightBranchDeletion(ctx, preflight.controlDir, preflight.entry, *preflight.metadata)
 			if err != nil {
 				return err
 			}
@@ -128,8 +128,8 @@ func (i *Inventory) Remove(ctx context.Context, selector string, options RemoveO
 		result.CheckoutRemoved = true
 
 		if options.DeleteBranch {
-			if _, err := git(ctx, preflight.controlDir, gitCommandTimeout, "branch", "-d", "--", branch); err != nil {
-				return &PartialMutationError{Err: fmt.Errorf("worktree: safely deleting branch %s: %w", branch, err)}
+			if err := manager.deleteMergedBranch(ctx, preflight.controlDir, branch, branchHead); err != nil {
+				return &PartialMutationError{Err: err}
 			}
 			result.BranchDeleted = true
 		}
@@ -236,6 +236,36 @@ func validateAdjacentMetadataPath(root string, entry Entry) error {
 	path := canonicalAdjacentPath(entry.Path)
 	if !pathContained(root, path) || entry.MetadataPath != SidecarPath(path) {
 		return fmt.Errorf("%w: metadata is not adjacent to a checkout under the managed root", ErrMetadataInvalid)
+	}
+	return nil
+}
+
+// deleteMergedBranch deletes a branch the caller has already proven merged
+// into its recorded source branch, and only while it still points at head.
+// `git branch -d` is not used: it judges "merged" against the HEAD of the
+// checkout it runs in, which is often some other branch (a landing advances a
+// source branch nobody has checked out), so it refused branches that were
+// merged where it matters. The old value makes the delete conditional, so a
+// branch that moved since the proof is refused by Git rather than lost, and a
+// branch some other worktree has checked out is refused here, as branch -d
+// would, because update-ref would delete it from under that checkout.
+func (i *Inventory) deleteMergedBranch(ctx context.Context, control, branch, head string) error {
+	git := i.gitRunner()
+	porcelain, err := git(ctx, control, gitProbeTimeout, "worktree", "list", "--porcelain", "-z")
+	if err != nil {
+		return fmt.Errorf("worktree: safely deleting branch %s: listing Git worktrees: %w", branch, err)
+	}
+	records, err := parseWorktreePorcelain(porcelain)
+	if err != nil {
+		return fmt.Errorf("worktree: safely deleting branch %s: %w", branch, err)
+	}
+	for _, record := range records {
+		if record.Branch == branch {
+			return fmt.Errorf("worktree: safely deleting branch %s: it is checked out at %s", branch, record.Path)
+		}
+	}
+	if _, err := git(ctx, control, gitCommandTimeout, "update-ref", "-m", "amx worktree remove: delete merged branch", "-d", "refs/heads/"+branch, head); err != nil {
+		return fmt.Errorf("worktree: safely deleting branch %s: %w", branch, err)
 	}
 	return nil
 }

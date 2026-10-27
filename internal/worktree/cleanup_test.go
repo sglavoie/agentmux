@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -240,7 +241,7 @@ func TestManagerRemovePartialBranchFailureIsRetryable(t *testing.T) {
 	manager := testInventory(root)
 	var failed atomic.Bool
 	manager.git = func(ctx context.Context, directory string, timeout time.Duration, args ...string) ([]byte, error) {
-		if strings.Join(args, " ") == "branch -d -- "+created.Branch && failed.CompareAndSwap(false, true) {
+		if len(args) > 0 && args[0] == "update-ref" && slices.Contains(args, "-d") && failed.CompareAndSwap(false, true) {
 			return nil, errors.New("injected branch deletion failure")
 		}
 		return runGit(ctx, directory, timeout, args...)

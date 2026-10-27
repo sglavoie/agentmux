@@ -163,41 +163,41 @@ func (i *Inventory) controlDirectory(ctx context.Context, records []gitWorktreeR
 	return "", fmt.Errorf("%w: no independent registered worktree is available to control cleanup", ErrGitUnavailable)
 }
 
-func (i *Inventory) preflightBranchDeletion(ctx context.Context, control string, entry Entry, metadata Metadata) (string, error) {
+func (i *Inventory) preflightBranchDeletion(ctx context.Context, control string, entry Entry, metadata Metadata) (string, string, error) {
 	if entry.Detached || strings.TrimSpace(entry.Branch) == "" {
-		return "", ErrWorktreeDetached
+		return "", "", ErrWorktreeDetached
 	}
 	branch, branchRef, err := localBranch(metadata.Branch)
 	if err != nil || branch != entry.Branch {
-		return "", fmt.Errorf("%w: recorded branch conflicts with the current worktree branch", ErrMetadataInvalid)
+		return "", "", fmt.Errorf("%w: recorded branch conflicts with the current worktree branch", ErrMetadataInvalid)
 	}
 	_, sourceRef, err := localBranch(metadata.SourceBranch)
 	if err != nil {
-		return "", fmt.Errorf("%w: no usable source branch was recorded", ErrMetadataInvalid)
+		return "", "", fmt.Errorf("%w: no usable source branch was recorded", ErrMetadataInvalid)
 	}
 	branchExists, err := i.gitRefExists(ctx, control, branchRef)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !branchExists {
-		return "", ErrBranchMissing
+		return "", "", ErrBranchMissing
 	}
 	sourceExists, err := i.gitRefExists(ctx, control, sourceRef)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !sourceExists {
-		return "", ErrSourceBranchMissing
+		return "", "", ErrSourceBranchMissing
 	}
 	branchHead, err := gitLineWith(ctx, i.gitRunner(), control, gitProbeTimeout, "rev-parse", "--verify", branchRef+"^{commit}")
 	if err != nil {
-		return "", fmt.Errorf("%w: resolving checkout branch: %w", ErrGitUnavailable, err)
+		return "", "", fmt.Errorf("%w: resolving checkout branch: %w", ErrGitUnavailable, err)
 	}
 	if entry.HEAD != "" && branchHead != entry.HEAD {
-		return "", fmt.Errorf("%w: checkout branch moved during cleanup preflight", ErrGitUnavailable)
+		return "", "", fmt.Errorf("%w: checkout branch moved during cleanup preflight", ErrGitUnavailable)
 	}
-	if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", branchRef, sourceRef); err != nil {
-		return "", fmt.Errorf("%w: %w", ErrBranchUnmerged, err)
+	if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", branchHead, sourceRef); err != nil {
+		return "", "", fmt.Errorf("%w: %w", ErrBranchUnmerged, err)
 	}
-	return branch, nil
+	return branch, branchHead, nil
 }

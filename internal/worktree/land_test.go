@@ -80,6 +80,76 @@ func TestLandAdvancesASourceBranchNoWorktreeHasCheckedOut(t *testing.T) {
 	}
 }
 
+// A landing that advanced a source branch nobody has checked out leaves the
+// source checkout's HEAD on another branch. The worktree branch is merged into
+// its recorded source branch, so --delete-branch must succeed, whichever branch
+// the checkout that runs the deletion happens to be on.
+func TestRemoveDeletesABranchLandedOnASourceBranchNobodyHasCheckedOut(t *testing.T) {
+	t.Parallel()
+
+	repo, inventory, entry := reviewFixture(t)
+	gitRun(t, repo, "checkout", "-b", "elsewhere")
+	commitFile(t, entry.Path, "feature.txt", "one\n", "feature")
+	if _, err := inventory.Land(context.Background(), entry.ID); err != nil {
+		t.Fatalf("Land: %v", err)
+	}
+
+	removed, err := inventory.Remove(context.Background(), entry.ID, RemoveOptions{DeleteBranch: true})
+	if err != nil || !removed.CheckoutRemoved || !removed.BranchDeleted || !removed.MetadataForgotten {
+		t.Fatalf("Remove after Land = %+v, err = %v", removed, err)
+	}
+	if exists, err := gitBranchExists(context.Background(), repo, entry.Branch); err != nil || exists {
+		t.Fatalf("branch %s exists = %v, err = %v; want deleted", entry.Branch, exists, err)
+	}
+}
+
+// The same holds when the checkout is already gone from disk and only the
+// branch and the sidecar are left to clean up.
+func TestRemoveDeletesALandedBranchOfAMissingCheckout(t *testing.T) {
+	t.Parallel()
+
+	repo, inventory, entry := reviewFixture(t)
+	gitRun(t, repo, "checkout", "-b", "elsewhere")
+	commitFile(t, entry.Path, "feature.txt", "one\n", "feature")
+	if _, err := inventory.Land(context.Background(), entry.ID); err != nil {
+		t.Fatalf("Land: %v", err)
+	}
+	if err := os.RemoveAll(entry.Path); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, repo, "worktree", "prune")
+
+	removed, err := inventory.Remove(context.Background(), entry.ID, RemoveOptions{DeleteBranch: true})
+	if err != nil || !removed.BranchDeleted || !removed.MetadataForgotten {
+		t.Fatalf("Remove of missing checkout = %+v, err = %v", removed, err)
+	}
+	if exists, err := gitBranchExists(context.Background(), repo, entry.Branch); err != nil || exists {
+		t.Fatalf("branch %s exists = %v, err = %v; want deleted", entry.Branch, exists, err)
+	}
+}
+
+// update-ref would delete a branch from under a checkout that has it, which
+// branch -d refuses; the deletion must refuse it too.
+func TestRemoveRefusesToDeleteABranchCheckedOutElsewhere(t *testing.T) {
+	t.Parallel()
+
+	repo, inventory, entry := reviewFixture(t)
+	if err := os.RemoveAll(entry.Path); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, repo, "worktree", "prune")
+	other := filepath.Join(t.TempDir(), "other")
+	gitRun(t, repo, "worktree", "add", other, entry.Branch)
+
+	removed, err := inventory.Remove(context.Background(), entry.ID, RemoveOptions{DeleteBranch: true})
+	if err == nil || removed.BranchDeleted {
+		t.Fatalf("Remove = %+v, err = %v; want the checked-out branch kept", removed, err)
+	}
+	if exists, err := gitBranchExists(context.Background(), repo, entry.Branch); err != nil || !exists {
+		t.Fatalf("branch %s exists = %v, err = %v; want kept", entry.Branch, exists, err)
+	}
+}
+
 func TestLandRefusesWithoutMovingAnything(t *testing.T) {
 	t.Parallel()
 
