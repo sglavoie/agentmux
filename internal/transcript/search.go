@@ -120,6 +120,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 	}
 	results := make([]Result, 0, len(metas))
 	var pending []SessionMeta
+	repairs := searchRepairs{index: idx}
 
 	if terms.Empty() {
 		for _, m := range metas {
@@ -183,7 +184,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		if readers == nil {
 			return nil, errors.New("transcript: Search with text requires readers")
 		}
-		if result, ok := searchFallback(idx, readers, m, terms, source); ok {
+		if result, ok := searchFallback(&repairs, readers, m, terms, source); ok {
 			if snippetPreview != "" {
 				result.Preview = snippetPreview
 			}
@@ -194,7 +195,10 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 		if readers == nil {
 			return nil, errors.New("transcript: Search with text requires readers")
 		}
-		results = append(results, searchFallbacksParallel(idx, readers, pending, terms, source)...)
+		results = append(results, searchFallbacksParallel(&repairs, readers, pending, terms, source)...)
+	}
+	if err := repairs.persist(); err != nil {
+		slog.Debug("transcript.search: sidecar repair failed", "path", idx.Path(), "err", err)
 	}
 
 	sortResults(results)
@@ -206,7 +210,7 @@ func Search(idx *Index, readers map[string]Reader, q Query) ([]Result, error) {
 // overwhelming the disk or the UI process.
 const sourceFallbackWorkers = 4
 
-func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []SessionMeta, terms searchquery.Terms, source string) []Result {
+func searchFallbacksParallel(repairs *searchRepairs, readers map[string]Reader, pending []SessionMeta, terms searchquery.Terms, source string) []Result {
 	jobs := make(chan SessionMeta)
 	found := make(chan Result, len(pending))
 	var workers sync.WaitGroup
@@ -216,7 +220,7 @@ func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []Se
 		go func() {
 			defer workers.Done()
 			for meta := range jobs {
-				if result, ok := searchFallback(idx, readers, meta, terms, source); ok {
+				if result, ok := searchFallback(repairs, readers, meta, terms, source); ok {
 					found <- result
 				}
 			}
@@ -235,7 +239,7 @@ func searchFallbacksParallel(idx *Index, readers map[string]Reader, pending []Se
 	return results
 }
 
-func searchFallback(idx *Index, readers map[string]Reader, meta SessionMeta, terms searchquery.Terms, source string) (Result, bool) {
+func searchFallback(repairs *searchRepairs, readers map[string]Reader, meta SessionMeta, terms searchquery.Terms, source string) (Result, bool) {
 	reader, ok := readers[meta.Harness]
 	if !ok {
 		slog.Debug("transcript.search: no reader for harness", "harness", meta.Harness, "id", meta.ID)
@@ -250,9 +254,8 @@ func searchFallback(idx *Index, readers map[string]Reader, meta SessionMeta, ter
 	if source != "any" {
 		updatedText = encodeSourceSidecar(sourceSidecarFromMessages(msgs))
 	}
-	key := IndexKey(meta.Harness, meta.ID)
-	if err := idx.WriteSearchText(key, updatedText); err != nil {
-		slog.Debug("transcript.search: sidecar repair failed", "path", idx.SearchTextPath(key), "err", err)
+	if err := repairs.add(meta, updatedText); err != nil {
+		slog.Debug("transcript.search: sidecar repair failed", "path", meta.Path, "err", err)
 	}
 	count, preview := countMatchesForSource(msgs, terms, source)
 	if count == 0 {
