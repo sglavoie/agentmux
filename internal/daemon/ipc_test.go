@@ -162,7 +162,12 @@ func TestIPC_ConcurrentUpdates(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		windowID := i + 1
 		go func() {
-			_, err := c.Send(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active"})
+			// This asserts every concurrent update is served, not how fast:
+			// Send's 250ms acknowledgement budget is exceeded by ten updates
+			// queued at once on a machine loaded by the parallel -race suite.
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_, err := c.SendWithContext(ctx, protocol.Request{Type: protocol.TypeStateUpdate, WindowID: windowID, Action: "active"})
 			done <- err
 		}()
 	}
