@@ -625,8 +625,25 @@ func (h *Handler) windowOfOtherInstanceLocked(windowID int, listedSocket string)
 }
 
 // maxForeignInstanceLists bounds the extra Kitty listings one maintenance pass
-// may spend on windows of instances other than the listed one.
+// may spend on windows of instances other than the listed one. With more
+// instances than that, passes take them in turn (Handler.foreignListAfter).
 const maxForeignInstanceLists = 4
+
+// rotateAfter returns sorted's elements starting with the first one greater
+// than after and wrapping around, so an after past every element (or empty)
+// keeps the sorted order.
+func rotateAfter(sorted []string, after string) []string {
+	start := sort.SearchStrings(sorted, after)
+	if start < len(sorted) && sorted[start] == after {
+		start++
+	}
+	if start == len(sorted) {
+		return sorted
+	}
+	rotated := make([]string, 0, len(sorted))
+	rotated = append(rotated, sorted[start:]...)
+	return append(rotated, sorted[:start]...)
+}
 
 // pruneForeignWindows closes windows of Kitty instances other than the one
 // listedSocket names, each judged by a listing of its own instance: a window
@@ -650,6 +667,7 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 		}
 	}
 	client := h.kittyClient
+	after := h.foreignListAfter
 	h.stateMu.Unlock()
 	if len(bySocket) == 0 || client == nil {
 		h.setOtherKittyTrees(nil, nil)
@@ -660,13 +678,22 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 		sockets = append(sockets, socket)
 	}
 	sort.Strings(sockets)
+	// Instances this pass does not list keep their previous trees, like a
+	// failed listing; their windows are judged on a later pass.
+	kept := make(map[string]bool)
 	if len(sockets) > maxForeignInstanceLists {
+		sockets = rotateAfter(sockets, after)
+		for _, socket := range sockets[maxForeignInstanceLists:] {
+			kept[socket] = true
+		}
 		sockets = sockets[:maxForeignInstanceLists]
+		h.stateMu.Lock()
+		h.foreignListAfter = sockets[len(sockets)-1]
+		h.stateMu.Unlock()
 	}
 
 	candidates := make(map[int]string)
 	trees := make(map[string][]kitty.OSWindow)
-	failed := make(map[string]bool)
 	for _, socket := range sockets {
 		if kittySocketGone(socket) {
 			for _, id := range bySocket[socket] {
@@ -677,7 +704,7 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 		windows, err := scopedKittyClient(client, socket).ListWindows()
 		if err != nil {
 			slog.Debug("maintenance: list windows of another kitty instance failed", "socket", socket, "err", err)
-			failed[socket] = true
+			kept[socket] = true
 			continue
 		}
 		trees[socket] = windows
@@ -694,7 +721,7 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 			}
 		}
 	}
-	h.setOtherKittyTrees(trees, failed)
+	h.setOtherKittyTrees(trees, kept)
 	if len(candidates) == 0 {
 		return
 	}
@@ -714,13 +741,13 @@ func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
 }
 
 // setOtherKittyTrees replaces the other instances' trees with listed, keeping
-// the previous tree of an instance whose listing failed this pass so one busy
-// listing does not strip its sessions of their titles. Every other instance's
-// tree is dropped. Fresh listings clear unseen attention for focused panes;
-// retained trees after failed listings are not new focus observations. The
-// companion is told whenever there is a set to show or one to withdraw; the
-// hub skips a publish that changed nothing.
-func (h *Handler) setOtherKittyTrees(listed map[string][]kitty.OSWindow, failed map[string]bool) {
+// the previous tree of an instance in kept, one whose listing failed or was
+// left to a later pass, so a busy or unvisited instance's sessions keep their
+// titles. Every other instance's tree is dropped. Fresh listings clear unseen
+// attention for focused panes; retained trees are not new focus observations.
+// The companion is told whenever there is a set to show or one to withdraw;
+// the hub skips a publish that changed nothing.
+func (h *Handler) setOtherKittyTrees(listed map[string][]kitty.OSWindow, kept map[string]bool) {
 	h.stateMu.Lock()
 	next := make(map[string][]kitty.OSWindow, len(listed))
 	observedAt := time.Now()
@@ -728,7 +755,7 @@ func (h *Handler) setOtherKittyTrees(listed map[string][]kitty.OSWindow, failed 
 		next[socket] = windows
 		h.refreshFocusFromSnapshotForLocked(windows, socket, observedAt)
 	}
-	for socket := range failed {
+	for socket := range kept {
 		if previous, ok := h.otherKittyTrees[socket]; ok {
 			next[socket] = previous
 		}

@@ -302,3 +302,53 @@ func TestForeignInstanceTreeIsKeptForTheCompanion(t *testing.T) {
 		t.Fatalf("other trees = %+v; want none once no window of another instance remains", trees)
 	}
 }
+
+// With more other instances than one pass may list, passes take them in turn:
+// every instance is listed within two passes, the window an instance the first
+// pass skipped has closed is pruned when its turn comes, and an instance a
+// pass skips keeps the tree it was last listed with.
+func TestForeignInstancesBeyondOnePassAreListedInTurn(t *testing.T) {
+	t.Parallel()
+
+	runner := &perSocketRunner{answers: map[string][]byte{}}
+	h, listed, foreign := twoInstanceHandler(t, runner)
+	runner.answers[foreign] = mustMarshalWindows(t, fakeOSWindowsWithTab(7, "W:first"))
+	dir := filepath.Dir(foreign[len("unix:"):])
+	sockets := []string{foreign}
+	for i := range 5 {
+		socket := "unix:" + filepath.Join(dir, "kitty-3-"+string(rune('a'+i)))
+		if err := os.WriteFile(socket[len("unix:"):], nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		id := 20 + i
+		runner.answers[socket] = mustMarshalWindows(t, fakeOSWindowsWithTab(id, "W:other"))
+		h.stateMu.Lock()
+		h.ensureWindowStateLocked(id)
+		h.rememberKittySocketLocked(id, socket)
+		h.stateMu.Unlock()
+		sockets = append(sockets, socket)
+	}
+	// The last instance in sorted order no longer reports its window 24.
+	runner.answers[sockets[len(sockets)-1]] = mustMarshalWindows(t, fakeOSWindowsWithTab(99, "W:other"))
+
+	h.pruneForeignWindows(time.Now(), listed)
+	if !storeHas(h, 24) {
+		t.Fatal("the first pass closed a window of an instance it did not list")
+	}
+	h.pruneForeignWindows(time.Now(), listed)
+
+	for _, socket := range sockets {
+		if runner.listCount(socket) == 0 {
+			t.Errorf("instance %s was never listed in two passes", socket)
+		}
+	}
+	if storeHas(h, 24) {
+		t.Error("the window the last instance closed survived its turn")
+	}
+	trees := otherTrees(h)
+	for _, socket := range sockets {
+		if _, ok := trees[socket]; !ok {
+			t.Errorf("other trees lost %s; have %d of %d", socket, len(trees), len(sockets))
+		}
+	}
+}

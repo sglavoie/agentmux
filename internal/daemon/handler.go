@@ -222,6 +222,11 @@ type Handler struct {
 	// only for slots from that socket. Guarded by stateMu; a stored tree is
 	// never mutated, only replaced.
 	otherKittyTrees map[string][]kitty.OSWindow
+	// foreignListAfter is the last other-instance socket a maintenance pass
+	// listed; the next pass starts after it, so every instance is listed in
+	// turn when there are more of them than one pass may list. Guarded by
+	// stateMu.
+	foreignListAfter string
 
 	// focusClient performs focus_window's list-verify-focus sequence. It is
 	// installed once on the startup goroutine by SetFocusClient, before the
