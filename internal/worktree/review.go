@@ -123,7 +123,7 @@ func (i *Inventory) Review(ctx context.Context, entry Entry, options ReviewOptio
 	if behindErr != nil || aheadErr != nil {
 		return Review{}, fmt.Errorf("%w: unexpected commit counts", ErrGitUnavailable)
 	}
-	status, err := git(ctx, path, gitProbeTimeout, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	status, err := git(ctx, path, gitProbeTimeout, statusArgs("--untracked-files=all")...)
 	if err != nil {
 		return Review{}, fmt.Errorf("%w: checking checkout status: %w", ErrGitUnavailable, err)
 	}
@@ -144,7 +144,7 @@ func (i *Inventory) Review(ctx context.Context, entry Entry, options ReviewOptio
 	if options.CommittedOnly {
 		span = append(span, head)
 	}
-	numstat, err := git(ctx, path, gitCommandTimeout, append([]string{"diff", "--no-ext-diff", "--no-renames", "--numstat", "-z"}, span...)...)
+	numstat, err := git(ctx, path, gitCommandTimeout, diffArgs(append([]string{"--no-ext-diff", "--no-renames", "--numstat", "-z"}, span...)...)...)
 	if err != nil {
 		return Review{}, fmt.Errorf("%w: summarizing changes: %w", ErrGitUnavailable, err)
 	}
@@ -171,7 +171,7 @@ func (i *Inventory) Review(ctx context.Context, entry Entry, options ReviewOptio
 		if options.Color {
 			color = "--color=always"
 		}
-		patch, err := git(ctx, path, gitCommandTimeout, append([]string{"diff", "--no-ext-diff", color}, span...)...)
+		patch, err := git(ctx, path, gitCommandTimeout, diffArgs(append([]string{"--no-ext-diff", color}, span...)...)...)
 		if err != nil {
 			return Review{}, fmt.Errorf("%w: reading the patch: %w", ErrGitUnavailable, err)
 		}

@@ -337,8 +337,26 @@ func resolveProjectLabel(request Request, sourceRoot string) string {
 	return filepath.Base(sourceRoot)
 }
 
+// statusArgs is every status probe's argument list: porcelain, NUL
+// separated, and with --no-optional-locks. Without that option status takes
+// the index lock to write back a refreshed index, and the checkout it reads
+// is often one an agent is committing in at that moment; the agent's commit
+// then fails on index.lock. extra follows the porcelain options.
+func statusArgs(extra ...string) []string {
+	return append([]string{"--no-optional-locks", "status", "--porcelain=v1", "-z"}, extra...)
+}
+
+// diffArgs is a diff that leaves the index alone. A diff against the work
+// tree refreshes the index and writes it back under index.lock whatever
+// --no-optional-locks says; diff.autoRefreshIndex=false is what stops that,
+// and it changes no output, since files whose content matches are skipped
+// either way.
+func diffArgs(args ...string) []string {
+	return append([]string{"-c", "diff.autoRefreshIndex=false", "diff"}, args...)
+}
+
 func gitDirty(ctx context.Context, directory string) (bool, error) {
-	out, err := runGit(ctx, directory, gitProbeTimeout, "status", "--porcelain=v1", "-z")
+	out, err := runGit(ctx, directory, gitProbeTimeout, statusArgs()...)
 	if err != nil {
 		return false, fmt.Errorf("worktree: checking source status: %w", err)
 	}
@@ -414,18 +432,36 @@ func runGit(ctx context.Context, directory string, timeout time.Duration, args .
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
+		name := gitSubcommand(args)
 		if errors.Is(commandCtx.Err(), context.DeadlineExceeded) {
-			return nil, fmt.Errorf("git %s timed out after %s: %w", args[0], timeout, context.DeadlineExceeded)
+			return nil, fmt.Errorf("git %s timed out after %s: %w", name, timeout, context.DeadlineExceeded)
 		}
 		// What Git printed before failing is returned with the error: for a
 		// command whose exit status is an answer (merge-tree's 1 for a
 		// conflict), the output is the rest of that answer.
 		if text := strings.TrimSpace(stderr.String()); text != "" {
-			return stdout.Bytes(), fmt.Errorf("git %s failed: %w: %s", args[0], err, text)
+			return stdout.Bytes(), fmt.Errorf("git %s failed: %w: %s", name, err, text)
 		}
-		return stdout.Bytes(), fmt.Errorf("git %s failed: %w", args[0], err)
+		return stdout.Bytes(), fmt.Errorf("git %s failed: %w", name, err)
 	}
 	return stdout.Bytes(), nil
+}
+
+// gitSubcommand names a failed command by its subcommand, past any global
+// option such as --no-optional-locks or -c and its setting.
+func gitSubcommand(args []string) string {
+	for index := 0; index < len(args); index++ {
+		switch {
+		case args[index] == "-c":
+			index++
+		case !strings.HasPrefix(args[index], "-"):
+			return args[index]
+		}
+	}
+	if len(args) == 0 {
+		return ""
+	}
+	return args[0]
 }
 
 func gitLine(ctx context.Context, directory string, timeout time.Duration, args ...string) (string, error) {

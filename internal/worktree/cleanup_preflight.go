@@ -72,7 +72,7 @@ func (i *Inventory) revalidatePresentCleanup(ctx context.Context, root string, s
 		}
 		return cleanupPreflight{}, ErrWorktreeLocked
 	}
-	status, err := git(ctx, path, gitProbeTimeout, "status", "--porcelain=v1", "-z")
+	status, err := git(ctx, path, gitProbeTimeout, statusArgs()...)
 	if err != nil {
 		return cleanupPreflight{}, fmt.Errorf("%w: checking checkout status: %w", ErrGitUnavailable, err)
 	}

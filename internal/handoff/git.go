@@ -39,11 +39,16 @@ func (commandGitInspector) Inspect(ctx context.Context, cwd string, timeout time
 	if err != nil {
 		return unavailableGit(probeCtx, err, "error", "Git HEAD inspection failed")
 	}
-	status, err := run("status", "--short")
+	// The source checkout may be one an agent is committing in, so neither
+	// probe may take index.lock. GIT_OPTIONAL_LOCKS=0 (and the explicit
+	// --no-optional-locks) covers status, but a diff against the work tree
+	// still refreshes and writes the index unless diff.autoRefreshIndex is
+	// off; turning it off changes no output.
+	status, err := run("--no-optional-locks", "status", "--short")
 	if err != nil {
 		return unavailableGit(probeCtx, err, "error", "Git status inspection failed")
 	}
-	diffStat, err := run("diff", "--stat", "--no-ext-diff", "HEAD")
+	diffStat, err := run("-c", "diff.autoRefreshIndex=false", "diff", "--stat", "--no-ext-diff", "HEAD")
 	if err != nil {
 		return unavailableGit(probeCtx, err, "error", "Git diff-stat inspection failed")
 	}

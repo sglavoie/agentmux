@@ -178,7 +178,7 @@ func (i *Inventory) landInCheckout(ctx context.Context, checkout, from, branchRe
 	if err != nil || head != from {
 		return fmt.Errorf("%w: the source branch's checkout moved during landing preflight", ErrGitUnavailable)
 	}
-	status, err := git(ctx, canonical, gitProbeTimeout, "status", "--porcelain=v1", "-z", "--untracked-files=no")
+	status, err := git(ctx, canonical, gitProbeTimeout, statusArgs("--untracked-files=no")...)
 	if err != nil {
 		return fmt.Errorf("%w: checking the source branch's checkout: %w", ErrGitUnavailable, err)
 	}

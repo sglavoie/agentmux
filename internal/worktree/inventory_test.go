@@ -501,6 +501,60 @@ func testInventory(root string) *Inventory {
 	return &Inventory{directory: func() (string, error) { return root, nil }, git: git, workers: maxInventoryWorkers}
 }
 
+// The status probes run in checkouts an agent may be committing in, so they
+// must never take index.lock. A file whose stat information is stale is what
+// makes a plain status refresh and rewrite the index; with
+// --no-optional-locks the index is left exactly as it was.
+func TestGitProbesLeaveTheIndexAlone(t *testing.T) {
+	t.Parallel()
+
+	repo := testRepository(t)
+	root := filepath.Join(t.TempDir(), "worktrees")
+	workflow := testWorkflow(root)
+	result, err := workflow.Create(context.Background(), Request{
+		ProjectLabel: "api", SourceCWD: repo, SessionID: "source-1", Profile: "work", Harness: "codex",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = workflow.RemoveUnused(context.Background(), result) })
+
+	stale := time.Now().Add(-time.Hour)
+	indexes := map[string][]byte{}
+	for _, directory := range []string{repo, result.Path} {
+		if err := os.Chtimes(filepath.Join(directory, "README.md"), stale, stale); err != nil {
+			t.Fatal(err)
+		}
+		index := strings.TrimSpace(gitOutput(t, directory, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+		data, err := os.ReadFile(index)
+		if err != nil {
+			t.Fatal(err)
+		}
+		indexes[index] = data
+	}
+
+	if dirty, err := gitDirty(context.Background(), repo); err != nil || dirty {
+		t.Fatalf("gitDirty() = %v, %v; want a clean source", dirty, err)
+	}
+	inventory := testInventory(root)
+	entries, err := inventory.List(context.Background())
+	if err != nil || len(entries) != 1 || !entries[0].StatusAvailable || entries[0].Dirty {
+		t.Fatalf("List() = %+v, %v; want one clean checkout", entries, err)
+	}
+	if review, err := inventory.Review(context.Background(), entries[0], ReviewOptions{Patch: true}); err != nil || len(review.Files) != 0 || review.Patch != "" {
+		t.Fatalf("Review() = %+v, %v; want no changes", review, err)
+	}
+	for index, before := range indexes {
+		after, err := os.ReadFile(index)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(before, after) {
+			t.Errorf("%s was rewritten by a status probe", index)
+		}
+	}
+}
+
 func metadataForInventory(path, common, source, id string) Metadata {
 	return Metadata{
 		SchemaVersion: MetadataSchemaVersion, ID: id, ProjectLabel: "api", Path: filepath.Clean(path),
@@ -519,7 +573,7 @@ func fakeInventoryGit(directory, common string, args ...string) ([]byte, error) 
 		return []byte(common + "\n"), nil
 	case "worktree list --porcelain -z":
 		return []byte("worktree " + directory + "\x00HEAD " + strings.Repeat("b", 40) + "\x00branch refs/heads/amx/api/branch\x00\x00"), nil
-	case "status --porcelain=v1 -z":
+	case "--no-optional-locks status --porcelain=v1 -z":
 		return nil, nil
 	case "rev-parse --verify --quiet refs/heads/main^{commit}":
 		return []byte(strings.Repeat("c", 40) + "\n"), nil

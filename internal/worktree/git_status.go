@@ -105,7 +105,7 @@ func probeInventoryEntry(ctx context.Context, git gitExecutor, candidate invento
 		}
 	}
 
-	status, err := git(ctx, entry.Path, gitProbeTimeout, "status", "--porcelain=v1", "-z")
+	status, err := git(ctx, entry.Path, gitProbeTimeout, statusArgs()...)
 	if err != nil {
 		entry.Warnings = append(entry.Warnings, fmt.Sprintf("Git status unavailable: %v", err))
 		entry.Actionable = false
