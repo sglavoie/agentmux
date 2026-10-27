@@ -231,6 +231,11 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 		}
 		mergeWarning = errors.Join(mergeWarning, reloadWarning)
 		for key := range removed {
+			// A directory that is not a plan is listed here on every refresh;
+			// only one the index holds is a change worth writing.
+			if _, indexed := i.entries[key]; !indexed {
+				continue
+			}
 			delete(i.entries, key)
 			i.filesystemDirty = true
 			mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))

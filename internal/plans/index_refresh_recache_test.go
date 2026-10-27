@@ -352,3 +352,40 @@ func TestRefresh_UnchangedPlansDoNotRewriteTheCache(t *testing.T) {
 		t.Fatalf("entries = %d, want 2", got)
 	}
 }
+
+// A directory in the root that is not a plan (no markdown, a dot-name, or
+// sources) is seen again on every refresh, and it changes nothing: an
+// unchanged refresh must leave plans.json as it was rather than rewrite it.
+func TestRefresh_NonPlanDirectoriesDoNotRewriteTheIndex(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	seedPlanDir(t, root, "plan-aabbccddeeff", map[string]string{"manifest.md": "# plan\n"})
+	seedPlanDir(t, root, "no-markdown", map[string]string{"notes.txt": "not a plan"})
+	seedPlanDir(t, root, ".hidden", map[string]string{"manifest.md": "# hidden\n"})
+	seedPlanDir(t, root, "sources", map[string]string{"prompt.md": "loose prompt"})
+
+	idx := newTestIndex(t)
+	if err := idx.Refresh(root); err != nil {
+		t.Fatalf("first Refresh: %v", err)
+	}
+	before, err := os.Stat(idx.Path())
+	if err != nil {
+		t.Fatalf("stat index: %v", err)
+	}
+	for range 2 {
+		if err := idx.Refresh(root); err != nil {
+			t.Fatalf("Refresh: %v", err)
+		}
+	}
+	after, err := os.Stat(idx.Path())
+	if err != nil {
+		t.Fatalf("stat index: %v", err)
+	}
+	if !os.SameFile(before, after) {
+		t.Error("unchanged refreshes replaced plans.json; want it left as it was")
+	}
+	if idx.Len() != 1 {
+		t.Errorf("Len = %d, want the one plan", idx.Len())
+	}
+}
