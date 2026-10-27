@@ -19,6 +19,8 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"github.com/BurntSushi/toml"
 )
 
 // ASLPairing is the set of values pairing persists. Empty strings are left
@@ -93,7 +95,7 @@ func ApplyASLPairing(original []byte, pairing ASLPairing) ([]byte, error) {
 
 	start, end, found := findASLTable(lines)
 	if !found {
-		return renderLines(appendASLTable(lines, values), endsWithNewline), nil
+		return requireParsable(renderLines(appendASLTable(lines, values), endsWithNewline))
 	}
 
 	edited, remaining, err := rewriteASLKeys(lines, start, end, values)
@@ -101,7 +103,7 @@ func ApplyASLPairing(original []byte, pairing ASLPairing) ([]byte, error) {
 		return nil, err
 	}
 	edited = insertRemainingKeys(edited, start, end, remaining)
-	return renderLines(edited, endsWithNewline), nil
+	return requireParsable(renderLines(edited, endsWithNewline))
 }
 
 // findASLTable returns the half-open line range of the [defaults.asl] table
@@ -146,32 +148,61 @@ func tableHeaderName(line string) string {
 	return name
 }
 
-// rejectDottedASLKeys refuses a file that configures the table through dotted
-// keys under [defaults] (`asl.command = "..."`). Both spellings are valid TOML
-// and mean the same thing, but writing a [defaults.asl] header alongside one
-// would redefine the table and make the file fail to parse — which the operator
-// would discover at the next daemon start, not here.
+// rejectDottedASLKeys refuses a file that configures the table in any form
+// other than a [defaults.asl] header: dotted keys under [defaults]
+// (`asl.command = "..."`), an inline table there (`asl = { ... }`), or keys at
+// the top of the file that reach it (`defaults.asl.command = "..."`,
+// `defaults = { ... }`). Each is valid TOML and means the same thing, but
+// writing a [defaults.asl] header alongside one would redefine the table and
+// make the file fail to parse — which the operator would discover at the next
+// daemon start, not here.
 func rejectDottedASLKeys(lines []string) error {
-	inDefaults := false
+	atRoot, inDefaults := true, false
 	for _, line := range lines {
 		if name := tableHeaderName(line); name != "" {
-			inDefaults = name == "defaults"
+			atRoot, inDefaults = false, name == "defaults"
 			continue
 		}
-		if !inDefaults {
+		if !atRoot && !inDefaults {
 			continue
 		}
 		key, _, ok := splitKeyValue(line)
-		if ok && strings.HasPrefix(key, "asl.") {
+		if !ok {
+			continue
+		}
+		if inDefaults && (key == "asl" || strings.HasPrefix(key, "asl.")) {
 			return &ErrASLTableAmbiguous{
 				Detail: fmt.Sprintf(
-					"[defaults] configures the bridge through the dotted key %q, which cannot be "+
+					"[defaults] configures the bridge through the key %q, which cannot be "+
 						"updated without redefining the table", key),
-				Remediation: "move the asl.* keys under a [defaults.asl] header and re-run",
+				Remediation: "move the asl settings under a [defaults.asl] header as plain key = value lines and re-run",
+			}
+		}
+		if atRoot && (key == "defaults" || key == "defaults.asl" || strings.HasPrefix(key, "defaults.asl.")) {
+			return &ErrASLTableAmbiguous{
+				Detail: fmt.Sprintf(
+					"the top of the file configures the bridge through the key %q, which cannot be "+
+						"updated without redefining the table", key),
+				Remediation: "move the asl settings under a [defaults.asl] header as plain key = value lines and re-run",
 			}
 		}
 	}
 	return nil
+}
+
+// requireParsable refuses an edit whose result is not valid TOML. The checks
+// above cover the shapes this editor knows it cannot rewrite; this is the
+// backstop for any it does not, because the caller replaces config.toml with
+// these bytes and the daemon reads them at startup.
+func requireParsable(edited []byte) ([]byte, error) {
+	var probe map[string]any
+	if _, err := toml.Decode(string(edited), &probe); err != nil {
+		return nil, &ErrASLTableAmbiguous{
+			Detail:      fmt.Sprintf("updating [defaults.asl] would leave a file that does not parse (%v)", err),
+			Remediation: "set the asl settings under a single [defaults.asl] header as plain key = value lines and re-run",
+		}
+	}
+	return edited, nil
 }
 
 // rewriteASLKeys replaces the values of keys already present in the table and

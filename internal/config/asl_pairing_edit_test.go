@@ -186,6 +186,41 @@ func TestDottedKeysUnderDefaultsAreRefusedWithRemediation(t *testing.T) {
 	}
 }
 
+// The same table can be written as an inline table under [defaults] or reached
+// from the top of the file. Appending a [defaults.asl] header to any of these
+// would redefine it, so each is refused with the edit that makes it editable.
+func TestOtherSpellingsOfTheTableAreRefusedWithRemediation(t *testing.T) {
+	for name, input := range map[string]string{
+		"inline table under defaults": "[defaults]\nasl = { command = \"/old/asl\" }\n",
+		"root dotted key":             "defaults.asl.command = \"/old/asl\"\n\n[[profiles]]\nname = \"a\"\n",
+		"root dotted table":           "defaults.asl = { command = \"/old/asl\" }\n",
+		"root inline defaults":        "defaults = { asl = { command = \"/old/asl\" } }\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := ApplyASLPairing([]byte(input), ASLPairing{Command: "/bin/asl"})
+			var ambiguous *ErrASLTableAmbiguous
+			if !errors.As(err, &ambiguous) {
+				t.Fatalf("ApplyASLPairing() = %v, want an ambiguity refusal", err)
+			}
+			if !strings.Contains(ambiguous.Remediation, "[defaults.asl]") {
+				t.Errorf("remediation %q does not name the edit that fixes it", ambiguous.Remediation)
+			}
+		})
+	}
+}
+
+// Whatever shape the checks above do not know, the editor never returns bytes
+// that fail to parse: here a value spanning several lines is rewritten on its
+// first line only, which would leave the rest of it dangling.
+func TestAnEditThatWouldNotParseIsRefused(t *testing.T) {
+	input := "[defaults.asl]\nstate_root = [\n  \"/srv/state\",\n]\n"
+	_, err := ApplyASLPairing([]byte(input), ASLPairing{StateRoot: "/srv/new"})
+	var ambiguous *ErrASLTableAmbiguous
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("ApplyASLPairing() = %v, want a refusal of an unparsable result", err)
+	}
+}
+
 // A duplicate key means the file was already invalid. Rewriting one occurrence
 // would leave the other and hide that.
 func TestADuplicateKeyIsRefusedRatherThanRewrittenTwice(t *testing.T) {
