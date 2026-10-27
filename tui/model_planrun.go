@@ -123,6 +123,10 @@ func (m Model) submitPlanRun() (tea.Model, tea.Cmd) {
 	m.planRun.Seq++
 	m.planRun.InFlight = true
 	m.planRun.Readiness, m.planRun.Notice, m.planRun.Warn = nil, "", false
+	if m.planRunOperations == nil {
+		m.planRunOperations = make(map[int]string)
+	}
+	m.planRunOperations[m.planRun.Seq] = m.planRun.PlanTitle()
 	return m, m.runPlanRunCmd(m.planRun.Seq, m.planRun.Plan, parameters)
 }
 
@@ -140,14 +144,29 @@ func (m Model) runPlanRunCmd(seq int, plan plans.PlanMeta, parameters map[string
 // handlePlanRunDone shows what a submission came to. A started run closes
 // the form: the run is a session now, and the list is where it shows. A plan
 // that may not be started keeps the form open on what agent-session-loop
-// said about it.
+// said about it. With the form closed since, or another one open, the answer
+// is still reported, as a toast, and never touches the form on screen: the
+// action may have launched a session whether anyone is waiting or not.
 func (m Model) handlePlanRunDone(msg planRunDoneMsg) (tea.Model, tea.Cmd) {
-	if !m.planRun.Active || msg.seq != m.planRun.Seq {
+	title, known := m.planRunOperations[msg.seq]
+	if !known {
 		return m, nil
+	}
+	delete(m.planRunOperations, msg.seq)
+	if !m.planRun.Active || msg.seq != m.planRun.Seq {
+		if msg.err == nil {
+			toast := m.pushToast(Toast{Severity: toastSuccess, Text: "Started run of " + title})
+			return m, tea.Batch(toast, m.requestTopologyRefresh())
+		}
+		failure := planRunFailureText(msg.err)
+		if readiness, ok := msg.result.Data[actions.DataPlanReadiness].(planrun.Readiness); ok && !readiness.Ready() {
+			failure = sentenceCase(readiness.Summary())
+		}
+		toast := m.pushToast(Toast{Severity: toastError, Text: "Run of " + title + ": " + failure})
+		return m, tea.Batch(toast, m.requestTopologyRefresh())
 	}
 	m.planRun.InFlight = false
 	if msg.err == nil {
-		title := m.planRun.PlanTitle()
 		m.closePlanRunForm()
 		return m, tea.Batch(m.pushToast(Toast{Severity: toastSuccess, Text: "Started run of " + title}), m.requestTopologyRefresh())
 	}

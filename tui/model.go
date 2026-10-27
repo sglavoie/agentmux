@@ -569,7 +569,10 @@ type Model struct {
 	sendDrafts     sendform.Drafts
 	sendOperations map[int]sendOperation
 	// planRun is the run form (ModePlanRun), zeroed wholesale when it closes.
-	planRun runform.State
+	// planRunOperations outlives it: the title of each plan a submission is
+	// still out for, by seq, so a run started after esc still says so.
+	planRun           runform.State
+	planRunOperations map[int]string
 	// aslOperations is the bounded body-free receipt window shown next to the
 	// runs list, so an accepted submission can reach consumed after its form has
 	// already closed.

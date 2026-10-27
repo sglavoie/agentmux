@@ -200,3 +200,92 @@ func TestRunFormDropsAnAnswerToAnEarlierForm(t *testing.T) {
 		t.Fatalf("an answer to a closed form closed the next one (mode %v)", m.mode)
 	}
 }
+
+// planRunSubmitThenEsc submits the form and closes it before the answer
+// lands, returning that answer for the test to deliver.
+func planRunSubmitThenEsc(t *testing.T, m Model) (Model, planRunDoneMsg) {
+	t.Helper()
+	m = planRunStep(t, m, runFormKey(keyRunPlan))
+	updated, cmd := m.Update(runFormKey(keyEnter))
+	m = updated.(Model)
+	if !m.planRun.InFlight || cmd == nil {
+		t.Fatalf("enter did not submit the form: %+v", m.planRun)
+	}
+	done, ok := cmd().(planRunDoneMsg)
+	if !ok {
+		t.Fatal("the submission produced no answer")
+	}
+	m = planRunStep(t, m, runFormKey(keyEsc))
+	if m.mode != ModePlanSearch || m.planRun.Active {
+		t.Fatalf("esc during a submission left mode %v", m.mode)
+	}
+	return m, done
+}
+
+// planRunRefreshRequested reports whether a topology refresh was started or
+// queued between before and after.
+func planRunRefreshRequested(before, after Model) bool {
+	return after.topologyRefreshNextSeq != before.topologyRefreshNextSeq || after.topologyRefreshPending
+}
+
+// TestRunFormReportsAStartedRunAfterEsc: esc while the run is being started
+// closes the form, but the plan.run action launches the session anyway, so
+// its answer still says so and refreshes the list.
+func TestRunFormReportsAStartedRunAfterEsc(t *testing.T) {
+	t.Parallel()
+
+	m, _ := planRunModel(t)
+	m, done := planRunSubmitThenEsc(t, m)
+	updated, cmd := m.Update(done)
+	got := updated.(Model)
+	if n := len(got.toasts); n == 0 || got.toasts[n-1].Severity != toastSuccess ||
+		got.toasts[n-1].Text != "Started run of "+m.planResults[0].Meta.Name {
+		t.Fatalf("a run started after esc was not reported: %+v", got.toasts)
+	}
+	if cmd == nil || !planRunRefreshRequested(m, got) {
+		t.Fatal("a run started after esc requested no refresh")
+	}
+	if got.mode != ModePlanSearch || got.planRun.Active {
+		t.Fatalf("the answer reopened the form (mode %v)", got.mode)
+	}
+	if again, _ := got.Update(done); len(again.(Model).toasts) != len(got.toasts) {
+		t.Fatal("a repeated answer was reported twice")
+	}
+}
+
+// TestRunFormReportsAFailedRunAfterEsc: a refusal that lands after esc has
+// no form to show it in, so it is an error toast instead.
+func TestRunFormReportsAFailedRunAfterEsc(t *testing.T) {
+	t.Parallel()
+
+	m, recorder := planRunModel(t)
+	recorder.answer = planRunDoneMsg{err: &actions.Error{Code: "asl_unavailable", Message: "asl not found"}}
+	m, done := planRunSubmitThenEsc(t, m)
+	updated, _ := m.Update(done)
+	got := updated.(Model)
+	if n := len(got.toasts); n == 0 || got.toasts[n-1].Severity != toastError ||
+		!strings.Contains(got.toasts[n-1].Text, "agent-session-loop did not answer") {
+		t.Fatalf("a run that failed after esc was not reported: %+v", got.toasts)
+	}
+}
+
+// TestRunFormReportsAnEarlierSubmissionWithoutTouchingTheNewerForm: the
+// answer to a submission whose form was closed is reported, and the form
+// opened since keeps its state.
+func TestRunFormReportsAnEarlierSubmissionWithoutTouchingTheNewerForm(t *testing.T) {
+	t.Parallel()
+
+	m, _ := planRunModel(t)
+	m, done := planRunSubmitThenEsc(t, m)
+	m = planRunStep(t, m, runFormKey(keyRunPlan))
+	before := m.planRun
+	updated, _ := m.Update(done)
+	got := updated.(Model)
+	if got.mode != ModePlanRun || !got.planRun.Active || got.planRun.Seq != before.Seq ||
+		got.planRun.InFlight != before.InFlight || got.planRun.Notice != before.Notice {
+		t.Fatalf("an earlier answer changed the newer form: %+v, was %+v", got.planRun, before)
+	}
+	if n := len(got.toasts); n == 0 || got.toasts[n-1].Severity != toastSuccess {
+		t.Fatalf("the earlier run was not reported: %+v", got.toasts)
+	}
+}
