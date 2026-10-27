@@ -77,6 +77,13 @@ func (h *Handler) holdStopForConfirmation(req protocol.Request, payload hookeven
 	}
 
 	h.stateMu.Lock()
+	if h.runtimeSlotClosedLocked(req.WindowID) {
+		// Nothing is held for a closed runtime slot: a hold left armed there
+		// would keep a timer for a session that is gone. The stop goes on to
+		// applyStateUpdate, which refuses it.
+		h.stateMu.Unlock()
+		return false
+	}
 	class, ok := stopHoldClassFor(req, payload, h.terminalStopHoldArmableLocked(req))
 	if !ok {
 		h.stateMu.Unlock()

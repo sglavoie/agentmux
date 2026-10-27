@@ -18,6 +18,16 @@ func (h *Handler) ensureWindowStateLocked(windowID int) *state.WindowState {
 	}
 	st := h.store[windowID]
 	if st == nil {
+		if h.runtimeSlotClosedLocked(windowID) {
+			// A non-Kitty slot no runtime session holds is closed for good:
+			// Kitty pruning skips it and retirement walks bindings, so state
+			// stored there would never be dropped. Work that reaches it late (a
+			// hook translated before its session ended, a probe or timer that
+			// outlived it) mutates a detached state instead. A slot a session
+			// claims is bound before its first update, and the checkpoint
+			// restore stores its state directly.
+			return &state.WindowState{}
+		}
 		st = &state.WindowState{}
 		h.store[windowID] = st
 		// A window ID coming back to life (Kitty ID reuse, or an event racing

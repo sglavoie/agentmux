@@ -778,3 +778,42 @@ func TestManagedHookAcknowledgementNeverWaitsOnBackendDiscovery(t *testing.T) {
 		t.Fatal("managed hook acknowledgement blocked behind a wedged Kitty list")
 	}
 }
+
+// TestHooksTranslatedBeforeTheirTmuxSessionEndsLeaveTheSlotClosed: a hook
+// translated while its session was live may be handled after maintenance ended
+// the session and closed its slot. Whatever the hook path does with it — record
+// an ignored or unknown event, arm a stop hold, refresh metadata — the closed
+// slot's state stays dropped, since nothing would ever drop it again.
+func TestHooksTranslatedBeforeTheirTmuxSessionEndsLeaveTheSlotClosed(t *testing.T) {
+	for _, event := range []string{"NoSuchHookEvent", "Stop"} {
+		t.Run(event, func(t *testing.T) {
+			h := newTestHandler()
+			h.SetStopConfirm(time.Hour, time.Hour, false)
+			directory := newFakeRuntimeDirectory()
+			h.SetRuntimeSessionDirectory(directory)
+			runtime := newRuntimeID(t)
+			directory.put(runtime, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%3")
+			requireAccepted(t, h.Handle(runtimeHook(t, runtime, "UserPromptSubmit", hookevent.HookPayload{})))
+			slot := slotOf(t, h, runtime)
+
+			late, rejection := h.translateHookOrigin(runtimeHook(t, runtime, event, hookevent.HookPayload{}))
+			if rejection != nil {
+				t.Fatalf("translation refused: %+v", rejection)
+			}
+			directory.setState(runtime, runtimesession.StateEnded)
+			h.retireEndedRuntimeSessions(time.Now())
+			h.handleHookEvent(late)
+
+			h.stateMu.Lock()
+			_, revived := h.store[slot]
+			_, held := h.pendingStopHolds[slot]
+			h.stateMu.Unlock()
+			if revived {
+				t.Fatalf("a late %s brought the closed slot's state back", event)
+			}
+			if held {
+				t.Fatalf("a late %s armed a stop hold on the closed slot", event)
+			}
+		})
+	}
+}
