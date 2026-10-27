@@ -68,6 +68,53 @@ func TestReplacePreservesAnExistingMode(t *testing.T) {
 	}
 }
 
+// A config.toml linked in from elsewhere keeps its link: the new contents land
+// in the file it points at, with that file's mode, and no temp is left beside
+// either of them.
+func TestReplaceWritesThroughASymlinkAndKeepsIt(t *testing.T) {
+	linkDir, targetDir := t.TempDir(), t.TempDir()
+	target := filepath.Join(targetDir, "config.toml")
+	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(linkDir, "config.toml")
+	if err := os.Symlink(target, path); err != nil {
+		t.Skipf("symlink: %v", err)
+	}
+	if err := Replace(path, []byte("new"), 0o644); err != nil {
+		t.Fatalf("Replace() = %v", err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("path mode = %v, want the symlink kept", info.Mode())
+	}
+	if got, _ := os.Readlink(path); got != target {
+		t.Errorf("link points at %q, want %q", got, target)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "new" {
+		t.Errorf("target contents = %q", data)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if targetInfo.Mode().Perm() != 0o600 {
+		t.Errorf("target mode = %v, want the 0600 it had", targetInfo.Mode().Perm())
+	}
+	for _, dir := range []string{linkDir, targetDir} {
+		if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+			t.Errorf("%s holds %d entries, want 1", dir, len(entries))
+		}
+	}
+}
+
 // The fallback applies only when there is nothing to preserve.
 func TestReplaceUsesTheFallbackModeForANewFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")

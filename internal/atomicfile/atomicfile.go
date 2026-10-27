@@ -215,7 +215,23 @@ var (
 // 0600 did so deliberately, and a rewrite that silently widened it back to a
 // default would be a quiet regression in a file that can name private paths.
 // fallbackPerm applies only when there is no file yet.
+//
+// A path that is a symlink is replaced at its final target, so the link
+// survives: an operator who keeps config.toml in a dotfiles repository and
+// links it into place must find the link still there, pointing at the new
+// contents, rather than a regular file that silently forked the two. A link
+// whose target does not exist yet is replaced at the path itself, since there
+// is nothing to keep it pointing at.
 func Replace(path string, data []byte, fallbackPerm os.FileMode, opts ...Option) error {
+	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		target, err := filepath.EvalSymlinks(path)
+		switch {
+		case err == nil:
+			path = target
+		case !os.IsNotExist(err):
+			return fmt.Errorf("resolving the symlink %s: %w", path, err)
+		}
+	}
 	perm := fallbackPerm
 	if info, err := os.Stat(path); err == nil {
 		perm = info.Mode().Perm()
