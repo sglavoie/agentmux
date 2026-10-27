@@ -29,7 +29,8 @@ final class WorkspaceSidebarView: NSTableView {
         enumerateAvailableRowViews { rowView, row in self.syncBandAppearance(rowView, row: row) }
     }
 
-    /// How wide a band's strip is: enough to frame the profile marker.
+    /// How wide a band's strip is; a line with a profile color fills its
+    /// stretch of it with that color.
     static let stripWidth: CGFloat = 10
 
     override func drawBackground(inClipRect clipRect: NSRect) {
@@ -105,7 +106,7 @@ final class WorkspaceSidebarView: NSTableView {
     }
 }
 
-/// Neutral session rows keep profile color in a small leading marker.
+/// A session row's profile color takes over its stretch of the band's strip.
 /// Selection uses the system accent independently of the profile's color.
 @MainActor
 class WorkspaceRowView: NSTableRowView {
@@ -130,7 +131,7 @@ class WorkspaceRowView: NSTableRowView {
         didSet { if chipColor != oldValue { syncCell() } }
     }
 
-    /// Profile color remains a marker, including on the selected row.
+    /// Profile color fills the line's strip, including on the selected row.
     var showsTabColor: Bool { tabColor != nil }
 
     /// Tells the line's cell what it is drawn on, so its text stays legible.
@@ -157,8 +158,8 @@ class WorkspaceRowView: NSTableRowView {
         }
         if let tabColor {
             tabColor.setFill()
-            NSBezierPath(roundedRect: NSRect(x: bounds.minX + 3, y: bounds.midY - 8,
-                                            width: 4, height: 16), xRadius: 2, yRadius: 2).fill()
+            NSRect(x: bounds.minX, y: bounds.minY,
+                   width: WorkspaceSidebarView.stripWidth, height: bounds.height).fill()
         }
     }
 
@@ -167,7 +168,7 @@ class WorkspaceRowView: NSTableRowView {
         needsDisplay = true
     }
 
-    /// System-accent selection stays distinct from the profile marker.
+    /// System-accent selection stays distinct from the profile strip.
     /// Draw over the cell so its contents cannot cover the border.
     let selectionBorder = WorkspaceSelectionBorderView()
 
