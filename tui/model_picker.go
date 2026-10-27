@@ -346,12 +346,16 @@ func (m Model) handlePickerNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			warn := m.pushToast(Toast{Severity: toastWarning, Text: launch.NothingToOpenText(hidden)})
 			return m, warn
 		}
-		cmd := pickerOpenCmd(m, targets)
-		if hidden == 0 {
-			return m, cmd
+		cmds := []tea.Cmd{pickerOpenCmd(m, targets)}
+		if hidden > 0 {
+			cmds = append(cmds, m.pushToast(Toast{Severity: toastWarning, Text: launch.HiddenSkippedText(hidden)}))
 		}
-		warn := m.pushToast(Toast{Severity: toastWarning, Text: launch.HiddenSkippedText(hidden)})
-		return m, tea.Batch(cmd, warn)
+		if rest := len(targets) - 1; rest > 0 && !pickerOpensEveryTarget(m) {
+			// Only one shell can run in this terminal: say what was left
+			// unopened rather than dropping it.
+			cmds = append(cmds, m.pushToast(Toast{Severity: toastWarning, Text: launch.OpenedHereOnlyText(configSessionDisplayTitle(targets[0]), rest)}))
+		}
+		return m, tea.Batch(cmds...)
 	case keyOpenEditor:
 		if len(m.pickerFilteredIdx) > 0 {
 			origIdx := m.pickerFilteredIdx[m.pickerCursor]
@@ -624,32 +628,49 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	return m, tea.Batch(cmds...)
 }
 
-// pickerOpenCmd opens every target directory in a plain shell tab. All
-// targets are attempted even when one fails; project-labelled errors are
-// joined into the single completion message consumed by the existing open
-// handler.
+// pickerOpensEveryTarget reports whether `o` can open each target in a view
+// of its own: a Kitty tab, or a utility view of the desktop workspace hosting
+// this surface. In a plain terminal outside Kitty only one shell runs here.
+func pickerOpensEveryTarget(m Model) bool {
+	return m.client != nil || commands.Portable.Desktop != nil
+}
+
+// pickerOpenCmd opens every target directory in a plain shell tab, or outside
+// Kitty in a shell view of the workspace. All targets are attempted even when
+// one fails; project-labelled errors are joined into the single completion
+// message consumed by the existing open handler.
 func pickerOpenCmd(m Model, targets []config.Session) tea.Cmd {
 	if len(targets) == 0 {
 		return nil
 	}
-	if m.client == nil {
+	if !pickerOpensEveryTarget(m) {
 		return pickerOpenHereCmd(m, targets)
 	}
 	return func() tea.Msg {
 		errs := make([]error, 0)
 		for i := range targets {
 			sess := targets[i]
-			_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.OpenDirectory, actions.Request{Project: &sess})
+			result, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.OpenDirectory, actions.Request{Project: &sess})
+			if err == nil {
+				if _, here := actions.UtilityHere(result); here {
+					// The workspace refused the view, and the shells of several
+					// projects cannot all take this one terminal.
+					err = errors.New("the workspace did not open it")
+				}
+			}
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", configSessionDisplayTitle(sess), err))
 			}
 		}
-		return commands.PickerOpenDoneMsg{Err: errors.Join(errs...)}
+		// A workspace view, like a shell here, leaves the operator on this
+		// surface; only a Kitty tab takes them away from it.
+		return commands.PickerOpenDoneMsg{Err: errors.Join(errs...), Stay: m.client == nil}
 	}
 }
 
-// pickerOpenHereCmd is pickerOpenCmd outside Kitty: with no tab to open, the
-// first target's directory is opened in a shell in this terminal.
+// pickerOpenHereCmd is pickerOpenCmd in a plain terminal outside Kitty: with no
+// tab to open, the first target's directory is opened in a shell in this
+// terminal, and the key handler names the rest in a warning.
 func pickerOpenHereCmd(m Model, targets []config.Session) tea.Cmd {
 	if len(targets) == 0 {
 		return nil

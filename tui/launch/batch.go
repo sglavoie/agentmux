@@ -94,6 +94,16 @@ func NothingToOpenText(hidden int) string {
 	return "Nothing to open: no project matches"
 }
 
+// OpenedHereOnlyText is the warning `o` raises outside Kitty and the desktop
+// workspace, where only the first project's shell can run in this terminal.
+func OpenedHereOnlyText(first string, rest int) string {
+	project := "project needs"
+	if rest != 1 {
+		project = "projects need"
+	}
+	return fmt.Sprintf("Opened %s here; %d more %s Kitty or the workspace to open", first, rest, project)
+}
+
 // StartText is the progress line shown the moment a batch is dispatched,
 // before any single launch has reported back.
 func StartText(total int) string {

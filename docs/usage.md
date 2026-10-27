@@ -807,6 +807,9 @@ its own badge/metadata columns.
 - `o` opens the directory of every project `enter` would launch: the selected
   projects the filter shows, or the highlighted one when nothing is selected,
   skipping hidden selections and staying open when there is nothing to open.
+  Each opens in a Kitty tab, or in a shell view of the desktop workspace; in a
+  plain terminal outside Kitty only the first opens, in a shell here, and a
+  warning counts the rest.
 - `?` shows the keymap,
 - `esc` clears an active filter first and leaves the launcher on a second
   press; `q` leaves it in one step. Neither quits Agent Mux — `Ctrl+C` does.

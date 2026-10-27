@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
@@ -464,5 +465,70 @@ func TestFooterPickerOpenDirHint(t *testing.T) {
 	footer := stripAnsi(renderFooter(m))
 	if !strings.Contains(footer, "o open dirs") {
 		t.Errorf("picker footer missing open dir hint, got:\n%s", footer)
+	}
+}
+
+// The two tests below swap the process's portable terminal set, so they do
+// not run in parallel.
+
+// TestPickerOKeyOpensEveryTargetInTheWorkspace: hosted by the desktop
+// workspace, with no Kitty, each checked project opens as a shell view of its
+// own, as Kitty opens a tab for each. Only the first used to open.
+func TestPickerOKeyOpensEveryTargetInTheWorkspace(t *testing.T) {
+	previous := commands.Portable
+	t.Cleanup(func() { commands.Portable = previous })
+	var shown []protocol.WorkspaceViewRequest
+	commands.Portable = commands.PortableTerminals{Desktop: func(request protocol.WorkspaceViewRequest) error {
+		shown = append(shown, request)
+		return nil
+	}}
+
+	m := pickerOpenModel(t, nil)
+	m.pickerSelected[pickerProjectIndex(t, m, "api")] = true
+	m.pickerSelected[pickerProjectIndex(t, m, "backend")] = true
+	updated, cmd := m.Update(keyPress("o"))
+	if toasts := updated.(Model).toasts; len(toasts) != 0 {
+		t.Fatalf("opening in the workspace raised %+v", toasts)
+	}
+	done := pickerOpenDone(t, cmd)
+	if done.Err != nil || !done.Stay {
+		t.Fatalf("open done = %+v, want no error and the dashboard kept", done)
+	}
+	var dirs []string
+	for _, request := range shown {
+		if request.Kind != protocol.WorkspaceViewShell {
+			t.Errorf("workspace was asked for a %q view, want a shell", request.Kind)
+		}
+		dirs = append(dirs, request.Directory)
+	}
+	if want := []string{"/projects/api", "/projects/backend"}; !slices.Equal(dirs, want) {
+		t.Fatalf("workspace shells = %v, want %v", dirs, want)
+	}
+}
+
+// TestPickerOKeyInAPlainTerminalSaysWhatItLeftUnopened: outside Kitty and the
+// workspace only one shell can run in this terminal. The first project opens
+// there and the rest are named in a warning rather than silently dropped.
+func TestPickerOKeyInAPlainTerminalSaysWhatItLeftUnopened(t *testing.T) {
+	previous := commands.Portable
+	t.Cleanup(func() { commands.Portable = previous })
+	commands.Portable = commands.PortableTerminals{}
+
+	m := pickerOpenModel(t, nil)
+	m.pickerSelected[pickerProjectIndex(t, m, "api")] = true
+	m.pickerSelected[pickerProjectIndex(t, m, "backend")] = true
+	m.pickerSelected[pickerProjectIndex(t, m, "dotfiles")] = true
+	targets, _ := m.pickerOpenTargets()
+	if len(targets) != 3 {
+		t.Fatalf("open targets = %d, want 3", len(targets))
+	}
+	updated, cmd := m.Update(keyPress("o"))
+	if cmd == nil {
+		t.Fatal("o opened nothing in a plain terminal")
+	}
+	toasts := updated.(Model).toasts
+	want := "Opened " + targets[0].Title + " here; 2 more projects need Kitty or the workspace to open"
+	if len(toasts) == 0 || toasts[len(toasts)-1].Severity != toastWarning || toasts[len(toasts)-1].Text != want {
+		t.Fatalf("toasts = %+v, want the warning %q", toasts, want)
 	}
 }
