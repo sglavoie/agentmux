@@ -29,14 +29,20 @@ final class WorkspaceSidebarView: NSTableView {
         enumerateAvailableRowViews { rowView, row in self.syncBandAppearance(rowView, row: row) }
     }
 
+    /// How wide a band's strip is: enough to frame the profile marker.
+    static let stripWidth: CGFloat = 10
+
     override func drawBackground(inClipRect clipRect: NSRect) {
         super.drawBackground(inClipRect: clipRect)
         for (lines, band) in bands where !lines.isEmpty && lines.upperBound <= numberOfRows {
             let rect = rect(ofRow: lines.lowerBound).union(rect(ofRow: lines.upperBound - 1))
             guard rect.intersects(clipRect) else { continue }
-            band.color.setFill()
             let gap: CGFloat = band.isSection ? 0 : 1
-            NSRect(x: bounds.minX, y: rect.minY + gap, width: bounds.width, height: rect.height - 2 * gap).fill()
+            let fill = NSRect(x: bounds.minX, y: rect.minY + gap, width: bounds.width, height: rect.height - 2 * gap)
+            band.color.setFill()
+            fill.fill()
+            band.stripColor.setFill()
+            NSRect(x: fill.minX, y: fill.minY, width: Self.stripWidth, height: fill.height).fill()
         }
     }
 
@@ -419,7 +425,7 @@ final class WorkspaceGroupCellView: NSTableCellView {
 @MainActor
 final class WorkspaceRowCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.row")
-    let glyphLabel = NSTextField(labelWithString: "")
+    let glyphLabel = WorkspaceSidebarLabel(labelWithString: "")
     let nameLabel = WorkspaceSidebarLabel(labelWithString: "")
     let titleLabel = WorkspaceSidebarLabel(labelWithString: "")
     let detailLabel = WorkspaceSidebarLabel(labelWithString: "")
@@ -566,7 +572,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// detail, key, and × there are the label color, a little muted.
     /// `chip` puts the text on that color, the detail and key dark gray.
     func setTabText(_ color: NSColor?, selected: Bool = false, chip: NSColor? = nil) {
-        [nameLabel, titleLabel, detailLabel, keyLabel].forEach { $0.chip = chip }
+        [glyphLabel, nameLabel, titleLabel, detailLabel, keyLabel].forEach { $0.chip = chip }
         nameLabel.textColor = color == nil ? Self.nameColor : Self.nameOnTabColor
         glyphLabel.textColor = color ?? .labelColor
         titleLabel.textColor = color ?? .labelColor

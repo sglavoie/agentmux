@@ -114,25 +114,25 @@ enum WorkspaceSidebarItem: Equatable {
 
 /// The background a section or a session of the sidebar is set apart by.
 /// Each band names its light and its dark hue, then the lighter chip its
-/// text sits on in each. All are bright, so the lines on a band are drawn
+/// text sits on in each, and the darker strip down its left edge. All are bright, so the lines on a band are drawn
 /// in the light appearance in either one
 /// (`WorkspaceSidebarView.syncBandAppearance`).
 enum WorkspaceSidebarBand: Equatable {
     /// Needs attention, and a session waiting on the operator:
     /// #FFF659 light, #FFE500 dark;
-    /// chips #FFFBD0, #FFF7A8.
+    /// chips #FFFBD0, #FFF7A8; strips #F2E68A, #D9C300.
     case attention
     /// Pinned: #98E7FF light, #9EE6FF dark;
-    /// chips #DDF6FF, #D6F5FF.
+    /// chips #DDF6FF, #D6F5FF; strips #B9EBFA, #7CCDEB.
     case pinned
     /// A session whose turn ended (✓): #FFC0C0 light, #FFB8B8 dark;
-    /// chips #FFE3E3, #FFE0E0.
+    /// chips #FFE3E3, #FFE0E0; strips #F0A8A8, #E89A9A.
     case stopped
     /// A session at work (⚡, 🤖, 🌀): #EAFFEA light, #C8FFC4 dark;
-    /// chips #F7FFF7, #E8FFE6.
+    /// chips #F7FFF7, #E8FFE6; strips #CDEFCD, #A6E3A1.
     case running
     /// A session with no state glyph: #E5E5E5 light, #E0E0E6 dark;
-    /// chips #F5F5F5, #F4F4F7.
+    /// chips #F5F5F5, #F4F4F7; strips #CFCFCF, #C4C4CC.
     case idle
 
     /// A section's heading and lines are one block; sessions are set apart
@@ -178,6 +178,22 @@ enum WorkspaceSidebarBand: Equatable {
         case .idle: (light, darkChip) = (0xF5F5F5, 0xF4F4F7)
         }
         return Self.rgb(dark ? darkChip : light, alpha: 1)
+    }
+
+    /// The darker shade of the hue drawn down the band's left edge, behind
+    /// the profile marker.
+    var stripColor: NSColor {
+        let (light, dark): (UInt32, UInt32)
+        switch self {
+        case .attention: (light, dark) = (0xF2E68A, 0xD9C300)
+        case .pinned: (light, dark) = (0xB9EBFA, 0x7CCDEB)
+        case .stopped: (light, dark) = (0xF0A8A8, 0xE89A9A)
+        case .running: (light, dark) = (0xCDEFCD, 0xA6E3A1)
+        case .idle: (light, dark) = (0xCFCFCF, 0xC4C4CC)
+        }
+        return NSColor(name: nil, dynamicProvider: { appearance in
+            Self.rgb(appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light, alpha: 1)
+        })
     }
 
     private static func rgb(_ hex: UInt32, alpha: CGFloat) -> NSColor {
