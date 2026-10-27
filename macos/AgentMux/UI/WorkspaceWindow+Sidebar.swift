@@ -225,6 +225,7 @@ extension WorkspaceWindowController {
         }
         view.tabColor = profileColor(of: items[row])
         view.selectionBorder.color = .controlAccentColor
+        sidebar.syncBandAppearance(view, row: row)
         return view
     }
 

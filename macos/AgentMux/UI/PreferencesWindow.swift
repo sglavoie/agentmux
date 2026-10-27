@@ -416,9 +416,9 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
     /// The width every pane is laid out at.
     static let contentWidth: CGFloat = 560
     /// The height a pane is given when its own cannot be measured.
-    static let fallbackContentHeight: CGFloat = 620
+    nonisolated static let fallbackContentHeight: CGFloat = 620
     /// The shortest a pane is made, so a short one still reads as a window.
-    static let minimumContentHeight: CGFloat = 160
+    nonisolated static let minimumContentHeight: CGFloat = 160
 
     init(model: PreferencesModel) {
         self.model = model

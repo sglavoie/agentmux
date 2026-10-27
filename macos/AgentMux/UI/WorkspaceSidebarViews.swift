@@ -8,7 +8,17 @@ final class WorkspaceSidebarView: NSTableView {
     private(set) var pointerInside = false
     /// The sections drawn on a background of their own, behind their lines.
     var bands: [(lines: Range<Int>, band: WorkspaceSidebarBand)] = [] {
-        didSet { needsDisplay = true }
+        didSet {
+            needsDisplay = true
+            enumerateAvailableRowViews { rowView, row in self.syncBandAppearance(rowView, row: row) }
+        }
+    }
+
+    /// A line on a band is drawn in the light appearance, dark text on a
+    /// bright hue, whichever appearance the sidebar has.
+    func syncBandAppearance(_ rowView: NSTableRowView, row: Int) {
+        let onBand = bands.contains { $0.lines.contains(row) }
+        rowView.appearance = onBand ? NSAppearance(named: .aqua) : nil
     }
 
     override func drawBackground(inClipRect clipRect: NSRect) {
