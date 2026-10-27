@@ -390,6 +390,35 @@ func TestHeldStopOfASessionThatEndsIsDroppedOnEitherBackend(t *testing.T) {
 	})
 }
 
+// A held stop that has passed its last check when the tmux session ends still
+// commits after the close. The slot is unbound by then, so the update is
+// refused: the closed slot's state does not come back, since nothing would
+// ever drop it again, and nobody is told a gone session stopped.
+func TestHeldStopCommittingAfterItsTmuxSessionEndsLeavesTheSlotClosed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s, _ := newProbedTmuxSession(t)
+		s.unreadable()
+		s.startTurn()
+		s.stopHeld()
+		pending, _ := terminalHoldPending(t, s.h, s.slot)
+
+		s.end()
+		if resp := s.h.handleStateUpdate(pending.req); resp.OK {
+			t.Fatalf("stop on the closed slot = %+v; want it refused", resp)
+		}
+		synctest.Wait()
+		s.h.stateMu.Lock()
+		_, revived := s.h.store[s.slot]
+		s.h.stateMu.Unlock()
+		if revived {
+			t.Fatal("the late stop brought the closed slot's state back")
+		}
+		if got := s.rec.len(); got != 0 {
+			t.Fatalf("notifications = %d; want 0 (%+v)", got, s.rec.snapshot())
+		}
+	})
+}
+
 // The context-limit banner on a working agent's screen turns it to the error
 // state once, with one notification; a pane that cannot be read reports
 // nothing.

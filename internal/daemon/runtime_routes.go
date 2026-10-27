@@ -211,6 +211,19 @@ func (r *runtimeRoutes) snapshot() map[int]runtimeBinding {
 // isRuntimeSyntheticSlot reports whether slot belongs to a non-Kitty target.
 func isRuntimeSyntheticSlot(slot int) bool { return slot >= runtimeSlotBase }
 
+// runtimeSlotClosedLocked reports whether slot is a non-Kitty slot no runtime
+// session holds any longer. Only its binding ever closes such a slot: Kitty
+// pruning skips it and retirement walks bindings, so state written there after
+// the release would never be dropped. A slot a session claims is bound during
+// hook translation, before its first update. Callers hold stateMu.
+func (h *Handler) runtimeSlotClosedLocked(slot int) bool {
+	if !isRuntimeSyntheticSlot(slot) {
+		return false
+	}
+	_, bound := h.runtimeRoutes.binding(slot)
+	return !bound
+}
+
 // SetRuntimeSessionDirectory installs the registry used to route managed
 // hooks. It is called once at startup, before the server dispatches a request;
 // without one, managed hooks are refused as retryable and legacy hooks route

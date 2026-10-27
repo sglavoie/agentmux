@@ -102,6 +102,13 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 
 	receivedAt := time.Now()
 	h.stateMu.Lock()
+	// An update that reaches a runtime slot after its session ended — a held
+	// stop committing, or an operator action racing the close — must not
+	// bring the slot's state back: nothing would ever drop it again.
+	if h.runtimeSlotClosedLocked(req.WindowID) {
+		h.stateMu.Unlock()
+		return protocol.Response{OK: false, Error: "runtime slot is closed"}, outcome
+	}
 	inputAction := req.Action
 	req = h.applyResetFlowLocked(req)
 	if req.Action != inputAction {
