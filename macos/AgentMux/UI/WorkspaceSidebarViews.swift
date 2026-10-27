@@ -15,10 +15,18 @@ final class WorkspaceSidebarView: NSTableView {
     }
 
     /// A line on a band is drawn in the light appearance, dark text on a
-    /// bright hue, whichever appearance the sidebar has.
+    /// bright hue, whichever appearance the sidebar has, and its text sits
+    /// on a lighter shade of the band, as if highlighted.
     func syncBandAppearance(_ rowView: NSTableRowView, row: Int) {
-        let onBand = bands.contains { $0.lines.contains(row) }
-        rowView.appearance = onBand ? NSAppearance(named: .aqua) : nil
+        let band = bands.first { $0.lines.contains(row) }?.band
+        rowView.appearance = band == nil ? nil : NSAppearance(named: .aqua)
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        (rowView as? WorkspaceRowView)?.chipColor = band?.chipColor(dark: dark)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        enumerateAvailableRowViews { rowView, row in self.syncBandAppearance(rowView, row: row) }
     }
 
     override func drawBackground(inClipRect clipRect: NSRect) {
@@ -111,15 +119,29 @@ class WorkspaceRowView: NSTableRowView {
         }
     }
 
+    /// What the line's text sits on: a lighter shade of its band, or nothing.
+    var chipColor: NSColor? {
+        didSet { if chipColor != oldValue { syncCell() } }
+    }
+
     /// Profile color remains a marker, including on the selected row.
     var showsTabColor: Bool { tabColor != nil }
 
     /// Tells the line's cell what it is drawn on, so its text stays legible.
     func syncCell() {
         guard numberOfColumns > 0 else { return }
+        if let group = view(atColumn: 0) as? WorkspaceGroupCellView {
+            group.chipColor = chipColor
+        }
         guard let cell = view(atColumn: 0) as? WorkspaceRowCellView else { return }
-        cell.setTabText(nil, selected: isSelected)
+        cell.setTabText(nil, selected: isSelected, chip: chipColor)
         cell.setStateGlyphOutsidePill((self as? WorkspaceSessionRowView)?.hasStateGlyph == true)
+    }
+
+    /// A cell the list puts in the line, new or reused, learns what it is on.
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        if subview is NSTableCellView { syncCell() }
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
@@ -290,14 +312,18 @@ final class WorkspaceGroupCellView: NSTableCellView {
     static let expandedDisclosure = "▾"
     static let expandAction = "Expand"
     static let collapseAction = "Collapse"
-    let nameLabel = NSTextField(labelWithString: "")
-    let countLabel = NSTextField(labelWithString: "")
+    let nameLabel = WorkspaceSidebarLabel(labelWithString: "")
+    let countLabel = WorkspaceSidebarLabel(labelWithString: "")
     /// ▸ while the project is collapsed to this line, ▾ while it is not; a
     /// heading that is not a project has none.
-    let disclosureLabel = NSTextField(labelWithString: "")
+    let disclosureLabel = WorkspaceSidebarLabel(labelWithString: "")
     /// Collapses or expands the project.
     var onToggle: (() -> Void)?
     private var labelLeading: NSLayoutConstraint!
+    /// What the heading's text sits on (`WorkspaceRowView.chipColor`).
+    var chipColor: NSColor? {
+        didSet { [nameLabel, countLabel, disclosureLabel].forEach { $0.chip = chipColor } }
+    }
 
     /// Attention is a clear heading, not a competing full-width highlight.
     private func setWarning(_ enabled: Bool) {
@@ -394,12 +420,12 @@ final class WorkspaceGroupCellView: NSTableCellView {
 final class WorkspaceRowCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.row")
     let glyphLabel = NSTextField(labelWithString: "")
-    let nameLabel = NSTextField(labelWithString: "")
-    let titleLabel = NSTextField(labelWithString: "")
-    let detailLabel = NSTextField(labelWithString: "")
+    let nameLabel = WorkspaceSidebarLabel(labelWithString: "")
+    let titleLabel = WorkspaceSidebarLabel(labelWithString: "")
+    let detailLabel = WorkspaceSidebarLabel(labelWithString: "")
     let closeButton = NSButton(title: "", target: nil, action: nil)
     /// `⌘1`: the key that goes to the session, empty when it has none.
-    let keyLabel = NSTextField(labelWithString: "")
+    let keyLabel = WorkspaceSidebarLabel(labelWithString: "")
     /// What the × does for the line shown now.
     var onClose: (() -> Void)?
     /// Whether the pointer is over the line; the × is drawn only then.
@@ -423,7 +449,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isHidden = true
         titleLabel.lineBreakMode = .byTruncatingTail
-        detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .bold)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
         // Not the cell's textField: the source list restyles that outlet,
@@ -449,7 +475,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         closeButton.action = #selector(closePressed(_:))
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(closeButton)
-        keyLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        keyLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .bold)
         keyLabel.textColor = .tertiaryLabelColor
         keyLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         keyLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -524,18 +550,31 @@ final class WorkspaceRowCellView: NSTableCellView {
             .withAlphaComponent(0.8)
     }
 
+    /// The detail and key on a chip: a dark gray, where the list's own
+    /// grays fade into it.
+    static let highlightedDetailColor = NSColor(white: 0.25, alpha: 1)
+    /// The detail and key of a line on no band, such as the Dashboard's and
+    /// the Overview's: #D0D0D0 dark, #333333 light, firmer than the list's
+    /// own grays.
+    static let detailColor = NSColor(name: nil) { appearance in
+        NSColor(white: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? 0xD0 / 255.0 : 0x33 / 255.0, alpha: 1)
+    }
+
     /// Draws the text in `color`, for a session's color behind it, or as the
     /// list draws it when there is none. On the `selected` line's opaque pill
     /// the list's secondary and tertiary grays are too faint to read, so the
     /// detail, key, and × there are the label color, a little muted.
-    func setTabText(_ color: NSColor?, selected: Bool = false) {
+    /// `chip` puts the text on that color, the detail and key dark gray.
+    func setTabText(_ color: NSColor?, selected: Bool = false, chip: NSColor? = nil) {
+        [nameLabel, titleLabel, detailLabel, keyLabel].forEach { $0.chip = chip }
         nameLabel.textColor = color == nil ? Self.nameColor : Self.nameOnTabColor
         glyphLabel.textColor = color ?? .labelColor
         titleLabel.textColor = color ?? .labelColor
-        let muted = color?.withAlphaComponent(0.8) ?? (selected ? Self.selectedDetailColor : nil)
-        detailLabel.textColor = muted ?? .secondaryLabelColor
+        let muted = color?.withAlphaComponent(0.8) ?? (chip != nil ? Self.highlightedDetailColor : nil)
+            ?? (selected ? Self.selectedDetailColor : nil)
+        detailLabel.textColor = muted ?? Self.detailColor
         closeButton.contentTintColor = muted ?? .tertiaryLabelColor
-        keyLabel.textColor = muted ?? .tertiaryLabelColor
+        keyLabel.textColor = muted ?? Self.detailColor
     }
 
     required init?(coder: NSCoder) {
@@ -554,7 +593,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         titleLabel.lineBreakMode = .byTruncatingTail
         glyphLabel.stringValue = view.glyph
         titleLabel.stringValue = bell ? "\(view.displayName) \(Self.bellGlyph)" : view.displayName
-        titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .bold)
         let program = program.flatMap { $0.isEmpty ? nil : $0 }
         let detail = view.detail(session: session, program: program)
         let progressText = progress.map(Self.progressText)
@@ -586,7 +625,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
-        titleLabel.font = .systemFont(ofSize: 12, weight: row.attention ? .semibold : .regular)
+        titleLabel.font = .systemFont(ofSize: 12, weight: .bold)
         detailLabel.stringValue = closing ? Self.closingDetail : row.detail
         toolTip = row.displayName + " · " + row.toolTip
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
@@ -623,5 +662,25 @@ final class WorkspaceRowCellView: NSTableCellView {
         if closing { spoken.append("ending session") } else if !row.detail.isEmpty { spoken.append(row.detail) }
         if let sessionKey { spoken.append("Command \(sessionKey)") }
         return spoken.joined(separator: ", ")
+    }
+}
+
+/// A sidebar label that can sit on a chip of color, as if highlighted. The
+/// chip is drawn only behind text, and the label opts out of vibrancy while
+/// it is shown: blended into the list, a light chip draws as black.
+@MainActor
+final class WorkspaceSidebarLabel: NSTextField {
+    var chip: NSColor? {
+        didSet { if chip != oldValue { needsDisplay = true } }
+    }
+
+    override var allowsVibrancy: Bool { chip == nil && super.allowsVibrancy }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if let chip, !stringValue.isEmpty {
+            chip.setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 3, yRadius: 3).fill()
+        }
+        super.draw(dirtyRect)
     }
 }
