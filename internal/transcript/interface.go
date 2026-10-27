@@ -279,6 +279,15 @@ type LookupFunc func(path string, size int64, mtime time.Time) (SessionMeta, boo
 type DiscoverOptions struct {
 	Cached  LookupFunc // optional; nil means always parse
 	MinTime time.Time  // zero means no cutoff; files with older mtime are skipped
+	// Superseded looks up a file an earlier pass set aside because a later
+	// file continues its conversation. A hit returns the identity, path,
+	// last activity, size, and mtime the reader compares segments by, so an
+	// unchanged earlier segment is not parsed again only to be set aside
+	// again. A reader that keeps such a file after all parses it. Optional.
+	Superseded LookupFunc
+	// Supersede is told of every discovered file the reader set aside for a
+	// later segment of the same conversation. Optional.
+	Supersede func(SessionMeta)
 }
 
 // Reader is the interface implemented by each harness adapter. Discover

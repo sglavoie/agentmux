@@ -69,6 +69,29 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 		return meta, readable
 	}
 
+	// Files set aside for a later segment of their conversation are looked
+	// up by size and mtime as well, and the ones set aside this pass replace
+	// the remembered set under the lock below.
+	i.mu.Lock()
+	supersededBefore := cloneSupersededSegments(i.superseded)
+	i.mu.Unlock()
+	supersededNow := make(map[string]supersededSegment)
+	supersededLookup := func(path string, size int64, mtime time.Time) (SessionMeta, bool) {
+		if rebuildSidecars {
+			return SessionMeta{}, false
+		}
+		segment, ok := supersededBefore[path]
+		if !ok || segment.FileSize != size || !segment.FileModTime.Equal(mtime) {
+			return SessionMeta{}, false
+		}
+		return segment.meta(path), true
+	}
+	supersede := func(meta SessionMeta) {
+		if meta.Path != "" {
+			supersededNow[meta.Path] = supersededSegmentOf(meta)
+		}
+	}
+
 	var cutoff time.Time
 	if days := cfg.Defaults.SessionArchive.ScanMaxAgeDays; days > 0 {
 		cutoff = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
@@ -81,7 +104,12 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 		if !ok {
 			continue
 		}
-		metas, err := reader.Discover(group.home, DiscoverOptions{Cached: lookup, MinTime: cutoff})
+		metas, err := reader.Discover(group.home, DiscoverOptions{
+			Cached:     lookup,
+			MinTime:    cutoff,
+			Superseded: supersededLookup,
+			Supersede:  supersede,
+		})
 		if err != nil {
 			slog.Debug("transcript.index: partial discover failed", "harness", group.harnessName, "home", group.home, "err", err)
 			discoveryWarning = errors.Join(discoveryWarning, err)
@@ -105,6 +133,10 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 		}
 		mergeWarning = errors.Join(mergeWarning, reloadWarning)
 		applyLegacySessionClasses(i, legacyClasses)
+		if !supersededSegmentsEqual(i.superseded, supersededNow) {
+			i.superseded = cloneSupersededSegments(supersededNow)
+			i.filesystemDirty = true
+		}
 		if rebuildSidecars {
 			if err := removeTranscriptSearchStore(i.SearchStoreDir()); err != nil {
 				return fmt.Errorf("removing transcript search sidecars: %w", err)

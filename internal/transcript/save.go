@@ -30,7 +30,7 @@ func (i *Index) saveLocked() (warning, persistErr error) {
 		meta.SearchText = ""
 		i.entries[key] = meta
 	}
-	data, err := json.MarshalIndent(indexFile{Entries: i.entries}, "", "  ")
+	data, err := json.MarshalIndent(indexFile{Entries: i.entries, Superseded: i.superseded}, "", "  ")
 	if err != nil {
 		return warning, err
 	}

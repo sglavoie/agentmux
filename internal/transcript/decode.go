@@ -24,14 +24,19 @@ func (i *Index) decodeIndexFile(dec *json.Decoder) error {
 		if !ok {
 			return fmt.Errorf("expected object field name, got %v", tok)
 		}
-		if field != "entries" {
+		switch field {
+		case "entries":
+			if err := i.decodeEntries(dec); err != nil {
+				return err
+			}
+		case "superseded":
+			if err := dec.Decode(&i.superseded); err != nil {
+				return err
+			}
+		default:
 			if err := skipJSONValue(dec); err != nil {
 				return err
 			}
-			continue
-		}
-		if err := i.decodeEntries(dec); err != nil {
-			return err
 		}
 	}
 	tok, err = dec.Token()

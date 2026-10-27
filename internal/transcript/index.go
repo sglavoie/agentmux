@@ -49,6 +49,9 @@ type Index struct {
 
 	filesystemBase  map[string]SessionMeta
 	filesystemDirty bool
+	// superseded remembers, by path, the transcript files discovery set aside
+	// for a later segment of the same conversation (see supersededSegment).
+	superseded map[string]supersededSegment
 }
 
 // saveLockedHookForTest lets same-package tests count successful persistence
@@ -64,7 +67,73 @@ var readTranscriptIndexFile = os.ReadFile
 // the file can grow a version or auxiliary fields without breaking
 // existing readers.
 type indexFile struct {
-	Entries map[string]SessionMeta `json:"entries"`
+	Entries    map[string]SessionMeta       `json:"entries"`
+	Superseded map[string]supersededSegment `json:"superseded,omitempty"`
+}
+
+// supersededSegment is a transcript file a reader set aside because a later
+// file continues its conversation (Codex rollout segments). It is not a
+// session: it holds only what choosing between segments needs, so a refresh
+// can skip parsing the file while its size and mtime are unchanged. Older
+// releases skip the field when reading and drop it when writing, which only
+// costs them the parse.
+type supersededSegment struct {
+	Harness     string    `json:"harness"`
+	ID          string    `json:"id"`
+	LastAt      time.Time `json:"last_at"`
+	FileSize    int64     `json:"file_size"`
+	FileModTime time.Time `json:"file_mod_time"`
+}
+
+func supersededSegmentOf(meta SessionMeta) supersededSegment {
+	return supersededSegment{
+		Harness:     meta.Harness,
+		ID:          meta.ID,
+		LastAt:      meta.LastAt,
+		FileSize:    meta.FileSize,
+		FileModTime: meta.FileModTime,
+	}
+}
+
+// meta is the stand-in a reader compares segments by; it is never indexed.
+func (s supersededSegment) meta(path string) SessionMeta {
+	return SessionMeta{
+		Harness:     s.Harness,
+		ID:          s.ID,
+		Path:        path,
+		LastAt:      s.LastAt,
+		FileSize:    s.FileSize,
+		FileModTime: s.FileModTime,
+	}
+}
+
+func (s supersededSegment) equal(other supersededSegment) bool {
+	return s.Harness == other.Harness && s.ID == other.ID && s.FileSize == other.FileSize &&
+		s.LastAt.Equal(other.LastAt) && s.FileModTime.Equal(other.FileModTime)
+}
+
+func supersededSegmentsEqual(a, b map[string]supersededSegment) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for path, segment := range a {
+		other, ok := b[path]
+		if !ok || !segment.equal(other) {
+			return false
+		}
+	}
+	return true
+}
+
+func cloneSupersededSegments(segments map[string]supersededSegment) map[string]supersededSegment {
+	if len(segments) == 0 {
+		return nil
+	}
+	out := make(map[string]supersededSegment, len(segments))
+	for path, segment := range segments {
+		out[path] = segment
+	}
+	return out
 }
 
 // LoadIndex reads the index from the default IndexPath. A missing file

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -487,5 +488,82 @@ func TestCodexDiscover_EndingIsTheLastAssistantReply(t *testing.T) {
 	}
 	if got := metas[0]; got.Ending != "Done. See the diff above." || got.ReaderVersion != codexReaderVersion {
 		t.Fatalf("Ending, ReaderVersion = %q, %d; want the closing reply, %d", got.Ending, got.ReaderVersion, codexReaderVersion)
+	}
+}
+
+// A rollout set aside for a later segment of its conversation is remembered
+// in the cache with its size and mtime, so later refreshes leave it unparsed
+// while it is unchanged; once the segment that won is gone, the one set aside
+// is parsed and indexed again.
+func TestCodexSupersededSegmentIsNotReparsedOnEveryRefresh(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "10", "05")
+	const id = "01a108ac-75f4-7dd0-bf85-6f583dfa0984"
+	meta := func(ts string) string {
+		return `{"timestamp":"` + ts + `","type":"session_meta","payload":{"id":"` + id + `","timestamp":"` + ts + `","cwd":"/cwd"}}` + "\n"
+	}
+	user := func(ts, text string) string {
+		return `{"timestamp":"` + ts + `","type":"event_msg","payload":{"type":"user_message","message":"` + text + `","images":[]}}` + "\n"
+	}
+	original := filepath.Join(dir, "rollout-2026-10-05T14-48-02-"+id+".jsonl")
+	continued := filepath.Join(dir, "rollout-2026-10-05T14-48-08-"+id+"_01a108ac-8e06-7361-92ac-87b005c3254d.jsonl")
+	writeTranscript(t, original, meta("2026-10-05T20:48:02.000Z")+user("2026-10-05T20:48:03.000Z", "aborted start"))
+	writeTranscript(t, continued, meta("2026-10-05T20:48:08.000Z")+user("2026-10-05T20:48:09.000Z", "the real conversation"))
+
+	var mu sync.Mutex
+	parses := map[string]int{}
+	hook := func(path string) {
+		if strings.HasPrefix(path, root) {
+			mu.Lock()
+			parses[path]++
+			mu.Unlock()
+		}
+	}
+	codexParseHookForTest.Store(&hook)
+	t.Cleanup(func() { codexParseHookForTest.CompareAndSwap(&hook, nil) })
+	parsed := func(path string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return parses[path]
+	}
+
+	path := filepath.Join(t.TempDir(), "transcripts.json")
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: root}}}
+	readers := map[string]Reader{harness.Codex: NewCodexReader()}
+	refresh := func() {
+		t.Helper()
+		// A fresh load each time, as a new process would, so the set-aside
+		// file must be remembered in the cache rather than in memory.
+		idx, err := LoadIndexAt(path)
+		if err != nil {
+			t.Fatalf("LoadIndexAt: %v", err)
+		}
+		if err := idx.Refresh(cfg, readers); err != nil {
+			t.Fatalf("Refresh: %v", err)
+		}
+	}
+	for range 3 {
+		refresh()
+	}
+	if got := parsed(original); got != 1 {
+		t.Errorf("superseded segment parsed %d times over 3 refreshes, want 1", got)
+	}
+	if got := parsed(continued); got != 1 {
+		t.Errorf("kept segment parsed %d times over 3 refreshes, want 1", got)
+	}
+
+	if err := os.Remove(continued); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	refresh()
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatalf("LoadIndexAt: %v", err)
+	}
+	got, ok := idx.Get(IndexKey(harness.Codex, id))
+	if !ok || got.Path != original || got.Snippet != "aborted start" {
+		t.Fatalf("entry = %+v (found %v), want the original segment parsed again", got, ok)
 	}
 }

@@ -44,6 +44,7 @@ func LoadIndexAt(path string) (*Index, error) {
 			idx.entries = cloneSessionEntries(loaded.entries)
 			idx.filesystemBase = cloneSessionEntries(loaded.entries)
 			idx.filesystemDirty = sessionEntriesHaveInlineSearch(idx.entries)
+			idx.superseded = cloneSupersededSegments(loaded.superseded)
 			return loadErr
 		}
 		var decodeErr *indexDecodeError
@@ -93,6 +94,7 @@ func (i *Index) reloadFilesystemLocked() (bool, error) {
 			applySessionDiff(disk, current, base)
 		}
 		i.entries = disk
+		i.superseded = cloneSupersededSegments(loaded.superseded)
 		i.filesystemDirty = dirty || sessionEntriesHaveInlineSearch(disk)
 		return true, err
 	}

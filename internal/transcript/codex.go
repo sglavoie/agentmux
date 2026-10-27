@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/harness"
@@ -104,6 +105,9 @@ func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMe
 	}
 
 	var out []SessionMeta
+	// unparsed holds the files taken from opts.Superseded, which carry only
+	// what choosing a segment needs and are parsed if they are kept.
+	unparsed := make(map[string]os.FileInfo)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			slog.Debug("transcript.codex: walk error", "path", path, "err", walkErr)
@@ -130,6 +134,13 @@ func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMe
 				return nil
 			}
 		}
+		if opts.Superseded != nil {
+			if meta, ok := opts.Superseded(path, info.Size(), info.ModTime()); ok {
+				unparsed[path] = info
+				out = append(out, meta)
+				return nil
+			}
+		}
 		meta, err := r.parseFile(path, info)
 		if err != nil {
 			slog.Debug("transcript.codex: skip file", "path", path, "err", err)
@@ -141,7 +152,26 @@ func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMe
 	if err != nil {
 		return nil, err
 	}
-	out = latestCodexSegments(out)
+	kept, superseded := latestCodexSegments(out)
+	out = kept[:0]
+	for _, meta := range kept {
+		if info, ok := unparsed[meta.Path]; ok {
+			// The segment that won before is gone or older now, so the one
+			// set aside is the conversation again and needs its full parse.
+			parsed, err := r.parseFile(meta.Path, info)
+			if err != nil {
+				slog.Debug("transcript.codex: skip file", "path", meta.Path, "err", err)
+				continue
+			}
+			meta = parsed
+		}
+		out = append(out, meta)
+	}
+	if opts.Supersede != nil {
+		for _, meta := range superseded {
+			opts.Supersede(meta)
+		}
+	}
 	applyCodexThreadNames(homeDir, out)
 	return out, nil
 }
@@ -154,10 +184,11 @@ func (r CodexReader) Discover(homeDir string, opts DiscoverOptions) ([]SessionMe
 // sidecar whenever the two disagreed. The segment with the latest activity is
 // the conversation as it now stands and the one a resume continues, so it is
 // the one kept; ties fall to the later modification time, then the later path,
-// so the choice does not depend on walk order.
-func latestCodexSegments(metas []SessionMeta) []SessionMeta {
+// so the choice does not depend on walk order. The segments set aside are
+// returned too, so a refresh can remember them instead of parsing them again.
+func latestCodexSegments(metas []SessionMeta) (out, superseded []SessionMeta) {
 	kept := make(map[string]int, len(metas))
-	out := metas[:0]
+	out = metas[:0]
 	for _, meta := range metas {
 		if meta.ID == "" {
 			out = append(out, meta)
@@ -170,10 +201,13 @@ func latestCodexSegments(metas []SessionMeta) []SessionMeta {
 			continue
 		}
 		if codexSegmentIsLater(meta, out[at]) {
+			superseded = append(superseded, out[at])
 			out[at] = meta
+			continue
 		}
+		superseded = append(superseded, meta)
 	}
-	return out
+	return out, superseded
 }
 
 func codexSegmentIsLater(a, b SessionMeta) bool {
@@ -185,6 +219,11 @@ func codexSegmentIsLater(a, b SessionMeta) bool {
 	}
 	return a.Path > b.Path
 }
+
+// codexParseHookForTest lets same-package tests see which rollouts discovery
+// parses without changing the production parse path. It is atomic because
+// the reader's other tests run in parallel with the one that sets it.
+var codexParseHookForTest atomic.Pointer[func(path string)]
 
 // codexSessionIndex is the file Codex records thread names in, one
 // {"id","thread_name","updated_at"} line per rename, beside sessions/.
@@ -328,6 +367,9 @@ func (r CodexReader) ClassifySession(path string) (SessionClass, error) {
 // loop tracks first/last timestamp, message count, snippet, cwd, and id —
 // using whichever subset of fields each line happens to carry.
 func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, error) {
+	if hook := codexParseHookForTest.Load(); hook != nil {
+		(*hook)(path)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return SessionMeta{}, err
