@@ -26,6 +26,9 @@ import (
 type commandWorktreeManager struct {
 	entries       []worktree.Entry
 	removeOptions []worktree.RemoveOptions
+	// branchErr, when set, makes Remove remove the checkout and then fail to
+	// delete the branch, as a branch with unmerged commits does.
+	branchErr     error
 	forgetCalls   int
 	reviewOptions []worktree.ReviewOptions
 	review        worktree.Review
@@ -40,6 +43,9 @@ func (m *commandWorktreeManager) Resolve(_ context.Context, selector string) (wo
 }
 func (m *commandWorktreeManager) Remove(_ context.Context, _ string, options worktree.RemoveOptions) (worktree.MutationResult, error) {
 	m.removeOptions = append(m.removeOptions, options)
+	if m.branchErr != nil {
+		return worktree.MutationResult{Entry: m.entries[0], CheckoutRemoved: true}, &worktree.PartialMutationError{Err: m.branchErr}
+	}
 	return worktree.MutationResult{Entry: m.entries[0], CheckoutRemoved: true, BranchDeleted: options.DeleteBranch, MetadataForgotten: true}, nil
 }
 func (m *commandWorktreeManager) Review(_ context.Context, _ worktree.Entry, options worktree.ReviewOptions) (worktree.Review, error) {

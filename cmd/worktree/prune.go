@@ -45,7 +45,7 @@ deletes each removed worktree's merged branch.`,
 			return worktreeCommandError(cmd, jsonOutput, listed, err)
 		}
 		views, _ := listed.Data["worktrees"].([]actions.WorktreeView)
-		data := worktreePruneData{DryRun: !confirmed, Candidates: []string{}, Removed: []string{}, Failed: []worktreePruneFailure{}}
+		data := worktreePruneData{DryRun: !confirmed, Candidates: []string{}, Removed: []string{}, Partial: []worktreePruneFailure{}, Failed: []worktreePruneFailure{}}
 		var candidates []actions.WorktreeView
 		for _, view := range views {
 			if prunable(view, mergedOnly) {
@@ -77,6 +77,17 @@ deletes each removed worktree's merged branch.`,
 			result, removeErr := executeWorktreeAction(cmd, actions.WorktreeRemove, actions.Request{
 				Selector: view.ID, Parameters: parameters, Confirmed: true,
 			})
+			if checkoutRemovedPartially(result, removeErr) {
+				// The checkout is gone; only a later step (deleting the branch,
+				// forgetting the sidecar) failed. Calling that "kept" would send
+				// the operator looking for a worktree that no longer exists.
+				data.Removed = append(data.Removed, view.ID)
+				data.Partial = append(data.Partial, worktreePruneFailure{ID: view.ID, Message: removeErr.Error()})
+				if !jsonOutput {
+					_, _ = fmt.Fprintf(out, "removed %s, but not completely: %v\n", view.ID, removeErr)
+				}
+				continue
+			}
 			if removeErr != nil {
 				data.Failed = append(data.Failed, worktreePruneFailure{ID: view.ID, Message: removeErr.Error()})
 				if !jsonOutput {
@@ -102,8 +113,23 @@ deletes each removed worktree's merged branch.`,
 			// status says not everything was.
 			return &cli.ExitError{Code: 1, Err: fmt.Errorf("%d of %s %s kept", len(data.Failed), cli.CountOf(len(candidates), "worktree", "worktrees"), cli.ByCount(len(data.Failed), "was", "were")), Quiet: jsonOutput}
 		}
+		if len(data.Partial) > 0 {
+			return &cli.ExitError{Code: 1, Err: fmt.Errorf("%d of %s %s removed only in part", len(data.Partial), cli.CountOf(len(candidates), "worktree", "worktrees"), cli.ByCount(len(data.Partial), "was", "were")), Quiet: jsonOutput}
+		}
 		return nil
 	},
+}
+
+// checkoutRemovedPartially reports a removal whose checkout is gone although
+// a step after it failed: the action's partial result, carrying a mutation
+// that removed the checkout.
+func checkoutRemovedPartially(result actions.Result, err error) bool {
+	var partial *actions.PartialResultError
+	if !errors.As(err, &partial) {
+		return false
+	}
+	mutation, ok := result.Data["mutation"].(worktree.MutationResult)
+	return ok && mutation.CheckoutRemoved
 }
 
 // prunable is the selection rule. It mirrors what remove refuses so a preview
@@ -135,10 +161,13 @@ func prunable(view actions.WorktreeView, mergedOnly bool) bool {
 }
 
 type worktreePruneData struct {
-	DryRun     bool                   `json:"dry_run"`
-	Candidates []string               `json:"candidates"`
-	Removed    []string               `json:"removed"`
-	Failed     []worktreePruneFailure `json:"failed"`
+	DryRun     bool     `json:"dry_run"`
+	Candidates []string `json:"candidates"`
+	Removed    []string `json:"removed"`
+	// Partial lists the removed worktrees whose removal stopped after the
+	// checkout went, with why; each is also in Removed.
+	Partial []worktreePruneFailure `json:"partial"`
+	Failed  []worktreePruneFailure `json:"failed"`
 }
 
 type worktreePruneFailure struct {
