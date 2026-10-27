@@ -2,7 +2,6 @@ package tmux_test
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"slices"
@@ -313,29 +312,7 @@ func TestReconcileEndsNothingOverASocketThatStillListens(t *testing.T) {
 	start := time.Now().Add(-time.Minute)
 	agent := register(t, f, launchAgent(t, f), start)
 	reconciler := tmux.NewReconciler(f.Registry, nil)
-	if err := f.Server.Kill(); err != nil {
-		t.Fatal(err)
-	}
-
-	// A listener that hangs up on every client is what a server too busy to
-	// answer looks like to one: tmux reports it as gone.
-	if err := os.Remove(f.Server.Socket()); err != nil && !os.IsNotExist(err) {
-		t.Fatal(err)
-	}
-	listener, err := net.Listen("unix", f.Server.Socket())
-	if err != nil {
-		t.Fatal(err)
-	}
-	listener.(*net.UnixListener).SetUnlinkOnClose(false)
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			_ = conn.Close()
-		}
-	}()
+	stop := f.Refuse(t)
 	report, err := reconciler.Reconcile(time.Now())
 	if err == nil || len(report.Ended) != 0 {
 		t.Fatalf("pass over a socket that still listens = %+v, %v; want an unreadable server and nothing ended", report, err)
@@ -345,9 +322,7 @@ func TestReconcileEndsNothingOverASocketThatStillListens(t *testing.T) {
 	}
 
 	// The listener goes and its socket stays, as a crashed server's does.
-	if err := listener.Close(); err != nil {
-		t.Fatal(err)
-	}
+	stop()
 	if _, err := os.Lstat(f.Server.Socket()); err != nil {
 		t.Fatalf("the socket was removed: %v", err)
 	}

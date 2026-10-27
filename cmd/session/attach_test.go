@@ -287,6 +287,21 @@ func TestAttachToAServerThatDiedIsLostAndStartsNothing(t *testing.T) {
 	}
 }
 
+// A server that turns a connection away while its socket still listens is
+// unreadable, not gone: attach says the backend is unavailable and leaves the
+// session live for the next attempt.
+func TestAttachToAServerThatRefusesLosesNothing(t *testing.T) {
+	f, launched := attachLaunchAgent(t)
+	attachRunClient = func(*exec.Cmd) error { t.Fatal("attached through a server that refused"); return nil }
+	f.Refuse(t)
+	if code, message := attachFailure(t, string(launched.RuntimeSessionID)); code != "backend_unavailable" || !strings.Contains(message, "still accepts connections") {
+		t.Fatalf("agent of a server that refused: %s %q", code, message)
+	}
+	if record, _ := f.Load(t).Get(launched.RuntimeSessionID); record.State != runtimesession.StateLive {
+		t.Fatalf("record = %s %q, want live", record.State, record.StaleReason)
+	}
+}
+
 func TestAttachJSONCountsTheTerminalsAttached(t *testing.T) {
 	f, launched := attachLaunchAgent(t)
 	attachRunClient = func(*exec.Cmd) error { t.Fatal("--json attached a client"); return nil }

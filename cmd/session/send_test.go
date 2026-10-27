@@ -316,6 +316,15 @@ func TestSendRefusesAnAgentThatStopped(t *testing.T) {
 	}
 }
 
+func TestSendThroughAServerThatRefusesLosesNothing(t *testing.T) {
+	w := newSendWorld(t)
+	w.f.Refuse(t)
+	w.refused(t, "backend_unavailable", w.id(), "typed-marker")
+	if record, _ := w.f.Load(t).Get(w.launched.RuntimeSessionID); record.State != runtimesession.StateLive {
+		t.Fatalf("record = %s %q, want live", record.State, record.StaleReason)
+	}
+}
+
 func TestSendLookShowsTheScreenAndWritesNothing(t *testing.T) {
 	w := newSendWorld(t)
 	w.sent(t, w.id(), "look-marker", "--no-enter")

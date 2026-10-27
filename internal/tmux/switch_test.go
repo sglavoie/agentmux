@@ -188,3 +188,20 @@ func TestPopupRunsAProgramOverAnAttachedTerminalWithTheSessionsEnvironment(t *te
 		t.Fatal("a name that is not a terminal was accepted")
 	}
 }
+
+// TestSwitcherLosesNothingOverAServerThatRefuses: a server that turns the
+// survey away while its socket still listens is unreadable, so the switch
+// fails without recording the session stale.
+func TestSwitcherLosesNothingOverAServerThatRefuses(t *testing.T) {
+	f := tmuxtest.New(t)
+	record := register(t, f, launchAgent(t, f), time.Now().Add(-time.Hour))
+	f.Refuse(t)
+	switcher := tmux.Switcher{Store: f.Registry, Backend: f.Backend}
+	var notLive *tmux.NotLiveError
+	if err := switcher.Switch("/dev/ttys999", record.ID); err == nil || errors.As(err, &notLive) {
+		t.Fatalf("switch through a server that refused = %v, want an unreadable server", err)
+	}
+	if got := get(t, f, record.ID); got.State != runtimesession.StateLive {
+		t.Fatalf("session = %s %q, want live", got.State, got.StaleReason)
+	}
+}

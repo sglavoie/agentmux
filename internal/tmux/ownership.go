@@ -70,6 +70,40 @@ const (
 	surveyClient = "C"
 )
 
+// ConfirmedSurvey is Survey for a caller that ends sessions on what it finds,
+// and does not take one refused connection for a server that is gone. A
+// survey that finds no server ends every session on it, so "not running" is
+// believed at once only when the socket is gone too. Over a socket that is
+// still there it may be a server too busy to take the connection, so the
+// survey is asked once more; a second refusal is believed only when nothing
+// listens on the socket, which is what a server that crashed and left its
+// socket behind looks like. One that still listens is reported as unreadable,
+// and missing evidence ends nothing.
+func (b *Backend) ConfirmedSurvey() (Survey, error) {
+	survey, err := b.Survey()
+	if err != nil || survey.Running {
+		return survey, err
+	}
+	socket := b.server.socket
+	if !socketPresent(socket) {
+		return survey, nil
+	}
+	if survey, err = b.Survey(); err != nil || survey.Running {
+		return survey, err
+	}
+	if Listening(socket) {
+		return Survey{}, fmt.Errorf("tmux: the server at %s refused a survey twice but still accepts connections", socket)
+	}
+	return survey, nil
+}
+
+// socketPresent reports whether anything is at the socket path. One that
+// cannot even be looked at counts as gone, as it would for tmux.
+func socketPresent(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
 // Survey reads the server. A server that is not running is not an error: it
 // is reported as such, with no panes and no clients. Any other failure is an
 // error, so an unreachable server is never mistaken for an absent one.

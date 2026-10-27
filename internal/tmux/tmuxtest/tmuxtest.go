@@ -5,6 +5,7 @@ package tmuxtest
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,4 +95,35 @@ func (f *Fixture) Load(t *testing.T) *runtimesession.Registry {
 		t.Fatal(err)
 	}
 	return registry
+}
+
+// Refuse ends the server and listens on its socket, hanging up on every
+// client: what a server too busy to take a connection looks like to one, which
+// tmux reports as no server running. The returned function stops listening
+// and leaves the socket behind, as a server that crashed does.
+func (f *Fixture) Refuse(t *testing.T) (stop func()) {
+	t.Helper()
+	if err := f.Server.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(f.Server.Socket()); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", f.Server.Socket())
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener.(*net.UnixListener).SetUnlinkOnClose(false)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	stop = func() { _ = listener.Close() }
+	t.Cleanup(stop)
+	return stop
 }

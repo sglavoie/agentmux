@@ -303,7 +303,9 @@ func (s Switcher) Switch(client string, id runtimesession.ID) error {
 	if record.Target.Instance.Kind != runtimesession.BackendTmux || record.Target.Instance.Address != s.Backend.server.socket {
 		return fmt.Errorf("runtime session %s does not run on the tmux server at %s", id, s.Backend.server.socket)
 	}
-	survey, err := s.Backend.Survey()
+	// The survey decides whether the session is still there, so a server
+	// that turned one connection away is not taken for one that is gone.
+	survey, err := s.Backend.ConfirmedSurvey()
 	if err != nil {
 		return err
 	}

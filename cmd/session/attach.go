@@ -131,7 +131,7 @@ func attachHosted() bool {
 
 // tmuxAttacher is what attaching needs from the tmux backend.
 type tmuxAttacher interface {
-	Survey() (tmux.Survey, error)
+	ConfirmedSurvey() (tmux.Survey, error)
 	AttachCommand(pane backend.Ref, view tmux.AttachView) (*exec.Cmd, error)
 }
 
@@ -256,8 +256,9 @@ func notLiveError(record runtimesession.Record) error {
 // returns the record as it stands afterwards: still live, or stale with why.
 func validateTmux(store *runtimesession.Store, server tmuxAttacher, record runtimesession.Record) (tmux.Survey, runtimesession.Record, error) {
 	// A server that is not running is surveyed as having no generation, which
-	// marks every session registered on it stale.
-	survey, err := server.Survey()
+	// marks every session registered on it stale, so one refused connection
+	// over a socket that still listens is an unreadable server, not a gone one.
+	survey, err := server.ConfirmedSurvey()
 	if err != nil {
 		return tmux.Survey{}, record, fmt.Errorf("reading tmux server: %w", err)
 	}
