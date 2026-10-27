@@ -141,7 +141,7 @@ func (i *Inventory) Land(ctx context.Context, selector string) (LandResult, erro
 		}
 		for _, record := range records {
 			if record.Branch == source && !record.Detached {
-				return manager.landInCheckout(ctx, record.Path, from, branchRef, &result)
+				return manager.landInCheckout(ctx, record.Path, from, to, &result)
 			}
 		}
 		// No worktree has the source branch checked out. One may still be in
@@ -165,9 +165,9 @@ func (i *Inventory) Land(ctx context.Context, selector string) (LandResult, erro
 
 // landInCheckout fast-forwards the source branch where it is checked out, so
 // that checkout's files and index move with it. Tracked changes there are a
-// refusal; untracked files are left to Git, which itself refuses to overwrite
-// one.
-func (i *Inventory) landInCheckout(ctx context.Context, checkout, from, branchRef string, result *LandResult) error {
+// refusal; untracked files, including ignored files, are left to Git with an
+// explicit instruction to refuse overwriting them.
+func (i *Inventory) landInCheckout(ctx context.Context, checkout, from, to string, result *LandResult) error {
 	git := i.gitRunner()
 	canonical, err := canonicalExistingPath(checkout)
 	if err != nil {
@@ -185,7 +185,11 @@ func (i *Inventory) landInCheckout(ctx context.Context, checkout, from, branchRe
 	if len(status) != 0 {
 		return fmt.Errorf("%w: %s", ErrSourceDirty, canonical)
 	}
-	if _, err := git(ctx, canonical, gitCommandTimeout, "merge", "--ff-only", "--no-edit", branchRef); err != nil {
+	// Merge the exact commit whose ancestry and count were validated. The
+	// worktree's branch can move while another process commits there. Explicit
+	// options also keep branch merge preferences from turning a landing into
+	// staged squash changes, or Git's default from overwriting ignored files.
+	if _, err := git(ctx, canonical, gitCommandTimeout, "merge", "--ff-only", "--no-squash", "--no-overwrite-ignore", "--no-edit", to); err != nil {
 		return fmt.Errorf("worktree: fast-forwarding %s in %s: %w", result.SourceBranch, canonical, err)
 	}
 	result.Landed = true

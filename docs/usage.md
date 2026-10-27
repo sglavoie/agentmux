@@ -1347,8 +1347,11 @@ worktree with no recorded source branch (a legacy checkout) cannot be reviewed.
 `land` fast-forwards the recorded source branch to the worktree branch under
 the same lock and with the same fresh checks as `remove`, and never forces.
 Where the source branch is checked out, that checkout moves with it and must
-have no uncommitted changes to tracked files; where no worktree has it checked
-out, only the branch is advanced. A `diff` verdict of `fast_forward` is the one
+have no uncommitted changes to tracked files. Landing also refuses to overwrite
+untracked files, including ignored files. It uses the commit validated during
+preflight and fast-forwards even when the source branch has a Git squash merge
+preference. Where no worktree has the source branch checked out, only the branch
+is advanced. A `diff` verdict of `fast_forward` is the one
 that lands; `diverged_clean` and `conflicts` are refused as `branch_diverged`.
 The other refusals are `nothing_to_land`, `worktree_dirty`, `worktree_locked`,
 `worktree_detached`, `worktree_active`, `source_dirty`, `source_busy` (the
