@@ -170,8 +170,8 @@ extension WorkspaceWindowController {
         }
     }
 
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        switch items[row] {
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row line: Int) -> NSView? {
+        switch items[line] {
         case let .section(title):
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
                 ?? WorkspaceGroupCellView()
@@ -197,7 +197,8 @@ extension WorkspaceWindowController {
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
-                      sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false)
+                      sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false,
+                      away: Item.isAway(at: line, in: items))
             let current = state.row(row.key) != nil
             cell.alphaValue = current ? 1 : 0.5
             cell.closeButton.isEnabled = current

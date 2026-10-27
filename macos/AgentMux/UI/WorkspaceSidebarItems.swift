@@ -45,6 +45,18 @@ enum WorkspaceSidebarItem: Equatable {
         }
     }
 
+    /// Whether the session at `index` is listed away from its project, under
+    /// Pinned or Needs attention, and so names the project. Read from where
+    /// the line is, not from the row: a held line keeps its place after the
+    /// row's state that put it there has changed.
+    static func isAway(at index: Int, in items: [Self]) -> Bool {
+        guard items.indices.contains(index),
+              let group = items[..<index].last(where: { if case .group = $0 { return true } else { return false } }),
+              case let .group(group) = group
+        else { return false }
+        return group.pinned || group.needsAttention
+    }
+
     /// A session can move only among its project's sessions; a utility view
     /// beside a session can move only among that session's views.
     static func dropSlots(forItemAt index: Int, in items: [Self]) -> [Int] {

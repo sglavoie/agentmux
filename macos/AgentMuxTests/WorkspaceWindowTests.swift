@@ -161,6 +161,30 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(group.needsAttention, "Promotion should apply when interaction ends")
     }
 
+    func testHeldLinesNameTheirProjectByWhereTheyAreListed() throws {
+        var live = sessions
+        live[1].unseen = true
+        app.store.apply(snapshot: F.snapshot(live))
+        let key = AttentionCycler.Key.embedded(F.runtimeID(2))
+        func title() throws -> String {
+            let line = try index(of: key)
+            let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: line, makeIfNecessary: true) as? WorkspaceRowCellView)
+            return cell.titleLabel.stringValue
+        }
+        XCTAssertEqual(try title(), "api — personal")
+        let entered = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: workspace.window.windowNumber,
+            context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+        workspace.sidebar.mouseEntered(with: entered)
+        live[1].unseen = false
+        app.store.apply(snapshot: F.snapshot(live))
+        guard case let .row(held) = workspace.items[try index(of: key)] else { return XCTFail("Lost held row") }
+        XCTAssertFalse(held.needsAttention)
+        XCTAssertEqual(try title(), "api — personal", "a line held in Needs attention still names its project")
+        workspace.sidebar.mouseExited(with: entered)
+        XCTAssertEqual(try title(), "personal", "back under its project it needs no project name")
+    }
+
     func testNewSessionsAppearWhilePointerRemainsInSidebar() throws {
         app.store.apply(snapshot: F.snapshot([]))
         let entered = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
