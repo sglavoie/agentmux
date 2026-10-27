@@ -46,7 +46,10 @@ type replayTrace struct {
 // replayEmitBase anchors sanitized emitted_time values just behind the wall
 // clock: the shadow path compacts tombstones by real age (time.Now), so a
 // fixed historical epoch would silently erase terminal facts mid-trace.
-var replayEmitBase = time.Now().Unix() - 60
+// replayTraces re-anchors it, because an anchor taken once when the package
+// loads ages past SubagentStopRetentionSeconds in a long -count or -race run,
+// and completed subagents are then compacted mid-trace.
+var replayEmitBase int64
 
 // pl builds a sanitized payload with the shared identity fields appended.
 // seq doubles as emitted time offset so recency follows the trace order.
@@ -68,6 +71,7 @@ func plc(seq int, extra string) string {
 }
 
 func replayTraces(projectDir string) []replayTrace {
+	replayEmitBase = time.Now().Unix() - 60
 	return []replayTrace{
 		{
 			name:    "claude-single-turn",
