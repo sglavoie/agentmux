@@ -149,6 +149,27 @@ func TestReviewReportsABinaryFileWithoutCounts(t *testing.T) {
 	}
 }
 
+func TestReviewNeverRunsTextconv(t *testing.T) {
+	t.Parallel()
+	_, inventory, entry := reviewFixture(t)
+	// The converter leaves a marker if Git runs it. Both the stats and patch
+	// must describe the actual content, without invoking configured programs.
+	gitRun(t, entry.Path, "config", "diff.review.textconv", "touch converter-ran; cat")
+	if err := os.WriteFile(filepath.Join(entry.Path, ".gitattributes"), []byte("README.md diff=review\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, entry.Path, "README.md", "# changed\n", "change")
+	for _, committedOnly := range []bool{false, true} {
+		review, err := inventory.Review(context.Background(), entry, ReviewOptions{Patch: true, CommittedOnly: committedOnly})
+		if err != nil || !strings.Contains(review.Patch, "+# changed") {
+			t.Fatalf("Review committed=%t: %+v, %v", committedOnly, review, err)
+		}
+		if _, err := os.Stat(filepath.Join(entry.Path, "converter-ran")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("Review committed=%t ran textconv: %v", committedOnly, err)
+		}
+	}
+}
+
 func TestReviewRefusesWhatItCannotCompare(t *testing.T) {
 	t.Parallel()
 

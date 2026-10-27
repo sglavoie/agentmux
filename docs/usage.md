@@ -1331,6 +1331,7 @@ valid, clean, unlocked, and used by no live session or loop — and with
 `remove`, which re-checks everything at that moment, so a worktree that became
 active in the meantime is kept and reported. Branches are kept unless
 `--delete-branch` is given, and even then only merged branches are deleted.
+A branch checked out or being rebased in another worktree is kept.
 
 `diff` reviews what a worktree did since it left its recorded source branch:
 commits ahead and behind, each changed file with its line counts, files Git
@@ -1339,7 +1340,8 @@ does not track yet, and a verdict on how the committed work would land —
 files), or `unknown` when the merge could not be predicted. The comparison
 starts at the merge base, so what the source branch gained meanwhile is not
 counted as the worktree's change. Uncommitted changes are included unless
-`--committed` is given; `--patch` appends the unified diff. It reads and never
+`--committed` is given; `--patch` appends the unified diff. External diff drivers
+and text converters are disabled. It reads and never
 writes — the merge is predicted in Git's object database, not in a checkout —
 so it needs no `--yes` and is safe on a worktree with a live session in it. A
 worktree with no recorded source branch (a legacy checkout) cannot be reviewed.
@@ -1347,7 +1349,8 @@ worktree with no recorded source branch (a legacy checkout) cannot be reviewed.
 `land` fast-forwards the recorded source branch to the worktree branch under
 the same lock and with the same fresh checks as `remove`, and never forces.
 Where the source branch is checked out, that checkout moves with it and must
-have no uncommitted changes to tracked files. Landing also refuses to overwrite
+have no uncommitted changes to tracked files. Landing refuses if that checkout
+has switched branches or detached HEAD during preflight. It also refuses to overwrite
 untracked files, including ignored files. It uses the commit validated during
 preflight and fast-forwards even when the source branch has a Git squash merge
 preference. Where no worktree has the source branch checked out, only the branch

@@ -150,6 +150,41 @@ func TestRemoveRefusesToDeleteABranchCheckedOutElsewhere(t *testing.T) {
 	}
 }
 
+func TestRemoveRefusesToDeleteABranchBeingRebasedElsewhere(t *testing.T) {
+	t.Parallel()
+	repo, inventory, entry := reviewFixture(t)
+	commitFile(t, entry.Path, "feature.txt", "feature\n", "feature")
+	if _, err := inventory.Land(context.Background(), entry.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(entry.Path); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, repo, "worktree", "prune")
+	other := filepath.Join(t.TempDir(), "other")
+	gitRun(t, repo, "worktree", "add", other, entry.Branch)
+	t.Cleanup(func() { _ = execGit(other, "rebase", "--abort") })
+	if err := execGit(other, "rebase", "--exec", "false", "HEAD~1"); err == nil {
+		t.Fatal("expected rebase to stop at the failing exec")
+	}
+	if err := execGit(other, "symbolic-ref", "-q", "HEAD"); err == nil {
+		t.Fatal("expected detached HEAD during rebase")
+	}
+	before := revision(t, repo, "refs/heads/"+entry.Branch)
+	removed, err := inventory.Remove(context.Background(), entry.ID, RemoveOptions{DeleteBranch: true})
+	if err == nil || removed.BranchDeleted || removed.MetadataForgotten {
+		t.Errorf("Remove = %+v, %v; want the rebasing branch and sidecar kept", removed, err)
+	}
+	if exists, err := gitBranchExists(context.Background(), repo, entry.Branch); err != nil || !exists {
+		t.Errorf("rebasing branch exists = %v, %v; want kept at %s", exists, err, before)
+	} else if got := revision(t, repo, "refs/heads/"+entry.Branch); got != before {
+		t.Errorf("branch moved from %s to %s", before, got)
+	}
+	if _, err := os.Stat(entry.MetadataPath); err != nil {
+		t.Errorf("sidecar was not preserved: %v", err)
+	}
+}
+
 func TestLandRefusesWithoutMovingAnything(t *testing.T) {
 	t.Parallel()
 

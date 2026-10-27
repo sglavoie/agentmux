@@ -2,11 +2,52 @@ package worktree
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestLandRefusesASourceCheckoutThatChangedBranches(t *testing.T) {
+	t.Parallel()
+	for _, detached := range []bool{false, true} {
+		t.Run("detached="+strconv.FormatBool(detached), func(t *testing.T) {
+			t.Parallel()
+			repo, inventory, entry := reviewFixture(t)
+			commitFile(t, entry.Path, "feature.txt", "feature\n", "feature")
+			before := revision(t, repo, "HEAD")
+			git := inventory.git
+			armed, switched := false, false
+			inventory.git = func(ctx context.Context, directory string, timeout time.Duration, args ...string) ([]byte, error) {
+				out, err := git(ctx, directory, timeout, args...)
+				if strings.Join(args, " ") == "rev-parse --verify refs/heads/"+entry.SourceBranch+"^{commit}" {
+					armed = true
+				}
+				if armed && !switched && gitSubcommand(args) == "worktree" && err == nil {
+					switched = true
+					if detached {
+						gitRun(t, repo, "checkout", "--detach")
+					} else {
+						gitRun(t, repo, "checkout", "-b", "elsewhere")
+					}
+				}
+				return out, err
+			}
+			result, err := inventory.Land(context.Background(), entry.ID)
+			if !switched || !errors.Is(err, ErrGitUnavailable) || result.Landed {
+				t.Errorf("Land = %+v, %v; switched = %t; want refusal", result, err, switched)
+			}
+			for _, ref := range []string{"HEAD", "refs/heads/" + entry.SourceBranch} {
+				if got := revision(t, repo, ref); got != before {
+					t.Errorf("%s moved from %s to %s", ref, before, got)
+				}
+			}
+		})
+	}
+}
 
 func TestLandPreservesIgnoredFilesInSourceCheckout(t *testing.T) {
 	t.Parallel()

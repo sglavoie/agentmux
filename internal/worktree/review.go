@@ -144,7 +144,9 @@ func (i *Inventory) Review(ctx context.Context, entry Entry, options ReviewOptio
 	if options.CommittedOnly {
 		span = append(span, head)
 	}
-	numstat, err := git(ctx, path, gitCommandTimeout, diffArgs(append([]string{"--no-ext-diff", "--no-renames", "--numstat", "-z"}, span...)...)...)
+	// Both diff modes must bypass configured programs: --no-ext-diff alone
+	// still lets a patch invoke an attributes-selected textconv command.
+	numstat, err := git(ctx, path, gitCommandTimeout, diffArgs(append([]string{"--no-ext-diff", "--no-textconv", "--no-renames", "--numstat", "-z"}, span...)...)...)
 	if err != nil {
 		return Review{}, fmt.Errorf("%w: summarizing changes: %w", ErrGitUnavailable, err)
 	}
@@ -171,7 +173,7 @@ func (i *Inventory) Review(ctx context.Context, entry Entry, options ReviewOptio
 		if options.Color {
 			color = "--color=always"
 		}
-		patch, err := git(ctx, path, gitCommandTimeout, diffArgs(append([]string{"--no-ext-diff", color}, span...)...)...)
+		patch, err := git(ctx, path, gitCommandTimeout, diffArgs(append([]string{"--no-ext-diff", "--no-textconv", color}, span...)...)...)
 		if err != nil {
 			return Review{}, fmt.Errorf("%w: reading the patch: %w", ErrGitUnavailable, err)
 		}

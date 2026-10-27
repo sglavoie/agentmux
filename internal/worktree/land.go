@@ -174,6 +174,12 @@ func (i *Inventory) landInCheckout(ctx context.Context, checkout, from, to strin
 		return fmt.Errorf("%w: the source branch's checkout %s is unavailable: %w", ErrGitUnavailable, checkout, err)
 	}
 	result.SourceCheckout = canonical
+	// Switching branches (or detaching) can leave HEAD at the same commit.
+	// Verify the branch as well as its tip before merging into this checkout.
+	branch, err := gitLineWith(ctx, git, canonical, gitProbeTimeout, "symbolic-ref", "--quiet", "HEAD")
+	if err != nil || branch != "refs/heads/"+result.SourceBranch {
+		return fmt.Errorf("%w: the source branch's checkout changed branches during landing preflight", ErrGitUnavailable)
+	}
 	head, err := gitLineWith(ctx, git, canonical, gitProbeTimeout, "rev-parse", "--verify", "HEAD^{commit}")
 	if err != nil || head != from {
 		return fmt.Errorf("%w: the source branch's checkout moved during landing preflight", ErrGitUnavailable)
