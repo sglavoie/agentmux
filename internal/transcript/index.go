@@ -295,7 +295,10 @@ func transcriptHomeGroups(cfg *config.Config) []transcriptHomeGroup {
 	for _, profile := range cfg.Profiles {
 		harnessName := profile.EffectiveHarness()
 		home := config.ExpandTilde(profile.EffectiveHomeDir())
-		key := transcriptHomeGroupKey{harnessName: harnessName, home: home}
+		if home != "" {
+			home = filepath.Clean(home)
+		}
+		key := transcriptHomeGroupKey{harnessName: harnessName, home: transcriptHomeIdentity(home)}
 		if idx, ok := groupByKey[key]; ok {
 			groups[idx].profiles = append(groups[idx].profiles, profile.Name)
 			continue
@@ -311,6 +314,22 @@ func transcriptHomeGroups(cfg *config.Config) []transcriptHomeGroup {
 		groups[idx].profiles = cleanProfileNames(groups[idx].profiles)
 	}
 	return groups
+}
+
+// transcriptHomeIdentity is the directory a profile home names, so two
+// spellings of one home (a trailing slash, a symlink) group as one. Discovery
+// still walks the home as configured; only the grouping uses the resolved
+// path, and a home that cannot be resolved groups by its cleaned spelling.
+// Grouping one home twice made each refresh assign its transcripts to
+// whichever profile came last and rewrite the cache.
+func transcriptHomeIdentity(home string) string {
+	if home == "" {
+		return home
+	}
+	if resolved, err := filepath.EvalSymlinks(home); err == nil {
+		return resolved
+	}
+	return home
 }
 
 func displayProfileForGroup(cfg *config.Config, projectTitle, matchedProfile string, profiles []string) string {

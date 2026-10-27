@@ -81,6 +81,58 @@ func TestRefresh_SharedHomeProfilesKeepStableDisplayAndFilterMembership(t *testi
 	}
 }
 
+// One home spelled two ways (here with and without a trailing slash, and
+// through a symlink) is still one home: its transcripts belong to every
+// profile naming it, and an unchanged refresh writes nothing.
+func TestRefresh_SharedHomeSpelledTwoWaysIsOneHome(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	link := filepath.Join(tmp, "claude-link")
+	transcriptPath := filepath.Join(home, "projects", "-tmp-x", "sess-spelled.jsonl")
+	writeTranscript(t, transcriptPath,
+		`{"type":"user","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/x","entrypoint":"cli","message":{"role":"user","content":"hello world"}}`+"\n")
+	if err := os.Symlink(home, link); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	cfg := &config.Config{
+		Profiles: []config.Account{
+			{Name: "work", Harness: harness.Claude, HomeDir: home},
+			{Name: "personal", Harness: harness.Claude, HomeDir: home + "/"},
+			{Name: "linked", Harness: harness.Claude, HomeDir: link},
+		},
+	}
+	readers := map[string]Reader{harness.Claude: NewClaudeReader()}
+	idx := newTestIndex(t)
+	if err := idx.Refresh(cfg, readers); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	saves := 0
+	saveLockedHookForTest = func() { saves++ }
+	t.Cleanup(func() { saveLockedHookForTest = nil })
+	for range 2 {
+		if err := idx.Refresh(cfg, readers); err != nil {
+			t.Fatalf("Refresh: %v", err)
+		}
+	}
+	if saves != 0 {
+		t.Errorf("unchanged refreshes saved the cache %d times, want 0", saves)
+	}
+	got, ok := idx.Get(IndexKey(harness.Claude, "sess-spelled"))
+	if !ok {
+		t.Fatal("entry missing after Refresh")
+	}
+	if want := []string{"work", "personal", "linked"}; !slices.Equal(got.Profiles, want) {
+		t.Errorf("Profiles = %v, want %v", got.Profiles, want)
+	}
+	for _, profile := range []string{"work", "personal", "linked"} {
+		if matches := idx.List(ListFilter{Profile: []string{profile}}); len(matches) != 1 {
+			t.Errorf("Profile filter %q returned %d sessions, want 1", profile, len(matches))
+		}
+	}
+}
+
 func TestRefresh_DuplicateDirectoryProjectsKeepOrderedMembership(t *testing.T) {
 	tmp := t.TempDir()
 	home := filepath.Join(tmp, "claude-home")
