@@ -120,16 +120,16 @@ enum WorkspaceSidebarItem: Equatable {
 enum WorkspaceSidebarBand: Equatable {
     /// Needs attention, and a session waiting on the operator:
     /// #FFF659 light, #FFE500 dark;
-    /// chips #FFFBD0, #FFF7A8; strips #F2E68A, #D9C300.
+    /// chips #FFFFF5, #FFF7A8; strips #F2E68A, #D9C300.
     case attention
     /// Pinned: #98E7FF light, #9EE6FF dark;
-    /// chips #DDF6FF, #D6F5FF; strips #B9EBFA, #7CCDEB.
+    /// chips #F5FCFF, #D6F5FF; strips #B9EBFA, #7CCDEB.
     case pinned
     /// A session whose turn ended (✓): #FFC0C0 light, #FFB8B8 dark;
     /// chips #FFE3E3, #FFE0E0; strips #F0A8A8, #E89A9A.
     case stopped
     /// A session at work (⚡, 🤖, 🌀): #EAFFEA light, #C8FFC4 dark;
-    /// chips #F7FFF7, #E8FFE6; strips #CDEFCD, #A6E3A1.
+    /// chips #FCFFFC, #F0FFEF; strips #CDEFCD, #A6E3A1.
     case running
     /// A session with no state glyph: #E5E5E5 light, #E0E0E6 dark;
     /// chips #F5F5F5, #F4F4F7; strips #CFCFCF, #C4C4CC.
@@ -167,14 +167,16 @@ enum WorkspaceSidebarBand: Equatable {
         })
     }
 
-    /// The lighter shade of the hue that the text on it sits on.
+    /// The lighter shade of the hue that the text on it sits on. A section
+    /// band is drawn at 30% in the light appearance, so its light chip is
+    /// nearly white, or it would match the band and vanish.
     func chipColor(dark: Bool) -> NSColor {
         let (light, darkChip): (UInt32, UInt32)
         switch self {
-        case .attention: (light, darkChip) = (0xFFFBD0, 0xFFF7A8)
-        case .pinned: (light, darkChip) = (0xDDF6FF, 0xD6F5FF)
+        case .attention: (light, darkChip) = (0xFFFFF5, 0xFFF7A8)
+        case .pinned: (light, darkChip) = (0xF5FCFF, 0xD6F5FF)
         case .stopped: (light, darkChip) = (0xFFE3E3, 0xFFE0E0)
-        case .running: (light, darkChip) = (0xF7FFF7, 0xE8FFE6)
+        case .running: (light, darkChip) = (0xFCFFFC, 0xF0FFEF)
         case .idle: (light, darkChip) = (0xF5F5F5, 0xF4F4F7)
         }
         return Self.rgb(dark ? darkChip : light, alpha: 1)

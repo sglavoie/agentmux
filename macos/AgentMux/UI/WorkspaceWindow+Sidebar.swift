@@ -441,9 +441,9 @@ extension WorkspaceWindowController {
 
     // MARK: Widths
 
-    static let sidebarWidths: ClosedRange<CGFloat> = 180...420
+    static let sidebarWidths: ClosedRange<CGFloat> = 180...720
 
-    static let inspectorWidths: ClosedRange<CGFloat> = 220...420
+    static let inspectorWidths: ClosedRange<CGFloat> = 220...720
 
     static let defaultSidebarWidth: CGFloat = 240
 

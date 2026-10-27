@@ -649,8 +649,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
         let split = NSSplitViewController()
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
-        sidebarItem.minimumThickness = 180
-        sidebarItem.maximumThickness = 420
+        sidebarItem.minimumThickness = Self.sidebarWidths.lowerBound
+        sidebarItem.maximumThickness = Self.sidebarWidths.upperBound
         sidebarItem.canCollapse = true
         sidebarItem.canCollapseFromWindowResize = false
         self.sidebarItem = sidebarItem
@@ -684,8 +684,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         inspectorController.view = inspectorZoomView
         self.inspectorZoomView = inspectorZoomView
         let inspectorItem = NSSplitViewItem(viewController: inspectorController)
-        inspectorItem.minimumThickness = 220
-        inspectorItem.maximumThickness = 420
+        inspectorItem.minimumThickness = Self.inspectorWidths.lowerBound
+        inspectorItem.maximumThickness = Self.inspectorWidths.upperBound
         inspectorItem.canCollapse = true
         // Like the sidebar it keeps its width while the window is resized:
         // the pane takes the difference.

@@ -121,8 +121,8 @@ extension WorkspaceWindowController {
         if contentItem?.minimumThickness != middle { contentItem?.minimumThickness = middle }
         let width: CGFloat
         if isSplit {
-            let left = sidebarItem.flatMap { $0.isCollapsed ? nil : max(180, $0.viewController.view.frame.width) } ?? 0
-            let right = inspectorItem.flatMap { $0.isCollapsed ? nil : max(220, $0.viewController.view.frame.width) } ?? 0
+            let left = sidebarItem.flatMap { $0.isCollapsed ? nil : max(Self.sidebarWidths.lowerBound, $0.viewController.view.frame.width) } ?? 0
+            let right = inspectorItem.flatMap { $0.isCollapsed ? nil : max(Self.inspectorWidths.lowerBound, $0.viewController.view.frame.width) } ?? 0
             width = middle + left + right + 2
         } else { width = Self.minimumSize.width }
         let minimum = NSSize(width: width, height: Self.minimumSize.height)
