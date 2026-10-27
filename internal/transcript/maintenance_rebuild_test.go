@@ -270,3 +270,50 @@ func requireQuarantinedMetadata(t *testing.T, path string) {
 		t.Fatalf("quarantine files = %v, want one", matches)
 	}
 }
+
+// A rebuild bounded by scan_max_age_days reparses only the recent sessions,
+// so it must reset only their sidecars: an older session it never reached
+// keeps the sidecar that still matches it rather than being left with none.
+func TestRebuildWithinScanAgeKeepsSidecarsOfOlderSessions(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude-home")
+	record := func(text string) string {
+		return `{"type":"user","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/x","entrypoint":"cli","message":{"role":"user","content":"` + text + `"}}` + "\n"
+	}
+	oldPath := filepath.Join(home, "projects", "-tmp-x", "old-session.jsonl")
+	writeTranscript(t, oldPath, record("an older needle"))
+	longAgo := time.Now().Add(-90 * 24 * time.Hour)
+	if err := os.Chtimes(oldPath, longAgo, longAgo); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+	writeTranscript(t, filepath.Join(home, "projects", "-tmp-x", "new-session.jsonl"), record("a recent needle"))
+
+	profiles := []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}
+	readers := map[string]Reader{harness.Claude: NewClaudeReader()}
+	path := filepath.Join(tmp, "transcripts.json")
+	idx, err := LoadIndexAt(path)
+	if err != nil {
+		t.Fatalf("LoadIndexAt: %v", err)
+	}
+	if err := idx.Refresh(&config.Config{Profiles: profiles}, readers); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+
+	bounded := &config.Config{
+		Defaults: config.Defaults{SessionArchive: config.SessionArchiveConfig{ScanMaxAgeDays: 30}},
+		Profiles: profiles,
+	}
+	result, err := Rebuild(path, bounded, readers, false)
+	if err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	if result.Status.VisibleEntries != 2 || result.Status.MissingSidecars != 0 || result.Status.SidecarCount != 2 {
+		t.Fatalf("after bounded rebuild: visible %d sidecars %d missing %v, want 2/2/none",
+			result.Status.VisibleEntries, result.Status.SidecarCount, result.Status.MissingSidecarKeys)
+	}
+	if got, err := idx.ReadSearchText(IndexKey(harness.Claude, "old-session")); err != nil || !strings.Contains(got, "older needle") {
+		t.Fatalf("older session sidecar = %q, %v; want it kept", got, err)
+	}
+}

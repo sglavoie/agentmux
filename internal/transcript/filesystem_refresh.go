@@ -137,7 +137,10 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			i.superseded = cloneSupersededSegments(supersededNow)
 			i.filesystemDirty = true
 		}
-		if rebuildSidecars {
+		// A rebuild that scanned everything resets the whole sidecar store. One
+		// bounded by the scan age resets only what it reparsed (below): the
+		// sessions it did not reach keep the sidecars they still match.
+		if rebuildSidecars && cutoff.IsZero() {
 			if err := removeTranscriptSearchStore(i.SearchStoreDir()); err != nil {
 				return fmt.Errorf("removing transcript search sidecars: %w", err)
 			}
@@ -182,6 +185,9 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("writing transcript search sidecar %s: %w", key, err))
 				}
 				meta.SearchText = ""
+			} else if rebuildSidecars && !cutoff.IsZero() {
+				// A reparse with no searchable text leaves no sidecar behind.
+				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
 			} else if exists && (existing.FileSize != meta.FileSize || !existing.FileModTime.Equal(meta.FileModTime)) {
 				// A changed transcript with no searchable text must not retain
 				// either a legacy or source-aware sidecar from its old contents.
