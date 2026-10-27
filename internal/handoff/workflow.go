@@ -257,12 +257,17 @@ func projectLabel(source transcript.SessionMeta) string {
 	return strings.TrimSpace(source.ID)
 }
 
+// targetSession derives the target's launch template. A configured project
+// for the target profile and source directory carries its args and
+// environment forward when its title matches the source, or when it is the
+// only such project; several untitled candidates are ambiguous, and picking
+// one would launch with whichever came first in the file.
 func targetSession(cfg *config.Config, source transcript.SessionMeta, target config.Account) config.Session {
 	projects := cfg.Projects
 	if len(projects) == 0 {
 		projects = cfg.Sessions
 	}
-	var fallback *config.Session
+	var candidates []config.Session
 	for i := range projects {
 		project := projects[i]
 		if !strings.EqualFold(project.EffectiveProfile(), target.Name) || !sameDirectory(project.Directory, source.CWD) {
@@ -272,17 +277,15 @@ func targetSession(cfg *config.Config, source transcript.SessionMeta, target con
 			project.Directory, project.Profile, project.Account = source.CWD, target.Name, target.Name
 			return project
 		}
-		if fallback == nil {
-			copy := project
-			fallback = &copy
-		}
+		candidates = append(candidates, project)
 	}
-	if fallback != nil {
-		fallback.Directory, fallback.Profile, fallback.Account = source.CWD, target.Name, target.Name
+	if len(candidates) == 1 {
+		project := candidates[0]
+		project.Directory, project.Profile, project.Account = source.CWD, target.Name, target.Name
 		if strings.TrimSpace(source.Project) != "" {
-			fallback.Title = source.Project
+			project.Title = source.Project
 		}
-		return *fallback
+		return project
 	}
 	title := strings.TrimSpace(source.Project)
 	if title == "" {

@@ -251,3 +251,52 @@ func TestWorkflowUsesExplicitLaunchDirectoryWithoutChangingSourcePackContext(t *
 		t.Fatalf("launch directory = %q, want %q", launched.Directory, launchCWD)
 	}
 }
+
+// Two configured projects share the target profile and the source directory,
+// and neither title names the source. Neither is the project the source ran
+// in, so the target launches from a bare template rather than with the args
+// of whichever came first.
+func TestWorkflowDoesNotGuessAmongSeveralMatchingProjects(t *testing.T) {
+	cwd := t.TempDir()
+	sourcePath := filepath.Join(cwd, "source.jsonl")
+	if err := os.WriteFile(sourcePath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		Accounts: []config.Account{{Name: "source", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex, HomeDir: "/tmp/target-home"}},
+		Projects: []config.Session{
+			{Title: "api-fast", Directory: cwd, Profile: "target", Args: []string{"--fast"}},
+			{Title: "api-safe", Directory: cwd, Profile: "target", Args: []string{"--safe"}},
+		},
+	}
+	var got config.Session
+	workflow := testWorkflow(t, func(_ kitty.KittyClient, sess config.Session, _ config.Account, _ *config.Config, _ string) error {
+		got = sess
+		return nil
+	}, nil)
+	if _, err := workflow.Run(context.Background(), Request{
+		Source: transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
+		Reader: workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Continue."}}},
+		Config: cfg, TargetProfile: "target",
+		Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got.Args) != 0 || len(got.ClaudeFlags) != 0 || got.Title != "api" || got.Directory != cwd || got.EffectiveProfile() != "target" {
+		t.Fatalf("launch session = %+v, want a bare template titled api in the source directory", got)
+	}
+
+	// With only one of them configured, it is the project and its args come along.
+	cfg.Projects = cfg.Projects[:1]
+	if _, err := workflow.Run(context.Background(), Request{
+		Source: transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
+		Reader: workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Continue."}}},
+		Config: cfg, TargetProfile: "target",
+		Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got.Args) != 1 || got.Args[0] != "--fast" || got.Title != "api" {
+		t.Fatalf("launch session = %+v, want the one matching project's args under the source title", got)
+	}
+}
