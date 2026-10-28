@@ -430,8 +430,10 @@ func sendWatchable(slot sendSlot) bool {
 // left the state it was in when the input was written.
 func sendMoved(id runtimesession.ID, from string, wait time.Duration) bool {
 	const step = 200 * time.Millisecond
-	for waited := time.Duration(0); waited < wait; waited += step {
-		sendPause(step)
+	for waited := time.Duration(0); waited < wait; {
+		pause := min(step, wait-waited)
+		sendPause(pause)
+		waited += pause
 		if slot, known := sendSlotState(id); known && slot.found && slot.state.IconState != from {
 			return true
 		}

@@ -307,6 +307,20 @@ func TestSendWaitsForTheAgentToTakeIt(t *testing.T) {
 	}
 }
 
+func TestSendWaitDoesNotPausePastRequestedDuration(t *testing.T) {
+	w := newSendWorld(t)
+	w.screen = screenstate.Blocked
+	w.daemon = []protocol.WindowStateSnapshot{{IconState: "key"}}
+	var pauses []time.Duration
+	sendPause = func(duration time.Duration) { pauses = append(pauses, duration) }
+	if data := w.sent(t, w.id(), "--key", "1", "--wait", "250ms"); data.Delivery != sendAccepted {
+		t.Fatalf("send = %+v, want accepted", data)
+	}
+	if len(pauses) != 2 || pauses[0] != 200*time.Millisecond || pauses[1] != 50*time.Millisecond {
+		t.Fatalf("pauses = %v, want [200ms 50ms]", pauses)
+	}
+}
+
 func TestSendRefusesAnOperationNobodySawFinish(t *testing.T) {
 	w := newSendWorld(t)
 	if err := w.f.Backend.SetMetadata(w.launched.Pane, map[string]string{session.SendOperationVar: "op-9:pending"}); err != nil {

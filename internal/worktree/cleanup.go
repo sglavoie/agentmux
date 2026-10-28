@@ -34,8 +34,10 @@ var (
 
 // RemoveOptions controls safe user cleanup. DeleteBranch never enables force:
 // it adds merge and provenance checks before the checkout is removed.
+// RequireMerged applies the same checks while retaining the branch.
 type RemoveOptions struct {
-	DeleteBranch bool `json:"delete_branch"`
+	DeleteBranch  bool `json:"delete_branch"`
+	RequireMerged bool `json:"require_merged"`
 }
 
 // MutationResult reports only the steps performed by this Remove or Forget
@@ -112,9 +114,9 @@ func (i *Inventory) Remove(ctx context.Context, selector string, options RemoveO
 		}
 		result.Entry = preflight.entry
 		var deletion branchDeletion
-		if options.DeleteBranch {
+		if options.DeleteBranch || options.RequireMerged {
 			if preflight.metadata == nil {
-				return fmt.Errorf("%w: branch deletion requires schema-v1 sidecar provenance", ErrMetadataInvalid)
+				return fmt.Errorf("%w: merge checking requires schema-v1 sidecar provenance", ErrMetadataInvalid)
 			}
 			deletion, err = manager.preflightBranchDeletion(ctx, preflight.controlDir, preflight.entry, *preflight.metadata)
 			if err != nil {

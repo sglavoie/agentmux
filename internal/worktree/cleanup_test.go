@@ -53,6 +53,31 @@ func TestManagerRemoveSafelyDeletesMergedBranch(t *testing.T) {
 	assertPathMissing(t, created.MetadataPath)
 }
 
+func TestManagerRemoveRequireMergedRechecksBeforeRemovingCheckout(t *testing.T) {
+	t.Parallel()
+
+	repo, root, _, created := cleanupFixture(t)
+	gitRun(t, created.Path, "commit", "--allow-empty", "-m", "unmerged work")
+	manager := testInventory(root)
+
+	_, err := manager.Remove(context.Background(), created.ID, RemoveOptions{RequireMerged: true})
+	if !errors.Is(err, ErrBranchUnmerged) {
+		t.Fatalf("RequireMerged error = %v, want ErrBranchUnmerged", err)
+	}
+	if _, err := os.Stat(created.Path); err != nil {
+		t.Fatalf("refused removal changed checkout: %v", err)
+	}
+
+	gitRun(t, repo, "merge", "--ff-only", created.Branch)
+	result, err := manager.Remove(context.Background(), created.ID, RemoveOptions{RequireMerged: true})
+	if err != nil || !result.CheckoutRemoved || result.BranchDeleted {
+		t.Fatalf("merged removal = %+v, err = %v", result, err)
+	}
+	if exists, err := gitBranchExists(context.Background(), repo, created.Branch); err != nil || !exists {
+		t.Fatalf("retained branch exists = %v, err = %v", exists, err)
+	}
+}
+
 func TestManagerRemoveLegacyCheckoutRetainsBranchAndRejectsBranchDeletion(t *testing.T) {
 	t.Parallel()
 

@@ -419,7 +419,10 @@ func defaultDefinitions() []Definition {
 		},
 		{
 			ID: WorktreeRemove, Label: "remove worktree", Description: "safely remove a clean inactive worktree", Requires: worktreeRequirement,
-			Parameters:   []ParameterSchema{{Name: "delete_branch", Type: "boolean", Description: "also safely delete the merged worktree branch"}},
+			Parameters: []ParameterSchema{
+				{Name: "delete_branch", Type: "boolean", Description: "also safely delete the merged worktree branch"},
+				{Name: "require_merged", Type: "boolean", Description: "remove only if the worktree branch is still merged into its source"},
+			},
 			Confirmation: Confirmation{Required: true, Prompt: "remove this worktree?"},
 			available: func(_ Dependencies, request Request) Availability {
 				return worktreeRemoveAvailability(request)

@@ -93,6 +93,55 @@ func TestWorktreePrunePreviewsThenRemoves(t *testing.T) {
 	}
 }
 
+func TestWorktreePruneDeleteBranchExcludesUnmergedCandidate(t *testing.T) {
+	manager, _ := resetWorktreeCommandsTestState(t)
+	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+	merged := false
+	manager.entries[0].ReachableFromSource = &merged
+	t.Cleanup(func() {
+		worktreePruneCmd.SetOut(nil)
+		for _, flag := range []string{"yes", "delete-branch"} {
+			_ = worktreePruneCmd.Flags().Set(flag, "false")
+		}
+	})
+	if err := worktreePruneCmd.Flags().Set("delete-branch", "true"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	worktreePruneCmd.SetOut(&out)
+	if err := worktreePruneCmd.RunE(worktreePruneCmd, nil); err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if strings.Contains(out.String(), "would remove") || len(manager.removeOptions) != 0 {
+		t.Fatalf("unmerged worktree preview = %q, remove calls = %d", out.String(), len(manager.removeOptions))
+	}
+}
+
+func TestWorktreePruneMergedRechecksMergeAtRemoval(t *testing.T) {
+	manager, _ := resetWorktreeCommandsTestState(t)
+	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+	merged := true
+	manager.entries[0].ReachableFromSource = &merged
+	t.Cleanup(func() {
+		worktreePruneCmd.SetOut(nil)
+		for _, flag := range []string{"yes", "merged"} {
+			_ = worktreePruneCmd.Flags().Set(flag, "false")
+		}
+	})
+	for _, flag := range []string{"yes", "merged"} {
+		if err := worktreePruneCmd.Flags().Set(flag, "true"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	worktreePruneCmd.SetOut(&bytes.Buffer{})
+	if err := worktreePruneCmd.RunE(worktreePruneCmd, nil); err != nil {
+		t.Fatalf("prune --merged --yes: %v", err)
+	}
+	if len(manager.removeOptions) != 1 || !manager.removeOptions[0].RequireMerged || manager.removeOptions[0].DeleteBranch {
+		t.Fatalf("remove options = %+v, want merged check without branch deletion", manager.removeOptions)
+	}
+}
+
 func TestWorktreePruneLeavesAnActiveWorktreeAlone(t *testing.T) {
 	manager, _ := resetWorktreeCommandsTestState(t) // the fixture's live session sits in wt-1
 	t.Cleanup(func() { worktreePruneCmd.SetOut(nil); _ = worktreePruneCmd.Flags().Set("yes", "false") })
@@ -114,6 +163,8 @@ func TestWorktreePruneLeavesAnActiveWorktreeAlone(t *testing.T) {
 // a checkout that is gone. The exit stays nonzero, since not all was done.
 func TestWorktreePruneReportsACheckoutRemovedWithoutItsBranchAsRemoved(t *testing.T) {
 	manager, _ := resetWorktreeCommandsTestState(t)
+	merged := true
+	manager.entries[0].ReachableFromSource = &merged
 	manager.branchErr = errors.New("branch wt-branch is not fully merged")
 	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
 	t.Cleanup(func() {

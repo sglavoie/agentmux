@@ -493,7 +493,10 @@ func removeWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 		return Result{}, &Error{Code: "worktree_active", Action: WorktreeRemove, Message: "worktree has a live session or active loop", Candidates: candidates}
 	}
 	selector := mutationSelector(request, entry)
-	mutation, err := lifecycleManager(deps).Remove(ctx, selector, worktree.RemoveOptions{DeleteBranch: parameterBool(request.Parameters, "delete_branch")})
+	mutation, err := lifecycleManager(deps).Remove(ctx, selector, worktree.RemoveOptions{
+		DeleteBranch:  parameterBool(request.Parameters, "delete_branch"),
+		RequireMerged: parameterBool(request.Parameters, "require_merged"),
+	})
 	result := mutationActionResult(WorktreeRemove, "removed managed worktree", mutation)
 	if err != nil {
 		var partial *worktree.PartialMutationError

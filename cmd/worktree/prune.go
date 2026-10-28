@@ -26,8 +26,9 @@ var worktreePruneCmd = &cobra.Command{
 valid, clean, unlocked, attached to a branch, and in use by no live session or
 loop. Without --yes it lists them and removes nothing. Each one is checked again as it is removed, so
 a worktree that became active meanwhile is kept. --merged keeps those whose
-branch is not yet reachable from its source branch, and --delete-branch also
-deletes each removed worktree's merged branch.`,
+branch is not yet reachable from its source branch, checking again before
+removal. --delete-branch selects only merged worktrees and also deletes each
+removed worktree's branch.`,
 	Example: `  amx worktree prune                    # preview
   amx worktree prune --merged --yes     # remove only worktrees whose branch is merged
   amx worktree prune --yes --delete-branch`,
@@ -48,7 +49,7 @@ deletes each removed worktree's merged branch.`,
 		data := worktreePruneData{DryRun: !confirmed, Candidates: []string{}, Removed: []string{}, Partial: []worktreePruneFailure{}, Failed: []worktreePruneFailure{}}
 		var candidates []actions.WorktreeView
 		for _, view := range views {
-			if prunable(view, mergedOnly) {
+			if prunable(view, mergedOnly || deleteBranch) {
 				candidates = append(candidates, view)
 				data.Candidates = append(data.Candidates, view.ID)
 			}
@@ -72,6 +73,9 @@ deletes each removed worktree's merged branch.`,
 		parameters := map[string]string{}
 		if deleteBranch {
 			parameters["delete_branch"] = "true"
+		}
+		if mergedOnly {
+			parameters["require_merged"] = "true"
 		}
 		for _, view := range candidates {
 			result, removeErr := executeWorktreeAction(cmd, actions.WorktreeRemove, actions.Request{
