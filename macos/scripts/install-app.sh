@@ -116,6 +116,9 @@ if [ -n "$server_before" ]; then
 fi
 
 if [ "${AMX_APP_NO_LAUNCH:-0}" != 1 ]; then
-	open "$dest"
+	# Automation commonly disables color for build logs. `open` passes its
+	# environment to the app, whose embedded terminals would then lose all
+	# TUI colors too. Keep that build setting out of the installed workspace.
+	env -u NO_COLOR open "$dest"
 	echo "Launched $dest"
 fi
