@@ -296,6 +296,26 @@ func TestPrune_ZeroKeepDaysIsNoOp(t *testing.T) {
 	}
 }
 
+func TestPrune_LargeKeepDaysDoesNotHideRecentSessions(t *testing.T) {
+	t.Parallel()
+
+	idx := newTestIndex(t)
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	key := IndexKey(harness.Claude, "recent")
+	must(t, idx.SetEntryForTest(key, SessionMeta{
+		ID: "recent", Harness: harness.Claude, LastAt: now.Add(-24 * time.Hour),
+	}))
+	cfg := &config.Config{}
+	cfg.Defaults.SessionArchive.KeepDays = 106752 // One day beyond time.Duration's range.
+
+	if hidden, err := Prune(idx, cfg, now); err != nil || hidden != 0 {
+		t.Fatalf("Prune = %d, %v; want no hidden sessions", hidden, err)
+	}
+	if meta, ok := idx.Get(key); !ok || meta.HiddenFromIndex {
+		t.Fatalf("recent session hidden by an overflowed cutoff: %+v, present = %v", meta, ok)
+	}
+}
+
 func TestPrune_ZeroLastAtIsKept(t *testing.T) {
 	t.Parallel()
 

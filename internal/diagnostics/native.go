@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/timeutil"
 )
 
 const nativeLaunchGrace = 5 * time.Minute
@@ -257,7 +259,7 @@ func pruneExpiredNative(launches *[]nativeLaunch, options NativeOptions, report 
 	if options.KeepDays <= 0 {
 		return
 	}
-	cutoff := options.Now().Add(-time.Duration(options.KeepDays) * 24 * time.Hour)
+	cutoff := timeutil.DaysAgo(options.Now(), options.KeepDays)
 	kept := (*launches)[:0]
 	for _, launch := range *launches {
 		if launch.active || launch.recent || !launch.modified.Before(cutoff) {

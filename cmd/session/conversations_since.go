@@ -24,6 +24,9 @@ func parseSinceWindow(value string) (time.Duration, error) {
 		if err != nil || n <= 0 {
 			return 0, fmt.Errorf("--since %q: want a positive whole number of %s", value, unit.name)
 		}
+		if n > int(time.Duration(1<<63-1)/unit.length) {
+			return 0, fmt.Errorf("--since %q: exceeds the largest supported duration", value)
+		}
 		return time.Duration(n) * unit.length, nil
 	}
 	window, err := time.ParseDuration(value)

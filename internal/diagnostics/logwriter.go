@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/timeutil"
 )
 
 type DaemonLogOptions struct {
@@ -176,7 +178,7 @@ func (w *DaemonLogWriter) retentionLocked() error {
 	})
 	cutoff := time.Time{}
 	if w.opts.KeepDays > 0 {
-		cutoff = w.opts.Now().Add(-time.Duration(w.opts.KeepDays) * 24 * time.Hour)
+		cutoff = timeutil.DaysAgo(w.opts.Now(), w.opts.KeepDays)
 	}
 	for _, file := range files {
 		if file.path == w.current || file.protected {

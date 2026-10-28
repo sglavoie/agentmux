@@ -12,6 +12,7 @@ import (
 
 func validateDefaults(d *Defaults) []string {
 	var errs []string
+	const maxMiBForByteCount = (1<<63 - 1) >> 20
 	if d.Sort != "" && !ValidSort(d.Sort) {
 		errs = append(errs, fmt.Sprintf(
 			"invalid sort %q: must be one of alpha, account",
@@ -85,6 +86,8 @@ func validateDefaults(d *Defaults) []string {
 	}
 	if d.Diagnostics.JournalMaxMiB < 0 {
 		errs = append(errs, "defaults.diagnostics.journal_max_mib must be >= 0")
+	} else if int64(d.Diagnostics.JournalMaxMiB) > maxMiBForByteCount {
+		errs = append(errs, fmt.Sprintf("defaults.diagnostics.journal_max_mib must be <= %d", maxMiBForByteCount))
 	}
 	if detail := strings.TrimSpace(d.Diagnostics.JournalDetail); detail != "" &&
 		!strings.EqualFold(detail, "standard") && !strings.EqualFold(detail, "full") {
@@ -98,9 +101,13 @@ func validateDefaults(d *Defaults) []string {
 	}
 	if d.Diagnostics.NativeMaxMiB < 0 {
 		errs = append(errs, "defaults.diagnostics.native_max_mib must be >= 0")
+	} else if int64(d.Diagnostics.NativeMaxMiB) > maxMiBForByteCount {
+		errs = append(errs, fmt.Sprintf("defaults.diagnostics.native_max_mib must be <= %d", maxMiBForByteCount))
 	}
 	if d.Diagnostics.NativeSessionMaxMiB < 0 {
 		errs = append(errs, "defaults.diagnostics.native_session_max_mib must be >= 0")
+	} else if int64(d.Diagnostics.NativeSessionMaxMiB) > maxMiBForByteCount {
+		errs = append(errs, fmt.Sprintf("defaults.diagnostics.native_session_max_mib must be <= %d", maxMiBForByteCount))
 	}
 	if d.Diagnostics.NativeMaxMiB > 0 && d.Diagnostics.NativeSessionMaxMiB > d.Diagnostics.NativeMaxMiB {
 		errs = append(errs, "defaults.diagnostics.native_session_max_mib must be <= native_max_mib")

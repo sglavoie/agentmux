@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/cachefile"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
+	"github.com/sglavoie/agentmux/internal/timeutil"
 )
 
 // refreshFilesystem discovers without holding the advisory lock, then reloads
@@ -94,7 +95,7 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 
 	var cutoff time.Time
 	if days := cfg.Defaults.SessionArchive.ScanMaxAgeDays; days > 0 {
-		cutoff = time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+		cutoff = timeutil.DaysAgo(time.Now(), days)
 	}
 	projectResolver := projectresolve.NewWithGit(cfg.Projects)
 	var discoveryWarning error

@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,5 +62,29 @@ func TestValidateDiagnosticsRejectsNegativeAndOversizedSessionQuota(t *testing.T
 		if !strings.Contains(err.Error(), field) {
 			t.Errorf("validation error missing %s: %v", field, err)
 		}
+	}
+}
+
+func TestValidateDiagnosticsRejectsMiBValuesThatOverflowByteCounts(t *testing.T) {
+	if strconv.IntSize < 64 {
+		t.Skip("overflowing MiB values do not fit in a 32-bit int")
+	}
+	large := int64(1) << 43
+	tooLarge := int(large)
+	for _, field := range []struct {
+		name string
+		set  func(*config.DiagnosticsConfig)
+	}{
+		{"journal_max_mib", func(d *config.DiagnosticsConfig) { d.JournalMaxMiB = tooLarge }},
+		{"native_max_mib", func(d *config.DiagnosticsConfig) { d.NativeMaxMiB = tooLarge }},
+		{"native_session_max_mib", func(d *config.DiagnosticsConfig) { d.NativeSessionMaxMiB = tooLarge }},
+	} {
+		t.Run(field.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			field.set(&cfg.Defaults.Diagnostics)
+			if err := config.Validate(cfg); err == nil || !strings.Contains(err.Error(), field.name+" must be <=") {
+				t.Fatalf("Validate accepted overflowing %s: %v", field.name, err)
+			}
+		})
 	}
 }

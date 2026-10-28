@@ -79,6 +79,26 @@ func TestMaintainNativeProtectsActiveAndPrunesInactive(t *testing.T) {
 	}
 }
 
+func TestMaintainNativeLargeKeepDaysPreservesRecentLogs(t *testing.T) {
+	t.Parallel()
+
+	paths := PathsForRoot(filepath.Join(t.TempDir(), "state"))
+	now := time.Unix(1_800_000_000, 0)
+	launchDir := writeNativeFixture(t, paths, "88888888-8888-4888-8888-888888888888", "recent.log", 7, now.Add(-24*time.Hour))
+	report, err := MaintainNative(paths, NativeOptions{
+		KeepDays: 106752, Now: func() time.Time { return now },
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(launchDir); err != nil {
+		t.Fatalf("recent logs removed by an overflowed cutoff: %v", err)
+	}
+	if report.RemovedLaunches != 0 {
+		t.Fatalf("removed %d launch directories", report.RemovedLaunches)
+	}
+}
+
 func TestMaintainNativeAggregateQuotaPrunesOldestInactiveLaunch(t *testing.T) {
 	t.Parallel()
 

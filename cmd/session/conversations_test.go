@@ -380,12 +380,12 @@ func TestMissingSelectorAsksForTheConversation(t *testing.T) {
 func TestParseSinceWindow(t *testing.T) {
 	t.Parallel()
 
-	for in, want := range map[string]time.Duration{"7d": 7 * 24 * time.Hour, "12h": 12 * time.Hour, " 90m ": 90 * time.Minute, "2w": 14 * 24 * time.Hour} {
+	for in, want := range map[string]time.Duration{"7d": 7 * 24 * time.Hour, "12h": 12 * time.Hour, " 90m ": 90 * time.Minute, "2w": 14 * 24 * time.Hour, "106751d": 106751 * 24 * time.Hour, "15250w": 15250 * 7 * 24 * time.Hour} {
 		if got, err := parseSinceWindow(in); err != nil || got != want {
 			t.Errorf("parseSinceWindow(%q) = %v, %v; want %v", in, got, err, want)
 		}
 	}
-	for _, bad := range []string{"", "0d", "-1d", "1.5d", "-2h", "week", "0w", "1.5w"} {
+	for _, bad := range []string{"", "0d", "-1d", "1.5d", "-2h", "week", "0w", "1.5w", "106752d", "15251w", "213504d"} {
 		if _, err := parseSinceWindow(bad); err == nil {
 			t.Errorf("parseSinceWindow(%q) accepted a bad window", bad)
 		}

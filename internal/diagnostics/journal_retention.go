@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/agentmux/internal/timeutil"
 )
 
 // RotateAndRetain rotates an oversized active journal and applies age and
@@ -127,14 +129,13 @@ type retainedFile struct {
 }
 
 func (j *Journal) retentionCandidates(files []retainedFile) []retainedFile {
-	now := j.opts.Now()
 	var total int64
 	for _, file := range files {
 		total += file.size
 	}
 	cutoff := time.Time{}
 	if j.opts.KeepDays > 0 {
-		cutoff = now.Add(-time.Duration(j.opts.KeepDays) * 24 * time.Hour)
+		cutoff = timeutil.DaysAgo(j.opts.Now(), j.opts.KeepDays)
 	}
 	var candidates []retainedFile
 	for _, file := range files {

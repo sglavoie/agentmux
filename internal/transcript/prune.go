@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cachefile"
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/timeutil"
 )
 
 // Prune marks every index entry whose LastAt is older than
@@ -32,7 +33,7 @@ func (i *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int, 
 	if keepDays <= 0 {
 		return 0, nil
 	}
-	cutoff := now.Add(-time.Duration(keepDays) * 24 * time.Hour)
+	cutoff := timeutil.DaysAgo(now, keepDays)
 	err := cachefile.WithExclusive(i.path, func() error {
 		i.mu.Lock()
 		defer i.mu.Unlock()
