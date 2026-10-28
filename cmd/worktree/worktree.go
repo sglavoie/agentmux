@@ -563,6 +563,7 @@ func printWorktree(cmd *cobra.Command, view actions.WorktreeView) {
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "branch: %s\n", view.Branch)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "classification: %s\n", view.Classification)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "dirty: %t\n", view.Dirty)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ignored_files: %t\n", view.Ignored)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "locked: %t\n", view.Locked)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "live_sessions: %d\n", len(view.LiveSessions))
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "active_loops: %d\n", view.LoopCount)
@@ -588,6 +589,8 @@ func worktreeState(view actions.WorktreeView) string {
 		return "active"
 	case view.Dirty:
 		return "dirty"
+	case view.Ignored:
+		return "ignored files"
 	case !view.GitAvailable:
 		return "unavailable"
 	default:

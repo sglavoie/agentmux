@@ -148,7 +148,7 @@ func prunable(view actions.WorktreeView, mergedOnly bool) bool {
 	if !view.Exists || !view.Actionable || view.Classification != worktree.ClassificationValid {
 		return false
 	}
-	if !view.GitAvailable || !view.StatusAvailable || view.Dirty || view.Locked || view.Detached {
+	if !view.GitAvailable || !view.StatusAvailable || view.Dirty || view.Ignored || view.Locked || view.Detached {
 		return false
 	}
 	if len(view.LiveSessions) > 0 || view.LoopCount > 0 {

@@ -123,6 +123,13 @@ func (i *Inventory) Remove(ctx context.Context, selector string, options RemoveO
 		}
 
 		git := manager.gitRunner()
+		ignored, err := hasIgnoredFiles(ctx, git, preflight.entry.Path)
+		if err != nil {
+			return fmt.Errorf("%w: checking ignored files: %w", ErrGitUnavailable, err)
+		}
+		if ignored {
+			return fmt.Errorf("%w: checkout contains ignored files that Git would delete", ErrWorktreeDirty)
+		}
 		if _, err := git(ctx, preflight.controlDir, gitCommandTimeout, "worktree", "remove", preflight.entry.Path); err != nil {
 			return fmt.Errorf("worktree: removing checkout %s: %w", preflight.entry.Path, err)
 		}

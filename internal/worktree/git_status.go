@@ -119,6 +119,14 @@ func probeInventoryEntry(ctx context.Context, git gitExecutor, candidate invento
 	}
 	entry.StatusAvailable = true
 	entry.Dirty = len(status) > 0
+	ignored, err := hasIgnoredFiles(ctx, git, entry.Path)
+	if err != nil {
+		entry.Warnings = append(entry.Warnings, fmt.Sprintf("Git ignored-file status unavailable: %v", err))
+		entry.StatusAvailable = false
+		entry.Actionable = false
+		return entry, true
+	}
+	entry.Ignored = ignored
 	entry.Actionable = candidate.metadataValid || !candidate.hasSidecar
 	if candidate.hasSidecar && !candidate.metadataValid {
 		entry.Actionable = false

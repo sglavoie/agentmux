@@ -61,6 +61,7 @@ type Entry struct {
 	LockReason           string         `json:"lock_reason,omitempty"`
 	Detached             bool           `json:"detached"`
 	Dirty                bool           `json:"dirty"`
+	Ignored              bool           `json:"ignored"`
 	Ahead                *int           `json:"ahead,omitempty"`
 	Behind               *int           `json:"behind,omitempty"`
 	ReachableFromSource  *bool          `json:"reachable_from_source,omitempty"`

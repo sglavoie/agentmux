@@ -121,6 +121,8 @@ func StateLabels(entry actions.WorktreeView) []string {
 	}
 	if entry.Dirty {
 		labels = append(labels, "dirty")
+	} else if entry.Ignored {
+		labels = append(labels, "ignored")
 	} else if entry.Exists && entry.StatusAvailable {
 		labels = append(labels, "clean")
 	}

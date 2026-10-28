@@ -372,6 +372,14 @@ func gitDirty(ctx context.Context, directory string) (bool, error) {
 	return len(out) > 0, nil
 }
 
+// Git removes ignored files with a worktree even without --force. Keep this
+// separate from ordinary dirty status so ignored build output does not block
+// creating or landing a worktree.
+func hasIgnoredFiles(ctx context.Context, git gitExecutor, directory string) (bool, error) {
+	out, err := git(ctx, directory, gitProbeTimeout, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
+	return len(out) > 0, err
+}
+
 func sourceGitIdentity(ctx context.Context, sourceRoot string) (baseCommit, sourceBranch, gitCommonDir string, err error) {
 	baseCommit, err = gitLine(ctx, sourceRoot, gitProbeTimeout, "rev-parse", "HEAD")
 	if err != nil {
@@ -417,7 +425,28 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	}
 	// Keep the sidecar until every Git step succeeds. A failed removal or
 	// branch deletion must remain discoverable and retryable by stable ID.
-	if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, "worktree", "remove", "--force", result.Path); err != nil {
+	removeArgs := []string{"worktree", "remove"}
+	info, err := os.Lstat(result.Path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// A failed creation can leave a Git registration after its checkout
+		// disappeared. Git requires --force to unregister that missing path.
+		removeArgs = append(removeArgs, "--force")
+	case err != nil:
+		return fmt.Errorf("worktree: inspecting unused checkout %s: %w", result.Path, err)
+	case !info.IsDir():
+		return fmt.Errorf("worktree: unused checkout %s is not a directory", result.Path)
+	default:
+		ignored, err := hasIgnoredFiles(ctx, runGit, result.Path)
+		if err != nil {
+			return fmt.Errorf("worktree: checking ignored files before removing unused checkout %s: %w", result.Path, err)
+		}
+		if ignored {
+			return fmt.Errorf("%w: unused checkout contains ignored files that Git would delete", ErrWorktreeDirty)
+		}
+	}
+	removeArgs = append(removeArgs, result.Path)
+	if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, removeArgs...); err != nil {
 		return fmt.Errorf("worktree: removing unused checkout %s: %w", result.Path, err)
 	}
 	if branch := strings.TrimSpace(result.Branch); branch != "" {

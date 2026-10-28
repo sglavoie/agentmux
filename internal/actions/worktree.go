@@ -53,6 +53,9 @@ func worktreeRemoveAvailability(request Request) Availability {
 	if entry.Dirty {
 		return Availability{Reason: "worktree is dirty"}
 	}
+	if entry.Ignored {
+		return Availability{Reason: "worktree contains ignored files"}
+	}
 	if !entry.Exists {
 		if parameterBool(request.Parameters, "delete_branch") && entry.Classification == worktree.ClassificationMissing {
 			return Availability{Available: true}
