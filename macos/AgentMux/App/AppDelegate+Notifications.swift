@@ -34,6 +34,7 @@ extension AppDelegate {
         presenter.onResponse = { [weak self] response in self?.respond(to: response) }
         presenter.onAuthorizationChange = { [weak self] authorization in
             self?.preferencesModel.notificationAuthorization = authorization
+            self?.refreshDockBadge(force: true)
         }
         notifications = presenter
         presenter.refreshAuthorization()

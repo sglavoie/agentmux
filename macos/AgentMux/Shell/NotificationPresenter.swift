@@ -243,17 +243,27 @@ protocol NotificationCenterClient: AnyObject {
 /// The real center.
 final class SystemNotificationCenter: NotificationCenterClient {
     let center: UNUserNotificationCenter
+    static let authorizationOptions: UNAuthorizationOptions = [.alert, .sound, .badge]
 
     init(center: UNUserNotificationCenter = .current()) {
         self.center = center
     }
 
     func authorizationStatus(_ completion: @escaping (UNAuthorizationStatus) -> Void) {
-        center.getNotificationSettings { completion($0.authorizationStatus) }
+        center.getNotificationSettings { [self] settings in
+            // Earlier builds registered only banners and sound. Register the
+            // new badge capability for those installs, without overriding a
+            // user who disabled badges or denied notifications.
+            if settings.authorizationStatus == .authorized, settings.badgeSetting == .notSupported {
+                requestAuthorization { _, _ in completion(settings.authorizationStatus) }
+            } else {
+                completion(settings.authorizationStatus)
+            }
+        }
     }
 
     func requestAuthorization(_ completion: @escaping (Bool, Error?) -> Void) {
-        center.requestAuthorization(options: [.alert, .sound], completionHandler: completion)
+        center.requestAuthorization(options: Self.authorizationOptions, completionHandler: completion)
     }
 
     func setCategories(_ categories: Set<UNNotificationCategory>) {

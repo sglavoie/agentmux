@@ -7,11 +7,17 @@ tmux sessions the app embeds Ghostty (`AgentMux/Ghostty/`, see
 [Embedded terminals](#embedded-terminals)) and shows each session's terminal
 in its [workspace window](#workspace), beside a sidebar of every live session.
 
-The app shows the live managed sessions, with attention counts in the menu bar,
-and a click focuses a session's Kitty tab and brings Kitty to the front. Two
-global shortcuts reach the dashboard and the sessions waiting on you from any
-app. The daemon's notifications arrive as native banners while the app runs,
-and ASL supervisor questions are answered in a native panel.
+The app shows the live managed sessions, with attention counts in the menu bar
+and a badge on its Dock icon whenever the icon is visible. The badge shows the
+total sessions requiring attention and clears when none are waiting or the
+daemon feed is disconnected. A click focuses a session's Kitty tab and brings
+Kitty to the front. Two global shortcuts reach the dashboard and the sessions
+waiting on you from any app. The daemon's notifications arrive as native banners
+while the app runs, and ASL supervisor questions are answered in a native panel.
+
+Dock badges require **System Settings → Notifications → Agent Mux → Badge
+application icon** to be enabled. An upgrade from a build that only requested
+banner and sound permissions may leave this switch off.
 
 ## Requirements
 

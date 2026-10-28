@@ -64,6 +64,7 @@ extension AppDelegate: DaemonConnectionDelegate {
     }
 
     func storeChanged() {
+        refreshDockBadge()
         historyWindow?.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
         snoozes.reconcile()
         statusItem?.refresh()
@@ -77,6 +78,12 @@ extension AppDelegate: DaemonConnectionDelegate {
         if preferencesModel.kittyInUse != kitty { preferencesModel.kittyInUse = kitty }
         preferences.daemonStatus = store.daemonStatus
         publishPreferences()
+    }
+
+    func refreshDockBadge(force: Bool = false) {
+        if force { NSApp.dockTile.badgeLabel = nil }
+        // The compact title is the attention total, empty at zero or offline.
+        NSApp.dockTile.badgeLabel = store.title(style: .compact)
     }
 
     /// Pins the sessions this app pinned by itself before pins were the

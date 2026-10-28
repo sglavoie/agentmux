@@ -153,7 +153,14 @@ extension AppDelegate {
     /// app's window; the menu bar accessory otherwise. The answer panels
     /// float above every window and need neither.
     func syncActivationPolicy() {
+        let previous = NSApp.activationPolicy()
         NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || activityVisible, settings: settingsVisible))
+        if previous != .regular, NSApp.activationPolicy() == .regular {
+            // AppKit keeps a badge set while accessory, but does not publish
+            // it when the Dock icon appears. Reassigning the same string is
+            // a no-op: clear it first so the Dock receives the current count.
+            refreshDockBadge(force: true)
+        }
     }
 
     nonisolated static func activationPolicy(workspace: Bool, settings: Bool) -> NSApplication.ActivationPolicy {
