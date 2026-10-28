@@ -1222,11 +1222,12 @@ be asked (`daemon_unavailable`); with the daemon unreachable, `--yes` sends
 without knowing whether a question is open.
 
 **Once.** `--operation-id` names a send; without one a name is made up and
-reported. The operation is recorded on the pane before its input is written
-and again after, so repeating a finished operation writes nothing and reports
+reported. The operation is recorded before its input is written and again
+after, so repeating a finished operation writes nothing and reports
 `delivery: "replayed"`, and repeating one that was never seen to finish is
-refused (`operation_outcome_unknown`) instead of risking a second copy. Only
-a session's latest operation is remembered.
+refused (`operation_outcome_unknown`) instead of risking a second copy.
+Operation IDs are remembered for the lifetime of their runtime session,
+including when other sends have happened since.
 
 **What it claims.** `delivery` is `accepted` once the input is written, which
 says nothing about the agent. With `--wait`, a session that was at rest or

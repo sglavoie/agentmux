@@ -1,7 +1,6 @@
 package transcript
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -31,10 +30,6 @@ func NewCodexReader() CodexReader { return CodexReader{} }
 
 // Harness reports the canonical harness name this reader speaks for.
 func (CodexReader) Harness() string { return harness.Codex }
-
-// codexMaxLineBytes mirrors claudeMaxLineBytes: Codex `function_call_output`
-// payloads regularly exceed bufio.Scanner's 64 KiB default.
-const codexMaxLineBytes = 16 << 20 // 16 MiB
 
 // rolloutPrefix is the filename prefix Codex uses for every transcript.
 const rolloutPrefix = "rollout-"
@@ -244,7 +239,7 @@ func applyCodexThreadNames(homeDir string, metas []SessionMeta) {
 	}
 	defer func() { _ = f.Close() }()
 	names := map[string]string{}
-	scanner := bufio.NewScanner(f)
+	scanner := newJSONLScanner(f)
 	for scanner.Scan() {
 		var entry struct {
 			ID         string `json:"id"`
@@ -273,8 +268,7 @@ func (r CodexReader) ReadMessages(path string) ([]Message, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), codexMaxLineBytes)
+	scanner := newJSONLScanner(f)
 
 	var msgs []Message
 	for scanner.Scan() {
@@ -327,9 +321,7 @@ func (r CodexReader) ReadMessages(path string) ([]Message, error) {
 			}
 		}
 	}
-	// Ignore scanner.Err(): partial trailing lines on live sessions are
-	// expected and benign.
-	return msgs, nil
+	return msgs, scanner.Err()
 }
 
 // ClassifySession inspects only Codex session metadata. Native subagents,
@@ -342,8 +334,7 @@ func (r CodexReader) ClassifySession(path string) (SessionClass, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), codexMaxLineBytes)
+	scanner := newJSONLScanner(f)
 	evidence := sessionClassEvidence{}
 	for scanner.Scan() {
 		var env codexEnvelope
@@ -376,8 +367,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), codexMaxLineBytes)
+	scanner := newJSONLScanner(f)
 
 	meta := SessionMeta{
 		Harness:     harness.Codex,
@@ -469,7 +459,7 @@ func (r CodexReader) parseFile(path string, info os.FileInfo) (SessionMeta, erro
 		meta.ID = codexIDFromFilename(filepath.Base(path))
 	}
 
-	return meta, nil
+	return meta, scanner.Err()
 }
 
 // cleanCodexUserMessage extracts the canonical user turn from both rollout
@@ -551,5 +541,6 @@ func parseCodexTimestamp(s string) (time.Time, bool) {
 // codexReaderVersion is the version of the Codex metadata rules parseFile
 // applies. Version 1 added Ending; entries cached before it carry 0 and are
 // reparsed once by cachePredatesRules. Version 2 counts only messages with
-// text, the ones session show --last prints.
-const codexReaderVersion = 2
+// text, the ones session show --last prints. Version 3 rescans entries that
+// may have stopped at a 16 MiB JSONL record.
+const codexReaderVersion = 3

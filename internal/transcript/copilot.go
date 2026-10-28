@@ -1,7 +1,6 @@
 package transcript
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -49,10 +48,6 @@ func NewCopilotReader() CopilotReader { return CopilotReader{} }
 
 // Harness reports the canonical harness name this reader speaks for.
 func (CopilotReader) Harness() string { return harness.Copilot }
-
-// copilotMaxLineBytes mirrors the other readers: tool.execution_complete
-// payloads can exceed bufio.Scanner's 64 KiB default.
-const copilotMaxLineBytes = 16 << 20 // 16 MiB
 
 // copilotEnvelope is the outer record carried on every line.
 type copilotEnvelope struct {
@@ -154,8 +149,7 @@ func (r CopilotReader) ReadMessages(path string) ([]Message, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), copilotMaxLineBytes)
+	scanner := newJSONLScanner(f)
 
 	var msgs []Message
 	for scanner.Scan() {
@@ -208,9 +202,7 @@ func (r CopilotReader) ReadMessages(path string) ([]Message, error) {
 			}
 		}
 	}
-	// Ignore scanner.Err(): partial trailing lines on live sessions are
-	// expected and benign.
-	return msgs, nil
+	return msgs, scanner.Err()
 }
 
 // ClassifySession verifies the indexed top-level Copilot conversation is
@@ -237,8 +229,7 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), copilotMaxLineBytes)
+	scanner := newJSONLScanner(f)
 
 	meta := SessionMeta{
 		Harness:      harness.Copilot,
@@ -324,13 +315,14 @@ func (r CopilotReader) parseFile(path string, info os.FileInfo, dirName string) 
 	meta.SearchText = searchBuf.String()
 	meta.ReaderVersion = copilotReaderVersion
 
-	return meta, nil
+	return meta, scanner.Err()
 }
 
 // copilotReaderVersion is the version of the Copilot metadata rules parseFile
 // applies. Version 1 added Ending; entries cached before it carry 0 and are
-// reparsed once by cachePredatesRules.
-const copilotReaderVersion = 1
+// reparsed once by cachePredatesRules. Version 2 rescans entries that may
+// have stopped at a 16 MiB JSONL record.
+const copilotReaderVersion = 2
 
 func parseCopilotTimestamp(s string) (time.Time, bool) {
 	if s == "" {

@@ -82,8 +82,8 @@ the Workbench, so the run records the reply. When the daemon cannot be asked,
 
 --operation-id names the send so that asking twice writes once: a repeat of a
 finished operation reports delivery "replayed", and a repeat of one that was
-never seen to finish is refused (operation_outcome_unknown). Only a session's
-latest operation is remembered.
+never seen to finish is refused (operation_outcome_unknown). Operation IDs are
+remembered for the lifetime of their runtime session, even after other sends.
 
 Delivery is "accepted" once the input is written. With --wait, a session that
 was at rest or asking is watched for that long, and delivery is "consumed" if

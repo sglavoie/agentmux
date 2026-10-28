@@ -593,7 +593,7 @@ func TestClaudeReader_MessageCountLeavesOutToolRecords(t *testing.T) {
 	}
 }
 
-func TestCacheFromBeforeEndingsIsReparsedForEveryHarness(t *testing.T) {
+func TestOutdatedReaderCacheIsReparsedForEveryHarness(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
@@ -605,7 +605,7 @@ func TestCacheFromBeforeEndingsIsReparsedForEveryHarness(t *testing.T) {
 		{harness.Copilot, copilotReaderVersion},
 	} {
 		if !cachePredatesRules(SessionMeta{Harness: tc.harness, Snippet: "x", ReaderVersion: tc.current - 1}) {
-			t.Errorf("%s entry from before endings must be reparsed once", tc.harness)
+			t.Errorf("%s entry from an older reader must be reparsed once", tc.harness)
 		}
 		if cachePredatesRules(SessionMeta{Harness: tc.harness, Snippet: "x", ReaderVersion: tc.current}) {
 			t.Errorf("current %s entry must be read from the cache", tc.harness)

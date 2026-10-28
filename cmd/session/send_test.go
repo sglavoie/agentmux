@@ -171,6 +171,10 @@ func TestSendTypesAPromptOnceHoweverOftenItIsAsked(t *testing.T) {
 		t.Fatalf("second operation = %+v, want accepted", next)
 	}
 	w.waitTyped(t, "prompt-marker", 2)
+	if older := w.sent(t, w.id(), "prompt-marker", "--operation-id", "op-1"); older.Delivery != "replayed" {
+		t.Fatalf("older retry = %+v, want a replay", older)
+	}
+	w.waitTyped(t, "prompt-marker", 2)
 
 	// Sending attached nothing and took the session from nobody.
 	if record, _ := w.f.Load(t).Get(w.launched.RuntimeSessionID); record.Attachment != nil || record.State != runtimesession.StateLive {

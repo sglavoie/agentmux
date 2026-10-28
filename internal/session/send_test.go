@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -110,6 +111,57 @@ func TestSendThatFailsLeavesItsOperationUnfinished(t *testing.T) {
 	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written || outcome.Screen != SendScreenIdle {
 		t.Fatalf("new operation = %+v, %v", outcome, err)
 	}
+	req.OperationID = "op-1"
+	if _, err := Send(f.Backend, req); !errors.As(err, &refusal) || refusal.Code != SendRefusedOutcomeUnknown {
+		t.Fatalf("older unfinished operation = %v, want operation_outcome_unknown", err)
+	}
+}
+
+func TestSendReplaysOlderOperationAfterAnotherSend(t *testing.T) {
+	f, req := sendFixture(t)
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written {
+		t.Fatalf("first send = %+v, %v", outcome, err)
+	}
+	req.OperationID = "op-2"
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written {
+		t.Fatalf("second send = %+v, %v", outcome, err)
+	}
+	req.OperationID = "op-1"
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Replayed || outcome.Written {
+		t.Fatalf("older retry = %+v, %v; want replay without a write", outcome, err)
+	}
+	if got := sendRecorded(t, f, req.Record); got != "op-2:sent" {
+		t.Fatalf("older retry changed the pane marker to %q", got)
+	}
+}
+
+func TestSendRetainsLegacyPaneMarkerWhenAnotherOperationStarts(t *testing.T) {
+	f, req := sendFixture(t)
+	ref := backend.PaneID(req.Record.Target.Ref)
+	if err := f.Backend.SetMetadata(ref, map[string]string{SendOperationVar: "op-old:sent"}); err != nil {
+		t.Fatal(err)
+	}
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written {
+		t.Fatalf("new send = %+v, %v", outcome, err)
+	}
+	req.OperationID = "op-old"
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Replayed || outcome.Written {
+		t.Fatalf("legacy retry = %+v, %v; want replay", outcome, err)
+	}
+}
+
+func TestSendRefusesCorruptHistoryBeforeWriting(t *testing.T) {
+	f, req := sendFixture(t)
+	path := sendLedgerPath(req.LockPath, req.Record.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if outcome, err := Send(f.Backend, req); err == nil || outcome.Written {
+		t.Fatalf("send with corrupt history = %+v, %v; want refusal before writing", outcome, err)
+	}
 }
 
 func TestSendThatCertainlyWroteNothingCanBeRepeated(t *testing.T) {
@@ -141,6 +193,9 @@ func TestSendReportsInputThatLandedWhenItsRecordDidNot(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "sent-marker") {
 		t.Fatalf("the error carries the text: %v", err)
+	}
+	if replay, err := Send(f.Backend, req); err != nil || !replay.Replayed || replay.Written {
+		t.Fatalf("retry after pane marker failure = %+v, %v; want replay", replay, err)
 	}
 }
 

@@ -33,7 +33,6 @@ package transcript
 // directory that covers only part of its content.
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -75,11 +74,9 @@ func (s *directorySet) values() []string { return s.order }
 // scanIdentityLines streams a transcript line by line, hands each line that
 // survives the byte pre-filter to visit, and never retains a line.
 //
-// The scanner buffer matches the readers' 16 MiB ceiling for one reason: a line
-// too long to scan would be silently skipped, and skipping the line that named a
+// A record too large to scan must return an error: skipping one that named a
 // second working directory would turn an ambiguous conversation into an
-// apparently unambiguous one. Being able to see a long line is a fail-closed
-// requirement here, not a convenience.
+// apparently unambiguous one.
 func scanIdentityLines(path string, markers [][]byte, visit func(line []byte)) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -87,8 +84,7 @@ func scanIdentityLines(path string, markers [][]byte, visit func(line []byte)) e
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), claudeMaxLineBytes)
+	scanner := newJSONLScanner(f)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {

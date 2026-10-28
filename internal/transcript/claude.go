@@ -1,7 +1,6 @@
 package transcript
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -28,10 +27,6 @@ func NewClaudeReader() ClaudeReader { return ClaudeReader{} }
 
 // Harness reports the canonical harness name this reader speaks for.
 func (ClaudeReader) Harness() string { return harness.Claude }
-
-// claudeMaxLineBytes lifts bufio.Scanner above its default 64 KiB cap so
-// long thinking/tool_use blocks do not cause silent line skips.
-const claudeMaxLineBytes = 16 << 20 // 16 MiB
 
 // claudeRecord is the lenient envelope used for both metadata extraction
 // and per-message decoding. Every field is optional; the reader inspects
@@ -150,8 +145,7 @@ func (r ClaudeReader) ReadMessages(path string) ([]Message, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), claudeMaxLineBytes)
+	scanner := newJSONLScanner(f)
 
 	var msgs []Message
 	for scanner.Scan() {
@@ -170,9 +164,7 @@ func (r ClaudeReader) ReadMessages(path string) ([]Message, error) {
 		}
 		msgs = append(msgs, msg)
 	}
-	// Ignore scanner.Err() for unexpected EOF / token-too-long: callers
-	// treat partial reads (sessions still being written) as success.
-	return msgs, nil
+	return msgs, scanner.Err()
 }
 
 // ClassifySession scans Claude's lightweight record envelopes without
@@ -185,8 +177,7 @@ func (r ClaudeReader) ClassifySession(path string) (SessionClass, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), claudeMaxLineBytes)
+	scanner := newJSONLScanner(f)
 	evidence := sessionClassEvidence{}
 	for scanner.Scan() {
 		var rec claudeRecord
@@ -214,8 +205,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 	}
 	defer func() { _ = f.Close() }()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), claudeMaxLineBytes)
+	scanner := newJSONLScanner(f)
 
 	meta := SessionMeta{
 		Harness:     harness.Claude,
@@ -317,7 +307,7 @@ func (r ClaudeReader) parseFile(path string, info os.FileInfo, encodedDir string
 		meta.CWD = "/" + strings.ReplaceAll(strings.TrimPrefix(encodedDir, "-"), "-", "/")
 	}
 
-	return meta, nil
+	return meta, scanner.Err()
 }
 
 // claudeSlashCommand recognizes the markup Claude Code records for a slash
@@ -368,8 +358,9 @@ func claudeCountsAsMessage(rec claudeRecord) bool {
 // applies. Version 1 added Title; version 2 added Ending; version 3 indexes
 // slash commands and their output as read rather than as tag markup; version
 // 4 counts only messages with prose, leaving out tool calls and results;
-// version 5 leaves out the notices Claude Code writes as user records.
-const claudeReaderVersion = 5
+// version 5 leaves out the notices Claude Code writes as user records;
+// version 6 rescans entries that may have stopped at a 16 MiB JSONL record.
+const claudeReaderVersion = 6
 
 // cachePredatesRules reports a cached entry its harness's reader would no
 // longer produce, so Refresh reparses it once instead of trusting the cache.

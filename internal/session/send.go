@@ -37,7 +37,8 @@ import (
 // belongs to the run's mailbox, and the caller refuses before it gets here.
 
 // SendOperationVar is the pane metadata key holding the last send operation
-// and how far it got, as "<operation-id>:<pending|sent>".
+// and how far it got, as "<operation-id>:<pending|sent>". The durable send
+// ledger retains earlier operations for this runtime session.
 const SendOperationVar = "amx_send_op"
 
 const (
@@ -140,6 +141,9 @@ func Send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 	if !ValidSendOperationID(req.OperationID) {
 		return SendOutcome{}, fmt.Errorf("%w: operation ID must be 1 to 64 letters, digits, '.', '_' or '-'", backend.ErrInvalidInput)
 	}
+	if req.LockPath == "" {
+		return SendOutcome{}, fmt.Errorf("%w: send lock path is required", backend.ErrInvalidInput)
+	}
 	if req.Record.Target == nil {
 		return SendOutcome{}, &SendRefusal{Code: SendRefusedGone, Message: fmt.Sprintf("runtime session %s has no terminal", req.Record.ID)}
 	}
@@ -164,10 +168,19 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 	if !ok || pane.Exit != nil || pane.Vars[RuntimeSessionVar] != string(req.Record.ID) {
 		return SendOutcome{}, &SendRefusal{Code: SendRefusedGone, Message: fmt.Sprintf("no running agent of runtime session %s", req.Record.ID)}
 	}
-	switch pane.Vars[SendOperationVar] {
-	case req.OperationID + ":" + sendSent:
+	ledger, err := loadSendLedger(req.LockPath, req.Record.ID)
+	if err != nil {
+		return SendOutcome{}, err
+	}
+	if ledger.rememberPaneMarker(pane.Vars[SendOperationVar]) {
+		if err := ledger.save(req.LockPath); err != nil {
+			return SendOutcome{}, err
+		}
+	}
+	switch ledger.Operations[req.OperationID] {
+	case sendSent:
 		return SendOutcome{Screen: SendScreenUnchecked, Replayed: true}, nil
-	case req.OperationID + ":" + sendPending:
+	case sendPending:
 		return SendOutcome{}, &SendRefusal{Code: SendRefusedOutcomeUnknown, Message: fmt.Sprintf(
 			"operation %s was started and never seen to finish; look at the agent before sending again under a new operation ID", req.OperationID)}
 	}
@@ -177,19 +190,41 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 			return SendOutcome{}, err
 		}
 	}
+	ledger.Operations[req.OperationID] = sendPending
+	if err := ledger.save(req.LockPath); err != nil {
+		return SendOutcome{}, err
+	}
 	if err := term.SetMetadata(ref, map[string]string{SendOperationVar: req.OperationID + ":" + sendPending}); err != nil {
+		if restoreErr := term.SetMetadata(ref, map[string]string{SendOperationVar: pane.Vars[SendOperationVar]}); restoreErr == nil {
+			delete(ledger.Operations, req.OperationID)
+			if rollbackErr := ledger.save(req.LockPath); rollbackErr != nil {
+				err = errors.Join(err, rollbackErr)
+			}
+		} else {
+			err = errors.Join(err, restoreErr)
+		}
 		return SendOutcome{}, fmt.Errorf("recording operation %s: %w", req.OperationID, err)
 	}
 	if err := term.Send(ref, req.Record.Target.Instance.Generation, req.Input); err != nil {
 		if notWritten(err) {
 			// Nothing reached the pane, so the operation is not unknown: the
 			// mark goes back to what it was and a repeat may write it.
-			_ = term.SetMetadata(ref, map[string]string{SendOperationVar: pane.Vars[SendOperationVar]})
+			if restoreErr := term.SetMetadata(ref, map[string]string{SendOperationVar: pane.Vars[SendOperationVar]}); restoreErr == nil {
+				delete(ledger.Operations, req.OperationID)
+				if rollbackErr := ledger.save(req.LockPath); rollbackErr != nil {
+					err = errors.Join(err, rollbackErr)
+				}
+			} else {
+				err = errors.Join(err, restoreErr)
+			}
 		}
 		return outcome, err
 	}
 	outcome.Written = true
-	if err := term.SetMetadata(ref, map[string]string{SendOperationVar: req.OperationID + ":" + sendSent}); err != nil {
+	ledger.Operations[req.OperationID] = sendSent
+	ledgerErr := ledger.save(req.LockPath)
+	markerErr := term.SetMetadata(ref, map[string]string{SendOperationVar: req.OperationID + ":" + sendSent})
+	if err := errors.Join(ledgerErr, markerErr); err != nil {
 		return outcome, fmt.Errorf("the input was written, but recording operation %s as sent failed: %w", req.OperationID, err)
 	}
 	return outcome, nil

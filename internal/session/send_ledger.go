@@ -1,0 +1,87 @@
+package session
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/sglavoie/agentmux/internal/atomicfile"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
+)
+
+// Each runtime session has its own durable operation history. It lives beside
+// the send lock, which serializes every read and write across CLI processes.
+// Keeping the history for the session's lifetime means an intervening send
+// cannot make an older retry eligible to write again.
+type sendLedger struct {
+	Version          int               `json:"version"`
+	RuntimeSessionID runtimesession.ID `json:"runtime_session_id"`
+	Operations       map[string]string `json:"operations"`
+}
+
+func sendLedgerPath(lockPath string, id runtimesession.ID) string {
+	digest := sha256.Sum256([]byte(id))
+	return filepath.Join(lockPath+".operations", fmt.Sprintf("%x.json", digest))
+}
+
+func loadSendLedger(lockPath string, id runtimesession.ID) (sendLedger, error) {
+	ledger := sendLedger{Version: 1, RuntimeSessionID: id, Operations: make(map[string]string)}
+	path := sendLedgerPath(lockPath, id)
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ledger, nil
+	}
+	if err != nil {
+		return sendLedger{}, fmt.Errorf("inspecting send history: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return sendLedger{}, errors.New("send history is not a regular file")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return sendLedger{}, fmt.Errorf("reading send history: %w", err)
+	}
+	if err := json.Unmarshal(data, &ledger); err != nil {
+		return sendLedger{}, fmt.Errorf("decoding send history: %w", err)
+	}
+	if ledger.Version != 1 || ledger.RuntimeSessionID != id || ledger.Operations == nil {
+		return sendLedger{}, errors.New("send history has an invalid version or runtime session")
+	}
+	for operation, status := range ledger.Operations {
+		if !ValidSendOperationID(operation) || status != sendPending && status != sendSent {
+			return sendLedger{}, errors.New("send history contains an invalid operation")
+		}
+	}
+	return ledger, nil
+}
+
+func (l sendLedger) save(lockPath string) error {
+	data, err := json.Marshal(l)
+	if err != nil {
+		return fmt.Errorf("encoding send history: %w", err)
+	}
+	path := sendLedgerPath(lockPath, l.RuntimeSessionID)
+	if err := atomicfile.Write(path, append(data, '\n'), 0o600,
+		atomicfile.ParentMode(0o700), atomicfile.RequireRegularTarget()); err != nil {
+		return fmt.Errorf("writing send history: %w", err)
+	}
+	return nil
+}
+
+func (l sendLedger) rememberPaneMarker(marker string) bool {
+	operation, status, ok := strings.Cut(marker, ":")
+	if !ok || !ValidSendOperationID(operation) || status != sendPending && status != sendSent {
+		return false
+	}
+	previous, known := l.Operations[operation]
+	if !known || previous == sendPending && status == sendSent {
+		l.Operations[operation] = status
+		return true
+	}
+	return false
+}
