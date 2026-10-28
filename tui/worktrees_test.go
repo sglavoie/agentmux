@@ -296,6 +296,25 @@ func TestWorktreeMissingRowDoesNotExposeOpenCommand(t *testing.T) {
 	}
 }
 
+func TestWorktreeReviewAttemptsAStaleMissingRow(t *testing.T) {
+	t.Parallel()
+
+	m := enterLoadedWorktrees(t, worktreeTestModel())
+	for i, entry := range m.worktreeFiltered {
+		if entry.ID == "wt-missing" {
+			m.worktreeCursor = i
+		}
+	}
+	if !worktreeReviewable(m) {
+		t.Fatal("review is disabled by a cached missing state")
+	}
+	updated, cmd := m.Update(keyPress("v"))
+	m = updated.(Model)
+	if cmd == nil || !m.worktreeActionInFlight || m.actionErr != nil {
+		t.Fatalf("review did not check current state: cmd=%T inFlight=%v err=%v", cmd, m.worktreeActionInFlight, m.actionErr)
+	}
+}
+
 func TestWorktreeRenderingStatusFooterHelpAndWidths(t *testing.T) {
 	t.Parallel()
 

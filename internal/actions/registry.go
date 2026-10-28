@@ -96,6 +96,13 @@ func (r *Registry) Execute(ctx context.Context, deps Dependencies, id ID, reques
 	if err := validateParameters(definition, request); err != nil {
 		return Result{}, err
 	}
+	if definition.prepare != nil {
+		var err error
+		request, err = definition.prepare(ctx, deps, request)
+		if err != nil {
+			return Result{}, err
+		}
+	}
 	availability := r.Availability(deps, id, request)
 	if !availability.Available {
 		message := availability.Reason

@@ -367,6 +367,7 @@ func defaultDefinitions() []Definition {
 				{Name: "patch", Type: "boolean", Description: "include the unified diff"},
 				{Name: "color", Type: "boolean", Description: "color the patch for a terminal"},
 			},
+			prepare: refreshWorktreeDiffRequest,
 			available: func(_ Dependencies, request Request) Availability {
 				return worktreeDiffAvailability(request)
 			},

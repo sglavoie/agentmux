@@ -81,8 +81,7 @@ func worktreeRemovable(deleteBranch bool) func(Model) bool {
 }
 
 func worktreeReviewable(m Model) bool {
-	entry, ok := m.selectedWorktree()
-	return ok && m.worktreeReviewRefusal(entry) == ""
+	return hasWorktreeResult(m)
 }
 
 func worktreeLandable(m Model) bool {

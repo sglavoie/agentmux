@@ -112,6 +112,8 @@ type Definition struct {
 	Parameters   []ParameterSchema   `json:"parameters,omitempty"`
 	Confirmation Confirmation        `json:"confirmation"`
 
+	// prepare refreshes request state before Execute checks availability.
+	prepare   func(context.Context, Dependencies, Request) (Request, error)
 	available func(Dependencies, Request) Availability
 	execute   func(context.Context, Dependencies, Request) (Result, error)
 }

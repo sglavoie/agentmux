@@ -424,17 +424,8 @@ func (m Model) beginWorktreeForget() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// worktreeReviewRefusal and worktreeLandRefusal are the same answer for v and
-// L. A snapshot cannot promise that the source branch has not moved on, so L
+// A snapshot cannot promise that the source branch has not moved on, so L
 // may still be refused by the landing itself.
-func (m Model) worktreeReviewRefusal(entry actions.WorktreeView) string {
-	request := actions.Request{Worktree: &entry.Entry}
-	if availability := commands.Registry.Availability(actions.Dependencies{Config: m.cfg}, actions.WorktreeDiff, request); !availability.Available {
-		return availability.Reason
-	}
-	return ""
-}
-
 func (m Model) worktreeLandRefusal(entry actions.WorktreeView) string {
 	if entry.Behind != nil && *entry.Behind > 0 && (entry.Ahead == nil || *entry.Ahead > 0) {
 		return fmt.Sprintf("%s has moved on; rebase the worktree branch onto it first", tuiworktrees.SourceLabel(entry))
@@ -453,9 +444,6 @@ func (m Model) reviewSelectedWorktree() (tea.Model, tea.Cmd) {
 	entry, ok := m.selectedWorktree()
 	if !ok || m.worktreeActionInFlight {
 		return m, nil
-	}
-	if reason := m.worktreeReviewRefusal(entry); reason != "" {
-		return m.worktreeDisabledToast(reason)
 	}
 	m.actionErr = nil
 	m.worktreeActionInFlight = true

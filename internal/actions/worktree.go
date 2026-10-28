@@ -134,6 +134,22 @@ func worktreeDiffAvailability(request Request) Availability {
 	return Availability{Available: true}
 }
 
+// refreshWorktreeDiffRequest resolves a cached row or selector before the
+// registry checks availability. A review is read-only, so its current state
+// determines whether it can run, even when the UI still shows an older row.
+func refreshWorktreeDiffRequest(ctx context.Context, deps Dependencies, request Request) (Request, error) {
+	selector := request.Selector
+	if request.Worktree != nil {
+		selector = request.Worktree.ID
+	}
+	entry, err := lifecycleManager(deps).Resolve(ctx, selector)
+	if err != nil {
+		return Request{}, mapLifecycleError(WorktreeDiff, err)
+	}
+	request.Worktree = &entry
+	return request, nil
+}
+
 func diffWorktree(ctx context.Context, deps Dependencies, request Request) (Result, error) {
 	entry, err := resolveWorktree(ctx, deps, request, WorktreeDiff)
 	if err != nil {

@@ -392,6 +392,37 @@ func TestWorktreeDiffReviewsActiveAndDirtyWorktreesAndPassesItsOptions(t *testin
 	}
 }
 
+func TestWorktreeDiffChecksCurrentStateBeforeAvailability(t *testing.T) {
+	t.Parallel()
+
+	current := worktree.Entry{ID: "wt-1", Classification: worktree.ClassificationValid,
+		SourceBranch: "main", Exists: true, GitAvailable: true, Registered: true}
+	manager := &actionWorktreeManager{entries: []worktree.Entry{current}}
+	deps := Dependencies{WorktreeManager: manager}
+	registry := DefaultRegistry()
+
+	stale := current
+	stale.Classification = worktree.ClassificationMissing
+	stale.SourceBranch = ""
+	stale.Exists = false
+	stale.GitAvailable = false
+	result, err := registry.Execute(context.Background(), deps, WorktreeDiff, Request{Worktree: &stale})
+	if err != nil {
+		t.Fatalf("recovered checkout review: %v", err)
+	}
+	if review := result.Data["review"].(worktree.Review); review.SourceBranch != "main" {
+		t.Fatalf("review used stale source branch: %+v", review)
+	}
+
+	manager.entries[0].Exists = false
+	manager.entries[0].Classification = worktree.ClassificationMissing
+	_, err = registry.Execute(context.Background(), deps, WorktreeDiff, Request{Worktree: &current})
+	var actionErr *Error
+	if !errors.As(err, &actionErr) || actionErr.Code != "unavailable" || len(manager.reviewOptions) != 1 {
+		t.Fatalf("removed checkout review error = %v, review calls = %d; want current-state refusal", err, len(manager.reviewOptions))
+	}
+}
+
 func TestWorktreeLandRequiresConfirmationAnInactiveWorktreeAndReportsAKeptOne(t *testing.T) {
 	t.Parallel()
 

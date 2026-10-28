@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -710,6 +711,29 @@ func fixtureWorktreeActionCmd(client *kittytest.Client, entries *[]actions.Workt
 			removeFixtureWorktree(entries, entry.ID)
 			return done(actions.Result{Changed: true, Message: "removed managed worktree", Data: map[string]any{"mutation": mutation}}, nil)
 		case actions.WorktreeDiff:
+			// The real action resolves the selected ID again before checking
+			// availability. Model that refresh instead of trusting the row the
+			// scenario passed from its last inventory snapshot.
+			var current *worktree.Entry
+			for _, candidate := range *entries {
+				if candidate.ID == entry.ID {
+					current = &candidate.Entry
+					break
+				}
+			}
+			if current == nil {
+				return done(actions.Result{}, &actions.Error{Code: "not_found", Action: id, Message: "worktree was not found"})
+			}
+			if !current.Exists {
+				return done(actions.Result{}, &actions.Error{Code: "unavailable", Action: id, Message: "worktree checkout is missing"})
+			}
+			if current.Classification != worktree.ClassificationValid || strings.TrimSpace(current.SourceBranch) == "" {
+				return done(actions.Result{}, &actions.Error{Code: "unavailable", Action: id, Message: "no source branch was recorded for this worktree"})
+			}
+			if !current.GitAvailable {
+				return done(actions.Result{}, &actions.Error{Code: "unavailable", Action: id, Message: "worktree Git facts are unavailable"})
+			}
+			entry = current
 			review := worktree.Review{
 				ID: entry.ID, Branch: entry.Branch, SourceBranch: entry.SourceBranch, Ahead: 2,
 				Files: []worktree.FileChange{{Path: "main.go", Added: 4, Deleted: 1}}, Added: 4, Deleted: 1,
