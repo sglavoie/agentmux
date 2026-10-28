@@ -187,6 +187,16 @@ func (i *Inventory) landInCheckout(ctx context.Context, checkout, from, to strin
 	if err != nil || head != from {
 		return fmt.Errorf("%w: the source branch's checkout moved during landing preflight", ErrGitUnavailable)
 	}
+	// A clean checkout can still have a paused operation. Git's merge command
+	// does not refuse every such state (notably git am), so check before
+	// advancing HEAD underneath an operation that expects to resume there.
+	operation, err := checkoutOperation(ctx, git, canonical)
+	if err != nil {
+		return err
+	}
+	if operation != "" {
+		return fmt.Errorf("%w: finish or abort %s in %s first", ErrSourceBusy, operation, canonical)
+	}
 	status, err := git(ctx, canonical, gitProbeTimeout, statusArgs("--untracked-files=no")...)
 	if err != nil {
 		return fmt.Errorf("%w: checking the source branch's checkout: %w", ErrGitUnavailable, err)

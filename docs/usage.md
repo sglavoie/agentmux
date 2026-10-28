@@ -1271,8 +1271,9 @@ branch is fast-forwarded to the worktree branch, and nothing else. The
 worktree and its branch are kept, and since the branch is then merged, `D`
 will remove both. Landing is refused, with the reason, for a worktree that is
 dirty, locked, detached, or in use, when there is nothing to land, when the
-source branch's own checkout has uncommitted changes, and when the source
-branch has moved on — rebase the worktree branch onto it and land again.
+source branch's own checkout has uncommitted changes or an unfinished Git
+operation, and when the source branch has moved on — rebase the worktree
+branch onto it and land again.
 Agent Mux never merges, squashes, or resolves a conflict.
 
 Cleanup is always explicit:
@@ -1370,7 +1371,8 @@ is advanced. A `diff` verdict of `fast_forward` is the one
 that lands; `diverged_clean` and `conflicts` are refused as `branch_diverged`.
 The other refusals are `nothing_to_land`, `worktree_dirty`, `worktree_locked`,
 `worktree_detached`, `worktree_active`, `source_dirty`, `source_busy` (the
-source branch is mid-rebase or in an active bisect), and `source_branch_missing`.
+source branch is mid-rebase, in an active bisect, or its checkout has another
+unfinished Git operation), and `source_branch_missing`.
 Unreadable Git operation state prevents landing. `--remove` goes on
 to remove the worktree and delete its now-merged branch; if that second step
 is refused, the landing stands and the command reports a partial result with
