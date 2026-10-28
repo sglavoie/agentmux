@@ -20,25 +20,11 @@ var writeSettings = func(path string, data []byte, perm os.FileMode) error {
 // writeSettings. Exported only via the test build path.
 var errInjectedFault = errors.New("hooks: injected write fault")
 
-// writeBackup writes data to path with permissions perm, ensuring perm is
-// enforced even when path already exists. os.WriteFile only applies perm on
-// creation: an existing file keeps its previous mode, which can leave a
-// stale-permission .bak after the user tightens the original settings file
-// to 0o600. We chmod after the write so the backup mode always tracks the
-// caller-provided perm.
+// writeBackup publishes the recovery copy only after its contents and exact
+// permissions are ready. An existing backup may have looser permissions than
+// the settings file, and a failed write must leave the previous copy intact.
+// Refuse a symlink rather than writing through it to an unrelated file.
 func writeBackup(path string, data []byte, perm os.FileMode) error {
-	writePerm := perm | 0o200
-	if info, err := os.Stat(path); err == nil {
-		if info.Mode().IsRegular() && info.Mode().Perm()&0o200 == 0 {
-			if err := os.Chmod(path, info.Mode().Perm()|0o200); err != nil {
-				return err
-			}
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if err := os.WriteFile(path, data, writePerm); err != nil {
-		return err
-	}
-	return os.Chmod(path, perm)
+	return atomicfile.Write(path, data, perm,
+		atomicfile.NoCreateParents(), atomicfile.RequireRegularTarget())
 }

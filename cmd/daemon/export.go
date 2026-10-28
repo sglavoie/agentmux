@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/cmd/debug"
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
@@ -221,7 +222,11 @@ window named by KITTY_WINDOW_ID and its reusable KITTY_LISTEN_ON socket.
 --window selects a daemon slot shown by an unrestricted export; --runtime-session
 selects one by ID. Use --schema 12 for the pre-screen-decline
 shape, --schema 11 for the pre-busy-anchor shape, --schema 10 for the pre-stop-hold shape, --schema 9 for the previous
-complete causal shape, or --schema 8 for pre-causal consumers.`,
+complete causal shape, or --schema 8 for pre-causal consumers.
+
+--output writes a complete file with mode 0600, replacing an existing regular
+file atomically. Its parent directory must exist; a symlink destination is
+refused.`,
 	Example: `  amx daemon export-events
   amx daemon export-events --current-window
   amx daemon export-events --current-window --last 25
@@ -309,6 +314,8 @@ complete causal shape, or --schema 8 for pre-causal consumers.`,
 		// Without this, --output ~/events.json would write a literal
 		// "~/events.json" file in the current working directory instead of the
 		// user's home directory.
-		return os.WriteFile(config.ExpandTilde(daemonExportEventsOutput), data, 0o600)
+		return atomicfile.Write(config.ExpandTilde(daemonExportEventsOutput), data, 0o600,
+			atomicfile.NoCreateParents(), atomicfile.RequireRegularTarget(),
+			atomicfile.WithDirSync(atomicfile.SyncDirBestEffort))
 	},
 }

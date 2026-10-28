@@ -503,6 +503,8 @@ func TestSendLookShowsTheScreenAndWritesNothing(t *testing.T) {
 
 func TestSendLookSearchContextIsReadOnlyAndCannotBeUsedWithInput(t *testing.T) {
 	w := newSendWorld(t)
+	w.sent(t, w.id(), "search-context-marker", "--no-enter")
+	w.waitTyped(t, "search-context-marker", 1)
 	before := w.operation(t)
 	out, err := w.run(t, "", w.id(), "--look", "--search-context", "--json")
 	if err != nil {
@@ -516,6 +518,10 @@ func TestSendLookSearchContextIsReadOnlyAndCannotBeUsedWithInput(t *testing.T) {
 	}
 	if envelope.Data.Search == nil || envelope.Data.Search.Scope != "terminal_history" {
 		t.Fatalf("search = %+v", envelope.Data.Search)
+	}
+	text, err := w.run(t, "", w.id(), "--look", "--search-context")
+	if err != nil || !strings.HasPrefix(text, "Search (terminal_history): \"\"\n") || !strings.Contains(text, "search-context-marker") {
+		t.Fatalf("text search context = %q, %v", text, err)
 	}
 	if w.operation(t) != before {
 		t.Fatal("reading search wrote an input receipt")

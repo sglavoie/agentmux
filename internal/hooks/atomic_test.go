@@ -10,8 +10,30 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/atomicfile"
 	"github.com/sglavoie/agentmux/internal/config"
 )
+
+func TestWriteBackupRefusesSymlinkWithoutTouchingItsTarget(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "unrelated.json")
+	if err := os.WriteFile(target, []byte("unrelated"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(dir, "settings.json.bak")
+	if err := os.Symlink(target, backup); err != nil {
+		t.Skipf("symlink: %v", err)
+	}
+	if err := writeBackup(backup, []byte("settings"), 0o600); !errors.Is(err, atomicfile.ErrNotRegular) {
+		t.Fatalf("writeBackup = %v, want a refusal for the symlink", err)
+	}
+	if got := readFileOrFatal(t, target); string(got) != "unrelated" {
+		t.Fatalf("symlink target changed to %q", got)
+	}
+	if info, err := os.Lstat(backup); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("backup symlink changed: %v, %v", info, err)
+	}
+}
 
 // readFileOrFatal reads path and fails the test if it does not exist or
 // cannot be read.

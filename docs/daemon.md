@@ -778,7 +778,9 @@ from the unrestricted export. An entry held by a runtime session
 carries `runtime_session_id` and `backend`; for a tmux session its `window_id`
 is the daemon's own slot for the session, not a Kitty window, and `live.found`
 is false. `--output PATH` writes the JSON to a file instead of
-stdout. The export is read-only and does not auto-start the daemon, so the
+stdout. The destination's parent directory must exist. The file is replaced
+atomically with mode `0600`, and a symlink destination is refused. The export
+is read-only and does not auto-start the daemon, so the
 buffer of a still-running investigation session is never replaced.
 
 ## Diagnostic and native-log privacy

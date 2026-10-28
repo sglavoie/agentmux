@@ -97,7 +97,8 @@ stays "accepted". The text itself is never logged or recorded.
 --json reports {runtime_session_id, backend, project, screen, lines}, where
 screen is the word a send would report. It is what a surface shows before a
 key is pressed, and it is refused where a send would be for a session that is
-gone or a screen that cannot be read.`,
+gone or a screen that cannot be read. With --search-context, the current
+terminal search scope and query are included in either output format.`,
 	Example: `  amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f "run the tests again"
   git diff | amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --stdin --no-enter
   amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --key down --key enter
@@ -291,24 +292,31 @@ func runSendLook(cmd *cobra.Command, term sendTerminal, record runtimesession.Re
 	case err != nil:
 		return cli.CommandFailure(cmd, sendJSON, "send_failed", fmt.Errorf("reading the screen of %s: %w", record.Project, err))
 	}
-	if sendJSON {
-		var search *tmux.SearchContext
-		if sendSearchContext {
-			if reader, ok := term.(interface {
-				ReadSearchContext(runtimesession.Record) (tmux.SearchContext, error)
-			}); ok {
-				value, err := reader.ReadSearchContext(record)
-				if err != nil {
-					return cli.CommandFailure(cmd, sendJSON, "search_unavailable", err)
-				}
-				search = &value
-			}
+	var search *tmux.SearchContext
+	if sendSearchContext {
+		reader, ok := term.(interface {
+			ReadSearchContext(runtimesession.Record) (tmux.SearchContext, error)
+		})
+		if !ok {
+			return cli.CommandFailure(cmd, sendJSON, "search_unavailable", errors.New("backend cannot read terminal search context"))
 		}
+		value, err := reader.ReadSearchContext(record)
+		if err != nil {
+			return cli.CommandFailure(cmd, sendJSON, "search_unavailable", err)
+		}
+		search = &value
+	}
+	if sendJSON {
 		return cli.WriteJSON(cmd, sendLookData{
 			Search:           search,
 			RuntimeSessionID: string(record.ID), Backend: string(record.Target.Instance.Kind), Project: record.Project,
 			Screen: look.Screen, Lines: look.Lines,
 		})
+	}
+	if search != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Search (%s): %q\n", search.Scope, search.Query); err != nil {
+			return err
+		}
 	}
 	_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(look.Lines, "\n"))
 	return err
