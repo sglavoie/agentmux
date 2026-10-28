@@ -99,9 +99,15 @@ func probeInventoryEntry(ctx context.Context, git gitExecutor, candidate invento
 		metadata := candidate.entry
 		if metadata.GitCommonDir != commonDir {
 			entry.Warnings = append(entry.Warnings, fmt.Sprintf("metadata Git common directory %q conflicts with Git value %q", metadata.GitCommonDir, commonDir))
+			entry.Classification = ClassificationMetadataInvalid
+			candidate.metadataValid = false
 		}
 		if metadata.Branch != entry.Branch {
 			entry.Warnings = append(entry.Warnings, fmt.Sprintf("metadata branch %q conflicts with Git value %q", metadata.Branch, entry.Branch))
+			if !entry.Detached {
+				entry.Classification = ClassificationMetadataInvalid
+				candidate.metadataValid = false
+			}
 		}
 	}
 

@@ -86,6 +86,51 @@ func TestInventoryValidDirtyLockedAndMergeFacts(t *testing.T) {
 	}
 }
 
+func TestInventoryMarksSidecarGitMismatchInvalid(t *testing.T) {
+	t.Parallel()
+
+	repo := testRepository(t)
+	root := filepath.Join(t.TempDir(), "worktrees")
+	workflow := testWorkflow(root)
+	created, err := workflow.Create(context.Background(), Request{SourceCWD: repo, SessionID: "source-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = workflow.RemoveUnused(context.Background(), created) })
+
+	gitRun(t, created.Path, "switch", "-c", "another-branch")
+	entries, err := testInventory(root).List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Classification != ClassificationMetadataInvalid || entries[0].Actionable {
+		t.Fatalf("entries = %+v, want one non-actionable metadata mismatch", entries)
+	}
+	if !strings.Contains(strings.Join(entries[0].Warnings, "\n"), "metadata branch") {
+		t.Fatalf("warnings = %q, want the branch mismatch explained", entries[0].Warnings)
+	}
+
+	gitRun(t, created.Path, "switch", created.Branch)
+	metadata, err := ReadMetadata(created.MetadataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata.GitCommonDir = repo
+	if err := WriteMetadata(created.MetadataPath, metadata); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = testInventory(root).List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Classification != ClassificationMetadataInvalid || entries[0].Actionable {
+		t.Fatalf("entries = %+v, want one non-actionable Git repository mismatch", entries)
+	}
+	if !strings.Contains(strings.Join(entries[0].Warnings, "\n"), "metadata Git common directory") {
+		t.Fatalf("warnings = %q, want the repository mismatch explained", entries[0].Warnings)
+	}
+}
+
 func TestInventoryMissingSourceRefLeavesNullableMergeFacts(t *testing.T) {
 	t.Parallel()
 
