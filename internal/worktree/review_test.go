@@ -50,6 +50,25 @@ func TestReviewOfAnUntouchedWorktreeHasNothingToLand(t *testing.T) {
 	}
 }
 
+func TestReviewRefreshesAStaleEntryByID(t *testing.T) {
+	t.Parallel()
+
+	_, inventory, entry := reviewFixture(t)
+	wantPath, wantBranch, wantSource := entry.Path, entry.Branch, entry.SourceBranch
+	entry.Path = filepath.Join(t.TempDir(), "different-checkout")
+	entry.Branch = "stale-branch"
+	entry.SourceBranch = "stale-source"
+	entry.Exists = false
+
+	review, err := inventory.Review(context.Background(), entry, ReviewOptions{})
+	if err != nil {
+		t.Fatalf("Review: %v", err)
+	}
+	if review.Path != wantPath || review.Branch != wantBranch || review.SourceBranch != wantSource {
+		t.Fatalf("review used stale entry facts: %+v", review)
+	}
+}
+
 func TestReviewCoversCommittedUncommittedAndUntrackedWork(t *testing.T) {
 	t.Parallel()
 
@@ -192,23 +211,40 @@ func TestReviewShowsCommittedSubmoduleChangesDespiteGitDisplaySettings(t *testin
 func TestReviewRefusesWhatItCannotCompare(t *testing.T) {
 	t.Parallel()
 
-	_, inventory, entry := reviewFixture(t)
-
-	missing := entry
-	missing.Exists = false
-	if _, err := inventory.Review(context.Background(), missing, ReviewOptions{}); !errors.Is(err, ErrWorktreeMissing) {
-		t.Fatalf("missing checkout error = %v, want ErrWorktreeMissing", err)
-	}
-	legacy := entry
-	legacy.Classification, legacy.SourceBranch = ClassificationLegacy, ""
-	if _, err := inventory.Review(context.Background(), legacy, ReviewOptions{}); !errors.Is(err, ErrMetadataInvalid) {
-		t.Fatalf("legacy error = %v, want ErrMetadataInvalid", err)
-	}
-	gone := entry
-	gone.SourceBranch = "no-such-branch"
-	if _, err := inventory.Review(context.Background(), gone, ReviewOptions{}); !errors.Is(err, ErrSourceBranchMissing) {
-		t.Fatalf("missing source error = %v, want ErrSourceBranchMissing", err)
-	}
+	t.Run("missing checkout", func(t *testing.T) {
+		repo, inventory, entry := reviewFixture(t)
+		gitRun(t, repo, "worktree", "remove", entry.Path)
+		if _, err := inventory.Review(context.Background(), entry, ReviewOptions{}); !errors.Is(err, ErrWorktreeMissing) {
+			t.Fatalf("missing checkout error = %v, want ErrWorktreeMissing", err)
+		}
+	})
+	t.Run("legacy checkout", func(t *testing.T) {
+		_, inventory, entry := reviewFixture(t)
+		if err := os.Remove(entry.MetadataPath); err != nil {
+			t.Fatal(err)
+		}
+		legacy, err := inventory.Resolve(context.Background(), entry.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := inventory.Review(context.Background(), legacy, ReviewOptions{}); !errors.Is(err, ErrMetadataInvalid) {
+			t.Fatalf("legacy error = %v, want ErrMetadataInvalid", err)
+		}
+	})
+	t.Run("missing source branch", func(t *testing.T) {
+		_, inventory, entry := reviewFixture(t)
+		metadata, err := ReadMetadata(entry.MetadataPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		metadata.SourceBranch = "no-such-branch"
+		if err := WriteMetadata(entry.MetadataPath, metadata); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := inventory.Review(context.Background(), entry, ReviewOptions{}); !errors.Is(err, ErrSourceBranchMissing) {
+			t.Fatalf("missing source error = %v, want ErrSourceBranchMissing", err)
+		}
+	})
 }
 
 func TestPredictMergeNeverCallsAnUnpredictedMergeClean(t *testing.T) {

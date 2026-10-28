@@ -80,10 +80,18 @@ type Review struct {
 }
 
 // Review compares entry with its recorded source branch. The entry is taken as
-// a selection only; every fact reported is read from Git now.
+// a selection only; inventory and Git facts are read again for the review.
 func (i *Inventory) Review(ctx context.Context, entry Entry, options ReviewOptions) (Review, error) {
 	if i == nil {
 		i = NewInventory()
+	}
+	// An entry may have come from a dashboard snapshot. Resolve its stable ID
+	// again so the path and provenance below describe the checkout as it is
+	// now, rather than whichever checkout the old snapshot described.
+	var err error
+	entry, err = i.Resolve(ctx, entry.ID)
+	if err != nil {
+		return Review{}, err
 	}
 	if !entry.Exists {
 		return Review{}, ErrWorktreeMissing
