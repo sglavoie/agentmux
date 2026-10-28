@@ -111,12 +111,12 @@ func (i *Inventory) Remove(ctx context.Context, selector string, options RemoveO
 			return err
 		}
 		result.Entry = preflight.entry
-		branch, branchHead := "", ""
+		var deletion branchDeletion
 		if options.DeleteBranch {
 			if preflight.metadata == nil {
 				return fmt.Errorf("%w: branch deletion requires schema-v1 sidecar provenance", ErrMetadataInvalid)
 			}
-			branch, branchHead, err = manager.preflightBranchDeletion(ctx, preflight.controlDir, preflight.entry, *preflight.metadata)
+			deletion, err = manager.preflightBranchDeletion(ctx, preflight.controlDir, preflight.entry, *preflight.metadata)
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func (i *Inventory) Remove(ctx context.Context, selector string, options RemoveO
 		result.CheckoutRemoved = true
 
 		if options.DeleteBranch {
-			if err := manager.deleteMergedBranch(ctx, preflight.controlDir, branch, branchHead); err != nil {
+			if err := manager.deleteMergedBranch(ctx, preflight.controlDir, deletion); err != nil {
 				return &PartialMutationError{Err: err}
 			}
 			result.BranchDeleted = true
@@ -242,15 +242,16 @@ func validateAdjacentMetadataPath(root string, entry Entry) error {
 }
 
 // deleteMergedBranch deletes a branch the caller has already proven merged
-// into its recorded source branch, and only while it still points at head.
+// into its recorded source branch, and only while both tips match the proof.
 // `git branch -d` is not used: it judges "merged" against the HEAD of the
 // checkout it runs in, which is often some other branch (a landing advances a
 // source branch nobody has checked out), so it refused branches that were
-// merged where it matters. The old value makes the delete conditional, so a
+// merged where it matters. The old values make the delete conditional, so a
 // branch that moved since the proof is refused by Git rather than lost, and a
 // branch some other worktree has checked out is refused here, as branch -d
 // would, because update-ref would delete it from under that checkout.
-func (i *Inventory) deleteMergedBranch(ctx context.Context, control, branch, head string) error {
+func (i *Inventory) deleteMergedBranch(ctx context.Context, control string, deletion branchDeletion) error {
+	branch := deletion.branch
 	git := i.gitRunner()
 	porcelain, err := git(ctx, control, gitProbeTimeout, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
@@ -273,7 +274,14 @@ func (i *Inventory) deleteMergedBranch(ctx context.Context, control, branch, hea
 			return fmt.Errorf("worktree: safely deleting branch %s: it is in use by %s at %s", branch, operation, record.Path)
 		}
 	}
-	if _, err := git(ctx, control, gitCommandTimeout, "update-ref", "-m", "amx worktree remove: delete merged branch", "-d", "refs/heads/"+branch, head); err != nil {
+	// Lock and verify both tips in one transaction. A source reset after the
+	// ancestry proof must not allow deletion of the last branch holding work.
+	input := fmt.Sprintf("verify %s\x00%s\x00delete refs/heads/%s\x00%s\x00", deletion.sourceRef, deletion.sourceHead, branch, deletion.head)
+	run := i.gitInput
+	if run == nil {
+		run = runGitInput
+	}
+	if _, err := run(ctx, control, gitCommandTimeout, input, "update-ref", "-m", "amx worktree remove: delete merged branch", "--stdin", "-z"); err != nil {
 		return fmt.Errorf("worktree: safely deleting branch %s: %w", branch, err)
 	}
 	return nil

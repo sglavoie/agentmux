@@ -436,9 +436,14 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 }
 
 func runGit(ctx context.Context, directory string, timeout time.Duration, args ...string) ([]byte, error) {
+	return runGitInput(ctx, directory, timeout, "", args...)
+}
+
+func runGitInput(ctx context.Context, directory string, timeout time.Duration, input string, args ...string) ([]byte, error) {
 	commandCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(commandCtx, "git", append([]string{"-C", directory}, args...)...)
+	cmd.Stdin = strings.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {

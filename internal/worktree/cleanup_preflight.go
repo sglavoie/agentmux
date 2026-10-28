@@ -178,41 +178,55 @@ func (i *Inventory) controlDirectory(ctx context.Context, records []gitWorktreeR
 	return "", fmt.Errorf("%w: no independent registered worktree is available to control cleanup", ErrGitUnavailable)
 }
 
-func (i *Inventory) preflightBranchDeletion(ctx context.Context, control string, entry Entry, metadata Metadata) (string, string, error) {
+// branchDeletion binds the merge proof to both branch tips, so deletion can
+// verify that neither ref changed after the proof.
+type branchDeletion struct {
+	branch, head, sourceRef, sourceHead string
+}
+
+func (i *Inventory) proveBranchDeletion(ctx context.Context, control, branch, head, sourceRef string) (branchDeletion, error) {
+	sourceHead, err := gitLineWith(ctx, i.gitRunner(), control, gitProbeTimeout, "rev-parse", "--verify", sourceRef+"^{commit}")
+	if err != nil {
+		return branchDeletion{}, fmt.Errorf("%w: resolving source branch: %w", ErrGitUnavailable, err)
+	}
+	if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", head, sourceHead); err != nil {
+		return branchDeletion{}, fmt.Errorf("%w: %w", ErrBranchUnmerged, err)
+	}
+	return branchDeletion{branch: branch, head: head, sourceRef: sourceRef, sourceHead: sourceHead}, nil
+}
+
+func (i *Inventory) preflightBranchDeletion(ctx context.Context, control string, entry Entry, metadata Metadata) (branchDeletion, error) {
 	if entry.Detached || strings.TrimSpace(entry.Branch) == "" {
-		return "", "", ErrWorktreeDetached
+		return branchDeletion{}, ErrWorktreeDetached
 	}
 	branch, branchRef, err := localBranch(metadata.Branch)
 	if err != nil || branch != entry.Branch {
-		return "", "", fmt.Errorf("%w: recorded branch conflicts with the current worktree branch", ErrMetadataInvalid)
+		return branchDeletion{}, fmt.Errorf("%w: recorded branch conflicts with the current worktree branch", ErrMetadataInvalid)
 	}
 	_, sourceRef, err := localBranch(metadata.SourceBranch)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: no usable source branch was recorded", ErrMetadataInvalid)
+		return branchDeletion{}, fmt.Errorf("%w: no usable source branch was recorded", ErrMetadataInvalid)
 	}
 	branchExists, err := i.gitRefExists(ctx, control, branchRef)
 	if err != nil {
-		return "", "", err
+		return branchDeletion{}, err
 	}
 	if !branchExists {
-		return "", "", ErrBranchMissing
+		return branchDeletion{}, ErrBranchMissing
 	}
 	sourceExists, err := i.gitRefExists(ctx, control, sourceRef)
 	if err != nil {
-		return "", "", err
+		return branchDeletion{}, err
 	}
 	if !sourceExists {
-		return "", "", ErrSourceBranchMissing
+		return branchDeletion{}, ErrSourceBranchMissing
 	}
 	branchHead, err := gitLineWith(ctx, i.gitRunner(), control, gitProbeTimeout, "rev-parse", "--verify", branchRef+"^{commit}")
 	if err != nil {
-		return "", "", fmt.Errorf("%w: resolving checkout branch: %w", ErrGitUnavailable, err)
+		return branchDeletion{}, fmt.Errorf("%w: resolving checkout branch: %w", ErrGitUnavailable, err)
 	}
 	if entry.HEAD != "" && branchHead != entry.HEAD {
-		return "", "", fmt.Errorf("%w: checkout branch moved during cleanup preflight", ErrGitUnavailable)
+		return branchDeletion{}, fmt.Errorf("%w: checkout branch moved during cleanup preflight", ErrGitUnavailable)
 	}
-	if _, err := i.gitRunner()(ctx, control, gitProbeTimeout, "merge-base", "--is-ancestor", branchHead, sourceRef); err != nil {
-		return "", "", fmt.Errorf("%w: %w", ErrBranchUnmerged, err)
-	}
-	return branch, branchHead, nil
+	return i.proveBranchDeletion(ctx, control, branch, branchHead, sourceRef)
 }

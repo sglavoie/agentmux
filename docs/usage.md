@@ -1282,7 +1282,9 @@ Cleanup is always explicit:
   branch.
 - `D` additionally deletes the worktree branch, but only after fresh Git checks
   prove it is merged into the source branch recorded when the worktree was
-  created.
+  created. Git verifies both branch tips atomically when deleting: if either
+  moved after the checks, the branch and recovery metadata remain. Review the
+  branches before retrying; the checkout may already have been removed.
 - `F` forgets retained metadata for a missing checkout or invalid metadata. It
   changes neither a checkout nor a Git branch.
 

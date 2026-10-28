@@ -77,6 +77,7 @@ type gitExecutor func(context.Context, string, time.Duration, ...string) ([]byte
 type Inventory struct {
 	directory      func() (string, error)
 	git            gitExecutor
+	gitInput       func(context.Context, string, time.Duration, string, ...string) ([]byte, error)
 	workers        int
 	removeMetadata func(string) error
 }
