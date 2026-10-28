@@ -167,11 +167,14 @@ is a structured error (restart_timeout).`,
 		}
 		carryKittySocket(c)
 		if err := c.RestartDetached(amxBin); err != nil {
-			return cli.CommandFailure(cmd, jsonOutput, "restart_failed", err)
+			code := "restart_failed"
+			if errors.Is(err, ipc.ErrRestartTimeout) {
+				code = "restart_timeout"
+			}
+			return cli.CommandFailure(cmd, jsonOutput, code, err)
 		}
-		// RestartDetached returns once the replacement is spawned, before it
-		// binds its socket. Saying "restarted" then would send the next
-		// command (a doctor, a status check) to a daemon that is not there yet.
+		// RestartDetached holds off competing starters until the replacement
+		// answers. Read its health again for the command's readiness report.
 		health, ok := waitForRestartedDaemon(c)
 		if !ok {
 			return cli.CommandFailure(cmd, jsonOutput, "restart_timeout", fmt.Errorf("daemon restart requested, but the new daemon did not answer within %s; run `amx daemon status` or check the bootstrap log", daemonRestartWait))

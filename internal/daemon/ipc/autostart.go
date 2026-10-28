@@ -113,7 +113,9 @@ func (c *Client) SendWithAutoStartObserved(req protocol.Request, amxBin string, 
 		}
 		autoStartLock = lock
 
-		if health := c.healthBefore(deadline); health.Alive {
+		// The restart decision preceded the lock. An explicit restart may
+		// have finished meanwhile, so recheck the socket before replacing it.
+		if health := c.healthBefore(deadline); health.Alive && process.SocketOlderThanBinary(c.socketPath, amxBin) {
 			slog.Debug("daemon client: restarting stale daemon for newer amx binary",
 				"socket_path", c.socketPath,
 				"amx_bin", amxBin,

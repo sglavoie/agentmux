@@ -137,6 +137,17 @@ func TestDaemonLifecycleJSON(t *testing.T) {
 			t.Fatalf("out = %q, err = %v", out, err)
 		}
 	})
+	t.Run("restart transport timeout", func(t *testing.T) {
+		resetDaemonLifecycleTestState(t)
+		newDaemonLifecycleClient = func() daemonLifecycleClient {
+			return &fakeDaemonLifecycleClient{restartErr: ipc.ErrRestartTimeout}
+		}
+		out, err := run(t, daemonRestartCmd)
+		var exit *cli.ExitError
+		if !errors.As(err, &exit) || !strings.Contains(out, `"code":"restart_timeout"`) {
+			t.Fatalf("out = %q, err = %v", out, err)
+		}
+	})
 	t.Run("restart that never answers", func(t *testing.T) {
 		resetDaemonLifecycleTestState(t)
 		newDaemonLifecycleClient = func() daemonLifecycleClient {

@@ -92,6 +92,13 @@ const restartSocketPollCount = 20
 
 var restartSocketPollDelay = 50 * time.Millisecond
 
+// Explicit restarts allow a slow restore; hook-driven starts keep their
+// separate two-second budget. This includes waiting for another starter.
+var explicitRestartTimeout = 10 * time.Second
+
+// ErrRestartTimeout distinguishes an unfinished restart from a rejected spawn.
+var ErrRestartTimeout = errors.New("daemon restart timed out")
+
 // maxResponseBytes caps the response payload size the client will buffer.
 // Requests stay bounded by the server's 1 MiB ceiling, but responses are
 // asymmetric: a full events export (TypeEventsExport, WindowID 0) carries
@@ -365,10 +372,40 @@ func daemonConnectionRefused(err error) bool {
 }
 
 // RestartDetached stops the current daemon if it is running, then starts a new
-// detached daemon using amxBin. It does not wait for the new socket to become
-// reachable; callers that need a live server should retry with Send afterward.
+// detached daemon using amxBin and waits for it to answer. The startup lock
+// covers shutdown through publication: a dashboard or hook must not auto-start
+// a different binary in the gap while the requested replacement is starting.
 func (c *Client) RestartDetached(amxBin string) error {
-	return c.restartDetachedBefore(amxBin, c.Health().Alive, time.Time{})
+	deadline := time.Now().Add(explicitRestartTimeout)
+	var lock *os.File
+	for {
+		var err error
+		lock, err = process.AcquireAutoStartLock(c.socketPath)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, process.ErrAutoStartInProgress) {
+			return fmt.Errorf("daemon restart lock failed: %w", err)
+		}
+		if time.Until(deadline) <= 0 {
+			return fmt.Errorf("%w: waiting for another daemon starter", ErrRestartTimeout)
+		}
+		time.Sleep(min(restartSocketPollDelay, time.Until(deadline)))
+	}
+	defer process.ReleaseAutoStartLock(lock)
+
+	// Inspect only after acquiring the lock: another starter may have brought
+	// up a daemon while this explicit restart was waiting for its turn.
+	if err := c.restartDetachedBefore(amxBin, c.healthBefore(deadline).Alive, deadline); err != nil {
+		return err
+	}
+	for time.Until(deadline) > 0 {
+		if c.healthBefore(deadline).Alive {
+			return nil
+		}
+		time.Sleep(min(restartSocketPollDelay, time.Until(deadline)))
+	}
+	return fmt.Errorf("%w: replacement did not answer within %s; run `amx daemon status` or check the bootstrap log", ErrRestartTimeout, explicitRestartTimeout)
 }
 
 func (c *Client) restartDetachedBefore(amxBin string, daemonAlive bool, deadline time.Time) error {
