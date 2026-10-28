@@ -51,6 +51,9 @@ var (
 	// ErrNotGitCheckout reports a source directory Git cannot resolve to a
 	// working-tree top level. Configuration is intentionally irrelevant.
 	ErrNotGitCheckout = errors.New("worktree: source is not a usable Git checkout")
+	// ErrUnusedBranchMoved protects commits made after an isolated checkout
+	// was created, even if its caller still considers launch unsuccessful.
+	ErrUnusedBranchMoved = errors.New("worktree: unused checkout branch moved from its creation commit")
 )
 
 // Request identifies the conversation context that will receive an isolated
@@ -180,7 +183,7 @@ func (w *Workflow) Create(ctx context.Context, request Request) (Result, error) 
 		canonicalDestination, err := canonicalDirectory(destination)
 		if err != nil {
 			primary := fmt.Errorf("worktree: resolving created checkout: %w", err)
-			rollbackResult := Result{Path: destination, Branch: branch, SourceRoot: sourceRoot, MetadataPath: SidecarPath(destination)}
+			rollbackResult := Result{Path: destination, Branch: branch, BaseCommit: baseCommit, SourceRoot: sourceRoot, MetadataPath: SidecarPath(destination)}
 			if rollbackErr := w.rollbackCreation(context.Background(), rollbackResult); rollbackErr != nil {
 				return errors.Join(primary, fmt.Errorf("worktree: rolling back failed creation: %w", rollbackErr))
 			}
@@ -423,6 +426,10 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	if strings.TrimSpace(result.Path) == "" || strings.TrimSpace(result.SourceRoot) == "" {
 		return errors.New("worktree: cleanup is missing checkout path or source root")
 	}
+	branch, branchRef, err := unusedBranchAtBase(ctx, result)
+	if err != nil {
+		return err
+	}
 	// Keep the sidecar until every Git step succeeds. A failed removal or
 	// branch deletion must remain discoverable and retryable by stable ID.
 	removeArgs := []string{"worktree", "remove"}
@@ -449,9 +456,9 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, removeArgs...); err != nil {
 		return fmt.Errorf("worktree: removing unused checkout %s: %w", result.Path, err)
 	}
-	if branch := strings.TrimSpace(result.Branch); branch != "" {
-		if _, err := runGit(ctx, result.SourceRoot, gitCommandTimeout, "branch", "-D", branch); err != nil {
-			return fmt.Errorf("worktree: removing unused branch %s: %w", branch, err)
+	if branchRef != "" {
+		if err := deleteUnusedBranch(ctx, result.SourceRoot, branch, branchRef, result.BaseCommit); err != nil {
+			return err
 		}
 	}
 	metadataPath := strings.TrimSpace(result.MetadataPath)
@@ -460,6 +467,58 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	}
 	if err := os.Remove(metadataPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("worktree: removing metadata %s: %w", metadataPath, err)
+	}
+	return nil
+}
+
+// Check before removing the checkout so a branch with new commits keeps its
+// checkout too. The later conditional delete covers movement after this read.
+func unusedBranchAtBase(ctx context.Context, result Result) (string, string, error) {
+	if strings.TrimSpace(result.Branch) == "" {
+		return "", "", nil
+	}
+	branch, ref, err := localBranch(result.Branch)
+	if err != nil {
+		return "", "", fmt.Errorf("worktree: invalid unused branch: %w", err)
+	}
+	if strings.TrimSpace(result.BaseCommit) == "" {
+		return "", "", fmt.Errorf("worktree: cleanup is missing the creation commit for %s", branch)
+	}
+	current, err := gitLineWith(ctx, runGit, result.SourceRoot, gitProbeTimeout, "rev-parse", "--verify", ref+"^{commit}")
+	if err != nil {
+		return "", "", fmt.Errorf("worktree: resolving unused branch %s: %w", branch, err)
+	}
+	if current != result.BaseCommit {
+		return "", "", fmt.Errorf("%w: %s is at %s, expected %s", ErrUnusedBranchMoved, branch, current, result.BaseCommit)
+	}
+	return branch, ref, nil
+}
+
+func deleteUnusedBranch(ctx context.Context, sourceRoot, branch, ref, baseCommit string) error {
+	porcelain, err := runGit(ctx, sourceRoot, gitProbeTimeout, "worktree", "list", "--porcelain", "-z")
+	if err != nil {
+		return fmt.Errorf("worktree: checking unused branch %s: %w", branch, err)
+	}
+	records, err := parseWorktreePorcelain(porcelain)
+	if err != nil {
+		return fmt.Errorf("worktree: checking unused branch %s: %w", branch, err)
+	}
+	for _, record := range records {
+		if record.Branch == branch {
+			return fmt.Errorf("worktree: keeping unused branch %s because it is checked out at %s", branch, record.Path)
+		}
+		operation, err := branchOperation(ctx, runGit, record.Path, ref)
+		if err != nil {
+			return err
+		}
+		if operation != "" {
+			return fmt.Errorf("worktree: keeping unused branch %s because %s uses it at %s", branch, operation, record.Path)
+		}
+	}
+	// Git compares the current tip with baseCommit under its ref lock. A
+	// concurrent commit makes this fail while preserving the branch and sidecar.
+	if _, err := runGit(ctx, sourceRoot, gitCommandTimeout, "update-ref", "-d", ref, baseCommit); err != nil {
+		return fmt.Errorf("worktree: deleting unused branch %s only at its creation commit: %w", branch, err)
 	}
 	return nil
 }
