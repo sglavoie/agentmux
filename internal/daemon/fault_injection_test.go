@@ -28,6 +28,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // TestFaultWedgedKittyListNeverBlocksHookIngestion parks ListWindows on a
@@ -258,13 +259,15 @@ func TestFaultDegradedStartupStillAppliesEvents(t *testing.T) {
 	fake.beforeListWindows = nil
 	fake.mu.Unlock()
 	h.renderSnapshot(fake.windows)
-	h.stateMu.Lock()
-	st := h.store[42]
-	converged := st.RenderedGen == st.Seq && !st.Dirty
-	h.stateMu.Unlock()
-	if !converged {
-		t.Fatalf("render did not converge after startup fault cleared: %+v", st)
-	}
+	// The timed-out startup restore keeps running and may own this window's
+	// render when our drain returns. Wait for that writer to finish instead
+	// of assuming the competing drain completed every queued render.
+	testutil.Eventually(t, "render to converge after the startup fault clears", func() bool {
+		h.stateMu.Lock()
+		defer h.stateMu.Unlock()
+		st := h.store[42]
+		return st.DesiredIcon == "bolt" && st.RenderedGen == st.Seq && !st.Dirty
+	})
 }
 
 // TestFaultMalformedPersistedStateIsolatedPerWindow restores a snapshot where

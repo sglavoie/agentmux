@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -50,6 +51,7 @@ func branchOperation(ctx context.Context, git gitExecutor, path, ref string) (st
 		operation string
 	}{
 		{"rebase-merge/head-name", "rebase"},
+		{"rebase-merge/update-refs", "rebase"},
 		{"rebase-apply/head-name", "rebase"},
 		{"BISECT_START", "bisect"},
 	} {
@@ -65,6 +67,17 @@ func branchOperation(ctx context.Context, git gitExecutor, path, ref string) (st
 			return "", fmt.Errorf("%w: reading %s state in %s: %w", ErrGitUnavailable, state.operation, path, err)
 		}
 		name := strings.TrimSpace(string(data))
+		// --update-refs reserves additional branches beyond head-name. Its
+		// state stores each full ref on a line followed by old/new object
+		// IDs, so an exact line match finds the branch without depending on
+		// the repository's object ID length. These branches may be neither
+		// checked out nor named by the rebase's HEAD.
+		if state.path == "rebase-merge/update-refs" {
+			if slices.Contains(strings.Split(name, "\n"), ref) {
+				return state.operation, nil
+			}
+			continue
+		}
 		// Rebase records a full ref; bisect records the short branch name
 		// (or a commit when it began with an already detached HEAD).
 		if name == ref || (state.operation == "bisect" && name == strings.TrimPrefix(ref, "refs/heads/")) {
