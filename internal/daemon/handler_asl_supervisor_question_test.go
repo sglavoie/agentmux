@@ -178,6 +178,44 @@ func supervisorMailboxQuestionPayload(
 	}
 }
 
+func TestStateQueryReportsOpenSupervisorQuestionBehindOtherIcons(t *testing.T) {
+	t.Parallel()
+	h, target, now := supervisorQuestionFixture(t, nil)
+	applySupervisorStop(h, now)
+	h.acceptASLSupervisorProjection(now, target, supervisorProjection(now, 7))
+
+	h.stateMu.Lock()
+	st := h.store[42]
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:failure"},
+		Action: "stop_failure", Seq: 1, At: now.Unix(),
+	})
+	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(now.Unix()))
+	h.stateMu.Unlock()
+	state := h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[42]
+	if state.IconState != "error" || !state.ASLQuestionOpen {
+		t.Fatalf("masked supervisor question = %+v; want error icon and open question", state)
+	}
+
+	h.stateMu.Lock()
+	st.Reducer.Apply(protocol.ReducerEvent{
+		Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"},
+		Action: "user_clear", Seq: 1, At: now.Add(time.Second).Unix(),
+	})
+	h.publishEffectiveLocked(42, st, st.Reducer.Reduce(now.Add(time.Second).Unix()))
+	h.stateMu.Unlock()
+	state = h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[42]
+	if !state.ASLQuestionOpen {
+		t.Fatalf("acknowledged icon hid the still-open question: %+v", state)
+	}
+
+	h.finishASLSupervisorQuestion(42, supervisorRunID, now.Add(2*time.Second))
+	state = h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[42]
+	if state.ASLQuestionOpen {
+		t.Fatalf("finished question is still open: %+v", state)
+	}
+}
+
 func deliverSupervisorMailboxQuestion(
 	t *testing.T,
 	h *Handler,

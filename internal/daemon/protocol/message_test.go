@@ -149,8 +149,9 @@ func TestRequest_OmittedToolNameMarshalsClean(t *testing.T) {
 func TestResponse_RoundtripCarriesStateSnapshots(t *testing.T) {
 	in := Response{OK: true, States: map[int]WindowStateSnapshot{
 		42: {
-			IconState: "key", Looping: true, LastAction: "permission", LastEventAt: 1_700_000_000,
-			GuardAction: "permission", PresentationChangedAtMS: 1_700_000_000_123,
+			IconState: "error", Looping: true, LastAction: "stop_failure", LastEventAt: 1_700_000_000,
+			ASLQuestionOpen: true,
+			GuardAction:     "stop_failure", PresentationChangedAtMS: 1_700_000_000_123,
 		},
 	}}
 	data, err := json.Marshal(in)
@@ -175,7 +176,7 @@ func TestLegacyStateSnapshotReaderIgnoresPresentationChangedAt(t *testing.T) {
 	}
 
 	data, err := json.Marshal(Response{OK: true, States: map[int]WindowStateSnapshot{
-		42: {IconState: "stop", PresentationChangedAtMS: 1_700_000_000_123},
+		42: {IconState: "stop", ASLQuestionOpen: true, PresentationChangedAtMS: 1_700_000_000_123},
 	}})
 	if err != nil {
 		t.Fatalf("Marshal(Response): %v", err)

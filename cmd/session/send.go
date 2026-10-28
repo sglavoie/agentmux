@@ -84,6 +84,9 @@ the Workbench, so the run records the reply. When the daemon cannot be asked,
 finished operation reports delivery "replayed", and a repeat of one that was
 never seen to finish is refused (operation_outcome_unknown). Operation IDs are
 remembered for the lifetime of their runtime session, even after other sends.
+Reusing an ID with different input is refused.
+An operation recorded before input identities were added is refused on retry
+because its original input cannot be verified.
 
 Delivery is "accepted" once the input is written. With --wait, a session that
 was at rest or asking is watched for that long, and delivery is "consumed" if
@@ -225,10 +228,7 @@ func runSend(cmd *cobra.Command, args []string) error {
 	if sendLook {
 		return runSendLook(cmd, term, record)
 	}
-	before, known := sendSlotState(id)
-	if code, refusal := sendASLGuard(record, before, known, sendYes); refusal != nil {
-		return cli.CommandFailure(cmd, sendJSON, code, refusal)
-	}
+	var before sendSlot
 	data := sendData{
 		RuntimeSessionID: string(id), Backend: string(record.Target.Instance.Kind), Project: record.Project,
 		OperationID: operation, Input: "text", Delivery: sendAccepted,
@@ -239,6 +239,14 @@ func runSend(cmd *cobra.Command, args []string) error {
 	outcome, err := session.Send(term, session.SendRequest{
 		Record: record, Input: input, OperationID: operation, AnyScreen: sendAnyScreen,
 		LockPath: store.Path() + ".send", Now: attachNow(), Classify: sendClassify,
+		BeforeWrite: func() error {
+			var known bool
+			before, known = sendSlotState(id)
+			if code, refusal := sendASLGuard(record, before, known, sendYes); refusal != nil {
+				return &session.SendRefusal{Code: code, Message: refusal.Error()}
+			}
+			return nil
+		},
 	})
 	data.Screen = outcome.Screen
 	var refusal *session.SendRefusal
@@ -392,11 +400,11 @@ func sendASLGuard(record runtimesession.Record, slot sendSlot, known, yes bool) 
 	case !known && !yes:
 		return "daemon_unavailable", fmt.Errorf(
 			"the daemon did not answer, so there is no telling whether %s runs an agent-session-loop run; `amx doctor` says why, and --yes sends anyway", record.Project)
-	case !known || len(slot.state.ASLRunIDs) == 0:
-		return "", nil
-	case slot.state.IconState == "question":
+	case known && (slot.state.ASLQuestionOpen || slot.state.IconState == "question" && len(slot.state.ASLRunIDs) > 0):
 		return "asl_question_open", fmt.Errorf(
 			"%s has an agent-session-loop question open; answer it from the Runs view, Agent Mux.app, or the Workbench, so the run records the reply", record.Project)
+	case !known || len(slot.state.ASLRunIDs) == 0:
+		return "", nil
 	case !yes:
 		return "confirmation_required", fmt.Errorf(
 			"%s runs an agent-session-loop run, and what is typed there reaches its supervisor; pass --yes to confirm", record.Project)

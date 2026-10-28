@@ -35,6 +35,10 @@ type WindowStateSnapshot struct {
 	// user variable; a session with no Kitty window is tied to its run only
 	// here.
 	ASLRunIDs []string `json:"asl_run_ids,omitempty"`
+	// ASLQuestionOpen reports an unanswered supervisor mailbox question from
+	// the daemon's question projection. It remains true when another icon
+	// outranks the question or the operator has acknowledged its icon.
+	ASLQuestionOpen bool `json:"asl_question_open,omitempty"`
 	// BusySinceAt is when the window's current active-class stretch began (unix
 	// seconds). Absent while the window is not busy, which also preserves the
 	// former response shape for clients that do not render the stretch.

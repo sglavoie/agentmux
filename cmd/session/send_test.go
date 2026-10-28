@@ -241,6 +241,10 @@ func TestSendStaysOutOfAgentSessionLoopsLane(t *testing.T) {
 	w.daemon = []protocol.WindowStateSnapshot{{IconState: "question", ASLRunIDs: []string{"run-1"}}}
 	w.refused(t, "asl_question_open", w.id(), "typed-marker", "--yes")
 	w.refused(t, "asl_question_open", w.id(), "--key", "enter", "--yes", "--any-screen")
+	w.daemon = []protocol.WindowStateSnapshot{{IconState: "error", ASLRunIDs: []string{"run-1"}, ASLQuestionOpen: true}}
+	w.refused(t, "asl_question_open", w.id(), "typed-marker", "--yes", "--any-screen")
+	w.daemon = []protocol.WindowStateSnapshot{{IconState: "stop", ASLQuestionOpen: true}}
+	w.refused(t, "asl_question_open", w.id(), "typed-marker", "--yes", "--any-screen")
 
 	w.daemon = nil
 	w.refused(t, "daemon_unavailable", w.id(), "typed-marker")
@@ -249,6 +253,34 @@ func TestSendStaysOutOfAgentSessionLoopsLane(t *testing.T) {
 	w.waitTyped(t, "unchecked-marker", 1)
 	if screen := w.screenText(t); strings.Contains(screen, "typed-marker") {
 		t.Fatalf("a refused send was typed:\n%s", screen)
+	}
+}
+
+func TestSendReplayDoesNotNeedAnotherDaemonDecision(t *testing.T) {
+	w := newSendWorld(t)
+	first := w.sent(t, w.id(), "retry-marker", "--operation-id", "op-retry")
+	if first.Delivery != sendAccepted {
+		t.Fatalf("first send = %+v", first)
+	}
+	w.waitTyped(t, "retry-marker", 1)
+	w.daemon = nil
+	if replay := w.sent(t, w.id(), "retry-marker", "--operation-id", "op-retry"); replay.Delivery != sendReplayed {
+		t.Fatalf("retry with daemon unavailable = %+v", replay)
+	}
+	w.daemon = []protocol.WindowStateSnapshot{{ASLQuestionOpen: true}}
+	if replay := w.sent(t, w.id(), "retry-marker", "--operation-id", "op-retry"); replay.Delivery != sendReplayed {
+		t.Fatalf("retry with question open = %+v", replay)
+	}
+	w.waitTyped(t, "retry-marker", 1)
+}
+
+func TestSendRejectsReusedOperationIDWithChangedInput(t *testing.T) {
+	w := newSendWorld(t)
+	w.sent(t, w.id(), "original-marker", "--operation-id", "op-fixed")
+	w.waitTyped(t, "original-marker", 1)
+	w.refused(t, "invalid_arguments", w.id(), "changed-marker", "--operation-id", "op-fixed")
+	if strings.Contains(w.screenText(t), "changed-marker") {
+		t.Fatal("changed input reached the terminal")
 	}
 }
 

@@ -75,6 +75,9 @@ const (
 	// SendRefusedOutcomeUnknown: this operation was started before and never
 	// seen to finish, so nobody can say whether its input was written.
 	SendRefusedOutcomeUnknown = "operation_outcome_unknown"
+	// SendRefusedInputUnknown: an older completed operation has no input
+	// identity, so a retry cannot be proven to contain the same input.
+	SendRefusedInputUnknown = "operation_input_unknown"
 	// SendRefusedGone: the pane no longer carries the runtime session.
 	SendRefusedGone = "not_found"
 )
@@ -112,6 +115,10 @@ type SendRequest struct {
 	// Classify reads a screen's state for a harness, and reports false when
 	// the harness has no screen adapter; nil uses the registered adapters.
 	Classify func(harnessName, screen string) (screenstate.State, bool)
+	// BeforeWrite runs only for a new operation, under the send lock, after
+	// completed and pending operations have been resolved. A refusal here
+	// writes neither input nor an operation marker.
+	BeforeWrite func() error
 }
 
 // SendOutcome is what a send did.
@@ -172,17 +179,33 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 	if err != nil {
 		return SendOutcome{}, err
 	}
+	digest, err := digestSendInput(req.Input)
+	if err != nil {
+		return SendOutcome{}, err
+	}
 	if ledger.rememberPaneMarker(pane.Vars[SendOperationVar]) {
 		if err := ledger.save(req.LockPath); err != nil {
 			return SendOutcome{}, err
 		}
 	}
+	if previous := ledger.InputDigests[req.OperationID]; previous != "" && previous != digest {
+		return SendOutcome{}, fmt.Errorf("%w: operation %s was already used for different input", backend.ErrInvalidInput, req.OperationID)
+	}
 	switch ledger.Operations[req.OperationID] {
 	case sendSent:
+		if ledger.InputDigests[req.OperationID] == "" {
+			return SendOutcome{}, &SendRefusal{Code: SendRefusedInputUnknown, Message: fmt.Sprintf(
+				"operation %s was sent before input identities were recorded; inspect the agent before sending again under a new operation ID", req.OperationID)}
+		}
 		return SendOutcome{Screen: SendScreenUnchecked, Replayed: true}, nil
 	case sendPending:
 		return SendOutcome{}, &SendRefusal{Code: SendRefusedOutcomeUnknown, Message: fmt.Sprintf(
 			"operation %s was started and never seen to finish; look at the agent before sending again under a new operation ID", req.OperationID)}
+	}
+	if req.BeforeWrite != nil {
+		if err := req.BeforeWrite(); err != nil {
+			return SendOutcome{}, err
+		}
 	}
 	outcome := SendOutcome{Screen: SendScreenUnchecked}
 	if !req.AnyScreen {
@@ -191,12 +214,14 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 		}
 	}
 	ledger.Operations[req.OperationID] = sendPending
+	ledger.InputDigests[req.OperationID] = digest
 	if err := ledger.save(req.LockPath); err != nil {
 		return SendOutcome{}, err
 	}
 	if err := term.SetMetadata(ref, map[string]string{SendOperationVar: req.OperationID + ":" + sendPending}); err != nil {
 		if restoreErr := term.SetMetadata(ref, map[string]string{SendOperationVar: pane.Vars[SendOperationVar]}); restoreErr == nil {
 			delete(ledger.Operations, req.OperationID)
+			delete(ledger.InputDigests, req.OperationID)
 			if rollbackErr := ledger.save(req.LockPath); rollbackErr != nil {
 				err = errors.Join(err, rollbackErr)
 			}
@@ -211,6 +236,7 @@ func send(term SendTerminal, req SendRequest) (SendOutcome, error) {
 			// mark goes back to what it was and a repeat may write it.
 			if restoreErr := term.SetMetadata(ref, map[string]string{SendOperationVar: pane.Vars[SendOperationVar]}); restoreErr == nil {
 				delete(ledger.Operations, req.OperationID)
+				delete(ledger.InputDigests, req.OperationID)
 				if rollbackErr := ledger.save(req.LockPath); rollbackErr != nil {
 					err = errors.Join(err, rollbackErr)
 				}

@@ -2,6 +2,7 @@ package session
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/atomicfile"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -22,6 +24,21 @@ type sendLedger struct {
 	Version          int               `json:"version"`
 	RuntimeSessionID runtimesession.ID `json:"runtime_session_id"`
 	Operations       map[string]string `json:"operations"`
+	// InputDigests binds new operation IDs to their input without persisting
+	// prompt text. Older ledgers and pane-only markers have no digest.
+	InputDigests map[string]string `json:"input_digests,omitempty"`
+}
+
+func digestSendInput(input backend.Input) (string, error) {
+	if len(input.Keys) == 0 {
+		input.Keys = nil
+	}
+	data, err := json.Marshal(input)
+	if err != nil {
+		return "", fmt.Errorf("encoding send input identity: %w", err)
+	}
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func sendLedgerPath(lockPath string, id runtimesession.ID) string {
@@ -30,7 +47,7 @@ func sendLedgerPath(lockPath string, id runtimesession.ID) string {
 }
 
 func loadSendLedger(lockPath string, id runtimesession.ID) (sendLedger, error) {
-	ledger := sendLedger{Version: 1, RuntimeSessionID: id, Operations: make(map[string]string)}
+	ledger := sendLedger{Version: 2, RuntimeSessionID: id, Operations: make(map[string]string), InputDigests: make(map[string]string)}
 	path := sendLedgerPath(lockPath, id)
 	info, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -49,14 +66,24 @@ func loadSendLedger(lockPath string, id runtimesession.ID) (sendLedger, error) {
 	if err := json.Unmarshal(data, &ledger); err != nil {
 		return sendLedger{}, fmt.Errorf("decoding send history: %w", err)
 	}
-	if ledger.Version != 1 || ledger.RuntimeSessionID != id || ledger.Operations == nil {
+	if (ledger.Version != 1 && ledger.Version != 2) || ledger.RuntimeSessionID != id || ledger.Operations == nil {
 		return sendLedger{}, errors.New("send history has an invalid version or runtime session")
+	}
+	if ledger.InputDigests == nil {
+		ledger.InputDigests = make(map[string]string)
 	}
 	for operation, status := range ledger.Operations {
 		if !ValidSendOperationID(operation) || status != sendPending && status != sendSent {
 			return sendLedger{}, errors.New("send history contains an invalid operation")
 		}
 	}
+	for operation, digest := range ledger.InputDigests {
+		decoded, err := hex.DecodeString(digest)
+		if _, ok := ledger.Operations[operation]; !ok || err != nil || len(decoded) != sha256.Size || hex.EncodeToString(decoded) != digest {
+			return sendLedger{}, errors.New("send history contains an invalid input identity")
+		}
+	}
+	ledger.Version = 2
 	return ledger, nil
 }
 

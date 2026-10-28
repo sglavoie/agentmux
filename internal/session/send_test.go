@@ -135,7 +135,61 @@ func TestSendReplaysOlderOperationAfterAnotherSend(t *testing.T) {
 	}
 }
 
-func TestSendRetainsLegacyPaneMarkerWhenAnotherOperationStarts(t *testing.T) {
+func TestSendRejectsReusedOperationIDWithDifferentInput(t *testing.T) {
+	f, req := sendFixture(t)
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written {
+		t.Fatalf("first send = %+v, %v", outcome, err)
+	}
+	for _, different := range []backend.Input{
+		{Text: "different-marker", Submit: true},
+		{Text: "sent-marker", Submit: false},
+		{Keys: []backend.Key{backend.KeyEnter}},
+	} {
+		retry := req
+		retry.Input = different
+		if outcome, err := Send(f.Backend, retry); !errors.Is(err, backend.ErrInvalidInput) || outcome.Written || outcome.Replayed {
+			t.Fatalf("changed input %+v = %+v, %v; want invalid input", different, outcome, err)
+		}
+	}
+	if text, _ := f.Backend.Capture(backend.PaneID(req.Record.Target.Ref), backend.ExtentScreen); strings.Contains(text, "different-marker") {
+		t.Fatalf("changed input was typed:\n%s", text)
+	}
+	data, err := os.ReadFile(sendLedgerPath(req.LockPath, req.Record.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "sent-marker") {
+		t.Fatalf("send history contains prompt text: %s", data)
+	}
+}
+
+func TestSendChecksBeforeWriteOnlyForNewOperations(t *testing.T) {
+	f, req := sendFixture(t)
+	calls := 0
+	req.BeforeWrite = func() error {
+		calls++
+		return nil
+	}
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written || calls != 1 {
+		t.Fatalf("first send = %+v, %v; guard calls = %d", outcome, err, calls)
+	}
+	req.BeforeWrite = func() error {
+		calls++
+		return errors.New("new sends blocked")
+	}
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Replayed || calls != 1 {
+		t.Fatalf("replay = %+v, %v; guard calls = %d", outcome, err, calls)
+	}
+	req.OperationID = "op-2"
+	if outcome, err := Send(f.Backend, req); err == nil || outcome.Written || calls != 2 {
+		t.Fatalf("new refused send = %+v, %v; guard calls = %d", outcome, err, calls)
+	}
+	if got := sendRecorded(t, f, req.Record); got != "op-1:sent" {
+		t.Fatalf("refused send changed pane marker to %q", got)
+	}
+}
+
+func TestSendRetainsLegacyPaneMarkerButRefusesUnverifiedReplay(t *testing.T) {
 	f, req := sendFixture(t)
 	ref := backend.PaneID(req.Record.Target.Ref)
 	if err := f.Backend.SetMetadata(ref, map[string]string{SendOperationVar: "op-old:sent"}); err != nil {
@@ -145,8 +199,37 @@ func TestSendRetainsLegacyPaneMarkerWhenAnotherOperationStarts(t *testing.T) {
 		t.Fatalf("new send = %+v, %v", outcome, err)
 	}
 	req.OperationID = "op-old"
-	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Replayed || outcome.Written {
-		t.Fatalf("legacy retry = %+v, %v; want replay", outcome, err)
+	var refusal *SendRefusal
+	if outcome, err := Send(f.Backend, req); !errors.As(err, &refusal) || refusal.Code != SendRefusedInputUnknown || outcome.Written || outcome.Replayed {
+		t.Fatalf("legacy retry = %+v, %v; want input-unknown refusal", outcome, err)
+	}
+}
+
+func TestSendUpgradesLegacyHistoryWithoutLosingReplay(t *testing.T) {
+	f, req := sendFixture(t)
+	path := sendLedgerPath(req.LockPath, req.Record.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := `{"version":1,"runtime_session_id":"` + string(req.Record.ID) + `","operations":{"op-old":"sent"}}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req.OperationID = "op-old"
+	var refusal *SendRefusal
+	if outcome, err := Send(f.Backend, req); !errors.As(err, &refusal) || refusal.Code != SendRefusedInputUnknown || outcome.Written {
+		t.Fatalf("legacy retry = %+v, %v; want input-unknown refusal", outcome, err)
+	}
+	req.OperationID = "op-new"
+	if outcome, err := Send(f.Backend, req); err != nil || !outcome.Written {
+		t.Fatalf("new operation = %+v, %v", outcome, err)
+	}
+	ledger, err := loadSendLedger(req.LockPath, req.Record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ledger.Version != 2 || ledger.Operations["op-old"] != sendSent || ledger.InputDigests["op-old"] != "" || ledger.InputDigests["op-new"] == "" {
+		t.Fatalf("upgraded ledger = %+v", ledger)
 	}
 }
 

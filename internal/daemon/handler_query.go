@@ -66,16 +66,21 @@ func (h *Handler) handleStateQuery() protocol.Response {
 func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapshot, map[int]int64) {
 	states := make(map[int]protocol.WindowStateSnapshot, len(h.store))
 	snapshot := make(map[int]int64, len(h.store))
+	openASLQuestions := make(map[int]bool)
+	for _, pending := range h.aslSupervisors.Pending() {
+		openASLQuestions[pending.Target.WindowID] = true
+	}
 	for id, st := range h.store {
 		state := protocol.WindowStateSnapshot{
-			StatusEvidence: statusEvidence(st),
-			IconState:      rendering.DesiredIcon(st),
-			Looping:        st.Looping,
-			LastAction:     st.LastAction,
-			GuardAction:    st.GuardAction,
-			AgentTurn:      st.Reducer.AgentTurn(now),
-			ASLPhases:      st.Reducer.ASLPhases(),
-			ASLRunIDs:      liveASLRunIDs(st.Reducer),
+			StatusEvidence:  statusEvidence(st),
+			IconState:       rendering.DesiredIcon(st),
+			Looping:         st.Looping,
+			LastAction:      st.LastAction,
+			GuardAction:     st.GuardAction,
+			AgentTurn:       st.Reducer.AgentTurn(now),
+			ASLPhases:       st.Reducer.ASLPhases(),
+			ASLRunIDs:       liveASLRunIDs(st.Reducer),
+			ASLQuestionOpen: openASLQuestions[id],
 			// The durable bit is projected as-is rather than recomputed: the
 			// daemon's publish path and focus observation are its only writers,
 			// so a query that derived it again would be a second opinion.
