@@ -127,15 +127,23 @@ func readVerification(path, runID string) ([]VerificationRecord, bool, error) {
 		return rows, false, errors.New("event log is not a regular file")
 	}
 	truncated := info.Size() > verificationTailBytes
+	startsMidLine := false
 	if truncated {
-		if _, err := f.Seek(-verificationTailBytes, io.SeekEnd); err != nil {
+		start := info.Size() - verificationTailBytes
+		var preceding [1]byte
+		if _, err := f.ReadAt(preceding[:], start-1); err != nil {
+			return rows, true, err
+		}
+		startsMidLine = preceding[0] != '\n'
+		if _, err := f.Seek(start, io.SeekStart); err != nil {
 			return rows, true, err
 		}
 	}
 	scanner := bufio.NewScanner(io.LimitReader(f, verificationTailBytes))
 	scanner.Buffer(make([]byte, 4096), 512<<10)
-	// Seeking into a line cannot produce a complete event.
-	if truncated {
+	// Discard only a partial first line. The tail can begin immediately
+	// after a newline, in which case its first record is complete.
+	if startsMidLine {
 		scanner.Scan()
 	}
 	for scanner.Scan() {

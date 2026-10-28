@@ -81,3 +81,24 @@ func TestVerificationReadIsBoundedAndShowsSkippedEvidence(t *testing.T) {
 		t.Fatalf("oversized line must be explicit: %v %v", truncated, err)
 	}
 }
+
+func TestVerificationTailKeepsFirstCompleteRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events")
+	line := `{"name":"verification_check_skipped","payload":{"run_id":"r","name":"first"}}` + "\n"
+	var tail strings.Builder
+	tail.Grow(verificationTailBytes)
+	tail.WriteString(line)
+	for tail.Len() < verificationTailBytes {
+		remaining := verificationTailBytes - tail.Len()
+		tail.WriteString(strings.Repeat(" ", min(remaining-1, 256<<10)))
+		tail.WriteByte('\n')
+	}
+	// The bounded read begins just after this prefix's newline.
+	if err := os.WriteFile(path, []byte("x\n"+tail.String()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	rows, truncated, err := readVerification(path, "r")
+	if err != nil || !truncated || len(rows) != 1 || rows[0].Name != "first" {
+		t.Fatalf("rows = %+v, truncated = %v, err = %v; want the first complete record", rows, truncated, err)
+	}
+}
