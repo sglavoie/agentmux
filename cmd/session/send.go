@@ -351,8 +351,12 @@ func sendInput(cmd *cobra.Command, rest []string) (backend.Input, error) {
 		if int64(len(text)) == limit {
 			return backend.Input{}, fmt.Errorf("%w: standard input is more than %d bytes", backend.ErrInvalidInput, backend.InputMaxBytes)
 		}
-		// What a pipe adds at the end is not part of the prompt.
-		input.Text, input.Submit = strings.TrimRight(string(text), "\r\n"), !sendNoEnter
+		// Remove one line ending added by the pipe. Earlier blank lines are
+		// part of the prompt and must survive the send.
+		input.Text = string(text)
+		input.Text = strings.TrimSuffix(input.Text, "\n")
+		input.Text = strings.TrimSuffix(input.Text, "\r")
+		input.Submit = !sendNoEnter
 	default:
 		input.Text, input.Submit = rest[0], !sendNoEnter
 	}

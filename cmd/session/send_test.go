@@ -193,6 +193,32 @@ func TestSendReadsTextFromStandardInput(t *testing.T) {
 	w.waitTyped(t, "piped-marker", 1)
 }
 
+func TestSendInputPreservesTrailingBlankLine(t *testing.T) {
+	previousStdin, previousKeys, previousNoEnter := sendStdin, sendKeys, sendNoEnter
+	sendStdin, sendKeys, sendNoEnter = true, nil, false
+	t.Cleanup(func() {
+		sendStdin, sendKeys, sendNoEnter = previousStdin, previousKeys, previousNoEnter
+	})
+	for _, tc := range []struct {
+		name, piped, want string
+	}{
+		{name: "unix", piped: "first line\n\n", want: "first line\n"},
+		{name: "windows final line ending", piped: "first line\n\r\n", want: "first line\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			cmd.SetIn(strings.NewReader(tc.piped))
+			input, err := sendInput(cmd, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if input.Text != tc.want || !input.Submit {
+				t.Fatalf("input = %+v, want text %q submitted", input, tc.want)
+			}
+		})
+	}
+}
+
 func TestSendHoldsInputToWhatTheScreenShows(t *testing.T) {
 	w := newSendWorld(t)
 
