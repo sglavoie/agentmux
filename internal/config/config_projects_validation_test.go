@@ -158,3 +158,52 @@ func TestValidate_ProjectEnvKeysRejectUnserializableNames(t *testing.T) {
 		t.Errorf("valid env value containing '=' should not be rejected, got %q", msg)
 	}
 }
+
+func TestValidate_ProjectEnvRejectsSessionMetadataSeparator(t *testing.T) {
+	cfg := &config.Config{
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"}},
+		Projects: []config.Session{{
+			Title: "api", Directory: "/tmp/a", Profile: "work",
+			Env: map[string]string{
+				"VALID":      "a=b",
+				"BAD\x1fKEY": "value",
+				"BAD\x00KEY": "value",
+				"TOKEN":      "first\x1fINJECTED=second",
+				"BINARY":     "first\x00second",
+			},
+		}},
+	}
+	err := config.Validate(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for env entries that cannot round-trip through session metadata")
+	}
+	for _, want := range []string{
+		`env key "BAD\x1fKEY"`,
+		`env key "BAD\x00KEY" must not contain NUL`,
+		`env value for "TOKEN"`,
+		`env value for "BINARY" must not contain NUL`,
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("validation error %q does not mention %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "VALID") {
+		t.Errorf("valid env entry rejected: %v", err)
+	}
+}
+
+func TestValidate_ProjectGroupsRejectSessionMetadataSeparator(t *testing.T) {
+	cfg := &config.Config{
+		HarnessEmojis: map[string]string{"claude": "🦊"},
+		Profiles:      []config.Account{{Name: "work", Harness: "claude", HomeDir: "/tmp/h", Color: "blue"}},
+		Projects: []config.Session{{
+			Title: "api", Directory: "/tmp/a", Profile: "work",
+			Groups: []string{"backend\x1finfra"},
+		}},
+	}
+	err := config.Validate(cfg)
+	if err == nil || !strings.Contains(err.Error(), `group "backend\x1finfra"`) {
+		t.Fatalf("expected a group separator validation error, got %v", err)
+	}
+}

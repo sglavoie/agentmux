@@ -43,6 +43,25 @@ func validateSessions(sessions []Session, accounts []Account) []string {
 					s.Title, k,
 				))
 			}
+			// Session metadata joins KEY=VALUE entries with this byte. If it
+			// appears inside either part, restart can silently change the env.
+			if strings.ContainsRune(k, '\x1f') {
+				errs = append(errs, fmt.Sprintf("project %q: env key %q must not contain the session metadata separator (U+001F)", s.Title, k))
+			}
+			if strings.ContainsRune(k, '\x00') {
+				errs = append(errs, fmt.Sprintf("project %q: env key %q must not contain NUL", s.Title, k))
+			}
+			if strings.ContainsRune(s.Env[k], '\x1f') {
+				errs = append(errs, fmt.Sprintf("project %q: env value for %q must not contain the session metadata separator (U+001F)", s.Title, k))
+			}
+			if strings.ContainsRune(s.Env[k], '\x00') {
+				errs = append(errs, fmt.Sprintf("project %q: env value for %q must not contain NUL", s.Title, k))
+			}
+		}
+		for _, group := range s.Groups {
+			if strings.ContainsRune(group, '\x1f') {
+				errs = append(errs, fmt.Sprintf("project %q: group %q must not contain the session metadata separator (U+001F)", s.Title, group))
+			}
 		}
 		// normalizeProjects mirrors profile↔account when one is empty, but
 		// silently keeps both when the user wrote two different values. That
