@@ -20,6 +20,7 @@ import (
 var (
 	ErrWorktreeMissing     = errors.New("worktree: checkout is missing")
 	ErrWorktreeDirty       = errors.New("worktree: checkout has uncommitted changes")
+	ErrWorktreeBusy        = errors.New("worktree: checkout has an unfinished Git operation")
 	ErrWorktreeLocked      = errors.New("worktree: checkout is locked")
 	ErrWorktreeDetached    = errors.New("worktree: checkout is detached")
 	ErrMetadataInvalid     = errors.New("worktree: metadata is invalid or mismatched")

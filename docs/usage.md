@@ -1340,6 +1340,10 @@ Removal also refuses a detached HEAD, even without `--delete-branch`, so it
 preserves commits with no branch reference and paused rebases. Finish or abort
 the rebase, or attach HEAD to a branch that preserves the work, before retrying.
 The structured refusal code is `worktree_detached`.
+An attached checkout with an unfinished merge, cherry-pick, revert, rebase,
+`git am`, or bisect is also kept, even when its files are clean. Finish or
+abort that operation before retrying; the refusal code is `worktree_busy`.
+Landing uses the same check on the managed checkout.
 
 `diff` reviews what a worktree did since it left its recorded source branch:
 commits ahead and behind, each changed file with its line counts, files Git

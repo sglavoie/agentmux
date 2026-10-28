@@ -458,6 +458,12 @@ func (d *uitestDriver) runCommand(cmd tea.Cmd) (tea.Msg, bool, error) {
 	}()
 	select {
 	case msg := <-ch:
+		// A command may return because Close canceled its context. If both
+		// channels are ready, select can pick the result; cancellation still
+		// wins so shutdown never turns canceled work into a successful effect.
+		if err := d.ctx.Err(); err != nil {
+			return nil, true, err
+		}
 		return msg, true, nil
 	case <-d.ctx.Done():
 		return nil, true, d.ctx.Err()

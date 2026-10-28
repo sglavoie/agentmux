@@ -78,6 +78,15 @@ func (i *Inventory) revalidatePresentCleanup(ctx context.Context, root string, s
 	if record.Detached || record.Branch == "" {
 		return cleanupPreflight{}, ErrWorktreeDetached
 	}
+	// A clean index does not mean an operation is finished. Removing the
+	// checkout also deletes its merge, sequencer, rebase, or bisect state.
+	operation, err := checkoutOperation(ctx, git, path)
+	if err != nil {
+		return cleanupPreflight{}, err
+	}
+	if operation != "" {
+		return cleanupPreflight{}, fmt.Errorf("%w: finish or abort %s in %s first", ErrWorktreeBusy, operation, path)
+	}
 	status, err := git(ctx, path, gitProbeTimeout, statusArgs()...)
 	if err != nil {
 		return cleanupPreflight{}, fmt.Errorf("%w: checking checkout status: %w", ErrGitUnavailable, err)

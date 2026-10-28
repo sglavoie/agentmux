@@ -5,8 +5,41 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
+
+// checkoutOperation checks state owned by this checkout, not the shared Git
+// directory. Even an empty or incomplete marker must prevent cleanup; only
+// absence proves that there is no operation to preserve.
+func checkoutOperation(ctx context.Context, git gitExecutor, path string) (string, error) {
+	directory, err := gitLineWith(ctx, git, path, gitProbeTimeout, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return "", fmt.Errorf("%w: locating operation state in %s: %w", ErrGitUnavailable, path, err)
+	}
+	for _, state := range []struct {
+		path      string
+		operation string
+	}{
+		{"rebase-merge", "rebase"},
+		{"rebase-apply", "rebase or am"},
+		{"MERGE_HEAD", "merge"},
+		{"CHERRY_PICK_HEAD", "cherry-pick"},
+		{"REVERT_HEAD", "revert"},
+		{"sequencer", "cherry-pick or revert"},
+		{"BISECT_START", "bisect"},
+	} {
+		_, err := os.Lstat(filepath.Join(directory, state.path))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("%w: inspecting %s state in %s: %w", ErrGitUnavailable, state.operation, path, err)
+		}
+		return state.operation, nil
+	}
+	return "", nil
+}
 
 // branchOperation reports an operation that still owns ref while HEAD may be
 // detached. Only a missing state file proves absence: a failed Git probe or

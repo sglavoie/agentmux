@@ -111,6 +111,7 @@ func TestWorktreeLifecycleErrorsHaveStableCodes(t *testing.T) {
 		code string
 	}{
 		{worktree.ErrWorktreeDirty, "worktree_dirty"},
+		{worktree.ErrWorktreeBusy, "worktree_busy"},
 		{worktree.ErrWorktreeLocked, "worktree_locked"},
 		{worktree.ErrWorktreeDetached, "worktree_detached"},
 		{worktree.ErrBranchUnmerged, "branch_unmerged"},
@@ -425,6 +426,7 @@ func TestWorktreeLandRequiresConfirmationAnInactiveWorktreeAndReportsAKeptOne(t 
 		worktree.ErrSourceDirty: "source_dirty", worktree.ErrSourceBusy: "source_busy",
 		worktree.ErrWorktreeDirty: "worktree_dirty", worktree.ErrSourceBranchMissing: "source_branch_missing",
 		worktree.ErrWorktreeDetached: "worktree_detached",
+		worktree.ErrWorktreeBusy:     "worktree_busy",
 	} {
 		manager.landErr = cause
 		_, err = registry.Execute(context.Background(), deps, WorktreeLand, Request{Selector: "wt-1", Confirmed: true})

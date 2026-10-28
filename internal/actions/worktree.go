@@ -542,6 +542,8 @@ func mapLifecycleError(action ID, err error) *Error {
 		code = "worktree_detached"
 	case errors.Is(err, worktree.ErrWorktreeDirty):
 		code = "worktree_dirty"
+	case errors.Is(err, worktree.ErrWorktreeBusy):
+		code = "worktree_busy"
 	case errors.Is(err, worktree.ErrWorktreeLocked):
 		code = "worktree_locked"
 	case errors.Is(err, worktree.ErrBranchUnmerged), errors.Is(err, worktree.ErrSourceBranchMissing):
