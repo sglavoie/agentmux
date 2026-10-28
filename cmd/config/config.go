@@ -9,6 +9,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,16 +44,24 @@ guided setup that adds a first profile and project, use ` + "`amx config setup`"
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := config.DefaultConfigPath()
-		if _, err := os.Stat(path); err == nil {
-			return fmt.Errorf("config already exists at %s", path)
-		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("creating config directory: %w", err)
 		}
-		if err := os.WriteFile(path, []byte(config.ExampleConfig), 0o644); err != nil {
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("config already exists at %s", path)
+		}
+		if err != nil {
 			return fmt.Errorf("writing config: %w", err)
 		}
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "created %s\n", path)
+		if _, err := io.WriteString(file, config.ExampleConfig); err != nil {
+			_ = file.Close()
+			return fmt.Errorf("writing config: %w", err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("closing config: %w", err)
+		}
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "created %s\n", path)
 		return err
 	},
 }

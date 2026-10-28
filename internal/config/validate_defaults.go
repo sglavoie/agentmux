@@ -19,35 +19,35 @@ func validateDefaults(d *Defaults) []string {
 			d.Sort,
 		))
 	}
-	if d.RefreshInterval < 0 {
-		errs = append(errs, "defaults.refresh_interval must be >= 0")
+	if err := durationSecondsError("defaults.refresh_interval", d.RefreshInterval); err != "" {
+		errs = append(errs, err)
 	}
-	if d.GuardDuration < 0 {
-		errs = append(errs, "defaults.guard_duration must be >= 0")
+	if err := durationSecondsError("defaults.guard_duration", d.GuardDuration); err != "" {
+		errs = append(errs, err)
 	}
-	if d.IdleThreshold < 0 {
-		errs = append(errs, "defaults.idle_threshold must be >= 0")
+	if err := durationSecondsError("defaults.idle_threshold", d.IdleThreshold); err != "" {
+		errs = append(errs, err)
 	}
-	if d.StaleActiveThreshold < 0 {
-		errs = append(errs, "defaults.stale_active_threshold must be >= 0")
+	if err := durationSecondsError("defaults.stale_active_threshold", d.StaleActiveThreshold); err != "" {
+		errs = append(errs, err)
 	}
-	if d.Watchdog.Active < 0 {
-		errs = append(errs, "defaults.watchdog.active must be >= 0")
+	if err := durationSecondsError("defaults.watchdog.active", d.Watchdog.Active); err != "" {
+		errs = append(errs, err)
 	}
-	if d.Watchdog.Subagent < 0 {
-		errs = append(errs, "defaults.watchdog.subagent must be >= 0")
+	if err := durationSecondsError("defaults.watchdog.subagent", d.Watchdog.Subagent); err != "" {
+		errs = append(errs, err)
 	}
-	if d.Watchdog.Compact < 0 {
-		errs = append(errs, "defaults.watchdog.compact must be >= 0")
+	if err := durationSecondsError("defaults.watchdog.compact", d.Watchdog.Compact); err != "" {
+		errs = append(errs, err)
 	}
-	if d.Watchdog.HookSilence < 0 {
-		errs = append(errs, "defaults.watchdog.hook_silence must be >= 0")
+	if err := durationSecondsError("defaults.watchdog.hook_silence", d.Watchdog.HookSilence); err != "" {
+		errs = append(errs, err)
 	}
-	if d.StopConfirm.Delay < 0 {
-		errs = append(errs, "defaults.stop_confirm.delay must be >= 0")
+	if err := durationSecondsError("defaults.stop_confirm.delay", d.StopConfirm.Delay); err != "" {
+		errs = append(errs, err)
 	}
-	if d.StopConfirm.Timeout < 0 {
-		errs = append(errs, "defaults.stop_confirm.timeout must be >= 0")
+	if err := durationSecondsError("defaults.stop_confirm.timeout", d.StopConfirm.Timeout); err != "" {
+		errs = append(errs, err)
 	}
 	if d.StopConfirm.Delay >= 0 && d.StopConfirm.Timeout >= 0 && d.StopConfirm.Timeout < d.StopConfirm.Delay {
 		errs = append(errs, fmt.Sprintf(
@@ -118,7 +118,7 @@ func validateDefaults(d *Defaults) []string {
 			d.Preview.Direction,
 		))
 	}
-	if d.Preview.Ratio != 0 && (d.Preview.Ratio <= 0 || d.Preview.Ratio >= 1) {
+	if d.Preview.Ratio != 0 && !(d.Preview.Ratio > 0 && d.Preview.Ratio < 1) {
 		errs = append(errs, fmt.Sprintf(
 			"defaults.preview.ratio must be > 0 and < 1 (got %v)",
 			d.Preview.Ratio,
@@ -126,6 +126,8 @@ func validateDefaults(d *Defaults) []string {
 	}
 	if d.Preview.RefreshMs != 0 && d.Preview.RefreshMs < 50 {
 		errs = append(errs, "defaults.preview.refresh_ms must be >= 50")
+	} else if err := durationMillisError("defaults.preview.refresh_ms", d.Preview.RefreshMs); err != "" {
+		errs = append(errs, err)
 	}
 	if d.Preview.MinCols < 0 {
 		errs = append(errs, "defaults.preview.min_cols must be >= 0")
@@ -133,17 +135,17 @@ func validateDefaults(d *Defaults) []string {
 	if d.Preview.MinRows < 0 {
 		errs = append(errs, "defaults.preview.min_rows must be >= 0")
 	}
-	if d.Notifications.PermissionDebounceMs < 0 {
-		errs = append(errs, "defaults.notifications.permission_debounce_ms must be >= 0")
+	if err := durationMillisError("defaults.notifications.permission_debounce_ms", d.Notifications.PermissionDebounceMs); err != "" {
+		errs = append(errs, err)
 	}
-	if d.GitProbeTTL < 0 {
-		errs = append(errs, "defaults.git_probe_ttl must be >= 0")
+	if err := durationSecondsError("defaults.git_probe_ttl", d.GitProbeTTL); err != "" {
+		errs = append(errs, err)
 	}
-	if d.GitProbeTimeout < 0 {
-		errs = append(errs, "defaults.git_probe_timeout must be >= 0")
+	if err := durationSecondsError("defaults.git_probe_timeout", d.GitProbeTimeout); err != "" {
+		errs = append(errs, err)
 	}
-	if d.Notifications.CooldownSeconds < 0 {
-		errs = append(errs, "defaults.notifications.cooldown_seconds must be >= 0")
+	if err := durationSecondsError("defaults.notifications.cooldown_seconds", d.Notifications.CooldownSeconds); err != "" {
+		errs = append(errs, err)
 	}
 	if _, _, err := ParseQuietHours(d.Notifications.QuietHours); err != nil {
 		errs = append(errs, "defaults.notifications."+err.Error())

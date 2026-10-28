@@ -51,17 +51,17 @@ func validateAccounts(accounts []Account) []string {
 			}
 			seen[key] = true
 		}
-		if a.Watchdog.Active < 0 {
-			errs = append(errs, fmt.Sprintf("profile %q: watchdog.active must be >= 0", a.Name))
+		if err := durationSecondsError("watchdog.active", a.Watchdog.Active); err != "" {
+			errs = append(errs, fmt.Sprintf("profile %q: %s", a.Name, err))
 		}
-		if a.Watchdog.Subagent < 0 {
-			errs = append(errs, fmt.Sprintf("profile %q: watchdog.subagent must be >= 0", a.Name))
+		if err := durationSecondsError("watchdog.subagent", a.Watchdog.Subagent); err != "" {
+			errs = append(errs, fmt.Sprintf("profile %q: %s", a.Name, err))
 		}
-		if a.Watchdog.Compact < 0 {
-			errs = append(errs, fmt.Sprintf("profile %q: watchdog.compact must be >= 0", a.Name))
+		if err := durationSecondsError("watchdog.compact", a.Watchdog.Compact); err != "" {
+			errs = append(errs, fmt.Sprintf("profile %q: %s", a.Name, err))
 		}
-		if a.Watchdog.HookSilence < 0 {
-			errs = append(errs, fmt.Sprintf("profile %q: watchdog.hook_silence must be >= 0", a.Name))
+		if err := durationSecondsError("watchdog.hook_silence", a.Watchdog.HookSilence); err != "" {
+			errs = append(errs, fmt.Sprintf("profile %q: %s", a.Name, err))
 		}
 	}
 	return errs

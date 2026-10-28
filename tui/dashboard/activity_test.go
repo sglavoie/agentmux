@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -126,6 +127,22 @@ func TestActivityCellTextWarningRequiresTimer(t *testing.T) {
 	noThreshold := protocol.WatchdogState{LastAction: "active", LastEventAt: now.Add(-2 * time.Hour).Unix()}
 	if _, warning = activityCellText(busy, noThreshold, now); warning {
 		t.Error("warning must not fire when ThresholdSec is zero")
+	}
+}
+
+func TestWatchdogStaleKeepsLargeRepresentableThreshold(t *testing.T) {
+	if strconv.IntSize < 64 {
+		t.Skip("large representable threshold does not fit in a 32-bit int")
+	}
+	now := time.Now()
+	maxSeconds := int64(1<<63-1) / int64(time.Second)
+	ws := protocol.WatchdogState{
+		LastAction:   "active",
+		LastEventAt:  now.Add(-time.Minute).Unix(),
+		ThresholdSec: int(maxSeconds),
+	}
+	if watchdogStale(ws, now) {
+		t.Fatal("a minute of silence reached 80% of a 292-year threshold")
 	}
 }
 

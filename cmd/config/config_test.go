@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -140,6 +141,38 @@ func TestConfigInitCommandWritesToCommandOutput(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("created config stat: %v", err)
+	}
+}
+
+func TestConfigInitRefusesExistingFileWithoutChangingIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	const original = "# keep this config\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("amx_CONFIG", path)
+	if err := configInitCmd.RunE(configInitCmd, nil); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("init existing config: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != original {
+		t.Fatalf("existing config changed: %q, %v", data, err)
+	}
+}
+
+func TestConfigInitRefusesDanglingSymlink(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "config.toml")
+	target := filepath.Join(root, "other-file")
+	if err := os.Symlink(target, path); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	t.Setenv("amx_CONFIG", path)
+	if err := configInitCmd.RunE(configInitCmd, nil); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("init dangling symlink: %v", err)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("init followed symlink to target: %v", err)
 	}
 }
 
