@@ -72,6 +72,41 @@ func TestJournalRotationAgeAndQuotaRetention(t *testing.T) {
 	}
 }
 
+func TestJournalRetentionPreservesUnrelatedEventsFiles(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	journal, paths := testJournal(t, JournalOptions{
+		KeepDays: 1,
+		Now:      func() time.Time { return now },
+	})
+	segment := filepath.Join(paths.JournalDir, "events-old.jsonl")
+	unrelated := filepath.Join(paths.JournalDir, "events-notes.txt")
+	for _, path := range []string{segment, unrelated} {
+		if err := os.WriteFile(path, []byte("old contents"), fileMode); err != nil {
+			t.Fatal(err)
+		}
+		old := now.Add(-48 * time.Hour)
+		if err := os.Chtimes(path, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	report, err := journal.RotateAndRetain(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.RemovedFiles != 1 {
+		t.Fatalf("removed %d files, want only the journal segment", report.RemovedFiles)
+	}
+	if _, err := os.Stat(segment); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("old journal segment still exists: %v", err)
+	}
+	if contents, err := os.ReadFile(unrelated); err != nil || string(contents) != "old contents" {
+		t.Fatalf("unrelated file changed: contents %q, error %v", contents, err)
+	}
+}
+
 func TestRotationUnderAppendLockProceedsDuringSharedSnapshotCapture(t *testing.T) {
 	t.Parallel()
 

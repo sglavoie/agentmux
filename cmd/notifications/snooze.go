@@ -114,11 +114,17 @@ func parseSnoozeArgs(args []string, now time.Time) (protocol.SnoozeRequest, erro
 		if err != nil {
 			return protocol.SnoozeRequest{}, fmt.Errorf("%q is not a HH:MM time", args[1])
 		}
-		end := time.Date(now.Year(), now.Month(), now.Day(), clock.Hour(), clock.Minute(), 0, 0, now.Location())
-		if !end.After(now) {
-			end = end.AddDate(0, 0, 1)
+		// Walk real instants so a skipped spring clock time waits until the
+		// next day and a repeated fall clock time can use its second occurrence.
+		// time.Date normalizes a nonexistent local time to a different clock
+		// reading, while AddDate can keep that changed reading.
+		for end, limit := now.Truncate(time.Minute).Add(time.Minute), now.Add(72*time.Hour); end.Before(limit); end = end.Add(time.Minute) {
+			local := end.In(now.Location())
+			if local.Hour() == clock.Hour() && local.Minute() == clock.Minute() {
+				return protocol.SnoozeRequest{Mode: protocol.SnoozeModeUntil, Until: end.Unix()}, nil
+			}
 		}
-		return protocol.SnoozeRequest{Mode: protocol.SnoozeModeUntil, Until: end.Unix()}, nil
+		return protocol.SnoozeRequest{}, fmt.Errorf("no next occurrence of %q in the local time zone", args[1])
 	}
 	switch args[0] {
 	case "indefinite":

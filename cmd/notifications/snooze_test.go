@@ -73,6 +73,40 @@ func TestParseSnoozeArgs(t *testing.T) {
 	}
 }
 
+func TestParseSnoozeUntilAcrossDaylightSavingTime(t *testing.T) {
+	location, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name  string
+		clock string
+		now   time.Time
+		want  time.Time
+	}{
+		{
+			name:  "missing spring clock time waits until tomorrow",
+			clock: "02:30",
+			now:   time.Date(2026, 3, 8, 1, 0, 0, 0, location),
+			want:  time.Date(2026, 3, 9, 2, 30, 0, 0, location),
+		},
+		{
+			name:  "repeated fall clock time uses second occurrence",
+			clock: "01:30",
+			now:   time.Date(2026, 11, 1, 5, 45, 0, 0, time.UTC).In(location),
+			want:  time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC).In(location),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseSnoozeArgs([]string{"until", tc.clock}, tc.now)
+			if err != nil || got.Until != tc.want.Unix() {
+				t.Fatalf("snooze until = %v, %v; want %v", time.Unix(got.Until, 0).In(location), err, tc.want)
+			}
+		})
+	}
+}
+
 func TestSnoozeCommandSendsRequestAndPrints(t *testing.T) {
 	until := snoozeTestNow.Add(time.Hour).Unix()
 	client := &fakeSnoozeClient{state: protocol.SnoozeState{SnoozedUntil: until}}

@@ -164,7 +164,7 @@ func (j *Journal) retentionFiles(ctx context.Context) ([]retainedFile, error) {
 			return nil, err
 		}
 		name := entry.Name()
-		if entry.IsDir() || !strings.HasPrefix(name, "events") || name == filepath.Base(j.lock) || strings.Contains(name, ".tmp") {
+		if entry.IsDir() || !isSnapshotSegmentName(name) {
 			continue
 		}
 		path := filepath.Join(j.paths.JournalDir, name)
