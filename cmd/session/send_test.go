@@ -204,6 +204,7 @@ func TestSendInputPreservesTrailingBlankLine(t *testing.T) {
 	}{
 		{name: "unix", piped: "first line\n\n", want: "first line\n"},
 		{name: "windows final line ending", piped: "first line\n\r\n", want: "first line\n"},
+		{name: "windows multiline", piped: "first line\r\nsecond line\r\n\r\n", want: "first line\nsecond line\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := &cobra.Command{}
@@ -216,6 +217,29 @@ func TestSendInputPreservesTrailingBlankLine(t *testing.T) {
 				t.Fatalf("input = %+v, want text %q submitted", input, tc.want)
 			}
 		})
+	}
+}
+
+func TestSendInputRefusesBareCarriageReturn(t *testing.T) {
+	previousStdin := sendStdin
+	sendStdin = true
+	t.Cleanup(func() { sendStdin = previousStdin })
+	cmd := &cobra.Command{}
+	cmd.SetIn(strings.NewReader("first line\r"))
+	if input, err := sendInput(cmd, nil); !errors.Is(err, backend.ErrInvalidInput) {
+		t.Fatalf("input = %+v, error = %v; want invalid input", input, err)
+	}
+}
+
+func TestSendInputAcceptsNormalizedCRLFAtTextLimit(t *testing.T) {
+	previousStdin := sendStdin
+	sendStdin = true
+	t.Cleanup(func() { sendStdin = previousStdin })
+	cmd := &cobra.Command{}
+	cmd.SetIn(strings.NewReader("a" + strings.Repeat("\r\n", backend.InputMaxBytes-1) + "\r\n"))
+	input, err := sendInput(cmd, nil)
+	if err != nil || len(input.Text) != backend.InputMaxBytes || input.Text[0] != 'a' {
+		t.Fatalf("input length = %d, error = %v; want %d valid bytes", len(input.Text), err, backend.InputMaxBytes)
 	}
 }
 

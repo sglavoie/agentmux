@@ -340,10 +340,10 @@ func sendInput(cmd *cobra.Command, rest []string) (backend.Input, error) {
 			input.Keys = append(input.Keys, key)
 		}
 	case sendStdin:
-		// Room for the limit, a trailing CRLF, and one byte more: input that
-		// fills it was cut short, and trimming the newline it was cut at
-		// must not let the cut prompt through as a whole one.
-		limit := int64(backend.InputMaxBytes + len("\r\n") + 1)
+		// CRLF may occupy twice as many bytes as the LF text the backend
+		// accepts. Leave room for the final pipe delimiter and one byte more
+		// so a truncated input cannot pass validation after normalization.
+		limit := int64(2*backend.InputMaxBytes + len("\r\n") + 1)
 		text, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), limit))
 		if err != nil {
 			return backend.Input{}, fmt.Errorf("reading standard input: %w", err)
@@ -351,11 +351,16 @@ func sendInput(cmd *cobra.Command, rest []string) (backend.Input, error) {
 		if int64(len(text)) == limit {
 			return backend.Input{}, fmt.Errorf("%w: standard input is more than %d bytes", backend.ErrInvalidInput, backend.InputMaxBytes)
 		}
-		// Remove one line ending added by the pipe. Earlier blank lines are
-		// part of the prompt and must survive the send.
+		// Remove one final line ending added by the pipe. Normalize any
+		// remaining CRLF line endings because the backend accepts LF in text,
+		// but rejects a bare carriage return as a control character.
 		input.Text = string(text)
-		input.Text = strings.TrimSuffix(input.Text, "\n")
-		input.Text = strings.TrimSuffix(input.Text, "\r")
+		if strings.HasSuffix(input.Text, "\r\n") {
+			input.Text = strings.TrimSuffix(input.Text, "\r\n")
+		} else {
+			input.Text = strings.TrimSuffix(input.Text, "\n")
+		}
+		input.Text = strings.ReplaceAll(input.Text, "\r\n", "\n")
 		input.Submit = !sendNoEnter
 	default:
 		input.Text, input.Submit = rest[0], !sendNoEnter

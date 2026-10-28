@@ -21,6 +21,28 @@ func TestJSONLScannerReportsOversizedRecord(t *testing.T) {
 	}
 }
 
+func TestJSONLScannerAcceptsCRLFAtRecordLimit(t *testing.T) {
+	scanner := newJSONLScanner(strings.NewReader("12345678\r\nnext\r\n"))
+	scanner.maxBytes = 8
+	for _, want := range []string{"12345678", "next"} {
+		if !scanner.Scan() || string(scanner.Bytes()) != want {
+			t.Fatalf("record = %q, error = %v; want %q", scanner.Bytes(), scanner.Err(), want)
+		}
+	}
+	if scanner.Scan() || scanner.Err() != nil {
+		t.Fatalf("extra record = %q, error = %v", scanner.Bytes(), scanner.Err())
+	}
+}
+
+func TestJSONLScannerAcceptsSplitCRLFAtRecordLimit(t *testing.T) {
+	const contentSize = 64<<10 - 1
+	scanner := newJSONLScanner(strings.NewReader(strings.Repeat("x", contentSize) + "\r\n"))
+	scanner.maxBytes = contentSize
+	if !scanner.Scan() || len(scanner.Bytes()) != contentSize || scanner.Err() != nil {
+		t.Fatalf("record length = %d, error = %v; want %d", len(scanner.Bytes()), scanner.Err(), contentSize)
+	}
+}
+
 func TestRefreshRebuildsOldIncompleteSearchCorpus(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "copilot-home")
 	path := filepath.Join(home, "session-state", "session-id", "events.jsonl")

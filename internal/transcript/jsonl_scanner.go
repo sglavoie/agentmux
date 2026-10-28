@@ -31,11 +31,9 @@ func (s *jsonlScanner) Scan() bool {
 	s.line = s.line[:0]
 	for {
 		chunk, err := s.reader.ReadSlice('\n')
-		limit := s.maxBytes
-		if err == nil {
-			limit++ // The final newline is a delimiter, not record content.
-		}
-		if len(s.line)+len(chunk) > limit {
+		// Allow room for both bytes of a CRLF delimiter, including when
+		// ReadSlice splits them across its internal buffer boundary.
+		if len(s.line)+len(chunk) > s.maxBytes+2 {
 			s.err = fmt.Errorf("transcript JSONL record exceeds %d bytes", s.maxBytes)
 			s.done = true
 			return false
@@ -47,11 +45,20 @@ func (s *jsonlScanner) Scan() bool {
 			if len(s.line) > 0 && s.line[len(s.line)-1] == '\r' {
 				s.line = s.line[:len(s.line)-1]
 			}
+			if len(s.line) > s.maxBytes {
+				s.err = fmt.Errorf("transcript JSONL record exceeds %d bytes", s.maxBytes)
+				s.done = true
+				return false
+			}
 			return true
 		case errors.Is(err, bufio.ErrBufferFull):
 			continue
 		case errors.Is(err, io.EOF):
 			s.done = true
+			if len(s.line) > s.maxBytes {
+				s.err = fmt.Errorf("transcript JSONL record exceeds %d bytes", s.maxBytes)
+				return false
+			}
 			return len(s.line) > 0
 		default:
 			s.err = err
