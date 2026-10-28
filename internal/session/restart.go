@@ -92,16 +92,21 @@ func RestartWithAccountTemplateOn(rt Runtime, running RunningSession, template c
 	return result, closeReplaced(rt, running)
 }
 
-// closeReplaced closes the session a restart replaced and ends its runtime
-// session. ErrCloseTimeout is non-fatal — the tab likely closed shortly after.
+// closeReplaced requests closure of the session a restart replaced and ends
+// its runtime record only after observing the terminal disappear. An
+// unconfirmed close is non-fatal: the replacement has already launched, and
+// reconciliation can retire the original once it actually exits.
 func closeReplaced(rt Runtime, running RunningSession) error {
-	closeErr := Close(rt.Terminal(), running.GroupRef())
+	observation, closeErr := CloseObserved(rt.Terminal(), running.GroupRef())
 	debugLog.Printf("Restart: Close err=%v", closeErr)
 	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
 		if running.Backend == "" {
 			return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
 		}
 		return fmt.Errorf("closing %s session %s: %w", running.Backend, running.GroupRef().ID, closeErr)
+	}
+	if !observation.Confirmed() {
+		return nil
 	}
 	return EndRuntimeSession(rt, running.RuntimeSessionID)
 }
