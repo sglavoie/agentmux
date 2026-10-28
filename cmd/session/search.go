@@ -125,6 +125,10 @@ the query was typed there. The selector flags narrow the search the way they nar
 		}
 		if terminal {
 			if len(views) == 0 {
+				if total > 0 {
+					_, err := fmt.Fprintln(out, offsetPastResultsMessage(selection.offset, total))
+					return err
+				}
 				message := "No indexed sessions match " + strconv.Quote(query) + "."
 				if flags := selectionFlagsText(cmd); flags != "" {
 					message = "No indexed sessions match " + strconv.Quote(query) + " with " + flags + "."

@@ -108,6 +108,45 @@ func TestServer_AcceptsLargeRequest(t *testing.T) {
 	}
 }
 
+func TestServer_RequestPayloadBoundary(t *testing.T) {
+	req := protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active"}
+	base, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SessionTitle = strings.Repeat("x", maxRequestPayloadBytes-len(base))
+	// Adding the title also adds its JSON key. Calculate the final padding
+	// from a marshaled request so the boundary is exact.
+	withTitle, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SessionTitle = req.SessionTitle[:len(req.SessionTitle)-(len(withTitle)-maxRequestPayloadBytes)]
+	payload, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(payload) != maxRequestPayloadBytes {
+		t.Fatalf("payload length = %d, want %d", len(payload), maxRequestPayloadBytes)
+	}
+
+	for _, tc := range []struct {
+		name, suffix, want string
+	}{
+		{"at limit", "", `"ok":true`},
+		{"over limit", " ", `request payload exceeds limit`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newTestServer()
+			var resp bytes.Buffer
+			srv.serveConn(strings.NewReader(string(payload)+tc.suffix+"\n"), &resp)
+			if !strings.Contains(resp.String(), tc.want) {
+				t.Fatalf("response = %s, want %s", resp.String(), tc.want)
+			}
+		})
+	}
+}
+
 // TestServer_RejectsOversizeRequest verifies that a payload larger than
 // maxRequestPayloadBytes is rejected explicitly rather than silently
 // truncated by bufio.Scanner. The rejection must surface as an OK=false

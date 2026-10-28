@@ -31,7 +31,7 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 	oldGetwd := sessionListGetwd
 	oldOut := sessionSearchCmd.OutOrStdout()
 	resetFlags := func() {
-		for _, name := range []string{"here", "harness", "profile", "limit", "since", "json", "source", "all"} {
+		for _, name := range []string{"here", "harness", "profile", "limit", "offset", "since", "json", "source", "all"} {
 			flag := sessionSearchCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -200,6 +200,10 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 		out, err = run(t, map[string]string{"harness": "copilot"}, "race")
 		if err != nil || out != "No indexed sessions match \"race\" with --harness copilot.\n" {
 			t.Fatalf("empty with a filter = %q, %v", out, err)
+		}
+		out, err = run(t, map[string]string{"offset": "3"}, "race")
+		if err != nil || out != "--offset 3 skips all 3 matching results.\n" {
+			t.Fatalf("empty page = %q, %v", out, err)
 		}
 	})
 

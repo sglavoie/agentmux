@@ -516,7 +516,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 	oldGetwd := sessionListGetwd
 	t.Cleanup(func() {
 		sessionListGetwd = oldGetwd
-		for _, name := range []string{"here", "live", "harness", "profile", "project", "limit", "json"} {
+		for _, name := range []string{"here", "live", "harness", "profile", "project", "limit", "offset", "json"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -572,7 +572,7 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 
 	run := func(t *testing.T, flags map[string]string) (string, error) {
 		t.Helper()
-		for _, name := range []string{"since", "here", "live", "harness", "profile", "project", "limit", "all"} {
+		for _, name := range []string{"since", "here", "live", "harness", "profile", "project", "limit", "offset", "all"} {
 			flag := sessionListCmd.Flags().Lookup(name)
 			if slice, ok := flag.Value.(interface{ Replace([]string) error }); ok {
 				_ = slice.Replace(nil)
@@ -707,8 +707,12 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 			t.Fatalf("empty = %q, %v", out, err)
 		}
 		out, err = run(t, map[string]string{"project": "🐱repo", "harness": "copilot", "here": "true"})
-		if err != nil || out != "No indexed sessions match --here --harness copilot --project 🐱repo.\n" {
+		if err != nil || out != "No indexed sessions match --here --harness copilot --project '🐱repo'.\n" {
 			t.Fatalf("empty = %q, %v", out, err)
+		}
+		out, err = run(t, map[string]string{"offset": "3"})
+		if err != nil || out != "--offset 3 skips all 3 matching results.\n" {
+			t.Fatalf("empty page = %q, %v", out, err)
 		}
 	})
 

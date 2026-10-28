@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/shellquote"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/spf13/cobra"
 )
@@ -260,6 +261,11 @@ func noSessionsMessage(cmd *cobra.Command, selection sessionSelection, idx *tran
 	return message
 }
 
+// offsetPastResultsMessage distinguishes an empty page from an empty match set.
+func offsetPastResultsMessage(offset, total int) string {
+	return fmt.Sprintf("--offset %d skips all %d matching results.", offset, total)
+}
+
 // selectionFlagsText is the selector flags the command was given, written
 // back as flags, in the order --help lists them.
 func selectionFlagsText(cmd *cobra.Command) string {
@@ -288,10 +294,7 @@ func selectionFlagsText(cmd *cobra.Command) string {
 // shellWord quotes a flag value that would not survive being pasted back
 // into a shell as one word.
 func shellWord(value string) string {
-	if value == "" || strings.ContainsAny(value, " \t'\"\\$`") {
-		return strconv.Quote(value)
-	}
-	return value
+	return shellquote.Quote(value)
 }
 
 // liveConversations is what list and search mark rows live from: the tabs

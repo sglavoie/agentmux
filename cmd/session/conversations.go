@@ -92,6 +92,10 @@ has_more, hidden_automated, sessions}.`,
 		}
 		if terminal {
 			if len(views) == 0 {
+				if total > 0 {
+					_, err := fmt.Fprintln(out, offsetPastResultsMessage(selection.offset, total))
+					return err
+				}
 				_, err := fmt.Fprintln(out, noSessionsMessage(cmd, selection, idx))
 				return err
 			}

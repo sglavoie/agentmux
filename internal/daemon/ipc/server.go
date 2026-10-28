@@ -259,14 +259,13 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 	// Raise the scan buffer ceiling above bufio's 64 KiB default so larger
 	// hook payloads (e.g. long notification messages) do not silently fail
 	// with bufio.ErrTooLong. Oversize requests surface explicitly below.
-	scanner.Buffer(make([]byte, 0, 64*1024), maxRequestPayloadBytes)
+	// Scanner needs room for the newline after a maximum-size payload. The
+	// explicit length check below keeps the payload ceiling at exactly 1 MiB.
+	scanner.Buffer(make([]byte, 0, 64*1024), maxRequestPayloadBytes+2)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			if errors.Is(err, bufio.ErrTooLong) {
-				count := s.badPayloads.Add(1)
-				s.metrics.rejected.Add(1)
-				slog.Warn("daemon: request payload exceeds limit", "limit", maxRequestPayloadBytes, "bad_payload_count", count)
-				writeResponse(w, protocol.Response{OK: false, Error: "request payload exceeds limit"})
+				s.rejectOversizeRequest(w)
 				return
 			}
 			slog.Warn("daemon: read failed", "err", err)
@@ -274,6 +273,10 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		return
 	}
 	payload := scanner.Bytes()
+	if len(payload) > maxRequestPayloadBytes {
+		s.rejectOversizeRequest(w)
+		return
+	}
 	if err := json.Unmarshal(payload, &req); err != nil {
 		count := s.badPayloads.Add(1)
 		s.metrics.rejected.Add(1)
@@ -324,6 +327,13 @@ func (s *Server) serveConn(r io.Reader, w io.Writer) {
 		}
 	}
 	writeResponse(w, resp)
+}
+
+func (s *Server) rejectOversizeRequest(w io.Writer) {
+	count := s.badPayloads.Add(1)
+	s.metrics.rejected.Add(1)
+	slog.Warn("daemon: request payload exceeds limit", "limit", maxRequestPayloadBytes, "bad_payload_count", count)
+	writeResponse(w, protocol.Response{OK: false, Error: "request payload exceeds limit"})
 }
 
 // process applies a request. State-changing requests flow through the serialized

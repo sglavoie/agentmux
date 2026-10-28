@@ -66,10 +66,15 @@ func TestShellWordQuotesWhatAShellWouldSplit(t *testing.T) {
 	t.Parallel()
 
 	for value, want := range map[string]string{
-		"copilot":         "copilot",
-		"🐱amx":            "🐱amx",
-		"Trad-X Pipeline": `"Trad-X Pipeline"`,
-		"":                `""`,
+		"copilot":            "copilot",
+		"🐱amx":               "'🐱amx'",
+		"Trad-X Pipeline":    "'Trad-X Pipeline'",
+		"":                   "''",
+		"$(printf injected)": "'$(printf injected)'",
+		"`printf injected`":  "'`printf injected`'",
+		"$HOME":              "'$HOME'",
+		"it's":               `'it'\''s'`,
+		"line\nbreak":        "'line\nbreak'",
 	} {
 		if got := shellWord(value); got != want {
 			t.Errorf("shellWord(%q) = %s, want %s", value, got, want)

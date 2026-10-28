@@ -337,11 +337,11 @@ func TestSessionCLIPointsAWordSelectorAtSearch(t *testing.T) {
 		want     string
 	}{
 		{"kitty", "was not found; to find a conversation by what was said in it, run `amx session search kitty`"},
-		{"tab title", "`amx session search \"tab title\"`"},
+		{"tab title", "`amx session search 'tab title'`"},
 		{"deadbeef", "run `amx session list` to see the indexed conversations"},
 		{"abc", "a session ID prefix needs at least 4 characters"},
 		{"amx", "🐱amx is a configured project, not a conversation; `amx session list --project amx` lists its conversations by ID"},
-		{"🐱amx", "`amx session list --project 🐱amx`"},
+		{"🐱amx", "`amx session list --project '🐱amx'`"},
 	} {
 		assertSessionCommandJSONError(t, sessionContinueCmd, []string{tc.selector}, &out, "not_found")
 		var payload cli.JSONErrorEnvelope
