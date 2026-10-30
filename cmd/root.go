@@ -41,7 +41,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const version = "0.8.0"
+const version = "0.8.1"
 
 var (
 	dashboardSourceWindowID int
