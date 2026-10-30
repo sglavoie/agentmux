@@ -461,6 +461,9 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 		if len(status) != 0 {
 			return ErrWorktreeDirty
 		}
+		if err := checkRemovalIndex(ctx, runGit, result.Path); err != nil {
+			return err
+		}
 		ignored, err := hasIgnoredFiles(ctx, runGit, result.Path)
 		if err != nil {
 			return fmt.Errorf("worktree: checking ignored files before removing unused checkout %s: %w", result.Path, err)

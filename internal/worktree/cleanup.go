@@ -125,6 +125,9 @@ func (i *Inventory) Remove(ctx context.Context, selector string, options RemoveO
 		}
 
 		git := manager.gitRunner()
+		if err := checkRemovalIndex(ctx, git, preflight.entry.Path); err != nil {
+			return err
+		}
 		ignored, err := hasIgnoredFiles(ctx, git, preflight.entry.Path)
 		if err != nil {
 			return fmt.Errorf("%w: checking ignored files: %w", ErrGitUnavailable, err)

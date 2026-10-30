@@ -1340,6 +1340,13 @@ active in the meantime is kept and reported. Branches are kept unless
 `--delete-branch` is given, and even then only merged branches are deleted.
 A branch checked out, being rebased, or used by an active bisect in another
 worktree is kept. Unreadable Git operation state also prevents branch deletion.
+
+Removal refuses local files marked `assume-unchanged` or `skip-worktree`, since
+Git status can hide edits to them and Git would silently delete those edits.
+Clear the index flags and inspect the files before retrying. Absent paths
+excluded by sparse checkout are allowed. This check also applies to cleanup
+after a failed launch.
+
 Removal also refuses a detached HEAD, even without `--delete-branch`, so it
 preserves commits with no branch reference and paused rebases. Finish or abort
 the rebase, or attach HEAD to a branch that preserves the work, before retrying.
