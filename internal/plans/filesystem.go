@@ -108,13 +108,15 @@ func (i *Index) reloadFilesystemLocked() (bool, error) {
 }
 
 func (i *Index) persistFilesystemLocked() error {
-	if err := i.saveLocked(); err != nil {
+	warning, persistErr := i.saveLocked()
+	if persistErr != nil {
 		i.filesystemDirty = true
-		return err
+		return errors.Join(warning, persistErr)
 	}
 	i.filesystemBase = clonePlanEntries(i.entries)
-	i.filesystemDirty = false
-	return nil
+	// Inline bodies are durable but still need a sidecar migration retry.
+	i.filesystemDirty = warning != nil
+	return warning
 }
 
 func (i *Index) filesystemSnapshot() (map[string]PlanMeta, error) {
@@ -273,8 +275,10 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 			if discoveredSearchText[key] {
 				if err := i.store.Write(key, meta.SearchText); err != nil {
 					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("writing plan search sidecar: %w", err))
+					meta.SearchTextPending = true
 				} else {
 					meta.SearchText = ""
+					meta.SearchTextPending = false
 				}
 			}
 			i.entries[key] = meta

@@ -16,8 +16,9 @@ import (
 )
 
 // PlanMeta describes a single agent-plan directory. SearchText is the
-// transient, lowercased concatenation of every .md file body. It is persisted
-// in a search sidecar and remains absent from metadata JSON.
+// lowercased concatenation of every .md file body. It is normally persisted
+// only in a search sidecar. A failed sidecar write leaves it in metadata JSON
+// until a later refresh or save can retry without losing the current corpus.
 type PlanMeta struct {
 	Name       string    `json:"name"`
 	DirPath    string    `json:"dir_path"`
@@ -28,7 +29,10 @@ type PlanMeta struct {
 	Size       int64     `json:"size"`
 	ModTime    time.Time `json:"mod_time"`
 	Snippet    string    `json:"snippet"`
-	SearchText string    `json:"-"`
+	SearchText string    `json:"search_text,omitempty"`
+	// SearchTextPending also distinguishes an empty pending corpus from a
+	// cache hit whose corpus is already in the sidecar.
+	SearchTextPending bool `json:"search_text_pending,omitempty"`
 
 	// FileFingerprint tracks each file's path, size, and modification time.
 	// Older caches omit it and are rebuilt on their next refresh.

@@ -230,6 +230,11 @@ const codexSessionIndex = "session_index.jsonl"
 // line for an ID is its current name. A missing or unreadable index leaves
 // every title empty: titles decorate a list and are never worth an error.
 func applyCodexThreadNames(homeDir string, metas []SessionMeta) {
+	// Cached rollout metadata can still hold a previous name after the
+	// separate naming index disappears or becomes unreadable.
+	for i := range metas {
+		metas[i].Title = ""
+	}
 	f, err := os.Open(filepath.Join(homeDir, codexSessionIndex))
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {

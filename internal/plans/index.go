@@ -127,12 +127,29 @@ func (i *Index) Save() error {
 	return i.saveFilesystem()
 }
 
-func (i *Index) saveLocked() error {
+// Persist pending search bodies before metadata. Failed writes remain inline
+// with their new fingerprint, so a stale sidecar cannot masquerade as current
+// after a restart. Keep sidecar warnings separate from metadata write failures.
+func (i *Index) saveLocked() (warning, persistErr error) {
+	for key, meta := range i.entries {
+		if meta.SearchText == "" && !meta.SearchTextPending {
+			continue
+		}
+		if err := i.store.Write(key, meta.SearchText); err != nil {
+			warning = errors.Join(warning, fmt.Errorf("writing plan search sidecar: %w", err))
+			meta.SearchTextPending = true
+			i.entries[key] = meta
+			continue
+		}
+		meta.SearchText = ""
+		meta.SearchTextPending = false
+		i.entries[key] = meta
+	}
 	data, err := json.MarshalIndent(indexFile{Entries: i.entries}, "", "  ")
 	if err != nil {
-		return err
+		return warning, err
 	}
-	return writePlanIndex(i.path, data, 0o644)
+	return warning, writePlanIndex(i.path, data, 0o644)
 }
 
 // Delete drops the entry with the given key and removes its sidecar.
@@ -220,19 +237,19 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 	// Cache hit: every file's path, size, and mtime matches the snapshot.
 	// Aggregate size and newest mtime can hide edits to an older sibling.
 	// Reuse the cached snippet and skip the per-file read + sidecar rewrite
-	// when the search sidecar still exists; otherwise fall through to rebuild it.
+	// when the search sidecar still exists. Pending inline text is a complete
+	// corpus too, but must be retried rather than replaced by an older sidecar.
 	cached, cachedOK := i.entries[PlanKey(planDir)]
 	if associationErr != nil && cachedOK {
 		return &cached, false, associationErr
 	}
-	if cachedOK && walkErr == nil && cached.FileFingerprint == fingerprint && i.sidecarExists(PlanKey(planDir)) {
+	if cachedOK && walkErr == nil && cached.FileFingerprint == fingerprint && (cached.SearchText != "" || cached.SearchTextPending || i.sidecarExists(PlanKey(planDir))) {
 		cached.Files = rels
 		cached.Name = displayName
 		cached.DirPath = planDir
-		cached.SearchText = ""
 		cached.CWD = cwd
 		cached = classifyPlanProject(cached, resolver)
-		return &cached, false, nil
+		return &cached, cached.SearchText != "" || cached.SearchTextPending, nil
 	}
 
 	var searchBuilder strings.Builder
@@ -273,10 +290,6 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 	if snippet == "" {
 		snippet = firstSnippet
 	}
-	if snippet == "" && cachedOK {
-		snippet = cached.Snippet
-	}
-
 	meta := &PlanMeta{
 		Name:            displayName,
 		DirPath:         planDir,

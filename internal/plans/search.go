@@ -111,7 +111,7 @@ func search(idx *Index, q Query, readSource func(PlanMeta) (string, error)) ([]R
 		}
 		key := PlanKey(m.DirPath)
 		searchText := m.SearchText
-		if searchText == "" {
+		if searchText == "" && !m.SearchTextPending {
 			var sidecarErr error
 			searchText, sidecarErr = idx.store.Read(key)
 			if sidecarErr != nil {

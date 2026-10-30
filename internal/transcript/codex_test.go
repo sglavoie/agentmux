@@ -428,6 +428,23 @@ func TestCodexDiscover_NoSessionIndexLeavesTitlesEmpty(t *testing.T) {
 	}
 }
 
+func TestCodexDiscover_RemovedSessionIndexClearsCachedTitles(t *testing.T) {
+	t.Parallel()
+	root := copyCodexFixture(t)
+	metas, err := NewCodexReader().Discover(root, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("Discover = %+v, %v", metas, err)
+	}
+	cached := metas[0]
+	cached.Title = "Old thread name"
+	metas, err = NewCodexReader().Discover(root, DiscoverOptions{Cached: func(string, int64, time.Time) (SessionMeta, bool) {
+		return cached, true
+	}})
+	if err != nil || len(metas) != 1 || metas[0].Title != "" {
+		t.Fatalf("Discover retained an obsolete thread name: %+v, %v", metas, err)
+	}
+}
+
 // Codex's paginated history continues a conversation in a second rollout,
 // rollout-<ts>-<id>_<segment>.jsonl, whose session_meta repeats the original
 // ID. Discovery keeps the later segment only, and repeated refreshes leave the
