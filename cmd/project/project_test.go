@@ -54,7 +54,7 @@ func (*recordingKittyClient) LaunchOverlayPager(string) error             { retu
 
 func testConfig() *config.Config {
 	return &config.Config{
-		Defaults: config.Defaults{Sort: "alpha"},
+		Defaults: config.Defaults{Sort: "alpha", LaunchBackend: "kitty"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", Color: "purple"},
 			{Name: "codex-work", Harness: "codex", Color: "blue"},

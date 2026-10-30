@@ -88,6 +88,51 @@ record remains pending; no dates or case completions are inferred from it.
   CLI launches still selected tmux; the app retained its workspace destination
   and open-at-launch preference.
 
+## Operator waiver: 2026-10-30
+
+The operator said, “I don't need the multi-day trial, what's next?” This waives
+the multi-day trial requirement and permits the default-backend change to
+proceed. The record is marked `waived`, not `passed`; `workdays` remains empty
+and `operator_confirmed` remains false. Prior defect observations and rehearsal
+evidence keep their original scope. Further daily-use feedback is optional.
+
+## Default backend change: 2026-10-30
+
+Following the operator's waiver, absent, empty, and whitespace-only launch
+settings now choose tmux consistently. CLI launch commands, Dashboard,
+Overview, and Past Sessions share flag/configuration/default precedence.
+Explicit Kitty choices and legacy session routing retain their meaning.
+Missing tmux reports its setup failure instead of switching destinations.
+
+- `just check` passed, including the full Go suite, core race suites, vet,
+  and both lint builds. Command tests cover all three terminal surfaces inside
+  and outside Kitty, configuration and flag overrides, unavailable tmux, and
+  a real default project launch on an isolated tmux backend.
+- Debug and Release hosted suites each passed 1,022 tests with zero failures.
+  The added app check decodes the tmux default report and verifies the Follow
+  CLI destination and source label. Historical Kitty reports remain supported.
+- Built and signed the Release app, installed the matching standalone CLI,
+  installed the app, and passed `just install-restart-smoke`. The installed CLI
+  is 0.8.1, working tree atop `525595a6a88a`, SHA-256 prefix `a486ffc3c023`.
+  Standalone and bundled CLI Go build IDs match.
+- Removed the local override added for trial preparation, preserving every
+  other configuration setting and saving a private backup beside the config
+  as `config.toml.before-default-transition-*.bak`. The installed CLI now
+  reports `launch_backend: tmux` and `launch_backend_source: default`.
+- Before/after checks verified the same server generation, the same seven
+  runtime targets, and each original live process's PID and UTC start token.
+  Doctor reports healthy with no companion build mismatch. Existing missing
+  project directory and Copilot activation warnings remain.
+- An initial legacy plan test inherited the changed default and briefly
+  launched one dummy plan on the real server. Its process had exited when
+  inspected. Removed only its dead pane and exact runtime registration under
+  the registry lock; diagnostic history remains. No matching temporary plan
+  was found in ASL state. Plans, project, session, worktree, and dashboard
+  command tests now reject unstubbed tmux backends, and Kitty fixtures choose
+  their backend explicitly. Subsequent checks passed with those guards.
+
+This is implementation and installation evidence, not a multi-day trial.
+
 ## Workday template
 
 Use a stable friction ID (`F-001`, `F-002`, …) when the same interruption recurs.

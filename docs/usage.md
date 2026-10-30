@@ -839,14 +839,14 @@ focusing the existing tab.
 
 | Entry point | Destination |
 | --- | --- |
-| CLI launch commands | `--backend`, then `[defaults] launch_backend`, then Kitty for compatibility |
-| Terminal dashboard | Configured backend; when unset, tmux outside Kitty and Kitty inside it |
+| CLI launch commands | `--backend`, then `[defaults] launch_backend`, then tmux |
+| Terminal dashboard | `--backend`, then configured backend, then tmux in every terminal |
 | App → Launch Project | App Settings → **Launch projects in**: Workspace (default), Kitty, or Follow CLI configuration; the last reads the CLI default again before launching |
 | App → Run a Plan | Workspace (tmux), shown beside the supervisor selection |
 | Open an existing live session | Its recorded backend; launch preferences do not move it |
 
 The launcher header names its actual destination and its source (`--backend`,
-`config.toml`, the workspace host, or the terminal/compatibility default).
+`config.toml`, the workspace host, or the tmux default).
 In the launcher, `Ctrl+e` opens configuration. The dashboard reloads valid edits
 automatically; an open form or confirmation keeps its captured settings until it
 finishes. The backend a dashboard launches on is chosen when it starts, so restart
@@ -869,12 +869,13 @@ below work on a machine that has none.
 
 | Where `amx` runs | New agents launch on | Sessions listed |
 | --- | --- | --- |
-| inside Kitty | Kitty tabs | Kitty tabs, plus tmux sessions once the private server exists |
-| inside Kitty, `amx --backend tmux` | tmux | both |
+| inside Kitty | tmux | Kitty tabs and tmux sessions |
+| inside Kitty, `amx --backend kitty` | Kitty tabs | Kitty tabs, plus tmux sessions when the private server exists |
 | any other terminal (tmux installed) | tmux | tmux sessions |
 | any other terminal, `amx --backend kitty` | Kitty | Kitty, through `KITTY_LISTEN_ON` as before |
 
-`amx overview` takes the same `--backend` flag and follows the same table.
+`amx overview` and `amx past-sessions` follow the same flag, configuration,
+and default precedence.
 
 The launch commands (`amx project launch`, `amx session continue|fork|
 fork-worktree|handoff`) take `--backend` too. Without it they launch where
@@ -885,12 +886,12 @@ fork-worktree|handoff`) take `--backend` too. Without it they launch where
 launch_backend = "tmux"
 ```
 
-Unset, it still means `kitty`, so a configuration written before the tmux
-backend existed keeps launching into Kitty; that default moves to `tmux` once
-the [daily-driver trial](daily-driver-trial.md) has passed, and
-`launch_backend = "kitty"` and `--backend kitty` keep working after it does.
-A session already running is always reached on the backend it was launched
-on, whatever is set now.
+Unset or empty, it means `tmux`. Use `launch_backend = "kitty"` or
+`--backend kitty` to keep launching in Kitty tabs. If tmux is unavailable,
+launches report the setup failure instead of silently switching destinations.
+A session already running is always reached on its recorded backend,
+whatever is set now. Legacy session records with an empty backend still
+identify Kitty sessions.
 
 **Which tmux.** The private server needs tmux 3.5 or newer. `amx` uses, in
 order: `[defaults.tmux] path` from `config.toml` or `AMX_TMUX`, either of

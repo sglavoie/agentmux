@@ -1,14 +1,10 @@
 {
   "session": "20",
-  "status": "pending",
+  "status": "waived",
   "artifact_revision": "agentmux 911ce009f3d0a974223d0b7265973cef63f1480e (clean tree at build). amx 0.8.0 revision 911ce009f3d0, sha256:9fc978dda369 (Go build ID 0aQpHb53OUQz423Lzk2t/…). Agent Mux.app 0.1.0 Release, built and ad-hoc signed on the MacBook Pro by `just mac-app Release` through the remote route; bundled amx sha256:a9a8f5d99f97 (same Go build ID; re-signed), bundled tmux 3.7c (bin/tmux sha256 fb421000337b…, SHA256SUMS sha256 858d25c2c2d4f810…). Kitty 0.48.2. This is the trial candidate, not yet the revision a trial was completed on.",
   "operator_confirmed": false,
   "workdays": [],
-  "unresolved_blockers": [
-    "Five completed operator workdays and the required case evidence have not been recorded. The 2026-10-17 tt completion-indicator report is an interruption observation, not a completed trial workday.",
-    "The operator has not explicitly confirmed completion of the separate five-workday trial."
-  ],
-  "why_pending": "Every trial case needs the operator's own work over at least five distinct workdays and explicit completion confirmation. Tests cannot supply either. The log now contains F-001, the operator's tt missing-completion report and its bounded diagnostic investigation (session-20/f-001-evidence.json); no workday is counted. The implementation, log template, friction register, and transition/rollback rehearsal are available. The rehearsal and fixture checks do not count as trial cases. On 2026-10-18 the operator confirmed every F-001 installed-build path; docs/acceptance/workspace-consistency/observations.json records the build and confirmation. This closes F-001 but establishes no completed trial workday.",
+  "unresolved_blockers": [],
   "cases": {
     "multiple-profiles": {
       "status": "pending",
@@ -75,5 +71,12 @@
       "docs/acceptance/ghostty-desktop/session-20/rehearsal/rollback-step4.log",
       "docs/acceptance/ghostty-desktop/session-20/rehearsal/teardown-rollback-step4.log"
     ]
-  }
+  },
+  "operator_waiver": {
+    "date": "2026-10-30",
+    "instruction": "I don't need the multi-day trial, what's next?",
+    "scope": "Waive the multi-day trial requirement and proceed with the consistent tmux launch default.",
+    "trial_completed": false
+  },
+  "why_waived": "The operator explicitly waived the multi-day trial on 2026-10-30. No workdays or case evidence are inferred, and operator_confirmed remains false because no successful trial was confirmed. Existing rehearsals and defect observations retain their original scope."
 }

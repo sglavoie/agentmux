@@ -1,14 +1,21 @@
 package plans
 
 import (
+	"errors"
 	"os"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 func TestMain(m *testing.M) {
 	testenv.ClearSessionEnv()
+	// Launch tests must opt into a private test backend.
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) {
+		return nil, errors.New("test must install a tmux backend seam")
+	}
 	stateRoot, err := os.MkdirTemp("", "agentmux-plan-test-state-")
 	if err != nil {
 		panic(err)

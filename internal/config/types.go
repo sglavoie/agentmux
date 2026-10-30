@@ -77,7 +77,7 @@ type Defaults struct {
 	PlansDirectory       string               `toml:"plans_directory"` // root for the Plans browser's index; defaults to ~/.local/share/agent-plans
 	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
 	Release              ReleaseConfig        `toml:"release"`         // paired ASL/Agent Mux release gate
-	LaunchBackend        string               `toml:"launch_backend"`  // "kitty" (default) or "tmux": where launches go when --backend is not given
+	LaunchBackend        string               `toml:"launch_backend"`  // "tmux" (default) or "kitty": where launches go when --backend is not given
 	Tmux                 TmuxConfig           `toml:"tmux"`            // the private tmux backend's executable
 
 	// GitProbe enables the cheap per-directory Git probe behind the dashboard's
@@ -118,14 +118,13 @@ const (
 )
 
 // LaunchBackendOrDefault is where a launch goes when nothing on the command
-// line says otherwise: `[defaults] launch_backend`, else Kitty, so a
-// configuration written before the tmux backend existed keeps launching into
-// Kitty.
+// line says otherwise: `[defaults] launch_backend`, else the private tmux
+// server. Existing sessions still use their recorded backend.
 func (c *Config) LaunchBackendOrDefault() string {
-	if c != nil && strings.EqualFold(strings.TrimSpace(c.Defaults.LaunchBackend), LaunchBackendTmux) {
-		return LaunchBackendTmux
+	if c != nil && strings.EqualFold(strings.TrimSpace(c.Defaults.LaunchBackend), LaunchBackendKitty) {
+		return LaunchBackendKitty
 	}
-	return LaunchBackendKitty
+	return LaunchBackendTmux
 }
 
 // TmuxPath is `[defaults.tmux] path` with a leading ~ expanded; empty when

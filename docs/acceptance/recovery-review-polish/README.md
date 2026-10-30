@@ -73,6 +73,8 @@ review references, not pixel-perfect goldens.
 
 ## Operator observations
 
-No installation or real-work trial is claimed. The existing daily-use and backend
-migration trials remain pending; their required workdays and operator confirmation
-cannot be supplied by fixture tests. Launch defaults remain governed by that trial.
+No installation or real-work trial is claimed by this earlier acceptance pass.
+The operator subsequently waived the multi-day backend migration trial on
+2026-10-30. Its [record](../ghostty-desktop/session-20.json) says `waived`, not
+`passed`; fixture tests do not supply operator workdays. Launch defaults no
+longer depend on that trial.

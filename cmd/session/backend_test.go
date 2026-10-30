@@ -128,7 +128,7 @@ func TestBackendStatusTreatsAMissingConfigurationAsAFreshInstall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status --check on a fresh install: %v\n%s", err, out)
 	}
-	if strings.Contains(out, "config") || !strings.Contains(out, "launch backend: kitty") {
+	if strings.Contains(out, "config") || !strings.Contains(out, "launch backend: tmux") {
 		t.Fatalf("a fresh install is reported as a configuration problem:\n%s", out)
 	}
 }

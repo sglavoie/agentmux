@@ -30,6 +30,9 @@ final class BackendSetupTests: XCTestCase {
                        .info("Launch in Kitty · CLI configuration"))
         input.cliLaunchBackendSource = "compatibility default"
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first, .info("Launch in Kitty · compatibility default"))
+        input.cliLaunchBackend = "tmux"
+        input.cliLaunchBackendSource = "default"
+        XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first, .info("Launch in workspace (tmux) · default"))
         XCTAssertTrue(MenuBuilder.entries(for: .projects, input).contains(.action(.launchSettings, "Launch Settings…")))
         input.launchBackend = .workspace
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first,
@@ -43,6 +46,14 @@ final class BackendSetupTests: XCTestCase {
     }
 
     // MARK: The report
+
+    func testTmuxDefaultReportResolvesToWorkspace() {
+        let result = decode(#"{"schema_version":1,"data":{"launch_backend":"tmux","launch_backend_source":"default"}}"#)
+        guard case let .success(status) = result else { return XCTFail("Default report did not decode") }
+        XCTAssertEqual(status.launchBackend, "tmux")
+        XCTAssertEqual(status.launchBackendSource, "default")
+        XCTAssertEqual(LaunchBackendPreference.followCLI.resolved(cliBackend: status.launchBackend), .workspace)
+    }
 
     func testAWorkingSetupDecodesAndReadsAsOneLineEach() throws {
         let result = decode("""

@@ -16,8 +16,7 @@ import (
 
 // BackendFlag names the flag that selects where a launch entrypoint starts
 // new agents. Without it a launch goes where `[defaults] launch_backend` says,
-// which is Kitty unless the operator chose tmux, so existing launches keep
-// working; desktop launches pass tmux explicitly. Actions on an existing
+// or to tmux when no preference is configured. Actions on an existing
 // session never read it: they follow the backend the session records.
 const BackendFlag = "backend"
 
@@ -51,7 +50,7 @@ func ConfigureTmux(cfg *config.Config) {
 }
 
 // BackendFlagUsage is --backend's help on a launch entrypoint.
-const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend; unset, kitty)"
+const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend; unset, tmux)"
 
 // AddBackendFlag registers --backend on a launch entrypoint.
 func AddBackendFlag(cmd *cobra.Command) {
@@ -67,7 +66,7 @@ func AddBackendFlagUsage(cmd *cobra.Command, usage string) {
 
 // SelectedBackend reads --backend, falling back to the configured launch
 // backend when the flag is absent or empty. A command without the flag and a
-// nil configuration launch on Kitty.
+// nil configuration launch on tmux.
 func SelectedBackend(cmd *cobra.Command, cfg *config.Config) (runtimesession.BackendKind, error) {
 	value, err := cmd.Flags().GetString(BackendFlag)
 	if err != nil {

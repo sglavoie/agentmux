@@ -339,7 +339,7 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 	manager := &commandWorktreeManager{entries: []worktree.Entry{entry}}
 	client := &worktreeCommandKitty{}
 	cfg := &config.Config{
-		Defaults: config.Defaults{Editor: "true"},
+		Defaults: config.Defaults{Editor: "true", LaunchBackend: "kitty"},
 		Accounts: []config.Account{{Name: "work", Harness: harness.Claude, Color: "blue"}},
 		Projects: []config.Session{{Title: "api", Directory: source, Profile: "work"}},
 	}

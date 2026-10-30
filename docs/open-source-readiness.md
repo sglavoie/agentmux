@@ -101,5 +101,5 @@ downloadable binaries.
   signing, with notarization unobserved.
 - [ ] Publish versioned artifacts with checksums, release notes, requirements,
   and installation instructions.
-- [ ] Complete the [daily-driver trial](daily-driver-trial.md) before changing
-  the existing unset-backend compatibility behavior.
+- [x] The operator waived the [daily-driver trial](daily-driver-trial.md) on
+  2026-10-30. The waiver does not claim completed workdays or a passed trial.

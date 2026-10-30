@@ -37,8 +37,8 @@ func TestLaunchBackendComesFromTheFlagThenTheConfiguration(t *testing.T) {
 		configured *config.Config
 		want       runtimesession.BackendKind
 	}{
-		{name: "nothing set keeps Kitty", want: runtimesession.BackendKitty},
-		{name: "an empty configuration keeps Kitty", configured: configWithBackend(""), want: runtimesession.BackendKitty},
+		{name: "nothing set uses tmux", want: runtimesession.BackendTmux},
+		{name: "an empty configuration uses tmux", configured: configWithBackend(""), want: runtimesession.BackendTmux},
 		{name: "configured tmux", configured: configWithBackend("tmux"), want: runtimesession.BackendTmux},
 		{name: "the flag overrides configured tmux", flag: "kitty", configured: configWithBackend("tmux"), want: runtimesession.BackendKitty},
 		{name: "the flag overrides configured Kitty", flag: "TMUX", configured: configWithBackend("kitty"), want: runtimesession.BackendTmux},
@@ -82,7 +82,7 @@ func TestSelectingKittyNeverOpensTmux(t *testing.T) {
 		t.Fatal("a Kitty launch opened the tmux backend")
 		return nil, nil
 	})
-	deps := actions.Dependencies{Config: configWithBackend("")}
+	deps := actions.Dependencies{Config: configWithBackend("kitty")}
 	if err := SelectBackend(launchCommand(t, ""), &deps); err != nil {
 		t.Fatalf("SelectBackend: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestBackendStatusWithoutTmuxSaysWhatToInstall(t *testing.T) {
 	}
 
 	// An operator who launches into Kitty is only warned.
-	kitty := CollectBackendStatus(nil, nil, missing)
+	kitty := CollectBackendStatus(configWithBackend("kitty"), nil, missing)
 	if got := problemCodes(kitty); len(got) != 1 || got[0] != "warning:tmux_unavailable" {
 		t.Fatalf("problems for a Kitty setup = %v", got)
 	}
@@ -198,7 +198,7 @@ func TestBackendStatusReportsAnUnreadableConfiguration(t *testing.T) {
 	if !strings.Contains(status.Problems[0].Hint, "amx config validate") {
 		t.Fatalf("hint = %q", status.Problems[0].Hint)
 	}
-	if status.LaunchBackend != "kitty" {
+	if status.LaunchBackend != "tmux" {
 		t.Fatalf("launch backend = %q", status.LaunchBackend)
 	}
 }
@@ -274,9 +274,11 @@ func TestBackendStatusWithALiveServerAndNoTmuxForTheNextOne(t *testing.T) {
 	}
 }
 
-func TestBackendStatusNamesTheCompatibilityDefault(t *testing.T) {
-	status := CollectBackendStatus(nil, nil, probe())
-	if status.LaunchBackend != "kitty" || status.LaunchBackendSource != "compatibility default" {
-		t.Fatalf("incorrect fallback provenance: %+v", status)
+func TestBackendStatusNamesTheTmuxDefault(t *testing.T) {
+	for _, cfg := range []*config.Config{nil, configWithBackend(""), configWithBackend("  ")} {
+		status := CollectBackendStatus(cfg, nil, probe())
+		if status.LaunchBackend != "tmux" || status.LaunchBackendSource != "default" {
+			t.Fatalf("incorrect fallback provenance: %+v", status)
+		}
 	}
 }

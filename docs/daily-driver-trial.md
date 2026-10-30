@@ -1,16 +1,12 @@
 # Daily-driver trial and transition
 
-The last step of the desktop migration ([backend-migration.md](backend-migration.md))
-is not a test run. It is at least five normal workdays of the operator's own
-work on the desktop workflow, with the defects it turns up fixed, and only then
-the move of every future launch to it. This guide is what the operator does
-for that: install the candidate, switch, work, write down what happened, and
-roll back if it goes wrong.
+The operator waived the multi-day trial on 2026-10-30 and authorized proceeding
+with tmux as the consistent launch default. The [acceptance record](acceptance/ghostty-desktop/session-20.json)
+says `waived`, with no completed workdays or successful trial confirmation.
 
-Nothing in this guide can be done by a test run or by an agent on the
-operator's behalf. The record at
-`docs/acceptance/ghostty-desktop/session-20.json` stays `pending` until the
-operator has done it and said so.
+The instructions below remain available for optional daily-use evaluation and
+rollback. They no longer block the default change. Automated checks and
+installation observations remain separate from operator trial evidence.
 
 ## What is being tried
 
@@ -215,38 +211,21 @@ A case that did not happen stays `pending`, and so does the record. After the
 record passes, the two switches under Transition stay as they are: that is the
 transition. Kitty remains installed and supported as the fallback.
 
-## Make the unset backend consistent after the trial
+## Consistent launch default
 
-The explicit trial settings above make this installation consistent now.
-Changing the application's unset default is a separate code change, made only
-after the record passes with five distinct workdays, evidence for every case,
-no unresolved blockers, and the operator's explicit confirmation.
+Following the operator's waiver, an absent or empty `launch_backend` selects
+tmux for CLI launches and terminal dashboards, including inside Kitty.
+`--backend` overrides configuration, and an explicit `launch_backend = "kitty"`
+continues to select Kitty. Overview and Past Sessions use the same precedence.
+If tmux is unavailable, the command reports its setup failure and remediation.
 
-That change must cover all launch entry points together:
+Existing sessions follow their recorded backend. In particular, a legacy
+session record with an empty backend still identifies Kitty; new-launch
+defaults do not reinterpret persisted sessions or move running agents.
 
-1. In `internal/config/types.go`, make `LaunchBackendOrDefault` choose tmux
-   when configuration is absent or `launch_backend` is empty. Preserve an
-   explicit `kitty` choice and the CLI flag's precedence. Update
-   `internal/config/config_backend_test.go` and `internal/cli/backend_test.go`
-   to cover absent configuration, an empty key, each explicit backend, and
-   flag overrides.
-2. In `cmd/dashboard/terminals.go`, make an unspecified destination launch on
-   tmux inside Kitty as well as in other terminals. Keep existing Kitty
-   sessions discoverable and focusable. An unavailable default tmux backend
-   must report its setup failure rather than silently launch on Kitty.
-   Update `cmd/dashboard/terminals_test.go` and the dashboard launch tests for
-   both terminal environments, explicit Kitty, and missing tmux.
-3. Update the launch-source wording in `internal/cli/backend_status.go`, the
-   CLI and dashboard flag help, and `cmd/config/setup.go`. Choosing **Keep**
-   in setup must describe the same tmux default as the launcher. Update setup
-   and help assertions, then the README, launch-destination guide, starter
-   configuration comments, and `CLAUDE.md`.
-4. Keep routing actions on existing sessions through their recorded backend.
-   A legacy session record whose backend is empty still identifies a Kitty
-   session; changing new-launch defaults must not reinterpret that record.
-5. Run `just check`, `just mac-test`, and `just mac-test Release`. Exercise
-   unconfigured launches from inside and outside Kitty, an explicit Kitty
-   fallback, and focus/resume of existing sessions. Build and install the
-   passing revision and record its identity in the trial log.
-
-Until that change is verified, leave the explicit trial settings in place.
+The default is covered by `TestLaunchBackendDefaultsToTmux`, CLI backend
+selection tests, terminal-selection tests, and standalone surface tests.
+Setup's **Keep** choice leaves the key unset and describes the same tmux
+behavior. The [trial log](acceptance/ghostty-desktop/session-20/trial-log.md)
+records the waiver and the implementation's validation separately from the
+historical trial candidate and rehearsals.

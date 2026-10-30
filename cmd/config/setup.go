@@ -34,10 +34,9 @@ var configSetupCmd = &cobra.Command{
 Existing comments and optional settings are preserved. Setup refuses a config
 that already has projects; use amx config edit to add more. The project directory
 must exist. Setup offers to sync this profile's hooks, checks launch requirements,
-and summarizes effective destinations. Keep leaves the launch destination unset: CLI
-launch commands retain their Kitty default, while the dashboard chooses Kitty
-inside Kitty and tmux in other terminals. Outside a Kitty window, or without
-Kitty installed, setup recommends tmux; keep remains the default answer.`,
+and summarizes effective destinations. Keep leaves the launch destination unset:
+CLI launch commands and terminal dashboards use the default private tmux server.
+Choose kitty explicitly to launch new agents in Kitty tabs.`,
 	RunE: runConfigSetup,
 }
 
@@ -161,11 +160,9 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if current.Defaults.LaunchBackend == "" {
-		if reason := setupTmuxRecommendation(); reason != "" {
-			if _, err := fmt.Fprintf(out, "Recommended: tmux (%s): keep would send CLI launch commands such as amx project launch to Kitty.\n", reason); err != nil {
-				return err
-			}
+	if strings.TrimSpace(current.Defaults.LaunchBackend) == "" {
+		if _, err := fmt.Fprintln(out, "Keep uses the tmux default in every terminal; choose kitty for new Kitty tabs."); err != nil {
+			return err
 		}
 		backend, err := setupChoice(reader, out, "Default backend (keep, tmux, or kitty)", "keep", "keep", config.LaunchBackendTmux, config.LaunchBackendKitty)
 		if err != nil {
@@ -224,21 +221,14 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 func setupSummary(out io.Writer, cfg *config.Config, profile string, synced bool, syncErr error) error {
 	var summary strings.Builder
 	cliBackend := cfg.LaunchBackendOrDefault()
-	dashboardBackend := cfg.Defaults.LaunchBackend
+	dashboardBackend := cliBackend
 	source := "config.toml"
-	if dashboardBackend == "" {
-		source = "compatibility default"
-		dashboardBackend = config.LaunchBackendTmux
-		if setupInKitty() {
-			dashboardBackend = config.LaunchBackendKitty
-		}
+	if strings.TrimSpace(cfg.Defaults.LaunchBackend) == "" {
+		source = "default"
 	}
 	fmt.Fprintf(&summary, "\nLaunch destinations\n  CLI: %s (%s; --backend overrides)\n  Dashboard in this terminal: %s\n", cliBackend, source, dashboardBackend)
-	if cfg.Defaults.LaunchBackend == "" {
-		summary.WriteString("  Dashboard elsewhere: Kitty inside Kitty; tmux in other terminals.\n")
-		if reason := setupTmuxRecommendation(); reason != "" {
-			fmt.Fprintf(&summary, "  Recommended: tmux (%s). Set launch_backend = \"tmux\" under [defaults] with amx config edit, or pass --backend tmux to CLI launches.\n", reason)
-		}
+	if strings.TrimSpace(cfg.Defaults.LaunchBackend) == "" {
+		summary.WriteString("  Dashboard elsewhere: tmux in every terminal, including Kitty.\n")
 	}
 	summary.WriteString("  macOS app: its Launch Project preference applies; check Settings → Launch destination.\n\nLaunch checks\n  Configuration: valid; project directory exists.\n")
 	for _, account := range cfg.Profiles {
@@ -281,27 +271,6 @@ func setupSummary(out io.Writer, cfg *config.Config, profile string, synced bool
 	summary.WriteString("\nAfter resolving any missing requirements, run amx, press l, select your project, and press Enter.\nFor a full installation check: amx doctor --strict\n")
 	_, err := io.WriteString(out, summary.String())
 	return err
-}
-
-// setupInKitty reports whether setup runs in a Kitty window, which is where
-// an unset launch_backend sends the dashboard to Kitty as well.
-func setupInKitty() bool {
-	return cli.WindowIDFromEnv() > 0 || os.Getenv("KITTY_LISTEN_ON") != ""
-}
-
-// setupTmuxRecommendation says why tmux suits this machine better than the
-// unset default, whose CLI launches still go to Kitty, or "" when Kitty is
-// here. It recommends and never chooses: keep stays the default answer, so a
-// scripted setup that accepted it before still writes nothing.
-func setupTmuxRecommendation() string {
-	_, kittenErr := setupLookPath("kitten")
-	switch {
-	case kittenErr != nil:
-		return "Kitty's kitten is not on PATH"
-	case !setupInKitty():
-		return "this terminal is not Kitty"
-	}
-	return ""
 }
 
 func setupHookCommand(profile string) string {

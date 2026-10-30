@@ -73,6 +73,10 @@ type startedOverview struct {
 
 func installOverviewSeams(t *testing.T, client kitty.KittyClient, cfg *config.Config, cfgErr error) *startedOverview {
 	t.Helper()
+	// These fixtures exercise Kitty's window tree and singleton behavior.
+	previousBackend := overviewBackend
+	overviewBackend = "kitty"
+	t.Cleanup(func() { overviewBackend = previousBackend })
 
 	previousClient, previousConfig, previousRun := newOverviewClient, loadOverviewConfig, runOverview
 	t.Cleanup(func() {

@@ -4,6 +4,9 @@ Status: two operator-reported interruptions, one confirmed fix and one awaiting
 real-use confirmation. No complete workday or recurrence rate is inferred from
 these reports, tests, or screenshots.
 
+The operator waived the multi-day trial on 2026-10-30. Outstanding real-use
+feedback remains optional and does not gate the launch default.
+
 Copy recurring IDs from [the daily log](trial-log.md). Combine occurrences only
 when they describe the same interruption; keep build changes visible.
 

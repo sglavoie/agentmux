@@ -3,7 +3,8 @@
 Current completion-visibility status: **F-001 resolved by operator confirmation
 on 2026-10-18**. See [the recorded build and observations](workspace-consistency/observations.json).
 Earlier pending statements below describe the evidence available during those
-passes. The separate five-workday migration trial remains pending.
+passes. The operator waived the separate five-workday migration trial on
+2026-10-30; no completed workdays are inferred from that waiver.
 
 Implementation checklist for the seven improvements requested together. A checked
 item requires working UI, appropriate failure handling, and verification; adding
@@ -465,7 +466,8 @@ Reviewed references:
 - [x] The daily-use log and friction register capture recurrence, recovery effort,
   builds, evidence, and subsequent verification without inventing trial results.
   The operator's `tt` completion-indicator report is recorded as F-001.
-- [ ] Five real workdays and post-fix recurrence evidence remain outstanding.
+- The multi-day trial requirement was waived by the operator on 2026-10-30.
+  Post-fix real-use observations remain optional feedback, not a launch-default gate.
 
 The reported Codex issue exposed a separate launch problem: a shared server's
 new conversations have no exact runtime binding after `/new`, so their hooks

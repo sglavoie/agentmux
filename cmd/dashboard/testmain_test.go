@@ -1,9 +1,11 @@
 package dashboard
 
 import (
+	"errors"
 	"os"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
@@ -22,6 +24,9 @@ func TestMain(m *testing.M) {
 	// of terminal selection replace these seams themselves.
 	insideKitty = func() bool { return true }
 	tmuxServerPresent = func() bool { return false }
+	openTmux = func() (backend.TargetLauncher, error) {
+		return nil, errors.New("test must install a tmux backend seam")
+	}
 	code := m.Run()
 	if hadPrevious {
 		_ = os.Setenv("XDG_STATE_HOME", previous)

@@ -24,7 +24,7 @@ func TestSessionForkCLIUsesPortableCopilotHandoff(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	meta, indexPath := sessionCommandMeta(t, harness.Copilot)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Copilot}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Copilot}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -73,7 +73,7 @@ func TestSessionForkWorktreeCLIRequiresConfirmationAndPassesDirtyOverride(t *tes
 	resetSessionCommandsTestState(t)
 	meta, indexPath := sessionCommandMeta(t, harness.Codex)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -132,7 +132,7 @@ func TestSessionHandoffCLICreateOnlyAndPartialJSON(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	meta, indexPath := sessionCommandMeta(t, harness.Claude)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -235,7 +235,7 @@ func TestSessionCLIRejectsHiddenMissingAndInvalidSelectors(t *testing.T) {
 	meta.HiddenFromIndex = true
 	writeSessionCommandIndex(t, indexPath, meta)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -319,7 +319,7 @@ func TestSessionCLIPointsAWordSelectorAtSearch(t *testing.T) {
 	meta, indexPath := sessionCommandMeta(t, harness.Codex)
 	writeSessionCommandIndex(t, indexPath, meta)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Codex}},
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}},
 			Projects: []config.Session{{Title: "🐱amx", Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }

@@ -42,7 +42,7 @@ Conversation History; Handoff / More opens these terminal actions.`,
 		if err != nil {
 			return err
 		}
-		client, err := selectTerminals(pastSessionsBackend)
+		client, err := selectTerminalsForConfig(pastSessionsBackend, cfg, newKittyClient)
 		if err != nil {
 			return err
 		}

@@ -3,8 +3,31 @@
 What changes for someone coming from an older Agent Mux release. Day-to-day use
 is in [Usage](usage.md).
 
+- [Default launch backend](#default-launch-backend)
 - [Upgrading from the old dashboard shortcuts](#upgrading-from-the-old-dashboard-shortcuts)
 - [One-off cleanup after upgrading from a SQLite release](#one-off-cleanup-after-upgrading-from-a-sqlite-release)
+
+## Default launch backend
+
+CLI launches, Dashboard, Overview, and Past Sessions now default to tmux when
+`[defaults] launch_backend` is absent or empty, including inside Kitty.
+Configurations that previously relied on the implicit Kitty default will
+start new agents on the private tmux server. Existing sessions stay on their
+recorded backend and remain reachable.
+Restart an already-open terminal dashboard or overview to refresh its captured
+launch destination.
+
+To keep launching new agents in Kitty tabs, set this in the existing
+`[defaults]` table:
+
+```toml
+launch_backend = "kitty"
+```
+
+`--backend kitty` selects Kitty for one command and overrides configuration.
+If tmux is unavailable, launches report the setup error; run
+`amx backend status --check` to see the required fix. See
+[launch destinations](usage.md#launch-destinations) for all entry points.
 
 ## Upgrading from the old dashboard shortcuts
 

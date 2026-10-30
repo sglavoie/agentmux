@@ -14,14 +14,25 @@ func mustParse(t *testing.T, content string) *Config {
 	return cfg
 }
 
-func TestLaunchBackendDefaultsToKitty(t *testing.T) {
-	cfg := mustParse(t, "[defaults]\n")
-	if got := cfg.LaunchBackendOrDefault(); got != LaunchBackendKitty {
-		t.Fatalf("an unset launch_backend launches on %q, want kitty: existing configurations must keep launching into Kitty", got)
+func TestLaunchBackendDefaultsToTmux(t *testing.T) {
+	for _, content := range []string{"", "[defaults]\n", "[defaults]\nlaunch_backend = \"\"\n"} {
+		if got := mustParse(t, content).LaunchBackendOrDefault(); got != LaunchBackendTmux {
+			t.Fatalf("config %q launches on %q, want tmux", content, got)
+		}
 	}
 	var none *Config
-	if got := none.LaunchBackendOrDefault(); got != LaunchBackendKitty {
-		t.Fatalf("no configuration launches on %q, want kitty", got)
+	if got := none.LaunchBackendOrDefault(); got != LaunchBackendTmux {
+		t.Fatalf("no configuration launches on %q, want tmux", got)
+	}
+}
+
+func TestLaunchBackendPreservesExplicitKitty(t *testing.T) {
+	cfg := mustParse(t, "[defaults]\nlaunch_backend = \" KITTY \"\n")
+	if err := Validate(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.LaunchBackendOrDefault(); got != LaunchBackendKitty {
+		t.Fatalf("explicit Kitty resolved to %q", got)
 	}
 }
 
@@ -41,8 +52,8 @@ func TestLaunchBackendRejectsAnUnknownBackend(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), `defaults.launch_backend "ghostty"`) {
 		t.Fatalf("Validate = %v, want a launch_backend error naming the value", err)
 	}
-	if got := cfg.LaunchBackendOrDefault(); got != LaunchBackendKitty {
-		t.Fatalf("an invalid launch_backend resolved to %q, want kitty", got)
+	if got := cfg.LaunchBackendOrDefault(); got != LaunchBackendTmux {
+		t.Fatalf("an invalid launch_backend resolved to %q, want tmux", got)
 	}
 }
 

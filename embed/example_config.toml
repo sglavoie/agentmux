@@ -19,8 +19,8 @@
 #
 # Paths in this file (home_dir, directory) support `~` for $HOME.
 #
-# Minimum manual setup: uncomment and customize this profile/project pair, then
-# uncomment launch_backend = "tmux" in the existing [defaults] section below.
+# Minimum manual setup: uncomment and customize this profile/project pair.
+# Launches default to the private tmux server; Kitty remains an explicit choice.
 # README.md#first-session has the complete minimal file; do not add a second
 # [defaults] section to this template.
 #
@@ -111,11 +111,9 @@ confirm_destructive = false
 # Where a launch goes when the command gives no --backend: "tmux" (the private
 # tmux server, whose agents outlive every terminal and are shown by `amx
 # attach`, the dashboard in any terminal, or Agent Mux.app's workspace) or
-# "kitty" (a new Kitty tab; needs Kitty and `just install-kitty`). Unset means
-# "kitty" for now, so a configuration written before the tmux backend keeps
-# launching where it did; set "tmux" to need no Kitty at all. The dashboard
-# started outside Kitty launches on tmux either way, and Agent Mux.app
-# launches into its workspace unless its own Preferences name Kitty.
+# "kitty" (a new Kitty tab; needs Kitty and `just install-kitty`). Unset or
+# empty means "tmux" in every terminal, including Kitty. Agent Mux.app launches
+# into its workspace unless its own Preferences choose Kitty or Follow CLI.
 # launch_backend = "tmux"
 # Plans in that directory and harness transcript files remain authoritative.
 # Agent Mux keeps only disposable filesystem caches at:

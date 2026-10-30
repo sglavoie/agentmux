@@ -34,15 +34,16 @@ func TestSelectTerminals(t *testing.T) {
 		wantTmux   bool
 		wantLaunch runtimesession.BackendKind
 	}{
-		"inside Kitty stays Kitty-only":             {hosted: true, wantKitty: true, wantLaunch: runtimesession.BackendKitty},
-		"inside Kitty lists a running tmux server":  {hosted: true, serverPresent: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendKitty},
-		"inside Kitty with --backend tmux":          {requested: "tmux", hosted: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendTmux},
-		"another terminal defaults to tmux":         {wantTmux: true, wantLaunch: runtimesession.BackendTmux},
-		"another terminal without tmux is as ever":  {tmuxErr: unavailable, wantKitty: true, wantLaunch: runtimesession.BackendKitty},
-		"another terminal asked for Kitty":          {requested: "kitty", wantKitty: true, wantLaunch: runtimesession.BackendKitty},
-		"explicit tmux that cannot open is refused": {requested: "tmux", hosted: true, tmuxErr: unavailable, wantErr: true},
-		"an unknown backend is refused":             {requested: "screen", hosted: true, wantErr: true},
-		"a listing failure inside Kitty costs tmux": {hosted: true, serverPresent: true, tmuxErr: unavailable, wantKitty: true, wantLaunch: runtimesession.BackendKitty},
+		"inside Kitty defaults to tmux":                {hosted: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendTmux},
+		"inside Kitty lists a running tmux server":     {hosted: true, serverPresent: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendTmux},
+		"inside Kitty with --backend tmux":             {requested: "tmux", hosted: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendTmux},
+		"another terminal defaults to tmux":            {wantTmux: true, wantLaunch: runtimesession.BackendTmux},
+		"another terminal without tmux is refused":     {tmuxErr: unavailable, wantErr: true},
+		"another terminal asked for Kitty":             {requested: "kitty", wantKitty: true, wantLaunch: runtimesession.BackendKitty},
+		"explicit tmux that cannot open is refused":    {requested: "tmux", hosted: true, tmuxErr: unavailable, wantErr: true},
+		"an unknown backend is refused":                {requested: "screen", hosted: true, wantErr: true},
+		"missing default tmux inside Kitty is refused": {hosted: true, serverPresent: true, tmuxErr: unavailable, wantErr: true},
+		"explicit Kitty survives tmux listing failure": {requested: "kitty", hosted: true, serverPresent: true, tmuxErr: unavailable, wantKitty: true, wantLaunch: runtimesession.BackendKitty},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -29,11 +29,12 @@ Requires Go 1.26+, `just`, and tmux 3.5 or newer for the tmux backend and its
 tests (they skip without it); Agent Mux.app brings its own. Kitty is needed
 only to launch into Kitty or to run `just kitty-smoke`.
 
-`launch_backend` unset still means Kitty (`config.LaunchBackendOrDefault`,
-pinned by `TestLaunchBackendDefaultsToKitty`). It moves to tmux only once
-`docs/acceptance/ghostty-desktop/session-20.json` records a passed,
-operator-confirmed trial; a *recorded* empty backend keeps meaning Kitty
-either way.
+`launch_backend` unset or empty means tmux (`config.LaunchBackendOrDefault`,
+pinned by `TestLaunchBackendDefaultsToTmux`). `--backend` overrides the configured
+choice; explicit Kitty remains supported. A *recorded* empty session backend
+still means Kitty. The operator waived the multi-day trial on 2026-10-30;
+`docs/acceptance/ghostty-desktop/session-20.json` records the waiver without
+claiming completed workdays or a passed trial.
 
 ```bash
 just build
@@ -286,7 +287,7 @@ Shared and domain packages (`internal/...`):
   argv/capabilities. `session.Order` is the one order sessions are listed
   in; the dashboard, navigation, and the v2 companion projection all sort
   through it, and nothing asks a backend to hold it except Kitty's `Resort`. `session.Runtime` selects the launch backend (`--backend`
-  on launch entrypoints, else `[defaults] launch_backend`, else Kitty): tmux launches dedup,
+  on launch entrypoints, else `[defaults] launch_backend`, else tmux): tmux launches dedup,
   register (`Begin`, launch, `Commit`), and compensate under one lock beside
   the registry, and actions on a live session follow its recorded backend.
   `amx attach <runtime-session-id>` (`cmd/session/attach.go`) transfers

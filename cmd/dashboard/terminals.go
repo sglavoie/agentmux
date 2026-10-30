@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -17,9 +18,8 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// BackendFlagUsage documents --backend on the surfaces. Without a configured
-// destination, the surface launches where it can show the result.
-const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend; unset, kitty inside Kitty and tmux in other terminals)"
+// BackendFlagUsage documents --backend on the surfaces.
+const BackendFlagUsage = cli.BackendFlagUsage
 
 // The seams the tests replace: a test must not read the operator's Kitty
 // environment or open their tmux server.
@@ -46,13 +46,26 @@ type tmuxAttacher interface {
 // for a surface running outside Kitty on the tmux backend: such a surface
 // never asks Kitty anything.
 //
-// requested is --backend or the configured preference, empty when neither was set. Inside
-// Kitty the default stays Kitty, and tmux sessions are listed beside the tabs
-// whenever the private server exists. In any other terminal the default is
-// tmux; when tmux cannot be used there, the surface falls back to the Kitty
-// client and fails the way it always has outside Kitty.
+// requested is --backend or the configured preference, empty when neither was
+// set. New agents default to tmux in every terminal. Inside Kitty its existing
+// tabs are still listed beside tmux sessions. An unavailable tmux fails with
+// its setup error; Kitty launches require an explicit choice.
 func selectTerminals(requested string) (kitty.KittyClient, error) {
 	return selectTerminalsWith(requested, newKittyClient)
+}
+
+// Every standalone surface resolves flags, configuration, and defaults in the
+// same order and reports the source of that choice at the point of launch.
+func selectTerminalsForConfig(requested string, cfg *config.Config, kittyClient func() kitty.KittyClient) (kitty.KittyClient, error) {
+	configured := strings.TrimSpace(requested) == "" && cfg != nil && strings.TrimSpace(cfg.Defaults.LaunchBackend) != ""
+	if configured {
+		requested = cfg.Defaults.LaunchBackend
+	}
+	client, err := selectTerminalsWith(requested, kittyClient)
+	if err == nil && configured && desktopViews == nil {
+		commands.Portable.LaunchSource = "config.toml"
+	}
+	return client, err
 }
 
 func selectTerminalsWith(requested string, kittyClient func() kitty.KittyClient) (kitty.KittyClient, error) {
@@ -66,10 +79,7 @@ func selectTerminalsWith(requested string, kittyClient func() kitty.KittyClient)
 	}
 	explicit := launch != ""
 	if !explicit {
-		launch = runtimesession.BackendKitty
-		if !hosted {
-			launch = runtimesession.BackendTmux
-		}
+		launch = runtimesession.BackendTmux
 	}
 
 	var server backend.TargetLauncher
@@ -78,18 +88,13 @@ func selectTerminalsWith(requested string, kittyClient func() kitty.KittyClient)
 		switch {
 		case err == nil:
 			server = opened
-		case explicit && launch == runtimesession.BackendTmux:
-			return nil, fmt.Errorf("tmux backend unavailable: %w", err)
 		case launch == runtimesession.BackendTmux:
-			// Nothing was asked for and tmux cannot be used: behave as before.
-			launch = runtimesession.BackendKitty
+			return nil, fmt.Errorf("tmux backend unavailable: %w", err)
 		}
 	}
-	source := "terminal default"
+	source := "default"
 	if explicit {
 		source = "--backend"
-	} else if launch == runtimesession.BackendKitty {
-		source = "compatibility default"
 	}
 	if desktopViews != nil {
 		source = "workspace host"

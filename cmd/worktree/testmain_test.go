@@ -6,11 +6,17 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
 func TestMain(m *testing.M) {
 	testenv.ClearSessionEnv()
+	// Default launches must never reach the operator's private server.
+	// Tests exercising tmux install their own isolated backend.
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) {
+		return nil, errors.New("test must install a tmux backend seam")
+	}
 	stateRoot, err := os.MkdirTemp("", "agentmux-worktree-test-state-")
 	if err != nil {
 		panic(err)

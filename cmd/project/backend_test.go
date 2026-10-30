@@ -49,7 +49,7 @@ type launchEnvelope struct {
 
 func TestProjectLaunchOnTmuxReportsTheRuntimeSession(t *testing.T) {
 	f := useTmux(t)
-	selectBackend(t, "tmux")
+	selectBackend(t, "")
 	client := &recordingKittyClient{}
 	out, err := runProject(t, "launch", tmuxProjectConfig(t), client, true, "", "API")
 	if err != nil {

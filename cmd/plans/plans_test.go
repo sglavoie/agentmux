@@ -96,7 +96,7 @@ func newPlanWorld(t *testing.T) *planWorld {
 	}
 	world := &planWorld{
 		cfg: &config.Config{
-			Defaults: config.Defaults{PlansDirectory: root},
+			Defaults: config.Defaults{PlansDirectory: root, LaunchBackend: "kitty"},
 			Profiles: []config.Account{{Name: "work", Harness: "claude"}},
 			Projects: []config.Session{{Title: "API", Directory: work, Profile: "work"}},
 		},

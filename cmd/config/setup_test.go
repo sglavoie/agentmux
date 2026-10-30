@@ -91,19 +91,19 @@ func TestSetupSummaryNamesMissingRequirementsAndActualDestinations(t *testing.T)
 				t.Setenv("KITTY_LISTEN_ON", "unix:/fixture")
 			}
 			cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: "codex", HomeDir: "/isolated/codex"}}}
+			if kitty {
+				cfg.Defaults.LaunchBackend = "  "
+			}
 			var out bytes.Buffer
 			if err := setupSummary(&out, cfg, "work", false, nil); err != nil {
 				t.Fatal(err)
 			}
 			destination := "tmux"
-			if kitty {
-				destination = "kitty"
+			if !strings.Contains(out.String(), "Dashboard launch blocked") {
+				t.Fatalf("missing tmux must block launches in every terminal: %s", out.String())
 			}
-			if strings.Contains(out.String(), "Dashboard launch blocked") == kitty {
-				t.Fatalf("readiness does not match this terminal's destination: %s", out.String())
-			}
-			for _, want := range []string{"CLI: kitty (compatibility default", "Dashboard in this terminal: " + destination,
-				"Agent CLI missing", "Kitty client missing", "Install tmux 3.5+", "Authentication: not checked", "/isolated/codex", "Hooks: not synced"} {
+			for _, want := range []string{"CLI: tmux (default", "Dashboard in this terminal: " + destination,
+				"Agent CLI missing", "Install tmux 3.5+", "Authentication: not checked", "/isolated/codex", "Hooks: not synced"} {
 				if !strings.Contains(out.String(), want) {
 					t.Errorf("missing %q in %s", want, out.String())
 				}
@@ -121,7 +121,7 @@ func TestSetupCreatesFirstProfileAndProjectWithoutLosingStarter(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out, "Next: amx config hooks-sync -- codex-local") ||
-		!strings.Contains(out, "CLI: kitty (compatibility default") || !strings.Contains(out, "Launch checks") {
+		!strings.Contains(out, "CLI: tmux (default") || !strings.Contains(out, "Launch checks") {
 		t.Fatalf("next step missing: %q", out)
 	}
 	data, err := os.ReadFile(path)
@@ -143,7 +143,7 @@ func TestSetupCreatesFirstProfileAndProjectWithoutLosingStarter(t *testing.T) {
 		len(cfg.Projects) != 1 || cfg.Projects[0].Directory != project || cfg.Projects[0].Profile != "codex-local" {
 		t.Fatalf("configured profiles/projects = %+v / %+v", cfg.Profiles, cfg.Projects)
 	}
-	if cfg.Defaults.LaunchBackend != "" || cfg.LaunchBackendOrDefault() != config.LaunchBackendKitty {
+	if cfg.Defaults.LaunchBackend != "" || cfg.LaunchBackendOrDefault() != config.LaunchBackendTmux {
 		t.Fatalf("new setup pinned a launch destination: %q", cfg.Defaults.LaunchBackend)
 	}
 }
@@ -350,20 +350,18 @@ func TestSetupAllowsCorrectingAChoice(t *testing.T) {
 	}
 }
 
-// Outside Kitty, or without it, setup recommends tmux before the backend
-// question and again in the summary when keep was chosen. It only
-// recommends: keep stays the default answer and still writes nothing.
-func TestSetupRecommendsTmuxWhereKittyIsNotAvailable(t *testing.T) {
+// Keep leaves the configuration unpinned and selects tmux regardless of the
+// terminal or whether Kitty is installed. Explicit choices remain available.
+func TestSetupKeepUsesTmuxInEveryTerminal(t *testing.T) {
 	for _, tc := range []struct {
 		name, windowID, answer string
 		noKitten               bool
-		want                   string
 		pinned                 string
 	}{
-		{name: "plain terminal, keep", answer: "", want: "Recommended: tmux (this terminal is not Kitty)"},
-		{name: "no Kitty installed", windowID: "5", answer: "", noKitten: true, want: "Recommended: tmux (Kitty's kitten is not on PATH)"},
+		{name: "plain terminal, keep", answer: ""},
+		{name: "no Kitty installed", windowID: "5", answer: "", noKitten: true},
 		{name: "inside Kitty", windowID: "5", answer: ""},
-		{name: "plain terminal, tmux chosen", answer: "tmux", want: "Recommended: tmux (this terminal is not Kitty):", pinned: config.LaunchBackendTmux},
+		{name: "plain terminal, tmux chosen", answer: "tmux", pinned: config.LaunchBackendTmux},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.toml")
@@ -386,15 +384,13 @@ func TestSetupRecommendsTmuxWhereKittyIsNotAvailable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tc.want == "" && strings.Contains(out, "Recommended:") {
-				t.Fatalf("recommended a backend inside Kitty:\n%s", out)
+			for _, want := range []string{"Keep uses the tmux default in every terminal", "CLI: tmux", "Dashboard in this terminal: tmux"} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("missing %q:\n%s", want, out)
+				}
 			}
-			if tc.want != "" && !strings.Contains(out, tc.want) {
-				t.Fatalf("missing %q:\n%s", tc.want, out)
-			}
-			summaryRecommends := strings.Contains(out, "  Recommended: tmux")
-			if summaryRecommends != (tc.want != "" && tc.pinned == "") {
-				t.Fatalf("summary recommendation = %t:\n%s", summaryRecommends, out)
+			if strings.Contains(out, "Kitty client missing") {
+				t.Fatalf("default tmux launch requires Kitty: %s", out)
 			}
 			cfg, err := config.Load(path)
 			if err != nil {

@@ -454,7 +454,7 @@ The palette offers configured-project launches, recent-conversation resume/focus
 shells, History, checkout review, Runs, and workspace navigation. The Launch
 Project menu names both the destination and its source. **Launch Settings…**
 opens **Launch projects in**. Following CLI configuration distinguishes an explicit
-`config.toml` choice from its compatibility default. Preferences lists resolved
+`config.toml` choice from the tmux default. Preferences lists resolved
 app, CLI, and plan destinations; **Follow CLI** aligns the app with CLI configuration.
 
 An empty workspace offers **Launch Project…**, **Conversation History**, and

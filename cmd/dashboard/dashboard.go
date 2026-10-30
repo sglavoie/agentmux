@@ -66,7 +66,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui"
-	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // Run performs the workflow behind a bare `amx`: focus an already-running
@@ -85,16 +84,9 @@ func Run(sourceWindowID int, backendName string, view View) error {
 	if err != nil {
 		return err
 	}
-	configured := backendName == "" && cfg.Defaults.LaunchBackend != ""
-	if configured {
-		backendName = cfg.Defaults.LaunchBackend
-	}
-	client, err := selectTerminals(backendName)
+	client, err := selectTerminalsForConfig(backendName, cfg, newKittyClient)
 	if err != nil {
 		return err
-	}
-	if configured {
-		commands.Portable.LaunchSource = "config.toml"
 	}
 	if client == nil {
 		selected, err := terminalView(view)

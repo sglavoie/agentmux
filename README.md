@@ -40,11 +40,9 @@ CLI. On macOS, native notifications additionally need
    profile home, an existing project directory, and a default backend, adds
    the first project without touching other settings, and offers to sync the
    profile's hooks (answer explicitly; **no** prints the command to finish
-   later). Choose **tmux** unless you work inside Kitty: **Keep** leaves
-   `launch_backend` unset, which still sends CLI launch commands to Kitty, and
-   setup recommends tmux when this terminal is not Kitty or Kitty is not
-   installed. Authentication is not checked. To write the configuration by
-   hand, see [Manual configuration](#manual-configuration).
+   later). Choose **Keep** to use the tmux default, **tmux** to pin it explicitly,
+   or **kitty** to launch in Kitty tabs. Authentication is not checked. To write
+   the configuration by hand, see [Manual configuration](#manual-configuration).
 3. **Check.**
 
    ```sh
@@ -63,13 +61,11 @@ CLI. On macOS, native notifications additionally need
    on the live session attaches and `F12` detaches back to the dashboard;
    attached, `F1` shows the shortcuts and `F2` opens the live overview.
 
-Where a launch goes depends on the entry point: CLI launch commands use
-`--backend`, then `[defaults] launch_backend`, then Kitty for compatibility;
-the dashboard uses the configured backend, else Kitty inside Kitty and tmux
-elsewhere; the app has its own Launch Project preference. Setting
-`launch_backend = "tmux"` keeps them consistent. See
-[launch destinations](docs/usage.md#launch-destinations) for precedence; the
-unset default changes only after the [daily-driver trial](docs/daily-driver-trial.md).
+CLI launches and terminal dashboards use `--backend`, then
+`[defaults] launch_backend`, then tmux. The app defaults to Workspace (tmux)
+and also offers Kitty or Follow CLI configuration. Existing sessions stay on
+their recorded backend. See [launch destinations](docs/usage.md#launch-destinations)
+for precedence and explicit Kitty launches.
 
 ### Manual configuration
 

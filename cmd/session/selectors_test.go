@@ -18,7 +18,7 @@ func TestSessionHandoffAcceptsTheTwoArgumentSelector(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	meta, indexPath := sessionCommandMeta(t, harness.Claude)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -53,7 +53,7 @@ func TestConversationNotFoundReadsTheSameEverywhere(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	_, indexPath := sessionCommandMeta(t, harness.Claude)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Claude}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {

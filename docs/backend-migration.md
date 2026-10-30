@@ -165,7 +165,7 @@ removed. What changed is that nothing else depends on it:
 | Surface | Without Kitty | To use Kitty |
 | --- | --- | --- |
 | Install | `just install` builds and installs `amx` and seeds `config.toml`; it creates no `~/.config/kitty` and links nothing | `just install-kitty` links `agent-mux.conf`; `kitty.conf` includes it and enables remote control. `just uninstall` removes the link if there is one |
-| Launch | `launch_backend = "tmux"` or `--backend tmux`; the dashboard in a terminal that is not Kitty launches on tmux unasked | `launch_backend = "kitty"` (or unset, until the default moves; see below) or `--backend kitty` |
+| Launch | tmux is the default for CLI launches and dashboards in every terminal | `launch_backend = "kitty"` or `--backend kitty` |
 | A running session | reached on the backend it was launched on; a *recorded* empty backend means Kitty, so sessions and checkpoints from before the tmux backend read as they always did | the same |
 | Paired release gate | no step runs or names Kitty; `cockpit-smoke` is a real-tmux smoke that runs from any terminal and fails without a usable tmux | `just kitty-smoke`, from a Kitty window, in no gate |
 | Evidence record | schema 2: no `kitty-version` step, `environment.kitty` absent | schema-1 records, which name a Kitty, still load |
@@ -179,15 +179,12 @@ TUI scenarios built on Kitty fixtures. The compatibility requirements below
 are unchanged: companion v1, `focus_window`, legacy `KITTY_WINDOW_ID` hooks,
 `amx_state` restore, and the ASL `kitty_window_id` contract.
 
-**The default.** `launch_backend` unset still means Kitty. Requirement 9 below
-holds it there until the daily-driver trial passes
-(`docs/acceptance/ghostty-desktop/session-20.json`, `docs/daily-driver-trial.md`).
-When that record says `passed` with `operator_confirmed: true`,
-`config.LaunchBackendOrDefault` returns tmux and
-`TestLaunchBackendDefaultsToKitty` is replaced; `--backend kitty` and
-`launch_backend = "kitty"` keep working. Until then an installation with no
-Kitty sets `launch_backend = "tmux"`: left unset, doctor counts Kitty as in
-use and raises `kitty` as a warning (never a `--strict` failure) saying so.
+**The default.** An absent or empty `launch_backend` means tmux, in CLI
+launch commands and terminal surfaces inside or outside Kitty. The operator
+waived the multi-day trial on 2026-10-30; the waiver is recorded in
+`docs/acceptance/ghostty-desktop/session-20.json` without claiming a passed
+trial. `TestLaunchBackendDefaultsToTmux` pins the default, while explicit
+Kitty settings and legacy empty session-backend records retain their meaning.
 
 ## Session 21 record
 
@@ -218,10 +215,9 @@ Done, with what holds it:
 
 Pending, and not counted as done:
 
-- **The default flip.** Not made. On 2026-10-13
-  `docs/acceptance/ghostty-desktop/session-20.json` is `pending` with
-  `operator_confirmed: false` and no workday logged, so `launch_backend` unset
-  still launches into Kitty and `TestLaunchBackendDefaultsToKitty` stands.
+- **Historical default hold.** At the Session 21 snapshot on 2026-10-13, the
+  default was still Kitty pending the trial. The operator waived that hold on
+  2026-10-30; the current default is tmux, as documented above.
 - **The hosted app suite.** The app and its test target compile
   (`xcodebuild build-for-testing`); `just mac-test` on the remote Mac has not
   run the changed `BackendSetupTests`, and the launch-target default has not
@@ -271,9 +267,9 @@ These pin current Kitty behavior so later sessions can prove they preserved it:
    schema versions where the shape changes.
 8. The ASL contract set, bridge protocol 2, and lifecycle hook schema 2 are
    unchanged by backend work; the paired release gate stays Xcode-free.
-9. Kitty launch defaults keep working; tmux is selected explicitly until its
-   acceptance sessions pass, and actions on an existing session follow its
-   recorded backend.
+9. Explicit Kitty launch settings keep working. New launches default to tmux
+   following the operator's 2026-10-30 trial waiver; actions on an existing
+   session follow its recorded backend, including legacy empty Kitty records.
 
 ## Session 1 baseline record
 

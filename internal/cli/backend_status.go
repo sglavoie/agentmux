@@ -118,8 +118,8 @@ func CollectBackendStatus(cfg *config.Config, cfgErr error, probe BackendProbe) 
 		Tmux:          TmuxStatus{MinVersion: tmux.MinVersion, Candidates: []tmux.Candidate{}},
 		Problems:      []BackendProblem{},
 	}
-	status.LaunchBackendSource = "compatibility default"
-	if cfg != nil && cfg.Defaults.LaunchBackend != "" {
+	status.LaunchBackendSource = "default"
+	if cfg != nil && strings.TrimSpace(cfg.Defaults.LaunchBackend) != "" {
 		status.LaunchBackendSource = "config.toml"
 	}
 	if cfgErr != nil {

@@ -3,6 +3,7 @@ package dashboard
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
@@ -63,7 +64,29 @@ func init() {
 // operator who has just broken their config file should still be able to reach
 // the overview they already have open.
 func runOverviewCommand(sourceWindowID int) error {
-	client, err := selectTerminalsWith(overviewBackend, newOverviewClient)
+	requested := strings.ToLower(strings.TrimSpace(overviewBackend))
+	if requested != "" && requested != config.LaunchBackendTmux && requested != config.LaunchBackendKitty {
+		return fmt.Errorf("unknown --backend %q: use kitty or tmux", overviewBackend)
+	}
+	var client kitty.KittyClient
+	checked := false
+	if insideKitty() || requested == config.LaunchBackendKitty {
+		client = newOverviewClient()
+		focused, err := focusExistingOverview(client)
+		if err != nil || focused {
+			return err
+		}
+		checked = true
+	}
+	cfg, err := loadOverviewConfig()
+	if err != nil {
+		return err
+	}
+	kittyClient := newOverviewClient
+	if client != nil {
+		kittyClient = func() kitty.KittyClient { return client }
+	}
+	client, err = selectTerminalsForConfig(overviewBackend, cfg, kittyClient)
 	if err != nil {
 		return err
 	}
@@ -72,10 +95,6 @@ func runOverviewCommand(sourceWindowID int) error {
 	// in; as a popup over an attached terminal it is that terminal's one
 	// overview, and choosing a tile switches the terminal (popup.go).
 	if client == nil {
-		cfg, err := loadOverviewConfig()
-		if err != nil {
-			return err
-		}
 		selected, err := terminalView(overviewView)
 		if err != nil {
 			return err
@@ -83,17 +102,11 @@ func runOverviewCommand(sourceWindowID int) error {
 		return runOverview(cfg, nil, selected)
 	}
 
-	focused, err := focusExistingOverview(client)
-	if err != nil {
-		return err
-	}
-	if focused {
-		return nil
-	}
-
-	cfg, err := loadOverviewConfig()
-	if err != nil {
-		return err
+	if !checked {
+		focused, err := focusExistingOverview(client)
+		if err != nil || focused {
+			return err
+		}
 	}
 	if sourceWindowID <= 0 {
 		sourceWindowID = cli.WindowIDFromEnv()

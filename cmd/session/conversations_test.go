@@ -194,6 +194,7 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
 		return &config.Config{
+			Defaults: config.Defaults{LaunchBackend: "kitty"},
 			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: dir}},
 			Projects: []config.Session{
 				{Title: "Primary", Directory: dir, Profile: "work"},
@@ -256,7 +257,7 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 	client := &sessionCommandKitty{}
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
 		return &config.Config{
-			Defaults: config.Defaults{Args: []string{"--model", "test"}},
+			Defaults: config.Defaults{LaunchBackend: "kitty", Args: []string{"--model", "test"}},
 			Accounts: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: "/tmp/codex-home"}},
 			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: "/tmp/codex-home"}},
 			Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work", Args: []string{"--project-flag"}}},
@@ -811,6 +812,7 @@ func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
 	sessionCommandsSessionIndexPath = func() string { return filepath.Join(dir, "transcripts.json") }
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
 		return &config.Config{
+			Defaults: config.Defaults{LaunchBackend: "kitty"},
 			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: filepath.Join(dir, "codex-home")}},
 			Projects: []config.Session{{Title: "repo", Directory: repo, Profile: "work"}},
 		}, nil
