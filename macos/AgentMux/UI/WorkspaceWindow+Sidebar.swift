@@ -79,6 +79,17 @@ extension WorkspaceWindowController {
         if isSwitching { switcher.update(switcherEntries()) }
     }
 
+    /// State changes pulse the session's current line without moving the
+    /// keyboard, scrolling, or opening collapsed groups. First sightings and
+    /// changes to names, ages, or other metadata do not flash.
+    func flashStateChanges(from previous: [WorkspaceRow]) {
+        let states = Dictionary(previous.map { ($0.key, $0.iconState) }, uniquingKeysWith: { first, _ in first })
+        for (index, item) in items.enumerated() {
+            guard case let .row(row) = item, let before = states[row.key], before != row.iconState else { continue }
+            (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: .systemGreen, pulseDuration: 0.8)
+        }
+    }
+
     /// What a line draws that its item does not carry: a session's ⌘ digit,
     /// or the name and profile marker inherited by a view.
     private func decoration(_ item: Item) -> LineDecoration {

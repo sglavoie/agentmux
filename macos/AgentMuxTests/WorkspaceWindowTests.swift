@@ -826,6 +826,66 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.sidebarCollapses, [true, false, true, false])
     }
 
+    func testStateChangesFlashGreenForChangedSessionsAfterReordering() throws {
+        var live = sessions
+        app.store.apply(snapshot: F.snapshot(live))
+        let keys = workspace.state.rows.map(\.key)
+        func rowView(_ key: AttentionCycler.Key) throws -> WorkspaceRowView {
+            try XCTUnwrap(workspace.sidebar.rowView(atRow: index(of: key), makeIfNecessary: true) as? WorkspaceRowView)
+        }
+        for key in keys { XCTAssertFalse(try rowView(key).isFlashing, "first sightings do not flash") }
+
+        live[0].name = "Renamed"
+        live[0].presentationChangedAtMS = 3000
+        live.append(F.tmux(5, project: "api", icon: "bolt"))
+        app.store.apply(snapshot: F.snapshot(live))
+        for row in workspace.state.rows {
+            XCTAssertFalse(try rowView(row.key).isFlashing, "metadata and new sessions do not flash")
+        }
+
+        let shown = try row("api", "personal")
+        workspace.activate(shown)
+        let responder = workspace.window.firstResponder
+        let position = workspace.sidebar.enclosingScrollView?.contentView.bounds.origin
+        // Both an embedded session and a Kitty session move from Done to Working.
+        live[0].iconState = "bolt"
+        live[2].iconState = "bolt"
+        app.store.apply(snapshot: F.snapshot(live))
+        for row in workspace.state.rows {
+            let view = try rowView(row.key)
+            let changed = row.key == .embedded(F.runtimeID(1)) || row.key.windowID == 4
+            XCTAssertEqual(view.isFlashing, changed)
+            if changed {
+                let layer = try XCTUnwrap(view.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
+                let animation = try XCTUnwrap(layer.animation(forKey: WorkspaceRowView.flashKey) as? CAKeyframeAnimation)
+                let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
+                XCTAssertEqual(animation.duration, 0.8 * Double(pulses), accuracy: 0.001)
+                XCTAssertEqual(animation.values?.count, 1 + 2 * pulses)
+                view.effectiveAppearance.performAsCurrentDrawingAppearance {
+                    XCTAssertEqual(layer.backgroundColor, NSColor.systemGreen.withAlphaComponent(0.35).cgColor)
+                }
+            }
+        }
+        XCTAssertEqual(workspace.state.selection, shown.key)
+        XCTAssertTrue(workspace.window.firstResponder === responder)
+        XCTAssertEqual(workspace.sidebar.enclosingScrollView?.contentView.bounds.origin, position)
+    }
+
+    func testStateChangesLeaveCollapsedGroupsAndSidebarClosed() throws {
+        var live = sessions
+        app.store.apply(snapshot: F.snapshot(live))
+        workspace.setCollapsed(project: "api", pinned: false, true)
+        workspace.setSidebarCollapsed(true)
+        live[0].iconState = "bolt"
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertTrue(workspace.isSidebarCollapsed)
+        XCTAssertFalse(workspace.items.contains { if case let .row(row) = $0 { return row.project == "api" }; return false })
+        workspace.setCollapsed(project: "api", pinned: false, false)
+        let line = try index(of: .embedded(F.runtimeID(1)))
+        let view = try XCTUnwrap(workspace.sidebar.rowView(atRow: line, makeIfNecessary: true) as? WorkspaceRowView)
+        XCTAssertFalse(view.isFlashing, "expanding does not replay an old transition")
+    }
+
     /// ⌘J finds the shown session in the list: a hidden sidebar comes back,
     /// a collapsed project opens, and the line flashes, while the keyboard
     /// stays with the terminal.
@@ -846,6 +906,13 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.sidebar.selectedRow, line)
         let rowView = try XCTUnwrap(workspace.sidebar.rowView(atRow: line, makeIfNecessary: false) as? WorkspaceRowView)
         XCTAssertTrue(rowView.isFlashing)
+        let flashLayer = try XCTUnwrap(rowView.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
+        let animation = try XCTUnwrap(flashLayer.animation(forKey: WorkspaceRowView.flashKey))
+        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
+        XCTAssertEqual(animation.duration, 0.4 * Double(pulses), accuracy: 0.001)
+        rowView.effectiveAppearance.performAsCurrentDrawingAppearance {
+            XCTAssertEqual(flashLayer.backgroundColor, NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor)
+        }
         XCTAssertTrue(workspace.window.firstResponder === terminal, "revealing does not take the keyboard")
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
     }

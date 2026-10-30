@@ -198,12 +198,12 @@ type Notifier struct {
 	now              func() time.Time // injectable for tests
 	dispatch         dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
 	capability       protocol.NotificationCapability
-	focus            FocusClient     // optional; nil when the daemon has no Kitty client wired
-	sessionFocus     SessionFocus    // optional; shows the runtime session of a clicked notice
-	isMuted          func(int) bool  // optional; nil treats every window as unmuted (tests + pre-wire)
-	ctx              context.Context // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
-	app              AppBackend      // optional companion backend; see app_backend.go
-	appNotices       map[string]int  // outstanding app notification ID -> window ID, for retraction
+	focus            FocusClient           // optional; nil when the daemon has no Kitty client wired
+	sessionFocus     SessionFocus          // optional; shows the runtime session of a clicked notice
+	isMuted          func(int) bool        // optional; nil treats every window as unmuted (tests + pre-wire)
+	ctx              context.Context       // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
+	app              AppBackend            // optional companion backend; see app_backend.go
+	appNotices       map[string]*appNotice // outstanding app notification ID -> acceptance and retraction state
 }
 
 // cooldownFor is the configured cooldown, or the default when it is unset.
@@ -225,7 +225,7 @@ func NewNotifier(cfg *config.NotificationConfig) *Notifier {
 		quietSet:        quietSet,
 		last:            make(map[notifyKey]time.Time),
 		pending:         make(map[int]pendingNotification),
-		appNotices:      make(map[string]int),
+		appNotices:      make(map[string]*appNotice),
 		debounce:        time.Duration(cfg.PermissionDebounceMs) * time.Millisecond,
 		cooldown:        cooldownFor(cfg),
 		dispatchTimeout: d.timeout,

@@ -214,3 +214,39 @@ in from the log, by or with the operator:
 A case that did not happen stays `pending`, and so does the record. After the
 record passes, the two switches under Transition stay as they are: that is the
 transition. Kitty remains installed and supported as the fallback.
+
+## Make the unset backend consistent after the trial
+
+The explicit trial settings above make this installation consistent now.
+Changing the application's unset default is a separate code change, made only
+after the record passes with five distinct workdays, evidence for every case,
+no unresolved blockers, and the operator's explicit confirmation.
+
+That change must cover all launch entry points together:
+
+1. In `internal/config/types.go`, make `LaunchBackendOrDefault` choose tmux
+   when configuration is absent or `launch_backend` is empty. Preserve an
+   explicit `kitty` choice and the CLI flag's precedence. Update
+   `internal/config/config_backend_test.go` and `internal/cli/backend_test.go`
+   to cover absent configuration, an empty key, each explicit backend, and
+   flag overrides.
+2. In `cmd/dashboard/terminals.go`, make an unspecified destination launch on
+   tmux inside Kitty as well as in other terminals. Keep existing Kitty
+   sessions discoverable and focusable. An unavailable default tmux backend
+   must report its setup failure rather than silently launch on Kitty.
+   Update `cmd/dashboard/terminals_test.go` and the dashboard launch tests for
+   both terminal environments, explicit Kitty, and missing tmux.
+3. Update the launch-source wording in `internal/cli/backend_status.go`, the
+   CLI and dashboard flag help, and `cmd/config/setup.go`. Choosing **Keep**
+   in setup must describe the same tmux default as the launcher. Update setup
+   and help assertions, then the README, launch-destination guide, starter
+   configuration comments, and `CLAUDE.md`.
+4. Keep routing actions on existing sessions through their recorded backend.
+   A legacy session record whose backend is empty still identifies a Kitty
+   session; changing new-launch defaults must not reinterpret that record.
+5. Run `just check`, `just mac-test`, and `just mac-test Release`. Exercise
+   unconfigured launches from inside and outside Kitty, an explicit Kitty
+   fallback, and focus/resume of existing sessions. Build and install the
+   passing revision and record its identity in the trial log.
+
+Until that change is verified, leave the explicit trial settings in place.

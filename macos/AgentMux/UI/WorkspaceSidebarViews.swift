@@ -202,16 +202,16 @@ class WorkspaceRowView: NSTableRowView {
 
     /// Pulses the accent over the line twice, so the eye finds it (once with
     /// Reduce Motion), then leaves it as it was.
-    func flash() {
+    func flash(color: NSColor = .controlAccentColor, pulseDuration: TimeInterval = 0.4) {
         if flashView.superview !== self { addSubview(flashView, positioned: .below, relativeTo: selectionBorder) }
         flashView.frame = pillRect(verticalInset: 1)
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            flashView.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor
+            flashView.layer?.backgroundColor = color.withAlphaComponent(0.35).cgColor
         }
         let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
         let animation = CAKeyframeAnimation(keyPath: "opacity")
         animation.values = [0] + Array(repeating: [1, 0], count: pulses).flatMap { $0 }
-        animation.duration = 0.4 * Double(pulses)
+        animation.duration = pulseDuration * Double(pulses)
         flashView.layer?.add(animation, forKey: Self.flashKey)
     }
 

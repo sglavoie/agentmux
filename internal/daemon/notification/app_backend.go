@@ -157,12 +157,32 @@ func appActions(target NotificationTarget, action string, trace NotificationTrac
 	return actions
 }
 
-// trackAppNotice remembers which window an outstanding notice belongs to, so
-// a later event for that window can retract it.
-func (n *Notifier) trackAppNotice(id string, windowID int) {
+// appNotice tracks acceptance as well as display. A cancellation during Deliver
+// is deferred until the backend has registered the notice and can withdraw it.
+// All fields are guarded by the notifier's mutex.
+type appNotice struct {
+	id         string
+	windowID   int
+	accepted   bool
+	retraction string
+}
+
+// trackAppNotice runs before Deliver can expose the notice to the companion.
+func (n *Notifier) trackAppNotice(id string, windowID int) *appNotice {
 	n.mu.Lock()
-	n.appNotices[id] = windowID
-	n.mu.Unlock()
+	defer n.mu.Unlock()
+	tracked := &appNotice{id: id, windowID: windowID}
+	n.appNotices[id] = tracked
+	return tracked
+}
+
+// acceptAppNotice returns a cancellation that arrived during Deliver. Once
+// accepted, subsequent cancellations can retract the notice immediately.
+func (n *Notifier) acceptAppNotice(tracked *appNotice) string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	tracked.accepted = true
+	return tracked.retraction
 }
 
 func (n *Notifier) untrackAppNotice(id string) {
@@ -173,21 +193,32 @@ func (n *Notifier) untrackAppNotice(id string) {
 
 // takeAppNoticesLocked removes and returns every outstanding notice for
 // windowID. The caller retracts them once n.mu is released.
-func (n *Notifier) takeAppNoticesLocked(windowID int) (AppBackend, []string) {
-	var ids []string
-	for id, owner := range n.appNotices {
-		if owner == windowID {
-			ids = append(ids, id)
+func (n *Notifier) takeAppNoticesLocked(windowID int) (AppBackend, []*appNotice) {
+	var notices []*appNotice
+	for id, tracked := range n.appNotices {
+		if tracked.windowID == windowID {
+			notices = append(notices, tracked)
 			delete(n.appNotices, id)
 		}
 	}
-	return n.app, ids
+	return n.app, notices
 }
 
-func retractAll(app AppBackend, ids []string, reason string) {
+// Retractions become effective only after the caller releases its locks.
+// Acceptance either already finished, or will perform the withdrawal itself.
+func (n *Notifier) retractAppNotices(app AppBackend, notices []*appNotice, reason string) {
 	if app == nil {
 		return
 	}
+	n.mu.Lock()
+	var ids []string
+	for _, tracked := range notices {
+		tracked.retraction = reason
+		if tracked.accepted {
+			ids = append(ids, tracked.id)
+		}
+	}
+	n.mu.Unlock()
 	for _, id := range ids {
 		app.Retract(id, reason)
 	}
@@ -224,15 +255,21 @@ func (n *Notifier) dispatchToApp(parent context.Context, app AppBackend, target 
 	if navigable {
 		notice.KittySocket = target.KittyListenOn
 	}
+	id := notice.NotificationID
+	tracked := n.trackAppNotice(id, windowID)
+	defer n.untrackAppNotice(id)
 	interactions, err := app.Deliver(ctx, notice)
+	if reason := n.acceptAppNotice(tracked); reason != "" {
+		if err == nil {
+			app.Retract(id, reason)
+		}
+		emit("dispatch", "cancelled", "retracted")
+		return true
+	}
 	if err != nil {
 		slog.Debug("notifier: app backend refused notice", "err", err, "window_id", windowID)
 		return false
 	}
-	id := notice.NotificationID
-	n.trackAppNotice(id, windowID)
-	defer n.untrackAppNotice(id)
-
 	ack := time.NewTimer(appDeliveredTimeout)
 	defer ack.Stop()
 	select {

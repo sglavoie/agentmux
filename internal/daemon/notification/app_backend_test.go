@@ -9,6 +9,7 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -22,13 +23,14 @@ import (
 // fakeApp is an AppBackend whose reports the test scripts. respond, when set,
 // runs inside Deliver and may report on the notice immediately.
 type fakeApp struct {
-	mu        sync.Mutex
-	ready     bool
-	notices   []AppNotice
-	retracted []string
-	reasons   []string
-	open      map[string]chan AppInteraction
-	respond   func(notice AppNotice, report func(string))
+	mu            sync.Mutex
+	ready         bool
+	notices       []AppNotice
+	retracted     []string
+	reasons       []string
+	open          map[string]chan AppInteraction
+	respond       func(notice AppNotice, report func(string))
+	beforeDeliver func(AppNotice)
 }
 
 func newFakeApp() *fakeApp {
@@ -42,6 +44,9 @@ func (a *fakeApp) Ready() bool {
 }
 
 func (a *fakeApp) Deliver(_ context.Context, notice AppNotice) (<-chan AppInteraction, error) {
+	if a.beforeDeliver != nil {
+		a.beforeDeliver(notice)
+	}
 	a.mu.Lock()
 	ch := make(chan AppInteraction, 2)
 	a.notices = append(a.notices, notice)
@@ -470,6 +475,83 @@ func TestAppBackendRetractsOnSupersede(t *testing.T) {
 		}
 		app.reportAll(protocol.DispositionDismissed)
 		synctest.Wait()
+	})
+}
+
+// Cancellation can arrive while the backend is still accepting the notice,
+// before Deliver returns. It must withdraw that notice once acceptance ends,
+// without showing the obsolete event through Alerter.
+func TestAppBackendCancellationDuringDelivery(t *testing.T) {
+	for _, beforeAcceptance := range []bool{true, false} {
+		for _, reason := range []string{"superseded", "window_closed"} {
+			name := fmt.Sprintf("before_acceptance=%t/%s", beforeAcceptance, reason)
+			t.Run(name, func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					app := newFakeApp()
+					n, rec, log := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
+					defer func() {
+						app.reportAll(protocol.DispositionDismissed)
+						synctest.Wait()
+					}()
+					cancel := func() {
+						if reason == "window_closed" {
+							n.PurgeWindow(1)
+						} else {
+							n.CancelPending(1)
+						}
+					}
+					if beforeAcceptance {
+						app.beforeDeliver = func(AppNotice) { cancel() }
+					}
+					app.respond = func(_ AppNotice, report func(string)) {
+						report(protocol.DispositionDelivered)
+						if !beforeAcceptance {
+							cancel()
+						}
+					}
+					n.MaybeNotify(1, "W:api", "work", "stop", false)
+					synctest.Wait()
+					ids, reasons := app.retractions()
+					if len(ids) != 1 || ids[0] != app.deliveries()[0].NotificationID || reasons[0] != reason {
+						t.Fatalf("retractions = %v %v; want the notice withdrawn once as %s", ids, reasons, reason)
+					}
+					if rec.len() != 0 || log.has("dispatch:fallback:app_fallback") {
+						t.Fatal("a cancelled notice fell back to Alerter")
+					}
+					if !log.has("dispatch:cancelled:retracted") {
+						t.Fatalf("no cancellation recorded: %v", log.entries)
+					}
+				})
+			})
+		}
+	}
+}
+
+func TestAppBackendCancellationDuringDeliveryWaitsForFinish(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		app := newFakeApp()
+		n, _, log := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
+		defer func() {
+			app.reportAll(protocol.DispositionDismissed)
+			synctest.Wait()
+		}()
+		var pending PendingCancellation
+		app.beforeDeliver = func(AppNotice) { pending = n.CancelPendingDisposition(1) }
+		app.respond = deliverThen("")
+		n.MaybeNotify(1, "W:api", "work", "stop", false)
+		synctest.Wait()
+		if ids, _ := app.retractions(); len(ids) != 0 {
+			t.Fatalf("a cancellation retracted %v before FinishCancellation", ids)
+		}
+		n.FinishCancellation(pending)
+		synctest.Wait()
+		ids, reasons := app.retractions()
+		if len(ids) != 1 || ids[0] != app.deliveries()[0].NotificationID || reasons[0] != "superseded" {
+			t.Fatalf("retractions = %v %v; want the accepted notice superseded once", ids, reasons)
+		}
+		if !log.has("focus:suppressed:retracted") {
+			t.Fatalf("no settled retraction recorded: %v", log.entries)
+		}
 	})
 }
 

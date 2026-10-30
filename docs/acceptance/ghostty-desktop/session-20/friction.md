@@ -1,7 +1,8 @@
 # Daily-use friction register
 
-Status: one operator-reported interruption, investigated below. No complete
-workday or recurrence rate is inferred from this report, tests, or screenshots.
+Status: two operator-reported interruptions, one confirmed fix and one awaiting
+real-use confirmation. No complete workday or recurrence rate is inferred from
+these reports, tests, or screenshots.
 
 Copy recurring IDs from [the daily log](trial-log.md). Combine occurrences only
 when they describe the same interruption; keep build changes visible.
@@ -9,6 +10,7 @@ when they describe the same interruption; keep build changes visible.
 | ID | Workflow and interruption | Workdays affected / observed | Occurrences | Recovery time | Severity | Evidence | Fix / verification / recurrence after fix |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | F-001 | Codex completes but the indicator eventually becomes blank; operator misses completion (`tt`) | Unknown | One named example; broader recurrence reported, not counted | Unknown | Completion visibility | [Observation](trial-log.md#reported-interruption-2026-10-17) | Managed Codex launches select supported `--no-daemon`; shell execution tests cover compatibility and explicit remote choices. Additional [lifecycle coverage](../../desktop-improvements.md#status-review-and-refresh-polish-on-2026-10-18) verifies new/resumed conversations, simulated observation gaps, and checkpoint restoration. Resolved on 2026-10-18: operator confirmed resume, /new reset and recompletion, app reopening, and physical sleep/wake on the installed fix. [Build and confirmation](../../workspace-consistency/observations.json). |
+| F-002 | Green sidebar state-change flash is hard to notice; operator requests twice the duration | Unknown | One report on 2026-10-30; recurrence unmeasured | Unknown | State-change visibility | [Report and installed build](trial-log.md#trial-preparation-2026-10-30) | Extended to 1.6 seconds total, or one 0.8-second pulse with Reduce Motion. Reveal in Sidebar keeps its original duration. Debug and Release suites each pass 1,021 tests, including timing, color, selection, focus, scrolling, and collapsed-group checks. Installed change awaits operator confirmation; no later recurrence evidence is recorded. |
 
 ## Ranking at the end of each workday
 
@@ -33,8 +35,9 @@ until the operator records actual use; they do not add occurrences or completed 
 | Rank | Friction ID | Evidence and reason | Next action | Outcome |
 | --- | --- | --- | --- | --- |
 
-F-001 is the first operator-confirmed fix; no comparative frequency ranking is
-available from one report. The implemented event navigation,
+F-001 is the first operator-confirmed fix. F-002 has one report and awaits
+confirmation of the installed change; no comparative recurrence ranking is
+available. The implemented event navigation,
 Runs evidence, status toolbar, filter hints, and launch summaries are candidates
 for real-use evaluation, not recorded trial successes.
 

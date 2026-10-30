@@ -410,6 +410,11 @@ ASL answer panel work the same either way.
   the waiting status, the session returns to its saved position. Its terminal,
   selection, pin, and dragged order are preserved. The temporary section
   always stays expanded, names each session's project, and cannot be dragged.
+  A session's line flashes green when its state changes, using the same pulse
+  as ⌘J's accent-colored reveal, with each pulse lasting twice as long:
+  1.6 seconds total, or one 0.8-second pulse with Reduce Motion.
+  These flashes leave focus, scrolling, and collapsed groups alone; first
+  sightings and updates to names or ages do not flash.
 - **Dragging.** Press a session's row and drag it to move it among its
   project's sessions; the terminals beside it go with it. The order is a
   `WorkspaceOrder`, kept in the `amxWorkspaceSessionOrder` preference, and a

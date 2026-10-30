@@ -65,7 +65,7 @@ type PendingCancellation struct {
 	Disposition NotificationDisposition
 	Cancelled   bool
 	app         AppBackend
-	retract     []string
+	retract     []*appNotice
 }
 
 // CancelPendingDisposition removes any pending permission notification for
@@ -85,7 +85,7 @@ func (n *Notifier) CancelPendingDisposition(windowID int) PendingCancellation {
 // emits its disposition. Callers run it with no lock of their own held, since
 // a retraction reaches the companion and the observer may re-enter them.
 func (n *Notifier) FinishCancellation(c PendingCancellation) {
-	retractAll(c.app, c.retract, "superseded")
+	n.retractAppNotices(c.app, c.retract, "superseded")
 	if c.Cancelled {
 		n.emitDisposition(c.Disposition)
 	}

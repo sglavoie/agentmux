@@ -544,6 +544,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             live = WorkspaceSidebar.groups(store.sessions, snapshotSocket: snapshot.kitty.socket, now: now(), glyphs: glyphs, order: order)
         }
         let wasCurrent = state.current
+        let previousRows = state.rows
         let previous = state.selection
         let previousName = state.selectedRow?.displayName
         let lost = state.apply(live)
@@ -573,6 +574,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             closing = closing.filter { !$0.value.answered || listed.contains($0.key) }
         }
         reloadSidebar()
+        if state.current { flashStateChanges(from: previousRows) }
         let notice = WorkspaceSidebar.feedNotice(store.feed)
         feedLabel.stringValue = notice ?? ""
         feedLabel.isHidden = notice == nil

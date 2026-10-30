@@ -163,7 +163,7 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	// event that is itself suppressed never leaves the operator with nothing.
 	app, superseded := n.takeAppNoticesLocked(windowID)
 	n.mu.Unlock()
-	retractAll(app, superseded, "superseded")
+	n.retractAppNotices(app, superseded, "superseded")
 	for _, disposition := range dispositions {
 		n.emitDisposition(disposition)
 	}
@@ -425,7 +425,7 @@ func (n *Notifier) PurgeWindow(windowID int) {
 	disposition, cancelled := n.cancelPendingLocked(windowID, "window_closed")
 	app, closed := n.takeAppNoticesLocked(windowID)
 	n.mu.Unlock()
-	retractAll(app, closed, "window_closed")
+	n.retractAppNotices(app, closed, "window_closed")
 	if cancelled {
 		n.emitDisposition(disposition)
 	}
