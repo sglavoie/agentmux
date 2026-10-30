@@ -78,6 +78,43 @@ func TestClaudeSessionClassification(t *testing.T) {
 	}
 }
 
+func TestClaudeClassificationKeepsLookingForAutomatedEvidence(t *testing.T) {
+	t.Parallel()
+
+	for _, marker := range []string{
+		`"isSidechain":true`,
+		`"agentId":"agent-1"`,
+		`"entrypoint":"sdk-cli"`,
+		`"promptSource":"sdk"`,
+	} {
+		t.Run(marker, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(t.TempDir(), "session.jsonl")
+			body := `{"type":"user","entrypoint":"cli","promptSource":"typed"}` + "\n" +
+				`{"type":"assistant",` + marker + `}` + "\n"
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			reader := NewClaudeReader()
+			got, err := reader.ClassifySession(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			meta, err := reader.parseFile(path, info, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != SessionClassAutomated || got != meta.SessionClass {
+				t.Fatalf("ClassifySession = %q, parsed class = %q; want automated for both", got, meta.SessionClass)
+			}
+		})
+	}
+}
+
 func TestCopilotTopLevelSessionClassification(t *testing.T) {
 	t.Parallel()
 

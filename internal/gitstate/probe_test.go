@@ -135,7 +135,7 @@ func TestProbeRunsTheDocumentedCommands(t *testing.T) {
 	if got := strings.Join(git.calls[0].args, " "); got != "rev-parse --abbrev-ref HEAD" {
 		t.Fatalf("branch probe ran %q", got)
 	}
-	if got := strings.Join(git.calls[1].args, " "); got != "status --porcelain --untracked-files=no" {
+	if got := strings.Join(git.calls[1].args, " "); got != "status --porcelain --untracked-files=no --ignore-submodules=untracked" {
 		t.Fatalf("dirty probe ran %q", got)
 	}
 }
@@ -145,6 +145,31 @@ func TestProbeWithoutAnExecutorIsSilent(t *testing.T) {
 
 	if got := Probe(context.Background(), nil, "/tmp/checkout", ProbeTimeout); got != (State{}) {
 		t.Fatalf("Probe(nil executor) = %+v, want the zero value", got)
+	}
+}
+
+func TestProbeShowsTrackedSubmoduleChangesDespiteGitDisplaySettings(t *testing.T) {
+	t.Parallel()
+	for _, setting := range []string{"diff.ignoreSubmodules", "submodule.child.ignore"} {
+		t.Run(setting, func(t *testing.T) {
+			t.Parallel()
+			dir, git, write := reviewFixture(t)
+			child, _, _ := reviewFixture(t)
+			git("-c", "protocol.file.allow=always", "submodule", "add", child, "child")
+			git("-c", "commit.gpgsign=false", "commit", "-qam", "add submodule")
+			git("config", setting, "all")
+
+			// The dashboard's dirty bit excludes untracked files, including
+			// those inside a submodule, even while overriding display settings.
+			write("child/untracked", "new file\n")
+			if got := Probe(context.Background(), runGit, dir, ProbeTimeout); got.Dirty {
+				t.Fatalf("untracked submodule file marked the checkout dirty: %+v", got)
+			}
+			write("child/tracked", "unfinished work\n")
+			if got := Probe(context.Background(), runGit, dir, ProbeTimeout); !got.Dirty {
+				t.Fatalf("probe hid tracked submodule changes with %s=all: %+v", setting, got)
+			}
+		})
 	}
 }
 

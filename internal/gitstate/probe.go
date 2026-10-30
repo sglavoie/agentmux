@@ -68,8 +68,9 @@ func Probe(ctx context.Context, git Executor, directory string, timeout time.Dur
 	}
 	// The first byte of `status --porcelain` output is the whole answer, so the
 	// result is measured rather than parsed. runGit already bounds how much of
-	// it was kept.
-	if out, err := git(ctx, directory, timeout, "status", "--porcelain", "--untracked-files=no"); err == nil {
+	// it was kept. Override display preferences that hide submodule changes,
+	// while excluding untracked files inside submodules as well as outside.
+	if out, err := git(ctx, directory, timeout, "status", "--porcelain", "--untracked-files=no", "--ignore-submodules=untracked"); err == nil {
 		state.Dirty = len(bytes.TrimSpace(out)) > 0
 	}
 	return state

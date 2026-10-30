@@ -185,8 +185,10 @@ func (r ClaudeReader) ClassifySession(path string) (SessionClass, error) {
 			continue
 		}
 		observeClaudeRecord(&evidence, rec)
-		if class := evidence.class(); class != SessionClassUnknown {
-			return class, nil
+		// Interactive evidence can be followed by an automation marker on a
+		// later record. Only the highest-precedence class is final before EOF.
+		if evidence.class() == SessionClassAutomated {
+			return SessionClassAutomated, nil
 		}
 	}
 	if err := scanner.Err(); err != nil {
