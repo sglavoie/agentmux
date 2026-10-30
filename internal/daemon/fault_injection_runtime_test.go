@@ -316,15 +316,25 @@ func TestFaultAgentExitIsRetiredAsExitedAndNotRelaunched(t *testing.T) {
 	if err := syscall.Kill(agent.process.PID, syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
+	var exitSignal string
 	w.eventually("the agent's pane to show its exit", func(s tmux.Survey) bool {
 		pane, ok := backend.FindPane(s.Panes, agent.launched.Pane)
-		return ok && pane.Exit != nil
+		if ok && pane.Exit != nil {
+			exitSignal = pane.Exit.Signal
+			return true
+		}
+		return false
 	})
+	if exitSignal == "" {
+		t.Fatal("the agent's pane did not report its exit signal")
+	}
 	h.maintainRuntimeSessions(start.Add(time.Minute))
 
+	// Preserve the backend's exit detail, whether tmux uses a name or number.
+	wantReason := "agent exited (signal " + exitSignal + ")"
 	record := w.record(agent.id)
-	if record.State != runtimesession.StateStale || record.Outcome() != runtimesession.OutcomeExited || record.StaleReason != "agent exited (signal term)" {
-		t.Fatalf("record = %s %q (%s), want stale: agent exited (signal term)", record.State, record.StaleReason, record.Outcome())
+	if record.State != runtimesession.StateStale || record.Outcome() != runtimesession.OutcomeExited || record.StaleReason != wantReason {
+		t.Fatalf("record = %s %q (%s), want stale: %s", record.State, record.StaleReason, record.Outcome(), wantReason)
 	}
 	if listedInSnapshot(h, agent.id) {
 		t.Fatal("an exited agent is still listed as a live session")

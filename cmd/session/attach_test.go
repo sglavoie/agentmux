@@ -237,12 +237,14 @@ func TestAttachTellsExitedFromLostAndRelaunchesNeither(t *testing.T) {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
+	var exitSignal string
 	for {
 		panes, err := f.Backend.Discover()
 		if err != nil {
 			t.Fatal(err)
 		}
 		if pane, ok := backend.FindPane(panes, launched.Pane); ok && pane.Exit != nil {
+			exitSignal = pane.Exit.Signal
 			break
 		}
 		if time.Now().After(deadline) {
@@ -250,9 +252,14 @@ func TestAttachTellsExitedFromLostAndRelaunchesNeither(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	if exitSignal == "" {
+		t.Fatal("the agent's pane did not report its exit signal")
+	}
+	// tmux reports the signal as a name on macOS and a number on Linux.
+	wantReason := "agent exited (signal " + exitSignal + ")"
 	for range 2 {
 		code, message := attachFailure(t, id)
-		if code != "runtime_session_exited" || !strings.Contains(message, "agent exited (signal term)") {
+		if code != "runtime_session_exited" || !strings.Contains(message, wantReason) {
 			t.Fatalf("exited agent: %s %q", code, message)
 		}
 	}

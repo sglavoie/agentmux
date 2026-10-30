@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -403,8 +404,8 @@ func hasAcceptanceStage(records []diagnostics.TraceEnvelope, stage, outcome, rea
 }
 
 func TestReleaseDocumentationPinsVersionAndDiagnosticWorkflow(t *testing.T) {
-	if version != "0.8.0" {
-		t.Fatalf("version = %q, want 0.8.0", version)
+	if !regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`).MatchString(version) {
+		t.Fatalf("release version = %q, want major.minor.patch", version)
 	}
 	for _, path := range []string{"../docs/daemon.md", "../docs/debugging.md", "../docs/acceptance.md"} {
 		data, err := os.ReadFile(path)

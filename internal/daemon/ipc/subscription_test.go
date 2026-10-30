@@ -610,6 +610,10 @@ func TestSubscribe_OversizeFrameIsDroppedAndCounted(t *testing.T) {
 	if frame.Type != protocol.FrameSnapshot || string(frame.Data) != `"small"` || frame.Seq != 1 {
 		t.Fatalf("frame = %+v; want the small snapshot as seq 1", frame)
 	}
+	// A client can read the bytes before the writer returns from Write and
+	// increments its counter. EOF follows completion of the writer loop.
+	sink.end("")
+	client.expectEOF(t)
 	if got := server.Metrics().StreamFramesOversize; got != 1 {
 		t.Fatalf("oversize count = %d; want 1", got)
 	}
