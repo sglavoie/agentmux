@@ -430,6 +430,9 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	if err != nil {
 		return err
 	}
+	if err := revalidateUnusedCheckout(ctx, result, branch); err != nil {
+		return err
+	}
 	// Keep the sidecar until every Git step succeeds. A failed removal or
 	// branch deletion must remain discoverable and retryable by stable ID.
 	removeArgs := []string{"worktree", "remove"}
@@ -444,6 +447,20 @@ func removeGitWorktree(ctx context.Context, result Result) error {
 	case !info.IsDir():
 		return fmt.Errorf("worktree: unused checkout %s is not a directory", result.Path)
 	default:
+		operation, err := checkoutOperation(ctx, runGit, result.Path)
+		if err != nil {
+			return err
+		}
+		if operation != "" {
+			return fmt.Errorf("%w: finish or abort %s in %s first", ErrWorktreeBusy, operation, result.Path)
+		}
+		status, err := runGit(ctx, result.Path, gitProbeTimeout, statusArgs()...)
+		if err != nil {
+			return fmt.Errorf("%w: checking unused checkout status: %w", ErrGitUnavailable, err)
+		}
+		if len(status) != 0 {
+			return ErrWorktreeDirty
+		}
 		ignored, err := hasIgnoredFiles(ctx, runGit, result.Path)
 		if err != nil {
 			return fmt.Errorf("worktree: checking ignored files before removing unused checkout %s: %w", result.Path, err)
