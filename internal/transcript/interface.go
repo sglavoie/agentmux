@@ -62,14 +62,14 @@ type SessionMeta struct {
 	// entries, but unlike HiddenFromIndex it is re-derived on every parse, so
 	// the session reappears as soon as its first prompt is written.
 	Empty bool `json:"empty,omitempty"`
-	// SearchText is the lowercased concatenation of every message body
-	// in the transcript, joined by '\n', persisted so substring search
-	// can run entirely against the in-memory index without reopening
-	// the underlying JSONL file on every keystroke. Empty for entries
-	// written by older versions of amx; Search falls back to a live
-	// ReadMessages scan in that case.
-	SearchText      string `json:"search_text,omitempty"`
-	HiddenFromIndex bool   `json:"hidden_from_index,omitempty"`
+	// SearchText is the lowercased concatenation of every message body,
+	// joined by '\n'. It stays inline until its sidecar can be written;
+	// ordinary entries search the sidecar or fall back to ReadMessages.
+	SearchText string `json:"search_text,omitempty"`
+	// SearchTextPending keeps a failed sidecar update retryable. With empty
+	// SearchText, it records pending removal and overrides any old sidecar.
+	SearchTextPending bool `json:"search_text_pending,omitempty"`
+	HiddenFromIndex   bool `json:"hidden_from_index,omitempty"`
 }
 
 // Summary is what a list row says a session is about: the harness's title

@@ -120,9 +120,9 @@ func (i *Index) persistFilesystemLocked() (warning, persistErr error) {
 		return warning, persistErr
 	}
 	i.filesystemBase = cloneSessionEntries(i.entries)
-	// Inline search bodies remain dirty after a successful metadata write so a
-	// later mutation retries their sidecar migration. They are nevertheless
-	// present in filesystemBase because the metadata write retained them.
+	// Pending sidecar writes and removals remain dirty after a successful
+	// metadata write so a later mutation retries them. Their state is present
+	// in filesystemBase because the metadata write retained it.
 	i.filesystemDirty = sessionEntriesHaveInlineSearch(i.entries)
 	return warning, nil
 }
@@ -347,8 +347,9 @@ func (i *Index) setHiddenFilesystem(key string, hidden bool) error {
 			if err := i.DeleteSearchText(key); err != nil {
 				return errors.Join(warning, fmt.Errorf("removing transcript search sidecar %s: %w", i.SearchTextPath(key), err))
 			}
-			if entry.SearchText != "" {
+			if entry.SearchText != "" || entry.SearchTextPending {
 				entry.SearchText = ""
+				entry.SearchTextPending = false
 				i.filesystemDirty = true
 			}
 		}

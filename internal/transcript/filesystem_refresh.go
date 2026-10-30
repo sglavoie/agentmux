@@ -59,7 +59,7 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 		if cachePredatesRules(meta) {
 			return SessionMeta{}, false
 		}
-		if meta.SearchText != "" || meta.HiddenFromIndex || meta.MessageCount == 0 {
+		if meta.SearchText != "" || meta.SearchTextPending || meta.HiddenFromIndex || meta.MessageCount == 0 {
 			return meta, true
 		}
 		readable, err := i.store.Readable(IndexKey(meta.Harness, meta.ID))
@@ -179,24 +179,15 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 					meta.LastAt = existing.LastAt
 				}
 			}
-			if meta.SearchText != "" {
+			if meta.SearchText != "" || meta.SearchTextPending || rebuildSidecars || (exists && !sameCachedSource) {
 				if meta.HiddenFromIndex {
-					mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
-					meta.SearchText = ""
-				} else if err := i.WriteSearchText(key, meta.SearchText); err != nil {
-					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("writing transcript search sidecar %s: %w", key, err))
-					// Keep the new body with its metadata until saveLocked can
-					// migrate it. An older readable sidecar may still exist.
-				} else {
 					meta.SearchText = ""
 				}
-			} else if rebuildSidecars {
-				// A reparse with no searchable text leaves no sidecar behind.
-				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
-			} else if exists && !sameCachedSource {
-				// A changed source or parser with no searchable text must not
-				// retain either kind of sidecar from its previous interpretation.
-				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
+				// Keep failed updates with their metadata, including an empty
+				// corpus whose obsolete sidecar could not yet be removed.
+				if err := i.persistSearchText(key, &meta); err != nil {
+					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("updating transcript search sidecar %s: %w", key, err))
+				}
 			}
 			if !exists || !reflect.DeepEqual(existing, meta) {
 				i.entries[key] = meta
@@ -271,7 +262,7 @@ func applySessionDiff(target, current, base map[string]SessionMeta) {
 
 func sessionEntriesHaveInlineSearch(entries map[string]SessionMeta) bool {
 	for _, meta := range entries {
-		if meta.SearchText != "" {
+		if meta.SearchText != "" || meta.SearchTextPending {
 			return true
 		}
 	}

@@ -53,6 +53,7 @@ func (i *Index) pruneFilesystem(cfg *config.Config, now time.Time) (hidden int, 
 			}
 			meta.HiddenFromIndex = true
 			meta.SearchText = ""
+			meta.SearchTextPending = false
 			i.entries[key] = meta
 			i.filesystemDirty = true
 			hidden++

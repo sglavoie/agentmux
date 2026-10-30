@@ -18,16 +18,14 @@ var writeTranscriptIndex = cachefile.WriteFileAtomic
 // second reports whether the authoritative metadata write itself failed.
 func (i *Index) saveLocked() (warning, persistErr error) {
 	for key, meta := range i.entries {
-		if meta.SearchText == "" {
+		if meta.SearchText == "" && !meta.SearchTextPending {
 			continue
 		}
 		// The caller already holds i.mu, so persist directly through the
 		// sidecar store before writing the metadata cache.
-		if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+		if err := i.persistSearchText(key, &meta); err != nil {
 			warning = errors.Join(warning, fmt.Errorf("migrating transcript search sidecar %s: %w", key, err))
-			continue
 		}
-		meta.SearchText = ""
 		i.entries[key] = meta
 	}
 	data, err := json.MarshalIndent(indexFile{Entries: i.entries, Superseded: i.superseded}, "", "  ")

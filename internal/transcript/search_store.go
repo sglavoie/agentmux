@@ -36,6 +36,22 @@ func (i *Index) DeleteSearchText(key string) error {
 	return err
 }
 
+// persistSearchText clears pending state only after the sidecar matches the
+// current corpus. An empty pending corpus removes the obsolete sidecar.
+func (i *Index) persistSearchText(key string, meta *SessionMeta) error {
+	var err error
+	if meta.SearchText == "" {
+		err = i.DeleteSearchText(key)
+	} else {
+		err = i.WriteSearchText(key, meta.SearchText)
+	}
+	meta.SearchTextPending = err != nil
+	if err == nil {
+		meta.SearchText = ""
+	}
+	return err
+}
+
 // SearchStoreStats returns the number and total byte size of regular sidecar
 // files in the search store directory.
 func (i *Index) SearchStoreStats() (count int, size int64, err error) {

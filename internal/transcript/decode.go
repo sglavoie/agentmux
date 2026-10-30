@@ -95,14 +95,12 @@ func (i *Index) decodeEntries(dec *json.Decoder) error {
 func (i *Index) migrateLegacySearchText() error {
 	var warning error
 	for key, meta := range i.entries {
-		if meta.SearchText == "" {
+		if meta.SearchText == "" && !meta.SearchTextPending {
 			continue
 		}
-		if err := i.WriteSearchText(key, meta.SearchText); err != nil {
+		if err := i.persistSearchText(key, &meta); err != nil {
 			warning = errors.Join(warning, fmt.Errorf("migrating transcript search sidecar %s: %w", key, err))
-			continue
 		}
-		meta.SearchText = ""
 		i.entries[key] = meta
 	}
 	return warning
