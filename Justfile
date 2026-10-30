@@ -555,6 +555,11 @@ paired-release-gate asl_root signing_key="" tag="no":
 
     go run . "${args[@]}"
 
+# Bump patch/minor/major, commit, push, wait for CI, then publish (--dry-run checks prerequisites)
+[positional-arguments]
+ship bump *flags:
+    bash scripts/ship-release "$@"
+
 # The one-step release: everything paired-release-gate does with tag=yes, then
 # the desktop gate with --notarized over the same revision, then the pair tag
 # pushed to both repositories' origin and a GitHub release for Agent Mux with

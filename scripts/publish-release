@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # publish-release preflight AMX_ROOT ASL_ROOT SIGNING_KEY
+# publish-release prepare AMX_ROOT ASL_ROOT SIGNING_KEY NEXT_VERSION
 # publish-release publish AMX_ROOT PAIR_RECORD DESKTOP_RECORD
 #
 # The GitHub half of a release. The paired release gate decides whether a pair
@@ -14,6 +15,9 @@
 # is already on origin/main, this version has no release yet, and the app can
 # be built, signed with Developer ID, and notarized (release-gate.sh
 # toolchain --notarized).
+#
+# `prepare` checks the next version before ship-release writes its version
+# commit. Agent Mux may be ahead of origin/main; ASL must already be pushed.
 #
 # `publish` reads everything from the two evidence records, never from the
 # current checkout, and refuses a pair record that is not a signed pass naming
@@ -76,7 +80,7 @@ require_signing_env() {
 }
 
 preflight() {
-    local amx_root="$1" asl_root="$2" signing_key="$3"
+    local amx_root="$1" asl_root="$2" signing_key="$3" next_version="${4:-}"
     need gh
     need jq
     gh auth status >/dev/null 2>&1 || die "gh is not signed in (gh auth login)"
@@ -84,18 +88,25 @@ preflight() {
 
     local root
     for root in "$amx_root" "$asl_root"; do
-        [ -d "$root/.git" ] || die "$root is not a Git checkout"
+        [ "$(git -C "$root" rev-parse --is-inside-work-tree 2>/dev/null)" = true ] || die "$root is not a Git checkout"
         if [ -n "$(git -C "$root" status --porcelain)" ]; then
             die "$root has uncommitted changes"
         fi
-        require_on_origin_main "$root" "$(git -C "$root" rev-parse HEAD)"
+        if [ "$root" = "$amx_root" ] && [ -n "$next_version" ]; then
+            git -C "$root" fetch --quiet origin main
+            git -C "$root" merge-base --is-ancestor origin/main HEAD ||
+                die "$root is behind or diverged from origin/main; update main first"
+        else
+            require_on_origin_main "$root" "$(git -C "$root" rev-parse HEAD)"
+        fi
     done
 
-    local repo version
+    local repo version releases
     repo="$(gh_repo "$amx_root")"
-    version="$(version_at "$amx_root" HEAD)"
+    version="${next_version:-$(version_at "$amx_root" HEAD)}"
     [ -n "$version" ] || die "cannot read the version from cmd/root.go"
-    if gh release list --repo "$repo" --limit 1000 --json name --jq '.[].name' | grep -qxF "amx $version"; then
+    releases="$(gh release list --repo "$repo" --limit 1000 --json name --jq '.[].name')"
+    if grep -qxF "amx $version" <<< "$releases"; then
         die "$repo already has a release for amx $version; run just bump first"
     fi
     require_signing_env
@@ -232,6 +243,10 @@ publish() {
 }
 
 case "${1:-}" in
+    prepare)
+        [ "$#" -eq 5 ] || die "usage: publish-release prepare AMX_ROOT ASL_ROOT SIGNING_KEY NEXT_VERSION"
+        preflight "$2" "$3" "$4" "$5"
+        ;;
     preflight)
         [ "$#" -eq 4 ] || die "usage: publish-release preflight AMX_ROOT ASL_ROOT SIGNING_KEY"
         preflight "$2" "$3" "$4"
@@ -241,6 +256,6 @@ case "${1:-}" in
         publish "$2" "$3" "$4"
         ;;
     *)
-        die "usage: publish-release preflight|publish ..."
+        die "usage: publish-release prepare|preflight|publish ..."
         ;;
 esac

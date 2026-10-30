@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Bump, commit, push, wait for CI, then run the existing paired + desktop release.
+set -euo pipefail
+
+die() {
+    echo "ship-release: $*" >&2
+    exit 1
+}
+
+bump="${1:-}"
+case "$bump" in
+    patch|minor|major) shift ;;
+    *) die "usage: just ship patch|minor|major [--dry-run]" ;;
+esac
+dry_run=no
+if [ "${1:-}" = --dry-run ]; then
+    dry_run=yes
+    shift
+fi
+[ "$#" -eq 0 ] || die "usage: just ship patch|minor|major [--dry-run]"
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+for tool in git gh jq just; do
+    command -v "$tool" >/dev/null 2>&1 || die "$tool is required"
+done
+[ "$(git branch --show-current)" = main ] || die "switch to main before releasing"
+[ -z "$(git status --porcelain)" ] || die "commit or stash changes before releasing"
+
+source_file=cmd/root.go
+version="$(sed -n 's/^const version = "\(.*\)"$/\1/p' "$source_file")"
+[[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
+    die "invalid version in $source_file: $version"
+IFS=. read -r major minor patch <<< "$version"
+case "$bump" in
+    patch) next="$major.$minor.$((patch + 1))" ;;
+    minor) next="$major.$((minor + 1)).0" ;;
+    major) next="$((major + 1)).0.0" ;;
+esac
+
+asl_root="$(scripts/named-arg asl_root "${AMX_ASL_ROOT:-$root/../sglavoie_agent-session-loop}")"
+signing_key="$(scripts/named-arg signing_key "${AMX_RELEASE_SIGNING_KEY:-$HOME/.ssh/amx_release}")"
+if [ -z "${AMX_CODESIGN_IDENTITY:-}" ]; then
+    AMX_CODESIGN_IDENTITY="$(security find-identity -v -p codesigning |
+        sed -n 's/^ *[0-9][0-9]*) \([0-9A-F]\{40\}\) "Developer ID Application: .*/\1/p' | head -n 1)"
+fi
+export AMX_CODESIGN_IDENTITY
+export AMX_NOTARY_PROFILE="${AMX_NOTARY_PROFILE:-agentmux-notary}"
+
+# Check both repositories, GitHub, signing, Xcode and notarization before
+# writing a version commit. The future amx commit has not been pushed yet.
+original="$(git rev-parse HEAD)"
+scripts/publish-release prepare "$root" "$asl_root" "$signing_key" "$next"
+[ "$(git rev-parse HEAD)" = "$original" ] && [ -z "$(git status --porcelain)" ] ||
+    die "source changed during preflight; start again"
+
+echo "Release Agent Mux $version -> $next"
+echo "ASL checkout: $asl_root"
+echo "Evidence signing key: $signing_key"
+echo "This commits the version, pushes main, waits for CI, runs both release gates and publishes."
+if [ "$dry_run" = yes ]; then
+    echo "Dry run passed; no version commit, push, gates or publication performed."
+    exit 0
+fi
+
+committed=no
+gates_started=no
+finish() {
+    local status=$?
+    if [ "$status" -ne 0 ] && [ "$committed" = yes ]; then
+        echo "ship-release: release $next stopped; its version commit is preserved. Do not bump again to retry." >&2
+        if [ "$gates_started" = no ]; then
+            echo "Push main and let CI pass, then run:" >&2
+            printf '  just release %q %q\n' "$asl_root" "$signing_key" >&2
+        else
+            echo "Use the evidence records to continue from the failed stage; see docs/paired-releases.md#retrying-a-release." >&2
+        fi
+    fi
+}
+trap finish EXIT
+
+updated="$(sed "s/^const version = \"$version\"$/const version = \"$next\"/" "$source_file")"
+printf '%s\n' "$updated" > "$source_file"
+git add -- "$source_file"
+git commit -m "chore(release): amx $next" -- "$source_file"
+committed=yes
+revision="$(git rev-parse HEAD)"
+git push origin "$revision:refs/heads/main"
+
+# Match the exact push, rather than following an older or pull-request run.
+run=
+for _ in {1..30}; do
+    run="$(gh run list --workflow check.yml --commit "$revision" --branch main --event push \
+        --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+    [ -z "$run" ] || break
+    sleep 2
+done
+[ -n "$run" ] || die "CI has not appeared for $revision; check: gh run list --workflow check.yml"
+echo "Waiting for CI run $run"
+gh run watch "$run" --exit-status --interval 10
+
+[ "$(git rev-parse HEAD)" = "$revision" ] && [ -z "$(git status --porcelain)" ] ||
+    die "source changed while CI ran; release the checked revision from a clean tree"
+gates_started=yes
+just --justfile "$root/Justfile" release "$asl_root" "$signing_key"

@@ -336,14 +336,29 @@ touch it. Then re-run the gate.
 
 ## Publishing on GitHub
 
-The gates tag locally and push nothing. `just release` is the one step that
-runs both and publishes:
+Use `just ship` to bump the version and publish a release:
 
 ```bash
-just bump 0.9.0 && git commit -am "chore: Bump version to 0.9.0" && git push
-AMX_MAC_TEST_HOST=user@other-mac AMX_UI_TEST_REMOTE_ONLY=1 \
-  just release asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
+just ship patch --dry-run
+just ship patch                  # 0.8.0 -> 0.8.1
+just ship minor                  # 0.8.0 -> 0.9.0
+just ship major                  # 0.8.0 -> 1.0.0
 ```
+
+Run from a clean `main` that contains `origin/main`. The command checks the
+release prerequisites, updates `cmd/root.go`, commits the version, pushes
+`main`, waits for the successful push CI run on that exact commit, then runs
+`just release`. It installs both programs, restarts the daemon, runs both
+release gates, pushes their pair tags and publishes the notarized downloads.
+It preserves the existing pair tag scheme; it does not create `vX.Y.Z` tags.
+
+The defaults are the sibling `../sglavoie_agent-session-loop` checkout and
+the SSH evidence signing key `~/.ssh/amx_release`. Set `AMX_ASL_ROOT` and
+`AMX_RELEASE_SIGNING_KEY` to override them. The ASL checkout must be clean and
+its HEAD already on its `origin/main`; shipping does not commit or push ASL's
+branch. `--dry-run` checks GitHub, both checkouts and the signing/build
+prerequisites without changing the version, pushing, or running the gates.
+It still fetches `origin/main` in both checkouts.
 
 It needs a Developer ID Application identity in this Mac's keychain and a
 notary profile, stored once (`macos/README.md`, "Notarizing a release build"):
@@ -354,6 +369,26 @@ xcrun notarytool store-credentials agentmux-notary --apple-id you@example.com --
 
 `AMX_CODESIGN_IDENTITY` defaults to the keychain's first Developer ID
 Application identity and `AMX_NOTARY_PROFILE` to `agentmux-notary`.
+The SSH key signs the evidence records; it is separate from the Apple
+Developer ID certificate. To create it once if it does not exist:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/amx_release -C agentmux-release
+```
+
+To build and test on another Mac, set `AMX_MAC_TEST_HOST` and
+`AMX_UI_TEST_REMOTE_ONLY` as for `just mac-test`:
+
+```bash
+AMX_MAC_TEST_HOST=user@other-mac AMX_UI_TEST_REMOTE_ONLY=1 just ship patch
+```
+
+The gates tag locally and push nothing. To publish an already committed,
+pushed version without bumping it, use the lower-level command:
+
+```bash
+just release asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
+```
 
 `scripts/publish-release preflight` runs first and fails in seconds when `gh`
 is not signed in, either tree is dirty or its HEAD is not on `origin/main`, the
@@ -380,16 +415,29 @@ Gatekeeper). The standalone amx's signature changes the file, so it is tied
 to the record by Go build ID, as the bundled copy is. Everything is checked
 and amx is notarized before anything is pushed.
 
-It is re-runnable: when notarization, a push, or the upload fails after both
-gates passed, fix the cause and run
+### Retrying a release
+
+If shipping fails after the version commit, that commit is preserved. Do not
+run `just ship patch` again: it would bump another version. If the failure
+was in pushing `main` or waiting for CI, push `main`, let CI pass, then run
+`just release` with the paths above. If the paired gate failed before tagging,
+follow its evidence recovery instructions before rerunning it; an existing
+record may need to be moved aside.
+
+If the paired gate passed but the desktop gate failed, keep the pair's
+evidence record and tags. Fix the desktop failure and run
+`just mac-release-gate --notarized --signing-key ~/.ssh/amx_release`
+(move aside a previous failed desktop record if the gate requests it).
+Then publish using both evidence paths. When notarization, a tag push, or
+the upload fails after both gates passed, use the same command:
 
 ```bash
 just publish-release record=~/.local/share/agent-mux/release-evidence/<pair-id>.json \
   desktop_record=~/.local/share/agent-mux/release-evidence/<record-id>.json
 ```
 
-rather than the gates again. A tag already on `origin` is not pushed twice, and
-a release that already exists only has its assets replaced.
+The gates print their evidence paths. Publication is re-runnable: a release
+that already exists only has its assets replaced.
 
 ## Rolling back
 

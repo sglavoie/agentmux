@@ -28,6 +28,11 @@ The ASL integration is optional for normal development. Its cross-repository
 checks require a separate agent-session-loop checkout; describe any checks
 you could not run in your pull request.
 
+Maintainers can publish with `just ship patch`, `just ship minor`, or
+`just ship major`. Start with `just ship patch --dry-run` to check the
+prerequisites. See [publishing releases](docs/paired-releases.md#publishing-on-github)
+for signing setup, checkout defaults, and retry instructions.
+
 ## Submit a change
 
 - Keep each pull request focused and explain the problem and resulting behavior.
