@@ -332,27 +332,19 @@ final class WorkspaceGroupCellView: NSTableCellView {
         didSet { [nameLabel, countLabel, disclosureLabel].forEach { $0.chip = chipColor } }
     }
 
-    /// Attention is a clear heading, not a competing full-width highlight.
-    private func setWarning(_ enabled: Bool) {
-        layer?.backgroundColor = nil
-        nameLabel.textColor = enabled ? .labelColor : .secondaryLabelColor
-        countLabel.textColor = enabled ? .labelColor : .secondaryLabelColor
-        labelLeading.constant = 2
-    }
-
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
         wantsLayer = true
         layer?.cornerRadius = 6
-        disclosureLabel.textColor = .secondaryLabelColor
+        disclosureLabel.textColor = .labelColor
         disclosureLabel.isHidden = true
         nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        nameLabel.textColor = .secondaryLabelColor
+        nameLabel.textColor = .labelColor
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
-        countLabel.textColor = .systemOrange
+        countLabel.textColor = .labelColor
         // Source-list group rows replace textField's attributed text with
         // an 11-point heading style. Keep this custom-sized label independent
         // of that outlet; the cell exposes its own accessibility label below.
@@ -374,7 +366,6 @@ final class WorkspaceGroupCellView: NSTableCellView {
 
     /// A heading that is not a project: it counts nothing.
     func show(section title: String) {
-        setWarning(false)
         nameLabel.stringValue = title
         countLabel.stringValue = ""
         countLabel.toolTip = nil
@@ -388,24 +379,19 @@ final class WorkspaceGroupCellView: NSTableCellView {
     func show(_ group: WorkspaceGroup) {
         if group.needsAttention {
             show(section: group.project)
-            setWarning(true)
             countLabel.stringValue = String(group.rows.count)
             countLabel.toolTip = "\(group.rows.count) waiting on you"
             setAccessibilityLabel("\(group.project), \(group.rows.count) waiting")
             return
         }
-        setWarning(false)
         var label: String
         if group.isSectionHeading {
-            // A state section stays muted, like the other sections, and
-            // counts the sessions it holds rather than the waiting ones.
+            // A state section counts all the sessions it holds.
             nameLabel.stringValue = group.project
             countLabel.stringValue = String(group.sessions)
             countLabel.toolTip = group.sessions == 1 ? "1 session" : "\(group.sessions) sessions"
             label = "\(group.project), \(countLabel.toolTip ?? "")"
         } else {
-            // A project's name reads as a heading; the sections' stay muted.
-            nameLabel.textColor = .labelColor
             nameLabel.stringValue = group.project
             let waiting = group.attention
             countLabel.stringValue = waiting > 0 ? String(waiting) : ""
