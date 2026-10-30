@@ -68,18 +68,7 @@ func TestRunRecordsLifecycleAndJournalMaintenance(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	published := make(chan struct{})
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- run(ctx, cfg, runDependencies{afterStartupPublication: func() { close(published) }})
-	}()
-	select {
-	case <-published:
-	case err := <-runErr:
-		t.Fatalf("daemon exited before publication: %v", err)
-	case <-time.After(3 * time.Second):
-		t.Fatal("daemon did not publish")
-	}
+	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer shutdownCancel()
 	if err := ipc.NewClientWithSocket(ipc.SocketPath()).ShutdownAndWait(shutdownCtx); err != nil {
@@ -194,18 +183,7 @@ func TestActiveDaemonPromotesSpoolAtStartup(t *testing.T) {
 	}}}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	published := make(chan struct{})
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- run(ctx, cfg, runDependencies{afterStartupPublication: func() { close(published) }})
-	}()
-	select {
-	case <-published:
-	case err := <-runErr:
-		t.Fatalf("daemon exited before publication: %v", err)
-	case <-time.After(3 * time.Second):
-		t.Fatal("daemon did not publish")
-	}
+	runErr := startPublishedDaemon(t, ctx, cfg, runDependencies{})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		segments, globErr := filepath.Glob(filepath.Join(paths.JournalDir, "events-spool-*.jsonl"))
@@ -267,6 +245,7 @@ func TestRunShutdownPersistsQueuedStageRows(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- run(ctx, cfg, runDependencies{
+			startupProbeBudget: testLivenessGrace,
 			afterStartupPublication: func() {
 				resp, sendErr := ipc.NewClientWithSocket(ipc.SocketPath()).Send(protocol.Request{
 					Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit",

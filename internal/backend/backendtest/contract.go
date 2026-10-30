@@ -82,7 +82,8 @@ type launched struct {
 	pane   backend.Pane
 }
 
-// launch starts one agent and waits until discovery reports it.
+// launch starts one agent and waits until discovery reports its requested
+// working directory. A pane may appear before its child has finished chdir.
 func (c *contract) launch(t *testing.T, extra map[string]string) launched {
 	t.Helper()
 	n := markerSeq.Add(1)
@@ -102,7 +103,7 @@ func (c *contract) launch(t *testing.T, extra map[string]string) launched {
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
-	l.pane = c.waitPane(t, l.id, func(backend.Pane) bool { return true })
+	l.pane = c.waitPane(t, l.id, func(p backend.Pane) bool { return samePath(p.CWD, c.Directory) })
 	return l
 }
 

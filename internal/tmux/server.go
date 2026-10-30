@@ -356,14 +356,25 @@ func (s *Server) instance(pid, start string) runtimesession.BackendInstance {
 	}
 }
 
-// Kill stops the whole server and every agent in it. Killing a server that is
-// not running is not an error.
+// Kill stops the whole server and every agent in it, then waits up to one
+// client timeout for the socket to stop accepting connections. Launches share
+// the start lock so a new server cannot appear during that wait. Killing a
+// server that is not running is not an error.
 func (s *Server) Kill() error {
-	_, err := s.run([]string{"kill-server"})
-	if errors.Is(err, ErrServerNotRunning) {
+	return cachefile.WithExclusive(filepath.Join(s.dir, "server-start"), func() error {
+		_, err := s.run([]string{"kill-server"})
+		if err != nil && !errors.Is(err, ErrServerNotRunning) {
+			return err
+		}
+		deadline := time.Now().Add(s.timeout)
+		for Listening(s.socket) {
+			if !time.Now().Before(deadline) {
+				return fmt.Errorf("tmux: waiting for server at %s to stop: %w", s.socket, context.DeadlineExceeded)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		return nil
-	}
-	return err
+	})
 }
 
 // starting runs fn, a client invocation that may start the server, and

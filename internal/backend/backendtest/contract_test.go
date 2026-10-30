@@ -26,6 +26,34 @@ func TestContractAcceptsCoreOnlyBackend(t *testing.T) {
 	})
 }
 
+// A newly forked pane can be discoverable before its child has changed out
+// of the server's directory. The contract must observe launch readiness.
+func TestContractWaitsForTheLaunchedWorkingDirectory(t *testing.T) {
+	Run(t, func(t *testing.T) Harness {
+		return Harness{
+			Backend:   &startingBackend{Backend: &coreOnly{}},
+			Directory: t.TempDir(),
+			EchoArgv:  func(marker string) []string { return []string{"echo", marker} },
+		}
+	})
+}
+
+type startingBackend struct {
+	backend.Backend
+	observed bool
+}
+
+func (b *startingBackend) Discover() ([]backend.Pane, error) {
+	panes, err := b.Backend.Discover()
+	if len(panes) > 0 && !b.observed {
+		b.observed = true
+		for i := range panes {
+			panes[i].CWD = "/server-startup-directory"
+		}
+	}
+	return panes, err
+}
+
 type memPane struct {
 	group, pane string
 	title, cwd  string

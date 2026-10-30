@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/testutil"
 )
 
 // The gate's promise is a ceiling: however many callers ask at once, no more
@@ -124,6 +125,12 @@ func TestConcurrentCapturesStayWithinTheClientLimit(t *testing.T) {
 	for i := range refs {
 		marker := fmt.Sprintf("gate-%02d", i)
 		refs[i] = f.launch(t, marker, echoArgv(marker), nil).Pane
+		// Launch creates the pane before its program necessarily prints.
+		// Start measuring concurrent reads only once each fixture is ready.
+		testutil.Eventually(t, "the pane's output marker", func() bool {
+			text, err := f.backend.Capture(refs[i], backend.ExtentScreen)
+			return err == nil && strings.Contains(text, marker)
+		})
 	}
 
 	before := Stats()
