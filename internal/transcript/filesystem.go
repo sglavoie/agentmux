@@ -25,11 +25,7 @@ func (e *indexDecodeError) Unwrap() error { return e.err }
 
 var quarantineTranscriptIndex = cachefile.Quarantine
 
-// removeTranscriptSearchStore is a test seam for verifying that rebuilds
-// reset disposable sidecars while holding the cache advisory lock.
-var removeTranscriptSearchStore = os.RemoveAll
-
-// removeTranscriptSearchSidecar is a test seam for verifying that compact
+// removeTranscriptSearchSidecar is a test seam for verifying that maintenance
 // prunes individual orphan sidecars while holding the cache advisory lock.
 var removeTranscriptSearchSidecar = os.Remove
 
@@ -264,31 +260,39 @@ func (i *Index) compactFilesystem() (result filesystemCompactResult, err error) 
 			result.Warning = errors.Join(result.Warning, reloadWarning)
 		}
 
-		keys := make([]string, 0, len(i.entries))
-		for key := range i.entries {
-			keys = append(keys, key)
-		}
-		inventory, inventoryErr := i.store.Inventory(keys)
-		if inventoryErr != nil {
-			return inventoryErr
-		}
-		for _, orphan := range inventory.Orphans {
-			info, statErr := os.Lstat(orphan.Path)
-			if statErr != nil {
-				return fmt.Errorf("checking orphan transcript search sidecar %s: %w", orphan.Path, statErr)
-			}
-			if !info.Mode().IsRegular() {
-				return fmt.Errorf("orphan transcript search sidecar %s is no longer a regular file", orphan.Path)
-			}
-			if removeErr := removeTranscriptSearchSidecar(orphan.Path); removeErr != nil {
-				return fmt.Errorf("removing orphan transcript search sidecar %s: %w", orphan.Path, removeErr)
-			}
-			result.RemovedOrphanSidecars++
-			result.RemovedOrphanSidecarSize += info.Size()
-		}
-		return nil
+		var removeErr error
+		result.RemovedOrphanSidecars, result.RemovedOrphanSidecarSize, removeErr = i.removeOrphanSearchSidecarsLocked()
+		return removeErr
 	})
 	return result, err
+}
+
+// removeOrphanSearchSidecarsLocked requires both the advisory lock and i.mu.
+// Call only after metadata is persisted, so reachability matches the disk cache.
+func (i *Index) removeOrphanSearchSidecarsLocked() (removed int, size int64, err error) {
+	keys := make([]string, 0, len(i.entries))
+	for key := range i.entries {
+		keys = append(keys, key)
+	}
+	inventory, err := i.store.Inventory(keys)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, orphan := range inventory.Orphans {
+		info, statErr := os.Lstat(orphan.Path)
+		if statErr != nil {
+			return removed, size, fmt.Errorf("checking orphan transcript search sidecar %s: %w", orphan.Path, statErr)
+		}
+		if !info.Mode().IsRegular() {
+			return removed, size, fmt.Errorf("orphan transcript search sidecar %s is no longer a regular file", orphan.Path)
+		}
+		if removeErr := removeTranscriptSearchSidecar(orphan.Path); removeErr != nil {
+			return removed, size, fmt.Errorf("removing orphan transcript search sidecar %s: %w", orphan.Path, removeErr)
+		}
+		removed++
+		size += info.Size()
+	}
+	return removed, size, nil
 }
 
 func (i *Index) deleteFilesystem(key string, alsoFile bool) error {

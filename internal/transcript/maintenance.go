@@ -168,8 +168,8 @@ func Rebuild(path string, cfg *config.Config, readers map[string]Reader, include
 	if includeAll {
 		refreshCfg.Defaults.SessionArchive.ScanMaxAgeDays = -1
 	}
-	// rebuildFilesystem reparses every source, then resets and rewrites the
-	// sidecar store inside the same cachefile.WithExclusive section.
+	// rebuildFilesystem replaces reparsed sidecars and prunes orphans under
+	// the cache advisory lock, preserving search text for sources it missed.
 	if err := idx.rebuildFilesystem(&refreshCfg, readers); err != nil {
 		return RebuildResult{}, err
 	}

@@ -185,7 +185,7 @@ func TestRebuildRepairsBlankCachedCurrentCodexTranscript(t *testing.T) {
 	}
 }
 
-func TestRebuildRemovesSidecarsWhileHoldingAdvisoryLock(t *testing.T) {
+func TestRebuildRemovesOrphanSidecarsWhileHoldingAdvisoryLock(t *testing.T) {
 	cfg, readers, _ := filesystemTranscriptFixture(t)
 	path := filepath.Join(t.TempDir(), "transcripts.json")
 	idx, err := LoadIndexAt(path)
@@ -197,8 +197,11 @@ func TestRebuildRemovesSidecarsWhileHoldingAdvisoryLock(t *testing.T) {
 	}
 
 	removedUnderLock := false
-	originalRemove := removeTranscriptSearchStore
-	removeTranscriptSearchStore = func(dir string) error {
+	if err := idx.WriteSearchText(IndexKey(harness.Claude, "orphan"), "orphan body"); err != nil {
+		t.Fatal(err)
+	}
+	originalRemove := removeTranscriptSearchSidecar
+	removeTranscriptSearchSidecar = func(sidecar string) error {
 		lockFile, openErr := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 		if openErr != nil {
 			return openErr
@@ -213,15 +216,15 @@ func TestRebuildRemovesSidecarsWhileHoldingAdvisoryLock(t *testing.T) {
 			return lockErr
 		}
 		removedUnderLock = true
-		return os.RemoveAll(dir)
+		return os.Remove(sidecar)
 	}
-	t.Cleanup(func() { removeTranscriptSearchStore = originalRemove })
+	t.Cleanup(func() { removeTranscriptSearchSidecar = originalRemove })
 
 	if _, err := Rebuild(path, cfg, readers, true); err != nil {
 		t.Fatalf("Rebuild: %v", err)
 	}
 	if !removedUnderLock {
-		t.Fatal("Rebuild did not reset search sidecars")
+		t.Fatal("Rebuild did not remove orphan search sidecars")
 	}
 }
 

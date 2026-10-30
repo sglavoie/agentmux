@@ -138,14 +138,9 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			i.superseded = cloneSupersededSegments(supersededNow)
 			i.filesystemDirty = true
 		}
-		// A rebuild that scanned everything resets the whole sidecar store. One
-		// bounded by the scan age resets only what it reparsed (below): the
-		// sessions it did not reach keep the sidecars they still match.
-		if rebuildSidecars && cutoff.IsZero() {
-			if err := removeTranscriptSearchStore(i.SearchStoreDir()); err != nil {
-				return fmt.Errorf("removing transcript search sidecars: %w", err)
-			}
-		}
+		// Rebuild sidecars individually. Even an unbounded scan can miss a
+		// cached session when a profile was removed, discovery failed, or its
+		// source changed mid-scan. Its last searchable body must survive.
 		for key, meta := range i.entries {
 			classified := classifySessionProject(meta, cfg, projectResolver)
 			if reflect.DeepEqual(classified, meta) {
@@ -195,7 +190,7 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 				} else {
 					meta.SearchText = ""
 				}
-			} else if rebuildSidecars && !cutoff.IsZero() {
+			} else if rebuildSidecars {
 				// A reparse with no searchable text leaves no sidecar behind.
 				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
 			} else if exists && !sameCachedSource {
@@ -208,11 +203,19 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 				i.filesystemDirty = true
 			}
 		}
-		if !i.filesystemDirty {
-			return nil
+		if i.filesystemDirty {
+			persistWarning, persistErr := i.persistFilesystemLocked()
+			mergeWarning = errors.Join(mergeWarning, persistWarning, persistErr)
+			if persistErr != nil {
+				return nil
+			}
 		}
-		persistWarning, persistErr := i.persistFilesystemLocked()
-		mergeWarning = errors.Join(mergeWarning, persistWarning, persistErr)
+		if rebuildSidecars && cutoff.IsZero() {
+			// Preserve sidecars referenced by the latest metadata, including
+			// sessions added concurrently while discovery was running.
+			_, _, err := i.removeOrphanSearchSidecarsLocked()
+			return err
+		}
 		return nil
 	})
 	return errors.Join(loadWarning, discoveryWarning, mergeWarning, lockErr)
