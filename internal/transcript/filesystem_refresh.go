@@ -166,9 +166,14 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			if !discoveredMetaStillFresh(meta) {
 				continue
 			}
+			// An empty corpus can be a fresh parse. Only reuse old fields or
+			// sidecars when the source and parser generation still match.
+			sameCachedSource := exists && !rebuildSidecars &&
+				existing.Path == meta.Path && existing.ReaderVersion == meta.ReaderVersion &&
+				existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime)
 			if exists {
 				meta.HiddenFromIndex = existing.HiddenFromIndex
-				if meta.SearchText == "" && existing.FileSize == meta.FileSize && existing.FileModTime.Equal(meta.FileModTime) {
+				if meta.SearchText == "" && sameCachedSource {
 					// Preserve the cached representation as well as the instant.
 					// JSON round trips can replace time.Local with time.UTC (or a
 					// fixed zone), which is Equal but not reflect.DeepEqual.
@@ -193,9 +198,9 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			} else if rebuildSidecars && !cutoff.IsZero() {
 				// A reparse with no searchable text leaves no sidecar behind.
 				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
-			} else if exists && (existing.FileSize != meta.FileSize || !existing.FileModTime.Equal(meta.FileModTime)) {
-				// A changed transcript with no searchable text must not retain
-				// either a legacy or source-aware sidecar from its old contents.
+			} else if exists && !sameCachedSource {
+				// A changed source or parser with no searchable text must not
+				// retain either kind of sidecar from its previous interpretation.
 				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
 			}
 			if !exists || !reflect.DeepEqual(existing, meta) {

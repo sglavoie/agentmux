@@ -179,6 +179,26 @@ func TestReviewLeavesTheIndexAlone(t *testing.T) {
 	}
 }
 
+func TestReviewKeepsBlankContextLineMarkersDespiteGitDisplaySettings(t *testing.T) {
+	t.Parallel()
+	dir, git, write := reviewFixture(t)
+	write("tracked", "before\n\nunchanged\nbefore again\n")
+	git("add", "tracked")
+	git("-c", "commit.gpgsign=false", "commit", "-qm", "blank context")
+	git("config", "diff.suppressBlankEmpty", "true")
+	write("tracked", "after\n\nunchanged\nafter again\n")
+
+	got, err := ReadChanges(context.Background(), dir, "HEAD", "tracked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The native viewer consumes a line number for each context marker.
+	// Omitting the marker on a blank line shifts every following line.
+	if !strings.Contains(got.Patch, "+after\n \n unchanged\n-before again\n+after again\n") {
+		t.Fatalf("patch lost the blank context marker: %q", got.Patch)
+	}
+}
+
 func TestReviewShowsSubmoduleChangesDespiteGitDisplaySettings(t *testing.T) {
 	t.Parallel()
 	for _, setting := range []string{"diff.ignoreSubmodules", "submodule.child.ignore"} {

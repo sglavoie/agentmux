@@ -56,7 +56,9 @@ func reviewGit(ctx context.Context, dir string, args ...string) ([]byte, bool, e
 	// under index.lock whatever --no-optional-locks says, which can fail an
 	// agent's own commit in the same checkout; diff.autoRefreshIndex=false
 	// stops the write and changes no output.
-	full := append([]string{"--no-optional-locks", "-c", "diff.autoRefreshIndex=false", "--literal-pathspecs", "-C", dir}, args...)
+	// The native parser needs a context marker even for blank lines so it
+	// can keep old/new line numbers aligned with the hunk header.
+	full := append([]string{"--no-optional-locks", "-c", "diff.autoRefreshIndex=false", "-c", "diff.suppressBlankEmpty=false", "--literal-pathspecs", "-C", dir}, args...)
 	// #nosec G204 -- argv contains git operations and literal selectors, never shell code.
 	cmd := exec.CommandContext(ctx, "git", full...)
 	var out, stderr reviewBuffer
