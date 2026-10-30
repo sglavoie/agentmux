@@ -51,7 +51,8 @@ func (r *searchRepairs) persist() error {
 			// A search may return its original snapshot, but must not restore
 			// a deleted sidecar or overwrite another generation's corpus.
 			if !exists || latest.DirPath != meta.DirPath || latest.Size != meta.Size ||
-				!latest.ModTime.Equal(meta.ModTime) || !equalStrings(latest.Files, meta.Files) {
+				!latest.ModTime.Equal(meta.ModTime) || !equalStrings(latest.Files, meta.Files) ||
+				latest.FileFingerprint != meta.FileFingerprint {
 				continue
 			}
 			warning = errors.Join(warning, idx.store.Write(key, repair.text))

@@ -249,9 +249,16 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 			mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
 		}
 		for key, meta := range discovered {
-			_, exists := i.entries[key]
-			if _, existedAtSnapshot := snapshot[key]; existedAtSnapshot && !exists {
+			current, exists := i.entries[key]
+			previous, existedAtSnapshot := snapshot[key]
+			if existedAtSnapshot && !exists {
 				mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
+				continue
+			}
+			// A concurrent refresh may have added files the scan never saw.
+			// Checking only the scanned paths cannot detect that addition, so
+			// leave any entry changed since the snapshot to its newer writer.
+			if exists && (!existedAtSnapshot || !reflect.DeepEqual(current, previous)) {
 				continue
 			}
 			if !planMetaStillFresh(meta) {
@@ -293,15 +300,20 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 func planMetaStillFresh(meta PlanMeta) bool {
 	var size int64
 	var latest int64
+	var files []planFileInfo
 	for _, rel := range meta.Files {
 		info, err := os.Stat(filepath.Join(meta.DirPath, rel))
 		if err != nil || !info.Mode().IsRegular() {
 			return false
 		}
+		files = append(files, planFileInfo{rel: rel, size: info.Size(), mod: info.ModTime()})
 		size += info.Size()
 		if nanos := info.ModTime().UnixNano(); nanos > latest {
 			latest = nanos
 		}
+	}
+	if meta.FileFingerprint != "" {
+		return planFileFingerprint(files) == meta.FileFingerprint
 	}
 	return size == meta.Size && latest == meta.ModTime.UnixNano()
 }

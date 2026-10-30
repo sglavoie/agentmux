@@ -29,6 +29,10 @@ type PlanMeta struct {
 	ModTime    time.Time `json:"mod_time"`
 	Snippet    string    `json:"snippet"`
 	SearchText string    `json:"-"`
+
+	// FileFingerprint tracks each file's path, size, and modification time.
+	// Older caches omit it and are rebuilt on their next refresh.
+	FileFingerprint string `json:"file_fingerprint,omitempty"`
 }
 
 // ProjectNames returns every configured project tied for the most-specific

@@ -158,12 +158,7 @@ func (i *Index) Refresh(root string, projects ...config.Session) error {
 // rebuilt and must be written by the caller after its merge-time freshness
 // check.
 func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolver) (*PlanMeta, bool, error) {
-	type fileInfo struct {
-		rel  string
-		size int64
-		mod  time.Time
-	}
-	var files []fileInfo
+	var files []planFileInfo
 	walkErr := filepath.WalkDir(planDir, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -195,7 +190,7 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		files = append(files, fileInfo{rel: rel, size: info.Size(), mod: info.ModTime()})
+		files = append(files, planFileInfo{rel: rel, size: info.Size(), mod: info.ModTime()})
 		return nil
 	})
 	if len(files) == 0 {
@@ -217,19 +212,20 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 		}
 		rels = append(rels, f.rel)
 	}
+	fingerprint := planFileFingerprint(files)
 
 	displayName := DisplayName(filepath.Base(planDir))
 	cwd, associationErr := discoverPlanCWD(planDir, i.stateRoot)
 
-	// Cache hit: identical file list, aggregate size, and mtime means
-	// the corpus matches the cached snapshot. Reuse the cached snippet
-	// and skip the per-file read + sidecar rewrite when the search
-	// sidecar still exists; otherwise fall through to rebuild it.
+	// Cache hit: every file's path, size, and mtime matches the snapshot.
+	// Aggregate size and newest mtime can hide edits to an older sibling.
+	// Reuse the cached snippet and skip the per-file read + sidecar rewrite
+	// when the search sidecar still exists; otherwise fall through to rebuild it.
 	cached, cachedOK := i.entries[PlanKey(planDir)]
 	if associationErr != nil && cachedOK {
 		return &cached, false, associationErr
 	}
-	if cachedOK && walkErr == nil && equalStrings(cached.Files, rels) && cached.Size == size && cached.ModTime.Equal(modTime) && i.sidecarExists(PlanKey(planDir)) {
+	if cachedOK && walkErr == nil && cached.FileFingerprint == fingerprint && i.sidecarExists(PlanKey(planDir)) {
 		cached.Files = rels
 		cached.Name = displayName
 		cached.DirPath = planDir
@@ -243,6 +239,7 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 	var manifestSnippet, firstSnippet string
 	var readWarning error
 	var readableFiles []string
+	var readableInfos []planFileInfo
 	var readableSize int64
 	var readableModTime time.Time
 	for _, f := range files {
@@ -256,6 +253,7 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 			continue
 		}
 		readableFiles = append(readableFiles, f.rel)
+		readableInfos = append(readableInfos, f)
 		readableSize += f.size
 		if f.mod.After(readableModTime) {
 			readableModTime = f.mod
@@ -280,14 +278,15 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 	}
 
 	meta := &PlanMeta{
-		Name:       displayName,
-		DirPath:    planDir,
-		Files:      rels,
-		Size:       size,
-		ModTime:    modTime,
-		Snippet:    snippet,
-		SearchText: searchBuilder.String(),
-		CWD:        cwd,
+		Name:            displayName,
+		DirPath:         planDir,
+		Files:           rels,
+		FileFingerprint: fingerprint,
+		Size:            size,
+		ModTime:         modTime,
+		Snippet:         snippet,
+		SearchText:      searchBuilder.String(),
+		CWD:             cwd,
 	}
 	*meta = classifyPlanProject(*meta, resolver)
 	if walkErr != nil || readWarning != nil {
@@ -295,6 +294,7 @@ func (i *Index) refreshPlanLocked(planDir string, resolver projectresolve.Resolv
 			return &cached, false, errors.Join(walkErr, readWarning)
 		}
 		meta.Files = readableFiles
+		meta.FileFingerprint = planFileFingerprint(readableInfos)
 		meta.Size = readableSize
 		meta.ModTime = readableModTime
 		return meta, true, errors.Join(walkErr, readWarning, associationErr)
