@@ -211,8 +211,8 @@ func firstMatchLine(text string, pos int) string {
 	return textutil.Snippet(line, snippetMaxLen)
 }
 
-// SortResults orders rs in place according to mode. Output is stable so
-// tests and the TUI list see deterministic ordering on every call.
+// SortResults orders rs in place according to mode, then by path for equal
+// ranks so the TUI list has deterministic ordering on every call.
 func SortResults(rs []Result, mode SortMode) {
 	switch mode {
 	case SortByModTime:
@@ -220,14 +220,20 @@ func SortResults(rs []Result, mode SortMode) {
 			if !rs[a].Meta.ModTime.Equal(rs[b].Meta.ModTime) {
 				return rs[a].Meta.ModTime.After(rs[b].Meta.ModTime)
 			}
-			return rs[a].Matches > rs[b].Matches
+			if rs[a].Matches != rs[b].Matches {
+				return rs[a].Matches > rs[b].Matches
+			}
+			return rs[a].Meta.DirPath < rs[b].Meta.DirPath
 		})
 	default:
 		sort.SliceStable(rs, func(a, b int) bool {
 			if rs[a].Matches != rs[b].Matches {
 				return rs[a].Matches > rs[b].Matches
 			}
-			return rs[a].Meta.ModTime.After(rs[b].Meta.ModTime)
+			if !rs[a].Meta.ModTime.Equal(rs[b].Meta.ModTime) {
+				return rs[a].Meta.ModTime.After(rs[b].Meta.ModTime)
+			}
+			return rs[a].Meta.DirPath < rs[b].Meta.DirPath
 		})
 	}
 }

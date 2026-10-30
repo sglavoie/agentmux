@@ -107,7 +107,8 @@ func (i *Index) Get(key string) (PlanMeta, bool) {
 }
 
 // List returns a copy of every entry, sorted by ModTime descending so
-// the most recently touched plan appears first.
+// the most recently touched plan appears first. Tied timestamps are ordered by
+// path so repeated reads of the map cannot shuffle the visible rows.
 func (i *Index) List() []PlanMeta {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -116,6 +117,9 @@ func (i *Index) List() []PlanMeta {
 		out = append(out, meta)
 	}
 	sort.Slice(out, func(a, b int) bool {
+		if out[a].ModTime.Equal(out[b].ModTime) {
+			return out[a].DirPath < out[b].DirPath
+		}
 		return out[a].ModTime.After(out[b].ModTime)
 	})
 	return out

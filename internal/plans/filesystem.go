@@ -284,10 +284,13 @@ func (i *Index) refreshFilesystem(root string, projects []config.Session) error 
 			i.entries[key] = meta
 			i.filesystemDirty = true
 		}
-		// Remove only paths proven absent. Permission and transient stat
-		// failures preserve the last-good row and its sidecar.
+		// Remove only paths proven absent or no longer real directories.
+		// Discovery skips regular files and symlinks, so their old corpus
+		// must not survive a directory being replaced at the same path.
+		// Permission and transient stat failures preserve the last-good row.
 		for key, meta := range i.entries {
-			if _, statErr := os.Stat(meta.DirPath); errors.Is(statErr, fs.ErrNotExist) {
+			info, statErr := os.Lstat(meta.DirPath)
+			if errors.Is(statErr, fs.ErrNotExist) || (statErr == nil && !info.IsDir()) {
 				delete(i.entries, key)
 				i.filesystemDirty = true
 				mergeWarning = errors.Join(mergeWarning, i.store.Delete(key))
