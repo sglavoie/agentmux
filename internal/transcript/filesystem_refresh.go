@@ -182,10 +182,14 @@ func (i *Index) refreshFilesystemWithOptions(cfg *config.Config, readers map[str
 			if meta.SearchText != "" {
 				if meta.HiddenFromIndex {
 					mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))
+					meta.SearchText = ""
 				} else if err := i.WriteSearchText(key, meta.SearchText); err != nil {
 					mergeWarning = errors.Join(mergeWarning, fmt.Errorf("writing transcript search sidecar %s: %w", key, err))
+					// Keep the new body with its metadata until saveLocked can
+					// migrate it. An older readable sidecar may still exist.
+				} else {
+					meta.SearchText = ""
 				}
-				meta.SearchText = ""
 			} else if rebuildSidecars && !cutoff.IsZero() {
 				// A reparse with no searchable text leaves no sidecar behind.
 				mergeWarning = errors.Join(mergeWarning, i.DeleteSearchText(key))

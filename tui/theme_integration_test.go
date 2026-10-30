@@ -11,7 +11,9 @@ import (
 )
 
 func TestTerminalBackgroundUpdatesExistingDashboardAndFooterStyles(t *testing.T) {
-	t.Parallel()
+	// Appearance is shared by every renderer in this process. Run this test
+	// before parallel rendering tests so it cannot change their colors between
+	// equivalent renders (the atomic palette is race-free but still global).
 
 	theme.Configure("auto")
 	t.Cleanup(func() { theme.Configure("auto") })

@@ -339,6 +339,12 @@ const (
 // readSearchCorpus reuses decoded sidecars between keystrokes. A changed
 // transcript metadata generation or sidecar write invalidates the cached text.
 func (i *Index) readSearchCorpus(key string, meta SessionMeta, source string) (string, bool, error) {
+	// A failed sidecar write leaves the current corpus inline with its
+	// metadata. Neither the old sidecar nor a decoded cache of it is current;
+	// source-filtered searches can use this body to decide whether to reparse.
+	if meta.SearchText != "" {
+		return meta.SearchText, false, nil
+	}
 	if text, sourceAware, ok := i.searchCache.getSource(key, meta, source); ok {
 		return text, sourceAware, nil
 	}

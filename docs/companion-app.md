@@ -303,6 +303,9 @@ Whatever has the keyboard decides where a key goes.
   lists them, top to bottom: ⌘1 is the first session and ⌘0 the tenth.
   Their items in the Session menu name the session each goes to, and are
   greyed out past the last one.
+  Visible sessions take the digits first, including while rows are held in
+  place during hover, a menu, or a drag. Sessions in collapsed groups follow
+  the visible ones; choosing one expands its group.
   Shells and other opened views are not counted. **⌘]** and **⌘[** step to
   the next and the previous session or terminal under one, wrapping. **⌘⇧→**
   and **⌘⇧←** do the same; **⌘⇧]**
@@ -338,7 +341,7 @@ Whatever has the keyboard decides where a key goes.
   (or **Unpin Session**, when it is pinned) does it for the session shown. Pinned sessions are listed in the
   order they were pinned and can be dragged among themselves; **Unpin** puts
   one back under its project. The digits, the next-attention shortcut, and
-  the inspector follow the list, so the first pinned session is ⌘1. Pins are
+  the inspector follow the list, so the first visible pinned session is ⌘1. Pins are
   kept across launches, and any session can be pinned, a Kitty one too.
   The order sessions were dragged into within a project is kept too; a
   session that ended, or a project with none left, is dropped from it once

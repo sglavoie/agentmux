@@ -108,6 +108,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var dragged: Place?
     var sidebarMenuOpen = false
     var items: [Item] = []
+    /// Visible sessions in physical sidebar order, followed by sessions in
+    /// collapsed groups. Shared by digit labels, menu titles, and actions.
+    var sessionShortcutRows: [WorkspaceRow] = []
     var content: Content = .empty
     /// Whether the window is on screen; terminals exist only while it is.
     private(set) var isOpen = false

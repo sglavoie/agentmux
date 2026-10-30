@@ -32,6 +32,18 @@ extension WorkspaceWindowController {
         if !allowReorder, !items.isEmpty, holdingHover || sidebarMenuOpen || dragged != nil {
             wanted = Self.holdingSidebar(items, latest: wanted)
         }
+        // Held rows can have a different order from the latest state. Number
+        // the physical rows, using current values and omitting ended sessions.
+        // Collapsed sessions remain reachable after the visible ones, without
+        // leaving gaps in the digits displayed on screen.
+        let liveRows = state.rows
+        let byKey = Dictionary(liveRows.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        let visible = wanted.compactMap { item -> WorkspaceRow? in
+            guard case let .row(row) = item else { return nil }
+            return byKey[row.key]
+        }
+        let visibleKeys = Set(visible.map(\.key))
+        sessionShortcutRows = visible + liveRows.filter { !visibleKeys.contains($0.key) }
         let dimmed: CGFloat = state.current ? 1 : 0.5
         let decorations = wanted.map(decoration)
         let ended = IndexSet(wanted.indices.filter { index in

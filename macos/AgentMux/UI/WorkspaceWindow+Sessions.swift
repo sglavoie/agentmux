@@ -608,10 +608,10 @@ extension WorkspaceWindowController {
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer
     /// sessions are listed. A Kitty row stays in the app unless `raising`.
-    /// The sessions of a collapsed project or state section keep their
-    /// places, so going to one expands what holds it.
+    /// Sessions in collapsed groups follow the visible ones; going to one
+    /// expands what holds it.
     func selectSession(at index: Int, raising: Bool = false) {
-        let rows = state.rows
+        let rows = sessionShortcutRows
         guard rows.indices.contains(index) else { return }
         let row = rows[index]
         expandGroups(of: row.key)
@@ -627,7 +627,7 @@ extension WorkspaceWindowController {
     /// Whether the session at `index` in sidebar order lives in Kitty, which
     /// ⌘⇧ and that digit bring forward there.
     func sessionIsInKitty(at index: Int) -> Bool {
-        let rows = state.rows
+        let rows = sessionShortcutRows
         guard rows.indices.contains(index), case .kitty = rows[index].target else { return false }
         return true
     }
@@ -647,7 +647,7 @@ extension WorkspaceWindowController {
     /// The name of the session at `index` in sidebar order, which ⌘ and
     /// that digit go to; nil when fewer sessions are listed.
     func sessionName(at index: Int) -> String? {
-        let rows = state.rows
+        let rows = sessionShortcutRows
         return rows.indices.contains(index) ? rows[index].displayName : nil
     }
 
@@ -662,7 +662,7 @@ extension WorkspaceWindowController {
     /// The digit that goes to a session with ⌘, which its line shows; nil
     /// past the tenth, which has none.
     func sessionKey(of key: AttentionCycler.Key) -> String? {
-        guard let index = state.rows.firstIndex(where: { $0.key == key }),
+        guard let index = sessionShortcutRows.firstIndex(where: { $0.key == key }),
               WorkspaceMenu.sessionKeys.indices.contains(index) else { return nil }
         return WorkspaceMenu.sessionKeys[index]
     }

@@ -157,6 +157,8 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(try index(of: key), before)
         guard case let .row(updated) = workspace.items[before] else { return XCTFail("Lost held row") }
         XCTAssertTrue(updated.needsAttention, "Held position must still show current attention")
+        XCTAssertEqual(workspace.sessionKey(of: key), "1", "hover keeps the digit with the physical row")
+        XCTAssertEqual(workspace.sessionName(at: 0), updated.displayName)
         workspace.menuWillOpen(NSMenu())
         workspace.sidebar.mouseExited(with: entered)
         XCTAssertEqual(try index(of: key), before, "Open menu must retain its target")
@@ -936,18 +938,66 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNil(workspace.sessionKey(of: .embedded("rs-not-listed")))
     }
 
-    func testALineKeepsItsDigitTrueWhenASessionStartsInACollapsedProject() throws {
+    func testDigitsFollowHeldRowsThroughStateChangesAndUseZeroForTheTenth() throws {
+        var live = (1...11).map { F.tmux($0, project: String(format: "project-%02d", $0), icon: "bolt") }
+        app.store.apply(snapshot: F.snapshot(live))
+        let original = workspace.items.compactMap { item -> AttentionCycler.Key? in
+            if case let .row(row) = item { return row.key }
+            return nil
+        }
+        let entered = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: workspace.window.windowNumber,
+            context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+        workspace.sidebar.mouseEntered(with: entered)
+        live[10].unseen = true
+        live[10].iconState = "stop"
+        live[5].iconState = "stop"
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertNotEqual(workspace.state.rows.map(\.key), original, "the live state has reordered")
+
+        func checkDisplayedShortcuts() throws {
+            let visible = workspace.items.compactMap { item -> WorkspaceRow? in
+                if case let .row(row) = item { return row }
+                return nil
+            }
+            XCTAssertEqual(try visible.map { try cell($0.key).keyLabel.stringValue },
+                           ["⌘1", "⌘2", "⌘3", "⌘4", "⌘5", "⌘6", "⌘7", "⌘8", "⌘9", "⌘0", ""])
+            for (index, row) in visible.prefix(10).enumerated() {
+                XCTAssertEqual(workspace.sessionName(at: index), row.displayName)
+                workspace.selectSession(at: index)
+                XCTAssertEqual(workspace.state.selection, row.key, "the digit must open the row carrying its label")
+            }
+            XCTAssertNil(workspace.sessionKey(of: visible[10].key))
+        }
+        XCTAssertEqual(workspace.items.compactMap { item -> AttentionCycler.Key? in
+            if case let .row(row) = item { return row.key }
+            return nil
+        }, original)
+        try checkDisplayedShortcuts()
+        workspace.menuWillOpen(NSMenu())
+        workspace.sidebar.mouseExited(with: entered)
+        try checkDisplayedShortcuts()
+        workspace.dragged = .session(original[0])
+        workspace.menuDidClose(NSMenu())
+        try checkDisplayedShortcuts()
+        workspace.dragged = nil
+        workspace.reloadSidebar()
+        XCTAssertEqual(workspace.sessionKey(of: .embedded(F.runtimeID(11))), "1", "released rows follow promotion")
+        try checkDisplayedShortcuts()
+    }
+
+    func testCollapsedSessionsDoNotLeaveGapsInVisibleDigits() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let web = try row("web", "work").key
         let line = try cell(web)
         XCTAssertEqual(line.keyLabel.stringValue, "⌘3")
         workspace.setCollapsed(project: "api", pinned: false, true)
+        XCTAssertEqual(try cell(web).keyLabel.stringValue, "⌘1")
 
-        // Only the collapsed header's count changes; the web line's own
-        // item does not, but its digit does.
+        // Starting a hidden session must not consume a visible digit.
         app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "spare", icon: "stop")]))
-        XCTAssertEqual(workspace.sessionKey(of: web), "4")
-        XCTAssertEqual(try cell(web).keyLabel.stringValue, "⌘4")
+        XCTAssertEqual(workspace.sessionKey(of: web), "1")
+        XCTAssertEqual(try cell(web).keyLabel.stringValue, "⌘1")
     }
 
     func testShiftRaisesAKittySessionInKitty() throws {
@@ -1504,8 +1554,8 @@ final class WorkspaceWindowTests: XCTestCase {
                              WorkspaceOverviewCellView.height(for: counts, width: 600), "narrow, the chips wrap")
     }
 
-    /// ⌘1 to ⌘0 count the sessions of a collapsed project, so going to one
-    /// expands it; ⌘] steps from the session the pane is on even after its
+    /// Digits reach collapsed sessions after the visible ones and expand
+    /// their group; ⌘] steps from the session the pane is on even after its
     /// row was collapsed away.
     func testDigitsAndStepsAgreeAboutACollapsedProject() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
@@ -1522,8 +1572,9 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.selectNeighbor(-1, sessionsOnly: true)
         XCTAssertEqual(workspace.content, .external(try row("web", "work").key), "F7 wraps from api/work as well")
 
-        XCTAssertEqual(workspace.sessionName(at: 0), "api — personal")
-        workspace.selectSession(at: 0)
+        XCTAssertEqual(workspace.sessionName(at: 0), "web — work")
+        XCTAssertEqual(workspace.sessionName(at: 1), "api — personal")
+        workspace.selectSession(at: 1)
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
         XCTAssertTrue(workspace.state.groups.first { $0.project == "api" }?.collapsed == false, "going to a session expands its project")
         XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(integer: try index(of: .embedded(F.runtimeID(2)))))
