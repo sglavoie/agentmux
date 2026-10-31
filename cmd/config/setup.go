@@ -20,6 +20,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/shellquote"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/spf13/cobra"
 )
 
@@ -268,13 +269,23 @@ func setupSummary(out io.Writer, cfg *config.Config, profile string, synced bool
 	default:
 		fmt.Fprintf(&summary, "  Hooks: not synced during setup. Next: %s\n", setupHookCommand(profile))
 	}
-	summary.WriteString("\nAfter resolving any missing requirements, run amx, press l, select your project, and press Enter.\nFor a full installation check: amx doctor --strict\n")
+	if os.Getenv(tmux.WorkspaceHostEnv) == "1" {
+		summary.WriteString("\nReturn to the workspace, choose Start Daemon if offered, then choose Launch Project and select your project.\nThe app includes amx and tmux; no separate installation is needed.\n")
+	} else {
+		summary.WriteString("\nAfter resolving any missing requirements, run amx, press l, select your project, and press Enter.\nFor a full installation check: amx doctor --strict\n")
+	}
 	_, err := io.WriteString(out, summary.String())
 	return err
 }
 
 func setupHookCommand(profile string) string {
-	return "amx config hooks-sync -- " + shellquote.Quote(profile)
+	bin := "amx"
+	if os.Getenv(tmux.WorkspaceHostEnv) == "1" {
+		if current, err := cli.AmxBinary(); err == nil {
+			bin = current
+		}
+	}
+	return shellquote.Quote(bin) + " config hooks-sync -- " + shellquote.Quote(profile)
 }
 
 func setupPrompt(reader *bufio.Reader, out io.Writer, label, fallback string) (string, error) {

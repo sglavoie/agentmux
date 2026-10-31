@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "result": "passed",
+  "host": "MacBook Pro",
+  "method": "SSH System Events and own-window screencapture using existing permissions; no VNC console preference or privacy grant changed",
+  "fixture": "scripted Claude and seeded transcript; isolated HOME, daemon, tmux, project, bundle ID, and amx shim",
+  "archive_sha256": "aa7890a82974759d84dc90b050a4293482d9a5d2dbd66781776bf360f8cf3047",
+  "cases": {
+    "native_launch_and_attention": {
+      "status": "passed",
+      "evidence": [
+        "native/welcome.png",
+        "native/attention.png",
+        "native/attention-snapshot.json"
+      ],
+      "scope": "preceding candidate; native UI sources unchanged in final candidate"
+    },
+    "reopen_preserves_session_and_input": {
+      "status": "passed",
+      "evidence": [
+        "native/before-reopen.json",
+        "native/after-reopen.json"
+      ]
+    },
+    "replace_app_preserves_session_and_input": {
+      "status": "passed",
+      "evidence": [
+        "native/before-update.json",
+        "native/after-update.json"
+      ],
+      "new_bundle_matches_final_candidate_amx": true
+    },
+    "native_history_resume": {
+      "status": "passed",
+      "evidence": [
+        "native/resumed-from-history.json",
+        "native/resumed.png"
+      ],
+      "scope": "final candidate; first fixture omitted entrypoint, so Include Automated Sessions exposed its unknown classification"
+    },
+    "corrected_workspace_setup_summary": {
+      "status": "passed",
+      "scope": "final candidate; real embedded setup inspected and disposable project verified; raw setup captures retained outside repository"
+    },
+    "final_fresh_run_return_and_launch_repeat": {
+      "status": "passed",
+      "scope": "final candidate; setup completed before connectivity interruptions, then saved project verified and native launch, attention, completion, reopen, input, and History resume completed after reconnecting",
+      "evidence": [
+        "native/final-fresh-launch.json",
+        "native/final-attention.json",
+        "native/final-attention.png",
+        "native/final-before-reopen.json",
+        "native/final-after-reopen.json",
+        "native/final-history.png",
+        "native/final-resumed.json",
+        "native/final-resumed.png"
+      ],
+      "history_include_automated_sessions": false,
+      "launch_lookup_resolution": "the restored completed setup tab showed its closed-view placeholder; Close View returned to the native Launch Project control"
+    }
+  },
+  "first_run_cleanup": "passed; isolated backend and daemon stop verified before resetting for final-candidate setup",
+  "latest_repeat_state": "completed; isolated app, backend, and daemon stopped, own preferences removed; native/final-cleanup.json",
+  "correction": "stat /dev/console and a shared-password VNC login screen did not establish that the operator session was locked; actual SSH UI actions and window capture succeeded"
+}

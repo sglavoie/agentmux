@@ -8,6 +8,7 @@ struct FetchState<Value: Equatable>: Equatable {
     private(set) var fetchedAt: Date?
     private(set) var loading = false
     private(set) var error: String?
+    private(set) var errorCode: String?
 
     init(value: Value? = nil, fetchedAt: Date? = nil, loading: Bool = false, error: String? = nil) {
         self.value = value
@@ -38,8 +39,11 @@ struct FetchState<Value: Equatable>: Equatable {
             self.value = value
             fetchedAt = now
             error = nil
+            errorCode = nil
         case let .failure(failure):
             error = failure.message
+            if case let .command(detail, _) = failure { errorCode = detail.code }
+            else { errorCode = nil }
         }
     }
 
@@ -137,6 +141,7 @@ struct ProjectLaunchResult: Decodable, Equatable {
 struct ProjectCatalog: Equatable {
     static func guidance(_ state: FetchState<[ProjectEntry]>, unavailable: String?) -> String {
         if let unavailable { return unavailable }
+        if state.errorCode == "config_missing" { return "Welcome to Agent Mux. Set Up First Project guides you through your agent profile, project directory, hooks, and launch destination." }
         if let error = state.error { return "Could not refresh projects: \(error). Choose Launch Project to try again." }
         guard let entries = state.value else { return "Loading configured projects…" }
         if entries.isEmpty { return "No projects configured. Set Up First Project guides you through your agent profile, project directory, hooks, and launch destination." }
@@ -144,7 +149,7 @@ struct ProjectCatalog: Equatable {
     }
 
     static func offersSetup(_ state: FetchState<[ProjectEntry]>, unavailable: String?) -> Bool {
-        unavailable == nil && state.error == nil && state.value?.isEmpty == true && !state.loading
+        unavailable == nil && !state.loading && (state.errorCode == "config_missing" || (state.error == nil && state.value?.isEmpty == true))
     }
 
     static let maxAge: TimeInterval = 10

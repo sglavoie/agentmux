@@ -21,6 +21,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/tmux"
 	"github.com/sglavoie/agentmux/tui"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/customization"
@@ -196,6 +197,19 @@ func init() {
 // operator returns to the native workspace. Setup's own prompts authorize writes.
 func runWorkspaceSetup(cmd *cobra.Command, _ []string) error {
 	scrubUtilityEnvironment()
+	// Utility terminals do not attach to a session, so they do not inherit
+	// attach's host marker. This command itself establishes the setup context.
+	previousHost, hadHost := os.LookupEnv(tmux.WorkspaceHostEnv)
+	if err := os.Setenv(tmux.WorkspaceHostEnv, "1"); err != nil {
+		return err
+	}
+	defer func() {
+		if hadHost {
+			_ = os.Setenv(tmux.WorkspaceHostEnv, previousHost)
+		} else {
+			_ = os.Unsetenv(tmux.WorkspaceHostEnv)
+		}
+	}()
 	err := workspaceViewSetup(cmd)
 	if err != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nSetup did not finish: %v\n", err)

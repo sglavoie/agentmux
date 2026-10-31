@@ -35,6 +35,10 @@
 // This state decorates a dashboard row that refreshes on a sweep; a row that
 // grew an error message because a directory was not a repository would be
 // worse than a row that simply said nothing.
+// On macOS, reads bypass Apple's /usr/bin/git installer shim and run Git in
+// the selected developer directory only when it exists. Without Git, optional
+// status stays empty and explicit review reads report unavailability; neither
+// starts an installer. Independent Git installations retain PATH precedence.
 //
 // So: worktree for worktree management, gitstate for a per-sweep dashboard
 // column. Do not reach for gitstate to decide anything destructive, and do not

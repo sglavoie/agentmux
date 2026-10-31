@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "result": "passed",
+  "fixture": "scripted Claude; seeded transcript",
+  "scope": "headless packaged CLI; not native UI or a physically toolchain-free Mac",
+  "archive_sha256": "aa7890a82974759d84dc90b050a4293482d9a5d2dbd66781776bf360f8cf3047",
+  "update_archive_sha256": null,
+  "apple_git_shim": true,
+  "workspace_setup": true,
+  "checks": [
+    {
+      "check": "archive extracted and bundle signature verified",
+      "evidence": "aa7890a82974759d84dc90b050a4293482d9a5d2dbd66781776bf360f8cf3047"
+    },
+    {
+      "check": "fresh HOME reports config_missing; no separate amx or tmux on PATH",
+      "evidence": null
+    },
+    {
+      "check": "workspace setup establishes hosted context and returns to native launch controls",
+      "evidence": null
+    },
+    {
+      "check": "guided setup creates config and hooks naming the bundled amx",
+      "evidence": null
+    },
+    {
+      "check": "Apple Git without a usable developer directory reports unavailable without executing its installer shim",
+      "evidence": null
+    },
+    {
+      "check": "verified bundled tmux runs from an installed copy outside the app",
+      "evidence": null
+    },
+    {
+      "check": "project launches with bundled tmux and SessionStart reaches the daemon",
+      "evidence": "rs-39daeff5b724e74f01be76fb9f73b6b2"
+    },
+    {
+      "check": "installed permission hook produces attention",
+      "evidence": null
+    },
+    {
+      "check": "installed completion hook produces completed state",
+      "evidence": null
+    },
+    {
+      "check": "closed conversation resumes with its recorded identity",
+      "evidence": "session.continue"
+    }
+  ],
+  "cleanup": {
+    "result": "passed",
+    "errors": []
+  }
+}

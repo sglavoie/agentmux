@@ -64,6 +64,24 @@ final class WorkspaceResumeTests: XCTestCase {
         XCTAssertTrue(app.made.isEmpty)
         XCTAssertNil(WorkspaceUtilityView.from(.init(kind: "setup")), "Only the operator opens setup")
     }
+
+    func testFreshInstallationCanSetUpBeforeStartingTheDaemon() {
+        let app = FakeWorkspaceApp()
+        app.workspaceOffersSetup = true
+        let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+        defer { workspace.window.close() }
+        workspace.openForTesting()
+        app.store.apply(health: .notRunning)
+        workspace.refresh()
+        XCTAssertEqual(workspace.placeholder.button.title, "Set Up First Project…")
+        workspace.placeholder.press()
+        XCTAssertEqual(app.madeViews, ["setup"])
+        workspace.utilityEnded("setup")
+        app.workspaceOffersSetup = false
+        workspace.refreshCommands()
+        XCTAssertEqual(workspace.placeholder.button.title, WorkspaceWindowController.startDaemonTitle)
+        XCTAssertTrue(app.made.isEmpty, "setup never launches an agent")
+    }
     func testRecoverySheetIsReadableAndDoesNotLaunchWhenOpenedOrCancelled() async throws {
         let model = WorkspaceResumeModel(identity: .init(harness: "codex", sessionID: "original"), command: { nil }, runner: ResumeRunner())
         var launches = 0

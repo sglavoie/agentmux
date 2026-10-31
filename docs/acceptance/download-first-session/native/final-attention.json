@@ -1,0 +1,64 @@
+{
+  "app_pid": 36946,
+  "bundled_amx_sha256": "b1939d027d09bbf3259d6951a54d4f6da6d8e10966ca1a32e565720f29a8dd16",
+  "server": {
+    "directory": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504",
+    "socket": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+    "running": true,
+    "binary": "/private/tmp/amx-firstsession-1030/home/.local/share/agent-mux/runtime/tmux-3.7c-b42054eeaff0fc11/bin/tmux",
+    "generation": "37174-1793411329",
+    "sessions": 1,
+    "agents": 1
+  },
+  "sessions": [
+    {
+      "id": "rs-71f73d3dfc5fed86e9a6f40ef58d3dc7",
+      "project": "First project",
+      "launch_id": "6bf43420-c504-4a86-8245-f4c51980982d",
+      "relation": "fresh",
+      "target": {
+        "instance": {
+          "kind": "tmux",
+          "address": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+          "generation": "37174-1793411329"
+        },
+        "ref": "%0"
+      },
+      "process": {
+        "pid": 37175,
+        "start_token": "Sat Oct 31 01:48:49 2026"
+      },
+      "attachment": {
+        "id": "amx-workspace-720ac2756b77a4ab",
+        "client": "amx attach (pid 37185)"
+      },
+      "state": "live",
+      "created_at": "2026-10-31T01:48:49.043539Z",
+      "updated_at": "2026-10-31T01:48:49.386631Z"
+    }
+  ],
+  "rows": [
+    {
+      "project": "First project",
+      "icon_state": "key",
+      "attention": true,
+      "runtime": {
+        "session_id": "rs-71f73d3dfc5fed86e9a6f40ef58d3dc7",
+        "backend": "tmux",
+        "instance": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+        "generation": "37174-1793411329",
+        "pane": "%0"
+      },
+      "conversation": {
+        "harness": "claude",
+        "session_id": "11111111-1111-4111-8111-111111111111"
+      }
+    }
+  ],
+  "clients": [
+    "37188 xterm-256color %0"
+  ],
+  "captures": {
+    "rs-71f73d3dfc5fed86e9a6f40ef58d3dc7": "fixture agent pid=37175 args=--debug-file /private/tmp/amx-firstsession-1030/home/.local/state/agent-mux/native/6bf43420-c504-4a86-8245-f4c51980982d/claude-debug.log\nask\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  }
+}

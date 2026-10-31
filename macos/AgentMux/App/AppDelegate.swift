@@ -61,6 +61,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var lastActiveKittyPID: pid_t?
 
     var projects = ProjectCatalog()
+    /// A first installation opens its setup entry point once, after amx
+    /// confirms the configuration is absent. Invalid files remain errors.
+    var hasOfferedInitialSetup = false
     var workspaceProjectMenu: NSMenu?
     var recent = RecentSessions()
     /// Lists the projects again when `config.toml` changes.

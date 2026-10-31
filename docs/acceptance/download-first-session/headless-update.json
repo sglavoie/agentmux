@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "result": "passed",
+  "fixture": "scripted Claude; seeded transcript",
+  "scope": "headless packaged CLI; not native UI or a physically toolchain-free Mac",
+  "archive_sha256": "1359d76e1fbbb42a4497531f288340bd52f47f3db5c8df9741a55f534da7fe1e",
+  "update_archive_sha256": "aa7890a82974759d84dc90b050a4293482d9a5d2dbd66781776bf360f8cf3047",
+  "apple_git_shim": false,
+  "workspace_setup": false,
+  "checks": [
+    {
+      "check": "archive extracted and bundle signature verified",
+      "evidence": "1359d76e1fbbb42a4497531f288340bd52f47f3db5c8df9741a55f534da7fe1e"
+    },
+    {
+      "check": "fresh HOME reports config_missing; no separate amx or tmux on PATH",
+      "evidence": null
+    },
+    {
+      "check": "guided setup creates config and hooks naming the bundled amx",
+      "evidence": null
+    },
+    {
+      "check": "verified bundled tmux runs from an installed copy outside the app",
+      "evidence": null
+    },
+    {
+      "check": "project launches with bundled tmux and SessionStart reaches the daemon",
+      "evidence": "rs-675f57f3fb8dec2dd466a75be0d15921"
+    },
+    {
+      "check": "installed permission hook produces attention",
+      "evidence": null
+    },
+    {
+      "check": "installed completion hook produces completed state",
+      "evidence": null
+    },
+    {
+      "check": "replacing the app preserves server generation, agent PID, and working input",
+      "evidence": null
+    },
+    {
+      "check": "closed conversation resumes with its recorded identity",
+      "evidence": "session.continue"
+    }
+  ],
+  "cleanup": {
+    "result": "passed",
+    "errors": []
+  }
+}

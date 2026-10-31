@@ -400,10 +400,11 @@ over the same revision, and on two passes publishes what they wrote:
 
 - the pair tag, pushed to both repositories' `origin`;
 - a GitHub release named `amx <version>` on the pair tag in Agent Mux's
-  repository, carrying `Agent-Mux-<version>-macos.zip` (the notarized,
+  repository, carrying `Agent-Mux-<version>-macos-<arch>.zip` (the notarized,
   stapled app), `amx-<version>-darwin-<arch>.zip` (amx signed with Developer
-  ID and notarized on its own), and both evidence records with their
-  signatures. agent-session-loop gets the tag, not a release.
+  ID and notarized on its own), `SHA256SUMS` for the exact uploaded bytes,
+  and both evidence records with their signatures. agent-session-loop gets
+  the tag, not a release.
 
 Publishing reads only the records. It refuses a pair record that is not a
 `"passed"`, signed record naming the tag in both repositories on the revisions

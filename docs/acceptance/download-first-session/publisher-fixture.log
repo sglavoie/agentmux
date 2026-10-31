@@ -1,0 +1,8 @@
+=== RUN   TestPublishUploadsChecksumsOfSignedDownloads
+=== RUN   TestPublishUploadsChecksumsOfSignedDownloads/create
+=== RUN   TestPublishUploadsChecksumsOfSignedDownloads/upload
+--- PASS: TestPublishUploadsChecksumsOfSignedDownloads (4.31s)
+    --- PASS: TestPublishUploadsChecksumsOfSignedDownloads/create (2.40s)
+    --- PASS: TestPublishUploadsChecksumsOfSignedDownloads/upload (1.24s)
+PASS
+ok  	github.com/sglavoie/agentmux/cmd/release	4.505s

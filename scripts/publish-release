@@ -171,7 +171,7 @@ publish() {
     local cli_zip app_zip
     stage="$(mktemp -d)" # global: the EXIT trap runs after publish returns
     trap 'rm -rf "$stage"' EXIT
-    app_zip="$stage/Agent-Mux-$version-macos.zip"
+    app_zip="$stage/Agent-Mux-$version-macos-$arch.zip"
     ditto -c -k --keepParent "$app" "$app_zip"
 
     # The standalone amx gets a Developer ID signature and its own
@@ -210,10 +210,24 @@ publish() {
         echo "| amx Go build ID | \`$build_id\` |"
         echo
         echo "Both downloads are signed with Developer ID and notarized by Apple, for macOS on $arch."
-        echo "\`Agent-Mux-$version-macos.zip\` is the app, with this \`amx\` and its tmux runtime inside."
+        echo "\`Agent-Mux-$version-macos-$arch.zip\` is the app, with this \`amx\` and its tmux runtime inside."
         echo "\`amx-$version-darwin-$arch.zip\` is the command line alone. The sha256 above is of"
         echo "the unsigned build the gate tested; the signed copy differs only in its signature,"
         echo "and \`go tool buildid amx\` prints the same build ID."
+        echo
+        echo "### Install the macOS app"
+        echo
+        echo "Download \`Agent-Mux-$version-macos-$arch.zip\`, expand it, and move Agent Mux.app to /Applications. Requires macOS 14 or later on $arch."
+        echo "Open the app and choose **Set Up First Project**. Use an installed, authenticated Claude, Codex, or Copilot CLI."
+        echo "After setup, choose **Start Daemon** if offered, then **Launch Project**."
+        echo "The app includes amx and tmux; Go, Xcode, Homebrew, and a separate amx installation are not required."
+        echo "To update, quit the app, replace it in /Applications, and reopen it. Running agents stay on the private session server."
+        echo
+        echo "Download \`SHA256SUMS\` alongside your ZIP, then verify the files you downloaded:"
+        echo
+        echo '```bash'
+        echo 'shasum -a 256 --check --ignore-missing SHA256SUMS'
+        echo '```'
         echo
         echo "The two evidence records and their signatures are attached. Verify them with:"
         echo
@@ -232,6 +246,12 @@ publish() {
     for file in "$record" "$sig" "$desktop" "$desktop.sig"; do
         assets+=("$stage/$(basename "$file")")
     done
+    # The evidence hashes the unsigned build. Downloads carry signatures and
+    # ZIP metadata, so publish checksums of the exact bytes being uploaded too.
+    local names=()
+    for file in "${assets[@]}"; do names+=("$(basename "$file")"); done
+    (cd "$stage" && shasum -a 256 -- "${names[@]}") > "$stage/SHA256SUMS"
+    assets+=("$stage/SHA256SUMS")
     if gh release view "$pair_id" --repo "$gh_repo_name" >/dev/null 2>&1; then
         echo "release $pair_id exists; replacing its assets"
         gh release upload "$pair_id" --repo "$gh_repo_name" --clobber "${assets[@]}"

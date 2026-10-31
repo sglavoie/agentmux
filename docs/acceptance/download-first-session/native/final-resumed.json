@@ -1,0 +1,68 @@
+{
+  "app_pid": 38240,
+  "bundled_amx_sha256": "b1939d027d09bbf3259d6951a54d4f6da6d8e10966ca1a32e565720f29a8dd16",
+  "server": {
+    "directory": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504",
+    "socket": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+    "running": true,
+    "binary": "/private/tmp/amx-firstsession-1030/home/.local/share/agent-mux/runtime/tmux-3.7c-b42054eeaff0fc11/bin/tmux",
+    "generation": "37174-1793411329",
+    "sessions": 2,
+    "agents": 1
+  },
+  "sessions": [
+    {
+      "id": "rs-0ae3ad6df33a7bc9b566955e0b8fef8c",
+      "project": "First project",
+      "launch_id": "18aa6728-0bc9-4588-b949-40a0f6718d3b",
+      "relation": "fresh",
+      "conversation": {
+        "harness": "claude",
+        "session_id": "11111111-1111-4111-8111-111111111111"
+      },
+      "target": {
+        "instance": {
+          "kind": "tmux",
+          "address": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+          "generation": "37174-1793411329"
+        },
+        "ref": "%1"
+      },
+      "process": {
+        "pid": 38683,
+        "start_token": "Sat Oct 31 01:50:22 2026"
+      },
+      "attachment": {
+        "id": "amx-workspace-8afe3e10ecbdb03f",
+        "client": "amx attach (pid 38718)"
+      },
+      "state": "live",
+      "created_at": "2026-10-31T01:50:22.030566Z",
+      "updated_at": "2026-10-31T01:50:22.381299Z"
+    }
+  ],
+  "rows": [
+    {
+      "project": "First project",
+      "icon_state": null,
+      "attention": null,
+      "runtime": {
+        "session_id": "rs-0ae3ad6df33a7bc9b566955e0b8fef8c",
+        "backend": "tmux",
+        "instance": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+        "generation": "37174-1793411329",
+        "pane": "%1"
+      },
+      "conversation": {
+        "harness": "claude",
+        "session_id": "11111111-1111-4111-8111-111111111111"
+      }
+    }
+  ],
+  "clients": [
+    "38721 xterm-256color %1"
+  ],
+  "captures": {
+    "rs-0ae3ad6df33a7bc9b566955e0b8fef8c": "fixture agent pid=38683 args=--debug-file /private/tmp/amx-firstsession-1030/home/.local/state/agent-mux/native/18aa6728-0bc9-4588-b949-40a0f6718d3b/claude-debug.log --resume 11111111-1111-4111-8111-111111111111\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  }
+}

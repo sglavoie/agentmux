@@ -1,0 +1,58 @@
+{
+  "v": 2,
+  "daemon": {
+    "pid": 19634,
+    "started_at": 1793405618,
+    "build": {
+      "version": "0.10.0",
+      "revision": "77ce14881b9b3308d194793e624c6179fb529e5e",
+      "dirty": true,
+      "build_time": "2026-10-30T20:39:20Z",
+      "go_version": "go1.27.3",
+      "binary_hash": "6c1ac06175c2dc772963ec1c276af0d3c994d37facb51a3ec42cc00526301e78"
+    },
+    "ready": true
+  },
+  "kitty": {
+    "ready": false
+  },
+  "notification": {
+    "backend": "alerter"
+  },
+  "dashboard": {
+    "open": false
+  },
+  "attention": {
+    "total": 1,
+    "key": 1
+  },
+  "asl": {},
+  "sessions": [
+    {
+      "status_evidence": {
+        "kind": "harness",
+        "at": 1793405737
+      },
+      "harness": "claude",
+      "profile": "claude-local",
+      "project": "First project",
+      "conversation": {
+        "harness": "claude",
+        "session_id": "11111111-1111-4111-8111-111111111111"
+      },
+      "icon_state": "key",
+      "attention": true,
+      "last_event_at": 1793405737,
+      "presentation_changed_at_ms": 1793405737057,
+      "tab_color": "#e4d063",
+      "harness_icon": "\ud83e\udd8a",
+      "runtime": {
+        "session_id": "rs-256708bad823f852dd4bd6fdde0c10f9",
+        "backend": "tmux",
+        "instance": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+        "generation": "20289-1793405709",
+        "pane": "%0"
+      }
+    }
+  ]
+}

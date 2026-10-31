@@ -1,0 +1,64 @@
+{
+  "app_pid": 22058,
+  "bundled_amx_sha256": "6c1ac06175c2dc772963ec1c276af0d3c994d37facb51a3ec42cc00526301e78",
+  "server": {
+    "directory": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504",
+    "socket": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+    "running": true,
+    "binary": "/private/tmp/amx-firstsession-1030/home/.local/share/agent-mux/runtime/tmux-3.7c-815521c168e7f23a/bin/tmux",
+    "generation": "20289-1793405709",
+    "sessions": 1,
+    "agents": 1
+  },
+  "sessions": [
+    {
+      "id": "rs-256708bad823f852dd4bd6fdde0c10f9",
+      "project": "First project",
+      "launch_id": "665aa732-d951-4ea9-a3d3-118370a4ad4d",
+      "relation": "fresh",
+      "target": {
+        "instance": {
+          "kind": "tmux",
+          "address": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+          "generation": "20289-1793405709"
+        },
+        "ref": "%0"
+      },
+      "process": {
+        "pid": 20290,
+        "start_token": "Sat Oct 31 00:15:09 2026"
+      },
+      "attachment": {
+        "id": "amx-workspace-e70008d48e88b7ae",
+        "client": "amx attach (pid 22081)"
+      },
+      "state": "live",
+      "created_at": "2026-10-31T00:15:09.670442Z",
+      "updated_at": "2026-10-31T00:18:11.787831Z"
+    }
+  ],
+  "rows": [
+    {
+      "project": "First project",
+      "icon_state": "stop",
+      "attention": true,
+      "runtime": {
+        "session_id": "rs-256708bad823f852dd4bd6fdde0c10f9",
+        "backend": "tmux",
+        "instance": "/private/tmp/amx-firstsession-1030/tmp/agent-mux-504/tmux.sock",
+        "generation": "20289-1793405709",
+        "pane": "%0"
+      },
+      "conversation": {
+        "harness": "claude",
+        "session_id": "11111111-1111-4111-8111-111111111111"
+      }
+    }
+  ],
+  "clients": [
+    "22086 xterm-256color %0"
+  ],
+  "captures": {
+    "rs-256708bad823f852dd4bd6fdde0c10f9": "fixture agent pid=20290 args=--debug-file /private/tmp/amx-firstsession-1030/home/.local/state/agent-mux/native/665aa732-d951-4ea9-a3d3-118370a4ad4d/claude-debug.log\nask\nwork\nreply-after-attention\necho: reply-after-attention\ndone\nafter-reopen\necho: after-reopen\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  }
+}

@@ -18,7 +18,35 @@ and how each feature works inside, is in [`macos/README.md`](../macos/README.md)
 
 ## Install
 
-Requirements: macOS 14 or later, Xcode command line tools, and the
+For a release download, you need macOS 14 or later and an installed,
+authenticated agent CLI. Download `Agent-Mux-<version>-macos-<arch>.zip` from
+[Releases](https://github.com/sglavoie/agentmux/releases), choosing
+`arm64` for Apple silicon or `amd64` for Intel when that architecture is
+available. Expand it, move Agent Mux.app to `/Applications`, and open it.
+If no compatible download is listed, build from source below.
+
+The bundle includes `amx`, tmux, and Ghostty. You do not need Go, Xcode,
+Homebrew, or a separately installed `amx` to run it. On a fresh installation,
+the workspace opens with **Set Up First Project** before a daemon is needed.
+Choose the agent's existing authenticated home and a project directory, keep
+the tmux default, and explicitly choose whether to sync its hooks. Press
+Enter after the summary, choose **Start Daemon** if offered, then
+**Launch Project**. Invalid or unreadable existing configuration is reported
+as an error rather than replaced by first-project setup.
+
+Checkout review and worktree actions need Git. When Apple's Git is unavailable,
+background status reads leave Git metadata empty; they do not open the developer
+tools installer. Install Git separately to use those checkout features.
+
+For command-line access without a separate installation, the bundled binary is:
+
+```bash
+"/Applications/Agent Mux.app/Contents/Resources/bin/amx" --version
+```
+
+### Building from source
+
+Build requirements: macOS 14 or later, Xcode command line tools, and the
 repository's usual toolchain (Go, `just`). The first build also builds the
 embedded terminal engine from source, which needs `git`, network access,
 several minutes, and about 5 GB under `macos/.cache/`; later builds reuse it.
@@ -48,7 +76,12 @@ the app.
 
 ### Updating
 
-`just mac-install` again. The installer checks the new bundle (signature,
+For a downloaded app, quit Agent Mux, expand the new release ZIP, replace
+the app in `/Applications`, and reopen it. Do not run **End Session** or
+`amx backend stop` as part of an update. If macOS says the app is in use,
+make sure it has quit from its menu before replacing it.
+
+For a source installation, run `just mac-install` again. The installer checks the new bundle (signature,
 `amx`, tmux against its checksums), quits the app, stages the new copy beside
 the old one, and renames it into place.
 

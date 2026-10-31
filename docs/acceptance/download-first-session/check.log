@@ -1,0 +1,118 @@
+go test -tags tuitest ./...
+ok  	github.com/sglavoie/agentmux	0.623s
+ok  	github.com/sglavoie/agentmux/cmd	7.115s
+ok  	github.com/sglavoie/agentmux/cmd/config	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/daemon	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/dashboard	3.894s
+ok  	github.com/sglavoie/agentmux/cmd/debug	1.002s
+ok  	github.com/sglavoie/agentmux/cmd/hooks	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/notifications	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/overseer	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/plans	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/project	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/release	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/session	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/transcripts	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/tuitest	(cached)
+ok  	github.com/sglavoie/agentmux/cmd/worktree	2.969s
+ok  	github.com/sglavoie/agentmux/embed	(cached)
+ok  	github.com/sglavoie/agentmux/internal/actions	(cached)
+ok  	github.com/sglavoie/agentmux/internal/activityfeed	(cached)
+ok  	github.com/sglavoie/agentmux/internal/agentloop	(cached)
+ok  	github.com/sglavoie/agentmux/internal/aslbridge	(cached)
+ok  	github.com/sglavoie/agentmux/internal/aslcontract	(cached)
+ok  	github.com/sglavoie/agentmux/internal/aslexport	(cached)
+ok  	github.com/sglavoie/agentmux/internal/atomicfile	(cached)
+ok  	github.com/sglavoie/agentmux/internal/backend	(cached)
+ok  	github.com/sglavoie/agentmux/internal/backend/backendtest	(cached)
+ok  	github.com/sglavoie/agentmux/internal/buildinfo	(cached)
+?   	github.com/sglavoie/agentmux/internal/cachefile	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/cli	(cached)
+ok  	github.com/sglavoie/agentmux/internal/clipboard	(cached)
+ok  	github.com/sglavoie/agentmux/internal/config	(cached)
+ok  	github.com/sglavoie/agentmux/internal/contextlimit	(cached)
+ok  	github.com/sglavoie/agentmux/internal/conversation	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/activity	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/asl	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/companion	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/eventlog	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/events	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/ipc	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/notification	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/probes	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/process	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/protocol	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/rendering	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/state	(cached)
+ok  	github.com/sglavoie/agentmux/internal/debugger	(cached)
+ok  	github.com/sglavoie/agentmux/internal/diagnostics	(cached)
+ok  	github.com/sglavoie/agentmux/internal/errors	(cached)
+ok  	github.com/sglavoie/agentmux/internal/gitstate	(cached)
+ok  	github.com/sglavoie/agentmux/internal/handoff	(cached)
+ok  	github.com/sglavoie/agentmux/internal/harness	(cached)
+ok  	github.com/sglavoie/agentmux/internal/hookevent	(cached)
+ok  	github.com/sglavoie/agentmux/internal/hooks	(cached)
+ok  	github.com/sglavoie/agentmux/internal/indicator	(cached)
+ok  	github.com/sglavoie/agentmux/internal/kitty	(cached)
+?   	github.com/sglavoie/agentmux/internal/kitty/kittytest	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/kittykeys	(cached)
+ok  	github.com/sglavoie/agentmux/internal/overrides	(cached)
+ok  	github.com/sglavoie/agentmux/internal/overseerpolicy	(cached)
+ok  	github.com/sglavoie/agentmux/internal/palette	(cached)
+ok  	github.com/sglavoie/agentmux/internal/patternset	(cached)
+ok  	github.com/sglavoie/agentmux/internal/planrun	(cached)
+ok  	github.com/sglavoie/agentmux/internal/plans	(cached)
+ok  	github.com/sglavoie/agentmux/internal/projectresolve	0.321s
+ok  	github.com/sglavoie/agentmux/internal/release	(cached)
+ok  	github.com/sglavoie/agentmux/internal/runtimesession	(cached)
+ok  	github.com/sglavoie/agentmux/internal/screenstate	(cached)
+ok  	github.com/sglavoie/agentmux/internal/searchquery	(cached)
+ok  	github.com/sglavoie/agentmux/internal/searchstore	(cached)
+ok  	github.com/sglavoie/agentmux/internal/session	(cached)
+ok  	github.com/sglavoie/agentmux/internal/shellquote	(cached)
+?   	github.com/sglavoie/agentmux/internal/testenv	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/testutil	(cached)
+ok  	github.com/sglavoie/agentmux/internal/textutil	(cached)
+?   	github.com/sglavoie/agentmux/internal/timeutil	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/tmux	(cached)
+?   	github.com/sglavoie/agentmux/internal/tmux/tmuxtest	[no test files]
+ok  	github.com/sglavoie/agentmux/internal/transcript	(cached)
+ok  	github.com/sglavoie/agentmux/internal/worktree	(cached)
+ok  	github.com/sglavoie/agentmux/tui	(cached)
+ok  	github.com/sglavoie/agentmux/tui/asl	(cached)
+ok  	github.com/sglavoie/agentmux/tui/chrome	(cached)
+?   	github.com/sglavoie/agentmux/tui/cmdtest	[no test files]
+ok  	github.com/sglavoie/agentmux/tui/commands	(cached)
+ok  	github.com/sglavoie/agentmux/tui/customization	(cached)
+ok  	github.com/sglavoie/agentmux/tui/dashboard	(cached)
+ok  	github.com/sglavoie/agentmux/tui/history	(cached)
+ok  	github.com/sglavoie/agentmux/tui/launch	(cached)
+ok  	github.com/sglavoie/agentmux/tui/layout	(cached)
+ok  	github.com/sglavoie/agentmux/tui/overview	(cached)
+ok  	github.com/sglavoie/agentmux/tui/plans	(cached)
+ok  	github.com/sglavoie/agentmux/tui/runform	(cached)
+ok  	github.com/sglavoie/agentmux/tui/sendform	(cached)
+ok  	github.com/sglavoie/agentmux/tui/sessionactions	(cached)
+ok  	github.com/sglavoie/agentmux/tui/theme	(cached)
+ok  	github.com/sglavoie/agentmux/tui/worktrees	(cached)
+go test ./cmd
+ok  	github.com/sglavoie/agentmux/cmd	6.546s
+go test -race -tags tuitest ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
+ok  	github.com/sglavoie/agentmux/internal/transcript	(cached)
+ok  	github.com/sglavoie/agentmux/internal/plans	(cached)
+ok  	github.com/sglavoie/agentmux/internal/handoff	(cached)
+ok  	github.com/sglavoie/agentmux/internal/worktree	(cached)
+ok  	github.com/sglavoie/agentmux/internal/kitty	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon	(cached)
+ok  	github.com/sglavoie/agentmux/internal/daemon/ipc	(cached)
+ok  	github.com/sglavoie/agentmux/tui	(cached)
+ok  	github.com/sglavoie/agentmux/tui/commands	(cached)
+ok  	github.com/sglavoie/agentmux/tui/overview	(cached)
+ok  	github.com/sglavoie/agentmux/tui/sessionactions	(cached)
+go vet ./...
+go vet -tags tuitest ./...
+golangci-lint run --allow-parallel-runners
+0 issues.
+golangci-lint run --allow-parallel-runners --build-tags tuitest
+0 issues.

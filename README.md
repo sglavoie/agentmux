@@ -20,6 +20,36 @@ the native session switcher, inspector, and command palette.
 
 ## First session
 
+### macOS app
+
+Requires macOS 14+ and an installed, authenticated Claude Code, Codex, or
+Copilot CLI. The app includes `amx`, tmux, and the terminal engine; Go, Xcode,
+Homebrew, and a separate `amx` installation are not required.
+Checkout review and worktree actions additionally need Git.
+
+1. Open [Releases](https://github.com/sglavoie/agentmux/releases) and
+   download `Agent-Mux-<version>-macos-<arch>.zip` for your Mac: `arm64` for
+   Apple silicon, `amd64` for Intel. Only architectures listed in that release
+   are available. If no compatible download is listed, use the source
+   installation below.
+2. Expand the ZIP, move **Agent Mux.app** to **Applications**, and open it.
+3. On a fresh installation the workspace opens with **Set Up First Project**.
+   Choose your agent CLI, its existing authenticated profile home, and an
+   existing project directory. Choose **Keep** for the tmux default and
+   explicitly answer **yes** to sync this profile's hooks. Setup does not
+   authenticate the agent CLI.
+4. Press **Enter** to return to the workspace, choose **Start Daemon** if
+   offered, then **Launch Project** and select your project. The agent opens
+   in the embedded terminal; the sidebar shows when it needs you.
+
+Close and reopen the app to return to your running sessions. For a conversation
+whose agent has ended, open **Conversation History** (`⌘Y`) and choose
+**Resume**. To update, quit the app, replace it in Applications with the new
+download, and reopen it; agents keep running on the private session server.
+See the [app guide](docs/companion-app.md) for details and troubleshooting.
+
+### Terminal or source installation
+
 Requires Go 1.26.2+ (see [`go.mod`](go.mod)), [just](https://github.com/casey/just), tmux 3.5+ on `PATH`
 (the optional macOS app bundles its own), and an installed, authenticated agent
 CLI. On macOS, native notifications additionally need
@@ -113,7 +143,8 @@ and CLI examples.
 
 ## macOS workspace (optional)
 
-With macOS 14+ and Xcode, after installing `amx`:
+Use the [downloaded app](#macos-app), or build it from source with macOS 14+
+and Xcode after installing `amx`:
 
 ```sh
 just mac-install

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "official_release": false,
+  "base_revision": "77ce14881b9b3308d194793e624c6179fb529e5e",
+  "product_diff_sha256": "f0ce5c3cefa8b5d340c960780236c00a756a9c28cabbf4d1b974b6552dec42bb",
+  "archive_name": "Agent-Mux-0.10.0-candidate-macos-arm64.zip",
+  "archive_sha256": "aa7890a82974759d84dc90b050a4293482d9a5d2dbd66781776bf360f8cf3047",
+  "app_executable_sha256": "b4ce29d69871d9ae72de1ec439bac60c99cab0f3ba0c0ed11740035599a311c8",
+  "amx_version": "amx version 0.10.0 (revision 77ce14881b9b-dirty, built 2026-10-30T20:39:20Z, go1.27.3, sha256:b1939d027d09)",
+  "notarization_submission": "27f8af14-370d-4a20-96f6-46edd6070da1",
+  "notarization_status": "Accepted",
+  "stapled": true,
+  "gatekeeper": "accepted; source=Notarized Developer ID",
+  "native_tests": {
+    "host": "MacBook Pro",
+    "Debug": {
+      "executed": 1024,
+      "skipped": 1,
+      "failures": 0
+    },
+    "Release": {
+      "executed": 1024,
+      "skipped": 1,
+      "failures": 0
+    }
+  },
+  "live_first_run": "passed; native lifecycle, corrected setup summary, final-candidate launch/reopen/History repeat, and verified cleanup recorded in native-ui.json",
+  "paired_release_gate": "not run; working tree candidate only",
+  "product_files_sha256": {
+    "cmd/config/setup.go": "9565e0a3d94de31e64f32b298ec008eed59d000cfce6268c6c0da5968b52bdbc",
+    "cmd/dashboard/workspace_view.go": "c64d626b71670f35b4a8217ccd8497897a4eb27f83d645c6c67144911ffcb8c5",
+    "internal/gitstate/binary.go": "c2dffa6315c050fa781a3099c514eb02c41417ea2f54fea6f44e1ea32cc74f24",
+    "internal/gitstate/doc.go": "8a9cd21a8250cf68634fc715867ce83ade93fa3e869f15c589e91888e1bbfb7b",
+    "internal/gitstate/probe.go": "c7c20b52f9c6700a2ea8d1edca1d1189dc9d86b0f2b73544912f66de8372b055",
+    "internal/gitstate/review.go": "98873211309d993b2d658d90d96437ed5000f68b82b10eddea5a9823d4bde3f0",
+    "macos/AgentMux/App/AppDelegate+Actions.swift": "d30575696ad4b263c2722fa5d121c3f6df06516dbb49eccb31b0b7c630a08e7e",
+    "macos/AgentMux/App/AppDelegate.swift": "3f581cd130c63f0fbcb0314b4d7b0ec87c06e4362b1173c960402efd0c7167af",
+    "macos/AgentMux/Model/ProjectCatalog.swift": "e67b567897fb86acbaf6c861b4f9375730b9df6cab0fd99ee5a33f5deac48e89",
+    "macos/AgentMux/UI/WorkspaceWindow+Pane.swift": "5a31ac1856d9d4714b49010f44d33e72cc9c01f9f3a1b6dcbb04bf31c8febe7f"
+  },
+  "check": "passed; check.log",
+  "publisher_fixture": "passed; publisher-fixture.log",
+  "native_tests_source_scope": "native UI sources unchanged since the recorded Debug and Release suite runs; refreshed bundled Go CLI verified by packaged acceptance",
+  "macbook_latest_headless": "passed with --workspace-setup and --apple-git-shim; raw report and verified cleanup in macbook-headless.json"
+}

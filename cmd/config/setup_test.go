@@ -76,6 +76,19 @@ func TestSetupUnansweredHookChoiceDoesNotSaveOrSync(t *testing.T) {
 	}
 }
 
+func TestWorkspaceSetupReturnsToAppWithoutRequiringAmxOnPath(t *testing.T) {
+	t.Setenv("AMX_WORKSPACE_HOSTED", "1")
+	t.Setenv("amx_CONFIG", filepath.Join(t.TempDir(), "config.toml"))
+	out, err := runSetupWithInput(t, "claude\n\n\n"+t.TempDir()+"\n\n\nno\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "choose Start Daemon if offered") || !strings.Contains(out, "then choose Launch Project") ||
+		strings.Contains(out, "run amx, press l") {
+		t.Fatalf("workspace setup sent the user to a separately installed CLI: %s", out)
+	}
+}
+
 func TestSetupSummaryNamesMissingRequirementsAndActualDestinations(t *testing.T) {
 	oldLook, oldStatus := setupLookPath, setupBackendStatus
 	t.Cleanup(func() { setupLookPath, setupBackendStatus = oldLook, oldStatus })

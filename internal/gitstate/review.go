@@ -52,6 +52,13 @@ func (b *reviewBuffer) Write(p []byte) (int, error) {
 func reviewGit(ctx context.Context, dir string, args ...string) ([]byte, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	binary, err := gitBinary(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
+		}
+		return nil, false, newReviewGitError("", err)
+	}
 	// A diff against the work tree refreshes the index and writes it back
 	// under index.lock whatever --no-optional-locks says, which can fail an
 	// agent's own commit in the same checkout; diff.autoRefreshIndex=false
@@ -60,10 +67,10 @@ func reviewGit(ctx context.Context, dir string, args ...string) ([]byte, bool, e
 	// can keep old/new line numbers aligned with the hunk header.
 	full := append([]string{"--no-optional-locks", "-c", "diff.autoRefreshIndex=false", "-c", "diff.suppressBlankEmpty=false", "--literal-pathspecs", "-C", dir}, args...)
 	// #nosec G204 -- argv contains git operations and literal selectors, never shell code.
-	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd := exec.CommandContext(ctx, binary, full...)
 	var out, stderr reviewBuffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if ctx.Err() != nil {
 		return nil, false, ctx.Err()
 	}

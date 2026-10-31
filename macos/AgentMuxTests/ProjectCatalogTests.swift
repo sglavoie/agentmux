@@ -101,6 +101,30 @@ final class ProjectCatalogTests: XCTestCase {
 
     // MARK: amx project list / launch
 
+    func testMissingConfigurationOffersSetupButInvalidAndUnreadableFilesRemainErrors() throws {
+        for code in ["config_missing", "config_invalid", "config_unreadable", "unknown"] {
+            let (amx, _) = command { _ in
+                self.output("{\"schema_version\":1,\"error\":{\"code\":\"\(code)\",\"message\":\"Configuration unavailable\"}}", status: 1)
+            }
+            var catalog = ProjectCatalog()
+            _ = catalog.state.begin()
+            catalog.state.finish(ProjectCatalog.fetch(amx), at: t0)
+            XCTAssertEqual(catalog.state.errorCode, code)
+            XCTAssertEqual(ProjectCatalog.offersSetup(catalog.state, unavailable: nil), code == "config_missing")
+            XCTAssertFalse(ProjectCatalog.offersSetup(catalog.state, unavailable: "amx unavailable"))
+            if code == "config_missing" {
+                XCTAssertTrue(ProjectCatalog.guidance(catalog.state, unavailable: nil).contains("Welcome"))
+            } else {
+                XCTAssertTrue(ProjectCatalog.guidance(catalog.state, unavailable: nil).contains("Could not refresh projects"))
+            }
+            _ = catalog.state.begin()
+            XCTAssertFalse(ProjectCatalog.offersSetup(catalog.state, unavailable: nil), "wait for the current config check")
+            catalog.state.finish(.success([ProjectEntry(profile: "work", title: "API")]), at: t0)
+            XCTAssertNil(catalog.state.errorCode)
+            XCTAssertFalse(ProjectCatalog.offersSetup(catalog.state, unavailable: nil))
+        }
+    }
+
     func testFetchDecodesTheProjectList() {
         let (amx, calls) = command { _ in
             self.output(#"{"schema_version":1,"data":[{"profile":"work","title":"API","harness":"claude","directory":"/p/api","groups":["be"]},{"profile":"home","title":"Blog","harness":"codex","directory":"/p/blog","groups":[]}]}"#)

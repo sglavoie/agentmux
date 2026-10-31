@@ -98,8 +98,12 @@ func branchFromRevParse(out []byte) string {
 func runGit(ctx context.Context, directory string, timeout time.Duration, args ...string) ([]byte, error) {
 	commandCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	binary, err := gitBinary(commandCtx)
+	if err != nil {
+		return nil, err
+	}
 	full := append([]string{"--no-optional-locks", "-C", directory}, args...)
-	cmd := exec.CommandContext(commandCtx, "git", full...)
+	cmd := exec.CommandContext(commandCtx, binary, full...)
 	stdout := &boundedBuffer{limit: maxProbeOutput}
 	cmd.Stdout = stdout
 	cmd.Stderr = io.Discard

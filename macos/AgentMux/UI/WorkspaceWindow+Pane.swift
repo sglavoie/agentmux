@@ -338,7 +338,10 @@ extension WorkspaceWindowController {
         case .empty, .terminal, .view, .review:
             // Rows held from the last snapshot can still be chosen; with none
             // listed, what is wrong is the feed, not the sessions.
-            if state.rows.isEmpty, let feed = delegate?.store.feed, let down = WorkspaceSidebar.feedExplanation(feed) {
+            // A fresh installation must be able to create its configuration
+            // before starting a daemon, which requires that configuration.
+            if state.rows.isEmpty, delegate?.workspaceOffersSetup != true,
+               let feed = delegate?.store.feed, let down = WorkspaceSidebar.feedExplanation(feed) {
                 placeholder.show(title: down.title, message: down.message, button: down.action?.title) { [weak self] in
                     if let action = down.action { self?.performDaemonAction(action) }
                 }

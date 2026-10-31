@@ -149,6 +149,13 @@ reads and rechecks the exact recorded source, shows profile and destination, and
 uses History's focus/resume path only after explicit submission. The first-project
 empty state opens `amx workspace-view setup`, which scrubs session identity before
 running the existing guided config setup and retains its summary until Return.
+A missing configuration opens that workspace entry point once at launch, even
+before a daemon is running; invalid and unreadable files remain errors. The
+setup summary returns hosted users to Start Daemon and Launch Project rather
+than requiring a separate CLI installation. `workspace-view setup` establishes
+its host marker itself; a utility terminal does not inherit attach's marker.
+Packaged acceptance is recorded in
+`docs/acceptance/download-first-session/README.md`.
 
 A session's terminal only views a pane the private tmux server holds, so its
 scrollback is the server's (`Ghostty.Scrollback.server`): the View and Edit
@@ -170,6 +177,11 @@ driver sends keys and pointer through a headless VNC client and reads state
 over SSH, because synthetic input posted on the machine itself has side
 effects: a modifier-flagged mouse event from the HID-system event source
 leaves that modifier held system-wide.
+Check the test Mac's current permissions before treating a historical driver's
+constraints as current: SSH System Events and own-window `screencapture` worked
+for the download-first-session acceptance without new grants. `/dev/console`
+ownership or a shared-password VNC login screen alone does not establish that
+the operator's actual session is locked.
 
 Releases of the Agent Mux / agent-session-loop pair go through
 `just paired-release-gate asl_root=… signing_key=…`, which runs both

@@ -235,6 +235,10 @@ extension AppDelegate {
             }
             self.projects.state.finish(result, at: Date())
             if let missing { self.projects.missingDirectories = missing }
+            if self.projects.state.errorCode == "config_missing", !self.hasOfferedInitialSetup {
+                self.hasOfferedInitialSetup = true
+                self.showWorkspace()
+            }
             self.updateWorkspaceProjectMenu()
             self.workspace?.refreshCommands()
             self.statusItem?.refreshSubmenus()
