@@ -141,3 +141,39 @@ fall back to source installation when no compatible asset is listed. A public
 release still needs a committed source revision and both existing release
 gates; the notarized working-tree candidate alone does not authorize or
 replace those gates.
+
+## First independent user walkthrough
+
+The scripted runs above do not establish that a new user can complete setup
+without help. After publication, use the following walkthrough with someone
+unfamiliar with Agent Mux. This walkthrough has not been performed yet.
+
+Give the participant only the published README and a small disposable project.
+They need a supported Mac and an installed, authenticated agent CLI, as the
+README requires. Record whether Agent Mux configuration already exists; an
+existing configuration does not exercise first-run setup. Do not remove their
+configuration or change their normal agent permissions to stage the test.
+The observer should let the participant proceed unaided and record each point
+where they ask for help, hesitate, repeat a step, or cannot recover.
+
+| Task | Evidence to record |
+| --- | --- |
+| Find and install the download | Release URL, version, architecture, macOS version, and any download or Gatekeeper confusion. |
+| Set up the first project using the README | Chosen CLI and profile, whether finding the authenticated home was clear, hook-sync choice, and any help needed. Do not record credentials or private profile contents. |
+| Launch the project and complete a small real task | Whether starting the daemon and launching were discoverable; elapsed time from opening the app to the first useful agent response. |
+| Handle an approval or question | Whether the participant notices attention, finds the waiting session, answers, and sees attention clear. If their normal permissions produce no prompt, record this case as unobserved. |
+| Close and reopen the app while the agent is running | Whether the same live conversation returns and accepts input without a new launch. |
+| End the agent, then resume from Conversation History | Whether the participant finds History, selects the original conversation, and continues it with its prior context. |
+
+For each task, record the actual outcome (`completed unaided`, `completed with
+help`, `failed`, or `unobserved`), elapsed time where useful, the participant's
+description of the problem, and the observer's intervention. Capture only
+consented, sanitized evidence. Finishing after assistance is useful feedback,
+but does not count as an unaided completion.
+
+The walkthrough succeeds when every task completes without observer help;
+an unobserved prompt leaves that task unverified. Rank follow-up work by
+blocked tasks, recurring confusion, and recovery effort. In particular, use
+observed profile/authentication or setup friction to decide whether a native
+setup form would help. Keep this real-user evidence separate from the scripted
+package checks and the waived multi-day daily-driver trial.
