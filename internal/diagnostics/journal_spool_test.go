@@ -128,11 +128,14 @@ func TestAppendSpoolAttemptsLockAfterSlowOpen(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer lockFile.Close()
+				t.Cleanup(func() {
+					if err := errors.Join(unix.Flock(int(lockFile.Fd()), unix.LOCK_UN), lockFile.Close()); err != nil {
+						t.Errorf("release spool fixture: %v", err)
+					}
+				})
 				if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX); err != nil {
 					t.Fatal(err)
 				}
-				defer unix.Flock(int(lockFile.Fd()), unix.LOCK_UN)
 			}
 
 			// Force the open to consume the wait budget. An available lock still
