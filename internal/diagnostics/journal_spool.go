@@ -39,12 +39,10 @@ func (j *Journal) appendSpoolWithOpenHook(ctx context.Context, record []byte, af
 			afterFirstOpen()
 			afterFirstOpen = nil
 		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			_ = file.Close()
-			return ErrLockTimeout
-		}
-		if err := acquireOpenFileLock(ctx, file, remaining); err != nil {
+		// Even when opening the file consumes the wait budget, attempt the
+		// non-blocking lock once. A slow filesystem or descheduled writer does
+		// not mean an otherwise available spool is contended.
+		if err := acquireOpenFileLock(ctx, file, time.Until(deadline)); err != nil {
 			_ = file.Close()
 			return err
 		}
@@ -62,6 +60,9 @@ func (j *Journal) appendSpoolWithOpenHook(ctx context.Context, record []byte, af
 		if pathInfo == nil || !os.SameFile(lockedInfo, pathInfo) {
 			if err := errors.Join(unix.Flock(int(file.Fd()), unix.LOCK_UN), file.Close()); err != nil {
 				return err
+			}
+			if time.Now().After(deadline) {
+				return ErrLockTimeout
 			}
 			continue
 		}

@@ -195,6 +195,11 @@ func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
 
 	sock, server, handler := newTestServerWithRef(t)
 	c := ipc.NewClientWithSocket(sock)
+	// This checks deduplication, not the hook client's latency budget. Give
+	// the concurrent socket exchanges room to finish on a loaded test host,
+	// and require every response before judging the exact request counts.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	const pairs = 10
 	const retriesPerRequest = 4
@@ -205,7 +210,12 @@ func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
 			inner.Add(1)
 			go func() {
 				defer inner.Done()
-				_, _ = c.Send(req)
+				resp, err := c.SendWithContext(ctx, req)
+				if err != nil {
+					t.Errorf("request %s: %v", req.RequestID, err)
+				} else if !resp.OK {
+					t.Errorf("request %s refused: %+v", req.RequestID, resp)
+				}
 			}()
 		}
 		inner.Wait()
@@ -227,6 +237,9 @@ func TestRaceConcurrentRetriesEachLogicalRequestAppliesOnce(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	if t.Failed() {
+		t.FailNow()
+	}
 
 	handler.stateMu.Lock()
 	count := handler.store[9].SubagentCount

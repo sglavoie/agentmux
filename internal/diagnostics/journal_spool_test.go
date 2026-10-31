@@ -115,6 +115,75 @@ func TestAppendSpoolLockIsBounded(t *testing.T) {
 	}
 }
 
+func TestAppendSpoolAttemptsLockAfterSlowOpen(t *testing.T) {
+	t.Parallel()
+
+	for _, busy := range []bool{false, true} {
+		t.Run(fmt.Sprintf("busy=%t", busy), func(t *testing.T) {
+			t.Parallel()
+			journal, paths := testJournal(t, JournalOptions{LockTimeout: time.Millisecond})
+			spoolPath := filepath.Join(paths.SpoolDir, fmt.Sprintf("journal-%d.jsonl", os.Getpid()))
+			if busy {
+				lockFile, err := os.OpenFile(spoolPath, os.O_CREATE|os.O_RDWR, fileMode)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer lockFile.Close()
+				if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX); err != nil {
+					t.Fatal(err)
+				}
+				defer unix.Flock(int(lockFile.Fd()), unix.LOCK_UN)
+			}
+
+			// Force the open to consume the wait budget. An available lock still
+			// permits one immediate attempt; a busy lock must fail without waiting.
+			err := journal.appendSpoolWithOpenHook(context.Background(), []byte("{}\n"), func() {
+				time.Sleep(2 * journal.opts.LockTimeout)
+			})
+			if busy && !errors.Is(err, ErrLockTimeout) {
+				t.Fatalf("busy spool error = %v, want %v", err, ErrLockTimeout)
+			}
+			if !busy && err != nil {
+				t.Fatalf("available spool error = %v", err)
+			}
+			data, readErr := os.ReadFile(spoolPath)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			want := "{}\n"
+			if busy {
+				want = ""
+			}
+			if string(data) != want {
+				t.Fatalf("spool = %q, want %q", data, want)
+			}
+		})
+	}
+}
+
+func TestAppendSpoolStopsRetryingPromotedFileAfterTimeout(t *testing.T) {
+	t.Parallel()
+
+	journal, paths := testJournal(t, JournalOptions{LockTimeout: time.Millisecond})
+	spoolPath := filepath.Join(paths.SpoolDir, fmt.Sprintf("journal-%d.jsonl", os.Getpid()))
+	promotedPath := filepath.Join(paths.JournalDir, "events-spool-slow-open.jsonl")
+	err := journal.appendSpoolWithOpenHook(context.Background(), []byte("{}\n"), func() {
+		if err := os.Rename(spoolPath, promotedPath); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(2 * journal.opts.LockTimeout)
+	})
+	if !errors.Is(err, ErrLockTimeout) {
+		t.Fatalf("promoted spool error = %v, want %v", err, ErrLockTimeout)
+	}
+	if data, err := os.ReadFile(promotedPath); err != nil || len(data) != 0 {
+		t.Fatalf("promoted spool changed: %q, err = %v", data, err)
+	}
+	if _, err := os.Stat(spoolPath); !os.IsNotExist(err) {
+		t.Fatalf("writer retried after timeout: %v", err)
+	}
+}
+
 func TestPromoteSpoolSkipsBusyActiveWriter(t *testing.T) {
 	t.Parallel()
 
