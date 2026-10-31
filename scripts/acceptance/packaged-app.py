@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import socket
@@ -126,6 +127,22 @@ class Acceptance:
         self.tmux("send-keys", "-t", pane, "Enter")
 
     def install_fixture(self):
+        # HOME and PATH do not isolate Notification Center: Alerter also
+        # searches absolute Homebrew/MacPorts paths and posts as Terminal.
+        # Disable every category before a fixture agent or daemon is started,
+        # including when the native acceptance driver installs this fixture.
+        config = self.root / "home/.config/agent-mux/config.toml"
+        content = config.read_text()
+        notifications = "[defaults.notifications]\n" + "".join(
+            f"{key} = false\n" for key in (
+                "error", "permission", "elicitation", "stop", "stop_failure",
+                "stale_active", "hook_silence")) + "\n"
+        content, replaced = re.subn(
+            r"(?ms)^\[defaults\.notifications\][^\n]*\n.*?(?=^\[|\Z)",
+            notifications, content)
+        if not replaced:
+            content = content.rstrip() + "\n\n" + notifications
+        config.write_text(content)
         settings = json.loads((self.root / "home/.claude/settings.json").read_text())
         hook_cases = []
         for event in ("SessionStart", "UserPromptSubmit", "PermissionRequest", "Stop", "SessionEnd"):

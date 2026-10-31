@@ -60,10 +60,16 @@ installed `amx` or tmux, and failing stand-ins for Git, Go, just, Homebrew,
 Xcode, and Kitty. It runs guided setup, executes the hook commands that setup
 installed, observes permission and completion states from the daemon, and
 resumes a seeded conversation with its exact identity. Runtime checks require
-the verified bundled tmux copied outside the app. The update case replaces
-the bundle with a different app build, compares the server generation and
-agent PID, and verifies that the surviving agent still accepts input. Cleanup
-verifies that both the isolated server and daemon have stopped.
+the verified bundled tmux copied outside the app. Before starting the fixture,
+the driver disables every notification category in its disposable config;
+permission and completion attention are still checked through daemon state.
+An isolated HOME and PATH alone do not isolate macOS Notification Center:
+Alerter can be found at an absolute Homebrew/MacPorts path and posts under
+Terminal's identity. These checks do not verify visible notification delivery.
+The update case replaces the bundle with a different app build, compares the
+server generation and agent PID, and verifies that the surviving agent still
+accepts input. Cleanup verifies that both the isolated server and daemon have
+stopped.
 
 [macbook-headless.json](macbook-headless.json) records the final signed candidate
 on the MacBook Pro with `--workspace-setup` and `--apple-git-shim`. All assertions
