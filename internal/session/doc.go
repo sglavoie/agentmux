@@ -1,4 +1,4 @@
-// Package session is the Kitty-backed session lifecycle: launching, focusing,
+// Package session is the backend-aware session lifecycle: launching, focusing,
 // closing, and restarting managed harness tabs, resolving the exact live owner
 // of a conversation, and constructing the harness invocation a launch runs.
 //
@@ -14,4 +14,6 @@
 // GroupRef/PaneRef are where a Kitty tab or window ID becomes a backend.Ref.
 // docs/backend-migration.md records that split and the workflows that depend
 // on it.
+// Successful launches also record compact Flight Log events, independently of
+// diagnostic logging. A failed or deduplicated launch records no usage.
 package session

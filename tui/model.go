@@ -16,6 +16,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/flightlog"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
@@ -37,6 +38,12 @@ import (
 
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
+	flightReport                                          *flightlog.Report
+	flightRead                                            func(flightlog.Filters, []string, int) tea.Cmd
+	flightFilters                                         flightlog.Filters
+	flightLoading, flightDetail                           bool
+	flightError, flightEventKind                          string
+	flightSequence, flightTab, flightCursor, flightOffset int
 	// deps
 	client kitty.KittyClient
 	cfg    *config.Config
@@ -686,6 +693,7 @@ const (
 	ModeHealth                 // scrollable details for every health check, from cached facts
 	ModeSend                   // text and keys for one tmux session, sent without attaching
 	ModePlanRun                // choices for starting an agent-session-loop run of one plan
+	ModeFlightLog              // durable session statistics and milestone collection
 )
 
 // String names the mode in stable lower snake case ("list",
@@ -694,6 +702,8 @@ const (
 // an out-of-range value reads "unknown" rather than panicking.
 func (mode Mode) String() string {
 	switch mode {
+	case ModeFlightLog:
+		return "flight_log"
 	case ModeList:
 		return "list"
 	case ModeSearch:

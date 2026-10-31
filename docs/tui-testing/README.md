@@ -504,6 +504,8 @@ inventory is:
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |
 | [`command-palette-wide.json`](scenarios/command-palette-wide.json) | `basic` | wide empty-query palette shows grouped commands and inline disabled reasons |
+| [`flight-log-wide.json`](scenarios/flight-log-wide.json) | `flight_log` | local statistics, observation coverage, and weekly recap |
+| [`flight-log-narrow.json`](scenarios/flight-log-narrow.json) | `flight_log` | session scorecard and counts in a narrow terminal |
 | [`compact-below-split-floor.json`](scenarios/compact-below-split-floor.json) | `project_families` | below the split's width floor the dashboard is the queue alone — no divider, no inspector, and no metadata the one-line row cannot carry — and the footer is the six labelled essentials, which is all 72 cells pay for |
 | [`compact-family-below-split-floor.json`](scenarios/compact-family-below-split-floor.json) | `project_families` | the same floor in Projects view: a collapsed family summary carries its own tally and nothing beside it, and the one-cell-wider fold hint tips the footer wholesale into its bare-key spelling |
 | [`config-picker-fit.json`](scenarios/config-picker-fit.json) | `wide_profiles` | profile/config picker fits with long profile names, reached the way the dashboard reaches it now — `a` for the actions menu, then its `C` entry |

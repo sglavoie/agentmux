@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/flightlog"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
@@ -183,7 +184,7 @@ func launchFresh(rt Runtime, sess config.Session, acc config.Account, cfg *confi
 	if err != nil {
 		return result, err
 	}
-	return result, launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, policy)
+	return result, launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, policy, launchFlightIdentity{operation: lin.operation})
 }
 
 // LaunchContinuity launches a native resume or fork in a new Kitty tab. The
@@ -255,7 +256,7 @@ func LaunchContinuityOn(
 // launchInvocation carries the Kitty-facing half shared by normal and
 // continuity launches. The caller must have already built the harness-owned
 // invocation, so this function never reconstructs CLI arguments.
-func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, formattedTitle string, invocation harness.Invocation, policy LaunchPolicy) error {
+func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, formattedTitle string, invocation harness.Invocation, policy LaunchPolicy, flightIdentity ...launchFlightIdentity) error {
 	osWindows, err := client.ListWindows()
 	if err != nil {
 		return fmt.Errorf("listing running sessions: %w", err)
@@ -305,7 +306,7 @@ func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.
 		return fmt.Errorf("launching session %q: %w", formattedTitle, err)
 	}
 	launchDebug.Printf("Launch: LaunchTab succeeded")
-	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport)
+	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport, flightIdentity...)
 
 	// Apply tab color with exponential backoff retry. Agent Mux owns the
 	// inactive profile accent; active colors reset to kitty.conf so the focused
@@ -370,7 +371,40 @@ func activeLaunchIDs(windows []kitty.OSWindow) map[string]struct{} {
 	return active
 }
 
-func recordHarnessLaunch(cfg *config.Config, sess config.Session, acc config.Account, invocation harness.Invocation, outcome, reason string, nativeReport diagnostics.NativeReport) {
+type launchFlightIdentity struct {
+	runtimeID string
+	operation string
+}
+
+func recordHarnessLaunch(cfg *config.Config, sess config.Session, acc config.Account, invocation harness.Invocation, outcome, reason string, nativeReport diagnostics.NativeReport, identity ...launchFlightIdentity) {
+	if outcome == "success" {
+		e := flightlog.Event{ID: "launch:" + invocation.LaunchID, At: time.Now().UTC(), Kind: "launch", Key: "launch:" + invocation.LaunchID, LaunchID: invocation.LaunchID, Harness: invocation.Harness, Profile: effectiveSessionProfile(sess, acc), Project: sess.Title, Operation: string(invocation.Kind)}
+		if len(identity) > 0 {
+			e.RuntimeSessionID = identity[0].runtimeID
+			if identity[0].operation != "" {
+				e.Operation = identity[0].operation
+			}
+		}
+		if cfg != nil {
+			for _, profile := range cfg.Accounts {
+				name := profile.EffectiveHarness()
+				if !slices.Contains(e.Fleet, name) {
+					e.Fleet = append(e.Fleet, name)
+				}
+			}
+		}
+		if invocation.SessionID != "" && invocation.Kind != harness.InvocationFork {
+			e.ConversationID = invocation.Harness + ":" + invocation.SessionID
+		}
+		if store, err := flightlog.DefaultStore(); err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			err = store.Append(ctx, e)
+			cancel()
+			if err != nil {
+				slog.Warn("flight log: launch could not be recorded", "error", err)
+			}
+		}
+	}
 	if cfg == nil || !cfg.Defaults.Diagnostics.JournalEnabledValue() {
 		return
 	}
@@ -404,6 +438,12 @@ func recordHarnessLaunch(cfg *config.Config, sess config.Session, acc config.Acc
 		"native_excess_bytes":        strconv.FormatInt(nativeReport.ExcessBytes, 10),
 		"native_active_excess_bytes": strconv.FormatInt(nativeReport.ActiveExcessBytes, 10),
 		"native_maintenance_errors":  strconv.Itoa(len(nativeReport.Errors)),
+	}
+	if len(identity) > 0 {
+		envelope.Evidence["runtime_session_id"] = identity[0].runtimeID
+		if identity[0].operation != "" {
+			envelope.Evidence["operation"] = identity[0].operation
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()

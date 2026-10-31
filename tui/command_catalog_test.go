@@ -61,6 +61,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.SearchPlans, commands.GroupNavigate, "Search Plans", []string{"agent plans", "history"}, ""},
 		{commands.ManageWorktrees, commands.GroupNavigate, "Manage Worktrees", []string{"git", "branches", "inventory"}, ""},
 		{commands.ShowRuns, commands.GroupNavigate, "Show Runs", []string{"asl", "loop", "needs action"}, ""},
+		{commands.ShowFlightLog, commands.GroupNavigate, "Show Flight Log", []string{"stats", "statistics", "achievements", "heatmap"}, ""},
 		{commands.FilterSessions, commands.GroupNavigate, "Filter Sessions", []string{"find", "search"}, "/"},
 		{commands.CycleProfileFilter, commands.GroupNavigate, "Cycle Profile Filter", []string{"account", "filter", "running"}, ""},
 		{commands.ClearFilters, commands.GroupNavigate, "Clear Filters", []string{"chips", "reset"}, "esc"},
@@ -193,6 +194,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.SearchPlans:        noDashboardKey,
 		commands.ManageWorktrees:    noDashboardKey,
 		commands.ShowRuns:           noDashboardKey,
+		commands.ShowFlightLog:      noDashboardKey,
 		commands.ToggleListView:     noDashboardKey,
 		commands.ResortTabs:         noDashboardKey,
 		commands.UndoClose:          keyUndoClose,
@@ -396,7 +398,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 34 {
-		t.Fatalf("clean catalog has %d visible commands, want 34", visible)
+	if visible != 35 {
+		t.Fatalf("clean catalog has %d visible commands, want 35", visible)
 	}
 }

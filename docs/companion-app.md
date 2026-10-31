@@ -563,7 +563,7 @@ be rebuilt for checkout review.
 Drag the file-list divider to choose its width; the preference and collapsed state
 survive reopening and app restarts, including embedded reviews. The sidebar button
 or **⌘⌥S** hides files to give the diff more room. Reopening restores keyboard focus
-to the selected file; **⌘⇧F** reveals and focuses the list. Resizing clamps the
+to the selected file; **⌘⌥F** reveals and focuses the list. Resizing clamps the
 visible width without replacing the saved preference. The worktree toolbar occupies
 space only when there is a review or error to display.
 
@@ -621,7 +621,7 @@ pauses without an unanswered question. Select a run for progress, blockers, and
 permitted controls above the scrolling plan sessions. **Run details** expands
 paths, identifiers, and timestamps; **Recorded verification** expands check evidence.
 The sidebar button or **⌘⌥S** hides the run list and restores focus to it on reopening;
-**⌘⇧F** reveals and focuses it. Divider width and collapsed state are remembered.
+**⌘⌥F** reveals and focuses it. Divider width and collapsed state are remembered.
 
 **Answer…** is primary for an open question. For verification failures, the detail
 heading names the failed check; **Inspect Failed Check** (⌘⇧I) expands recorded
@@ -725,9 +725,9 @@ the app is active. History and Changes also have separate resizable native windo
 | View | Keys |
 | --- | --- |
 | History | ⌘F search; Down from search reveals results; ⌘G / ⌘⇧G next/previous match; ⌘R refresh transcript; ⌘Return resume/focus; ⌘⇧Return fork; ⌘⌥S toggle results |
-| Changes | ⌘G / ⌘⇧G next/previous hunk; ⌘R refresh comparison; ⌘E open file; ⌘⇧F reveal/focus files; ⌘⇧E edit base; ⌘⌥S toggle files |
-| Runs | ⌘R refresh; ⌘⇧F reveal/focus runs; ⌘Return open session; ⌘⇧I inspect failed check; ⌘⌥S toggle runs |
-| Activity | ⌘R refresh; ⌘⇧F reveal/focus events; ⌘Return focus live session; ⌘⇧Return open recorded conversation; ⌘⌥S toggle events |
+| Changes | ⌘G / ⌘⇧G next/previous hunk; ⌘R refresh comparison; ⌘E open file; ⌘⌥F reveal/focus files; ⌘⇧E edit base; ⌘⌥S toggle files |
+| Runs | ⌘R refresh; ⌘⌥F reveal/focus runs; ⌘Return open session; ⌘⇧I inspect failed check; ⌘⌥S toggle runs |
+| Activity | ⌘R refresh; ⌘⌥F reveal/focus events; ⌘Return focus live session; ⌘⇧Return open recorded conversation; ⌘⌥S toggle events |
 
 **⌘W** closes a standalone review window and returns to the workspace when open.
 The four review windows share one minimum size and remember their placement. Each

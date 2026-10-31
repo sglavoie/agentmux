@@ -1,0 +1,13 @@
+{
+  "name": "flight-log-wide",
+  "fixture": "flight_log",
+  "size": {"width": 120, "height": 42},
+  "actions": [{"type": "command", "command_id": "explore.show-flight-log"}],
+  "assertions": [
+    {"type": "mode_equals", "mode": "flight_log"},
+    {"type": "contains_text", "text": "1 launches · 3 state changes · 1 turns finished"},
+    {"type": "contains_text", "text": "Tracking since"},
+    {"type": "contains_text", "text": "THIS WEEK"},
+    {"type": "no_layout_issues"}
+  ]
+}

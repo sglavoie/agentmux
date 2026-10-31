@@ -21,6 +21,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/flightlog"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/plans"
@@ -49,12 +50,13 @@ import (
 // and a default terminal size. Building a driver from a fixture never reads the
 // operator's real config and never launches a subprocess.
 type uitestFixture struct {
-	Notices     []Toast
-	Name        string
-	Description string
-	Size        UITestSize
-	Config      *config.Config
-	Windows     []kitty.OSWindow
+	FlightEvents []flightlog.Event
+	Notices      []Toast
+	Name         string
+	Description  string
+	Size         UITestSize
+	Config       *config.Config
+	Windows      []kitty.OSWindow
 	// Portable is the sessions a non-Kitty backend hosts, already carrying the
 	// process-local IDs discovery would give them. NoKitty additionally runs
 	// the dashboard with no Kitty client at all, the way it runs in any other
@@ -215,6 +217,7 @@ var uitestFixtureBuilders = map[string]func() uitestFixture{
 	"paused_queue":       pausedQueueFixture,
 	"preview_failure":    previewFailureFixture,
 	"portable_tmux":      portableTmuxFixture,
+	"flight_log":         flightLogFixture,
 }
 
 func actionFeedbackFixture() uitestFixture {

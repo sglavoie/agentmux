@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/cli"
@@ -20,8 +21,8 @@ func TestSessionJSONCommandSurfaceIsVersioned(t *testing.T) {
 	}
 	// activity and changes are built by constructors, so they are found by
 	// name under the family they were registered in.
-	for _, name := range []string{"activity", "changes"} {
-		command, _, err := sessionCmd.Find([]string{name})
+	for _, name := range []string{"activity", "changes", "flight-log", "flight-log export", "flight-log settings", "flight-log reset", "flight-log import"} {
+		command, _, err := sessionCmd.Find(strings.Fields(name))
 		if err != nil || command == sessionCmd {
 			t.Fatalf("session %s is not registered: %v", name, err)
 		}

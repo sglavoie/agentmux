@@ -11,6 +11,22 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testFlightLogOverviewAtMinimumAndWideSizes() async throws {
+        let command = FlightLogFixture.command()
+        let model = WorkspaceFlightLogModel(command: { command }, runner: PreviewRunner())
+        model.refresh()
+        XCTAssertNil(model.error)
+        for dark in [false, true] {
+            for width in [CGFloat(780), CGFloat(1060)] {
+                try await render(WorkspaceFlightLogView(model: model), name: "flight-log-\(Int(width))-\(dark)", width: width, height: 720,
+                                 dark: dark, expected: ["Flight Log", "Launches", "State changes", "Activity calendar"])
+            }
+        }
+        for (tab, expected) in [("sessions", ["rs-flight", "Open Conversation"]), ("milestones", ["First Flight", "Frequent Flyer"])] {
+            try await render(WorkspaceFlightLogView(model: model, initialTab: tab), name: "flight-log-\(tab)-minimum", width: 780, height: 500,
+                             expected: expected)
+        }
+    }
     func testWaitingReadStatesAndFormattedQuestionAtNarrowWidth() async throws {
         for dark in [false, true] {
             let inspector = WorkspaceInspectorView()

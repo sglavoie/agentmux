@@ -39,6 +39,7 @@ const (
 	SearchPlans        ID = "explore.search-plans"
 	ManageWorktrees    ID = "explore.manage-worktrees"
 	ShowRuns           ID = "explore.show-runs"
+	ShowFlightLog      ID = "explore.show-flight-log"
 	ToggleInspector    ID = "explore.toggle-inspector"
 	SwitchProject      ID = "explore.switch-project"
 	ToggleListView     ID = "explore.toggle-list-view"

@@ -164,7 +164,7 @@ final class WorkspaceConsistencyTests: XCTestCase {
         XCTAssertEqual(focused, 1)
         XCTAssertTrue(host.performKeyEquivalent(with: try key("\r", modifiers: [.command, .shift], in: window)))
         XCTAssertEqual(opened, 1)
-        XCTAssertTrue(host.performKeyEquivalent(with: try key("f", modifiers: [.command, .shift], in: window)))
+        XCTAssertTrue(host.performKeyEquivalent(with: try key("f", modifiers: [.command, .option], in: window)))
         XCTAssertTrue(host.performKeyEquivalent(with: try key("w", in: window)))
         XCTAssertFalse(window.isVisible)
 

@@ -22,6 +22,8 @@ import (
 func renderFooter(m Model) string {
 	var lines []string
 	switch m.mode {
+	case ModeFlightLog:
+		lines = nonEmptyFooterLines(footerLine(m.width, " · ", "1/2/3 views", "p period", "f project", "h harness", "a profile", "j/k move", "enter scorecard", "e events", "s conversation", "r refresh", "esc back"))
 	case ModeSearch:
 		lines = nonEmptyFooterLines(
 			footerLine(m.width, " · ", "filter: @profile", "#project", "%harness", "!state (!attention)", "word", "\\@ \\# \\% \\! literal"),

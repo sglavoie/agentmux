@@ -62,6 +62,14 @@ struct WorkspaceActivityView: View {
             }.frame(height: 20)
             WorkspaceReadFailure(title: "Activity", error: model.error, retained: model.report != nil,
                                  loading: model.loading, retry: { model.refresh() })
+            if let session = model.flightSession {
+                HStack {
+                    Text("Flight Log: \(session.title) · \(model.flightKind == "all" ? "all events" : FlightEvent.stateName(model.flightKind))").font(.caption)
+                    Spacer()
+                    Button("Clear session filter") { model.clearFlightFilter() }
+                }
+                Text("Activity is limited to retained journal history. Flight Log totals may include older events.").font(.caption).foregroundStyle(.secondary)
+            }
             WorkspaceReviewSplit(layout: $model.layout, title: "Events", minimum: 220, detailMinimum: 360) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
                     ForEach(model.visible) { entry in
@@ -147,11 +155,11 @@ struct WorkspaceActivityView: View {
             }
         } else if modifiers == [.command, .shift] {
             switch key {
-            case "f": model.layout.collapsed = false; focus = .list
             case "\r": model.openConversation()
             default: return false
             }
-        } else if modifiers == [.command, .option], key == "s" { toggleEvents() }
+        } else if modifiers == [.command, .option], key == "f" { model.layout.collapsed = false; focus = .list }
+        else if modifiers == [.command, .option], key == "s" { toggleEvents() }
         else { return false }
         return true
     }

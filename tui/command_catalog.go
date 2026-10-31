@@ -122,6 +122,7 @@ func commandDeclarations() []commands.Command[Model] {
 // place rather than opening something else.
 func navigateCommandDeclarations() []commands.Command[Model] {
 	return []commands.Command[Model]{
+
 		{
 			ID: commands.OpenLauncher, Group: commands.GroupNavigate,
 			Title:       commands.StaticTitle[Model]("Open Launcher"),
@@ -168,6 +169,13 @@ func navigateCommandDeclarations() []commands.Command[Model] {
 				updated, cmd := m.enterASLRuns()
 				return updated.(Model), cmd
 			},
+		},
+		{
+			ID: commands.ShowFlightLog, Group: commands.GroupNavigate,
+			Title:       commands.StaticTitle[Model]("Show Flight Log"),
+			Description: "Explore session statistics, milestones, and weekly recaps.",
+			Aliases:     []string{"stats", "statistics", "achievements", "heatmap"},
+			Execute:     func(m Model, _ commands.Context) (Model, tea.Cmd) { return m.enterFlightLog() },
 		},
 		{
 			ID: commands.FilterSessions, Group: commands.GroupNavigate,

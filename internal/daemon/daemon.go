@@ -238,6 +238,8 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// Restored tmux sessions are labeled before the socket binds, so the first
 	// snapshot a companion gets already says which project and profile each is.
 	handler.labelRuntimeSessions(time.Now())
+	// Restoring a presentation is not a newly observed state transition.
+	defer handler.startFlightLog()()
 
 	server, err := ipc.NewServer(socketPath, handler)
 	if err != nil {

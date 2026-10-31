@@ -170,7 +170,7 @@ extension WorkspaceWorkflowPolishTests {
         XCTAssertTrue(key("E", flags: [.command, .shift]))
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertTrue((window.firstResponder as? NSTextView)?.isFieldEditor == true)
-        XCTAssertTrue(key("F", flags: [.command, .shift]))
+        XCTAssertTrue(key("f", flags: [.command, .option]))
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertFalse((window.firstResponder as? NSTextView)?.isFieldEditor == true)
         let before = reads

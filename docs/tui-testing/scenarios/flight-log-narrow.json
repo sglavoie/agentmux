@@ -1,0 +1,16 @@
+{
+  "name": "flight-log-narrow",
+  "fixture": "flight_log",
+  "size": {"width": 48, "height": 20},
+  "actions": [
+    {"type": "command", "command_id": "explore.show-flight-log"},
+    {"type": "key", "key": "2"},
+    {"type": "key", "key": "enter"}
+  ],
+  "assertions": [
+    {"type": "mode_equals", "mode": "flight_log"},
+    {"type": "contains_text", "text": "rs-flight"},
+    {"type": "contains_text", "text": "1 questions · 0 permissions"},
+    {"type": "no_layout_issues"}
+  ]
+}

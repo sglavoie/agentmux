@@ -4,7 +4,7 @@ import AppKit
 /// menu equivalents, never Carbon registrations that capture keys in other apps.
 enum WorkspaceShortcut: String, CaseIterable, Identifiable {
     case splitShell, splitChanges, focusOtherPane, swapPanes, hideOtherPane
-    case runs, runPlan, activity, history, changes, commandPalette
+    case runs, runPlan, activity, flightLog, history, changes, commandPalette
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -16,6 +16,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .runs: return "ASL Runs…"
         case .runPlan: return "Run a Plan…"
         case .activity: return "Since Last Looked…"
+        case .flightLog: return "Flight Log…"
         case .history: return "Conversation History…"
         case .changes: return "Checkout Changes…"
         case .commandPalette: return "Command Palette…"
@@ -31,15 +32,15 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .runs: return #selector(AppDelegate.showRuns(_:))
         case .runPlan: return #selector(AppDelegate.runPlan(_:))
         case .activity: return #selector(AppDelegate.showActivity(_:))
+        case .flightLog: return #selector(AppDelegate.showFlightLog(_:))
         case .history: return #selector(AppDelegate.showHistory(_:))
         case .changes: return #selector(AppDelegate.showChanges(_:))
         case .commandPalette: return #selector(AppDelegate.showCommandPalette(_:))
         }
     }
-    /// ⌘⇧ and a letter for the command palette and the review windows;
-    /// none for the panes. Each is free in the main menu and among Ghostty's
-    /// ⌘⇧ bindings (which take , D F G J P T V W Z [ ] ↑ ↓ and Return), and
-    /// none holds Option, which stays the focused program's.
+    /// ⌘⇧ and a letter for the command palette and review windows. Menu
+    /// shortcuts take precedence over Ghostty's bindings. Pane actions have
+    /// no default, and Option stays with the focused program.
     var defaultCombo: HotKeyCombo? {
         defaultKey.flatMap { HotKeyCombo(string: "shift+cmd+" + $0, scope: .application) }
     }
@@ -49,6 +50,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .runs: return "r"
         case .runPlan: return "n"
         case .activity: return "u"
+        case .flightLog: return "f"
         case .history: return "h"
         case .changes: return "c"
         case .splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane: return nil

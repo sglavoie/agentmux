@@ -93,7 +93,7 @@ struct WorkspaceChangesView: View {
                                 }.tag(file.path)
                             }
                         }.focused($focus, equals: .files)
-                            .help("Changed files (⌘⇧F)")
+                            .help("Changed files (⌘⌥F)")
                     } detail: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
@@ -211,11 +211,11 @@ struct WorkspaceChangesView: View {
         } else if modifiers == [.command, .shift] {
             switch key {
             case "g": if !model.reading && model.patchError == nil { moveHunk(-1) }
-            case "f": model.layout.collapsed = false; focus = .files
             case "e": focus = .base
             default: return false
             }
-        } else if modifiers == [.command, .option], key == "s" { toggleFiles() }
+        } else if modifiers == [.command, .option], key == "f" { model.layout.collapsed = false; focus = .files }
+        else if modifiers == [.command, .option], key == "s" { toggleFiles() }
         else { return false }
         return true
     }

@@ -1,0 +1,925 @@
+{
+  "schema_version": 1,
+  "tracking_since": "2026-10-23T16:00:00Z",
+  "generated_at": "2026-10-30T16:00:00Z",
+  "since": "2026-10-26T00:00:00Z",
+  "timezone": "UTC",
+  "settings": {
+    "enabled": true,
+    "celebrations": true
+  },
+  "filters": {
+    "period": "week",
+    "project": "",
+    "harness": "",
+    "profile": "",
+    "session": ""
+  },
+  "totals": {
+    "launches": 4,
+    "fresh": 1,
+    "resumes": 1,
+    "forks": 1,
+    "restarts": 1,
+    "conversations": 4,
+    "projects": 1,
+    "state_changes": 12,
+    "turns_finished": 4,
+    "questions": 4,
+    "permissions": 0,
+    "errors": 0,
+    "runs_finished": 0,
+    "working_seconds": 80,
+    "waiting_seconds": 80,
+    "observed_seconds": 240,
+    "peak_working": 1
+  },
+  "lifetime": {
+    "launches": 4,
+    "fresh": 1,
+    "resumes": 1,
+    "forks": 1,
+    "restarts": 1,
+    "conversations": 4,
+    "projects": 1,
+    "state_changes": 12,
+    "turns_finished": 4,
+    "questions": 4,
+    "permissions": 0,
+    "errors": 0,
+    "runs_finished": 0,
+    "working_seconds": 80,
+    "waiting_seconds": 80,
+    "observed_seconds": 240,
+    "peak_working": 1
+  },
+  "days": [
+    {
+      "date": "2026-10-17",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-18",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-19",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-20",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-21",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-22",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-23",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-24",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-25",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-26",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-27",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-28",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-29",
+      "metrics": {
+        "launches": 0,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 0,
+        "projects": 0,
+        "state_changes": 0,
+        "turns_finished": 0,
+        "questions": 0,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 0,
+        "waiting_seconds": 0,
+        "observed_seconds": 0,
+        "peak_working": 0
+      }
+    },
+    {
+      "date": "2026-10-30",
+      "metrics": {
+        "launches": 4,
+        "fresh": 1,
+        "resumes": 1,
+        "forks": 1,
+        "restarts": 1,
+        "conversations": 4,
+        "projects": 1,
+        "state_changes": 12,
+        "turns_finished": 4,
+        "questions": 4,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 80,
+        "waiting_seconds": 80,
+        "observed_seconds": 240,
+        "peak_working": 1
+      }
+    }
+  ],
+  "sessions": [
+    {
+      "key": "rs-flight-3",
+      "runtime_session_id": "rs-flight-3",
+      "launch_id": "launch-3",
+      "conversation_id": "codex:conversation-3",
+      "harness": "codex",
+      "profile": "work",
+      "project": "API",
+      "operation": "restart",
+      "first_at": "2026-10-30T15:06:00Z",
+      "last_at": "2026-10-30T15:07:20Z",
+      "metrics": {
+        "launches": 1,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 1,
+        "conversations": 1,
+        "projects": 1,
+        "state_changes": 3,
+        "turns_finished": 1,
+        "questions": 1,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 20,
+        "waiting_seconds": 20,
+        "observed_seconds": 60,
+        "peak_working": 1
+      },
+      "state_counts": {
+        "bolt": 1,
+        "question": 1,
+        "stop": 1
+      },
+      "timeline": [
+        {
+          "from": "2026-10-30T15:06:20Z",
+          "to": "2026-10-30T15:06:40Z",
+          "icon": "bolt",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:06:40Z",
+          "to": "2026-10-30T15:07:00Z",
+          "icon": "question",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:07:00Z",
+          "to": "2026-10-30T15:07:20Z",
+          "icon": "stop",
+          "looping": false,
+          "observed": true
+        }
+      ],
+      "events": [
+        {
+          "id": "event-3-0",
+          "at": "2026-10-30T15:06:00Z",
+          "kind": "launch",
+          "key": "rs-flight-3",
+          "runtime_session_id": "rs-flight-3",
+          "launch_id": "launch-3",
+          "conversation_id": "codex:conversation-3",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "operation": "restart",
+          "epoch": "fixture",
+          "fleet": [
+            "codex"
+          ]
+        },
+        {
+          "id": "event-3-1",
+          "at": "2026-10-30T15:06:20Z",
+          "kind": "state",
+          "key": "rs-flight-3",
+          "runtime_session_id": "rs-flight-3",
+          "conversation_id": "codex:conversation-3",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-3-2",
+          "at": "2026-10-30T15:06:40Z",
+          "kind": "state",
+          "key": "rs-flight-3",
+          "runtime_session_id": "rs-flight-3",
+          "conversation_id": "codex:conversation-3",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "question",
+          "before_icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-3-3",
+          "at": "2026-10-30T15:07:00Z",
+          "kind": "state",
+          "key": "rs-flight-3",
+          "runtime_session_id": "rs-flight-3",
+          "conversation_id": "codex:conversation-3",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "stop",
+          "before_icon": "question",
+          "epoch": "fixture"
+        }
+      ],
+      "partial": false
+    },
+    {
+      "key": "rs-flight-2",
+      "runtime_session_id": "rs-flight-2",
+      "launch_id": "launch-2",
+      "conversation_id": "codex:conversation-2",
+      "harness": "codex",
+      "profile": "work",
+      "project": "API",
+      "operation": "fork",
+      "first_at": "2026-10-30T15:04:00Z",
+      "last_at": "2026-10-30T15:05:20Z",
+      "metrics": {
+        "launches": 1,
+        "fresh": 0,
+        "resumes": 0,
+        "forks": 1,
+        "restarts": 0,
+        "conversations": 1,
+        "projects": 1,
+        "state_changes": 3,
+        "turns_finished": 1,
+        "questions": 1,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 20,
+        "waiting_seconds": 20,
+        "observed_seconds": 60,
+        "peak_working": 1
+      },
+      "state_counts": {
+        "bolt": 1,
+        "question": 1,
+        "stop": 1
+      },
+      "timeline": [
+        {
+          "from": "2026-10-30T15:04:20Z",
+          "to": "2026-10-30T15:04:40Z",
+          "icon": "bolt",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:04:40Z",
+          "to": "2026-10-30T15:05:00Z",
+          "icon": "question",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:05:00Z",
+          "to": "2026-10-30T15:05:20Z",
+          "icon": "stop",
+          "looping": false,
+          "observed": true
+        }
+      ],
+      "events": [
+        {
+          "id": "event-2-0",
+          "at": "2026-10-30T15:04:00Z",
+          "kind": "launch",
+          "key": "rs-flight-2",
+          "runtime_session_id": "rs-flight-2",
+          "launch_id": "launch-2",
+          "conversation_id": "codex:conversation-2",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "operation": "fork",
+          "epoch": "fixture",
+          "fleet": [
+            "codex"
+          ]
+        },
+        {
+          "id": "event-2-1",
+          "at": "2026-10-30T15:04:20Z",
+          "kind": "state",
+          "key": "rs-flight-2",
+          "runtime_session_id": "rs-flight-2",
+          "conversation_id": "codex:conversation-2",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-2-2",
+          "at": "2026-10-30T15:04:40Z",
+          "kind": "state",
+          "key": "rs-flight-2",
+          "runtime_session_id": "rs-flight-2",
+          "conversation_id": "codex:conversation-2",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "question",
+          "before_icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-2-3",
+          "at": "2026-10-30T15:05:00Z",
+          "kind": "state",
+          "key": "rs-flight-2",
+          "runtime_session_id": "rs-flight-2",
+          "conversation_id": "codex:conversation-2",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "stop",
+          "before_icon": "question",
+          "epoch": "fixture"
+        }
+      ],
+      "partial": false
+    },
+    {
+      "key": "rs-flight-1",
+      "runtime_session_id": "rs-flight-1",
+      "launch_id": "launch-1",
+      "conversation_id": "codex:conversation-1",
+      "harness": "codex",
+      "profile": "work",
+      "project": "API",
+      "operation": "resume",
+      "first_at": "2026-10-30T15:02:00Z",
+      "last_at": "2026-10-30T15:03:20Z",
+      "metrics": {
+        "launches": 1,
+        "fresh": 0,
+        "resumes": 1,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 1,
+        "projects": 1,
+        "state_changes": 3,
+        "turns_finished": 1,
+        "questions": 1,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 20,
+        "waiting_seconds": 20,
+        "observed_seconds": 60,
+        "peak_working": 1
+      },
+      "state_counts": {
+        "bolt": 1,
+        "question": 1,
+        "stop": 1
+      },
+      "timeline": [
+        {
+          "from": "2026-10-30T15:02:20Z",
+          "to": "2026-10-30T15:02:40Z",
+          "icon": "bolt",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:02:40Z",
+          "to": "2026-10-30T15:03:00Z",
+          "icon": "question",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:03:00Z",
+          "to": "2026-10-30T15:03:20Z",
+          "icon": "stop",
+          "looping": false,
+          "observed": true
+        }
+      ],
+      "events": [
+        {
+          "id": "event-1-0",
+          "at": "2026-10-30T15:02:00Z",
+          "kind": "launch",
+          "key": "rs-flight-1",
+          "runtime_session_id": "rs-flight-1",
+          "launch_id": "launch-1",
+          "conversation_id": "codex:conversation-1",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "operation": "resume",
+          "epoch": "fixture",
+          "fleet": [
+            "codex"
+          ]
+        },
+        {
+          "id": "event-1-1",
+          "at": "2026-10-30T15:02:20Z",
+          "kind": "state",
+          "key": "rs-flight-1",
+          "runtime_session_id": "rs-flight-1",
+          "conversation_id": "codex:conversation-1",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-1-2",
+          "at": "2026-10-30T15:02:40Z",
+          "kind": "state",
+          "key": "rs-flight-1",
+          "runtime_session_id": "rs-flight-1",
+          "conversation_id": "codex:conversation-1",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "question",
+          "before_icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-1-3",
+          "at": "2026-10-30T15:03:00Z",
+          "kind": "state",
+          "key": "rs-flight-1",
+          "runtime_session_id": "rs-flight-1",
+          "conversation_id": "codex:conversation-1",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "stop",
+          "before_icon": "question",
+          "epoch": "fixture"
+        }
+      ],
+      "partial": false
+    },
+    {
+      "key": "rs-flight-0",
+      "runtime_session_id": "rs-flight-0",
+      "launch_id": "launch-0",
+      "conversation_id": "codex:conversation-0",
+      "harness": "codex",
+      "profile": "work",
+      "project": "API",
+      "operation": "fresh",
+      "first_at": "2026-10-30T15:00:00Z",
+      "last_at": "2026-10-30T15:01:20Z",
+      "metrics": {
+        "launches": 1,
+        "fresh": 1,
+        "resumes": 0,
+        "forks": 0,
+        "restarts": 0,
+        "conversations": 1,
+        "projects": 1,
+        "state_changes": 3,
+        "turns_finished": 1,
+        "questions": 1,
+        "permissions": 0,
+        "errors": 0,
+        "runs_finished": 0,
+        "working_seconds": 20,
+        "waiting_seconds": 20,
+        "observed_seconds": 60,
+        "peak_working": 1
+      },
+      "state_counts": {
+        "bolt": 1,
+        "question": 1,
+        "stop": 1
+      },
+      "timeline": [
+        {
+          "from": "2026-10-30T15:00:20Z",
+          "to": "2026-10-30T15:00:40Z",
+          "icon": "bolt",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:00:40Z",
+          "to": "2026-10-30T15:01:00Z",
+          "icon": "question",
+          "looping": false,
+          "observed": true
+        },
+        {
+          "from": "2026-10-30T15:01:00Z",
+          "to": "2026-10-30T15:01:20Z",
+          "icon": "stop",
+          "looping": false,
+          "observed": true
+        }
+      ],
+      "events": [
+        {
+          "id": "event-0-0",
+          "at": "2026-10-30T15:00:00Z",
+          "kind": "launch",
+          "key": "rs-flight-0",
+          "runtime_session_id": "rs-flight-0",
+          "launch_id": "launch-0",
+          "conversation_id": "codex:conversation-0",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "operation": "fresh",
+          "epoch": "fixture",
+          "fleet": [
+            "codex"
+          ]
+        },
+        {
+          "id": "event-0-1",
+          "at": "2026-10-30T15:00:20Z",
+          "kind": "state",
+          "key": "rs-flight-0",
+          "runtime_session_id": "rs-flight-0",
+          "conversation_id": "codex:conversation-0",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-0-2",
+          "at": "2026-10-30T15:00:40Z",
+          "kind": "state",
+          "key": "rs-flight-0",
+          "runtime_session_id": "rs-flight-0",
+          "conversation_id": "codex:conversation-0",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "question",
+          "before_icon": "bolt",
+          "epoch": "fixture"
+        },
+        {
+          "id": "event-0-3",
+          "at": "2026-10-30T15:01:00Z",
+          "kind": "state",
+          "key": "rs-flight-0",
+          "runtime_session_id": "rs-flight-0",
+          "conversation_id": "codex:conversation-0",
+          "harness": "codex",
+          "profile": "work",
+          "project": "API",
+          "icon": "stop",
+          "before_icon": "question",
+          "epoch": "fixture"
+        }
+      ],
+      "partial": false
+    }
+  ],
+  "achievements": [
+    {
+      "id": "first-flight",
+      "title": "First Flight",
+      "description": "Launch your first session",
+      "progress": 4,
+      "target": 1,
+      "unlocked_at": "2026-10-30T15:00:00Z",
+      "session_key": "rs-flight-0"
+    },
+    {
+      "id": "frequent-flyer",
+      "title": "Frequent Flyer",
+      "description": "Reach 100 successful launches",
+      "progress": 4,
+      "target": 100,
+      "session_key": ""
+    },
+    {
+      "id": "thousand-signals",
+      "title": "A Thousand Signals",
+      "description": "Observe 1,000 state changes",
+      "progress": 12,
+      "target": 1000,
+      "session_key": ""
+    },
+    {
+      "id": "picking-up",
+      "title": "Picking Up the Thread",
+      "description": "Resume 25 conversations",
+      "progress": 1,
+      "target": 25,
+      "session_key": ""
+    },
+    {
+      "id": "branching-out",
+      "title": "Branching Out",
+      "description": "Fork your first conversation",
+      "progress": 1,
+      "target": 1,
+      "unlocked_at": "2026-10-30T15:04:00Z",
+      "session_key": "rs-flight-2"
+    },
+    {
+      "id": "across-fleet",
+      "title": "Across the Fleet",
+      "description": "Finish a turn with each configured harness",
+      "progress": 1,
+      "target": 1,
+      "unlocked_at": "2026-10-30T15:01:00Z",
+      "session_key": "rs-flight-0"
+    },
+    {
+      "id": "loop-closed",
+      "title": "Loop Closed",
+      "description": "Finish your first ASL run",
+      "progress": 0,
+      "target": 1,
+      "session_key": ""
+    }
+  ],
+  "recap": [
+    "This week: 4 launches, 1 resumed conversations, and 4 turns finished.",
+    "Your busiest observed overlap was 1 working sessions."
+  ],
+  "warnings": [
+    "Time totals sum observed session time, including overlapping agents. Gaps and time after the last observation are unknown."
+  ],
+  "projects": [
+    "API"
+  ],
+  "harnesses": [
+    "codex"
+  ],
+  "profiles": [
+    "work"
+  ]
+}

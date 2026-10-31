@@ -165,6 +165,8 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commands.HealthMsg:
 		return m.handleHealth(msg)
+	case commands.FlightLogMsg:
+		return m.handleFlightLog(msg)
 
 	case previewTickMsg:
 		return m.handlePreviewTick(msg)

@@ -678,6 +678,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             XCTAssertFalse(delegate.validateMenuItem(item), "\(label) is disabled unless the workspace is key")
         }
         let opening: [(TestKey, String)] = [
+            (.command("f", keyCode: 3, shifted: "F"), "Flight Log…"),
             (.command("d", keyCode: 2), "Dashboard"),
             (.command("o", keyCode: 31), "Overview"),
             (.command("y", keyCode: 16), "Find or Resume a Conversation…"),
@@ -733,6 +734,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("r", keyCode: 15, shifted: "R"), "ASL Runs…"),
             (.command("n", keyCode: 45, shifted: "N"), "Run a Plan…"),
             (.command("u", keyCode: 32, shifted: "U"), "Since Last Looked…"),
+            (.command("f", keyCode: 3, shifted: "F"), "Flight Log…"),
             (.command("h", keyCode: 4, shifted: "H"), "Conversation History…"),
             (.command("c", keyCode: 8, shifted: "C"), "Checkout Changes…"),
             (.command("p", keyCode: 35), "Go to…"),

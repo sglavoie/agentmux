@@ -530,6 +530,7 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 		})
 	}
 	d := newUITestDriver(fx.Config, client, size)
+	d.model.flightRead = fixtureFlightReader(fx.FlightEvents)
 	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.overlay())
 	if len(fx.Portable) > 0 || fx.NoKitty {
 		portable, text := fx.Portable, fx.Text
@@ -818,6 +819,7 @@ func newUITestDriverUnder(m Model, size UITestSize, tempParent string) (*uitestD
 	m.plansIndex = snapshot.planIndex
 	m.backgroundCommands = hermeticModelBackgroundCommands()
 	m.now = func() time.Time { return uitestFrozenNow }
+	m.flightRead = fixtureFlightReader(nil)
 	// Plan fixtures exercise navigation and layout, not filesystem scan
 	// latency. Supply deterministic command results so the driver never relies
 	// on a 50ms wall-clock race or the operator's real plan index.

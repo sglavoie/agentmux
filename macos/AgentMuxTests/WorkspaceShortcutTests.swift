@@ -53,10 +53,11 @@ final class WorkspaceShortcutPreferencesTests: XCTestCase {
     func testConflictsIncludeMenusShiftedSymbolsOtherCommandsAndGlobalShortcuts() throws {
         let menu = WorkspaceMenu.make(target: AppDelegate())
         var preferences = AppPreferences()
-        for key in ["cmd+c", "shift+cmd+p", "shift+cmd+1", "shift+cmd+minus", "f1", "ctrl+opt+cmd+a"] {
+        for key in ["cmd+c", "shift+cmd+p", "shift+cmd+f", "shift+cmd+1", "shift+cmd+minus", "f1", "ctrl+opt+cmd+a"] {
             XCTAssertNotNil(WorkspaceShortcut.splitShell.problem(for: combo(key), preferences: preferences, menu: menu), key)
         }
         XCTAssertNil(WorkspaceShortcut.commandPalette.problem(for: combo("shift+cmd+p"), preferences: preferences, menu: menu))
+        XCTAssertNil(WorkspaceShortcut.flightLog.problem(for: combo("shift+cmd+f"), preferences: preferences, menu: menu))
         preferences.workspaceShortcuts[WorkspaceShortcut.swapPanes.rawValue] = "cmd+backslash"
         preferences.workspaceShortcuts[WorkspaceShortcut.splitShell.rawValue] = "cmd+backslash"
         WorkspaceShortcut.apply(preferences, to: menu)

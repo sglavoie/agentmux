@@ -143,6 +143,7 @@ func (r LaunchResult) deduplicated(existing RunningSession) LaunchResult {
 
 // lineage is how a launch relates to what came before it.
 type lineage struct {
+	operation string
 	// parent is the runtime session a restart replaces.
 	parent runtimesession.ID
 	// conversation is the conversation a resume continues.
@@ -314,7 +315,7 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 		}
 		return tmuxLaunch{}, errors.Join(failure, end())
 	}
-	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport)
+	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport, launchFlightIdentity{runtimeID: string(id), operation: lin.operation})
 	return tmuxLaunch{Launched: launched, id: id}, nil
 }
 

@@ -210,7 +210,7 @@ struct WorkspaceRunsView: View {
             case "\r": if let row = model.selected { model.onFocus?(row) }
             default: return false
             }
-        } else if modifiers == [.command, .shift], key == "f" { model.layout.collapsed = false; focus = .list }
+        } else if modifiers == [.command, .option], key == "f" { model.layout.collapsed = false; focus = .list }
         else if modifiers == [.command, .shift], key == "i" { model.inspectFailedCheck() }
         else if modifiers == [.command, .option], key == "s" { toggleRuns() }
         else { return false }

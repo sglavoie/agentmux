@@ -67,8 +67,8 @@ func TestEveryCommandGroupRejectsAnUnknownCommand(t *testing.T) {
 
 func TestBareCommandGroupsPrintTheirHelp(t *testing.T) {
 	for _, group := range commandGroups() {
-		if group.Name() == "notifications" {
-			continue // a bare notifications reports delivery status
+		if group.Name() == "notifications" || group.Name() == "flight-log" {
+			continue // these runnable groups report delivery status or statistics
 		}
 		path := strings.Fields(group.CommandPath())[1:]
 		t.Run(strings.Join(path, " "), func(t *testing.T) {

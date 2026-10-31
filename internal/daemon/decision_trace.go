@@ -320,7 +320,11 @@ func (h *Handler) setDecisionJournal(journal *diagnostics.Journal) {
 // record shape is eventlog's; the fail-open bounded append is the daemon's, so
 // a slow or unwritable journal can never hold up the hook path.
 func (h *Handler) recordDecisionEvent(event protocol.SessionEvent) {
-	if h == nil || h.decisionJournal == nil {
+	if h == nil {
+		return
+	}
+	h.recordFlightRun(event)
+	if h.decisionJournal == nil {
 		return
 	}
 	envelope := eventlog.DecisionEnvelope(event)

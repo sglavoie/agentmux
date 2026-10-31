@@ -72,6 +72,8 @@ final class WorkspaceActivityModel: ObservableObject {
     @Published var layout: WorkspaceReviewState.SidebarLayout { didSet { reviewState.activityLayout = layout } }
     @Published var unreadOnly = true
     @Published var days = 7
+    @Published private(set) var flightSession: FlightSession?
+    @Published private(set) var flightKind = "all"
     @Published private(set) var reportRefreshedAt: Date?
     @Published private(set) var transcriptRefreshedAt: Date?
     @Published private(set) var report: WorkspaceActivityReport?
@@ -117,7 +119,26 @@ final class WorkspaceActivityModel: ObservableObject {
         catch { readError = "Could not load read markers. Events are shown as unread: \(error.localizedDescription)" }
     }
 
-    var visible: [WorkspaceActivityEntry] { (report?.entries ?? []).filter { !unreadOnly || readState.read[$0.id] == nil } }
+    var visible: [WorkspaceActivityEntry] {
+        (report?.entries ?? []).filter { entry in
+            guard !unreadOnly || readState.read[entry.id] == nil else { return false }
+            guard let session = flightSession else { return true }
+            if !session.runtimeSessionID.isEmpty {
+                guard entry.runtimeSessionID == session.runtimeSessionID else { return false }
+            } else {
+                guard session.conversation != nil, entry.conversation == session.conversation,
+                      let date = entry.date, let first = WorkspaceActivityEntry.date(session.firstAt),
+                      let last = WorkspaceActivityEntry.date(session.lastAt), date >= first, date <= last else { return false }
+            }
+            let kind = ["question": "question", "key": "permission", "stop": "completed", "error": "error"][flightKind]
+            return kind == nil || entry.kind == kind
+        }
+    }
+
+    func filterFlightSession(_ session: FlightSession, kind: String) {
+        flightSession = session; flightKind = kind; unreadOnly = false; days = 90; filterChanged(); refresh()
+    }
+    func clearFlightFilter() { flightSession = nil; flightKind = "all"; filterChanged() }
     var selected: WorkspaceActivityEntry? { report?.entries.first { $0.id == selection } }
     var canLoadEarlier: Bool { !reading && (transcript?.total ?? 0) > (transcript?.messages.count ?? 0) }
     var excerpt: WorkspaceTranscript.Message? {

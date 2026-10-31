@@ -15,6 +15,8 @@ import (
 // handleKey dispatches key events by current mode.
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
+	case ModeFlightLog:
+		return m.handleFlightLogKey(msg)
 	case ModeSearch:
 		return m.handleSearchKey(msg)
 	case ModeConfirm:

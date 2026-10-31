@@ -132,6 +132,7 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 | Task | Entry point |
 | --- | --- |
 | Find sessions needing input | Dashboard, or `F4` while attached |
+| Explore statistics and milestones | **Flight Log…** in the app's View menu, **Show Flight Log** in the dashboard command palette, or `amx session flight-log` |
 | See every live pane | `F2` or `amx overview` |
 | Resume or fork a conversation | `s` for project history, `S` for all history; straight there with `ctrl+shift+y`, native Conversation History with `⌘Y` in the app, or `amx past-sessions` |
 | Read an action failure | `:` → **Show Action Feedback**; notices remain until dismissed |
@@ -140,6 +141,8 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 
 See [Usage](docs/usage.md) for navigation, filtering, continuity, worktrees,
 and CLI examples.
+See [Flight Log](docs/flight-log.md) for scorecards, the activity calendar,
+milestones, weekly recaps, and local history controls.
 
 ## macOS workspace (optional)
 

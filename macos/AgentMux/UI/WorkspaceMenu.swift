@@ -161,7 +161,7 @@ enum WorkspaceMenu {
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
         // The review windows: ⌘⇧ and a letter by default
         // (`WorkspaceShortcut.defaultCombo`), reassignable in Settings.
-        for shortcut in [WorkspaceShortcut.runs, .runPlan, .activity, .history, .changes] {
+        for shortcut in [WorkspaceShortcut.runs, .runPlan, .activity, .flightLog, .history, .changes] {
             let command = item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target)
             if shortcut == .history {
                 // Keep the configurable older shortcut as an alias to the same

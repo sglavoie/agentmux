@@ -8,6 +8,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
+	"github.com/sglavoie/agentmux/tui/flightview"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
@@ -79,6 +80,8 @@ func renderRootBody(m Model, chrome rootChrome) string {
 	var sb strings.Builder
 
 	switch m.mode {
+	case ModeFlightLog:
+		sb.WriteString(flightview.Render(m.flightInput(), m.width, chrome.bodyHeight()))
 	case ModePicker:
 		// Picker replaces both header and list.
 		sb.WriteString(renderPicker(m))

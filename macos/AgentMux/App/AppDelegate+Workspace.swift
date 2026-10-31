@@ -154,7 +154,7 @@ extension AppDelegate {
     /// float above every window and need neither.
     func syncActivationPolicy() {
         let previous = NSApp.activationPolicy()
-        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || activityVisible, settings: settingsVisible))
+        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || activityVisible || flightLogVisible, settings: settingsVisible))
         if previous != .regular, NSApp.activationPolicy() == .regular {
             // AppKit keeps a badge set while accessory, but does not publish
             // it when the Dock icon appears. Reassigning the same string is
@@ -618,6 +618,19 @@ extension AppDelegate {
             self.focus(.focusing(live, title: entry.title))
         }
         activityWindow = controller
+        controller.model.clearFlightFilter()
+        controller.show()
+    }
+
+    @objc func showFlightLog(_ sender: Any?) {
+        let controller = flightLogWindow ?? WorkspaceFlightLogWindow(model: WorkspaceFlightLogModel(command: { [weak self] in self?.command }))
+        trackVisibility(of: controller, \.flightLogVisible)
+        controller.model.onConversation = { [weak self] identity, at in self?.openHistory(conversation: identity, eventTime: at) }
+        controller.model.onActivity = { [weak self] session, kind in
+            self?.showActivity(nil)
+            self?.activityWindow?.model.filterFlightSession(session, kind: kind)
+        }
+        flightLogWindow = controller
         controller.show()
     }
 
@@ -737,6 +750,7 @@ extension AppDelegate {
             entry(.swapPanes, WorkspaceShortcut.swapPanes.title, reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
             entry(.collapsePane, WorkspaceShortcut.hideOtherPane.title, reason: workspace?.isSplit == true ? (workspace?.canHideOtherPane == true ? nil : "Wait for the checkout operation to finish") : "Open a second pane first"),
             entry(.activity, WorkspaceShortcut.activity.title, key(.activity)),
+            entry(.flightLog, WorkspaceShortcut.flightLog.title, key(.flightLog)),
             entry(.runs, WorkspaceShortcut.runs.title, key(.runs)),
             entry(.runPlan, WorkspaceShortcut.runPlan.title, key(.runPlan), reason: command == nil ? AMXWording.unavailable(notFound: preferences.binaryMenuProblem) : nil),
             entry(.changes, WorkspaceShortcut.changes.title, key(.changes)),
@@ -840,6 +854,7 @@ extension AppDelegate {
         case .nextWaiting: nextAttention(nil)
         case .settings: showPreferences(nil)
         case .activity: showActivity(nil)
+        case .flightLog: showFlightLog(nil)
         case .history: showHistory(nil)
         case .runs: showRuns(nil)
         case .runPlan: runPlan(nil)

@@ -121,7 +121,7 @@ final class WorkspaceReviewUsabilityTests: XCTestCase {
         window.sendEvent(pageDown)
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertGreaterThan(scroll.contentView.bounds.minY, 400, "Collapsing the sidebar gives keyboard reading focus to the diff")
-        XCTAssertTrue(host.performKeyEquivalent(with: key("f", flags: [.command, .shift], in: window)))
+        XCTAssertTrue(host.performKeyEquivalent(with: key("f", flags: [.command, .option], in: window)))
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertFalse(model.layout.collapsed)
         XCTAssertEqual(model.selectedFile, "file.swift")

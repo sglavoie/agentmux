@@ -36,7 +36,7 @@ func RestartOn(rt Runtime, running RunningSession, cfg *config.Config) (LaunchRe
 
 	sess := SessionFromRunning(running)
 
-	result, err := launchFresh(rt, sess, acc, cfg, "", lineage{parent: running.RuntimeSessionID}, LaunchPolicyAlwaysNewInstance)
+	result, err := launchFresh(rt, sess, acc, cfg, "", lineage{parent: running.RuntimeSessionID, operation: "restart"}, LaunchPolicyAlwaysNewInstance)
 	if err != nil {
 		return result, err
 	}
@@ -84,7 +84,7 @@ func RestartWithAccountTemplateOn(rt Runtime, running RunningSession, template c
 	sess.Account = targetAcc.Name
 	debugLog.Printf("RestartWithAccount: session=%+v", sess)
 
-	result, launchErr := launchFresh(rt, sess, targetAcc, cfg, "", lineage{parent: running.RuntimeSessionID}, LaunchPolicyAlwaysNewInstance)
+	result, launchErr := launchFresh(rt, sess, targetAcc, cfg, "", lineage{parent: running.RuntimeSessionID, operation: "restart"}, LaunchPolicyAlwaysNewInstance)
 	debugLog.Printf("RestartWithAccount: Launch err=%v", launchErr)
 	if launchErr != nil {
 		return result, launchErr
