@@ -91,6 +91,27 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         }
     }
 
+    func testNewSessionDialogInBothAppearances() async throws {
+        let amx = command { args in
+            if args.starts(with: ["project", "list"]) {
+                return #"[{"profile":"work","title":"API","harness":"claude","directory":"/Projects/api"}]"#
+            }
+            if args.starts(with: ["config", "profiles"]) {
+                return #"[{"name":"work","harness":"claude"},{"name":"coding","harness":"codex"}]"#
+            }
+            return #"{"runtime_session_id":"\#(WorkspaceFixture.runtimeID(1))","state":"live","directory":"/Projects/api/worktree"}"#
+        }
+        let row = WorkspaceSidebar.row(WorkspaceFixture.tmux(1, project: "API"), snapshotSocket: "", now: Date(), glyphs: .fallback)
+        let model = WorkspaceNewSessionModel(source: row, command: { amx }, runner: PreviewRunner())
+        model.load()
+        XCTAssertTrue(model.canLaunch)
+        for dark in [false, true] {
+            try await render(WorkspaceNewSessionView(model: model, cancel: {}), name: "new-session-\(dark)",
+                             width: 460, height: 278, dark: dark,
+                             expected: ["New Session Below", "Harness", "claude", "Directory", "Choose", "Cancel", "Launch Session"])
+        }
+    }
+
     func testNativeRecoveryAndRestoredFeedbackPreviews() async throws {
         let amx = command { _ in
             #"{"session":{"id":"recorded-conversation","harness":"codex","profile":"work","project":"API","cwd":"/Projects/api"}}"#

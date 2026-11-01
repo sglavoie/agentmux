@@ -1121,6 +1121,7 @@ amx project launch API                         # one project titled API
 amx project launch amx                         # the project titled 🐱amx
 amx project launch --title API --profile codex-work --json
 amx project launch API --directory ../api-hotfix   # this one session, in another directory
+amx project launch API --profile work --launch-profile codex-work   # another harness/profile, without changing the project
 ```
 
 A project is identified by its profile and title, given as the argument or as
@@ -1138,6 +1139,10 @@ is where the session launched. `runtime_session_id` is the runtime session a
 tmux launch registered, the one `amx attach` takes, and is omitted otherwise.
 `tab_id` and `window_id` name the new Kitty tab when exactly one new tab
 carrying the title appeared, and are omitted otherwise.
+
+`--launch-profile PROFILE` uses another configured profile and its harness for
+this launch. `--profile` still selects the source project template. The override
+does not require a separate project under the target profile and is not saved.
 
 `--directory DIR` starts that one session in `DIR` instead of the project's
 configured directory, read from the current directory when relative. The

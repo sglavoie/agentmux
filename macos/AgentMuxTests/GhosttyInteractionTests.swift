@@ -201,18 +201,22 @@ final class GhosttyInteractionTests: XCTestCase {
         let menu = WorkspaceMenu.make(target: try XCTUnwrap(NSApp.delegate as? AppDelegate))
         NSApp.mainMenu = menu
         let receiver = TerminalBelowReceiver()
-        let key = TestKey.command("\r", keyCode: 36)
-        let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()))
-        XCTAssertEqual(item.title, "New Terminal Below")
-        item.target = receiver
-        for scrollback in [Ghostty.Scrollback.terminal, .server] {
-            try record(scrollback: scrollback)
-            let event = key.event()
-            if !view.performKeyEquivalent(with: event), !menu.performKeyEquivalent(with: event) {
-                view.keyDown(with: event)
+        for (key, title) in [
+            (TestKey.command("\r", keyCode: 36), "New Terminal Below"),
+            (TestKey(keyCode: 36, characters: "\r", unmodified: "\r", flags: [.command, .shift]), "New Session Below…"),
+        ] {
+            let item = try XCTUnwrap(Ghostty.MenuShortcut.item(in: menu, matching: key.event()))
+            XCTAssertEqual(item.title, title)
+            item.target = receiver
+            for scrollback in [Ghostty.Scrollback.terminal, .server] {
+                try record(scrollback: scrollback)
+                let event = key.event()
+                if !view.performKeyEquivalent(with: event), !menu.performKeyEquivalent(with: event) {
+                    view.keyDown(with: event)
+                }
             }
         }
-        XCTAssertEqual(receiver.calls, 2)
+        XCTAssertEqual(receiver.calls, 4)
     }
 
     @MainActor
@@ -664,6 +668,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("b", keyCode: 11, shifted: "B"), "Toggle Inspector"),
             (.command("j", keyCode: 38), "Reveal in Sidebar"),
             (.command("\r", keyCode: 36), "New Terminal Below"),
+            (.command("\r", keyCode: 36, shifted: "\r"), "New Session Below…"),
             (.command("r", keyCode: 15), "Name Session…"),
             (.command(".", keyCode: 47), "Pin Session"),
             (.command("w", keyCode: 13, shifted: "W"), "End Session…"),
@@ -741,6 +746,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("p", keyCode: 35, shifted: "P"), "Command Palette…"),
             (.command("a", keyCode: 0, shifted: "A"), AttentionCycler.commandTitle),
             (.command("\r", keyCode: 36), "New Terminal Below"),
+            (.command("\r", keyCode: 36, shifted: "\r"), "New Session Below…"),
             (.command("r", keyCode: 15), "Name Session…"),
             (.command(".", keyCode: 47), "Pin Session"),
             (.command("]", keyCode: 30), WorkspaceMenu.nextStopTitle),
@@ -1219,6 +1225,7 @@ private final class WorkspaceShortcutReceiver: NSObject {
 private final class TerminalBelowReceiver: NSObject {
     var calls = 0
     @objc func newSessionTerminal(_ sender: Any?) { calls += 1 }
+    @objc func newSessionBelow(_ sender: Any?) { calls += 1 }
 }
 
 private final class NavigationShortcutReceiver: NSObject {

@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var promptPanel: PromptAnswerPanelController?
     var historyWindow: WorkspaceHistoryWindow?
     var resumePanel: WorkspaceResumePanel?
+    var newSessionPanel: WorkspaceNewSessionPanel?
     var conversationSearchSequence = 0
     var activityWindow: WorkspaceActivityWindow?
     var flightLogWindow: WorkspaceFlightLogWindow?

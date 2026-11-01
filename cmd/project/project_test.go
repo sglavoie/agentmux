@@ -925,3 +925,46 @@ func TestProjectLaunchRefusesAnArchivedProject(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectLaunchWithAnotherProfileKeepsSourceTemplateAndConfiguration(t *testing.T) {
+	cfg := testConfig()
+	cfg.Projects = cfg.Projects[2:] // Web exists only under work.
+	cfg.Projects[0].Args = []string{"--source-project-arg"}
+	projectLaunchAs = "CODEX-WORK"
+	projectLaunchDir = t.TempDir()
+	t.Cleanup(func() { projectLaunchAs, projectLaunchDir = "", "" })
+	client := &recordingKittyClient{}
+	out, err := runProject(t, "launch", cfg, client, true, "work", "Web")
+	if err != nil {
+		t.Fatalf("launch: %v\n%s", err, out)
+	}
+	if len(client.launched) != 1 {
+		t.Fatalf("launched = %+v", client.launched)
+	}
+	launch := client.launched[0]
+	if launch.Directory != projectLaunchDir || launch.UserVars["amx_profile"] != "codex-work" || launch.UserVars["amx_harness"] != "codex" || !strings.Contains(strings.Join(launch.Cmdline, " "), "--source-project-arg") {
+		t.Fatalf("wrong launch: %+v", launch)
+	}
+	var envelope struct {
+		Data projectLaunchData `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Project.Profile != "codex-work" || envelope.Data.Project.Directory != projectLaunchDir || envelope.Data.Project.Title != "Web" {
+		t.Fatalf("wrong result: %+v", envelope.Data)
+	}
+	if cfg.Projects[0].Profile != "work" || cfg.Projects[0].Directory != "/tmp/web" {
+		t.Fatalf("configuration mutated: %+v", cfg.Projects)
+	}
+}
+
+func TestProjectLaunchRefusesUnknownLaunchProfile(t *testing.T) {
+	projectLaunchAs = "missing"
+	t.Cleanup(func() { projectLaunchAs = "" })
+	client := &recordingKittyClient{}
+	out, err := runProject(t, "launch", testConfig(), client, true, "work", "Web")
+	if err == nil || len(client.launched) != 0 || !strings.Contains(out, `"code":"not_found"`) {
+		t.Fatalf("unknown profile: %v %s; launched %+v", err, out, client.launched)
+	}
+}

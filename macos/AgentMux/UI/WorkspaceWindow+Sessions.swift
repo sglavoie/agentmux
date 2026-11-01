@@ -115,6 +115,7 @@ extension WorkspaceWindowController {
     }
 
     static let newTerminalTitle = "New Terminal Below"
+    static let newSessionTitle = "New Session Below…"
 
     static let copyRuntimeSessionIDTitle = "Copy Runtime Session ID"
 
@@ -276,6 +277,10 @@ extension WorkspaceWindowController {
         let terminal = NSMenuItem(title: Self.newTerminalTitle, action: #selector(openTerminalBesideClickedSession(_:)), keyEquivalent: "")
         terminal.representedObject = id
         terminal.target = self
+        let session = NSMenuItem(title: Self.newSessionTitle, action: #selector(newSessionBelowClickedSession(_:)), keyEquivalent: "")
+        session.representedObject = row.key
+        session.target = self
+        session.isEnabled = closing[id] == nil
         let copy = NSMenuItem(title: Self.copyRuntimeSessionIDTitle, action: #selector(copyClickedRuntimeSessionID(_:)), keyEquivalent: "")
         copy.representedObject = id
         copy.target = self
@@ -283,13 +288,13 @@ extension WorkspaceWindowController {
         end.representedObject = row.key
         end.target = self
         end.isEnabled = closing[id] == nil
-        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, copy, .separator(), end] }
+        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, session, copy, .separator(), end] }
         // What a click or Return on the line does: attach again, taking the
         // session from whichever terminal has it.
         let reattach = NSMenuItem(title: Self.reattachTitle, action: #selector(reattachClickedSession(_:)), keyEquivalent: "")
         reattach.representedObject = row.key
         reattach.target = self
-        return [name] + looks + [pin, .separator(), reattach, terminal, copy, .separator(), end]
+        return [name] + looks + [pin, .separator(), reattach, terminal, session, copy, .separator(), end]
     }
 
     @objc private func clickedSessionAction(_ sender: Any?) {
@@ -328,6 +333,12 @@ extension WorkspaceWindowController {
     @objc private func copyClickedRuntimeSessionID(_ sender: Any?) {
         guard let id = (sender as? NSMenuItem)?.representedObject as? String else { return }
         copyToPasteboard(id)
+    }
+
+    @objc private func newSessionBelowClickedSession(_ sender: Any?) {
+        guard let key = (sender as? NSMenuItem)?.representedObject as? AttentionCycler.Key,
+              let row = state.row(key), let id = row.embeddedRuntimeSessionID, closing[id] == nil else { return }
+        delegate?.workspaceNewSession(below: row)
     }
 
     @objc private func endClickedSession(_ sender: Any?) {

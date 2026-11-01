@@ -101,8 +101,9 @@ type attachData struct {
 	// Clients counts the terminals attached to the session right now. One
 	// means the session has an interactive owner, which attaching would
 	// detach; none means attaching takes nothing from anyone.
-	Clients int      `json:"clients"`
-	Command []string `json:"command,omitempty"`
+	Clients   int      `json:"clients"`
+	Command   []string `json:"command,omitempty"`
+	Directory string   `json:"directory,omitempty"`
 }
 
 // attachView is what this terminal shows around the pane. A plain terminal
@@ -189,6 +190,9 @@ func attachTmux(cmd *cobra.Command, store *runtimesession.Store, record runtimes
 		return cli.CommandFailure(cmd, attachJSON, notLiveCode(stale), notLiveError(stale))
 	}
 	data.Clients = len(survey.ClientsOf(backend.PaneID(record.Target.Ref)))
+	if pane, ok := backend.FindPane(survey.Panes, backend.PaneID(record.Target.Ref)); ok {
+		data.Directory = pane.CWD
+	}
 	client, err := server.AttachCommand(backend.PaneID(record.Target.Ref), attachView())
 	if err != nil {
 		return cli.CommandFailure(cmd, attachJSON, "invalid_target", err)

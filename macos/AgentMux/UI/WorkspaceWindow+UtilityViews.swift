@@ -6,6 +6,28 @@ import os
 extension WorkspaceWindowController {
     // MARK: Utility views
 
+    /// Opens a freshly launched agent and saves its place below its source
+    /// among the project's sessions, once the daemon lists it.
+    func openNewSession(_ id: String, below parent: AttentionCycler.Key) {
+        newSessionBelow = (id, parent)
+        arrangeNewSessionBelow()
+        reloadSidebar()
+        open(WorkspaceViewRequest(kind: WorkspaceViewRequest.sessionKind, runtimeSessionID: id, awaited: true))
+    }
+
+    func arrangeNewSessionBelow() {
+        guard let pending = newSessionBelow,
+              let row = state.row(.embedded(pending.runtimeSessionID)) else { return }
+        newSessionBelow = nil
+        guard let parent = state.row(pending.parent), parent.project == row.project else { return }
+        var keys = WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order).map(\.key).filter { $0 != row.key }
+        guard let index = keys.firstIndex(of: parent.key) else { return }
+        keys.insert(row.key, at: index + 1)
+        order.set(keys, for: row.project)
+        state.arrange(order)
+        delegate?.workspaceOrderChanged(order)
+    }
+
     /// Shows a utility view in the pane, starting its program if it is not
     /// running. With `focus`, its terminal takes the keyboard.
     @discardableResult

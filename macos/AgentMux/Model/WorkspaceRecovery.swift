@@ -228,12 +228,13 @@ enum WorkspaceSessionStatus: Equatable {
 struct AttachCheck: Decodable, Equatable {
     var runtimeSessionID = ""
     var state = ""
+    var directory = ""
     /// Terminals attached to the session right now.
     var clients = 0
 
     enum CodingKeys: String, CodingKey {
         case runtimeSessionID = "runtime_session_id"
-        case state, clients
+        case state, clients, directory
     }
 
     init(runtimeSessionID: String = "", state: String = "", clients: Int = 0) {
@@ -246,6 +247,7 @@ struct AttachCheck: Decodable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         runtimeSessionID = try c.decodeIfPresent(String.self, forKey: .runtimeSessionID) ?? ""
         state = try c.decodeIfPresent(String.self, forKey: .state) ?? ""
+        directory = try c.decodeIfPresent(String.self, forKey: .directory) ?? ""
         clients = try c.decodeIfPresent(Int.self, forKey: .clients) ?? 0
     }
 }

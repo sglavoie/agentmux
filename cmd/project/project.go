@@ -87,6 +87,7 @@ var (
 	projectLaunchProfile string
 	projectLaunchTitle   string
 	projectLaunchDir     string
+	projectLaunchAs      string
 )
 
 var projectListCmd = &cobra.Command{
@@ -124,6 +125,9 @@ meant and launches nothing.
 directory; a relative DIR is read from the current directory. The project, its
 profile, and its configuration are unchanged.
 
+--launch-profile uses another configured profile (and its harness) for this
+launch. --profile still identifies the source project; neither override is saved.
+
 Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket
 (a tmux launch needs no Kitty).`,
 	Example: `  amx project launch api
@@ -148,8 +152,10 @@ func init() {
 	projectLaunchCmd.Flags().StringVar(&projectLaunchTitle, "title", "", "configured project title")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchProfile, "profile", "", "configured profile the project launches with")
 	projectLaunchCmd.Flags().StringVar(&projectLaunchDir, "directory", "", "working directory for this launch, instead of the project's configured one")
+	projectLaunchCmd.Flags().StringVar(&projectLaunchAs, "launch-profile", "", "profile and harness to use for this launch, instead of the project's own")
 	_ = projectLaunchCmd.MarkFlagDirname("directory")
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
+	_ = projectLaunchCmd.RegisterFlagCompletionFunc("launch-profile", cli.CompleteProfiles)
 	_ = projectLaunchCmd.RegisterFlagCompletionFunc("title", completeProjectTitles)
 	cli.AddBackendFlag(projectLaunchCmd)
 	projectCmd.AddCommand(projectListCmd, projectLaunchCmd)
@@ -449,6 +455,14 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	project, err := selectProjectOrPair(cfg, strings.TrimSpace(projectLaunchProfile), title)
 	if err != nil {
 		return projectActionError(cmd, err)
+	}
+
+	if name := strings.TrimSpace(projectLaunchAs); name != "" {
+		index := slices.IndexFunc(cfg.Profiles, func(profile config.Account) bool { return strings.EqualFold(profile.Name, name) })
+		if index < 0 {
+			return cli.CommandFailure(cmd, projectLaunchJSON, "not_found", cli.UnknownProfile(cfg, name))
+		}
+		project.Profile, project.Account = cfg.Profiles[index].Name, cfg.Profiles[index].Name
 	}
 
 	deps := actions.Dependencies{Config: cfg}

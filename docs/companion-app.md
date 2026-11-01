@@ -278,6 +278,14 @@ terminals of their own beside the agents, and none of them needs Kitty.
   the item is greyed out. If the session ends first, the
   shell keeps running and moves up to the **Workspace** section.
 
+- **Session › New Session Below…** (⌘⇧↩), also in a session's right-click
+  menu and the command palette, opens a launch dialog. Choose a harness/profile
+  and optionally type or choose a directory. An empty directory uses the source
+  session's current working directory; relative paths start there. **Launch
+  Session** starts a fresh agent in the workspace and opens it automatically,
+  saving its place below the source in the project's session order. The sidebar
+  still groups sessions by state. These choices apply only to this launch.
+
 A view is not a session. It is never counted as waiting, never shown in the
 status menu, and skipped by the next-attention shortcut. Its program runs
 without any session's identity, so a harness you start by hand in a shell

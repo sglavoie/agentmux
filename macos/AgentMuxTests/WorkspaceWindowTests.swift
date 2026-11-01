@@ -457,7 +457,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "New Terminal Below",
-                                            "Copy Runtime Session ID", "", "End Session…"])
+                                            "New Session Below…", "Copy Runtime Session ID", "", "End Session…"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(asked.map(\.0), [personal])
         XCTAssertTrue(app.named.isEmpty, "nothing is written before the answer")
@@ -1449,6 +1449,27 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.closeShownTitle, "Close View")
     }
 
+    func testNewSessionMenuTargetsClickedRowAndLaunchFocusWaitsForSnapshot() throws {
+        let initial = [F.tmux(1, project: "api"), F.tmux(2, project: "api"), F.tmux(3, project: "api")]
+        app.store.apply(snapshot: F.snapshot(initial))
+        let parent = AttentionCycler.Key.embedded(F.runtimeID(2))
+        workspace.select(.embedded(F.runtimeID(1)))
+        let menu = workspace.contextMenuItems(forRow: try index(of: parent))
+        let item = try XCTUnwrap(menu.first { $0.title == WorkspaceWindowController.newSessionTitle })
+        _ = try XCTUnwrap(item.target).perform(try XCTUnwrap(item.action), with: item)
+        XCTAssertEqual(app.newSessionRequests.map(\.key), [parent])
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)), "opening the dialog preserves the shown session")
+        workspace.openNewSession(F.runtimeID(4), below: parent)
+        XCTAssertEqual(workspace.awaited?.runtimeSessionID, F.runtimeID(4))
+        app.store.apply(snapshot: F.snapshot(initial + [F.tmux(4, project: "api", profile: "codex", harness: "codex")]))
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(4)))
+        XCTAssertEqual(workspace.order.projects["api"], [F.runtimeID(1), F.runtimeID(2), F.runtimeID(4), F.runtimeID(3)])
+        XCTAssertNil(workspace.awaited)
+        XCTAssertNil(workspace.newSessionBelow)
+        app.store.apply(snapshot: F.snapshot(initial + [F.tmux(4, project: "api", profile: "codex", harness: "codex")]))
+        XCTAssertEqual(workspace.order.projects["api"], [F.runtimeID(1), F.runtimeID(2), F.runtimeID(4), F.runtimeID(3)])
+    }
+
     func testTheSessionMenuFollowsTheSessions() throws {
         XCTAssertNil(workspace.sessionName(at: 0), "nothing listed, nothing to go to")
         XCTAssertEqual(WorkspaceWindowController.sessionItemTitle(at: 6, name: nil), "Session 7")
@@ -1504,7 +1525,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.select(kitty.key)
         items = workspace.contextMenuItems(forRow: try index(of: work.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Reattach", "New Terminal Below",
-                                            "Copy Runtime Session ID", "", "End Session…"])
+                                            "New Session Below…", "Copy Runtime Session ID", "", "End Session…"])
         _ = try XCTUnwrap(items[6].target).perform(try XCTUnwrap(items[6].action), with: items[6])
         XCTAssertEqual(workspace.state.selection, work.key)
         XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)])

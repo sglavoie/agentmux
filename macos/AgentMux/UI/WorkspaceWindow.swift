@@ -357,6 +357,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// A session that was just launched and is shown once a snapshot lists
     /// it, unless the operator goes somewhere else first.
     var awaited: (runtimeSessionID: String, until: Date)?
+    var newSessionBelow: (runtimeSessionID: String, parent: AttentionCycler.Key)?
     /// Set while the table is brought in line with `state`, so its selection
     /// callbacks are not taken for the operator's.
     var applying = false
@@ -578,6 +579,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             detached.formIntersection(listed)
             closing = closing.filter { !$0.value.answered || listed.contains($0.key) }
         }
+        arrangeNewSessionBelow()
         reloadSidebar()
         if state.current { flashStateChanges(from: previousRows) }
         let notice = WorkspaceSidebar.feedNotice(store.feed)

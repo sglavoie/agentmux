@@ -84,6 +84,8 @@ final class FocusableView: NSView {
 @MainActor
 final class FakeWorkspaceApp: WorkspaceDelegate {
     let store = SessionStore()
+    var newSessionRequests: [WorkspaceRow] = []
+    func workspaceNewSession(below row: WorkspaceRow) { newSessionRequests.append(row) }
     var launchMenuRequests = 0
     var conversationSearchRequests = 0
     func workspaceSearchConversation() { conversationSearchRequests += 1 }

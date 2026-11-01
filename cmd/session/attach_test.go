@@ -164,6 +164,14 @@ func TestAttachJSONReportsCommandWithoutAttaching(t *testing.T) {
 	}
 	record, _ := f.Load(t).Get(launched.RuntimeSessionID)
 	d := envelope.Data
+	panes, err := f.Backend.Discover()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pane, ok := backend.FindPane(panes, launched.Pane)
+	if !ok || d.Directory == "" || d.Directory != pane.CWD {
+		t.Fatalf("directory = %q, want live pane directory %q", d.Directory, pane.CWD)
+	}
 	if envelope.SchemaVersion != 1 || d.RuntimeSessionID != string(launched.RuntimeSessionID) || d.Backend != "tmux" || d.Pane != launched.Pane.ID || d.PID != record.Process.PID || !slices.Contains(d.Command, "attach-session") {
 		t.Fatalf("payload = %+v, want the session and its attach command", envelope)
 	}

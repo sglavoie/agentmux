@@ -421,6 +421,26 @@ extension AppDelegate {
         guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
         if !workspace.openTerminalBesideSession() { refuse(WorkspaceWindowController.terminalNeedsEmbedded) }
     }
+
+    @objc func newSessionBelow(_ sender: Any?) {
+        guard let row = workspace?.shownSessionRow else { return refuse(Self.noSessionShown) }
+        workspaceNewSession(below: row)
+    }
+
+    func workspaceNewSession(below row: WorkspaceRow) {
+        guard row.embeddedRuntimeSessionID != nil, let workspace else { return }
+        if let reason = gate.unavailableReason(.project) { return refuse(reason) }
+        guard workspace.window.attachedSheet == nil else { return }
+        let model = WorkspaceNewSessionModel(source: row, command: { [weak self] in self?.command })
+        let panel = WorkspaceNewSessionPanel(model: model)
+        newSessionPanel = panel
+        model.onLaunched = { [weak self, weak panel, weak workspace] id in
+            panel?.close()
+            self?.newSessionPanel = nil
+            workspace?.openNewSession(id, below: row.key)
+        }
+        panel.show(on: workspace.window)
+    }
     /// ⌘W: closes what the workspace's pane is on, as the × on its row does,
     /// and never the workspace itself. Another window that has the keyboard,
     /// such as Preferences, closes as it would.
@@ -751,6 +771,7 @@ extension AppDelegate {
         }
         var entries = [
             entry(.newTerminal, "New Terminal Here", "⌘↩", reason: workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first"),
+            entry(.newSession, WorkspaceWindowController.newSessionTitle, "⌘⇧↩", reason: gate.unavailableReason(.project) ?? (workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first")),
             entry(.newShell, "New Shell", "⌘T"),
             entry(.splitShell, WorkspaceShortcut.splitShell.title, reason: workspace?.splitUnavailableReason ?? (workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first")),
             entry(.splitChanges, WorkspaceShortcut.splitChanges.title, reason: workspace?.splitUnavailableReason ?? (workspace?.shownSessionRow?.embeddedRuntimeSessionID != nil ? nil : "Select an embedded session first")),
@@ -857,6 +878,7 @@ extension AppDelegate {
         case let .launch(project): launch(project)
         case let .resume(conversation): continueConversation(conversation)
         case .newTerminal: newSessionTerminal(nil)
+        case .newSession: newSessionBelow(nil)
         case .newShell: newShellFromMenu(nil)
         case .dashboard: openDashboardFromMenu(nil)
         case .overview: openOverviewFromMenu(nil)

@@ -186,6 +186,7 @@ enum WorkspaceMenu {
         session.addItem(item("Command Palette…", #selector(AppDelegate.showCommandPalette(_:)), "P", target: target))
         session.addItem(item(AttentionCycler.commandTitle, #selector(AppDelegate.nextAttention(_:)), "A", target: target))
         session.addItem(item("New Terminal Below", #selector(AppDelegate.newSessionTerminal(_:)), "\r", target: target))
+        session.addItem(item(WorkspaceWindowController.newSessionTitle, #selector(AppDelegate.newSessionBelow(_:)), "\r", mask: [.command, .shift], target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))
         session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), ".", target: target))
         session.addItem(item(WorkspaceWindowController.endSessionTitle, #selector(AppDelegate.endWorkspaceSession(_:)), "W", target: target))
