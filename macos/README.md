@@ -1277,6 +1277,28 @@ operate a real run. PNGs are attached to the XCTest result and written to
 tests. Reviewed reference images and their provenance are recorded in
 [`docs/acceptance/desktop-improvements.md`](../docs/acceptance/desktop-improvements.md).
 
+### Project Briefing
+
+View › Project Briefing… and the command palette open `WorkspaceBriefingWindow`.
+`WorkspaceBriefingModel` joins the companion snapshot with `session list --all
+--project <title> --limit 10`; project membership follows the same CLI filter as
+History, across profiles and harnesses. All live conversation identities remain
+included even outside the latest ten. The model deduplicates on harness plus
+conversation ID, and late replies cannot replace a newly selected project.
+
+Each card owns a `WorkspaceRecapModel` with `automaticallyGenerate: false`.
+Opening, refreshing, missing/stale results, and pending-request polls only read
+saved recaps. Generation is an explicit per-conversation action, gated on a live
+feed and no working instance of that conversation. Focus and resume reuse the
+existing exact-identity actions; source links open History at the cited message.
+The View menu shortcut is assignable and has no default. Closing cancels pending
+UI work, while a model request already started may finish into the shared cache.
+
+`WorkspaceBriefingTests` covers scope, the history bound, live/history merging,
+cross-harness identity collisions, stale responses, cached-only reads, generation
+eligibility, retained failures, and focus/resume. `WorkspaceWorkflowPreviewTests`
+captures populated light/dark, empty, and offline views at narrow and wide sizes.
+
 ### Running the UI on another Mac
 
 The hosted tests launch the app, so they show windows on the Mac that runs

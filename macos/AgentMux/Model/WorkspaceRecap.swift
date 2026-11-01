@@ -36,6 +36,9 @@ final class WorkspaceRecapModel: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var conversation: ConversationIdentity?
     private(set) var canGenerate = true
+    /// Briefings read many saved recaps at once; only an explicit per-card
+    /// request may generate one. Other surfaces keep selection generation.
+    let automaticallyGenerate: Bool
     var command: () -> AMXCommand?
     var onEvidence: ((ConversationIdentity, Int) -> Void)?
     private let runner: ASLWorkRunner
@@ -48,8 +51,8 @@ final class WorkspaceRecapModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
-    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent()) {
-        self.command = command; self.runner = runner
+    init(command: @escaping () -> AMXCommand?, runner: ASLWorkRunner = QueueWorkRunner.concurrent(), automaticallyGenerate: Bool = true) {
+        self.command = command; self.runner = runner; self.automaticallyGenerate = automaticallyGenerate
     }
 
     func select(_ identity: ConversationIdentity?, revision: String, canGenerate: Bool = true) {
@@ -64,7 +67,7 @@ final class WorkspaceRecapModel: ObservableObject {
     }
 
     func refresh() {
-        guard conversation != nil, !loading else { return }
+        guard conversation != nil, !loading, canGenerate else { return }
         pending?.cancel(); sequence += 1
         sourceRetries = 0
         read(cached: false, force: true)
@@ -98,9 +101,9 @@ final class WorkspaceRecapModel: ObservableObject {
                 self.report = value
                 if value.status == "pending" {
                     self.enqueue(after: 2) { $0.check() }
-                } else if cached, self.canGenerate, ["missing", "stale"].contains(value.status), value.retryAfter == nil {
+                } else if cached, self.automaticallyGenerate, self.canGenerate, ["missing", "stale"].contains(value.status), value.retryAfter == nil {
                     self.enqueue(after: 0.4) { $0.read(cached: false) }
-                } else if !cached, self.canGenerate, value.status == "stale", value.retryAfter == nil, self.sourceRetries == 0 {
+                } else if !cached, self.automaticallyGenerate, self.canGenerate, value.status == "stale", value.retryAfter == nil, self.sourceRetries == 0 {
                     // A stop hook can arrive before the transcript's final
                     // write. Retry that race once without making the user
                     // refresh; continuously changing input cannot loop bills.

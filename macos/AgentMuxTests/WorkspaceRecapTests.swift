@@ -164,4 +164,25 @@ final class WorkspaceRecapTests: XCTestCase {
         XCTAssertEqual(generations, 2)
         XCTAssertTrue(scheduled.isEmpty, "a continuously changing source cannot cause an unbounded model loop")
     }
+
+    func testBriefingPollsExistingWorkerWithoutGeneratingWhenResultIsMissing() {
+        let runner = RecapRunner()
+        var scheduled: [DispatchWorkItem] = [], calls: [[String]] = [], status = "pending"
+        let command = command { args in
+            calls.append(args)
+            return self.payload("codex:a", status: status)
+        }
+        let model = WorkspaceRecapModel(command: { command }, runner: runner, automaticallyGenerate: false)
+        model.schedule = { _, work in scheduled.append(work) }
+        model.select(.init(harness: "codex", sessionID: "a"), revision: "1")
+        runner.release()
+        XCTAssertEqual(scheduled.count, 1, "a request already running in another view is polled")
+        status = "missing"
+        scheduled.removeFirst().perform(); runner.release()
+        XCTAssertTrue(scheduled.isEmpty, "a missing result cannot turn a briefing read into a model request")
+        XCTAssertTrue(calls.allSatisfy { $0.contains("--cached") })
+        model.refresh(); runner.release()
+        XCTAssertTrue(calls.last!.contains("--refresh"), "per-card generation remains explicit")
+        model.close()
+    }
 }

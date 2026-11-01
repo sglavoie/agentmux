@@ -234,6 +234,7 @@ extension AppDelegate {
                 Self.logger.error("project list: \(error.message, privacy: .public)")
             }
             self.projects.state.finish(result, at: Date())
+            self.refreshBriefing()
             if let missing { self.projects.missingDirectories = missing }
             if self.projects.state.errorCode == "config_missing", !self.hasOfferedInitialSetup {
                 self.hasOfferedInitialSetup = true

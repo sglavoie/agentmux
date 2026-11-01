@@ -596,6 +596,37 @@ with the CLI's clean/inactive checks. A details button expands warnings and
 conflicts without pushing the diff or landing controls out of view. A retained
 review cannot authorize landing while its replacement is being read.
 
+### Project Briefing
+
+**View › Project Briefing…** gathers one project's live sessions and ten most
+recent conversations across agents and profiles, including automated and
+unclassified sessions. Choose another project in the window's picker. It starts
+on the workspace's selected project when possible, and is also available from
+the command palette; assign a shortcut in Settings if desired.
+
+**Needs you** links to sessions with questions, permission requests, or other
+attention. **Live sessions** includes agents whose conversation identity is not
+known yet. **Recent outcomes and unfinished work** shows each conversation's
+saved goal, latest outcome, and outstanding work separately, with recap times,
+profile/model, excerpt coverage, and supporting-message links into History.
+Agent-reported results remain attributed to the agent.
+
+Opening the briefing and **Refresh** (⌘R) read saved recaps without starting
+model requests. **Generate Recap** or **Regenerate** on a conversation explicitly
+uses the configured recap profile and its service/quota. Generation is disabled
+while that conversation has a working agent, or live status is unavailable.
+Missing, stale, and failed recaps remain visible as such. A failed refresh keeps
+the last loaded conversations and recaps with a readable error.
+
+**Focus Session** returns to an existing agent; **Resume** continues the exact
+closed conversation through History's existing launch path. **Read Conversation**
+and supporting-message links open History; closing it returns to the briefing
+when that window is still open. Live state follows daemon updates; refresh
+explicitly to reload recent history and saved recaps. Offline state labels the
+last known live list and disables session actions. Older unfinished work can
+fall outside the recent ten; this view does not combine or resolve claims across
+conversations.
+
 ### Conversation recaps
 
 The inspector's **Session** tab and Conversation History show an automatic recap

@@ -131,7 +131,7 @@ enum WorkspaceCommand: Equatable {
     case splitShell, splitChanges, focusReview, focusOtherPane, swapPanes, collapsePane
     case launch(ProjectEntry)
     case resume(RecentConversation)
-    case runs, runPlan, activity, flightLog
+    case runs, runPlan, activity, flightLog, briefing
     case newTerminal, newShell, dashboard, overview, pastSessions, nextWaiting, settings, history, changes
 }
 
@@ -146,6 +146,7 @@ extension WorkspaceCommand {
         case .pastSessions: return ["history", "transcript", "conversation", "search", "past sessions", "resume", "continue", "fork"]
         case .activity: return ["unread", "activity", "recent"]
         case .flightLog: return ["stats", "statistics", "milestones", "achievements", "heatmap", "sessions", "gamification"]
+        case .briefing: return ["project", "recap", "outcomes", "unfinished", "catch up", "continue"]
         case .nextWaiting: return ["attention", "inbox", "question", "permission"]
         default: return []
         }

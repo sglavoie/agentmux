@@ -14,6 +14,12 @@ menu opens its cited messages in Conversation History. A recap's timestamp and
 profile/model are visible; excerpts and stale saved results are labeled.
 History's **Recap** button also opens it without moving your reading position.
 
+The app's **Project Briefing…** brings together saved recaps for one project's
+live conversations and ten most recent conversations. Opening or refreshing
+the briefing only reads the cache; use **Generate Recap** or **Regenerate** on a
+conversation to request generation. Source links, stale labels, and the same
+shared request locks apply there too.
+
 ## Generation and configuration
 
 Recaps use one configured **Claude** profile for source conversations from

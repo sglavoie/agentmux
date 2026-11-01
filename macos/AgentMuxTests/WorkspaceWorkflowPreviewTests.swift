@@ -11,6 +11,36 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testProjectBriefingAtMinimumAndWideSizes() async throws {
+        let command = BriefingFixture.command()
+        let model = WorkspaceBriefingModel(command: { command }, runner: PreviewRunner())
+        model.update(projects: [.init(profile: "work", title: "API")],
+                     sessions: [BriefingFixture.session("rs-a", icon: "question")], live: true)
+        model.open(preferredProject: "API"); model.refresh()
+        XCTAssertNil(model.error)
+        for dark in [false, true] {
+            for width in [CGFloat(780), CGFloat(1060)] {
+                try await render(WorkspaceBriefingView(model: model), name: "project-briefing-\(Int(width))-\(dark)",
+                                 width: width, height: 900, dark: dark,
+                                 expected: ["Project Briefing", "Needs you", "Open Session", "Live sessions", "Recent outcomes", "Conversation Recap", "Supporting messages"])
+            }
+        }
+        model.close()
+        let empty = BriefingFixture.command { _ in ["sessions": [], "total": 0] }
+        let emptyModel = WorkspaceBriefingModel(command: { empty }, runner: PreviewRunner())
+        emptyModel.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: true)
+        emptyModel.open(preferredProject: nil); emptyModel.refresh()
+        try await render(WorkspaceBriefingView(model: emptyModel), name: "project-briefing-empty", width: 780, height: 500,
+                         expected: ["Project Briefing", "No conversations found", "No live sessions"])
+        emptyModel.close()
+        let failedModel = WorkspaceBriefingModel(command: { nil }, runner: PreviewRunner())
+        failedModel.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: false)
+        failedModel.open(preferredProject: nil); failedModel.refresh()
+        try await render(WorkspaceBriefingView(model: failedModel), name: "project-briefing-offline", width: 780, height: 500,
+                         expected: ["Project Briefing", "Live status is unavailable", "Retry"])
+        failedModel.close()
+    }
+
     func testConversationRecapAtNarrowAndWideSizes() async throws {
         var command = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/fixture", path: "/bin"))
         command.runner = { _, _, _, _ in

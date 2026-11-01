@@ -154,7 +154,7 @@ extension AppDelegate {
     /// float above every window and need neither.
     func syncActivationPolicy() {
         let previous = NSApp.activationPolicy()
-        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || activityVisible || flightLogVisible, settings: settingsVisible))
+        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || activityVisible || flightLogVisible || briefingVisible, settings: settingsVisible))
         if previous != .regular, NSApp.activationPolicy() == .regular {
             // AppKit keeps a badge set while accessory, but does not publish
             // it when the Dock icon appears. Reassigning the same string is
@@ -679,14 +679,16 @@ extension AppDelegate {
         openHistory(conversation: identity, recapMessage: message)
     }
 
-    func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil, query: String = "", searchNote: String? = nil, recapMessage: Int? = nil) {
+    func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil, query: String = "", searchNote: String? = nil, recapMessage: Int? = nil, returnTo: ReviewWindowController? = nil) {
         conversationSearchSequence += 1
         let workspace = workspaceController()
         let returnResponder: NSResponder? = searchNote == nil ? workspace.window.firstResponder : workspace.shownTerminalView
         workspace.show()
         let controller = historyWindow ?? WorkspaceHistoryWindow(model: WorkspaceHistoryModel(command: { [weak self] in self?.command }, defaults: .standard, feedbackHistory: reviewFeedbackHistory))
-        trackVisibility(of: controller, \.historyVisible) { [weak returnResponder] app in
-            if eventTime != nil, let activity = app.activityWindow?.window, activity.isVisible {
+        trackVisibility(of: controller, \.historyVisible) { [weak returnResponder, weak returnTo] app in
+            if let window = returnTo?.window, window.isVisible {
+                window.makeKeyAndOrderFront(nil)
+            } else if eventTime != nil, let activity = app.activityWindow?.window, activity.isVisible {
                 activity.makeKeyAndOrderFront(nil)
             } else if app.workspaceVisible {
                 app.workspace?.window.makeKeyAndOrderFront(nil)
@@ -758,6 +760,7 @@ extension AppDelegate {
             entry(.collapsePane, WorkspaceShortcut.hideOtherPane.title, reason: workspace?.isSplit == true ? (workspace?.canHideOtherPane == true ? nil : "Wait for the checkout operation to finish") : "Open a second pane first"),
             entry(.activity, WorkspaceShortcut.activity.title, key(.activity)),
             entry(.flightLog, WorkspaceShortcut.flightLog.title, key(.flightLog)),
+            entry(.briefing, WorkspaceShortcut.briefing.title, key(.briefing)),
             entry(.runs, WorkspaceShortcut.runs.title, key(.runs)),
             entry(.runPlan, WorkspaceShortcut.runPlan.title, key(.runPlan), reason: command == nil ? AMXWording.unavailable(notFound: preferences.binaryMenuProblem) : nil),
             entry(.changes, WorkspaceShortcut.changes.title, key(.changes)),
@@ -862,6 +865,7 @@ extension AppDelegate {
         case .settings: showPreferences(nil)
         case .activity: showActivity(nil)
         case .flightLog: showFlightLog(nil)
+        case .briefing: showBriefing(nil)
         case .history: showHistory(nil)
         case .runs: showRuns(nil)
         case .runPlan: runPlan(nil)

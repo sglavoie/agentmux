@@ -68,6 +68,7 @@ extension AppDelegate: DaemonConnectionDelegate {
         historyWindow?.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
         historyWindow?.model.workingConversations = Set(store.sessions.filter(\.isWorking).compactMap { $0.conversation?.encoded })
         refreshHistoryRecap()
+        refreshBriefing()
         snoozes.reconcile()
         statusItem?.refresh()
         workspace?.refresh()

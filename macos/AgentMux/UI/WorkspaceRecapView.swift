@@ -2,15 +2,19 @@ import SwiftUI
 
 struct WorkspaceRecapView: View {
     @ObservedObject var model: WorkspaceRecapModel
+    var generationWaitMessage = "Will update after the agent finishes its turn."
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("Conversation Recap").font(.headline)
                 Spacer()
                 if model.loading { ProgressView().controlSize(.small) }
-                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                Button { model.refresh() } label: {
+                    if model.automaticallyGenerate { Image(systemName: "arrow.clockwise") }
+                    else { Text(model.report?.recap == nil ? "Generate Recap" : "Regenerate") }
+                }
                     .buttonStyle(.borderless).disabled(model.loading || !model.canGenerate || model.report?.status == "disabled")
-                    .accessibilityLabel("Regenerate conversation recap")
+                    .accessibilityLabel(model.report?.recap == nil ? "Generate conversation recap" : "Regenerate conversation recap")
                     .help("Generate a new recap using the configured summarization profile")
             }
             if let recap = model.report?.recap {
@@ -30,7 +34,7 @@ struct WorkspaceRecapView: View {
                 Text(emptyMessage).font(.caption).foregroundStyle(.secondary)
             }
             if !model.canGenerate {
-                Text("Will update after the agent finishes its turn.").font(.caption).foregroundStyle(.secondary)
+                Text(generationWaitMessage).font(.caption).foregroundStyle(.secondary)
             }
             if let warning = model.error ?? model.report?.warning {
                 Text(warning).font(.caption).foregroundStyle(.secondary)
@@ -50,7 +54,7 @@ struct WorkspaceRecapView: View {
         case "unconfigured": return "Choose a Claude profile in [defaults.recaps] to generate recaps."
         case "empty": return "No conversation messages to recap yet."
         case "pending": return "Recap generation is in progress."
-        default: return "A recap will appear here when it is ready."
+        default: return model.automaticallyGenerate ? "A recap will appear here when it is ready." : "No current saved recap. Generate one to see the goal, latest outcome, and unfinished work."
         }
     }
 
