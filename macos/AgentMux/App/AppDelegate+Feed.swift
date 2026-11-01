@@ -66,6 +66,8 @@ extension AppDelegate: DaemonConnectionDelegate {
     func storeChanged() {
         refreshDockBadge()
         historyWindow?.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
+        historyWindow?.model.workingConversations = Set(store.sessions.filter(\.isWorking).compactMap { $0.conversation?.encoded })
+        refreshHistoryRecap()
         snoozes.reconcile()
         statusItem?.refresh()
         workspace?.refresh()
@@ -78,6 +80,15 @@ extension AppDelegate: DaemonConnectionDelegate {
         if preferencesModel.kittyInUse != kitty { preferencesModel.kittyInUse = kitty }
         preferences.daemonStatus = store.daemonStatus
         publishPreferences()
+    }
+
+    func refreshHistoryRecap() {
+        guard let historyWindow, historyWindow.window?.isVisible == true,
+              let selected = historyWindow.model.selected else { return }
+        let session = store.sessions.first { $0.conversation == selected.conversation.identity }
+        historyWindow.model.recap.select(selected.conversation.identity,
+            revision: String(session?.presentationChangedAtMS ?? 0) + (session?.iconState ?? ""),
+            canGenerate: session?.isWorking != true)
     }
 
     func refreshDockBadge(force: Bool = false) {

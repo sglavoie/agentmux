@@ -673,7 +673,13 @@ extension AppDelegate {
 
     func workspaceSearchConversation() { searchConversation(nil) }
 
-    func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil, query: String = "", searchNote: String? = nil) {
+    func workspaceRecapCommand() -> AMXCommand? { command }
+
+    func workspaceRecapEvidence(_ identity: ConversationIdentity, message: Int) {
+        openHistory(conversation: identity, recapMessage: message)
+    }
+
+    func openHistory(conversation: ConversationIdentity?, eventTime: String? = nil, query: String = "", searchNote: String? = nil, recapMessage: Int? = nil) {
         conversationSearchSequence += 1
         let workspace = workspaceController()
         let returnResponder: NSResponder? = searchNote == nil ? workspace.window.firstResponder : workspace.shownTerminalView
@@ -697,6 +703,7 @@ extension AppDelegate {
             self?.openHistoryConversation(conversation, fork: fork, completion: completion)
         }
         controller.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
+        controller.model.workingConversations = Set(store.sessions.filter(\.isWorking).compactMap { $0.conversation?.encoded })
         historyWindow = controller
         controller.model.searchEntryNote = searchNote
         if conversation != nil {
@@ -705,7 +712,7 @@ extension AppDelegate {
             controller.model.includeAutomated = true
         }
         controller.show(project: controller.model.project.isEmpty ? (workspace.shownSessionRow?.project ?? "") : controller.model.project,
-                        conversation: conversation ?? controller.model.currentConversation ?? workspace.shownSessionRow?.conversation, eventTime: eventTime)
+                        conversation: conversation ?? controller.model.currentConversation ?? workspace.shownSessionRow?.conversation, eventTime: eventTime, recapMessage: recapMessage)
     }
 
     func openHistoryConversation(_ conversation: RecentConversation, fork: Bool, completion: @escaping (String?) -> Void) {

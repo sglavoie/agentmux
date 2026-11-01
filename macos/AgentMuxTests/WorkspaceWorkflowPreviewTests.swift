@@ -11,6 +11,23 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testConversationRecapAtNarrowAndWideSizes() async throws {
+        var command = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/fixture", path: "/bin"))
+        command.runner = { _, _, _, _ in
+            .finished(.init(status: 0, stdout: Data(#"{"schema_version":1,"data":{"conversation":"codex:one","status":"ready","recap":{"goal":{"text":"Add conversation recaps.","messages":[0]},"latest":{"text":"Agent reports tests passed.","messages":[3]},"outstanding":{"text":"Verify keyboard navigation.","messages":[3]},"generated_at":"2026-10-31T12:00:00Z","profile":"personal","model":"haiku","partial":true}}}"#.utf8), stderr: Data()))
+        }
+        let model = WorkspaceRecapModel(command: { command }, runner: PreviewRunner())
+        model.select(.init(harness: "codex", sessionID: "one"), revision: "1")
+        for dark in [false, true] {
+            for width in [CGFloat(260), CGFloat(680)] {
+                let view = VStack { WorkspaceRecapView(model: model); Spacer(minLength: 0) }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).padding(12)
+                try await render(view, name: "conversation-recap-\(Int(width))-\(dark)",
+                                 width: width, height: 460, dark: dark,
+                                 expected: ["Conversation Recap", "Goal", "Latest", "Outstanding", "Supporting messages"])
+            }
+        }
+    }
     func testFlightLogOverviewAtMinimumAndWideSizes() async throws {
         let command = FlightLogFixture.command()
         let model = WorkspaceFlightLogModel(command: { command }, runner: PreviewRunner())
@@ -71,7 +88,11 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
     private func command(_ data: @escaping ([String]) -> String) -> AMXCommand {
         var amx = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
         amx.runner = { _, args, _, _ in
-            .finished(ProcessOutput(status: 0, stdout: Data("{\"schema_version\":1,\"data\":\(data(args))}".utf8), stderr: Data()))
+            if args.count > 1, args[0] == "session", args[1] == "recap" {
+                let selector = args.firstIndex(of: "--").map { args[$0 + 1] } ?? "claude:one"
+                return .finished(ProcessOutput(status: 0, stdout: Data("{\"schema_version\":1,\"data\":{\"conversation\":\"\(selector)\",\"status\":\"disabled\"}}".utf8), stderr: Data()))
+            }
+            return .finished(ProcessOutput(status: 0, stdout: Data("{\"schema_version\":1,\"data\":\(data(args))}".utf8), stderr: Data()))
         }
         return amx
     }
@@ -82,7 +103,10 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
     /// drawn "Refresh failed" as "Refresh falled", and "Previous" as
     /// "Prevlous", so an exact match would fail on what the window shows.
     nonisolated static func ocrFolded(_ text: String) -> String {
-        String(text.lowercased().compactMap { character -> Character? in
+        // Visually checked captures also show Vision merging the final g in
+        // "Refreshing…" into the ellipsis. The toolbar text remains complete.
+        let text = text.lowercased().replacingOccurrences(of: "refreshin...", with: "refreshing...")
+        return String(text.compactMap { character -> Character? in
             if character.isWhitespace { return nil }
             return "l1|!".contains(character) ? "i" : character
         })

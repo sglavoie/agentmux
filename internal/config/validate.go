@@ -24,6 +24,7 @@ func Validate(cfg *Config) error {
 	errs = append(errs, validateHarnessColors(cfg)...)
 	errs = append(errs, validateHarnessEmojis(cfg)...)
 	errs = append(errs, validateAccounts(cfg.Profiles)...)
+	errs = append(errs, validateRecaps(cfg)...)
 	errs = append(errs, validateSessions(cfg.Projects, cfg.Profiles)...)
 	errs = append(errs, validateHookOverrides(cfg.Hooks, cfg.Profiles)...)
 

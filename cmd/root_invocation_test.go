@@ -183,6 +183,7 @@ func TestMissingConfigIsOneCodeEverywhere(t *testing.T) {
 var selfValidatedArgs = map[string]bool{
 	"amx session continue": true, "amx session fork": true, "amx session fork-worktree": true,
 	"amx session handoff": true, "amx session search": true, "amx session show": true,
+	"amx session recap": true,
 	"amx worktree diff": true, "amx worktree edit": true, "amx worktree forget": true,
 	"amx worktree land": true, "amx worktree list": true, "amx worktree prune": true,
 	"amx worktree remove": true, "amx worktree reopen": true, "amx worktree shell": true,

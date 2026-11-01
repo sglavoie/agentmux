@@ -297,6 +297,16 @@ timeout = 15
 max_bytes = 65536
 recent_messages = 12
 
+# Automatic conversation recaps appear for the session you open in the native
+# inspector or History. Uses the first configured Claude profile by default,
+# for source conversations from every harness. Each changed conversation costs
+# a separate model request on that profile's service/quota. Recaps are cached
+# locally; no requests run for conversations you never open.
+# [defaults.recaps]
+# enabled = true
+# profile = "claude-local"
+# model = "haiku"
+
 # Private diagnostic state is stored below $XDG_STATE_HOME/agent-mux (or
 # ~/.local/state/agent-mux). Journal entries contain causal metadata and HMACs,
 # never raw hook payloads. Native harness logs are raw and may contain prompts,

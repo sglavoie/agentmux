@@ -111,6 +111,8 @@ final class WorkspaceInspectorView: NSView {
     /// The lines under the tabs, top to bottom.
     private(set) var lines: [NSView] = []
     private let stack = WorkspaceInspectorStack()
+    let recap = WorkspaceRecapModel(command: { nil })
+    private lazy var recapHost = NSHostingView(rootView: WorkspaceRecapView(model: recap))
     private let scroll = NSScrollView()
     private static let inset: CGFloat = 12
 
@@ -138,6 +140,11 @@ final class WorkspaceInspectorView: NSView {
         scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
+
+        recapHost.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(recapHost)
+        recapHost.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -2 * Self.inset).isActive = true
+        recapHost.isHidden = true
 
         filterPicker.addItems(withTitles: WorkspaceWaitingFilter.allCases.map(\.rawValue))
         filterPicker.target = self
@@ -229,6 +236,7 @@ final class WorkspaceInspectorView: NSView {
     }
 
     private func rebuild(keeping old: [WorkspaceInspectorLine]? = nil) {
+        recapHost.isHidden = model.tab != .session || model.inspection == nil
         for (index, tab) in WorkspaceInspectorTab.allCases.enumerated() {
             let count = tab == .waiting && !model.waiting.isEmpty ? " \(model.waiting.count)" : ""
             tabs.setLabel(tab.title + count, forSegment: index)

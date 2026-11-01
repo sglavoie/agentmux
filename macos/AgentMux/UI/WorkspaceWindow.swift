@@ -394,6 +394,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         self.glyphs = glyphs
         self.now = now
         super.init()
+        inspector.recap.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
+        inspector.recap.onEvidence = { [weak self] identity, message in
+            self?.delegate?.workspaceRecapEvidence(identity, message: message)
+        }
     }
 
     /// The runtime sessions that have a terminal right now.
@@ -468,6 +472,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
+        inspector.recap.close()
         reportLayout()
         pendingLayout = nil
         layoutGeneration += 1

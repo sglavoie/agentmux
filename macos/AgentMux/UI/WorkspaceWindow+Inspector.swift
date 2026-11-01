@@ -38,6 +38,8 @@ extension WorkspaceWindowController {
         guard collapsed != reportedInspectorCollapsed else { return }
         reportedInspectorCollapsed = collapsed
         if collapsed { inspector.discardContext() }
+        if collapsed { inspector.recap.close() }
+        else { reloadInspector() }
         delegate?.workspaceInspectorChanged(collapsed: collapsed, tab: inspectorTab)
     }
 
@@ -60,6 +62,9 @@ extension WorkspaceWindowController {
             current: state.current,
             feedNotice: WorkspaceSidebar.feedNotice(store.feed)
         ))
+        if isOpen, !reportedInspectorCollapsed, inspectorTab == .session, let row = shownSessionRow {
+            inspector.recap.select(row.conversation, revision: String(shown?.presentationChangedAtMS ?? 0) + (shown?.iconState ?? ""), canGenerate: state.current && !row.working)
+        } else { inspector.recap.close() }
     }
 
     /// Return in the session list: focuses the selected row, as a click does.

@@ -98,6 +98,8 @@ protocol WorkspaceDelegate: AnyObject {
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void)
     func workspaceResumeConversation(_ identity: ConversationIdentity)
     func workspaceSearchConversation()
+    func workspaceRecapCommand() -> AMXCommand?
+    func workspaceRecapEvidence(_ identity: ConversationIdentity, message: Int)
     /// Opens Settings on the amx binary, from an error that says amx was not
     /// found.
     func workspaceOpenAMXSettings()
@@ -116,6 +118,8 @@ extension WorkspaceDelegate {
     func workspacePerform(_ command: WorkspaceCommand) {}
     func workspaceResumeConversation(_ identity: ConversationIdentity) {}
     func workspaceSearchConversation() {}
+    func workspaceRecapCommand() -> AMXCommand? { nil }
+    func workspaceRecapEvidence(_ identity: ConversationIdentity, message: Int) {}
     func workspaceOpenAMXSettings() {}
     var workspaceDaemonIsDown: Bool { false }
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void) {

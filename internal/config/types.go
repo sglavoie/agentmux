@@ -65,6 +65,7 @@ type Defaults struct {
 	StopConfirm          StopConfirmConfig    `toml:"stop_confirm"`           // confirmed-idle gate before a native stop paints the terminal icon
 	SessionArchive       SessionArchiveConfig `toml:"session_archive"`        // retention policy for the searchable session-transcript index
 	Handoff              HandoffConfig        `toml:"handoff"`                // bounded cross-harness context-pack generation
+	Recaps               RecapConfig          `toml:"recaps"`                 // on-demand conversation recaps
 	Diagnostics          DiagnosticsConfig    `toml:"diagnostics"`            // private event journal and native/daemon log retention
 	Args                 []string             `toml:"args"`                   // preferred shared launch args
 	ClaudeFlags          []string             `toml:"claude_flags"`           // legacy alias for args

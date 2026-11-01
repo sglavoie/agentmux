@@ -596,6 +596,21 @@ with the CLI's clean/inactive checks. A details button expands warnings and
 conflicts without pushing the diff or landing controls out of view. A retained
 review cannot authorize landing while its replacement is being read.
 
+### Conversation recaps
+
+The inspector's **Session** tab and Conversation History show an automatic recap
+of the selected conversation: its goal, latest outcome, and explicitly unfinished
+work. Saved recaps appear first. Generation runs in the background only for a
+conversation you open and waits while its live agent is working. No typing is
+required. **Supporting messages** opens the evidence in History; the refresh
+button regenerates or retries. Timestamps, excerpt coverage, stale data, and
+failures remain visible.
+
+Recaps use the first configured Claude profile, including for Codex and Copilot
+conversations, and consume that profile's service/quota. Choose a different
+profile/model or disable generation in `[defaults.recaps]`. See
+[conversation recaps](conversation-recaps.md) for configuration and limits.
+
 ### Since Last Looked
 
 **View › Since Last Looked…** (⌘⇧U) shows recorded state transitions, process exits,

@@ -126,6 +126,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var actionFeedback: WorkspaceFeedback?
     var actionNotice: String? { actionFeedback?.message }
     @Published var liveConversations: Set<String> = []
+    @Published var workingConversations: Set<String> = []
     @Published private(set) var project = ""
     @Published private(set) var currentConversation: ConversationIdentity?
     var revealFeedback: (() -> Void)?
@@ -139,6 +140,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     private let command: () -> AMXCommand?
+    let recap: WorkspaceRecapModel
     private let runner: ASLWorkRunner
     private var searchGeneration = 0
     private var transcriptGeneration = 0
@@ -149,6 +151,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var highlightedMessage: Int?
     @Published private(set) var locationNotice: String?
     private var eventLocation: (conversation: String, at: String)?
+    private var recapLocation: (conversation: String, message: Int)?
     private var highlightTask: Task<Void, Never>?
     private var scrollSequence = 0
     private var loadedQuery = ""
@@ -160,6 +163,7 @@ final class WorkspaceHistoryModel: ObservableObject {
         self.feedbackHistory = feedbackHistory ?? WorkspaceFeedbackHistory()
         self.command = command
         self.runner = runner
+        recap = WorkspaceRecapModel(command: command)
         reviewState = WorkspaceReviewState(defaults: defaults)
         layout = reviewState.historyLayout
         if let saved = reviewState.history {
@@ -208,11 +212,26 @@ final class WorkspaceHistoryModel: ObservableObject {
         scrollRequest = ScrollRequest(sequence: scrollSequence, message: message)
     }
 
-    func open(project: String, conversation: ConversationIdentity?, eventTime: String? = nil) {
+    /// Recap indices use the same visible-prose sequence as session show.
+    func revealRecapMessage(_ message: Int) {
+        guard message >= 0, selected != nil else { return }
+        loadedQuery = ""; eventLocation = nil
+        highlightedMessage = message
+        locationNotice = "Supporting message \(message + 1) for the conversation recap."
+        readWindow(from: max(0, message - 10), anchor: message)
+    }
+
+    func open(project: String, conversation: ConversationIdentity?, eventTime: String? = nil, recapMessage: Int? = nil) {
         highlightTask?.cancel()
         highlightedMessage = nil
         locationNotice = nil
         eventLocation = nil
+        recapLocation = nil
+        if let conversation, let recapMessage {
+            recapLocation = (conversation.encoded, recapMessage)
+            query = ""; scope = .conversation; includeAutomated = true
+            transcript = nil
+        }
         if let conversation, let eventTime {
             eventLocation = (conversation.encoded, eventTime)
             query = ""
@@ -373,7 +392,10 @@ final class WorkspaceHistoryModel: ObservableObject {
         matchIndex = 0
         scrollRequest = nil
         saveReview()
-        if let anchor { readWindow(from: max(0, anchor - 20), anchor: anchor) }
+        if let location = recapLocation, location.conversation == id {
+            recapLocation = nil
+            revealRecapMessage(location.message)
+        } else if let anchor { readWindow(from: max(0, anchor - 20), anchor: anchor) }
         else { loadTranscript() }
     }
 
@@ -487,6 +509,7 @@ final class WorkspaceHistoryModel: ObservableObject {
     }
 
     func close() {
+        recap.close()
         highlightTask?.cancel()
         highlightedMessage = nil
         eventLocation = nil

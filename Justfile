@@ -84,7 +84,7 @@ fmt-check:
 #
 # Run the concurrency-sensitive suites under the race detector
 race-core:
-    go test -race -tags {{ harness_tags }} ./internal/transcript ./internal/plans ./internal/handoff ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
+    go test -race -tags {{ harness_tags }} ./internal/transcript ./internal/plans ./internal/handoff ./internal/recap ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
 
 # `just test` already runs the same set through the same CLI path (see the
 # acceptance recipe), so this is for running them by hand.

@@ -4,16 +4,17 @@ import SwiftUI
 @MainActor
 final class WorkspaceHistoryWindow: ReviewWindowController {
     let model: WorkspaceHistoryModel
-    private var opening: (project: String, conversation: ConversationIdentity?, eventTime: String?)?
+    private var opening: (project: String, conversation: ConversationIdentity?, eventTime: String?, recapMessage: Int?)?
 
     init(model: WorkspaceHistoryModel) {
         self.model = model
         super.init(title: "Conversation History", autosaveName: "WorkspaceHistory", size: NSSize(width: 1000, height: 680))
         model.revealFeedback = { [weak self] in self?.reveal() }
+        model.recap.onEvidence = { [weak model] _, message in model?.revealRecapMessage(message) }
     }
 
-    func show(project: String, conversation: ConversationIdentity?, eventTime: String? = nil) {
-        opening = (project, conversation, eventTime)
+    func show(project: String, conversation: ConversationIdentity?, eventTime: String? = nil, recapMessage: Int? = nil) {
+        opening = (project, conversation, eventTime, recapMessage)
         present()
     }
 
@@ -21,7 +22,7 @@ final class WorkspaceHistoryWindow: ReviewWindowController {
     override func willPresent() {
         guard let opening else { return }
         self.opening = nil
-        model.open(project: opening.project, conversation: opening.conversation, eventTime: opening.eventTime)
+        model.open(project: opening.project, conversation: opening.conversation, eventTime: opening.eventTime, recapMessage: opening.recapMessage)
     }
     override func didClose() { model.close() }
 }
@@ -33,6 +34,7 @@ struct WorkspaceHistoryView: View {
     private enum Focus: Hashable { case search, results, transcript }
     @FocusState private var focus: Focus?
     @State private var dragStart: Double?
+    @State private var showingRecap = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -178,6 +180,12 @@ struct WorkspaceHistoryView: View {
                                     Text(transcript.total == 0 ? "No messages" : "\(transcript.total) \(transcript.total == 1 ? "message" : "messages")")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
+                                Button("Recap") { showingRecap.toggle() }
+                                    .buttonStyle(.borderless).font(.caption)
+                                    .help("Read the conversation recap without moving your place")
+                                    .popover(isPresented: $showingRecap) {
+                                        WorkspaceRecapView(model: model.recap).padding(8).frame(width: 420)
+                                    }
                                 Spacer()
                                 if !model.resultsQuery.isEmpty {
                                     Text(model.matchingMessages.isEmpty ? "No matches in conversation prose" : "Match \(model.matchIndex + 1) of \(model.matchingMessages.count)")
@@ -193,6 +201,8 @@ struct WorkspaceHistoryView: View {
                             ScrollViewReader { proxy in
                                 ScrollView {
                                     LazyVStack(alignment: .leading, spacing: 16) {
+                                        WorkspaceRecapView(model: model.recap)
+                                            .id("conversation-recap")
                                         ForEach(transcript.start..<transcript.end, id: \.self) { index in
                                             let message = transcript.messages[index - transcript.start]
                                             VStack(alignment: .leading, spacing: 5) {
@@ -226,8 +236,19 @@ struct WorkspaceHistoryView: View {
             }
             }
         }.padding(.horizontal, 12).padding(.vertical, 8)
-            .onAppear { focus = .search }
+            .onAppear { focus = .search; selectRecap() }
+            .onChange(of: model.selection) { _, _ in selectRecap() }
+            .onChange(of: model.transcriptRefreshedAt) { _, _ in selectRecap() }
+            .onChange(of: model.workingConversations) { _, _ in selectRecap() }
+            .onChange(of: model.highlightedMessage) { _, message in if message != nil { showingRecap = false } }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
+    }
+
+    private func selectRecap() {
+        guard let selected = model.selected else { model.recap.close(); return }
+        model.recap.select(selected.conversation.identity,
+                           revision: String(model.transcript?.total ?? 0) + (selected.conversation.lastAt?.description ?? ""),
+                           canGenerate: !model.workingConversations.contains(selected.id))
     }
     private var emptyResultsDetail: String {
         guard !model.includeAutomated, model.hiddenAutomated > 0 else { return "" }

@@ -1,0 +1,72 @@
+import SwiftUI
+
+struct WorkspaceRecapView: View {
+    @ObservedObject var model: WorkspaceRecapModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Conversation Recap").font(.headline)
+                Spacer()
+                if model.loading { ProgressView().controlSize(.small) }
+                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.borderless).disabled(model.loading || !model.canGenerate || model.report?.status == "disabled")
+                    .accessibilityLabel("Regenerate conversation recap")
+                    .help("Generate a new recap using the configured summarization profile")
+            }
+            if let recap = model.report?.recap {
+                claim("Goal", recap.goal)
+                claim("Latest", recap.latest)
+                claim("Outstanding", recap.outstanding)
+                let date = WorkspaceActivityEntry.date(recap.generatedAt)
+                Text("Updated \(date?.formatted(date: .abbreviated, time: .shortened) ?? recap.generatedAt) · \(recap.profile) · \(recap.model)")
+                    .font(.caption).foregroundStyle(.secondary)
+                if model.report?.status != "ready" || model.error != nil {
+                    Text("Saved recap · newer messages may not be included").font(.caption).foregroundStyle(.secondary)
+                }
+                if recap.partial {
+                    Text("Based on excerpts from the conversation").font(.caption).foregroundStyle(.secondary)
+                }
+            } else if !model.loading {
+                Text(emptyMessage).font(.caption).foregroundStyle(.secondary)
+            }
+            if !model.canGenerate {
+                Text("Will update after the agent finishes its turn.").font(.caption).foregroundStyle(.secondary)
+            }
+            if let warning = model.error ?? model.report?.warning {
+                Text(warning).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .textSelection(.enabled)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityIdentifier("conversation-recap")
+    }
+
+    private var emptyMessage: String {
+        switch model.report?.status {
+        case "disabled": return "Automatic recaps are disabled in [defaults.recaps]."
+        case "unconfigured": return "Choose a Claude profile in [defaults.recaps] to generate recaps."
+        case "empty": return "No conversation messages to recap yet."
+        case "pending": return "Recap generation is in progress."
+        default: return "A recap will appear here when it is ready."
+        }
+    }
+
+    @ViewBuilder private func claim(_ title: String, _ claim: ConversationRecap.Claim) -> some View {
+        if !claim.text.reveal().isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(claim.text.reveal()).font(.callout).lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true).help(claim.text.reveal())
+                Menu("Supporting messages") {
+                    ForEach(Array(Set(claim.messages)).sorted(), id: \.self) { index in
+                        Button("Message \(index + 1)") { model.reveal(index) }
+                    }
+                }.menuStyle(.borderlessButton).fixedSize().font(.caption)
+                    .disabled(model.report?.status != "ready" || model.error != nil || model.loading)
+            }
+        }
+    }
+}

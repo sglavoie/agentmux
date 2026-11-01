@@ -36,6 +36,28 @@ final class WorkspaceInspectorTests: XCTestCase {
 
     // MARK: Data
 
+    func testRecapTracksOnlyTheVisibleSessionAndWaitsForItsWorkingTurn() {
+        var session = F.tmux(1, project: "api", icon: "bolt", conversation: "one")
+        app.store.apply(snapshot: F.snapshot([session]))
+        workspace.select(.embedded(F.runtimeID(1)))
+        workspace.setInspectorTab(.session)
+        XCTAssertNil(workspace.inspector.recap.conversation, "a hidden inspector does not start recaps")
+        workspace.setInspectorCollapsed(false)
+        XCTAssertEqual(workspace.inspector.recap.conversation?.encoded, "claude:one")
+        XCTAssertFalse(workspace.inspector.recap.canGenerate)
+        session.iconState = "stop"; session.presentationChangedAtMS = 500_000
+        app.store.apply(snapshot: F.snapshot([session]))
+        XCTAssertTrue(workspace.inspector.recap.canGenerate)
+        session.conversation = .init(harness: "claude", sessionID: "two")
+        app.store.apply(snapshot: F.snapshot([session]))
+        XCTAssertEqual(workspace.inspector.recap.conversation?.encoded, "claude:two")
+        workspace.setInspectorTab(.waiting)
+        XCTAssertNil(workspace.inspector.recap.conversation)
+        workspace.setInspectorTab(.session)
+        workspace.setInspectorCollapsed(true)
+        XCTAssertNil(workspace.inspector.recap.conversation)
+    }
+
     func testWaitingListsTheSessionsThatWaitInSidebarOrder() {
         // The permission request waits under Waiting, above the turn that
         // completed under Done, though it has waited the least.
