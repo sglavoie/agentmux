@@ -154,12 +154,20 @@ struct WorkspaceHistoryView: View {
                                 .buttonStyle(.borderedProminent).fixedSize()
                                 .help("Resume or focus the selected session (⌘Return)").disabled(!model.canAct)
                             Button("Fork") { model.act(fork: true) }.fixedSize().help("Fork the selected conversation (⌘⇧Return)").disabled(!model.canAct)
-                            Button("Handoff / More…") { model.openAdvancedActions() }
+                            Button("More…") { model.openAdvancedActions() }
                                 .help("Open terminal conversation actions with this conversation and search. ⌘Y returns here.")
                                 .disabled(!model.canAct || model.onAdvanced == nil)
                             Button { model.refreshTranscript() } label: { Image(systemName: "arrow.clockwise") }
                                 .help("Refresh conversation without moving your place (⌘R)")
                                 .accessibilityLabel("Refresh conversation").disabled(!model.canRefreshTranscript)
+                        }
+                        HStack {
+                            if let source = model.sourceOrigin?(selected.conversation.identity) {
+                                Button("Source Conversation") { model.onSource?(source) }.help(source.encoded)
+                            }
+                            Spacer()
+                            Button(WorkspaceHandoffModel.title) { model.onHandoff?(selected.conversation) }
+                                .disabled(!model.canAct || model.onHandoff == nil)
                         }
                         if let notice = model.locationNotice {
                             Text(notice).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

@@ -203,6 +203,10 @@ var sessionHandoffCmd = &cobra.Command{
 it stands and its recent messages, and launches a new agent under --profile
 (of any harness) that starts from it. --edit opens the pack in your editor
 before launch; --no-launch writes it and stops. The pack is kept either way.
+--preview reads the generated context without writing a pack or starting an
+agent; it does not require --profile or a working terminal backend.
+--content-file uses reviewed UTF-8 context verbatim instead of regenerating it.
+--instruction appends the receiving agent's next task to the saved pack.
 A selector is ` + "`<harness>:<session-id>`" + ` or a bare session ID or unique prefix.
 
 With --json it reports {action, changed, message, data}, including the
@@ -215,6 +219,15 @@ pack's path.`,
 		edit, _ := cmd.Flags().GetBool("edit")
 		noLaunch, _ := cmd.Flags().GetBool("no-launch")
 		profile, _ := cmd.Flags().GetString("profile")
+		preview, _ := cmd.Flags().GetBool("preview")
+		contentFile, _ := cmd.Flags().GetString("content-file")
+		instruction, _ := cmd.Flags().GetString("instruction")
+		if (preview && (edit || noLaunch || contentFile != "" || instruction != "")) || (edit && contentFile != "") {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_options", errors.New("--preview cannot be combined with --edit, --no-launch, --content-file or --instruction; --edit and --content-file are mutually exclusive"))
+		}
+		if len(instruction) > handoff.MaxInstructionBytes {
+			return cli.CommandFailure(cmd, jsonOutput, "invalid_options", errors.New("instruction exceeds 16 KiB"))
+		}
 		if edit && jsonOutput {
 			return cli.CommandFailure(cmd, jsonOutput, "invalid_options", errors.New("--edit cannot be used with --json"))
 		}
@@ -224,7 +237,7 @@ pack's path.`,
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(profile) == "" {
+		if strings.TrimSpace(profile) == "" && !preview {
 			return cli.MissingParameter(cmd, jsonOutput, "profile", "target configured profile")
 		}
 		cfg, err := sessionCommandsLoadConfig()
@@ -235,7 +248,17 @@ pack's path.`,
 		if err != nil {
 			return err
 		}
-		parameters := map[string]string{"profile": profile}
+		parameters := map[string]string{"profile": profile, "instruction": instruction}
+		if preview {
+			parameters["preview"] = "true"
+		}
+		if contentFile != "" {
+			content, err := readReviewedHandoff(contentFile)
+			if err != nil {
+				return cli.CommandFailure(cmd, jsonOutput, "invalid_content", err)
+			}
+			parameters["content"] = string(content)
+		}
 		if edit {
 			parameters["edit"] = "true"
 		}

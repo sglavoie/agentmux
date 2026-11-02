@@ -395,6 +395,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         self.glyphs = glyphs
         self.now = now
         super.init()
+        inspector.onSource = { [weak self] identity in self?.delegate?.workspaceOpenHandoffSource(identity) }
         inspector.recap.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
         inspector.recap.onEvidence = { [weak self] identity, message in
             self?.delegate?.workspaceRecapEvidence(identity, message: message)

@@ -150,3 +150,44 @@ func recordJSON(t *testing.T, f *tmuxtest.Fixture, id runtimesession.ID) []byte 
 	}
 	return raw
 }
+
+// Exercise the real workflow, harness invocation and runtime registry together:
+// the ID returned to the app must identify the agent receiving the reviewed pack.
+func TestReviewedHandoffOnTmuxReportsTheReceivingSession(t *testing.T) {
+	for _, target := range []string{harness.Claude, harness.Codex, harness.Copilot} {
+		t.Run(target, func(t *testing.T) {
+			f := tmuxtest.New(t)
+			t.Setenv("HOME", t.TempDir())
+			cfg := continuityConfig(target)
+			cfg.Projects[0].Directory = t.TempDir()
+			cfg.Accounts[0].HomeDir = t.TempDir()
+			meta := continuityMeta(t, harness.Claude, "source-1", "work")
+			meta.CWD = cfg.Projects[0].Directory
+			deps := tmuxDeps(f, cfg)
+			deps.Readers = map[string]transcript.Reader{harness.Claude: forkReader{harness: harness.Claude}}
+			content := "Reviewed context: preserve this exact text.\n"
+			result, err := DefaultRegistry().Execute(context.Background(), deps, Handoff, Request{Conversation: &meta, Parameters: map[string]string{"profile": "work", "content": content, "instruction": "Review for races"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, ok := result.Data["runtime_session_id"].(string)
+			if !ok || id == "" || result.Data["launched"] != true {
+				t.Fatalf("handoff result = %+v", result)
+			}
+			record, err := f.Load(t).Get(runtimesession.ID(id))
+			if err != nil || record.State != runtimesession.StateLive || record.Conversation != nil {
+				t.Fatalf("receiving runtime = %+v, %v", record, err)
+			}
+			pack, err := os.ReadFile(result.Data["path"].(string))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(pack) != content+"\n\n## Next instruction\n\nReview for races\n" {
+				t.Fatalf("pack = %q", pack)
+			}
+			if result.Data["source_harness"] != harness.Claude || result.Data["source_session_id"] != meta.ID {
+				t.Fatalf("origin = %+v", result)
+			}
+		})
+	}
+}

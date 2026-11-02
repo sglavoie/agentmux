@@ -59,6 +59,7 @@ extension WorkspaceWindowController {
                 sessions, asl: store.snapshot?.asl.waiting ?? [], snapshotSocket: socket, now: now(), glyphs: glyphs, order: order
             ),
             inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs, displayName: shownSessionRow?.displayName) },
+            sourceConversation: shownSessionRow.flatMap { delegate?.workspaceHandoffSource($0) },
             current: state.current,
             feedNotice: WorkspaceSidebar.feedNotice(store.feed)
         ))

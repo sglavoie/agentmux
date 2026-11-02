@@ -11,6 +11,27 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testHandoffPreviewAtMinimumAndWideSizes() async throws {
+        let command = command { args in
+            if args[0] == "config" { return #"[{"name":"work","harness":"claude"},{"name":"review","harness":"codex"}]"# }
+            return #"{"data":{"content":"Original goal: implement checkout review.\n\nRecent outcome: tests passed.\n\nCheckout: feature/review, two modified files.\n","directory":"/Projects/api/worktree","source_harness":"claude","source_session_id":"source-one"}}"#
+        }
+        let model = WorkspaceHandoffModel(source: .init(harness: "claude", sessionID: "source-one"), command: { command }, runner: PreviewRunner())
+        model.load()
+        model.instruction = "Review this implementation for concurrency bugs."
+        XCTAssertTrue(model.canLaunch)
+        for dark in [false, true] {
+            for width in [CGFloat(660), CGFloat(860)] {
+                try await render(WorkspaceHandoffView(model: model, cancel: {}), name: "handoff-\(Int(width))-\(dark)", width: width, height: 740, dark: dark,
+                                 expected: ["Continue with Another Agent", "Receiving agent", "Context to pass along", "Next instruction", "Launch Agent", "Read Source Conversation"])
+            }
+        }
+        let failed = WorkspaceHandoffModel(source: .init(harness: "claude", sessionID: "source-one"), command: { nil }, runner: PreviewRunner())
+        failed.load()
+        try await render(WorkspaceHandoffView(model: failed, cancel: {}), name: "handoff-unavailable", width: 660, height: 740,
+                         expected: ["Continue with Another Agent", "Retry Preview", "Cancel", "Launch Agent"])
+    }
+
     func testProjectBriefingAtMinimumAndWideSizes() async throws {
         let command = BriefingFixture.command()
         let model = WorkspaceBriefingModel(command: { command }, runner: PreviewRunner())

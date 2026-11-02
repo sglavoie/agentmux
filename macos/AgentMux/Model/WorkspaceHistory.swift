@@ -131,6 +131,9 @@ final class WorkspaceHistoryModel: ObservableObject {
     @Published private(set) var currentConversation: ConversationIdentity?
     var revealFeedback: (() -> Void)?
     var onAction: ((RecentConversation, Bool, @escaping (String?) -> Void) -> Void)?
+    var onHandoff: ((RecentConversation) -> Void)?
+    var sourceOrigin: ((ConversationIdentity) -> ConversationIdentity?)?
+    var onSource: ((ConversationIdentity) -> Void)?
     var onAdvanced: ((ConversationIdentity, String) -> Void)?
 
     func openAdvancedActions() {

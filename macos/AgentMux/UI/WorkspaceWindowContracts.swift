@@ -94,6 +94,9 @@ protocol WorkspaceDelegate: AnyObject {
     var workspaceOffersSetup: Bool { get }
     func workspaceSetupFinished()
     func workspaceLaunchProjects(from view: NSView)
+    func workspaceHandoff(from row: WorkspaceRow)
+    func workspaceHandoffSource(_ row: WorkspaceRow) -> ConversationIdentity?
+    func workspaceOpenHandoffSource(_ identity: ConversationIdentity)
     func workspaceNewSession(below row: WorkspaceRow)
     func workspacePerform(_ command: WorkspaceCommand)
     func workspaceContext(_ row: WorkspaceWaitingRow, completion: @escaping (WorkspaceWaitingContext.Result) -> Void)
@@ -116,6 +119,9 @@ extension WorkspaceDelegate {
     var workspaceOffersSetup: Bool { false }
     func workspaceSetupFinished() {}
     func workspaceLaunchProjects(from view: NSView) {}
+    func workspaceHandoff(from row: WorkspaceRow) {}
+    func workspaceHandoffSource(_ row: WorkspaceRow) -> ConversationIdentity? { nil }
+    func workspaceOpenHandoffSource(_ identity: ConversationIdentity) {}
     func workspaceNewSession(below row: WorkspaceRow) {}
     func workspacePerform(_ command: WorkspaceCommand) {}
     func workspaceResumeConversation(_ identity: ConversationIdentity) {}

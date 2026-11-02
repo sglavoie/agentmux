@@ -266,12 +266,15 @@ extension WorkspaceWindowController {
                              action: #selector(pinClickedSession(_:)), keyEquivalent: "")
         pin.representedObject = row.key
         pin.target = self
+        let handoff = NSMenuItem(title: WorkspaceHandoffModel.title, action: #selector(handoffClickedSession(_:)), keyEquivalent: "")
+        handoff.representedObject = row.key; handoff.target = self
+        handoff.isEnabled = row.conversation != nil
         guard let id = row.embeddedRuntimeSessionID else {
             // What a click on the line does: the window comes forward in Kitty.
             let show = NSMenuItem(title: Self.showInKittyTitle, action: #selector(activateClickedSession(_:)), keyEquivalent: "")
             show.representedObject = row.key
             show.target = self
-            return [name] + looks + [pin, .separator(), show]
+            return [name] + looks + [pin, .separator(), handoff, show]
         }
         // What the × and the Session menu do, for the line under the pointer.
         let terminal = NSMenuItem(title: Self.newTerminalTitle, action: #selector(openTerminalBesideClickedSession(_:)), keyEquivalent: "")
@@ -281,6 +284,7 @@ extension WorkspaceWindowController {
         session.representedObject = row.key
         session.target = self
         session.isEnabled = closing[id] == nil
+        handoff.isEnabled = handoff.isEnabled && closing[id] == nil
         let copy = NSMenuItem(title: Self.copyRuntimeSessionIDTitle, action: #selector(copyClickedRuntimeSessionID(_:)), keyEquivalent: "")
         copy.representedObject = id
         copy.target = self
@@ -288,13 +292,13 @@ extension WorkspaceWindowController {
         end.representedObject = row.key
         end.target = self
         end.isEnabled = closing[id] == nil
-        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, session, copy, .separator(), end] }
+        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, session, handoff, copy, .separator(), end] }
         // What a click or Return on the line does: attach again, taking the
         // session from whichever terminal has it.
         let reattach = NSMenuItem(title: Self.reattachTitle, action: #selector(reattachClickedSession(_:)), keyEquivalent: "")
         reattach.representedObject = row.key
         reattach.target = self
-        return [name] + looks + [pin, .separator(), reattach, terminal, session, copy, .separator(), end]
+        return [name] + looks + [pin, .separator(), reattach, terminal, session, handoff, copy, .separator(), end]
     }
 
     @objc private func clickedSessionAction(_ sender: Any?) {
@@ -333,6 +337,13 @@ extension WorkspaceWindowController {
     @objc private func copyClickedRuntimeSessionID(_ sender: Any?) {
         guard let id = (sender as? NSMenuItem)?.representedObject as? String else { return }
         copyToPasteboard(id)
+    }
+
+    @objc private func handoffClickedSession(_ sender: Any?) {
+        guard state.current, let key = (sender as? NSMenuItem)?.representedObject as? AttentionCycler.Key,
+              let row = state.row(key), row.conversation != nil else { return }
+        if let id = row.embeddedRuntimeSessionID, closing[id] != nil { return }
+        delegate?.workspaceHandoff(from: row)
     }
 
     @objc private func newSessionBelowClickedSession(_ sender: Any?) {

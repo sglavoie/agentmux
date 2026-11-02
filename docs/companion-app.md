@@ -528,6 +528,30 @@ or an open context menu. Attention badges still update; ended sessions held in
 place cannot be acted on. Sidebar, Waiting, and menu-bar reasons share readable
 labels; raw protocol reasons remain in the session inspector.
 
+### Continue with another agent
+
+**Session › Continue with Another Agent…**, a session's right-click menu, and
+its command-palette entry open a native handoff preview. The action is also
+available for the selected conversation in History and on Project Briefing's
+conversation cards.
+
+Choose any configured Claude, Codex, or Copilot profile, review and edit the
+context, and optionally add a next instruction such as “Review this for concurrency
+bugs.” The preview captures the source conversation's goal and recent messages,
+checkout directory, branch, and Git status. Loading it makes no model request
+and starts no agent. **Launch Agent** saves the reviewed text as a private
+handoff pack and starts a fresh receiving agent in the displayed checkout. The
+pack records a snapshot; the receiving agent is told to verify current state.
+The original conversation stays available.
+
+The receiving session opens automatically and is placed below the source when
+that live session is available. Its Session inspector offers **Read Source
+Conversation**. The link survives app relaunch and appears in the receiving
+conversation's History after the daemon reports its conversation identity.
+An incomplete or timed-out launch stays visible for inspection and cannot be
+repeated from the same panel; check the session list before starting again.
+Saved packs can be revealed from a failed launch panel.
+
 ### Conversation History
 
 **View › Find or Resume a Conversation…** (⌘Y, also ⌘⇧H) searches full transcripts, scoped to all history,

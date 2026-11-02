@@ -457,7 +457,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "New Terminal Below",
-                                            "New Session Below…", "Copy Runtime Session ID", "", "End Session…"])
+                                            "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(asked.map(\.0), [personal])
         XCTAssertTrue(app.named.isEmpty, "nothing is written before the answer")
@@ -485,7 +485,7 @@ final class WorkspaceWindowTests: XCTestCase {
         // A Kitty window is named in Kitty; other lines have no menu.
         let kitty = try row("web", "work")
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Show in Kitty"])
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Continue with Another Agent…", "Show in Kitty"])
         XCTAssertNil(items[0].action, "listed, and greyed out")
         XCTAssertNotNil(items[4].action, "a Kitty session can be pinned")
         XCTAssertTrue(workspace.contextMenuItems(forRow: 0).isEmpty)
@@ -609,7 +609,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.refresh()
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[Done]", "[api]", "api/personal"])
         items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Unpin", "", "Show in Kitty"],
+        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Unpin", "", "Continue with Another Agent…", "Show in Kitty"],
                        "a Kitty session is ended, and has its terminals, in Kitty")
         workspace.setPinned(kitty.key, false)
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[Done]", "[api]", "api/personal", "[web]", "web/work"])
@@ -1449,6 +1449,36 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.closeShownTitle, "Close View")
     }
 
+    func testHandoffTargetsClickedConversationAndRetainsSourceNavigation() throws {
+        var kitty = F.kitty(4, project: "api")
+        kitty.conversation = .init(harness: "copilot", sessionID: "kitty-source")
+        let initial = [F.tmux(1, project: "api", conversation: "first"), F.tmux(2, project: "api", conversation: "second"), F.tmux(3, project: "api"), kitty]
+        app.store.apply(snapshot: F.snapshot(initial))
+        workspace.select(.embedded(F.runtimeID(1)))
+        let menu = workspace.contextMenuItems(forRow: try index(of: .embedded(F.runtimeID(2))))
+        let handoff = try XCTUnwrap(menu.first { $0.title == WorkspaceHandoffModel.title })
+        XCTAssertTrue(handoff.isEnabled)
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(handoff.action), to: handoff.target, from: handoff))
+        XCTAssertEqual(app.handoffRequests.map(\.conversation), [ConversationIdentity(harness: "claude", sessionID: "second")])
+        let withoutIdentity = workspace.contextMenuItems(forRow: try index(of: .embedded(F.runtimeID(3))))
+        XCTAssertFalse(try XCTUnwrap(withoutIdentity.first { $0.title == WorkspaceHandoffModel.title }).isEnabled)
+        let kittyKey = AttentionCycler.key(kitty, snapshotSocket: "unix:/tmp/kitty-1")
+        let kittyMenu = workspace.contextMenuItems(forRow: try index(of: kittyKey))
+        let kittyHandoff = try XCTUnwrap(kittyMenu.first { $0.title == WorkspaceHandoffModel.title })
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(kittyHandoff.action), to: kittyHandoff.target, from: kittyHandoff))
+        XCTAssertEqual(app.handoffRequests.last?.conversation, kitty.conversation)
+        let source = ConversationIdentity(harness: "codex", sessionID: "original")
+        app.handoffSource = source
+        workspace.setInspectorTab(.session)
+        workspace.reloadInspector()
+        XCTAssertEqual(workspace.inspector.model.sourceConversation, source)
+        workspace.inspector.onSource?(source)
+        XCTAssertEqual(app.openedHandoffSources, [source])
+        app.store.apply(snapshot: F.snapshot([initial[0]]))
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(handoff.action), to: handoff.target, from: handoff))
+        XCTAssertEqual(app.handoffRequests.count, 2, "an ended target cannot be handed off from a stale menu")
+    }
+
     func testNewSessionMenuTargetsClickedRowAndLaunchFocusWaitsForSnapshot() throws {
         let initial = [F.tmux(1, project: "api"), F.tmux(2, project: "api"), F.tmux(3, project: "api")]
         app.store.apply(snapshot: F.snapshot(initial))
@@ -1525,7 +1555,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.select(kitty.key)
         items = workspace.contextMenuItems(forRow: try index(of: work.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Reattach", "New Terminal Below",
-                                            "New Session Below…", "Copy Runtime Session ID", "", "End Session…"])
+                                            "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…"])
         _ = try XCTUnwrap(items[6].target).perform(try XCTUnwrap(items[6].action), with: items[6])
         XCTAssertEqual(workspace.state.selection, work.key)
         XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)])

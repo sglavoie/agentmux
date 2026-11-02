@@ -18,6 +18,7 @@ final class WorkspaceInspectorView: NSView {
         var waiting: [WorkspaceWaitingRow] = []
         /// Nil when the pane is on no session.
         var inspection: WorkspaceInspection?
+        var sourceConversation: ConversationIdentity?
         /// False while the rows are held from the last live snapshot.
         var current = true
         /// What is wrong with the feed, said instead of "nothing waiting":
@@ -61,6 +62,7 @@ final class WorkspaceInspectorView: NSView {
     var onTab: ((WorkspaceInspectorTab) -> Void)?
     var onWaiting: ((AttentionCycler.Key) -> Void)?
     var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
+    var onSource: ((ConversationIdentity) -> Void)?
     var onAction: ((WorkspaceInspectorAction) -> Void)?
     var onContext: ((WorkspaceWaitingRow, @escaping (WorkspaceWaitingContext.Result) -> Void) -> Void)?
     let filterPicker = NSPopUpButton()
@@ -113,6 +115,7 @@ final class WorkspaceInspectorView: NSView {
     private let stack = WorkspaceInspectorStack()
     let recap = WorkspaceRecapModel(command: { nil })
     private lazy var recapHost = NSHostingView(rootView: WorkspaceRecapView(model: recap))
+    private let sourceButton = NSButton(title: "Read Source Conversation", target: nil, action: nil)
     private let scroll = NSScrollView()
     private static let inset: CGFloat = 12
 
@@ -145,6 +148,11 @@ final class WorkspaceInspectorView: NSView {
         stack.addArrangedSubview(recapHost)
         recapHost.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -2 * Self.inset).isActive = true
         recapHost.isHidden = true
+        sourceButton.target = self; sourceButton.action = #selector(readSourceConversation(_:))
+        sourceButton.bezelStyle = .rounded
+        sourceButton.refusesFirstResponder = true
+        stack.addArrangedSubview(sourceButton)
+        sourceButton.isHidden = true
 
         filterPicker.addItems(withTitles: WorkspaceWaitingFilter.allCases.map(\.rawValue))
         filterPicker.target = self
@@ -237,6 +245,8 @@ final class WorkspaceInspectorView: NSView {
 
     private func rebuild(keeping old: [WorkspaceInspectorLine]? = nil) {
         recapHost.isHidden = model.tab != .session || model.inspection == nil
+        sourceButton.isHidden = model.tab != .session || model.sourceConversation == nil
+        sourceButton.toolTip = model.sourceConversation?.encoded
         for (index, tab) in WorkspaceInspectorTab.allCases.enumerated() {
             let count = tab == .waiting && !model.waiting.isEmpty ? " \(model.waiting.count)" : ""
             tabs.setLabel(tab.title + count, forSegment: index)
@@ -347,6 +357,10 @@ final class WorkspaceInspectorView: NSView {
                 Self.configure(button, action, muted: muted, embedded: embedded)
             }
         }
+    }
+
+    @objc private func readSourceConversation(_ sender: Any?) {
+        if let source = model.sourceConversation { onSource?(source) }
     }
 
     /// Adds a line as wide as the sidebar.

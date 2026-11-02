@@ -66,6 +66,9 @@ func init() {
 	_ = sessionHandoffCmd.RegisterFlagCompletionFunc("profile", cli.CompleteProfiles)
 	sessionHandoffCmd.Flags().Bool("edit", false, "edit the generated handoff before launch")
 	sessionHandoffCmd.Flags().Bool("no-launch", false, "finalize the handoff without launching a target")
+	sessionHandoffCmd.Flags().Bool("preview", false, "read generated context without writing artifacts or launching")
+	sessionHandoffCmd.Flags().String("content-file", "", "use reviewed UTF-8 context from this file (at most 1 MiB)")
+	sessionHandoffCmd.Flags().String("instruction", "", "next instruction to append to the handoff (at most 16 KiB)")
 	cli.AddJSONFlag(sessionHandoffCmd, nil)
 	for _, launcher := range []*cobra.Command{sessionContinueCmd, sessionForkCmd, sessionForkWorktreeCmd, sessionHandoffCmd} {
 		cli.AddBackendFlag(launcher)

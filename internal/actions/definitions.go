@@ -101,9 +101,9 @@ func defaultDefinitions() []Definition {
 		},
 		{
 			ID: Handoff, Label: "handoff", Description: "start a fresh target profile from a portable context pack", Requires: conversationRequirement,
-			Parameters: []ParameterSchema{{Name: "profile", Type: "string", Description: "target configured profile", Required: true}, {Name: "edit", Type: "boolean", Description: "edit the generated pack before finalizing"}, {Name: "no_launch", Type: "boolean", Description: "finalize the pack without launching a target"}},
+			Parameters: []ParameterSchema{{Name: "profile", Type: "string", Description: "target configured profile (required except for preview)"}, {Name: "edit", Type: "boolean", Description: "edit the generated pack before finalizing"}, {Name: "no_launch", Type: "boolean", Description: "finalize the pack without launching a target"}, {Name: "preview", Type: "boolean", Description: "read context without writing or launching"}, {Name: "content", Type: "string", Description: "reviewed context to use verbatim"}, {Name: "instruction", Type: "string", Description: "next instruction for the receiving agent"}},
 			execute: func(ctx context.Context, deps Dependencies, request Request) (Result, error) {
-				return handoffConversation(ctx, deps, *request.Conversation, strings.TrimSpace(request.Parameters["profile"]), parameterBool(request.Parameters, "edit"), parameterBool(request.Parameters, "no_launch"), "", "")
+				return handoffConversation(ctx, deps, *request.Conversation, strings.TrimSpace(request.Parameters["profile"]), parameterBool(request.Parameters, "edit"), parameterBool(request.Parameters, "no_launch"), "", "", request.Parameters)
 			},
 		},
 		{

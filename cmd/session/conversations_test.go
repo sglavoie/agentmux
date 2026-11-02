@@ -81,6 +81,9 @@ func resetSessionCommandsTestState(t *testing.T) {
 		_ = sessionHandoffCmd.Flags().Set("profile", "")
 		_ = sessionHandoffCmd.Flags().Set("edit", "false")
 		_ = sessionHandoffCmd.Flags().Set("no-launch", "false")
+		_ = sessionHandoffCmd.Flags().Set("preview", "false")
+		_ = sessionHandoffCmd.Flags().Set("content-file", "")
+		_ = sessionHandoffCmd.Flags().Set("instruction", "")
 		_ = sessionHandoffCmd.Flags().Set("json", "false")
 		for _, cmd := range []*cobra.Command{sessionListCmd, sessionSearchCmd} {
 			if value, ok := cmd.Flags().Lookup("project").Value.(interface{ Replace([]string) error }); ok {

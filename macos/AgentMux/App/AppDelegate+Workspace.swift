@@ -716,6 +716,11 @@ extension AppDelegate {
                    !view.isHiddenOrHasHiddenAncestor { app.workspace?.window.makeFirstResponder(view) }
             }
         }
+        controller.model.onHandoff = { [weak self, weak controller] conversation in
+            self?.showHandoff(source: conversation.identity, profile: conversation.profile, on: controller?.window)
+        }
+        controller.model.sourceOrigin = { [weak self] identity in self?.handoffOrigins.origin(conversation: identity)?.identity }
+        controller.model.onSource = { [weak self] identity in self?.openHistory(conversation: identity) }
         controller.model.onAdvanced = { [weak self] identity, query in
             var view = WorkspaceUtilityView(kind: .history, target: identity.encoded, title: "Conversation Actions")
             view.historyQuery = query
@@ -771,6 +776,7 @@ extension AppDelegate {
         }
         var entries = [
             entry(.newTerminal, "New Terminal Here", "⌘↩", reason: workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first"),
+            entry(.handoff, WorkspaceHandoffModel.title, reason: gate.unavailableReason(.sessions) ?? (workspace?.shownSessionRow?.conversation != nil ? nil : "Select a session with a conversation first")),
             entry(.newSession, WorkspaceWindowController.newSessionTitle, "⌘⇧↩", reason: gate.unavailableReason(.project) ?? (workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first")),
             entry(.newShell, "New Shell", "⌘T"),
             entry(.splitShell, WorkspaceShortcut.splitShell.title, reason: workspace?.splitUnavailableReason ?? (workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first")),
@@ -878,6 +884,7 @@ extension AppDelegate {
         case let .launch(project): launch(project)
         case let .resume(conversation): continueConversation(conversation)
         case .newTerminal: newSessionTerminal(nil)
+        case .handoff: continueWithAnotherAgent(nil)
         case .newSession: newSessionBelow(nil)
         case .newShell: newShellFromMenu(nil)
         case .dashboard: openDashboardFromMenu(nil)

@@ -17,6 +17,8 @@ import (
 )
 
 const (
+	MaxReviewedBytes      = 1024 * 1024
+	MaxInstructionBytes   = 16 * 1024
 	DefaultMaxBytes       = 64 * 1024
 	DefaultRecentMessages = 12
 	DefaultGitTimeout     = 2 * time.Second

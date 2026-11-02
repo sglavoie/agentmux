@@ -50,8 +50,8 @@ func testWorkflow(t *testing.T, launch func(kitty.KittyClient, config.Session, c
 		builder:           NewBuilderWithGit(workflowGit{}),
 		artifactDirectory: func() (string, error) { return artifactDirectory, nil },
 		edit:              edit,
-		launch: func(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) error {
-			return launch(rt.Kitty, sess, acc, cfg, prompt)
+		launch: func(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) (session.LaunchResult, error) {
+			return session.LaunchResult{}, launch(rt.Kitty, sess, acc, cfg, prompt)
 		},
 		now:   func() time.Time { return time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC) },
 		newID: func() (string, error) { return "handoff-test", nil },
@@ -181,9 +181,9 @@ func TestWorkflowLaunchesOnSelectedRuntime(t *testing.T) {
 	selected := session.Runtime{Tmux: selectedTmux{}}
 	workflow := testWorkflow(t, nil, nil)
 	var launches []session.Runtime
-	workflow.launch = func(rt session.Runtime, _ config.Session, _ config.Account, _ *config.Config, _ string) error {
+	workflow.launch = func(rt session.Runtime, _ config.Session, _ config.Account, _ *config.Config, _ string) (session.LaunchResult, error) {
 		launches = append(launches, rt)
-		return errors.New("tmux launch failed")
+		return session.LaunchResult{}, errors.New("tmux launch failed")
 	}
 	result, err := workflow.Run(context.Background(), Request{
 		Source:        transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
@@ -340,5 +340,61 @@ func TestWorkflowMatchesATargetProjectConfiguredThroughASymlink(t *testing.T) {
 	}
 	if len(got.Args) != 1 || got.Args[0] != "--target-arg" || got.Directory != cwd {
 		t.Fatalf("launch session = %+v, want the symlinked project's args in the source directory", got)
+	}
+}
+
+func TestPreviewIsReadOnlyAndReviewedLaunchPreservesEdits(t *testing.T) {
+	cfg := &config.Config{Accounts: []config.Account{{Name: "target", Harness: harness.Codex}}}
+	request := Request{Source: transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, CWD: t.TempDir(), Path: "source.jsonl"},
+		Reader: workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Original goal"}}}, Config: cfg, Preview: true}
+	workflow := testWorkflow(t, nil, nil)
+	originalDirectory := workflow.artifactDirectory
+	workflow.artifactDirectory = func() (string, error) { t.Fatal("preview attempted to create an artifact"); return "", nil }
+	preview, err := workflow.Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(preview.Content, "Original goal") || preview.SourceHarness != harness.Claude || preview.SourceSessionID != "source-1" || preview.Directory != request.Source.CWD || preview.Launched || preview.Artifact.Path != "" {
+		t.Fatalf("preview = %+v", preview)
+	}
+	workflow.artifactDirectory = originalDirectory
+	var prompt string
+	workflow.launch = func(_ session.Runtime, target config.Session, account config.Account, _ *config.Config, initial string) (session.LaunchResult, error) {
+		if target.Directory != request.Source.CWD || account.Name != "target" {
+			t.Fatalf("target = %+v, %+v", target, account)
+		}
+		prompt = initial
+		return session.LaunchResult{RuntimeSessionID: runtimesession.ID("rs-receiving")}, nil
+	}
+	request.Preview = false
+	request.TargetProfile = "target"
+	request.Runtime = session.Runtime{Tmux: selectedTmux{}}
+	request.Content = []byte("Edited context with `quotes`, $() and a different goal.\n")
+	request.Instruction = "Review for concurrency bugs."
+	result, err := workflow.Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(result.Artifact.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := string(request.Content) + "\n\n## Next instruction\n\n" + request.Instruction + "\n"
+	if string(content) != want || strings.Contains(string(content), "Original goal") {
+		t.Fatalf("artifact = %q", content)
+	}
+	if !result.Launched || result.RuntimeSessionID != "rs-receiving" || !strings.Contains(prompt, result.Artifact.Path) {
+		t.Fatalf("launch = %+v, %q", result, prompt)
+	}
+}
+
+func TestReviewedContextValidationBeforeWriting(t *testing.T) {
+	for _, content := range [][]byte{[]byte(" \n"), []byte(strings.Repeat("a", MaxReviewedBytes+1))} {
+		workflow := testWorkflow(t, nil, nil)
+		workflow.artifactDirectory = func() (string, error) { t.Fatal("invalid context wrote an artifact"); return "", nil }
+		_, err := workflow.Run(context.Background(), Request{Source: transcript.SessionMeta{ID: "one", Harness: harness.Claude, CWD: t.TempDir(), Path: "source.jsonl"}, Reader: workflowReader{harness: harness.Claude}, Config: &config.Config{Accounts: []config.Account{{Name: "target"}}}, TargetProfile: "target", Content: content, NoLaunch: true})
+		if err == nil {
+			t.Fatal("invalid context accepted")
+		}
 	}
 }

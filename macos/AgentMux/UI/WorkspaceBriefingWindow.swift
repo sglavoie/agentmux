@@ -133,6 +133,8 @@ struct WorkspaceBriefingView: View {
                         Button(model.liveRows(for: item).isEmpty ? "Resume" : "Focus Session") { model.continueConversation(item) }
                             .disabled(!model.feedLive || model.acting)
                     }
+                    Button(WorkspaceHandoffModel.title) { model.onHandoff?(item) }
+                        .disabled(!model.feedLive || model.acting || model.onHandoff == nil)
                     if let recap = model.recaps[item.selector] {
                         WorkspaceRecapView(model: recap, generationWaitMessage: model.feedLive
                             ? "Recap generation is available after the agent finishes its turn."

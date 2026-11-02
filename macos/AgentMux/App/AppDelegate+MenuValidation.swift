@@ -23,7 +23,7 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(toggleRecentPlace(_:)),
         #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)), #selector(revealInWorkspaceSidebar(_:)),
         #selector(biggerWorkspaceSidebars(_:)), #selector(smallerWorkspaceSidebars(_:)), #selector(resetWorkspaceSidebars(_:)),
-        #selector(newSessionTerminal(_:)), #selector(newSessionBelow(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
+        #selector(newSessionTerminal(_:)), #selector(newSessionBelow(_:)), #selector(continueWithAnotherAgent(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
         #selector(endWorkspaceSession(_:)), #selector(searchConversation(_:)),
         #selector(focusNextSession(_:)), #selector(focusPreviousSession(_:)),
         #selector(pickSessionIcon(_:)), #selector(pickSessionColor(_:)),
@@ -72,6 +72,8 @@ extension AppDelegate: NSMenuItemValidation {
             return workspace?.shownSessionRow != nil
         case #selector(newSessionTerminal(_:)):
             return workspace?.canOpenTerminalBesideSession == true
+        case #selector(continueWithAnotherAgent(_:)):
+            return workspace?.shownSessionRow?.conversation != nil && gate.unavailableReason(.sessions) == nil
         case #selector(newSessionBelow(_:)):
             return workspace?.canOpenTerminalBesideSession == true && gate.unavailableReason(.project) == nil
         case #selector(toggleWorkspaceSidebar(_:)):

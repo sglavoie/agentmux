@@ -112,12 +112,17 @@ func forkConversation(deps Dependencies, meta transcript.SessionMeta) (Result, e
 	}, nil
 }
 
-func handoffConversation(ctx context.Context, deps Dependencies, meta transcript.SessionMeta, targetProfile string, edit, noLaunch bool, label, launchDirectory string) (Result, error) {
+func handoffConversation(ctx context.Context, deps Dependencies, meta transcript.SessionMeta, targetProfile string, edit, noLaunch bool, label, launchDirectory string, options ...map[string]string) (Result, error) {
 	if deps.Config == nil {
 		return Result{}, dependencyError(Handoff, "configuration")
 	}
+	var parameters map[string]string
+	if len(options) != 0 {
+		parameters = options[0]
+	}
+	preview := parameterBool(parameters, "preview")
 	var rt session.Runtime
-	if !noLaunch {
+	if !noLaunch && !preview {
 		var err error
 		if rt, err = deps.launchRuntime(Handoff); err != nil {
 			return Result{}, err
@@ -131,19 +136,26 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 	if !ok || reader == nil {
 		return Result{}, &Error{Code: "source_unavailable", Action: Handoff, Message: fmt.Sprintf("no transcript reader is registered for harness %q", identity.Harness)}
 	}
-	if _, ok := accountByName(deps.Config, targetProfile); !ok {
+	if _, ok := accountByName(deps.Config, targetProfile); !ok && !preview {
 		return Result{}, &Error{Code: "not_found", Action: Handoff, Message: fmt.Sprintf("no matching profile %q", targetProfile)}
 	}
 	runner := deps.Handoff
 	if runner == nil {
 		runner = handoff.NewWorkflow()
 	}
-	workflowResult, err := runner.Run(ctx, handoff.Request{
+	request := handoff.Request{
 		Source: meta, Reader: reader, Config: deps.Config, TargetProfile: targetProfile,
 		LaunchDirectory: launchDirectory, Edit: edit, NoLaunch: noLaunch, Label: label, Kitty: deps.Kitty, Runtime: rt,
-	})
+		Preview: preview, Instruction: parameters["instruction"],
+	}
+	if content, ok := parameters["content"]; ok {
+		request.Content = []byte(content)
+	}
+	workflowResult, err := runner.Run(ctx, request)
 	result := resultFromHandoff(workflowResult)
-	if strings.HasPrefix(label, "Portable") {
+	if preview {
+		result.Message = "handoff preview"
+	} else if strings.HasPrefix(label, "Portable") {
 		result.Message = "started portable fork from finalized handoff pack"
 		result.Data["continuation"] = "portable_fork"
 		result.Data["fork_kind"] = "portable"
@@ -278,6 +290,15 @@ func resultFromHandoff(result handoff.Result) Result {
 		"target_profile": result.TargetProfile,
 		"target_harness": result.TargetHarness,
 		"launched":       result.Launched,
+	}
+	data["source_harness"] = result.SourceHarness
+	data["source_session_id"] = result.SourceSessionID
+	data["directory"] = result.Directory
+	if result.Content != "" {
+		data["content"] = result.Content
+	}
+	if result.RuntimeSessionID != "" {
+		data["runtime_session_id"] = result.RuntimeSessionID
 	}
 	if result.DraftPath != "" {
 		data["draft_path"] = result.DraftPath

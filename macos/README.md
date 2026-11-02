@@ -1277,6 +1277,25 @@ operate a real run. PNGs are attached to the XCTest result and written to
 tests. Reviewed reference images and their provenance are recorded in
 [`docs/acceptance/desktop-improvements.md`](../docs/acceptance/desktop-improvements.md).
 
+### Native agent handoff
+
+`WorkspaceHandoffModel` loads all configured profiles and a read-only
+`session handoff --preview` snapshot. `WorkspaceHandoffPanel` presents editable
+context, the source checkout, an optional instruction, and explicit launch.
+It submits private temporary context through `--content-file`, removes the
+file after the CLI returns, and opens the reported receiving runtime session.
+Unconfirmed outcomes retain the preview and disable repeated launch.
+
+Session menu, sidebar context menu, command palette, History and Project
+Briefing share this panel. `WorkspaceHandoffOrigins` persists source links by
+runtime identity and, once observed, by harness-qualified conversation identity.
+The Session inspector and History expose the source conversation. Generated
+handoff packs remain durable user assets owned by the Go handoff workflow.
+
+`WorkspaceHandoffTests` cover preview identity, exact reviewed text, private
+file permissions and cleanup, launch receipts, stale reads and saved links.
+Workflow previews exercise light/dark, narrow/wide and unavailable states.
+
 ### Project Briefing
 
 View › Project Briefing… and the command palette open `WorkspaceBriefingWindow`.

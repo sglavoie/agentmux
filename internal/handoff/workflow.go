@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
@@ -26,6 +27,11 @@ type Request struct {
 	Reader        transcript.Reader
 	Config        *config.Config
 	TargetProfile string
+	// Preview builds context without writing artifacts or launching.
+	Preview bool
+	// Content is an explicitly reviewed pack. Nil generates from the transcript.
+	Content     []byte
+	Instruction string
 	// LaunchDirectory overrides only the fresh target's working directory.
 	// The source CWD remains the provenance and pack-building context. It is
 	// used by isolated worktree forks so portable fallbacks run in the new
@@ -54,12 +60,17 @@ func (r Request) launchRuntime() (session.Runtime, bool) {
 // Result describes the finalized handoff and, when requested, the fresh
 // target session. Artifact is retained for both complete and partial runs.
 type Result struct {
-	Artifact      Artifact
-	DraftPath     string
-	TargetProfile string
-	TargetHarness string
-	Launched      bool
-	Label         string
+	Artifact         Artifact
+	DraftPath        string
+	TargetProfile    string
+	TargetHarness    string
+	Launched         bool
+	Label            string
+	Content          string
+	SourceHarness    string
+	SourceSessionID  string
+	Directory        string
+	RuntimeSessionID string
 }
 
 // Runner permits action and command callers to substitute a deterministic
@@ -69,7 +80,7 @@ type Runner interface {
 }
 
 // PartialLaunchError means finalization succeeded and the artifact path in
-// Result remains safe to use, but creating the target Kitty tab failed.
+// Result remains safe to use, but starting the receiving agent failed.
 type PartialLaunchError struct{ Err error }
 
 func (e *PartialLaunchError) Error() string {
@@ -93,7 +104,7 @@ type Workflow struct {
 	builder           *Builder
 	artifactDirectory func() (string, error)
 	edit              func(string, *config.Config) error
-	launch            func(session.Runtime, config.Session, config.Account, *config.Config, string) error
+	launch            func(session.Runtime, config.Session, config.Account, *config.Config, string) (session.LaunchResult, error)
 	now               func() time.Time
 	newID             func() (string, error)
 }
@@ -136,29 +147,46 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 		return Result{}, errors.New("handoff: source conversation has no working directory")
 	}
 	runtime, canLaunch := request.launchRuntime()
-	if !request.NoLaunch && !canLaunch {
-		return Result{}, errors.New("handoff: Kitty client is required when launching a target session")
+	if !request.Preview && !request.NoLaunch && !canLaunch {
+		return Result{}, errors.New("handoff: terminal runtime is required when launching a target session")
 	}
 
 	target, ok := accountByName(request.Config, request.TargetProfile)
-	if !ok {
+	if !ok && !request.Preview {
 		return Result{}, fmt.Errorf("handoff: no matching target profile %q", request.TargetProfile)
 	}
-	messages, err := request.Reader.ReadMessages(request.Source.Path)
-	if err != nil {
-		return Result{}, fmt.Errorf("handoff: reading source transcript: %w", err)
-	}
-
 	createdAt := w.now().UTC()
-	pack, err := w.builder.Build(ctx, Source{
-		ProjectLabel: projectLabel(request.Source), Harness: request.Source.Harness, SessionID: request.Source.ID,
-		CapturedAt: createdAt, CWD: request.Source.CWD, TranscriptPath: request.Source.Path, Messages: messages,
-	}, Options{
-		MaxBytes:       request.Config.Defaults.Handoff.MaxBytes,
-		RecentMessages: request.Config.Defaults.Handoff.RecentMessages,
-	})
-	if err != nil {
-		return Result{}, err
+	content := request.Content
+	if content == nil {
+		messages, err := request.Reader.ReadMessages(request.Source.Path)
+		if err != nil {
+			return Result{}, fmt.Errorf("handoff: reading source transcript: %w", err)
+		}
+		pack, err := w.builder.Build(ctx, Source{
+			ProjectLabel: projectLabel(request.Source), Harness: request.Source.Harness, SessionID: request.Source.ID,
+			CapturedAt: createdAt, CWD: request.Source.CWD, TranscriptPath: request.Source.Path, Messages: messages,
+		}, Options{MaxBytes: request.Config.Defaults.Handoff.MaxBytes, RecentMessages: request.Config.Defaults.Handoff.RecentMessages})
+		if err != nil {
+			return Result{}, err
+		}
+		content = pack.Content
+	}
+	if (request.Content != nil && (len(content) > MaxReviewedBytes || !utf8.Valid(content))) || strings.TrimSpace(string(content)) == "" {
+		return Result{}, errors.New("handoff: reviewed context must be non-empty UTF-8 and at most 1 MiB")
+	}
+	if len(request.Instruction) > MaxInstructionBytes {
+		return Result{}, errors.New("handoff: instruction exceeds 16 KiB")
+	}
+	result := Result{Label: request.Label, SourceHarness: request.Source.Harness, SourceSessionID: request.Source.ID, Directory: request.Source.CWD}
+	if ok {
+		result.TargetProfile, result.TargetHarness = target.Name, target.EffectiveHarness()
+	}
+	if request.Preview {
+		result.Content = string(content)
+		return result, nil
+	}
+	if instruction := strings.TrimSpace(request.Instruction); instruction != "" {
+		content = append(append([]byte(nil), content...), []byte("\n\n## Next instruction\n\n"+instruction+"\n")...)
 	}
 
 	id, err := w.newID()
@@ -179,8 +207,6 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 		}
 	}
 
-	result := Result{TargetProfile: target.Name, TargetHarness: target.EffectiveHarness(), Label: request.Label}
-	content := pack.Content
 	if request.Edit {
 		draft, err := artifacts.Write(writeRequest(StatusDraft, content))
 		if err != nil {
@@ -220,7 +246,9 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 		launchSession.Directory = directory
 	}
 	prompt := launchPrompt(final.Path)
-	if err := w.launch(runtime, launchSession, target, request.Config, prompt); err != nil {
+	launched, err := w.launch(runtime, launchSession, target, request.Config, prompt)
+	result.RuntimeSessionID = string(launched.RuntimeSessionID)
+	if err != nil {
 		return result, &PartialLaunchError{Err: err}
 	}
 	result.Launched = true
@@ -335,7 +363,6 @@ func newArtifactID() (string, error) {
 	return "handoff-" + hex.EncodeToString(bytes), nil
 }
 
-func launchFresh(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) error {
-	_, err := session.LaunchFreshOn(rt, sess, acc, cfg, prompt)
-	return err
+func launchFresh(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) (session.LaunchResult, error) {
+	return session.LaunchFreshOn(rt, sess, acc, cfg, prompt)
 }

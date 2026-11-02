@@ -397,6 +397,27 @@ amx session fork-worktree codex <session-id> --yes
 amx session handoff claude:<session-id> --profile codex-work
 ```
 
+A handoff can also be reviewed by a native or external caller before launch:
+
+```sh
+amx session handoff claude:<session-id> --preview --json
+amx session handoff claude:<session-id> --preview > context.md
+# Edit context.md, then submit the reviewed text:
+amx session handoff claude:<session-id> --profile codex-work \
+  --content-file context.md --instruction 'Review this for concurrency bugs'
+```
+
+Preview is read-only and requires no target profile or terminal backend. Its JSON
+uses the standard action envelope, with `changed: false` and `data.content`,
+`data.directory`, `data.source_harness`, and `data.source_session_id`.
+`--content-file` accepts non-empty UTF-8 up to 1 MiB; `--instruction` accepts up
+to 16 KiB and appends a **Next instruction** section. Submitted context is used
+verbatim, even when the original transcript has advanced. `--preview` cannot be
+combined with editing, submitted content, instructions, or `--no-launch`.
+`--edit` and `--content-file` are mutually exclusive. Launch results additionally
+report `data.runtime_session_id` on tmux, so clients open the exact receiving
+session. Packs remain saved if launch fails.
+
 `amx session activity` reads what the daemon recorded in its journal: sessions
 changing state, agents exiting, and agent-session-loop runs starting and
 finishing. It is a record of what happened, never rebuilt from the sessions

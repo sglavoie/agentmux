@@ -291,12 +291,15 @@ func executeSessionAction(cmd *cobra.Command, jsonOutput bool, cfg *config.Confi
 	deps := actions.Dependencies{
 		Config: cfg, Readers: sessionCommandsSessionReaders(), Daemon: sessionCommandsDaemon, Handoff: sessionCommandsNewHandoff(), Worktree: sessionCommandsNewWorktree(),
 	}
-	if err := cli.SelectBackend(cmd, &deps); err != nil {
-		return sessionActionCommandError(cmd, jsonOutput, actions.Result{Action: actionID}, err)
-	}
-	// A tmux launch must work with no Kitty running, so it never reads Kitty.
-	if deps.Backend != runtimesession.BackendTmux {
-		deps.Kitty = sessionCommandsNewKitty()
+	// Preview and create-only handoffs do not need a terminal backend.
+	handoffWithoutLaunch := actionID == actions.Handoff && (request.Parameters["preview"] == "true" || request.Parameters["no_launch"] == "true")
+	if !handoffWithoutLaunch {
+		if err := cli.SelectBackend(cmd, &deps); err != nil {
+			return sessionActionCommandError(cmd, jsonOutput, actions.Result{Action: actionID}, err)
+		}
+		if deps.Backend != runtimesession.BackendTmux {
+			deps.Kitty = sessionCommandsNewKitty()
+		}
 	}
 	result, err := actions.DefaultRegistry().Execute(cli.CommandContext(cmd), deps, actionID, request)
 	if err != nil {
@@ -304,6 +307,10 @@ func executeSessionAction(cmd *cobra.Command, jsonOutput bool, cfg *config.Confi
 	}
 	if jsonOutput {
 		return cli.WriteJSON(cmd, sessionActionData{Action: result.Action, Changed: result.Changed, Message: result.Message, Data: result.Data})
+	}
+	if content, ok := result.Data["content"].(string); ok && content != "" {
+		_, err := fmt.Fprint(cmd.OutOrStdout(), content)
+		return err
 	}
 	if result.Message != "" {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), result.Message)

@@ -22,6 +22,7 @@ final class WorkspaceBriefingModel: ObservableObject {
 
     var onFocus: ((AttentionCycler.Key) -> Void)?
     var onConversation: ((ConversationIdentity, Int?) -> Void)?
+    var onHandoff: ((RecentConversation) -> Void)?
     var onContinue: ((RecentConversation, @escaping (String?) -> Void) -> Void)?
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner

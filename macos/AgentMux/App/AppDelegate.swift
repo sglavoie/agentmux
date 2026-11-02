@@ -34,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var historyWindow: WorkspaceHistoryWindow?
     var resumePanel: WorkspaceResumePanel?
     var newSessionPanel: WorkspaceNewSessionPanel?
+    var handoffPanel: WorkspaceHandoffPanel?
+    let handoffOrigins = WorkspaceHandoffOrigins()
     var conversationSearchSequence = 0
     var activityWindow: WorkspaceActivityWindow?
     var flightLogWindow: WorkspaceFlightLogWindow?
