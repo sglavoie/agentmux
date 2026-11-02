@@ -9,9 +9,10 @@ struct RecentConversation: Decodable, Equatable, Hashable {
     var cwd = ""
     var lastAt: Date?
     var snippet = ""
+    var title = ""
 
     init(id: String, harness: String, profile: String = "", project: String = "", cwd: String = "",
-         lastAt: Date? = nil, snippet: String = "") {
+         lastAt: Date? = nil, snippet: String = "", title: String = "") {
         self.id = id
         self.harness = harness
         self.profile = profile
@@ -19,10 +20,11 @@ struct RecentConversation: Decodable, Equatable, Hashable {
         self.cwd = cwd
         self.lastAt = lastAt
         self.snippet = snippet
+        self.title = title
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, harness, profile, project, cwd, snippet
+        case id, harness, profile, project, cwd, snippet, title
         case lastAt = "last_at"
     }
 
@@ -34,6 +36,7 @@ struct RecentConversation: Decodable, Equatable, Hashable {
         project = c.lenient(.project, "")
         cwd = c.lenient(.cwd, "")
         snippet = c.lenient(.snippet, "")
+        title = c.lenient(.title, "")
         lastAt = (c.lenient(.lastAt) as String?).flatMap(Self.parseTime)
     }
 
@@ -46,6 +49,13 @@ struct RecentConversation: Decodable, Equatable, Hashable {
         if !project.isEmpty { return project }
         let folder = (cwd as NSString).lastPathComponent
         return folder.isEmpty || folder == "/" ? selector : folder
+    }
+
+    /// A conversation's own name distinguishes members of the same project.
+    var conversationTitle: String {
+        if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return title }
+        let opening = snippet.trimmingCharacters(in: .whitespacesAndNewlines)
+        return opening.isEmpty ? displayName : String(opening.prefix(160))
     }
 
     /// The conversation identity a live session reports.

@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/internal/config"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -107,6 +108,7 @@ type Workflow struct {
 	launch            func(session.Runtime, config.Session, config.Account, *config.Config, string) (session.LaunchResult, error)
 	now               func() time.Time
 	newID             func() (string, error)
+	threads           func() (conversation.ThreadStore, error)
 }
 
 func NewWorkflow() *Workflow {
@@ -117,6 +119,7 @@ func NewWorkflow() *Workflow {
 		launch:            launchFresh,
 		now:               time.Now,
 		newID:             newArtifactID,
+		threads:           conversation.DefaultThreadStore,
 	}
 }
 
@@ -245,6 +248,16 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 		}
 		launchSession.Directory = directory
 	}
+	var links conversation.ThreadStore
+	if w.threads != nil {
+		links, err = w.threads()
+		if err != nil {
+			return result, err
+		}
+		if _, err = links.Links(); err != nil {
+			return result, err
+		}
+	}
 	prompt := launchPrompt(final.Path)
 	launched, err := w.launch(runtime, launchSession, target, request.Config, prompt)
 	result.RuntimeSessionID = string(launched.RuntimeSessionID)
@@ -252,6 +265,19 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 		return result, &PartialLaunchError{Err: err}
 	}
 	result.Launched = true
+	if w.threads != nil {
+		key := result.RuntimeSessionID
+		if key == "" && launched.LaunchID != "" {
+			key = "launch:" + launched.LaunchID
+		}
+		if key == "" {
+			return result, &RelationshipError{Err: errors.New("receiving launch has no identity")}
+		}
+		source, _ := conversation.New(request.Source.Harness, request.Source.ID)
+		if err := links.Record(conversation.Link{ID: id, Source: source, TargetKey: key, Kind: "handoff", ArtifactPath: final.Path, CreatedAt: createdAt}); err != nil {
+			return result, &RelationshipError{Err: err}
+		}
+	}
 	return result, nil
 }
 
@@ -366,3 +392,11 @@ func newArtifactID() (string, error) {
 func launchFresh(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) (session.LaunchResult, error) {
 	return session.LaunchFreshOn(rt, sess, acc, cfg, prompt)
 }
+
+// RelationshipError reports a running target whose source link could not be saved.
+type RelationshipError struct{ Err error }
+
+func (e *RelationshipError) Error() string {
+	return "target launched, but its conversation link could not be saved: " + e.Err.Error()
+}
+func (e *RelationshipError) Unwrap() error { return e.Err }

@@ -1363,3 +1363,15 @@ assistant message timestamp at or before the recorded event. Missing timestamps
 or transcripts are explicit, and earlier messages can be loaded. Stale requests
 cannot replace a newer selection. Event navigation rechecks the live session
 feed and never uses a recycled terminal window ID to identify an agent.
+
+## Shared conversation threads
+
+The app reads Go-owned handoff relationships from `session list/show --json`
+and `session threads --json`. History and the inspector expose both directions;
+Project Briefing groups connected conversations and reads cached recaps for
+older indexed members returned as `related_conversations`. These reads launch
+no agents or model requests. `WorkspaceThreadsModel` discards replies after a
+selection change or close. Source links in old `workspace.handoffOrigins.v1`
+preferences remain readable for compatibility; new handoffs are recorded by
+the Go workflow instead of app preferences. See [usage](../docs/usage.md) for
+storage and CLI details.

@@ -34,7 +34,11 @@ struct WorkspaceHistorySearch: Decodable {
     let hasMore: Bool
     let hiddenAutomated: Int
     let matchTerms: [String]
+    let threadLinks: [ConversationLink]
+    let relatedConversations: [RecentConversation]
+    let threadWarning: String?
     enum CodingKeys: String, CodingKey {
+        case threadLinks = "thread_links", relatedConversations = "related_conversations", threadWarning = "thread_warning"
         case results, sessions, total
         case hasMore = "has_more", hiddenAutomated = "hidden_automated", matchTerms = "match_terms"
     }
@@ -42,6 +46,9 @@ struct WorkspaceHistorySearch: Decodable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         results = try c.decodeIfPresent([WorkspaceHistoryEntry].self, forKey: .results)
             ?? c.decodeIfPresent([WorkspaceHistoryEntry].self, forKey: .sessions) ?? []
+        threadLinks = try c.decodeIfPresent([ConversationLink].self, forKey: .threadLinks) ?? []
+        relatedConversations = try c.decodeIfPresent([RecentConversation].self, forKey: .relatedConversations) ?? []
+        threadWarning = try c.decodeIfPresent(String.self, forKey: .threadWarning)
         total = try c.decodeIfPresent(Int.self, forKey: .total) ?? results.count
         hasMore = try c.decodeIfPresent(Bool.self, forKey: .hasMore) ?? false
         hiddenAutomated = try c.decodeIfPresent(Int.self, forKey: .hiddenAutomated) ?? 0
@@ -62,6 +69,8 @@ struct WorkspaceTranscript: Decodable, Equatable {
     let matchMessages: [Int]
     let matchTerms: [String]
     let focusMessage: Int?
+    var threadLinks: [ConversationLink] = []
+    var threadWarning: String?
 
     var end: Int { start + messages.count }
 
@@ -73,6 +82,8 @@ struct WorkspaceTranscript: Decodable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        threadLinks = try c.decodeIfPresent([ConversationLink].self, forKey: .threadLinks) ?? []
+        threadWarning = try c.decodeIfPresent(String.self, forKey: .threadWarning)
         session = try c.decode(RecentConversation.self, forKey: .session)
         messages = try c.decodeIfPresent([Message].self, forKey: .messages) ?? []
         total = try c.decodeIfPresent(Int.self, forKey: .total) ?? messages.count
@@ -83,6 +94,7 @@ struct WorkspaceTranscript: Decodable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case threadLinks = "thread_links", threadWarning = "thread_warning"
         case session, messages
         case total = "messages_total"
         case start = "messages_start"
@@ -465,6 +477,8 @@ final class WorkspaceHistoryModel: ObservableObject {
                     self.transcript = WorkspaceTranscript(session: value.session, messages: messages, total: value.total,
                         start: min(value.start, retaining.start), matchMessages: value.matchMessages,
                         matchTerms: value.matchTerms, focusMessage: value.focusMessage)
+                    self.transcript?.threadLinks = value.threadLinks
+                    self.transcript?.threadWarning = value.threadWarning
                 } else { self.transcript = value }
                 if let focus = value.focusMessage, let index = value.matchMessages.firstIndex(of: focus) { self.matchIndex = index }
                 let destination = refreshing ? (self.visibleMessage ?? anchor) : anchor

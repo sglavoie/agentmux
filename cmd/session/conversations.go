@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
@@ -73,7 +74,8 @@ has_more, hidden_automated, sessions}.`,
 		}
 		allSelection := selection
 		allSelection.limit, allSelection.offset = 0, 0
-		total := len(allSelection.narrow(idx.List(selection.filter)))
+		allMetas := allSelection.narrow(idx.List(selection.filter))
+		total := len(allMetas)
 		metas := selection.narrow(idx.List(selection.filter))
 		out := cmd.OutOrStdout()
 		terminal := !jsonOutput && sessionListIsTerminal(out)
@@ -88,7 +90,14 @@ has_more, hidden_automated, sessions}.`,
 		live, liveKnown := selection.liveConversations(true)
 		markLive(views, live, sessionCommandsCurrentWindow())
 		if jsonOutput {
-			return cli.WriteJSON(cmd, sessionListData{Sessions: views, Total: total, Offset: selection.offset, HasMore: selection.offset+len(views) < total, HiddenAutomated: hiddenAutomated(selection, idx)})
+			var liveSeeds []conversation.Identity
+			for _, meta := range allMetas {
+				key, _ := liveConversationKey(meta.Harness, meta.ID)
+				if _, ok := live[key]; ok {
+					liveSeeds = append(liveSeeds, conversation.Identity{Harness: meta.Harness, SessionID: meta.ID})
+				}
+			}
+			return cli.WriteJSON(cmd, sessionListData{threadContext: readThreadContext(views, idx.List(transcript.ListFilter{}), liveSeeds...), Sessions: views, Total: total, Offset: selection.offset, HasMore: selection.offset+len(views) < total, HiddenAutomated: hiddenAutomated(selection, idx)})
 		}
 		if terminal {
 			if len(views) == 0 {
@@ -270,6 +279,7 @@ pack's path.`,
 }
 
 type sessionListData struct {
+	threadContext
 	Total           int           `json:"total"`
 	Offset          int           `json:"offset"`
 	HasMore         bool          `json:"has_more"`

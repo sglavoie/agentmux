@@ -162,12 +162,16 @@ struct WorkspaceHistoryView: View {
                                 .accessibilityLabel("Refresh conversation").disabled(!model.canRefreshTranscript)
                         }
                         HStack {
-                            if let source = model.sourceOrigin?(selected.conversation.identity) {
+                            if model.transcript?.threadLinks.isEmpty != false, let source = model.sourceOrigin?(selected.conversation.identity) {
                                 Button("Source Conversation") { model.onSource?(source) }.help(source.encoded)
                             }
                             Spacer()
                             Button(WorkspaceHandoffModel.title) { model.onHandoff?(selected.conversation) }
                                 .disabled(!model.canAct || model.onHandoff == nil)
+                        }
+                        if let transcript = model.transcript {
+                            ConversationLinksView(links: transcript.threadLinks, conversation: selected.conversation.identity,
+                                                  warning: transcript.threadWarning, onOpen: { model.onSource?($0) })
                         }
                         if let notice = model.locationNotice {
                             Text(notice).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

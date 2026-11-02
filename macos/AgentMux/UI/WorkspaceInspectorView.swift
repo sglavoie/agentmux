@@ -114,6 +114,8 @@ final class WorkspaceInspectorView: NSView {
     private(set) var lines: [NSView] = []
     private let stack = WorkspaceInspectorStack()
     let recap = WorkspaceRecapModel(command: { nil })
+    let threads = WorkspaceThreadsModel(command: { nil })
+    private lazy var threadsHost = NSHostingView(rootView: WorkspaceThreadsView(model: threads, onOpen: { [weak self] identity in self?.onSource?(identity) }))
     private lazy var recapHost = NSHostingView(rootView: WorkspaceRecapView(model: recap))
     private let sourceButton = NSButton(title: "Read Source Conversation", target: nil, action: nil)
     private let scroll = NSScrollView()
@@ -148,6 +150,10 @@ final class WorkspaceInspectorView: NSView {
         stack.addArrangedSubview(recapHost)
         recapHost.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -2 * Self.inset).isActive = true
         recapHost.isHidden = true
+        threadsHost.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(threadsHost)
+        threadsHost.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -2 * Self.inset).isActive = true
+        threadsHost.isHidden = true
         sourceButton.target = self; sourceButton.action = #selector(readSourceConversation(_:))
         sourceButton.bezelStyle = .rounded
         sourceButton.refusesFirstResponder = true
@@ -245,6 +251,7 @@ final class WorkspaceInspectorView: NSView {
 
     private func rebuild(keeping old: [WorkspaceInspectorLine]? = nil) {
         recapHost.isHidden = model.tab != .session || model.inspection == nil
+        threadsHost.isHidden = recapHost.isHidden
         sourceButton.isHidden = model.tab != .session || model.sourceConversation == nil
         sourceButton.toolTip = model.sourceConversation?.encoded
         for (index, tab) in WorkspaceInspectorTab.allCases.enumerated() {

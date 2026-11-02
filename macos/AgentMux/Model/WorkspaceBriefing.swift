@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// A bounded project view over the existing session list, companion snapshot,
+/// A project view over the existing session list, companion snapshot,
 /// and recap cache. It never synthesizes claims across conversations or starts
 /// model requests as a side effect of opening or refreshing a project.
 @MainActor
@@ -13,6 +13,9 @@ final class WorkspaceBriefingModel: ObservableObject {
     @Published private(set) var feedLive = false
     @Published private(set) var recent: [RecentConversation] = []
     @Published private(set) var total = 0
+    @Published private(set) var threadLinks: [ConversationLink] = []
+    @Published private(set) var threadWarning: String?
+    private var related: [RecentConversation] = []
     @Published private(set) var updatedAt: Date?
     @Published private(set) var loading = false
     @Published private(set) var error: String?
@@ -64,7 +67,7 @@ final class WorkspaceBriefingModel: ObservableObject {
         if name != project {
             generation += 1; loading = false
             recaps.values.forEach { $0.close() }; recaps = [:]
-            project = name; recent = []; total = 0
+            project = name; recent = []; related = []; threadLinks = []; threadWarning = nil; total = 0
             updatedAt = nil; error = nil; actionError = nil
         }
         updateRows()
@@ -83,15 +86,18 @@ final class WorkspaceBriefingModel: ObservableObject {
         var result: [RecentConversation] = [], seen: Set<String> = []
         for row in rows {
             guard let identity = row.conversation, seen.insert(identity.encoded).inserted else { continue }
-            result.append(recent.first { $0.identity == identity }
+            result.append((recent + related).first { $0.identity == identity }
                 ?? RecentConversation(id: identity.sessionID, harness: identity.harness, profile: row.label, project: project))
         }
         for item in recent.prefix(10) where item.identity.isUsable && seen.insert(item.selector).inserted { result.append(item) }
+        for item in related where item.identity.isUsable && seen.insert(item.selector).inserted { result.append(item) }
         return result
     }
 
+    var threads: [ConversationThreadGroup] { ConversationThreadGroup.group(conversations, links: threadLinks) }
+
     func liveRows(for conversation: RecentConversation) -> [WorkspaceRow] {
-        rows.filter { $0.conversation == conversation.identity }
+        allRows.filter { $0.conversation == conversation.identity }
     }
 
     func refresh() {
@@ -109,6 +115,9 @@ final class WorkspaceBriefingModel: ObservableObject {
             case let .success(value), let .partial(value, _):
                 self.recent = value.results.prefix(10).map(\.conversation)
                 self.total = value.total
+                self.threadLinks = value.threadLinks
+                self.related = value.relatedConversations
+                self.threadWarning = value.threadWarning
                 self.updatedAt = Date()
                 if case .partial = result { self.error = "The conversation list is incomplete. Refresh to try again." }
             }
@@ -138,7 +147,8 @@ final class WorkspaceBriefingModel: ObservableObject {
     }
 
     func focus(_ key: AttentionCycler.Key) {
-        guard feedLive, rows.contains(where: { $0.key == key }) else { return }
+        guard feedLive, let row = allRows.first(where: { $0.key == key }),
+              row.project == project || related.contains(where: { $0.identity == row.conversation }) else { return }
         actionError = nil
         onFocus?(key)
     }
@@ -156,6 +166,6 @@ final class WorkspaceBriefingModel: ObservableObject {
     func close() {
         active = false; generation += 1; loading = false
         recaps.values.forEach { $0.close() }; recaps = [:]
-        recent = []; updatedAt = nil; error = nil; actionError = nil
+        recent = []; related = []; threadLinks = []; threadWarning = nil; updatedAt = nil; error = nil; actionError = nil
     }
 }

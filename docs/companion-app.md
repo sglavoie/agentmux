@@ -545,9 +545,13 @@ pack records a snapshot; the receiving agent is told to verify current state.
 The original conversation stays available.
 
 The receiving session opens automatically and is placed below the source when
-that live session is available. Its Session inspector offers **Read Source
-Conversation**. The link survives app relaunch and appears in the receiving
-conversation's History after the daemon reports its conversation identity.
+that live session is available. The Session inspector and Conversation History
+show **Continued from** and **Continued in** links, so you can follow a handoff
+in either direction. Links are shared with CLI handoffs and survive app and
+daemon restarts and closing both agents. Until the receiving agent reports its
+first interactive conversation, the source shows that its continuation has
+not reported a conversation yet. Older app-only handoffs retain their existing
+**Read Source Conversation** link.
 An incomplete or timed-out launch stays visible for inspection and cannot be
 repeated from the same panel; check the session list before starting again.
 Saved packs can be revealed from a failed launch panel.
@@ -642,6 +646,13 @@ known yet. **Recent outcomes and unfinished work** shows each conversation's
 saved goal, latest outcome, and outstanding work separately, with recap times,
 profile/model, excerpt coverage, and supporting-message links into History.
 Agent-reported results remain attributed to the agent.
+
+Recorded handoff chains are grouped as conversation threads. Older indexed
+members are included even when they fall outside the recent ten, and each
+conversation keeps its own recap, live status, and Read/Focus/Resume actions.
+**Continued from** and **Continued in** open the exact conversation in History.
+An unavailable transcript does not remove the recorded relationship. Threads
+reflect recorded handoffs; similar topics are not automatically merged.
 
 Opening the briefing and **Refresh** (⌘R) read saved recaps without starting
 model requests. **Generate Recap** or **Regenerate** on a conversation explicitly

@@ -396,6 +396,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         self.now = now
         super.init()
         inspector.onSource = { [weak self] identity in self?.delegate?.workspaceOpenHandoffSource(identity) }
+        inspector.threads.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
         inspector.recap.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
         inspector.recap.onEvidence = { [weak self] identity, message in
             self?.delegate?.workspaceRecapEvidence(identity, message: message)
@@ -475,6 +476,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
         inspector.recap.close()
+        inspector.threads.close()
         reportLayout()
         pendingLayout = nil
         layoutGeneration += 1

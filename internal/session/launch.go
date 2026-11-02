@@ -184,6 +184,7 @@ func launchFresh(rt Runtime, sess config.Session, acc config.Account, cfg *confi
 	if err != nil {
 		return result, err
 	}
+	result.LaunchID = invocation.LaunchID
 	return result, launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, policy, launchFlightIdentity{operation: lin.operation})
 }
 

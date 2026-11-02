@@ -198,6 +198,7 @@ func (h *Handler) restoreStateFromKitty(now time.Time) (bool, error) {
 // maintenanceTick lists windows once and runs the maintenance pass over the
 // result. It is the periodic entry point of runMaintenance.
 func (h *Handler) maintenanceTick(now time.Time) {
+	defer h.persistConversationBindings()
 	h.maintainCaptureStore(now)
 	client, socket := h.kittyListTarget()
 	if client == nil {

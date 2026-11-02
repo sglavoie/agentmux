@@ -40,6 +40,7 @@ type hookEventContext struct {
 }
 
 func (h *Handler) handleHookEvent(req protocol.Request) protocol.Response {
+	defer h.persistConversationBindings()
 	eventOrAction := strings.TrimSpace(req.Event)
 	if eventOrAction == "" {
 		ctx := h.resolveHookEventContext(req)

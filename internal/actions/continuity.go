@@ -167,6 +167,11 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 	if err == nil {
 		return result, nil
 	}
+	var relationship *handoff.RelationshipError
+	if errors.As(err, &relationship) {
+		result.Message = err.Error()
+		return result, &PartialResultError{ActionError: &Error{Code: "conversation_link_failed", Action: Handoff, Message: err.Error(), Cause: err}}
+	}
 	var partial *handoff.PartialLaunchError
 	if errors.As(err, &partial) {
 		result.Message = "handoff pack finalized at " + workflowResult.Artifact.Path + "; target launch failed"

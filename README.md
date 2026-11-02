@@ -136,6 +136,7 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 | Explore statistics and milestones | **Flight Log…** in the app's View menu, **Show Flight Log** in the dashboard command palette, or `amx session flight-log` |
 | See every live pane | `F2` or `amx overview` |
 | Resume or fork a conversation | `s` for project history, `S` for all history; straight there with `ctrl+shift+y`, native Conversation History with `⌘Y` in the app, or `amx past-sessions` |
+| Follow work across agents | **Continued from/in** in History and the Session inspector, thread groups in Project Briefing, or `amx session thread <harness>:<id>` |
 | Continue work with a different agent | **Continue with Another Agent…** in the app’s Session menu, History, or Project Briefing |
 | Remember where a conversation left off | Automatic [conversation recaps](docs/conversation-recaps.md) in the app's Session inspector and History, or `amx session recap <harness>:<id>` |
 | Read an action failure | `:` → **Show Action Feedback**; notices remain until dismissed |

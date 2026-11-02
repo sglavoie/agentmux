@@ -97,7 +97,7 @@ fields are present only when messages were read.`,
 			}
 		}
 		if jsonOutput {
-			data := sessionShowData{Session: view}
+			data := sessionShowData{Session: view, threadContext: readThreadContext(views, nil)}
 			if tail != nil {
 				data.Messages, data.MessagesTotal = tail.Messages, &tail.Total
 				data.MessagesStart = &tail.Start
@@ -160,6 +160,7 @@ func sessionShowMessageFlags(last int, query string, match, from, count int, atT
 }
 
 type sessionShowData struct {
+	threadContext
 	Session sessionView `json:"session"`
 	// Message fields are present only under --last, --find, --from, or --at: visible
 	// user/assistant prose in chronological order, its total, and window start.

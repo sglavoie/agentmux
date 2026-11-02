@@ -418,6 +418,42 @@ combined with editing, submitted content, instructions, or `--no-launch`.
 report `data.runtime_session_id` on tmux, so clients open the exact receiving
 session. Packs remain saved if launch fails.
 
+Conversation threads retain the source and receiving conversation of handoffs
+launched from either the app or CLI, including after both agents exit:
+
+```sh
+amx session thread claude:<session-id>        # follow the entire connected chain
+amx session thread codex:<receiving-id> --json
+amx session threads --json                   # all recorded continuations
+```
+
+`thread` accepts the same qualified, bare, and unique-prefix selectors as
+`show`. An exact qualified identity already present in the link history works
+even when its transcript is no longer indexed. JSON uses the standard schema-v1
+envelope and `data.thread_links`: each link has its source identity, optional
+target identity, stable receiving launch key, handoff artifact path, kind, and
+time. Until the receiving agent reports its first interactive conversation,
+the target is absent and the link is labeled as awaiting its conversation.
+Branches are preserved; matching a bare session ID never joins different
+harnesses. Native resumes of the same conversation retain that identity.
+
+`session list --json` and `session show --json` also include `thread_links`.
+List responses add `related_conversations` for indexed members outside the
+returned page; pagination totals still count the requested list. A
+`thread_warning` reports unreadable link history while leaving usable
+conversation results visible. The dedicated thread commands fail visibly if
+the history cannot be read.
+
+Links live in `$XDG_STATE_HOME/agent-mux/conversation-links.json`, falling back
+to `~/.local/state/agent-mux/conversation-links.json`. The private file stores
+identities, relationships, artifact paths and timestamps, without transcript
+contents. It is durable state, independent of the transcript cache and Flight
+Log. Missing files start empty; damaged files are preserved, never rebuilt.
+Recording begins with the updated launcher and daemon; restart the daemon
+after updating. `--preview`, `--no-launch`, and failed launches create no
+continuation. A later `/new` in the receiving terminal does not reassign an
+existing handoff to the new chat.
+
 `amx session activity` reads what the daemon recorded in its journal: sessions
 changing state, agents exiting, and agent-session-loop runs starting and
 finishing. It is a record of what happened, never rebuilt from the sessions

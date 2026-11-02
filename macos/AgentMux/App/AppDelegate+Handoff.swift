@@ -24,7 +24,6 @@ extension AppDelegate {
         model.onSource = { [weak self] in self?.openHistory(conversation: source) }
         model.onLaunched = { [weak self, weak panel] id, path in
             guard let self else { return }
-            self.handoffOrigins.record(runtimeID: id, source: source, artifactPath: path)
             self.handoffOrigins.observe(self.store.sessions)
             panel?.close(); self.handoffPanel = nil
             let workspace = self.workspaceController()

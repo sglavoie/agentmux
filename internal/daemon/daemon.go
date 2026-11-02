@@ -228,6 +228,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// amx_state just rebuilt is rebound to its session, and before the socket
 	// binds, so no event can land in a slot before its checkpoint does.
 	handler.SetRuntimeCheckpointPath(DefaultRuntimeCheckpointPath())
+	handler.enableConversationThreads()
 	// The registry is reconciled first: an agent that exited or was lost
 	// while no daemon ran is recorded as such before its checkpoint entry is
 	// looked at, so it is dropped rather than restored as running.

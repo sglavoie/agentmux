@@ -121,7 +121,9 @@ func (r Runtime) registry() (*runtimesession.Store, error) {
 
 // LaunchResult is what one launch did.
 type LaunchResult struct {
-	Backend runtimesession.BackendKind
+	// LaunchID identifies a Kitty invocation before its conversation is reported.
+	LaunchID string
+	Backend  runtimesession.BackendKind
 	// Deduplicated is true when the project/profile key was already running
 	// and nothing was launched; Group, Pane, and RuntimeSessionID then name
 	// the existing session when the backend reports them.

@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/buildinfo"
+	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
@@ -36,7 +37,10 @@ type kittyTitleClient interface {
 
 // Handler processes daemon requests.
 type Handler struct {
-	flightLog *flightlog.Collector
+	flightLog                  *flightlog.Collector
+	conversationThreads        *conversation.ThreadStore
+	conversationThreadsMu      sync.Mutex
+	conversationThreadBindings map[string]bool
 	// UI preference lives only in this handler; it is never checkpointed.
 	overviewMu      sync.Mutex
 	overviewCompact bool

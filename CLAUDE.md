@@ -214,7 +214,8 @@ side effect of indexing:
 - harness transcript files;
 - saved plan directories;
 - `config.toml`;
-- handoff Markdown artifacts.
+- handoff Markdown artifacts;
+- `conversation-links.json`, the shared durable handoff relationship and launch-to-conversation store under the state directory.
 
 `transcripts.json`, `plans.json`, and their search sidecars are disposable
 caches. Refresh, rebuild, and corruption quarantine may replace them, but the

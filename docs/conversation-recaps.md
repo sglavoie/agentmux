@@ -15,7 +15,9 @@ profile/model are visible; excerpts and stale saved results are labeled.
 History's **Recap** button also opens it without moving your reading position.
 
 The app's **Project Briefing…** brings together saved recaps for one project's
-live conversations and ten most recent conversations. Opening or refreshing
+live conversations and ten most recent conversations, plus older indexed
+members of their recorded handoff threads. Each thread groups related
+conversations while preserving separate recaps and source links. Opening or refreshing
 the briefing only reads the cache; use **Generate Recap** or **Regenerate** on a
 conversation to request generation. Source links, stale labels, and the same
 shared request locks apply there too.

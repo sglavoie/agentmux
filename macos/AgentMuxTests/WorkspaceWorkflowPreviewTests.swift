@@ -11,6 +11,47 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testConversationThreadLinksAtNarrowAndWideSizes() async throws {
+        let a = ConversationIdentity(harness: "claude", sessionID: "source")
+        let b = ConversationIdentity(harness: "codex", sessionID: "review")
+        let c = ConversationIdentity(harness: "copilot", sessionID: "follow-up")
+        let links = [ConversationLink(id: "one", source: a, target: b, targetKey: "rs-review", kind: "handoff", artifactPath: "/handoffs/one.md", createdAt: "2026-11-01T12:00:00Z"),
+                     ConversationLink(id: "two", source: b, target: c, targetKey: "rs-follow-up", kind: "handoff", artifactPath: "/handoffs/two.md", createdAt: "2026-11-01T12:01:00Z"),
+                     ConversationLink(id: "pending", source: b, target: nil, targetKey: "rs-pending", kind: "handoff", artifactPath: "/handoffs/three.md", createdAt: "2026-11-01T12:02:00Z")]
+        for dark in [false, true] {
+            for width in [CGFloat(280), CGFloat(680)] {
+                try await render(VStack(alignment: .leading, spacing: 12) {
+                    Text("Conversation thread").font(.headline)
+                    ConversationLinksView(links: links, conversation: b, onOpen: { _ in })
+                    Spacer()
+                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(12), name: "conversation-thread-\(Int(width))-\(dark)", width: width, height: 250,
+                                 dark: dark, expected: ["Continued from", "Continued in", "conversation not reported yet"])
+            }
+        }
+    }
+
+    func testConversationThreadBriefingAtMinimumAndWideSizes() async throws {
+        let command = BriefingFixture.command { args in
+            if args[1] == "recap" { return BriefingFixture.recap(args[args.firstIndex(of: "--")! + 1], saved: false) }
+            return ["sessions": [["id": "review", "harness": "codex", "project": "API", "title": "Review pagination"]], "total": 50,
+                    "related_conversations": [["id": "source", "harness": "claude", "project": "API", "title": "Implement pagination"]],
+                    "thread_links": [["id": "one", "source": ["harness": "claude", "session_id": "source"],
+                                      "target": ["harness": "codex", "session_id": "review"], "target_key": "rs-review", "kind": "handoff",
+                                      "artifact_path": "/handoffs/one.md", "created_at": "2026-11-01T12:00:00Z"]]]
+        }
+        let model = WorkspaceBriefingModel(command: { command }, runner: PreviewRunner())
+        model.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: true)
+        model.open(preferredProject: "API"); model.refresh()
+        XCTAssertEqual(model.threads.count, 1)
+        for dark in [false, true] {
+            for width in [CGFloat(780), CGFloat(1080)] {
+                try await render(WorkspaceBriefingView(model: model), name: "conversation-thread-briefing-\(Int(width))-\(dark)",
+                                 width: width, height: 760, dark: dark, expected: ["Thread", "2 conversations", "Implement pagination", "Continued in"])
+            }
+        }
+        model.close()
+    }
+
     func testHandoffPreviewAtMinimumAndWideSizes() async throws {
         let command = command { args in
             if args[0] == "config" { return #"[{"name":"work","harness":"claude"},{"name":"review","harness":"codex"}]"# }

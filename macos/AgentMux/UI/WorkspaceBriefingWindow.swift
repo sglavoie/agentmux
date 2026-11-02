@@ -109,42 +109,61 @@ struct WorkspaceBriefingView: View {
     private var conversationCards: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent outcomes and unfinished work").font(.headline)
-            Text("All live conversations plus the ten most recent conversations, across profiles and agents, including automated sessions. Refresh reads saved recaps; Generate Recap uses your configured summarization profile.")
+            Text("All live conversations, the ten most recent, and their recorded continuations, grouped across profiles and agents. Refresh reads saved recaps; Generate Recap uses your configured summarization profile.")
                 .font(.caption).foregroundStyle(.secondary)
             if model.total > 10 {
-                Text("Showing the ten most recent of \(model.total) matching conversations, plus any other live conversations")
+                Text("Showing the ten most recent of \(model.total) matching conversations, plus any other live conversations and linked history")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if model.conversations.isEmpty, !model.loading {
                 Text("No conversations found for this project.").foregroundStyle(.secondary)
             }
-            ForEach(model.conversations, id: \.selector) { item in
+            if let warning = model.threadWarning {
+                Text("Conversation links unavailable: " + warning).font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(model.threads) { thread in
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text([item.harness, item.profile].filter { !$0.isEmpty }.joined(separator: " · ")).font(.headline)
-                            Text(item.selector).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                            if let at = item.lastAt {
-                                Text("Last message " + at.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        Button("Read Conversation") { model.onConversation?(item.identity, nil) }.disabled(model.acting)
-                        Button(model.liveRows(for: item).isEmpty ? "Resume" : "Focus Session") { model.continueConversation(item) }
-                            .disabled(!model.feedLive || model.acting)
+                    if thread.conversations.count > 1 {
+                        Label("Thread · \(thread.conversations.count) conversations", systemImage: "link").font(.subheadline.weight(.semibold))
                     }
-                    Button(WorkspaceHandoffModel.title) { model.onHandoff?(item) }
-                        .disabled(!model.feedLive || model.acting || model.onHandoff == nil)
-                    if let recap = model.recaps[item.selector] {
-                        WorkspaceRecapView(model: recap, generationWaitMessage: model.feedLive
-                            ? "Recap generation is available after the agent finishes its turn."
-                            : "Reconnect the daemon to check whether this agent is still working.")
-                    }
-                }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 10))
+                    ForEach(thread.conversations, id: \.selector) { item in conversationCard(item) }
+                }.padding(thread.conversations.count > 1 ? 10 : 0)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(thread.conversations.count > 1 ? 0.25 : 0)))
             }
             Text("Each recap describes its own conversation. Older unfinished work may be outside this briefing; open Conversation History to explore further.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
+    private func conversationCard(_ item: RecentConversation) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.conversationTitle).font(.headline).lineLimit(2)
+                    Text([item.harness, item.profile].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                    Text(item.selector).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    if let at = item.lastAt {
+                        Text("Last message " + at.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Button("Read Conversation") { model.onConversation?(item.identity, nil) }.disabled(model.acting)
+                Button(model.liveRows(for: item).isEmpty ? "Resume" : "Focus Session") { model.continueConversation(item) }
+                    .disabled(!model.feedLive || model.acting)
+            }
+            if !model.liveRows(for: item).isEmpty {
+                Text(model.feedLive ? "Live" : "Last known live").font(.caption).foregroundStyle(.secondary)
+            }
+            ConversationLinksView(links: model.threadLinks, conversation: item.identity,
+                                  onOpen: { model.onConversation?($0, nil) })
+            Button(WorkspaceHandoffModel.title) { model.onHandoff?(item) }
+                .disabled(!model.feedLive || model.acting || model.onHandoff == nil)
+            if let recap = model.recaps[item.selector] {
+                WorkspaceRecapView(model: recap, generationWaitMessage: model.feedLive
+                    ? "Recap generation is available after the agent finishes its turn."
+                    : "Reconnect the daemon to check whether this agent is still working.")
+            }
+        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 10))
+    }
+
 }
