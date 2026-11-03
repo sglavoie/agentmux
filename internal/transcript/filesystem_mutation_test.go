@@ -197,6 +197,56 @@ func TestFilesystemSetHiddenRetriesFailedPersistence(t *testing.T) {
 	}
 }
 
+func TestFilesystemSaveRetryPreservesConcurrentHideOrDelete(t *testing.T) {
+	for _, mutation := range []string{"hide", "delete"} {
+		t.Run(mutation, func(t *testing.T) {
+			cfg, readers, source := filesystemTranscriptFixture(t)
+			idx := newTestIndex(t)
+			must(t, idx.Refresh(cfg, readers))
+			key := IndexKey(harness.Claude, "session")
+			meta, _ := idx.Get(key)
+			info := writeTranscript(t, source, "new transcript with more content\n")
+			meta.FileSize, meta.FileModTime = info.Size(), info.ModTime()
+			meta.Snippet, meta.SearchText = "new summary", "newneedle"
+			readers[harness.Claude].(*fakeReader).discover = func(string, DiscoverOptions) ([]SessionMeta, error) {
+				return []SessionMeta{meta}, nil
+			}
+			persistFailure := errors.New("disk full")
+			originalWrite := writeTranscriptIndex
+			t.Cleanup(func() { writeTranscriptIndex = originalWrite })
+			writeTranscriptIndex = func(string, []byte, os.FileMode) error { return persistFailure }
+			if err := idx.Refresh(cfg, readers); !errors.Is(err, persistFailure) {
+				t.Fatalf("Refresh = %v, want persistence failure", err)
+			}
+			writeTranscriptIndex = originalWrite
+
+			// The operator changes history in another process before the first
+			// process can retry its pending metadata write.
+			other, err := LoadIndexAt(idx.Path())
+			must(t, err)
+			if mutation == "hide" {
+				must(t, other.SetHidden(key, true))
+			} else {
+				must(t, other.Delete(key, false))
+			}
+			must(t, idx.Save())
+			loaded, err := LoadIndexAt(idx.Path())
+			must(t, err)
+			got, exists := loaded.Get(key)
+			if mutation == "hide" {
+				if !exists || !got.HiddenFromIndex || got.Snippet != "new summary" {
+					t.Fatalf("retry lost the hide or pending summary: %+v, exists=%v", got, exists)
+				}
+			} else if exists {
+				t.Fatalf("retry resurrected deleted history: %+v", got)
+			}
+			if exists, err := loaded.SearchTextExists(key); err != nil || exists {
+				t.Fatalf("retry recreated removed sidecar: exists=%v, err=%v", exists, err)
+			}
+		})
+	}
+}
+
 func TestFilesystemSaveRetainsInlineSearchWhenSidecarMigrationFails(t *testing.T) {
 	t.Parallel()
 

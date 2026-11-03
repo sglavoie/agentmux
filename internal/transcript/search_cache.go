@@ -11,14 +11,15 @@ import (
 const maxSearchCacheBytes int64 = 256 << 20
 
 type cachedSearchCorpus struct {
-	key         string
-	path        string
-	fileSize    int64
-	fileModTime time.Time
-	legacy      string
-	sources     sourceSidecar
-	sourceAware bool
-	bytes       int64
+	key           string
+	path          string
+	fileSize      int64
+	fileModTime   time.Time
+	readerVersion int
+	legacy        string
+	sources       sourceSidecar
+	sourceAware   bool
+	bytes         int64
 }
 
 func (e *cachedSearchCorpus) text(source string) (string, bool) {
@@ -47,7 +48,7 @@ func (c *searchCorpusCache) getSource(key string, meta SessionMeta, source strin
 		return "", false, false
 	}
 	e := element.Value.(*cachedSearchCorpus)
-	if e.path != meta.Path || e.fileSize != meta.FileSize || !e.fileModTime.Equal(meta.FileModTime) {
+	if e.path != meta.Path || e.fileSize != meta.FileSize || !e.fileModTime.Equal(meta.FileModTime) || e.readerVersion != meta.ReaderVersion {
 		c.remove(element)
 		return "", false, false
 	}
@@ -63,7 +64,7 @@ func (c *searchCorpusCache) version() uint64 {
 }
 
 func (c *searchCorpusCache) put(key string, meta SessionMeta, raw string, sources sourceSidecar, sourceAware bool, generation uint64) {
-	e := &cachedSearchCorpus{key: key, path: meta.Path, fileSize: meta.FileSize, fileModTime: meta.FileModTime}
+	e := &cachedSearchCorpus{key: key, path: meta.Path, fileSize: meta.FileSize, fileModTime: meta.FileModTime, readerVersion: meta.ReaderVersion}
 	if sourceAware {
 		e.sources, e.sourceAware = sources, true
 		e.bytes = int64(len(sources.Any) + len(sources.User) + len(sources.Harness))

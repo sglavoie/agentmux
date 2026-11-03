@@ -250,6 +250,23 @@ func applySessionDiff(target, current, base map[string]SessionMeta) {
 	for key, meta := range current {
 		baseMeta, existed := base[key]
 		if !existed || !reflect.DeepEqual(meta, baseMeta) {
+			if existed {
+				latest, exists := target[key]
+				if !exists {
+					// A retry of a failed refresh must not recreate an entry
+					// another process deleted after our last saved snapshot.
+					continue
+				}
+				if meta.HiddenFromIndex == baseMeta.HiddenFromIndex {
+					// Discovery changes metadata, not the operator's visibility
+					// choice. Replay only a visibility change made locally.
+					meta.HiddenFromIndex = latest.HiddenFromIndex
+					if latest.HiddenFromIndex && !baseMeta.HiddenFromIndex {
+						meta.SearchText = ""
+						meta.SearchTextPending = false
+					}
+				}
+			}
 			target[key] = meta
 		}
 	}

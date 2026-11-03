@@ -215,6 +215,52 @@ func TestClaudeLocalCommandSearchRefreshesOldSourceSidecars(t *testing.T) {
 	}
 }
 
+func TestSearchCacheSeesReaderUpgradeFromAnotherIndex(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	path := filepath.Join(home, "projects", "-tmp-demo", "commands.jsonl")
+	writeTranscript(t, path, `{"type":"user","cwd":"/tmp/demo","message":{"role":"user","content":"Check billing"}}
+{"type":"user","message":{"role":"user","content":"<local-command-stdout>billingneedle</local-command-stdout>"}}
+`)
+	reader := NewClaudeReader()
+	metas, err := reader.Discover(home, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("discover: %+v, %v", metas, err)
+	}
+	meta := metas[0]
+	meta.ReaderVersion = claudeReaderVersion - 1
+	meta.SearchText = ""
+	idx := newTestIndex(t)
+	key := IndexKey(harness.Claude, meta.ID)
+	must(t, idx.SetEntryForTest(key, meta))
+	must(t, idx.Save())
+	must(t, idx.WriteSearchText(key, encodeSourceSidecar(sourceSidecar{
+		Version: 2, Any: "check billing\nbillingneedle", User: "check billing\nbillingneedle",
+	})))
+	before, err := Search(idx, nil, Query{Text: "billingneedle", MessageSource: "user"})
+	if err != nil || len(before) != 1 {
+		t.Fatalf("old sidecar: %+v, %v", before, err)
+	}
+
+	// A second process upgrades the index and sidecar without changing the
+	// transcript's path, size, or mtime. The first process then reloads it.
+	other, err := LoadIndexAt(idx.Path())
+	must(t, err)
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
+	readers := map[string]Reader{harness.Claude: reader}
+	must(t, other.Refresh(cfg, readers))
+	_, err = Search(other, readers, Query{Text: "billingneedle", MessageSource: "harness"})
+	must(t, err)
+	must(t, idx.Refresh(cfg, readers))
+	for _, source := range []string{"user", "harness"} {
+		results, err := Search(idx, nil, Query{Text: "billingneedle", MessageSource: source})
+		if err != nil || (len(results) == 1) != (source == "harness") {
+			t.Fatalf("after external upgrade source %s: %+v, %v", source, results, err)
+		}
+	}
+}
+
 func TestSearchSourceSidecarRefreshesAfterTranscriptChange(t *testing.T) {
 	t.Parallel()
 
