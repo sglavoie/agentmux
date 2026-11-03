@@ -168,6 +168,32 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(group.needsAttention, "Promotion should apply when interaction ends")
     }
 
+    func testWorkingSessionLeavesAttentionAfterBriefHoverHold() async throws {
+        var live = sessions
+        live[1].unseen = true
+        app.store.apply(snapshot: F.snapshot(live))
+        let key = AttentionCycler.Key.embedded(F.runtimeID(2))
+        let before = try index(of: key)
+        let entered = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: workspace.window.windowNumber,
+            context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+        workspace.sidebar.mouseEntered(with: entered)
+
+        live[1].iconState = "bolt"
+        live[1].unseen = false
+        live[1].attention = false
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertEqual(try index(of: key), before, "Hover briefly keeps the click target in place")
+        XCTAssertFalse(try XCTUnwrap(workspace.state.row(key)).needsAttention)
+
+        try await Task.sleep(for: .milliseconds(700))
+        let moved = try index(of: key)
+        let group = try XCTUnwrap(workspace.items[..<moved].last { if case .group = $0 { return true }; return false })
+        guard case let .group(working) = group else { return XCTFail("Missing working group") }
+        XCTAssertEqual(working.stateSection, .working)
+        XCTAssertFalse(working.needsAttention)
+    }
+
     func testHeldLinesNameTheirProjectByWhereTheyAreListed() throws {
         var live = sessions
         live[1].unseen = true

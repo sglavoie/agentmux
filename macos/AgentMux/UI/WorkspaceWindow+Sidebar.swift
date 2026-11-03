@@ -30,6 +30,15 @@ extension WorkspaceWindowController {
             }
         let holdingHover = sidebar.pointerInside && !Self.hasNewSidebarTargets(wanted, comparedTo: items)
         if !allowReorder, !items.isEmpty, holdingHover || sidebarMenuOpen || dragged != nil {
+            if holdingHover, wanted != items, hoverReorderTask == nil {
+                hoverReorderTask = Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard let self else { return }
+                    self.hoverReorderTask = nil
+                    guard !self.sidebarMenuOpen, self.dragged == nil else { return }
+                    self.reloadSidebar(allowReorder: true)
+                }
+            }
             wanted = Self.holdingSidebar(items, latest: wanted)
         }
         // Held rows can have a different order from the latest state. Number

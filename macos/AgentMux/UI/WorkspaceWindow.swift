@@ -78,8 +78,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         Item.holding(old, latest: latest)
     }
 
-    /// Hover holds attention reordering, but must not hide newly opened
-    /// sessions or views for as long as the pointer rests in the sidebar.
+    /// Hover briefly holds attention reordering, but must not hide newly
+    /// opened sessions or views while the pointer rests in the sidebar.
     static func hasNewSidebarTargets(_ latest: [Item], comparedTo old: [Item]) -> Bool {
         Item.hasNewTargets(latest, comparedTo: old)
     }
@@ -107,6 +107,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The line being dragged, from when the drag begins until it ends.
     var dragged: Place?
     var sidebarMenuOpen = false
+    var hoverReorderTask: Task<Void, Never>?
     var items: [Item] = []
     /// Visible sessions in physical sidebar order, followed by sessions in
     /// collapsed groups. Shared by digit labels, menu titles, and actions.
