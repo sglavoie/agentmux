@@ -355,6 +355,42 @@ func TestForkWorktreeUsesPortableLaunchDirectoryAndCleansUpFailure(t *testing.T)
 	}
 }
 
+func TestForkWorktreeRetainsRunningPortableForkWhenRecordingItsLinkFails(t *testing.T) {
+	t.Parallel()
+
+	meta := continuityMeta(t, harness.Copilot, "source-1", "work")
+	managed := &continuityWorktree{created: worktree.Result{
+		ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: t.TempDir(),
+	}}
+	recordErr := errors.New("conversation history could not be saved")
+	runner := &continuityHandoff{
+		result: handoff.Result{
+			Artifact:      handoff.Artifact{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal},
+			TargetProfile: "work", TargetHarness: harness.Copilot, Launched: true, RuntimeSessionID: "rs-running",
+		},
+		err: &handoff.RelationshipError{Err: recordErr},
+	}
+	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
+		Kitty: &continuityKitty{}, Config: continuityConfig(harness.Copilot),
+		Readers: map[string]transcript.Reader{harness.Copilot: &continuityReader{harness: harness.Copilot}},
+		Handoff: runner, Worktree: managed,
+	}, ForkWorktree, Request{Conversation: &meta, Confirmed: true})
+	if len(managed.removed) != 0 {
+		t.Fatalf("removed a running agent's worktree: %+v", managed.removed)
+	}
+	var partial *PartialResultError
+	if !errors.As(err, &partial) || partial.ActionError.Code != "conversation_link_failed" || !errors.Is(err, recordErr) {
+		t.Fatalf("error = %v, want the original conversation link failure", err)
+	}
+	worktreeData, ok := result.Data["worktree"].(map[string]any)
+	if !ok || worktreeData["path"] != managed.created.Path || result.Data["worktree_retained"] != true {
+		t.Fatalf("result data = %#v, want the retained worktree", result.Data)
+	}
+	if result.Data["launched"] != true || result.Data["runtime_session_id"] != "rs-running" || result.Data["path"] != runner.result.Artifact.Path {
+		t.Fatalf("lost the running session or handoff artifact: %#v", result.Data)
+	}
+}
+
 func TestForkWorktreeCleansUpWhenNativeLaunchFails(t *testing.T) {
 	t.Parallel()
 

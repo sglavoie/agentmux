@@ -236,13 +236,19 @@ func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta tra
 
 	if identity.Harness == harness.Copilot {
 		result, err := handoffConversation(ctx, deps, meta, account.Name, false, false, "Portable isolated fork", isolated.Path)
-		if err != nil || result.Data["launched"] != true {
-			if err == nil {
-				err = &Error{Code: "launch_failed", Action: ForkWorktree, Message: "portable isolated fork did not start a target harness"}
+		if result.Data["launched"] == true {
+			// Saving the conversation link can fail after the agent starts.
+			// Keep its checkout and report the original partial result.
+			result = addIsolatedWorktreeResult(result, isolated)
+			if err != nil {
+				result.Data["worktree_retained"] = true
 			}
-			return cleanup(err, result)
+			return result, err
 		}
-		return addIsolatedWorktreeResult(result, isolated), nil
+		if err == nil {
+			err = &Error{Code: "launch_failed", Action: ForkWorktree, Message: "portable isolated fork did not start a target harness"}
+		}
+		return cleanup(err, result)
 	}
 	project.Directory = isolated.Path
 	launched, err := session.LaunchContinuityOn(rt, project, account, deps.Config, harness.InvocationFork, identity.SessionID, "")
