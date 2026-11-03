@@ -255,7 +255,7 @@ extension WorkspaceWindowController {
             if !current { cell.detailLabel.stringValue = "Session ended" }
             cell.onClose = { [weak self] in
                 guard let self, self.state.row(row.key) != nil else { return }
-                self.detachSession(row.key)
+                self.closeSession(row.key)
             }
             return cell
         }

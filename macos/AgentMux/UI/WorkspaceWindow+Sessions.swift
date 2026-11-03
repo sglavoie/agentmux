@@ -276,7 +276,7 @@ extension WorkspaceWindowController {
             show.target = self
             return [name] + looks + [pin, .separator(), handoff, show]
         }
-        // What the × and the Session menu do, for the line under the pointer.
+        // Session actions for the line under the pointer.
         let terminal = NSMenuItem(title: Self.newTerminalTitle, action: #selector(openTerminalBesideClickedSession(_:)), keyEquivalent: "")
         terminal.representedObject = id
         terminal.target = self

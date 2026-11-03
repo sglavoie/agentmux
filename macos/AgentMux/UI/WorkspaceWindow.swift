@@ -16,9 +16,9 @@ import os
 /// when its `amx attach` ends, when a live snapshot no longer lists its
 /// session, or when the window closes. None of those ends the agent.
 ///
-/// The × on a session row and ⌘W detach its terminal. End Session… is
-/// a separate action that always asks before ending an agent. The × on an opened
-/// view closes that view and ends its program. A Kitty session and the
+/// The × on a session row and ⌘⇧W end its agent through the same confirmation
+/// policy. ⌘W detaches its terminal. The × on an opened view closes that view
+/// and ends its program. A Kitty session and the
 /// Dashboard and Overview have none.
 ///
 /// The workspace only ever shows agents that are running. It comes back to

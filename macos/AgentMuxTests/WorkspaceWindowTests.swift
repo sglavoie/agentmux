@@ -1424,10 +1424,30 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNotNil(workspace.state.row(busy.key))
         workspace.activate(busy, reattaching: true)
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
+    }
+
+    func testSessionRowCloseButtonEndsItsOwnSessionThroughConfirmation() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.activate(try row("api", "work"))
+        let busy = try row("api", "personal")
+        var asked: [(WorkspaceRow, @MainActor (Bool) -> Void)] = []
+        workspace.confirmClose = { row, answer in asked.append((row, answer)) }
+
+        let button = try cell(busy.key).closeButton
+        XCTAssertEqual(button.toolTip, "End \(busy.displayName)…")
+        XCTAssertEqual(button.accessibilityLabel(), "End session \(busy.displayName)")
+        button.performClick(nil)
+        XCTAssertEqual(asked.map(\.0), [busy])
+        XCTAssertEqual(app.ended, [], "clicking does not end the agent before confirmation")
+        asked[0].1(false)
+        XCTAssertEqual(app.ended, [], "cancelling keeps the session running")
+
         try cell(busy.key).closeButton.performClick(nil)
-        XCTAssertEqual(app.ended, [])
-        XCTAssertEqual(app.closed, [F.runtimeID(2), F.runtimeID(2)])
-        XCTAssertTrue(try cell(busy.key).closeButton.toolTip?.contains("agent keeps running") == true)
+        XCTAssertEqual(asked.map(\.0), [busy, busy])
+        asked[1].1(true)
+        XCTAssertEqual(app.ended, [F.runtimeID(2)], "the row under the pointer is ended")
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)),
+                       "ending another row does not change the shown session")
     }
 
     func testASessionThatCouldNotBeClosedComesBack() throws {

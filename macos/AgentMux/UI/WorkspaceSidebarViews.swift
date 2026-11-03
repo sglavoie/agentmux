@@ -772,8 +772,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
         setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))
         closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
-        closeButton.toolTip = "Detach \(row.displayName); agent keeps running"
-        closeButton.setAccessibilityLabel("Detach \(row.displayName); agent keeps running")
+        closeButton.toolTip = "End \(row.displayName)…"
+        closeButton.setAccessibilityLabel("End session \(row.displayName)")
         syncTrailingRoom()
     }
 

@@ -258,10 +258,10 @@ terminals of their own beside the agents, and none of them needs Kitty.
   worktree editors) and from **View › New Shell** (⌘T). Each is listed while
   its program runs and goes away when it exits; **View › Close** (⌘W)
   ends the one you are on, and so does the × in the top right corner of its row.
-- The × on a session row and ⌘W **detach its terminal**. The agent keeps
-  running and stays in the sidebar; click its row or choose **Reattach** to
-  return. **Session › End Session…** (⌘⇧W), also in the row's context menu, ends
-  the agent after confirmation. Its conversation remains on disk. A Kitty
+- The × on a session row and **Session › End Session…** (⌘⇧W), also in the
+  row's context menu, end the agent through the same confirmation policy. Its
+  conversation remains on disk. ⌘W **detaches its terminal**, leaving the agent
+  running and listed; click its row or choose **Reattach** to return. A Kitty
   session has no ×; manage its terminal in Kitty.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you
   are on is working and lists it right under that session; pressed again, it

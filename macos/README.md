@@ -485,10 +485,11 @@ ASL answer panel work the same either way.
   configured emoji it starts with as the session's `harness_icon`, so a pick
   shows as soon as a color does. A Kitty session's icon stays on its tab in
   Kitty.
-- **Closing from the sidebar.** A session row's × and ⌘W detach its terminal,
-  leaving the agent running and listed. Click the row or choose Reattach to
-  return. The Session menu and row context menu provide **End Session…** (⌘⇧W),
-  which runs `amx close <runtime-session-id> --yes` after confirmation by default.
+- **Closing from the sidebar.** A session row's ×, **End Session…** (⌘⇧W)
+  in the Session menu, and the row context menu end its agent through the same
+  confirmation policy. They run `amx close <runtime-session-id> --yes` after
+  confirmation by default. ⌘W detaches its terminal, leaving the agent running
+  and listed; click the row or choose Reattach to return.
   Its conversation stays on disk; terminals opened beside it close with it.
   ⌘W's menu item says **Detach Terminal** on
   a session and **Close View** on a utility view. Closing a utility view ends
@@ -550,7 +551,7 @@ ASL answer panel work the same either way.
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
   `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘J (scroll the sidebar to what the pane is on and flash its line, expanding a collapsed project and showing a hidden sidebar; the keyboard stays put, `revealInSidebar`; every key that moves the pane to another session or terminal reveals where it went the same way, `AppDelegate.followingFocus`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘⇧↩ (a fresh session with a harness/profile picker and optional directory, opened automatically), ⌘R (name the session or terminal shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view, or an embedded session attachment as its × does; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session, with confirmation enabled by default), ⌘M,
+  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘J (scroll the sidebar to what the pane is on and flash its line, expanding a collapsed project and showing a hidden sidebar; the keyboard stays put; every key that moves the pane to another session or terminal reveals where it went the same way, `AppDelegate.followingFocus`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘⇧↩ (a fresh session with a harness/profile picker and optional directory, opened automatically), ⌘R (name the session or terminal shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view or an embedded session attachment; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session, with confirmation enabled by default), ⌘M,
   ⌘, and ⌘Q.
 - **Two panes.** View and the command palette can split with a session shell or
   native checkout review; the palette can also select another agent. Clicking a
