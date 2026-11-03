@@ -42,7 +42,7 @@ func Build(snapshot Snapshot, filters Filters, now time.Time, configuredHarnesse
 	r.Totals = aggregate(selected, r.Since, now)
 	r.Lifetime = aggregate(all, time.Time{}, now)
 	r.Achievements = achievements(events, configuredHarnesses)
-	start := midnight(now).AddDate(-1, 0, 0)
+	start := midnight(now.AddDate(-1, 0, 0))
 	r.Days = calendarDays(selected, start, now)
 	r.Recap = recap(selected, periodStart("week", now), now)
 	if r.TrackingSince.IsZero() {
@@ -71,15 +71,29 @@ func Build(snapshot Snapshot, filters Filters, now time.Time, configuredHarnesse
 
 func midnight(t time.Time) time.Time {
 	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+	start := time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+	// When a clock jumps forward at midnight, Date may normalize the
+	// nonexistent time into the previous evening. The zone transition is
+	// the first real instant of the requested day.
+	if start.Year() != y || start.Month() != m || start.Day() != d {
+		_, start = start.ZoneBounds()
+	}
+	return start
+}
+
+func calendarDay(t time.Time, offset int) time.Time {
+	y, m, d := t.Date()
+	// Move between dates at noon, then resolve each day's start afresh.
+	// Adding a date to midnight can stay on the old date when midnight is
+	// skipped, or carry a 01:00 start into every subsequent day.
+	return midnight(time.Date(y, m, d+offset, 12, 0, 0, 0, t.Location()))
 }
 func periodStart(period string, now time.Time) time.Time {
 	switch period {
 	case "today":
 		return midnight(now)
 	case "week":
-		d := midnight(now)
-		return d.AddDate(0, 0, -(int(d.Weekday())+6)%7)
+		return calendarDay(now, -(int(now.Weekday())+6)%7)
 	default:
 		return time.Time{}
 	}

@@ -33,7 +33,7 @@ func calendarDays(all []Session, start, now time.Time) []Day {
 			from, to := maxTime(segment.From, start), minTime(segment.To, now)
 			for from.Before(to) {
 				day := midnight(from.In(zone))
-				end := minTime(to, day.AddDate(0, 0, 1))
+				end := minTime(to, calendarDay(day, 1))
 				clipped := segment
 				clipped.From = from
 				clipped.To = end
@@ -44,14 +44,14 @@ func calendarDays(all []Session, start, now time.Time) []Day {
 		}
 	}
 	days := []Day{}
-	for date := start; !date.After(now); date = date.AddDate(0, 0, 1) {
+	for date := start; !date.After(now); date = calendarDay(date, 1) {
 		day := Day{Date: date.Format(time.DateOnly)}
 		if bucket := buckets[day.Date]; bucket != nil {
 			sessions := make([]Session, 0, len(bucket))
 			for _, s := range bucket {
 				sessions = append(sessions, *s)
 			}
-			day.Metrics = aggregate(sessions, date, date.AddDate(0, 0, 1))
+			day.Metrics = aggregate(sessions, date, calendarDay(date, 1))
 		}
 		days = append(days, day)
 	}
