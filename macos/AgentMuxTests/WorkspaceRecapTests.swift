@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 import XCTest
+import ScreenCaptureKit
+import Vision
 @testable import AgentMux
 
 private final class RecapRunner: ASLWorkRunner {
@@ -159,6 +161,113 @@ final class WorkspaceRecapTests: XCTestCase {
                                             "The session details must start below the recap")
             }
         }
+    }
+
+    func testSupportingMessagesExpandCollapseAndNavigateInInspector() async throws {
+        guard #available(macOS 14.4, *) else { throw XCTSkip("Own-window capture requires macOS 14.4") }
+        let inspector = WorkspaceInspectorView()
+        // The inspector uses its normal asynchronous runner; wait for the cache read below.
+        var status = "ready"
+        let command = command { args in
+            self.payload(args.last!, status: status, saved: true)
+        }
+        inspector.recap.command = { command }
+        let loaded = expectation(description: "Saved recap loaded")
+        let subscription = inspector.recap.$report.sink { if $0?.recap != nil { loaded.fulfill() } }
+        inspector.recap.select(.init(harness: "codex", sessionID: "a"), revision: "1")
+        await fulfillment(of: [loaded], timeout: 3)
+        subscription.cancel()
+        inspector.show(.init(tab: .session, inspection: .init(key: .embedded("recap-test"), title: "Session details",
+                                                             glyph: "", sections: [], embedded: true, muted: false)))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 280, height: 800),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = inspector
+        window.makeKeyAndOrderFront(nil)
+        defer { inspector.recap.close(); window.close() }
+        var revealed: (ConversationIdentity, Int)?
+        inspector.recap.onEvidence = { revealed = ($0, $1) }
+
+        func labels() async throws -> [(String, NSPoint)] {
+            window.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(100))
+            let content = try await SCShareableContent.currentProcess
+            let target = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(window.windowNumber) })
+            let filter = SCContentFilter(desktopIndependentWindow: target)
+            let config = SCStreamConfiguration()
+            config.width = Int(window.frame.width * CGFloat(filter.pointPixelScale))
+            config.height = Int(window.frame.height * CGFloat(filter.pointPixelScale))
+            config.showsCursor = false
+            let capture = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["en-US"]
+            try VNImageRequestHandler(cgImage: capture).perform([request])
+            return (request.results ?? []).compactMap { result in
+                guard let text = result.topCandidates(1).first?.string else { return nil }
+                let rect = result.boundingBox
+                return (text, NSPoint(x: rect.midX * window.frame.width, y: rect.midY * window.frame.height))
+            }
+        }
+        func click(_ text: String, occurrence: Int = 0) async throws {
+            let matches = try await labels().filter { $0.0.contains(text) }.sorted { $0.1.y > $1.1.y }
+            XCTAssertGreaterThan(matches.count, occurrence, "Missing visible control: \(text)")
+            guard matches.indices.contains(occurrence) else { return }
+            let point = matches[occurrence].1
+            let up = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0))
+            let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            NSApp.postEvent(up, atStart: true)
+            window.sendEvent(down)
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        func messageCount(_ text: String) async throws -> Int {
+            try await labels().filter { $0.0 == text }.count
+        }
+
+        let initiallyVisible = try await messageCount("Message 1")
+        XCTAssertEqual(initiallyVisible, 0)
+        try await click("Supporting messages")
+        let expandedGoal = try await messageCount("Message 1")
+        XCTAssertEqual(expandedGoal, 1, "Clicking the label must expand evidence inline")
+        try await click("Supporting messages", occurrence: 1)
+        try await click("Supporting messages", occurrence: 2)
+        let expandedOthers = try await messageCount("Message 43")
+        XCTAssertEqual(expandedOthers, 2, "Each claim expands independently")
+        try await click("Supporting messages")
+        let collapsedGoal = try await messageCount("Message 1")
+        XCTAssertEqual(collapsedGoal, 0)
+        try await click("Message 43")
+        XCTAssertEqual(revealed?.0.encoded, "codex:a")
+        XCTAssertEqual(revealed?.1, 42, "The visible one-based number must reveal the exact zero-based message")
+
+        for width in [CGFloat(420), 280] {
+            window.setContentSize(NSSize(width: width, height: 800))
+            _ = try await labels()
+            let title = try XCTUnwrap(inspector.lines.first)
+            let stack = try XCTUnwrap(title.superview as? NSStackView)
+            let host = try XCTUnwrap(stack.arrangedSubviews.compactMap { $0 as? NSHostingView<WorkspaceInspectorRecapView> }.first)
+            XCTAssertGreaterThanOrEqual(title.frame.minY, host.frame.maxY, "Expanded evidence cannot overlap session details")
+        }
+        status = "stale"
+        let staleLoaded = expectation(description: "Stale recap loaded")
+        let staleSubscription = inspector.recap.$report.sink {
+            if $0?.conversation == "codex:b" { staleLoaded.fulfill() }
+        }
+        inspector.recap.select(.init(harness: "codex", sessionID: "b"), revision: "1", canGenerate: false)
+        await fulfillment(of: [staleLoaded], timeout: 3)
+        staleSubscription.cancel()
+        let resetEvidence = try await messageCount("Message 43")
+        XCTAssertEqual(resetEvidence, 0, "Changing conversations resets disclosure state")
+        try await click("Supporting messages")
+        let staleEvidence = try await messageCount("Message 1")
+        XCTAssertEqual(staleEvidence, 1, "A stale recap must still expand while its agent is working")
+        let staleLabels = try await labels()
+        XCTAssertTrue(staleLabels.contains { $0.0.contains("Refresh recap") }, "Explain why stale message links are disabled")
+        revealed = nil
+        try await click("Message 1")
+        XCTAssertNil(revealed, "Stale evidence indices must not navigate to possibly changed messages")
     }
 
     func testHistoryOpensExactSupportingMessageFromInspectorAndWithinHistory() {

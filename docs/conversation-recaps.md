@@ -10,8 +10,9 @@ automatically show a short recap for the selected conversation:
   stays absent when the source messages give no evidence.
 
 You do not need to write or maintain notes. Each field's **Supporting messages**
-menu opens its cited messages in Conversation History. A recap's timestamp and
-profile/model are visible; excerpts and stale saved results are labeled.
+expands a list of citations; select a message to open it in Conversation History.
+A recap's timestamp and profile/model are visible; excerpts and stale saved
+results are labeled.
 History's **Recap** button also opens it without moving your reading position.
 
 The app's **Project Briefing…** brings together saved recaps for one project's
@@ -83,7 +84,8 @@ The cache fingerprint covers all visible conversation prose, the summarizer
 profile/home, model, and recap format version. Transcript edits, truncation,
 new messages, or a summarizer change invalidate it. A result arriving after
 its source changes is discarded. Supporting-message links are disabled for
-stale recaps until they are refreshed.
+stale recaps until they are refreshed. The citation list still expands and explains
+why its links are unavailable.
 A late transcript write gets one automatic retry while the view remains selected.
 
 Private, disposable recap files live under `$XDG_CACHE_HOME/agent-mux/recaps`,

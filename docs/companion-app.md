@@ -676,9 +676,9 @@ The inspector's **Session** tab and Conversation History show an automatic recap
 of the selected conversation: its goal, latest outcome, and explicitly unfinished
 work. Saved recaps appear first. Generation runs in the background only for a
 conversation you open and waits while its live agent is working. No typing is
-required. **Supporting messages** opens the evidence in History; the refresh
-button regenerates or retries. Timestamps, excerpt coverage, stale data, and
-failures remain visible.
+required. **Supporting messages** expands the citations; selecting a message
+opens the evidence in History. The refresh button regenerates or retries.
+Timestamps, excerpt coverage, stale data, and failures remain visible.
 
 Recaps use the first configured Claude profile, including for Codex and Copilot
 conversations, and consume that profile's service/quota. Choose a different
