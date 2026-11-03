@@ -182,7 +182,9 @@ final class WorkspaceRecapTests: XCTestCase {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 280, height: 800),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.contentView = inspector
+        let zoom = WorkspaceSidebarZoomView(content: inspector)
+        zoom.zoom = 1.3
+        window.contentView = zoom
         window.makeKeyAndOrderFront(nil)
         defer { inspector.recap.close(); window.close() }
         var revealed: (ConversationIdentity, Int)?
@@ -242,13 +244,19 @@ final class WorkspaceRecapTests: XCTestCase {
         XCTAssertEqual(revealed?.0.encoded, "codex:a")
         XCTAssertEqual(revealed?.1, 42, "The visible one-based number must reveal the exact zero-based message")
 
-        for width in [CGFloat(420), 280] {
-            window.setContentSize(NSSize(width: width, height: 800))
+        for (width, scale) in [(CGFloat(420), CGFloat(0.9)), (280, 1), (420, 2), (280, 1.3)] {
+            zoom.zoom = scale
+            window.setContentSize(NSSize(width: width * scale, height: 800 * scale))
             _ = try await labels()
             let title = try XCTUnwrap(inspector.lines.first)
             let stack = try XCTUnwrap(title.superview as? NSStackView)
             let host = try XCTUnwrap(stack.arrangedSubviews.compactMap { $0 as? NSHostingView<WorkspaceInspectorRecapView> }.first)
             XCTAssertGreaterThanOrEqual(title.frame.minY, host.frame.maxY, "Expanded evidence cannot overlap session details")
+            XCTAssertEqual(host.rootView.width ?? 0, host.frame.width, accuracy: 1, "Wrapping must follow sidebar resizing")
+            try await click("Supporting messages")
+            let expandedAfterZoom = try await messageCount("Message 1")
+            XCTAssertEqual(expandedAfterZoom, 1, "Pointer clicks must follow the rendered control at zoom \(scale)")
+            try await click("Supporting messages")
         }
         status = "stale"
         let staleLoaded = expectation(description: "Stale recap loaded")

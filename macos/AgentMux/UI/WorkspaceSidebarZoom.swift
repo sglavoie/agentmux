@@ -1,5 +1,10 @@
 import AppKit
 
+@MainActor
+protocol WorkspaceSidebarZoomAware: AnyObject {
+    func setSidebarZoom(_ zoom: CGFloat)
+}
+
 /// Scales the whole sidebar, including row spacing and controls. The split
 /// view still measures its width in window points; content lays out in the
 /// smaller or larger logical viewport and keeps native scrolling/hit testing.
@@ -50,6 +55,7 @@ final class WorkspaceSidebarZoomView: NSView {
             canvas.frame = bounds
             canvas.bounds = NSRect(origin: .zero, size: NSSize(width: bounds.width / zoom, height: bounds.height / zoom))
             content.frame = canvas.bounds
+            (content as? WorkspaceSidebarZoomAware)?.setSidebarZoom(zoom)
         }
         super.layout()
     }

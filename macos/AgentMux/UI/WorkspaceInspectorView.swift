@@ -11,7 +11,7 @@ import Combine
 /// a click on an identifier copies it, and the buttons do what the
 /// session function keys do; the terminal that had the keyboard keeps it.
 @MainActor
-final class WorkspaceInspectorView: NSView {
+final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     /// Everything the sidebar shows.
     struct Model: Equatable {
         var tab = WorkspaceInspectorTab.waiting
@@ -116,7 +116,7 @@ final class WorkspaceInspectorView: NSView {
     let recap = WorkspaceRecapModel(command: { nil })
     let threads = WorkspaceThreadsModel(command: { nil })
     private lazy var threadsHost = NSHostingView(rootView: WorkspaceThreadsView(model: threads, onOpen: { [weak self] identity in self?.onSource?(identity) }))
-    private lazy var recapHost = NSHostingView(rootView: WorkspaceInspectorRecapView(model: recap))
+    private lazy var recapHost = WorkspaceInspectorRecapHost(rootView: WorkspaceInspectorRecapView(model: recap))
     private let sourceButton = NSButton(title: "Read Source Conversation", target: nil, action: nil)
     private let scroll = NSScrollView()
     private static let inset: CGFloat = 12
@@ -527,11 +527,11 @@ final class WorkspaceInspectorView: NSView {
 
     override func layout() {
         super.layout()
-        let width = recapHost.bounds.width
-        if width > 0, recapHost.rootView.width != width {
-            recapHost.rootView.width = width
-        }
         updateReadingLayout()
+    }
+
+    func setSidebarZoom(_ zoom: CGFloat) {
+        recapHost.zoom = zoom
     }
 
     private func updateReadingLayout() {
@@ -619,11 +619,62 @@ final class WorkspaceInspectorView: NSView {
 struct WorkspaceInspectorRecapView: View {
     let model: WorkspaceRecapModel
     var width: CGFloat?
+    var zoom: CGFloat = 1
 
     var body: some View {
-        WorkspaceRecapView(model: model)
-            .frame(width: width)
-            .fixedSize(horizontal: false, vertical: true)
+        WorkspaceRecapScaleLayout(zoom: zoom) {
+            WorkspaceRecapView(model: model)
+                .frame(width: width)
+                .fixedSize(horizontal: false, vertical: true)
+                .scaleEffect(zoom, anchor: .topLeading)
+        }
+    }
+}
+
+/// Cancel the ancestor's AppKit transform at the hosting boundary. SwiftUI
+/// scales its own content so rendering and pointer coordinates stay together.
+@MainActor
+private final class WorkspaceInspectorRecapHost: NSHostingView<WorkspaceInspectorRecapView> {
+    var zoom: CGFloat = 1 {
+        didSet {
+            guard zoom != oldValue else { return }
+            rootView.zoom = zoom
+            updateBounds()
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if newSize.width > 0, rootView.width != newSize.width {
+            rootView.width = newSize.width
+        }
+        updateBounds()
+    }
+
+    private func updateBounds() {
+        let size = NSSize(width: frame.width * zoom, height: frame.height * zoom)
+        if bounds.size != size { setBoundsSize(size) }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let size = super.intrinsicContentSize
+        return NSSize(width: size.width / zoom, height: size.height / zoom)
+    }
+}
+
+private struct WorkspaceRecapScaleLayout: Layout {
+    let zoom: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews[0].sizeThatFits(.init(width: proposal.width.map { $0 / zoom },
+                                                height: proposal.height.map { $0 / zoom }))
+        return CGSize(width: size.width * zoom, height: size.height * zoom)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, anchor: .topLeading,
+                          proposal: .init(width: bounds.width / zoom, height: bounds.height / zoom))
     }
 }
 
