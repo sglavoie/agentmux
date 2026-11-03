@@ -11,21 +11,17 @@ import (
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 )
 
 // continueConversation performs the smart-continuation decision at the action
-// boundary. It queries the daemon and Kitty immediately before focusing so a
-// stale indexed row can never claim a reused or split-pane tab. When no exact
-// live owner exists, the persisted transcript source is validated before a
-// native resume starts in a new tab.
+// boundary. It checks runtime ownership and fresh Kitty topology before
+// returning an existing session. When no exact live owner exists, the
+// persisted transcript source is validated before a native resume starts.
 func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Result, error) {
-	rt, err := deps.launchRuntime(Continue)
-	if err != nil {
-		return Result{}, err
-	}
 	identity, err := conversationIdentity(meta, Continue)
 	if err != nil {
 		return Result{}, err
@@ -45,18 +41,50 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 		}
 		return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: message}
 	}
-	// A tmux launch without Kitty has no Kitty tab to find; the registry
-	// still refuses to resume a conversation another runtime session runs.
+	// State slots are daemon-local IDs, not necessarily Kitty window IDs.
+	// Separate runtime owners and map local Kitty aliases before checking the
+	// fresh topology. A foreign instance cannot be disproved by a local list.
+	localStates := map[int]protocol.WindowStateSnapshot{}
+	runtimeOwners := map[string]protocol.RuntimeSlot{}
+	localSocket := kitty.NormalizedListenAddressFromEnv()
+	for slot, state := range response.States {
+		if state.Conversation == nil || !identity.Equal(*state.Conversation) {
+			continue
+		}
+		if bound, ok := response.RuntimeSlots[slot]; ok && bound.RuntimeSessionID != "" && bound.Backend != string(runtimesession.BackendKitty) {
+			runtimeOwners[bound.RuntimeSessionID] = bound
+			continue
+		}
+		if key, ok := response.KittySlots[slot]; ok {
+			if localSocket == "" || key.Socket != localSocket {
+				return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: "conversation is open in another Kitty instance; continue it from that instance"}
+			}
+			localStates[key.WindowID] = state
+		} else {
+			localStates[slot] = state
+		}
+	}
 	var windows []kitty.OSWindow
-	if deps.Kitty != nil {
+	if len(localStates) > 0 {
+		if deps.Kitty == nil {
+			return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: "Kitty client is required to check the live conversation"}
+		}
 		windows, err = deps.Kitty.ListWindows()
 		if err != nil {
 			return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: fmt.Sprintf("listing Kitty windows: %v", err)}
 		}
 	}
-	live, status := session.ResolveLiveConversationStatus(identity, response.States, windows)
-	if status == session.LiveConversationAmbiguous {
-		return Result{}, &Error{Code: "ambiguous_conversation", Action: Continue, Message: "multiple live tabs claim this conversation; refusing to focus or resume"}
+	live, status := session.ResolveLiveConversationStatus(identity, localStates, windows)
+	if status == session.LiveConversationAmbiguous || len(runtimeOwners) > 1 || (len(runtimeOwners) > 0 && status == session.LiveConversationExact) {
+		return Result{}, &Error{Code: "ambiguous_conversation", Action: Continue, Message: "multiple live sessions claim this conversation; refusing to focus or resume"}
+	}
+	for _, bound := range runtimeOwners {
+		return Result{
+			Message: "conversation is already running; attach with amx attach " + bound.RuntimeSessionID,
+			Data: deps.launchData(map[string]any{"continuation": DataContinuationAttach}, session.LaunchResult{
+				Backend: runtimesession.BackendKind(bound.Backend), RuntimeSessionID: runtimesession.ID(bound.RuntimeSessionID),
+			}),
+		}, nil
 	}
 	if status == session.LiveConversationExact {
 		if err := deps.terminal().Focus(live.GroupRef()); err != nil {
@@ -69,6 +97,10 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 		}, nil
 	}
 	project, account, err := continuityLaunchTarget(deps, meta, identity, Continue)
+	if err != nil {
+		return Result{}, err
+	}
+	rt, err := deps.launchRuntime(Continue)
 	if err != nil {
 		return Result{}, err
 	}
@@ -225,11 +257,18 @@ func forkConversationInWorktree(ctx context.Context, deps Dependencies, meta tra
 			return result, &PartialResultError{ActionError: retained}
 		}
 		if cleanupErr := runner.RemoveUnused(context.Background(), isolated); cleanupErr != nil {
-			if result.Data == nil {
-				result.Data = map[string]any{}
-			}
+			// Cleanup can fail after removing the checkout, leaving only its
+			// branch or sidecar. Report the recovery identity without claiming
+			// that every part of the worktree still exists.
+			result = addIsolatedWorktreeResult(result, isolated)
+			result.Data["worktree_cleanup_incomplete"] = true
 			result.Data["worktree_cleanup_error"] = cleanupErr.Error()
-			return result, cause
+			result.Message = "isolated worktree cleanup incomplete at " + isolated.Path + "; fork launch failed and cleanup failed: " + cleanupErr.Error()
+			return result, &PartialResultError{ActionError: &Error{
+				Code: "worktree_cleanup_failed", Action: ForkWorktree,
+				Message: cause.Error() + "; worktree cleanup failed: " + cleanupErr.Error(),
+				Cause:   errors.Join(cause, cleanupErr),
+			}}
 		}
 		return result, cause
 	}

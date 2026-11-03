@@ -407,6 +407,45 @@ func TestForkWorktreeCleansUpWhenNativeLaunchFails(t *testing.T) {
 	}
 }
 
+func TestForkWorktreeReportsRetainedCheckoutWhenCleanupFails(t *testing.T) {
+	t.Parallel()
+
+	for _, harnessName := range []string{harness.Claude, harness.Copilot} {
+		t.Run(harnessName, func(t *testing.T) {
+			launchErr := errors.New("terminal launch failed")
+			cleanupErr := worktree.ErrWorktreeDirty
+			meta := continuityMeta(t, harnessName, "source-1", "work")
+			managed := &continuityWorktree{
+				created:   worktree.Result{ID: "retained-checkout", ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", SourceRoot: t.TempDir()},
+				removeErr: cleanupErr,
+			}
+			runner := &continuityHandoff{
+				result: handoff.Result{Artifact: handoff.Artifact{Path: "/handoff.md"}},
+				err:    &handoff.PartialLaunchError{Err: launchErr},
+			}
+			result, err := DefaultRegistry().Execute(context.Background(), Dependencies{
+				Kitty: &continuityKitty{launchErr: launchErr}, Config: continuityConfig(harnessName),
+				Readers:  map[string]transcript.Reader{harnessName: &continuityReader{harness: harnessName}},
+				Worktree: managed, Handoff: runner,
+			}, ForkWorktree, Request{Conversation: &meta, Confirmed: true})
+			var partial *PartialResultError
+			if !errors.As(err, &partial) || !errors.Is(err, launchErr) || !errors.Is(err, cleanupErr) {
+				t.Fatalf("error = %v, want partial result retaining both failure causes", err)
+			}
+			retained, ok := result.Data["worktree"].(map[string]any)
+			if !result.Changed || !ok || retained["path"] != managed.created.Path || retained["id"] != managed.created.ID || result.Data["worktree_cleanup_incomplete"] != true {
+				t.Fatalf("lost retained worktree: %+v", result)
+			}
+			if !strings.Contains(result.Message, managed.created.Path) || !strings.Contains(result.Message, cleanupErr.Error()) {
+				t.Fatalf("text output hides cleanup failure or checkout: %q", result.Message)
+			}
+			if harnessName == harness.Copilot && result.Data["path"] != "/handoff.md" {
+				t.Fatalf("lost handoff artifact: %+v", result)
+			}
+		})
+	}
+}
+
 // A launch that failed with its agent possibly still running keeps the
 // worktree: removing it would force the checkout and its branch out from
 // under that agent. The worktree is reported as a retained artifact instead.

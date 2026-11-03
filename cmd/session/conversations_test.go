@@ -159,8 +159,9 @@ type sessionCommandHandoff struct {
 }
 
 type sessionCommandWorktree struct {
-	requests []worktree.Request
-	result   worktree.Result
+	requests  []worktree.Request
+	result    worktree.Result
+	removeErr error
 }
 
 func (w *sessionCommandWorktree) Create(_ context.Context, request worktree.Request) (worktree.Result, error) {
@@ -168,7 +169,9 @@ func (w *sessionCommandWorktree) Create(_ context.Context, request worktree.Requ
 	return w.result, nil
 }
 
-func (*sessionCommandWorktree) RemoveUnused(context.Context, worktree.Result) error { return nil }
+func (w *sessionCommandWorktree) RemoveUnused(context.Context, worktree.Result) error {
+	return w.removeErr
+}
 
 func (h *sessionCommandHandoff) Run(_ context.Context, request handoff.Request) (handoff.Result, error) {
 	h.requests = append(h.requests, request)
