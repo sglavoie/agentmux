@@ -194,6 +194,32 @@ func TestSaveFutureVersionReturnsError(t *testing.T) {
 	}
 }
 
+func TestSavePreservesUnreadableExistingState(t *testing.T) {
+	for _, original := range []string{
+		`{"version":3,"entries":[],"future_setting":true}`,
+		`{"version":2,"entries":[`,
+		`null`,
+		`{"version":2,"entries":"invalid"}`,
+	} {
+		t.Run(original, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "overrides.json")
+			t.Setenv(overrides.PathEnvVar, path)
+			if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := overrides.Save(overrides.File{
+				PinnedProjects: []overrides.PinnedProject{{ProfileName: "work", ProjectTitle: "api"}},
+			}); err == nil {
+				t.Fatal("Save replaced state that this build cannot read")
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != original {
+				t.Fatalf("existing state changed: %q, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestSaveAtomic(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "overrides.json")

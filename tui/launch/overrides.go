@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"errors"
 	"log/slog"
 
 	"github.com/sglavoie/agentmux/internal/config"
@@ -27,7 +28,6 @@ func LoadState(sessions []config.Session) (map[int]string, map[int]bool) {
 		projectIdx[session.SessionKey(s.EffectiveProfile(), s.Title)] = i
 	}
 	var pruned bool
-	var fresh []overrides.Entry
 	for _, e := range f.Entries {
 		idx, ok := titleIdx[e.ProjectTitle]
 		if !ok {
@@ -35,10 +35,8 @@ func LoadState(sessions []config.Session) (map[int]string, map[int]bool) {
 			pruned = true
 			continue
 		}
-		fresh = append(fresh, e)
 		profileOverrides[idx] = e.ProfileName
 	}
-	freshPins := make([]overrides.PinnedProject, 0, len(f.PinnedProjects))
 	seenPins := make(map[string]bool, len(f.PinnedProjects))
 	for _, pin := range f.PinnedProjects {
 		key := session.SessionKey(pin.ProfileName, pin.ProjectTitle)
@@ -57,37 +55,85 @@ func LoadState(sessions []config.Session) (map[int]string, map[int]bool) {
 		if canonical != pin {
 			pruned = true
 		}
-		freshPins = append(freshPins, canonical)
 		pinned[idx] = true
 	}
 	if pruned {
-		f.Version = overrides.CurrentVersion
-		f.Entries = fresh
-		f.PinnedProjects = freshPins
-		if err := overrides.Save(f); err != nil {
+		// Recheck under the writer lock. Another dashboard may have saved a
+		// preference since this read, and pruning its earlier snapshot would
+		// discard that newer choice.
+		if err := overrides.Update(func(current *overrides.File) error {
+			entries := current.Entries[:0]
+			for _, e := range current.Entries {
+				if _, ok := titleIdx[e.ProjectTitle]; ok {
+					entries = append(entries, e)
+				}
+			}
+			current.Entries = entries
+			pins := current.PinnedProjects[:0]
+			seen := make(map[string]bool, len(current.PinnedProjects))
+			for _, pin := range current.PinnedProjects {
+				key := session.SessionKey(pin.ProfileName, pin.ProjectTitle)
+				idx, ok := projectIdx[key]
+				if !ok || seen[key] {
+					continue
+				}
+				seen[key] = true
+				pins = append(pins, overrides.PinnedProject{
+					ProfileName: sessions[idx].EffectiveProfile(), ProjectTitle: sessions[idx].Title,
+				})
+			}
+			current.PinnedProjects = pins
+			current.Version = overrides.CurrentVersion
+			return nil
+		}); err != nil {
 			slog.Debug("overrides: save after prune error", "err", err)
 		}
 	}
 	return profileOverrides, pinned
 }
 
-// SaveState writes profile overrides and pins together so changing one
-// launcher preference cannot discard the other.
-func (in PickerInput) SaveState(profileOverrides map[int]string, pinned map[int]bool) error {
-	f := overrides.File{Version: overrides.CurrentVersion}
-	for idx := range in.Sessions {
-		if profile := profileOverrides[idx]; profile != "" {
-			f.Entries = append(f.Entries, overrides.Entry{
-				ProjectTitle: in.Sessions[idx].Title,
-				ProfileName:  profile,
-			})
+type StateChange struct {
+	Index   int
+	Pin     *bool
+	Profile *string
+}
+
+// SaveChanges applies only the choices made in this dashboard, preserving
+// preferences saved by another dashboard after this one opened.
+func (in PickerInput) SaveChanges(changes []StateChange) error {
+	return overrides.Update(func(f *overrides.File) error {
+		for _, change := range changes {
+			if change.Index < 0 || change.Index >= len(in.Sessions) || (change.Pin == nil) == (change.Profile == nil) {
+				return errors.New("invalid launcher state change")
+			}
+			s := in.Sessions[change.Index]
+			if change.Pin != nil {
+				pin := overrides.PinnedProject{ProfileName: s.EffectiveProfile(), ProjectTitle: s.Title}
+				key := session.SessionKey(pin.ProfileName, pin.ProjectTitle)
+				fresh := f.PinnedProjects[:0]
+				for _, old := range f.PinnedProjects {
+					if session.SessionKey(old.ProfileName, old.ProjectTitle) == key {
+						continue
+					}
+					fresh = append(fresh, old)
+				}
+				f.PinnedProjects = fresh
+				if *change.Pin {
+					f.PinnedProjects = append(f.PinnedProjects, pin)
+				}
+				continue
+			}
+			fresh := f.Entries[:0]
+			for _, old := range f.Entries {
+				if old.ProjectTitle != s.Title {
+					fresh = append(fresh, old)
+				}
+			}
+			f.Entries = fresh
+			if *change.Profile != "" {
+				f.Entries = append(f.Entries, overrides.Entry{ProjectTitle: s.Title, ProfileName: *change.Profile})
+			}
 		}
-		if pinned[idx] {
-			f.PinnedProjects = append(f.PinnedProjects, overrides.PinnedProject{
-				ProfileName:  in.Sessions[idx].EffectiveProfile(),
-				ProjectTitle: in.Sessions[idx].Title,
-			})
-		}
-	}
-	return overrides.Save(f)
+		return nil
+	})
 }

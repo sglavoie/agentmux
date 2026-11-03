@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/sglavoie/agentmux/internal/atomicfile"
+	"github.com/sglavoie/agentmux/internal/cachefile"
 )
 
 // PathEnvVar is the environment variable that overrides the default file path (for testing).
@@ -56,6 +57,10 @@ func Load() (File, error) {
 	if err != nil {
 		return File{}, err
 	}
+	return load(path)
+}
+
+func load(path string) (File, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return File{
@@ -92,16 +97,52 @@ func Load() (File, error) {
 
 // Save writes the overrides file atomically (internal/atomicfile): a unique
 // sibling temp, fsynced and renamed over the destination, removed on any
-// failure so a partial write never lingers as garbage on disk.
+// failure so a partial write never lingers as garbage on disk. Existing state
+// that cannot be read by this build is preserved rather than overwritten with
+// the empty defaults a launcher may have shown after a failed Load.
 func Save(f File) error {
 	path, err := Path()
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	return cachefile.WithExclusive(path, func() error {
+		if _, err := load(path); err != nil {
+			return fmt.Errorf("refusing to overwrite unreadable launcher state: %w", err)
+		}
+		return write(path, f)
+	})
+}
+
+// Update applies a launcher change to the latest saved state under the same
+// sidecar lock as Save. Separate dashboard processes can therefore edit
+// different preferences without replacing each other's earlier choices.
+func Update(change func(*File) error) error {
+	if change == nil {
+		return errors.New("overrides update requires a change")
+	}
+	path, err := Path()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return cachefile.WithExclusive(path, func() error {
+		f, err := load(path)
+		if err != nil {
+			return err
+		}
+		if err := change(&f); err != nil {
+			return err
+		}
+		return write(path, f)
+	})
+}
+
+func write(path string, f File) error {
 	if f.Version == 0 {
 		f.Version = CurrentVersion
 	}

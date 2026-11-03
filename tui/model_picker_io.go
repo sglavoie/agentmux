@@ -49,13 +49,17 @@ type pickerPinChange struct {
 	pinned  bool
 }
 
-// pickerStateWriter serializes the launcher's saves and lets only the newest
-// state reach the file. Commands run concurrently, so two quick toggles could
-// otherwise finish in either order and leave the older state on disk. It is
-// shared by pointer across the model's value copies.
+// pickerStateWriter serializes saves and keeps ordered changes until they are
+// written. Commands can run out of order; the later one carries earlier edits.
 type pickerStateWriter struct {
 	mu      sync.Mutex
 	written uint64
+	pending []pickerPendingChange
+}
+
+type pickerPendingChange struct {
+	seq    uint64
+	change launch.StateChange
 }
 
 // checkPickerDirectoriesCmd starts a new generation of the launcher's project
@@ -131,25 +135,40 @@ func (m Model) handlePickerDirCompleted(msg pickerDirCompletedMsg) (tea.Model, t
 	return m, nil
 }
 
-// savePickerStateCmd writes the launcher's saved state off the update loop. The
-// maps are copied now, so a later edit cannot change what this write says.
-func (m *Model) savePickerStateCmd(profileOverrides map[int]string, pinned map[int]bool, pin *pickerPinChange) tea.Cmd {
+// savePickerStateCmd writes a change off the update loop while retaining all
+// earlier changes from this dashboard that may still be waiting to run.
+func (m *Model) savePickerStateCmd(change launch.StateChange, pin *pickerPinChange) tea.Cmd {
 	if m.pickerStateWriter == nil {
 		m.pickerStateWriter = &pickerStateWriter{}
 	}
 	m.pickerStateSeq++
 	seq, writer, in := m.pickerStateSeq, m.pickerStateWriter, m.pickerInput()
-	profileOverrides, pinned = maps.Clone(profileOverrides), maps.Clone(pinned)
+	writer.mu.Lock()
+	writer.pending = append(writer.pending, pickerPendingChange{seq: seq, change: change})
+	writer.mu.Unlock()
 	return func() tea.Msg {
 		writer.mu.Lock()
 		defer writer.mu.Unlock()
 		if seq <= writer.written {
-			// A newer state, which includes this change, is already saved.
+			// A newer save already included this change.
 			return pickerStateSavedMsg{pin: pin}
 		}
-		err := in.SaveState(profileOverrides, pinned)
+		changes := make([]launch.StateChange, 0, len(writer.pending))
+		for _, pending := range writer.pending {
+			if pending.seq > writer.written && pending.seq <= seq {
+				changes = append(changes, pending.change)
+			}
+		}
+		err := in.SaveChanges(changes)
 		if err == nil {
 			writer.written = seq
+			remaining := writer.pending[:0]
+			for _, pending := range writer.pending {
+				if pending.seq > seq {
+					remaining = append(remaining, pending)
+				}
+			}
+			writer.pending = remaining
 		}
 		return pickerStateSavedMsg{err: err, pin: pin}
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/tui/launch"
 )
 
 func pickerPositionByTitle(t *testing.T, m Model, title string) int {
@@ -105,6 +106,8 @@ func TestPickerPinsRetainExistingOrderSelectionOverrideAndFilter(t *testing.T) {
 	m = pressKey(m, " ")
 	dotfilesIdx := m.pickerFilteredIdx[dotfilesPos]
 	m.pickerProfileOverride[dotfilesIdx] = "work"
+	m.configPickerProjectIdx = dotfilesIdx
+	m = settlePickerIO(m, m.savePickerOverridesCmd())
 
 	m = pinPickerTitle(t, m, "backend")
 	m = pinPickerTitle(t, m, "api")
@@ -234,6 +237,90 @@ func TestPickerPinSaveFailureLeavesOrderingUnchanged(t *testing.T) {
 	if len(got.toasts) == 0 || got.toasts[0].Severity != toastError ||
 		!strings.Contains(got.toasts[0].Text, "Could not update pin") {
 		t.Fatalf("failed pin save toast = %+v", got.toasts)
+	}
+}
+
+func TestPickerPinPreservesUnreadableLauncherState(t *testing.T) {
+	for _, afterOpen := range []bool{false, true} {
+		name := "before opening launcher"
+		if afterOpen {
+			name = "after opening launcher"
+		}
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "launch_overrides.json")
+			t.Setenv(overrides.PathEnvVar, path)
+			original := `{"version":3,"entries":[],"future_setting":true}`
+			seed := func() {
+				t.Helper()
+				if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !afterOpen {
+				seed()
+			}
+			m := pickerModel(t)
+			if afterOpen {
+				seed()
+			}
+			m = pinPickerTitle(t, m, "api")
+			if len(m.pickerPinned) != 0 || len(m.toasts) == 0 || m.toasts[0].Severity != toastError {
+				t.Fatalf("refused pin must be rolled back and reported: pins=%v, toasts=%+v", m.pickerPinned, m.toasts)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != original {
+				t.Fatalf("launcher replaced unreadable state: %q, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestSeparatePickersPreserveEachOthersPins(t *testing.T) {
+	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "launch_overrides.json"))
+	first, second := pickerModel(t), pickerModel(t)
+	first = pinPickerTitle(t, first, "api")
+	_ = pinPickerTitle(t, second, "backend")
+	saved, err := overrides.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.PinnedProjects) != 2 {
+		t.Fatalf("second picker's stale snapshot erased a pin: %+v", saved.PinnedProjects)
+	}
+	_ = pinPickerTitle(t, first, "api")
+	saved, err = overrides.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.PinnedProjects) != 1 || saved.PinnedProjects[0].ProjectTitle != "backend" {
+		t.Fatalf("unpinning in first picker erased second picker's pin: %+v", saved.PinnedProjects)
+	}
+}
+
+func TestSeparatePickersPreservePinAndProfileChoice(t *testing.T) {
+	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "launch_overrides.json"))
+	first, second := pickerModel(t), pickerModel(t)
+	first = pinPickerTitle(t, first, "api")
+	profile := "personal"
+	idx := second.pickerFilteredIdx[pickerPositionByTitle(t, second, "backend")]
+	if err := second.pickerInput().SaveChanges([]launch.StateChange{{Index: idx, Profile: &profile}}); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := overrides.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.PinnedProjects) != 1 || saved.PinnedProjects[0].ProjectTitle != "api" ||
+		len(saved.Entries) != 1 || saved.Entries[0] != (overrides.Entry{ProjectTitle: "backend", ProfileName: profile}) {
+		t.Fatalf("stale profile choice erased the other picker's pin: %+v", saved)
+	}
+	_ = pinPickerTitle(t, first, "api")
+	saved, err = overrides.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.PinnedProjects) != 0 || len(saved.Entries) != 1 {
+		t.Fatalf("unpinning erased the other picker's profile choice: %+v", saved)
 	}
 }
 

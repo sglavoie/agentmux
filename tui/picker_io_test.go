@@ -119,3 +119,26 @@ func TestPickerSavesLeaveTheNewestStateOnDisk(t *testing.T) {
 		t.Fatalf("model pins = %v, want both", m.pickerPinned)
 	}
 }
+
+func TestPickerSavesKeepLaterPendingChanges(t *testing.T) {
+	t.Setenv(overrides.PathEnvVar, filepath.Join(t.TempDir(), "launch_overrides.json"))
+	m := pickerModel(t)
+	var cmds []tea.Cmd
+	for _, title := range []string{"api", "backend", "notes"} {
+		m.pickerCursor = pickerPositionByTitle(t, m, title)
+		updated, cmd := m.Update(keyPress("P"))
+		m = updated.(Model)
+		cmds = append(cmds, cmd)
+	}
+	// The middle save runs first, with an even newer command still pending.
+	m = settlePickerIO(m, cmds[1])
+	m = settlePickerIO(m, cmds[2])
+	m = settlePickerIO(m, cmds[0])
+	saved, err := overrides.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.PinnedProjects) != 3 {
+		t.Fatalf("out-of-order saves lost a pending pin: %+v", saved.PinnedProjects)
+	}
+}

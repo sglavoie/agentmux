@@ -456,7 +456,7 @@ func (m Model) togglePickerPin() (tea.Model, tea.Cmd) {
 	// says pinned or unpinned, or takes the pin back if it could not be written
 	// (handlePickerStateSaved).
 	change := &pickerPinChange{origIdx: origIdx, title: m.pickerSessions[origIdx].Title, pinned: pinned}
-	save := m.savePickerStateCmd(m.pickerProfileOverride, nextPinned, change)
+	save := m.savePickerStateCmd(launch.StateChange{Index: origIdx, Pin: &pinned}, change)
 	m.applyPickerPins(nextPinned, origIdx)
 
 	cmds := []tea.Cmd{save}
@@ -691,5 +691,6 @@ func pickerOpenEditorCmd(m Model, sess config.Session) tea.Cmd {
 // savePickerOverridesCmd persists an updated one-time profile choice while
 // retaining all project pins.
 func (m *Model) savePickerOverridesCmd() tea.Cmd {
-	return m.savePickerStateCmd(m.pickerProfileOverride, m.pickerPinned, nil)
+	profile := m.pickerProfileOverride[m.configPickerProjectIdx]
+	return m.savePickerStateCmd(launch.StateChange{Index: m.configPickerProjectIdx, Profile: &profile}, nil)
 }
