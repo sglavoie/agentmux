@@ -116,7 +116,7 @@ final class WorkspaceInspectorView: NSView {
     let recap = WorkspaceRecapModel(command: { nil })
     let threads = WorkspaceThreadsModel(command: { nil })
     private lazy var threadsHost = NSHostingView(rootView: WorkspaceThreadsView(model: threads, onOpen: { [weak self] identity in self?.onSource?(identity) }))
-    private lazy var recapHost = NSHostingView(rootView: WorkspaceRecapView(model: recap))
+    private lazy var recapHost = NSHostingView(rootView: WorkspaceInspectorRecapView(model: recap))
     private let sourceButton = NSButton(title: "Read Source Conversation", target: nil, action: nil)
     private let scroll = NSScrollView()
     private static let inset: CGFloat = 12
@@ -527,6 +527,10 @@ final class WorkspaceInspectorView: NSView {
 
     override func layout() {
         super.layout()
+        let width = recapHost.bounds.width
+        if width > 0, recapHost.rootView.width != width {
+            recapHost.rootView.width = width
+        }
         updateReadingLayout()
     }
 
@@ -607,6 +611,19 @@ final class WorkspaceInspectorView: NSView {
         let all = WorkspaceInspectorAction.allCases
         guard all.indices.contains(sender.tag) else { return }
         onAction?(all[sender.tag])
+    }
+}
+
+/// Give SwiftUI the sidebar's actual width when it computes the card's
+/// intrinsic height. An unconstrained ideal width undercounts wrapped lines.
+struct WorkspaceInspectorRecapView: View {
+    let model: WorkspaceRecapModel
+    var width: CGFloat?
+
+    var body: some View {
+        WorkspaceRecapView(model: model)
+            .frame(width: width)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

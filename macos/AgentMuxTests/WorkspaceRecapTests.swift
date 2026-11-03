@@ -119,6 +119,47 @@ final class WorkspaceRecapTests: XCTestCase {
         XCTAssertGreaterThan(view.fittingSize.height, 0)
     }
 
+    func testInspectorReservesRecapHeightWhenTextWrapsAndContentChanges() async throws {
+        let inspector = WorkspaceInspectorView()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 280, height: 400),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = inspector
+        window.orderFront(nil)
+        defer { inspector.recap.close(); window.close() }
+        inspector.show(.init(tab: .session, inspection: .init(key: .embedded("recap-test"), title: "Session details",
+                                                             glyph: "", sections: [], embedded: true, muted: false)))
+        let warning = "Error: indexed conversation codex:01a1a25a-27f6-7531-91ea-7c60c8c2801e was not found; to find a conversation by what was said in it, run `amx session search --json`"
+        for saved in [false, true, false] {
+            let loaded = expectation(description: "Recap content loaded")
+            let subscription = inspector.recap.$report.sink { report in
+                if (report?.recap != nil) == saved, report?.warning == warning { loaded.fulfill() }
+            }
+            let command = command { _ in self.payload("codex:a", status: "ready", saved: saved, warning: warning) }
+            inspector.recap.command = { command }
+            inspector.recap.select(.init(harness: "codex", sessionID: "a"), revision: UUID().uuidString)
+            await fulfillment(of: [loaded], timeout: 3)
+            subscription.cancel()
+
+            for width in [CGFloat(280), 420, 280] {
+                window.setContentSize(NSSize(width: width, height: 400))
+                // Allow SwiftUI's observed update and AppKit's intrinsic-size
+                // invalidation to reach the enclosing document stack.
+                try await Task.sleep(for: .milliseconds(50))
+                window.layoutIfNeeded()
+                let title = try XCTUnwrap(inspector.lines.first)
+                let stack = try XCTUnwrap(title.superview as? NSStackView)
+                let host = try XCTUnwrap(stack.arrangedSubviews.compactMap { $0 as? NSHostingView<WorkspaceInspectorRecapView> }.first)
+                let measurement = NSHostingController(rootView: WorkspaceRecapView(model: inspector.recap))
+                let expected = measurement.sizeThatFits(in: NSSize(width: host.bounds.width, height: .greatestFiniteMagnitude))
+                XCTAssertEqual(host.bounds.height, expected.height, accuracy: 1,
+                               "The recap must reserve its full wrapped height at width \(width)")
+                XCTAssertGreaterThanOrEqual(title.frame.minY, host.frame.maxY,
+                                            "The session details must start below the recap")
+            }
+        }
+    }
+
     func testHistoryOpensExactSupportingMessageFromInspectorAndWithinHistory() {
         let runner = RecapRunner()
         var calls: [[String]] = []
