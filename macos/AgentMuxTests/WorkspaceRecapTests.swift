@@ -43,6 +43,8 @@ final class WorkspaceRecapTests: XCTestCase {
         XCTAssertEqual(calls.count, 1); XCTAssertTrue(calls[0].contains("--cached"))
         XCTAssertEqual(scheduled.count, 1)
         scheduled.removeFirst().perform(); runner.release()
+        XCTAssertEqual(calls[0], ["session", "recap", "--cached", "--json", "--", "codex:a"])
+        XCTAssertEqual(calls[1], ["session", "recap", "--json", "--", "codex:a"])
         XCTAssertEqual(model.report?.recap?.latest.messages, [42])
         XCTAssertEqual(model.report?.recap?.latest.text.reveal(), "Agent reports tests passed")
         var revealed: (ConversationIdentity, Int)?
@@ -67,13 +69,12 @@ final class WorkspaceRecapTests: XCTestCase {
         XCTAssertNotNil(model.report?.recap)
         XCTAssertTrue(runner.pending.isEmpty)
         model.refresh(); runner.release()
-        XCTAssertTrue(calls.last!.contains("--refresh"))
-        XCTAssertFalse(calls.last!.contains("--cached"))
+        XCTAssertEqual(calls.last, ["session", "recap", "--refresh", "--json", "--", "claude:a"])
     }
 
     func testSwitchingAndClosingDiscardLateRepliesAndDebouncedWork() {
         let runner = RecapRunner()
-        let command = command { args in self.payload(args[args.count - 2], status: "ready", saved: true) }
+        let command = command { args in self.payload(args[args.firstIndex(of: "--")! + 1], status: "ready", saved: true) }
         let model = WorkspaceRecapModel(command: { command }, runner: runner)
         model.select(.init(harness: "claude", sessionID: "a"), revision: "1")
         model.select(.init(harness: "codex", sessionID: "b"), revision: "1")

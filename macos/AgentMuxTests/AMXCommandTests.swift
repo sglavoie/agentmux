@@ -151,6 +151,23 @@ final class AMXCommandTests: XCTestCase {
         XCTAssertEqual(recorder.calls[0].3, AMXCommand.defaultTimeout)
     }
 
+    func testJSONFlagPrecedesSeparatorAndPreservesPositionalArguments() {
+        let recorder = Recorder()
+        let out = ProcessOutput(status: 0, stdout: Data(#"{"schema_version":1,"data":[]}"#.utf8), stderr: Data())
+        let amx = command(recorder, output: out)
+        for (arguments, expected) in [
+            (["session", "recap", "--cached", "--", "claude:conversation"],
+             ["session", "recap", "--cached", "--json", "--", "claude:conversation"]),
+            (["session", "recap", "--json", "--", "claude:conversation"],
+             ["session", "recap", "--json", "--", "claude:conversation"]),
+            (["session", "search", "--", "--json"],
+             ["session", "search", "--json", "--", "--json"]),
+        ] {
+            XCTAssertEqual(amx.json([String].self, arguments), .success([]))
+            XCTAssertEqual(recorder.calls.last?.1, expected)
+        }
+    }
+
     func testTimeoutIsNotALaunchFailure() {
         let amx = command(Recorder(), output: nil)
         XCTAssertEqual(amx.json(Mute.self, ["x"], timeout: 2), .failure(.timedOut(binary: "/bin/amx", timeout: 2, mutates: false)))

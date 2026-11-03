@@ -250,8 +250,8 @@ struct AMXCommand {
         }
     }
 
-    /// One `--json` run decoded through the schema-v1 envelope. `--json` is
-    /// appended when `arguments` does not already carry it.
+    /// One `--json` run decoded through the schema-v1 envelope. Insert the
+    /// option before `--` so positional arguments stay literal.
     func json<T: Decodable>(
         _ type: T.Type,
         _ arguments: [String],
@@ -260,7 +260,11 @@ struct AMXCommand {
         mutates: Bool = false,
         cancellation: ProcessCancellation? = nil
     ) -> AMXCommandResult<T> {
-        let full = arguments.contains("--json") ? arguments : arguments + ["--json"]
+        var full = arguments
+        let optionsEnd = full.firstIndex(of: "--") ?? full.endIndex
+        if !full[..<optionsEnd].contains("--json") {
+            full.insert("--json", at: optionsEnd)
+        }
         switch run(full, kittyListenOn: kittyListenOn, timeout: timeout, mutates: mutates, cancellation: cancellation) {
         case let .failure(error):
             return .failure(error)
