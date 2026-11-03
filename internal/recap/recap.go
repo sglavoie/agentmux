@@ -184,6 +184,11 @@ func (s Service) Get(ctx context.Context, r Request) (Report, error) {
 		return report, nil
 	}
 	content, generateErr := s.Generator.Generate(ctx, input)
+	// Caller cancellation is not a provider failure. In particular, do not
+	// persist a retry cooldown that would outlive the interrupted request.
+	if err := ctx.Err(); err != nil {
+		return report, err
+	}
 	if generateErr == nil {
 		for _, claim := range []*Claim{&content.Goal, &content.Latest, &content.Outstanding} {
 			claim.Text = strings.TrimSpace(claim.Text)

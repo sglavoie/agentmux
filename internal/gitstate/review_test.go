@@ -71,6 +71,44 @@ func TestReviewIncludesStagedUnstagedUntrackedAndLiteralPaths(t *testing.T) {
 	}
 }
 
+func TestReviewShowsRecreatedFileAfterStagedDeletion(t *testing.T) {
+	t.Parallel()
+	dir, git, write := reviewFixture(t)
+	git("rm", "tracked")
+	write("tracked", "replacement\n")
+	listed, err := ReadChanges(context.Background(), dir, "HEAD", "")
+	if err != nil || len(listed.Files) != 1 || !listed.Files[0].Untracked {
+		t.Fatalf("recreated file list: %+v, %v", listed.Files, err)
+	}
+	got, err := ReadChanges(context.Background(), dir, "HEAD", "tracked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Files) != 1 || got.Files[0].Path != "tracked" || !got.Files[0].Untracked || got.Files[0].Deleted != 1 {
+		t.Fatalf("recreated file must appear once as untracked: %+v", got.Files)
+	}
+	if !strings.Contains(got.Patch, "+replacement") || !strings.Contains(got.Patch, "-before") {
+		t.Fatalf("review must show the staged deletion and replacement content: %s", got.Patch)
+	}
+}
+
+func TestReviewBoundsCombinedDeletionAndReplacementPatches(t *testing.T) {
+	t.Parallel()
+	dir, git, write := reviewFixture(t)
+	write("tracked", strings.Repeat("before\n", 180000))
+	git("add", "tracked")
+	git("-c", "commit.gpgsign=false", "commit", "-qm", "large original")
+	git("rm", "tracked")
+	write("tracked", strings.Repeat("replacement\n", 100000))
+	got, err := ReadChanges(context.Background(), dir, "HEAD", "tracked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Patch) != reviewOutputLimit || !got.Truncated || !strings.Contains(got.Patch, "+replacement") {
+		t.Fatalf("combined patch: bytes=%d, truncated=%t; want bounded deletion and replacement", len(got.Patch), got.Truncated)
+	}
+}
+
 func TestReviewBaseChangesAndRejectsUnknownOrOptionLikeReferences(t *testing.T) {
 	t.Parallel()
 

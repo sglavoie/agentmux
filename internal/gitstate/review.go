@@ -153,9 +153,24 @@ func ReadChanges(ctx context.Context, directory, base, file string) (Changes, er
 		}
 		return result, err
 	}
+	trackedPaths := make(map[string]int, len(result.Files))
+	for i, changed := range result.Files {
+		trackedPaths[changed.Path] = i
+	}
+	recreated := false
 	for _, path := range bytes.Split(untracked, []byte{0}) {
 		if len(path) > 0 {
-			result.Files = append(result.Files, ChangedFile{Path: string(path), Untracked: true})
+			name := string(path)
+			if i, ok := trackedPaths[name]; ok {
+				// A staged deletion can have a new, untracked file at the
+				// same path. Keep one selectable row and review both parts.
+				result.Files[i].Untracked = true
+				if name == file {
+					recreated = true
+				}
+			} else {
+				result.Files = append(result.Files, ChangedFile{Path: name, Untracked: true})
+			}
 		}
 	}
 	if file == "" {
@@ -171,6 +186,15 @@ func ReadChanges(ctx context.Context, directory, base, file string) (Changes, er
 	if selected == nil {
 		return result, errors.New("the selected file no longer has changes; refresh the file list")
 	}
+	var combined reviewBuffer
+	if recreated {
+		deleted, cut, readErr := reviewGit(ctx, result.Root, append(flags, result.Base, "--", file)...)
+		if readErr != nil {
+			return result, readErr
+		}
+		_, _ = combined.Write(deleted)
+		combined.truncated = cut
+	}
 	var patch []byte
 	if selected.Untracked {
 		path := filepath.Join(result.Root, file)
@@ -179,13 +203,13 @@ func ReadChanges(ctx context.Context, directory, base, file string) (Changes, er
 			return result, statErr
 		}
 		if !info.Mode().IsRegular() {
-			result.Patch = "Untracked symbolic link or special file; open the checkout to inspect it."
-			return result, nil
-		}
-		patch, truncated, err = reviewGit(ctx, result.Root, append(flags, "--no-index", "--", os.DevNull, path)...)
-		var exit *exec.ExitError
-		if errors.As(err, &exit) && exit.ExitCode() == 1 {
-			err = nil // git diff --no-index reports differences with status 1.
+			patch = []byte("Untracked symbolic link or special file; open the checkout to inspect it.")
+		} else {
+			patch, truncated, err = reviewGit(ctx, result.Root, append(flags, "--no-index", "--", os.DevNull, path)...)
+			var exit *exec.ExitError
+			if errors.As(err, &exit) && exit.ExitCode() == 1 {
+				err = nil // git diff --no-index reports differences with status 1.
+			}
 		}
 	} else {
 		patch, truncated, err = reviewGit(ctx, result.Root, append(flags, result.Base, "--", file)...)
@@ -193,6 +217,7 @@ func ReadChanges(ctx context.Context, directory, base, file string) (Changes, er
 	if err != nil {
 		return result, err
 	}
-	result.Patch, result.Truncated = string(patch), truncated
+	_, _ = combined.Write(patch)
+	result.Patch, result.Truncated = combined.String(), combined.truncated || truncated
 	return result, nil
 }

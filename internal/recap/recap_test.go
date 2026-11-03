@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -230,6 +231,49 @@ func TestGenerationGlobalLockHonorsCancellation(t *testing.T) {
 	_, err = s.Get(ctx, request(&messages))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCancelledGenerationDoesNotBackOffTheNextRequest(t *testing.T) {
+	for _, saved := range []bool{false, true} {
+		t.Run(fmt.Sprintf("saved=%t", saved), func(t *testing.T) {
+			messages := []transcript.Message{{Role: "user", Text: "Goal"}}
+			r := request(&messages)
+			s := Service{Directory: t.TempDir(), Generator: generatorFunc(func(_ context.Context, in Input) (Content, error) {
+				return contentFor(in), nil
+			})}
+			if saved {
+				if _, err := s.Get(t.Context(), r); err != nil {
+					t.Fatal(err)
+				}
+				messages = append(messages, transcript.Message{Role: "assistant", Text: "More work"})
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s.Generator = generatorFunc(func(context.Context, Input) (Content, error) {
+				cancel()
+				// Providers can wrap cancellation in their own diagnostic.
+				return Content{}, errors.New("request interrupted")
+			})
+			if _, err := s.Get(ctx, r); !errors.Is(err, context.Canceled) {
+				t.Fatalf("cancelled generation = %v; want context.Canceled", err)
+			}
+			r.CachedOnly = true
+			got, err := s.Get(t.Context(), r)
+			if err != nil || got.RetryAfter != nil || got.Warning != "" || (got.Recap != nil) != saved {
+				t.Fatalf("cancellation changed the saved retry state: %+v, %v", got, err)
+			}
+			r.CachedOnly = false
+			calls := 0
+			s.Generator = generatorFunc(func(_ context.Context, in Input) (Content, error) {
+				calls++
+				return contentFor(in), nil
+			})
+			got, err = s.Get(t.Context(), r)
+			if err != nil || got.Status != "ready" || calls != 1 {
+				t.Fatalf("retry after cancellation: %+v, %v, calls=%d", got, err, calls)
+			}
+		})
 	}
 }
 
