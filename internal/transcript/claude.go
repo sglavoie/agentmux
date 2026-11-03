@@ -361,8 +361,10 @@ func claudeCountsAsMessage(rec claudeRecord) bool {
 // slash commands and their output as read rather than as tag markup; version
 // 4 counts only messages with prose, leaving out tool calls and results;
 // version 5 leaves out the notices Claude Code writes as user records;
-// version 6 rescans entries that may have stopped at a 16 MiB JSONL record.
-const claudeReaderVersion = 6
+// version 6 rescans entries that may have stopped at a 16 MiB JSONL record;
+// version 7 invalidates source-aware sidecars that treated local command
+// output as user input.
+const claudeReaderVersion = 7
 
 // cachePredatesRules reports a cached entry its harness's reader would no
 // longer produce, so Refresh reparses it once instead of trusting the cache.
@@ -470,6 +472,12 @@ func messageFromRecord(rec claudeRecord) (Message, bool) {
 				return Message{}, false
 			}
 			empty := ""
+			if command, _, _ := claudeSlashCommand(text); command == "" {
+				// Local stdout, stderr, and caveats are harness output even
+				// though Claude stores them in user-role records.
+				return Message{Role: role, Text: shown, Timestamp: ts, handoffText: &handoff,
+					sourceUserText: &empty, sourceHarnessText: &shown}, true
+			}
 			return Message{Role: role, Text: shown, Timestamp: ts, handoffText: &handoff,
 				sourceUserText: &shown, sourceHarnessText: &empty}, true
 		}

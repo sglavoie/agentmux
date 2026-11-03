@@ -146,6 +146,75 @@ func TestClaudeMixedUserToolResultSource(t *testing.T) {
 	}
 }
 
+func TestClaudeLocalCommandSearchSources(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "commands.jsonl")
+	body := `{"type":"user","message":{"role":"user","content":"<command-name>/cost</command-name>"}}
+{"type":"user","message":{"role":"user","content":"<local-command-stdout>Total cost: billingneedle</local-command-stdout>"}}
+{"type":"user","message":{"role":"user","content":"<local-command-stderr>warningneedle</local-command-stderr>"}}
+{"type":"user","message":{"role":"user","content":"<local-command-caveat>caveatneedle</local-command-caveat>"}}
+`
+	writeTranscript(t, path, body)
+	idx := newTestIndex(t)
+	must(t, idx.SetEntryForTest("claude:commands", SessionMeta{ID: "commands", Harness: harness.Claude, Path: path}))
+	readers := map[string]Reader{harness.Claude: NewClaudeReader()}
+	for _, query := range []string{"/cost", "billingneedle", "warningneedle", "caveatneedle"} {
+		for _, source := range []string{"user", "harness", "any"} {
+			want := source == "any" || (source == "user") == (query == "/cost")
+			// Repeat without readers to exercise the persisted source-aware corpus.
+			for _, available := range []map[string]Reader{readers, nil} {
+				results, err := Search(idx, available, Query{Text: query, MessageSource: source})
+				if err != nil || (len(results) == 1) != want {
+					t.Fatalf("query %q source %s: got %+v, %v; want match=%v", query, source, results, err, want)
+				}
+			}
+		}
+	}
+}
+
+func TestClaudeLocalCommandSearchRefreshesOldSourceSidecars(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	path := filepath.Join(home, "projects", "-tmp-demo", "commands.jsonl")
+	writeTranscript(t, path, `{"type":"user","cwd":"/tmp/demo","message":{"role":"user","content":"Check billing"}}
+{"type":"user","message":{"role":"user","content":"<local-command-stdout>billingneedle</local-command-stdout>"}}
+`)
+	reader := NewClaudeReader()
+	metas, err := reader.Discover(home, DiscoverOptions{})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("discover: %+v, %v", metas, err)
+	}
+	meta := metas[0]
+	meta.ReaderVersion = 6
+	meta.SearchText = ""
+	idx := newTestIndex(t)
+	key := IndexKey(harness.Claude, meta.ID)
+	must(t, idx.SetEntryForTest(key, meta))
+	must(t, idx.WriteSearchText(key, encodeSourceSidecar(sourceSidecar{
+		Version: 2, Any: "check billing\nbillingneedle", User: "check billing\nbillingneedle",
+	})))
+	readers := map[string]Reader{harness.Claude: reader}
+	// Warm the decoded cache with the old classification as well.
+	before, err := Search(idx, nil, Query{Text: "billingneedle", MessageSource: "user"})
+	if err != nil || len(before) != 1 {
+		t.Fatalf("old sidecar: %+v, %v", before, err)
+	}
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
+	must(t, idx.Refresh(cfg, readers))
+	for _, source := range []string{"user", "harness"} {
+		results, err := Search(idx, readers, Query{Text: "billingneedle", MessageSource: source})
+		if err != nil || (len(results) == 1) != (source == "harness") {
+			t.Fatalf("after refresh source %s: %+v, %v", source, results, err)
+		}
+	}
+	updated, _ := idx.Get(key)
+	if updated.ReaderVersion != claudeReaderVersion {
+		t.Fatalf("reader version = %d, want %d", updated.ReaderVersion, claudeReaderVersion)
+	}
+}
+
 func TestSearchSourceSidecarRefreshesAfterTranscriptChange(t *testing.T) {
 	t.Parallel()
 
