@@ -234,16 +234,39 @@ func TestSendUpgradesLegacyHistoryWithoutLosingReplay(t *testing.T) {
 }
 
 func TestSendRefusesCorruptHistoryBeforeWriting(t *testing.T) {
+	for name, data := range map[string]string{
+		"invalid JSON":       "{",
+		"null":               "null",
+		"empty object":       "{}",
+		"missing version":    `{"runtime_session_id":"SESSION","operations":{}}`,
+		"missing session":    `{"version":2,"operations":{}}`,
+		"missing operations": `{"version":2,"runtime_session_id":"SESSION"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			testSendRefusesCorruptHistory(t, data)
+		})
+	}
+}
+
+func testSendRefusesCorruptHistory(t *testing.T, data string) {
+	t.Helper()
 	f, req := sendFixture(t)
 	path := sendLedgerPath(req.LockPath, req.Record.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+	data = strings.ReplaceAll(data, "SESSION", string(req.Record.ID))
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if outcome, err := Send(f.Backend, req); err == nil || outcome.Written {
 		t.Fatalf("send with corrupt history = %+v, %v; want refusal before writing", outcome, err)
+	}
+	if got := sendRecorded(t, f, req.Record); got != "" {
+		t.Fatalf("corrupt history changed the pane marker to %q", got)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != data {
+		t.Fatalf("corrupt history was replaced: %q, %v", got, err)
 	}
 }
 

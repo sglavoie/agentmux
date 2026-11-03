@@ -47,11 +47,10 @@ func sendLedgerPath(lockPath string, id runtimesession.ID) string {
 }
 
 func loadSendLedger(lockPath string, id runtimesession.ID) (sendLedger, error) {
-	ledger := sendLedger{Version: 2, RuntimeSessionID: id, Operations: make(map[string]string), InputDigests: make(map[string]string)}
 	path := sendLedgerPath(lockPath, id)
 	info, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return ledger, nil
+		return sendLedger{Version: 2, RuntimeSessionID: id, Operations: make(map[string]string), InputDigests: make(map[string]string)}, nil
 	}
 	if err != nil {
 		return sendLedger{}, fmt.Errorf("inspecting send history: %w", err)
@@ -63,6 +62,10 @@ func loadSendLedger(lockPath string, id runtimesession.ID) (sendLedger, error) {
 	if err != nil {
 		return sendLedger{}, fmt.Errorf("reading send history: %w", err)
 	}
+	// Defaults belong only to a missing file. Applying them before decoding
+	// would let null or omitted fields erase the history that prevents retries
+	// from writing the same input twice.
+	var ledger sendLedger
 	if err := json.Unmarshal(data, &ledger); err != nil {
 		return sendLedger{}, fmt.Errorf("decoding send history: %w", err)
 	}

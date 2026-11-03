@@ -124,6 +124,11 @@ func decodeRegistry(path string, data []byte) (*Registry, error) {
 	if file.SchemaVersion != SchemaVersion {
 		return nil, fmt.Errorf("%w: %s: unsupported schema version %d; want %d", ErrCorrupt, path, file.SchemaVersion, SchemaVersion)
 	}
+	// A valid empty registry contains []. Missing or null sessions must not
+	// authorize an update that replaces unreadable agent registrations.
+	if file.Sessions == nil {
+		return nil, fmt.Errorf("%w: %s: sessions must be an array", ErrCorrupt, path)
+	}
 	registry, err := registryFromRecords(file.Sessions)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w", ErrCorrupt, path, err)

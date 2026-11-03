@@ -29,6 +29,20 @@ func TestNewStoreRequiresACleanAbsolutePath(t *testing.T) {
 	}
 }
 
+func TestStoreRoundTripsAnEmptyRegistry(t *testing.T) {
+	store := testStore(t)
+	if err := store.Update(func(*Registry) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(registry.List()); got != 0 {
+		t.Fatalf("empty registry has %d records", got)
+	}
+}
+
 func TestStoreRoundTripsAPrivateRegistry(t *testing.T) {
 	store := testStore(t)
 	registry, err := store.Load()
@@ -284,6 +298,8 @@ func TestLoadRejectsUntrustworthyFiles(t *testing.T) {
 	}{
 		{name: "truncated", body: `{"schema_version":1,"sessions":[`, want: "unexpected EOF"},
 		{name: "future version", body: `{"schema_version":2,"sessions":[]}`, want: "unsupported schema version 2"},
+		{name: "missing sessions", body: `{"schema_version":1}`, want: "sessions must be an array"},
+		{name: "null sessions", body: `{"schema_version":1,"sessions":null}`, want: "sessions must be an array"},
 		{name: "unknown field", body: `{"schema_version":1,"sessions":[],"future":true}`, want: "unknown field"},
 		{name: "trailing data", body: `{"schema_version":1,"sessions":[]}{}`, want: "trailing data"},
 		{name: "duplicate ID", body: `{"schema_version":1,"sessions":[` + live(id1, "100") + `,` + live(id1, "101") + `]}`, want: "appears twice"},
