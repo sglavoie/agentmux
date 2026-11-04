@@ -56,6 +56,9 @@ extension WorkspaceWindowController {
                 if request.awaited { revealInSidebar() }
             } else if request.awaited, WorkspaceUtilityView.isRuntimeSessionID(id) {
                 Self.logger.notice("workspace: awaiting just-launched session \(id, privacy: .public)")
+                // A late group restore must not select its old session and
+                // clear this explicit navigation before the new row arrives.
+                leaveRecovery()
                 awaited = (id, now().addingTimeInterval(Self.awaitLimit))
             } else {
                 Self.logger.notice("workspace: view request for \(id, privacy: .public), which is not listed; ignored")

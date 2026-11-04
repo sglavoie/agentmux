@@ -238,13 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         let controller = workspaceController()
         controller.show()
         if restoration.fullScreen { controller.enterFullScreen() }
-        if let layout = restoration.layout {
-            controller.restoreLayout(layout, conversation: restoration.conversation)
-        } else if let place = restoration.place {
-            controller.restore(place, conversation: restoration.conversation)
-        } else {
-            if !controller.state.rows.isEmpty { controller.showDashboardUnlessPlaced() }
-        }
+        if !controller.state.rows.isEmpty { controller.showDashboardUnlessPlaced() }
     }
 
     var launchReopensWorkspace: Bool {

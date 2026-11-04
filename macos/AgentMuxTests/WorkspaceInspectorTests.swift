@@ -47,7 +47,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.setInspectorCollapsed(false)
     }
 
-    func testWaitingFollowsGroupScopeAndKeepsInspectionOfTheShownSession() {
+    func testWaitingAndInspectionFollowTheSelectedGroupsSession() {
         loadGroupedSessions()
         let inspector = workspace.inspector
         XCTAssertEqual(inspector.allGroupsButton.state, .off)
@@ -56,7 +56,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.selectGroup("work")
         XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(4))])
         XCTAssertEqual(inspector.tabs.label(forSegment: 0), "Waiting 1")
-        XCTAssertEqual(inspector.model.inspection?.key, .embedded(F.runtimeID(2)))
+        XCTAssertEqual(inspector.model.inspection?.key, .embedded(F.runtimeID(4)))
 
         app.store.apply(snapshot: F.snapshot(sessions))
         XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(4))])
@@ -66,6 +66,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual(inspector.tabs.label(forSegment: 0), "Waiting")
         workspace.selectGroup(nil)
         XCTAssertEqual(inspector.visibleWaiting.count, 2)
+        XCTAssertEqual(inspector.model.inspection?.key, .embedded(F.runtimeID(2)))
     }
 
     func testAllGroupsToggleRevealsHiddenWaitingSessionAndResetsSidebarScope() throws {

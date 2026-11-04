@@ -163,6 +163,16 @@ attention lead the list.
   Buttons show nonzero waiting counts, including sessions outside the selected
   group. A session in several groups counts once in each, and once in All.
   Counts disappear while the daemon feed is disconnected.
+- Each group, including **All**, remembers its active session or view and split
+  panes, their active side, and divider position. Switching groups returns to
+  that context; it also survives closing the window or restarting the app.
+  The first visit selects the group's first session in sidebar order, or an
+  empty pane when none is running. Existing terminals keep running while hidden.
+  Restoration never restarts an ended agent or shell, and a session attached
+  elsewhere stays detached. A removed group returns to All after a successful
+  project refresh. Switching waits for any checkout operation in the review
+  pane to finish. Opening a session from a notification or an out-of-group
+  launch still takes you to that session.
 - **Launch Project** in the workspace and menu bar follows the selected group,
   including configured projects with no running sessions. Its **All projects**
   submenu offers the full catalog without changing the group just by opening it.

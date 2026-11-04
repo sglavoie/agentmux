@@ -339,12 +339,13 @@ final class WorkspaceRecoveryTests: XCTestCase {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Agent lost")
         XCTAssertNil(workspace.viewSelection)
 
-        // A closed window forgets both, so it opens again on the Dashboard.
+        // Reopening restores the group's ended-session notice too.
         workspace.window.close()
         XCTAssertFalse(workspace.hasPlace)
         workspace.openForTesting()
         workspace.showDashboardUnlessPlaced()
-        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.dashboard.id)
+        XCTAssertNil(workspace.viewSelection)
+        XCTAssertEqual(workspace.gone?.runtimeSessionID, F.runtimeID(9))
     }
 
     func testAStoppedAgentWithAConversationOffersNativeRecovery() throws {

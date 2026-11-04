@@ -7,6 +7,7 @@ import Foundation
 /// is still running and never starts one that is not.
 struct WorkspaceRestoration: Equatable {
     enum Pane: Codable, Equatable {
+        case empty
         case session(String)
         case utility(WorkspaceUtilityView)
         case review(String)
@@ -19,6 +20,23 @@ struct WorkspaceRestoration: Equatable {
     }
     static let layoutKey = "amxWorkspaceLayout"
     var layout: Layout?
+
+    /// Group names are prefixed so a configured group named All cannot
+    /// collide with the unfiltered workspace.
+    struct GroupContext: Codable, Equatable {
+        var layout: Layout
+        var conversation: String?
+    }
+    static let groupContextsKey = "amxWorkspaceGroupContexts"
+    var groupContexts: [String: GroupContext] = [:]
+
+    static func contextKey(_ group: String?) -> String {
+        group.map { "group:\($0)" } ?? "all"
+    }
+
+    static func saveGroupContexts(_ contexts: [String: GroupContext], to defaults: UserDefaults = .standard) {
+        if let data = try? JSONEncoder().encode(contexts) { defaults.set(data, forKey: groupContextsKey) }
+    }
 
     static func saveLayout(_ layout: Layout?, to defaults: UserDefaults = .standard) {
         if let layout, let data = try? JSONEncoder().encode(layout) { defaults.set(data, forKey: layoutKey) }
@@ -100,6 +118,9 @@ struct WorkspaceRestoration: Equatable {
     static func load(from defaults: UserDefaults = .standard) -> WorkspaceRestoration {
         WorkspaceRestoration(
             layout: defaults.data(forKey: layoutKey).flatMap { try? JSONDecoder().decode(Layout.self, from: $0) },
+            groupContexts: defaults.data(forKey: groupContextsKey).flatMap {
+                try? JSONDecoder().decode([String: GroupContext].self, from: $0)
+            } ?? [:],
             windowOpen: defaults.bool(forKey: windowOpenKey),
             place: defaults.string(forKey: placeKey).flatMap(Place.init(encoded:)),
             conversation: defaults.string(forKey: conversationKey).flatMap(ConversationIdentity.init(encoded:)),

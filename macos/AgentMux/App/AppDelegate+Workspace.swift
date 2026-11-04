@@ -41,6 +41,7 @@ extension AppDelegate {
         workspace = controller
         if !Self.isRunningTests {
             controller.onLayoutChanged = { WorkspaceRestoration.saveLayout($0) }
+            controller.onGroupContextsChanged = { WorkspaceRestoration.saveGroupContexts($0) }
             controller.makeRestoredReview = { [weak self] directory in
                 guard let self else { return nil }
                 let model = self.makeChangesModel()
@@ -53,7 +54,7 @@ extension AppDelegate {
                              canClose: { !model.landing }, close: { model.close() }, directory: { model.changes?.root ?? directory })
             }
             let restoration = WorkspaceRestoration.load()
-            controller.selectedGroup = restoration.selectedGroup
+            controller.restoreContext(restoration)
             // Before anything makes the window, which opens at these widths.
             controller.sidebarWidth = restoration.sidebarWidth.map { CGFloat($0) }
             controller.inspectorWidth = restoration.inspectorWidth.map { CGFloat($0) }

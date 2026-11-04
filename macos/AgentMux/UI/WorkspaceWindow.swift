@@ -121,6 +121,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
     var showsAllWaitingGroups = false
+    var groupContexts: [String: WorkspaceRestoration.GroupContext] = [:]
+    var onGroupContextsChanged: ([String: WorkspaceRestoration.GroupContext]) -> Void = { _ in }
+    var choosingGroupPlace = false
+    var showingEmptyGroup = false
     private(set) var compactSidebar = false
 
     func setCompactSidebar(_ compact: Bool) {
@@ -462,6 +466,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// closed keeps it, so it is attached again only once amx says nobody
     /// else has it.
     private func comeBackToSelection() {
+        guard pendingLayout == nil else { return }
+        if let context = groupContexts[WorkspaceRestoration.contextKey(selectedGroup)] {
+            restoreLayout(context.layout, conversation: context.conversation.flatMap(ConversationIdentity.init(encoded:)))
+            return
+        }
         guard let key = state.selection, viewSelection == nil, !key.runtimeSessionID.isEmpty else { return }
         let id = key.runtimeSessionID
         let conversation = state.row(key)?.conversation
@@ -622,6 +631,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             }
         }
         continueRestoring()
+        continueChoosingGroupPlace()
         continueRestoringLayout()
         updateContent(focus: false)
     }

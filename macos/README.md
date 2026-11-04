@@ -399,8 +399,15 @@ ASL answer panel work the same either way.
   terminals. Projects can belong to
   several groups and appear under each of their tags. Click the selected pill
   again, or **All**, to clear the filter. Counts and session shortcuts follow
-  the filtered list; the current terminal keeps running and stays open even
-  if its row is hidden.
+  the filtered list. Each group remembers its active session or view, both
+  split panes, their active side, and divider position. Switching groups
+  restores that context, reusing hidden terminals. The first visit selects
+  the first session in the group's sidebar order, or an empty pane.
+  `UI/WorkspaceWindow+GroupContext.swift` coordinates the switch;
+  `amxWorkspaceGroupContexts` stores layouts and active conversation identities
+  by group, with a distinct key for All. Window reopening and app restart use
+  the same restoration and ownership checks. Ended agents and shells are never
+  restarted. The former global layout migrates into its selected group's context.
   Sessions launched with a different profile inherit their project's tags
   unless that project/profile pair has its own explicit config entry.
   Config edits refresh the choices automatically; removing the selected group

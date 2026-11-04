@@ -7,21 +7,30 @@ extension WorkspaceWindowController {
     // MARK: Recovery
 
     func restoreLayout(_ layout: WorkspaceRestoration.Layout, conversation: ConversationIdentity? = nil) {
+        leaveRecovery()
         var layout = layout
         if layout.other == layout.active { layout.other = nil }
         pendingLayout = layout
         layoutConversation = conversation
         layoutChecking = false
         layoutGeneration += 1
+        rememberGroupLayout(layout, conversation: conversation)
         continueRestoringLayout()
     }
 
     func continueRestoringLayout() {
         guard let layout = pendingLayout, !layoutChecking, state.current, isOpen else { return }
+        if !paneBelongsToGroup(layout.active) {
+            pendingLayout = nil
+            choosingGroupPlace = true
+            continueChoosingGroupPlace()
+            return
+        }
         // The active pane goes through restore(_:), including its ownership
         // check. Check the inactive session before allowing it to make a terminal.
         if case let .session(encoded)? = layout.other,
            case let .session(id)? = WorkspaceRestoration.Place(encoded: encoded),
+           terminals[id] == nil, !detached.contains(id),
            state.row(.embedded(id)) != nil {
             layoutChecking = true
             let generation = layoutGeneration
@@ -37,10 +46,15 @@ extension WorkspaceWindowController {
     private func applyLayout(_ layout: WorkspaceRestoration.Layout) {
         applyingLayout = true
         pendingLayout = nil
+        state.select(nil)
+        viewSelection = nil
+        reviewSelected = false
         otherPlace = layout.other.flatMap(restorePane)
         activeOnRight = otherPlace != nil && layout.activeOnRight
         restoringFraction = layout.fraction
-        if case let .session(encoded) = layout.active, let place = WorkspaceRestoration.Place(encoded: encoded) {
+        if layout.active == .empty {
+            showingEmptyGroup = true
+        } else if case let .session(encoded) = layout.active, let place = WorkspaceRestoration.Place(encoded: encoded) {
             restore(place, conversation: layoutConversation)
         } else {
             let active = restorePane(layout.active) ?? .view(WorkspaceUtilityView.dashboard.id)
@@ -60,6 +74,7 @@ extension WorkspaceWindowController {
 
     private func restorePane(_ pane: WorkspaceRestoration.Pane) -> Place? {
         switch pane {
+        case .empty: return nil
         case let .session(encoded):
             return WorkspaceRestoration.Place(encoded: encoded)?.sessionKey.map(Place.session)
         case let .utility(view):
@@ -68,7 +83,7 @@ extension WorkspaceWindowController {
                 guard state.row(.embedded(id)) != nil, closing[id] == nil else { return nil }
             }
             views.open(view)
-            if !view.isPermanent { endedViews.insert(view.id) }
+            if !view.isPermanent, viewTerminals[view.id] == nil { endedViews.insert(view.id) }
             return .view(view.id)
         case let .review(directory):
             guard let review = makeRestoredReview?(directory) else { return nil }
@@ -91,11 +106,17 @@ extension WorkspaceWindowController {
     }
 
     func reportLayout() {
-        guard isOpen, pendingLayout == nil, !applyingLayout else { return }
+        guard isOpen, pendingLayout == nil, !applyingLayout, !choosingGroupPlace else { return }
         let active = restoring.map { WorkspaceRestoration.Pane.session($0.encoded) }
             ?? savedPane(place)
             ?? gone.map { .session(WorkspaceRestoration.Place.session(runtimeSessionID: $0.runtimeSessionID).encoded) }
-        if let active { onLayoutChanged(.init(active: active, other: savedPane(otherPlace), activeOnRight: activeOnRight, fraction: paneLayout.fraction)) }
+            ?? (showingEmptyGroup ? .empty : nil)
+        if let active {
+            let layout = WorkspaceRestoration.Layout(active: active, other: savedPane(otherPlace), activeOnRight: activeOnRight,
+                                                     fraction: restoringFraction ?? paneLayout.fraction)
+            rememberGroupLayout(layout)
+            onLayoutChanged(layout)
+        }
     }
 
     /// Comes back to where the workspace was when the app last ran. A view is
@@ -105,11 +126,13 @@ extension WorkspaceWindowController {
     /// as exited or lost, with the conversation saved for it when there is
     /// one. Nothing is ever started.
     func restore(_ place: WorkspaceRestoration.Place, conversation: ConversationIdentity? = nil) {
+        leaveRecovery()
         Self.logger.notice("workspace: restoring \(place.encoded, privacy: .public)")
         switch place {
         case let .view(id):
             if !showView(id, focus: true) { showView(WorkspaceUtilityView.dashboard.id) }
         case .session:
+            reviewSelected = false
             state.select(nil)
             viewSelection = nil
             gone = nil
@@ -136,6 +159,12 @@ extension WorkspaceWindowController {
         if !listed {
             Self.logger.notice("workspace: \(id, privacy: .public) is not listed after the restart; asking what became of it")
             sessionGone(id, name: name)
+            return
+        }
+        // Switching groups can return to an attachment this window already
+        // owns. Its own client is not evidence of another terminal taking it.
+        if terminals[id] != nil || detached.contains(id) {
+            select(key, focus: true)
             return
         }
         // Listed, so running. Whether this window may take it is the server's
@@ -202,6 +231,7 @@ extension WorkspaceWindowController {
     /// particular must leave such a place alone.
     var hasPlace: Bool {
         reviewSelected || state.selection != nil || viewSelection != nil || restoring != nil || gone != nil
+            || pendingLayout != nil || choosingGroupPlace || showingEmptyGroup
     }
 
     /// Lands the pane on the Dashboard when it has no place, as opening the
@@ -214,6 +244,8 @@ extension WorkspaceWindowController {
     /// The operator went somewhere: whatever the pane was waiting to say or
     /// to come back to is over.
     func leaveRecovery() {
+        choosingGroupPlace = false
+        showingEmptyGroup = false
         if !applyingLayout {
             pendingLayout = nil
             layoutChecking = false

@@ -7,7 +7,7 @@ extension WorkspaceWindowController {
     // MARK: Sidebar
 
     /// Filtering is a presentation of the complete state. Hidden sessions
-    /// still own their terminals, selection, and saved ordering.
+    /// still own their terminals and saved ordering.
     var scopedSidebar: WorkspaceState {
         guard selectedGroup != nil else { return state }
         var scoped = WorkspaceState()
@@ -20,8 +20,16 @@ extension WorkspaceWindowController {
         let projects = delegate?.workspaceProjects ?? []
         var groups = ProjectCatalog.groups(projects)
         if let selectedGroup, !groups.contains(selectedGroup) {
-            if delegate?.workspaceProjectsLoaded == true { self.selectedGroup = nil }
+            if delegate?.workspaceProjectsLoaded == true, reviewCanClose() { switchGroup(to: nil) }
             else { groups.append(selectedGroup); groups.sort() }
+        }
+        if delegate?.workspaceProjectsLoaded == true {
+            let valid = Set([WorkspaceRestoration.contextKey(nil)] + groups.map { WorkspaceRestoration.contextKey($0) })
+            let kept = groupContexts.filter { valid.contains($0.key) }
+            if kept != groupContexts {
+                groupContexts = kept
+                onGroupContextsChanged(kept)
+            }
         }
         let waiting = state.rows.filter(\.attention)
         let counts = state.current
@@ -32,8 +40,7 @@ extension WorkspaceWindowController {
     }
 
     func selectGroup(_ group: String?) {
-        selectedGroup = selectedGroup == group ? nil : group
-        reloadSidebar(allowReorder: true)
+        switchGroup(to: selectedGroup == group ? nil : group)
     }
 
     func reloadSidebar(force: Bool = false, allowReorder: Bool = false) {
@@ -118,6 +125,7 @@ extension WorkspaceWindowController {
         syncSidebarSelection()
         reloadInspector()
         if isSwitching { switcher.update(switcherEntries()) }
+        continueChoosingGroupPlace()
     }
 
     /// State changes pulse the session's current line without moving the
