@@ -41,7 +41,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const version = "0.10.1"
+const version = "0.11.0"
 
 var (
 	dashboardBackend string
