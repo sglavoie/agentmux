@@ -355,6 +355,52 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(expanded.compactTerminalButtons.isEmpty)
     }
 
+    func testCompactTerminalTabsReceiveClicksAcrossSessionStateFlashes() throws {
+        workspace.setCompactSidebar(true)
+        workspace.window.orderFront(nil)
+        // Return to Idle as well: the overlay stays installed after any transition.
+        for icon in ["", "working", "stop", "question", ""] {
+            app.store.apply(snapshot: F.snapshot([F.tmux(1, project: "api", profile: "work", icon: icon)]))
+            let session = try row("api", "work")
+            workspace.activate(session)
+            if workspace.views.terminals(beside: F.runtimeID(1)).isEmpty {
+                XCTAssertTrue(workspace.openTerminalBesideSession())
+                XCTAssertTrue(workspace.openTerminalBesideSession())
+            }
+            let terminals = workspace.views.terminals(beside: F.runtimeID(1))
+            let line = try index(of: session.key)
+            let rowView = try XCTUnwrap(workspace.sidebar.rowView(atRow: line, makeIfNecessary: true) as? WorkspaceRowView)
+            rowView.flash()
+            for flashing in [true, false] {
+                if !flashing {
+                    // Completing the animation leaves its transparent view installed.
+                    for view in rowView.subviews { view.layer?.removeAnimation(forKey: WorkspaceRowView.flashKey) }
+                }
+                XCTAssertEqual(rowView.isFlashing, flashing)
+                for terminal in terminals {
+                    workspace.activate(session)
+                    workspace.sidebar.scrollRowToVisible(line)
+                    workspace.window.layoutIfNeeded()
+                    let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: line, makeIfNecessary: true) as? WorkspaceRowCellView)
+                    let button = try XCTUnwrap(cell.compactTerminalButtons.first { $0.terminalID == terminal.id })
+                    let root = try XCTUnwrap(workspace.window.contentView)
+                    let point = button.convert(NSPoint(x: 4, y: button.bounds.midY), to: nil)
+                    let hit = root.hitTest(root.superview!.convert(point, from: nil))
+                    XCTAssertTrue(hit === button, "Tab must receive clicks in state \(icon), flashing: \(flashing)")
+                    let close = button.closeButton
+                    let closePoint = close.convert(NSPoint(x: close.bounds.midX, y: close.bounds.midY), to: root.superview)
+                    XCTAssertTrue(root.hitTest(closePoint) === close, "Close button must remain reachable")
+                    let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                        windowNumber: workspace.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+                    // Route through the window hierarchy, without requiring the test app to be active.
+                    if hit === button { hit?.mouseDown(with: down) }
+                    XCTAssertEqual(workspace.viewSelection, terminal.id)
+                    XCTAssertTrue(workspace.window.firstResponder === workspace.utilityTerminalView(for: terminal.id))
+                }
+            }
+        }
+    }
+
     func testCompactTerminalTabUsesFullTitleWhenItFitsAndOrdinalWhenItDoesNot() throws {
         let button = WorkspaceCompactTerminalButton(terminalID: "terminal:example#2")
         button.title = "Terminal 2"

@@ -191,7 +191,7 @@ class WorkspaceRowView: NSTableRowView {
 
     /// The accent drawn over the line while it flashes, under its border.
     private let flashView: NSView = {
-        let view = NSView()
+        let view = WorkspaceRowFlashView()
         view.wantsLayer = true
         view.layer?.opacity = 0
         view.layer?.cornerRadius = WorkspaceRowView.selectionRadius
@@ -231,6 +231,13 @@ class WorkspaceRowView: NSTableRowView {
                       width: max(0, bounds.maxX - Self.selectionInset - left),
                       height: max(0, bounds.height - 2 * verticalInset))
     }
+}
+
+/// The flash remains installed after its layer fades; it must never cover
+/// the row's terminal tabs or close buttons for mouse hit testing.
+@MainActor
+private final class WorkspaceRowFlashView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Session state sits to the left of the selected row's outline.
