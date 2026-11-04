@@ -87,6 +87,26 @@ func TestProjectionProblemsAreWarningsEvenInRequiredMode(t *testing.T) {
 	}
 }
 
+// Old state files may keep projections from a previous contract after both
+// installed executables have moved on. They are unreadable as evidence, but
+// cannot by themselves make the live bridge pairing fail.
+func TestOlderProjectionsWarnWithoutFailingTheLiveContract(t *testing.T) {
+	resetDoctorTestState(t)
+	aslDoctorStat = func(string) error { return nil }
+	in := pairedInputs()
+	in.Mode = string(aslbridge.ModeRequired)
+	in.Reconcile.UnsupportedContracts = 49
+	in.Reconcile.Sweeps = 1
+	report := evaluateASLIntegration(in)
+	if got := dimension(t, report, aslDimensionContract); got.Status != aslStatusOK {
+		t.Errorf("live contract = %s (%s), want ok", got.Status, got.Detail)
+	}
+	got := dimension(t, report, aslDimensionProjection)
+	if got.Status != aslStatusWarn || !strings.Contains(got.Detail, "49 unsupported-contract projection readings across 1 sweep") {
+		t.Errorf("projection = %s (%s), want historical warning", got.Status, got.Detail)
+	}
+}
+
 // A stale bridge still serves reads, so nothing looks broken — the dashboard
 // simply describes a world that has moved on.
 func TestAStaleSnapshotOrALaggingSweepIsReportedAsStale(t *testing.T) {

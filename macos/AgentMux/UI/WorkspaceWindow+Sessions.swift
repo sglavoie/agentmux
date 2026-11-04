@@ -131,13 +131,26 @@ extension WorkspaceWindowController {
             let close = NSMenuItem(title: Self.closeTitle, action: #selector(closeClickedView(_:)), keyEquivalent: "")
             close.representedObject = view.id
             close.target = self
+            var items: [NSMenuItem] = []
             if view.canName {
                 let name = NSMenuItem(title: Self.nameTerminalTitle, action: #selector(nameClickedTerminal(_:)), keyEquivalent: "")
                 name.representedObject = view.id
                 name.target = self
-                return [name, close]
+                items.append(name)
             }
-            return [close]
+            if compactSidebar, view.kind == .terminal, let beside = view.besideRuntimeSessionID {
+                let terminals = views.terminals(beside: beside)
+                if let position = terminals.firstIndex(where: { $0.id == view.id }), terminals.count > 1 {
+                    for (title, offset) in [("Move Terminal Left", -1), ("Move Terminal Right", 1)] {
+                        let move = NSMenuItem(title: title, action: #selector(moveClickedTerminal(_:)), keyEquivalent: "")
+                        move.representedObject = [view.id, offset] as [Any]
+                        move.target = self
+                        move.isEnabled = terminals.indices.contains(position + offset)
+                        items.append(move)
+                    }
+                }
+            }
+            return items + [close]
         case let .group(group): return groupMenuItems(group)
         case .section, .overview: return []
         }
@@ -146,6 +159,19 @@ extension WorkspaceWindowController {
     @objc private func nameClickedTerminal(_ sender: Any?) {
         guard let id = (sender as? NSMenuItem)?.representedObject as? String else { return }
         nameTerminal(id)
+    }
+
+    @objc private func moveClickedTerminal(_ sender: Any?) {
+        guard let values = (sender as? NSMenuItem)?.representedObject as? [Any],
+              values.count == 2, let id = values[0] as? String, let offset = values[1] as? Int,
+              let view = views.view(id), let beside = view.besideRuntimeSessionID else { return }
+        let terminals = views.terminals(beside: beside)
+        guard let index = terminals.firstIndex(where: { $0.id == id }),
+              terminals.indices.contains(index + offset) else { return }
+        let destination = offset < 0 ? terminals[index - 1].id
+            : terminals.indices.contains(index + 2) ? terminals[index + 2].id : nil
+        views.moveTerminal(id, before: destination)
+        reloadSidebar(allowReorder: true)
     }
 
     /// The list's empty space: where to go, and what to open, as the main

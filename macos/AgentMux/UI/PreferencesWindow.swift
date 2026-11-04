@@ -742,6 +742,8 @@ struct PreferencesView: View {
             }
 
             Section("Sidebar appearance") {
+                Toggle("Compact sidebar", isOn: $model.preferences.compactSidebar)
+                note("Shows terminals beside their session, like tabs, to fit more sessions in the sidebar.")
                 LabeledContent("Sidebar zoom") {
                     HStack {
                         if model.preferences.sidebarZoomPercent != 100 {

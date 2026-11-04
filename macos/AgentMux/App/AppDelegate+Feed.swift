@@ -104,7 +104,7 @@ extension AppDelegate: DaemonConnectionDelegate {
     func sharePinsOnce() {
         let defaults = UserDefaults.standard
         guard !Self.isRunningTests, !defaults.bool(forKey: WorkspaceOrder.pinsSharedDefaultsKey),
-              store.feed == .live, let snapshot = store.snapshot, command != nil else { return }
+              store.feed == .live, store.snapshot != nil, command != nil else { return }
         defaults.set(true, forKey: WorkspaceOrder.pinsSharedDefaultsKey)
         let rows = WorkspaceSidebar.rows(store.managedSessions)
         for row in attentionOrder.unsharedPins(rows) {

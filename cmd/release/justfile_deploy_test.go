@@ -103,11 +103,17 @@ func TestJustInstallRestartSmokeGatesOnReadinessAndStrictDoctor(t *testing.T) {
 func TestJustUpdateInstallsEverythingBeforeVerifying(t *testing.T) {
 	justfile := readJustfile(t)
 	justfileRecipe(t, justfile, "update")
-	if !strings.Contains(justfile, "\nupdate: install sync-hooks mac-install restart-verify\n") {
-		t.Error("update must depend on install, sync-hooks, mac-install, then restart-verify")
+	if !strings.Contains(justfile, "\nupdate: install sync-hooks mac-install sync-app-binary restart-verify\n") {
+		t.Error("update must install the signed app binary before restarting and verifying")
 	}
 	if !strings.Contains(justfileRecipe(t, justfile, "sync-hooks"), "config hooks-sync") {
 		t.Error("sync-hooks must run the installed amx's hooks-sync")
+	}
+	sync := justfileRecipe(t, justfile, "sync-app-binary")
+	for _, want := range []string{"Contents/Resources/bin/amx", ".amx.staging", "codesign --verify", "mv -f"} {
+		if !strings.Contains(sync, want) {
+			t.Errorf("sync-app-binary must atomically install the signed bundle's amx (%s missing):\n%s", want, sync)
+		}
 	}
 }
 

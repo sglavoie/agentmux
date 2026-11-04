@@ -333,7 +333,6 @@ extension WorkspaceWindowController {
     }
 
     func fillPlaceholder(_ content: Content) {
-        let row = state.selectedRow
         switch content {
         case .empty, .terminal, .view, .review:
             // Rows held from the last snapshot can still be chosen; with none

@@ -113,6 +113,17 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private(set) var isOpen = false
 
     let sidebar = WorkspaceSidebarView()
+    private(set) var compactSidebar = false
+
+    func setCompactSidebar(_ compact: Bool) {
+        guard compactSidebar != compact else { return }
+        compactSidebar = compact
+        guard sidebar.dataSource != nil else { return }
+        applying = true
+        sidebar.reloadData()
+        applying = false
+        syncSidebarSelection()
+    }
     /// The sidebars' zoom in percent, kept whole so steps never drift.
     private(set) var sidebarZoomPercent = 100
     var sidebarZoom: CGFloat { CGFloat(sidebarZoomPercent) / 100 }
@@ -546,7 +557,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     func refresh() {
         guard let store = delegate?.store else { return }
         var live: [WorkspaceGroup]?
-        if store.feed == .live, let snapshot = store.snapshot {
+        if store.feed == .live, store.snapshot != nil {
             live = WorkspaceSidebar.groups(store.sessions, now: now(), glyphs: glyphs, order: order)
         }
         let wasCurrent = state.current

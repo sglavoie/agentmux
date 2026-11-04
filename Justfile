@@ -635,9 +635,23 @@ install-restart-smoke: install restart-verify
 #
 # It runs from any terminal.
 #
-# Update everything from this checkout: amx, hooks, menu bar app, daemon
-update: install sync-hooks mac-install restart-verify
+# Update everything from this checkout: amx, hooks, menu bar app, daemon. The
+# app signs its bundled amx, changing its file hash, so install those exact
+# signed bytes as the CLI before the daemon restarts and doctor compares them.
+update: install sync-hooks mac-install sync-app-binary restart-verify
     @echo "update: ok ($("{{prefix_bin}}/amx" --version))"
+
+[private]
+sync-app-binary:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bundled="${AMX_APP_INSTALL_DIR:-/Applications}/Agent Mux.app/Contents/Resources/bin/amx"
+    staging="{{prefix_bin}}/.amx.staging"
+    test -x "$bundled"
+    cp "$bundled" "$staging"
+    codesign --verify "$staging"
+    mv -f "$staging" "{{prefix_bin}}/amx"
+    echo "Installed signed app binary at {{prefix_bin}}/amx"
 
 # Hook files follow the installed amx's templates, so a new amx can leave an
 # installed one drifted, which strict doctor fails on.

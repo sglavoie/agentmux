@@ -112,11 +112,48 @@ extension WorkspaceWindowController {
     }
 
     func syncSidebarSelection() {
+        syncCompactTerminalTabs()
         let wanted = shownLine.map { IndexSet(integer: $0) } ?? IndexSet()
         guard sidebar.selectedRowIndexes != wanted else { return }
         applying = true
         sidebar.selectRowIndexes(wanted, byExtendingSelection: false)
         applying = false
+    }
+
+    private func syncCompactTerminalTabs() {
+        guard compactSidebar else { return }
+        for (index, item) in items.enumerated() {
+            guard index < sidebar.numberOfRows, case let .row(row) = item,
+                  let cell = sidebar.view(atColumn: 0, row: index, makeIfNecessary: false) as? WorkspaceRowCellView
+            else { continue }
+            configureCompactTabs(in: cell, for: row)
+        }
+    }
+
+    private func configureCompactTabs(in cell: WorkspaceRowCellView, for row: WorkspaceRow) {
+        let terminals = views.terminals(beside: row.embeddedRuntimeSessionID)
+        var details: [String: String] = [:]
+        for terminal in terminals {
+            let program = terminal.detail(session: nil, program: programTitles[terminal.id])
+            if let progress = progresses[terminal.id] {
+                let status = WorkspaceRowCellView.progressText(progress)
+                details[terminal.id] = program.isEmpty ? status : "\(status) · \(program)"
+            } else {
+                details[terminal.id] = program
+            }
+        }
+        cell.onSelectTerminal = { [weak self] id in _ = self?.showView(id) }
+        cell.onCloseTerminal = { [weak self] id in self?.closeView(id) }
+        cell.onTerminalMenu = { [weak self] id in
+            guard let self, let index = self.items.firstIndex(where: {
+                if case let .view(view) = $0 { return view.id == id }
+                return false
+            }) else { return nil }
+            let menu = NSMenu()
+            for item in self.contextMenuItems(forRow: index) { menu.addItem(item) }
+            return menu.items.isEmpty ? nil : menu
+        }
+        cell.showCompactTerminals(terminals, selectedID: viewSelection, ringing: ringingViews, details: details)
     }
 
     /// The line of what the pane is on, if the list has it.
@@ -209,6 +246,8 @@ extension WorkspaceWindowController {
         case .section, .group: return 34
         case let .overview(counts):
             return WorkspaceOverviewCellView.height(for: counts, width: tableView.tableColumns.first?.width ?? tableView.bounds.width)
+        case let .view(view) where compactSidebar && view.kind == .terminal && view.besideRuntimeSessionID != nil:
+            return 1
         case let .row(row) where !row.name.isEmpty: return 54
         case .view, .row: return 38
         }
@@ -228,8 +267,12 @@ extension WorkspaceWindowController {
             cell.onSelect = { [weak self] count in self?.selectSection(count) }
             return cell
         case let .view(view):
+            if compactSidebar && view.kind == .terminal && view.besideRuntimeSessionID != nil {
+                return NSTableCellView(frame: .zero)
+            }
             let cell = tableView.makeView(withIdentifier: WorkspaceRowCellView.identifier, owner: nil) as? WorkspaceRowCellView
                 ?? WorkspaceRowCellView()
+            cell.showCompactTerminals([], selectedID: nil)
             cell.show(view, session: view.aboutRuntimeSessionID.flatMap { sessionNames[$0] },
                       program: programTitles[view.id], bell: ringingViews.contains(view.id),
                       progress: progresses[view.id])
@@ -249,6 +292,11 @@ extension WorkspaceWindowController {
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
                       sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false,
                       away: Item.isAway(at: line, in: items))
+            if compactSidebar {
+                configureCompactTabs(in: cell, for: row)
+            } else {
+                cell.showCompactTerminals([], selectedID: nil)
+            }
             let current = state.row(row.key) != nil
             cell.alphaValue = current ? 1 : 0.5
             cell.closeButton.isEnabled = current
@@ -264,6 +312,10 @@ extension WorkspaceWindowController {
     /// Session and child-terminal rows carry a small profile-color marker.
     /// Every selection uses the same system accent.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        if compactSidebar, case let .view(utility) = items[row],
+           utility.kind == .terminal, utility.besideRuntimeSessionID != nil {
+            return NSTableRowView()
+        }
         let view: WorkspaceRowView
         if case let .view(utility) = items[row], utility.kind == .terminal {
             view = WorkspaceTerminalRowView()

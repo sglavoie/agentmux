@@ -111,6 +111,83 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(reported, [200, 100, 90, 80, 70])
     }
 
+    func testCompactSidebarPlacesTerminalTabsBesideSessionAndKeepsSelection() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        workspace.setCompactSidebar(true)
+        workspace.activate(work)
+        XCTAssertTrue(workspace.openTerminalBesideSession())
+        XCTAssertTrue(workspace.openTerminalBesideSession())
+        let terminals = workspace.views.terminals(beside: F.runtimeID(1))
+        XCTAssertEqual(terminals.count, 2)
+        workspace.programTitles[terminals[0].id] = "make test"
+        workspace.sidebar.reloadData()
+        let sessionIndex = try index(of: work.key)
+        let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: sessionIndex, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertEqual(cell.compactTerminalButtons.map(\.terminalID), terminals.map(\.id))
+        XCTAssertEqual(cell.compactTerminalButtons[0].displayedDetail, "make test")
+        XCTAssertEqual(cell.compactTerminalButtons[1].displayedDetail, "")
+        let menu = try XCTUnwrap(cell.compactTerminalButtons[0].onMenu?())
+        XCTAssertEqual(menu.items.map(\.title), ["Name Terminal…", "Move Terminal Left", "Move Terminal Right", "Close"])
+        XCTAssertFalse(menu.items[1].isEnabled)
+        XCTAssertTrue(menu.items[2].isEnabled)
+        workspace.window.layoutIfNeeded()
+        for (index, button) in cell.compactTerminalButtons.enumerated() {
+            let frame = button.convert(button.bounds, to: cell)
+            XCTAssertGreaterThan(frame.minX, cell.bounds.minX + cell.bounds.width * 0.4)
+            XCTAssertGreaterThan(frame.width, 0)
+            XCTAssertLessThanOrEqual(frame.maxX, cell.bounds.maxX)
+            XCTAssertFalse(button.closeButton.isHidden)
+            XCTAssertEqual(button.closeButton.accessibilityLabel(), "Close Terminal: \(terminals[index].displayName)")
+            XCTAssertEqual(button.displayedTitle, "T\(terminals[index].ordinal)")
+        }
+        for terminal in terminals {
+            let line = try XCTUnwrap(workspace.items.firstIndex(of: .view(terminal)))
+            XCTAssertEqual(workspace.tableView(workspace.sidebar, heightOfRow: line), 1)
+        }
+        cell.compactTerminalButtons[0].performClick(nil)
+        XCTAssertEqual(workspace.viewSelection, terminals[0].id)
+        XCTAssertTrue(cell.compactTerminalButtons[0].isCurrent)
+        XCTAssertFalse(cell.compactTerminalButtons[1].isCurrent)
+        _ = try XCTUnwrap(menu.items[2].target).perform(try XCTUnwrap(menu.items[2].action), with: menu.items[2])
+        XCTAssertEqual(workspace.views.terminals(beside: F.runtimeID(1)).map(\.id), terminals.reversed().map(\.id))
+        let reordered = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: sessionIndex, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertEqual(reordered.compactTerminalButtons.map(\.terminalID), terminals.reversed().map(\.id))
+        workspace.programTitles[terminals[0].id] = "swift build"
+        workspace.progresses[terminals[0].id] = Ghostty.Progress(state: .normal, percent: 45)
+        workspace.reload(IndexSet(integer: sessionIndex))
+        let updated = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: sessionIndex, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertEqual(updated.compactTerminalButtons[1].displayedDetail, "45% · swift build")
+        workspace.confirmBeforeClosing = false
+        updated.compactTerminalButtons[0].closeButton.performClick(nil)
+        XCTAssertEqual(workspace.views.terminals(beside: F.runtimeID(1)).map(\.id), [terminals[0].id])
+        XCTAssertNotNil(workspace.state.row(work.key), "closing a tab must leave its session running")
+        workspace.setCompactSidebar(false)
+        let line = try XCTUnwrap(workspace.items.firstIndex(of: .view(terminals[0])))
+        XCTAssertEqual(workspace.tableView(workspace.sidebar, heightOfRow: line), 38)
+        let expanded = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: sessionIndex, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertTrue(expanded.compactTerminalButtons.isEmpty)
+    }
+
+    func testCompactTerminalTabUsesFullTitleWhenItFitsAndOrdinalWhenItDoesNot() throws {
+        let button = WorkspaceCompactTerminalButton(terminalID: "terminal:example#2")
+        button.title = "Terminal 2"
+        button.shortTitle = "T2"
+        button.detail = "swift build"
+        button.frame = NSRect(x: 0, y: 0, width: 46, height: 34)
+        button.layoutSubtreeIfNeeded()
+        XCTAssertEqual(button.displayedTitle, "T2")
+        XCTAssertEqual(button.displayedDetail, "swift build")
+        XCTAssertFalse(button.closeButton.isHidden)
+        let detail = try XCTUnwrap(button.subviews.compactMap { $0 as? NSTextField }.first { $0.stringValue == "swift build" })
+        XCTAssertFalse(detail.frame.intersects(button.closeButton.frame))
+        XCTAssertGreaterThan(detail.frame.maxX, button.closeButton.frame.minX,
+                             "the command line uses the space beneath the close button")
+        button.frame.size.width = 150
+        button.layoutSubtreeIfNeeded()
+        XCTAssertEqual(button.displayedTitle, "Terminal 2")
+    }
+
     private func index(of key: AttentionCycler.Key) throws -> Int {
         try XCTUnwrap(workspace.items.firstIndex { item in
             if case let .row(row) = item { return row.key == key }

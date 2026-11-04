@@ -152,15 +152,10 @@ func aslContractDimension(in aslIntegrationInputs) doctorASLDimension {
 		in.Reconcile.ContractSetID != aslcontract.ContractSetID {
 		mismatches = append(mismatches, "the state root publishes "+in.Reconcile.ContractSetID)
 	}
-	if in.Reconcile != nil && in.Reconcile.UnsupportedContracts > 0 {
-		mismatches = append(mismatches, fmt.Sprintf(
-			"%s named a contract set this build does not implement",
-			cli.CountOf(in.Reconcile.UnsupportedContracts, "projection", "projections")))
-	}
 	if len(mismatches) > 0 {
-		// A mismatch is terminal by construction: the daemon refuses the peer
-		// every time, so it is a failure in every mode rather than a warning
-		// that might clear on its own.
+		// A live mismatch is terminal: the daemon refuses the peer every time.
+		// Historical projections are counted by the projection dimension; they
+		// do not prove that the connected bridge speaks an older contract.
 		dim.Status = aslStatusFail
 		dim.Detail = fmt.Sprintf("this build implements %s, but %s",
 			aslcontract.ContractSetID, strings.Join(mismatches, "; and "))
@@ -179,9 +174,8 @@ func aslContractDimension(in aslIntegrationInputs) doctorASLDimension {
 }
 
 // aslProjectionDimension reports what the sweep could not read. These are
-// warnings rather than failures even in required mode: a single corrupt plan
-// does not break the pairing, and treating it as a strict-doctor failure would
-// make one unreadable directory block a release check forever.
+// warnings rather than failures even in required mode: a historical plan's
+// projection cannot establish that the currently connected peer is mismatched.
 func aslProjectionDimension(in aslIntegrationInputs) doctorASLDimension {
 	dim := doctorASLDimension{Name: aslDimensionProjection}
 	if !in.DaemonAlive || in.Reconcile == nil {
@@ -204,10 +198,13 @@ func aslProjectionDimension(in aslIntegrationInputs) doctorASLDimension {
 	if r.UnreadableStates > 0 {
 		problems = append(problems, fmt.Sprintf("%s across %s", cli.CountOf(r.UnreadableStates, "unreadable state document reading", "unreadable state document readings"), cli.CountOf(r.Sweeps, "sweep", "sweeps")))
 	}
+	if r.UnsupportedContracts > 0 {
+		problems = append(problems, fmt.Sprintf("%s across %s", cli.CountOf(r.UnsupportedContracts, "unsupported-contract projection reading", "unsupported-contract projection readings"), cli.CountOf(r.Sweeps, "sweep", "sweeps")))
+	}
 	if len(problems) > 0 {
 		dim.Status = aslStatusWarn
 		dim.Detail = fmt.Sprintf("under %s: %s", r.StateRoot, strings.Join(problems, ", "))
-		dim.Remediation = "run `asl agent-mux pairing` to list the affected plans"
+		dim.Remediation = "run `asl agent-mux pairing --json` to inspect state compatibility"
 		return dim
 	}
 	if r.Sweeps == 0 {

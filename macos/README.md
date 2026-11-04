@@ -409,13 +409,19 @@ ASL answer panel work the same either way.
   1.6 seconds total, or one 0.8-second pulse with Reduce Motion.
   These flashes leave focus, scrolling, and collapsed groups alone; first
   sightings and updates to names or ages do not flash.
+  Preferences › Appearance › Compact sidebar places attached terminals as
+  tabs beside their session, saving a row for each terminal. The setting is
+  kept for the next launch; the regular layout remains the default. Each tab
+  has a × that closes only its terminal.
 - **Dragging.** Press a session's row and drag it to move it among its
   project's sessions; the terminals beside it go with it. The order is a
   `WorkspaceOrder`, kept in the `amxWorkspaceSessionOrder` preference, and a
   session launched later follows the dragged ones. Dragging other sessions
   preserves the saved places of those temporarily needing attention. A terminal
-  beside a session drags among that session's terminals (`WorkspaceViews.moveTerminal`),
-  for as long as the app runs. `dropSlots(forItemAt:)` is the whole rule:
+  beside a session drags among that session's terminals in the regular layout
+  (`WorkspaceViews.moveTerminal`); its tab's right-click menu offers Move Left
+  and Move Right in compact mode. Terminal order lasts for as long as the app
+  runs. `dropSlots(forItemAt:)` is the whole rule:
   nothing leaves its project or its session, and the project lines and the
   **Workspace** section do not move.
 - **Pinning.** **Pin to Top** in a session's right-click menu, or **Session ›
@@ -715,7 +721,8 @@ never a command line, and amx decides the program and removes every session
   `.terminal` view: `amx workspace-view session-shell <runtime-session-id>`,
   a login shell in the directory of that session's pane, which amx reads only
   while the private server holds the pane for that session. The sidebar lists
-  it under the session's row (`reloadSidebar`) rather than in **Workspace**,
+  it under the session's row, or beside it in compact mode (`reloadSidebar`),
+  rather than in **Workspace**,
   and closes it when the session ends, including when a live snapshot stops
   listing the session. A disconnected feed keeps the terminals intact. It is a
   utility view in every other respect: `WorkspaceState.rows` never holds it,

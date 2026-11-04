@@ -33,6 +33,7 @@ extension AppDelegate {
         let controller = WorkspaceWindowController(delegate: self)
         controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing
         controller.setSidebarZoom(percent: preferencesModel.preferences.sidebarZoomPercent)
+        controller.setCompactSidebar(preferencesModel.preferences.compactSidebar)
         controller.onSidebarZoomChanged = { [weak self] percent in
             self?.preferencesModel.preferences.sidebarZoomPercent = percent
         }

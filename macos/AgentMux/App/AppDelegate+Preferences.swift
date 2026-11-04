@@ -37,6 +37,7 @@ extension AppDelegate {
     func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
         workspace?.setSidebarZoom(percent: new.sidebarZoomPercent)
+        if old.compactSidebar != new.compactSidebar { workspace?.setCompactSidebar(new.compactSidebar) }
         if old.confirmationPolicy != new.confirmationPolicy {
             do { try workspaceConfirmationFile.write(new.confirmationPolicy) }
             catch {
@@ -163,7 +164,7 @@ extension AppDelegate {
     /// ⌃⌥⌘N: focuses the first waiting session in the workspace sidebar's
     /// order, then the next on each press.
     func focusNextAttention() {
-        guard store.feed == .live, let snapshot = store.snapshot else {
+        guard store.feed == .live, store.snapshot != nil else {
             refuse(DaemonPhrase.notConnected + ".")
             return
         }

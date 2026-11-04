@@ -576,7 +576,15 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// is there: a hidden one leaves the title the whole line.
     private var clearOfClose: NSLayoutConstraint!
     private var clearOfKey: NSLayoutConstraint!
+    private var compactContentWidth: NSLayoutConstraint!
+    private var terminalTabsLeading: NSLayoutConstraint!
+    private var terminalTabsTrailing: NSLayoutConstraint!
     private let contentStack = NSStackView()
+    private let terminalTabs = NSStackView()
+    private(set) var compactTerminalButtons: [WorkspaceCompactTerminalButton] = []
+    var onSelectTerminal: ((String) -> Void)?
+    var onCloseTerminal: ((String) -> Void)?
+    var onTerminalMenu: ((String) -> NSMenu?)?
 
     init() {
         super.init(frame: .zero)
@@ -603,6 +611,12 @@ final class WorkspaceRowCellView: NSTableCellView {
         contentStack.spacing = 6
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(contentStack)
+        terminalTabs.orientation = .horizontal
+        terminalTabs.distribution = .fillEqually
+        terminalTabs.spacing = 2
+        terminalTabs.translatesAutoresizingMaskIntoConstraints = false
+        terminalTabs.isHidden = true
+        addSubview(terminalTabs)
         closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .bold))
         closeButton.imagePosition = .imageOnly
@@ -625,6 +639,8 @@ final class WorkspaceRowCellView: NSTableCellView {
             keyLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
             keyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             contentStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            terminalTabs.centerYAnchor.constraint(equalTo: centerYAnchor),
+            terminalTabs.heightAnchor.constraint(equalToConstant: 34),
             closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 1),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
             closeButton.widthAnchor.constraint(equalToConstant: Self.closeTarget),
@@ -632,12 +648,56 @@ final class WorkspaceRowCellView: NSTableCellView {
         ])
         clearOfClose = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2)
         clearOfKey = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4)
+        terminalTabsLeading = terminalTabs.leadingAnchor.constraint(equalTo: contentStack.trailingAnchor, constant: 4)
+        terminalTabsTrailing = terminalTabs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -28)
+        compactContentWidth = contentStack.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.45)
         closeButton.alphaValue = 0
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
     }
 
     @objc private func closePressed(_ sender: Any?) { onClose?() }
+
+    /// A session and its attached terminals share one visible line in compact mode.
+    func showCompactTerminals(_ terminals: [WorkspaceUtilityView], selectedID: String?, ringing: Set<String> = [],
+                              details: [String: String] = [:]) {
+        let titles = terminals.map { $0.displayName + (ringing.contains($0.id) ? " \(Self.bellGlyph)" : "") }
+        if compactTerminalButtons.map(\.terminalID) == terminals.map(\.id),
+           compactTerminalButtons.map(\.title) == titles,
+           compactTerminalButtons.map(\.detail) == terminals.map({ details[$0.id] ?? "" }) {
+            selectCompactTerminal(selectedID)
+            return
+        }
+        for button in compactTerminalButtons {
+            terminalTabs.removeArrangedSubview(button)
+            button.removeFromSuperview()
+        }
+        compactTerminalButtons = terminals.enumerated().map { index, terminal in
+            let button = WorkspaceCompactTerminalButton(terminalID: terminal.id)
+            button.title = titles[index]
+            button.shortTitle = "T\(max(terminal.ordinal, 1))"
+            button.detail = details[terminal.id] ?? ""
+            button.toolTip = button.detail.isEmpty ? terminal.displayName : "\(terminal.displayName) — \(button.detail)"
+            button.setAccessibilityLabel(button.detail.isEmpty
+                ? "Terminal: \(terminal.displayName)" : "Terminal: \(terminal.displayName), \(button.detail)")
+            button.closeButton.toolTip = "Close Terminal: \(terminal.displayName)"
+            button.closeButton.setAccessibilityLabel("Close Terminal: \(terminal.displayName)")
+            button.onSelect = { [weak self, id = terminal.id] in self?.onSelectTerminal?(id) }
+            button.onClose = { [weak self, id = terminal.id] in self?.onCloseTerminal?(id) }
+            button.onMenu = { [weak self, id = terminal.id] in self?.onTerminalMenu?(id) }
+            terminalTabs.addArrangedSubview(button)
+            return button
+        }
+        terminalTabs.isHidden = terminals.isEmpty
+        terminalTabsLeading.isActive = !terminals.isEmpty
+        terminalTabsTrailing.isActive = !terminals.isEmpty
+        compactContentWidth.isActive = !terminals.isEmpty
+        selectCompactTerminal(selectedID)
+    }
+
+    func selectCompactTerminal(_ id: String?) {
+        for button in compactTerminalButtons { button.isCurrent = button.terminalID == id }
+    }
 
     func setStateGlyphOutsidePill(_ outside: Bool) {
         contentStack.spacing = outside ? 10 : 6
@@ -665,6 +725,10 @@ final class WorkspaceRowCellView: NSTableCellView {
         super.prepareForReuse()
         isHovered = false
         setStateGlyphOutsidePill(false)
+        showCompactTerminals([], selectedID: nil)
+        onSelectTerminal = nil
+        onCloseTerminal = nil
+        onTerminalMenu = nil
     }
 
     /// After the title of a line whose terminal rang the bell unseen.
@@ -804,6 +868,125 @@ final class WorkspaceRowCellView: NSTableCellView {
         if let sessionKey { spoken.append("Command \(sessionKey)") }
         return spoken.joined(separator: ", ")
     }
+}
+
+/// A terminal tab in a compact session row, with its own close button and
+/// right-click menu so both actions address the terminal rather than its session.
+@MainActor
+final class WorkspaceCompactTerminalButton: NSView {
+    let terminalID: String
+    let closeButton = NSButton(title: "", target: nil, action: nil)
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let detailLabel = NSTextField(labelWithString: "")
+    private var titleCenterY: NSLayoutConstraint!
+    private var titleTop: NSLayoutConstraint!
+    private var fullTitle = ""
+    var title: String {
+        get { fullTitle }
+        set { fullTitle = newValue; needsLayout = true }
+    }
+    var shortTitle = "" { didSet { needsLayout = true } }
+    var detail = "" {
+        didSet {
+            detailLabel.stringValue = detail
+            detailLabel.isHidden = detail.isEmpty
+            if detail.isEmpty {
+                titleTop.isActive = false
+                titleCenterY.isActive = true
+            } else {
+                titleCenterY.isActive = false
+                titleTop.isActive = true
+            }
+        }
+    }
+    var displayedTitle: String { titleLabel.stringValue }
+    var displayedDetail: String { detailLabel.stringValue }
+    var onSelect: (() -> Void)?
+    var onClose: (() -> Void)?
+    var onMenu: (() -> NSMenu?)?
+    var isCurrent = false {
+        didSet { needsDisplay = true }
+    }
+
+    init(terminalID: String) {
+        self.terminalID = terminalID
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 5
+        layer?.cornerCurve = .continuous
+        setAccessibilityRole(.button)
+        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        titleLabel.setAccessibilityElement(false)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+        detailLabel.font = .systemFont(ofSize: 10)
+        detailLabel.textColor = .secondaryLabelColor
+        detailLabel.lineBreakMode = .byTruncatingTail
+        detailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        detailLabel.setAccessibilityElement(false)
+        detailLabel.isHidden = true
+        detailLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(detailLabel)
+        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close Terminal")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .bold))
+        closeButton.imagePosition = .imageOnly
+        closeButton.isBordered = false
+        closeButton.contentTintColor = .secondaryLabelColor
+        closeButton.refusesFirstResponder = true
+        closeButton.target = self
+        closeButton.action = #selector(closePressed(_:))
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(closeButton)
+        titleCenterY = titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+        titleTop = titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 2)
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -1),
+            titleCenterY,
+            detailLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2),
+            detailLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            closeButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            closeButton.widthAnchor.constraint(equalToConstant: 14),
+            closeButton.heightAnchor.constraint(equalToConstant: 16),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported for this view") }
+
+    override func layout() {
+        super.layout()
+        let available = max(0, bounds.width - 3 - 1 - 14 - 2)
+        let font = titleLabel.font ?? .systemFont(ofSize: 11, weight: .semibold)
+        let width = (fullTitle as NSString).size(withAttributes: [.font: font]).width
+        let wanted = width <= available || shortTitle.isEmpty ? fullTitle : shortTitle
+        if titleLabel.stringValue != wanted { titleLabel.stringValue = wanted }
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        layer?.borderWidth = isCurrent ? 2 : 0.5
+        layer?.borderColor = (isCurrent ? NSColor.controlAccentColor : .separatorColor).cgColor
+        layer?.backgroundColor = (isCurrent ? NSColor.controlAccentColor.withAlphaComponent(0.15) : NSColor.clear).cgColor
+    }
+
+    @objc private func closePressed(_ sender: Any?) { onClose?() }
+
+    func performClick(_ sender: Any?) { onSelect?() }
+
+    override func mouseDown(with event: NSEvent) { onSelect?() }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        guard bounds.contains(local) else { return nil }
+        return closeButton.frame.contains(local) ? closeButton : self
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? { onMenu?() }
 }
 
 /// A sidebar label that can sit on a chip of color, as if highlighted. The

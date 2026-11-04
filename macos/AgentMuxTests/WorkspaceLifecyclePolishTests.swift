@@ -97,17 +97,17 @@ final class WorkspaceLifecyclePolishTests: XCTestCase {
         let card = try XCTUnwrap(workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first)
         let children = try XCTUnwrap(card.accessibilityChildren()).compactMap { $0 as? NSAccessibilityProtocol }
         let context = try XCTUnwrap(children.first { $0.accessibilityLabel()?.contains("context") == true || $0.accessibilityLabel()?.contains("Context") == true })
-        (context as? NSObject)?.accessibilityPerformAction(.press)
+        _ = context.accessibilityPerformPress()
         try await Task.sleep(for: .milliseconds(100))
         // Focus entry already expanded the reader; toggle again if the action closed it.
         if card.contextScroll.isHidden {
-            (context as? NSObject)?.accessibilityPerformAction(.press)
+            _ = context.accessibilityPerformPress()
             try await Task.sleep(for: .milliseconds(100))
         }
         XCTAssertEqual(card.contextLabel.stringValue, "Approve deployment to staging?")
         XCTAssertTrue(card.accessibilityChildren()?.contains { ($0 as AnyObject) === card.contextScroll } == true)
         let answer = try XCTUnwrap(children.first { $0.accessibilityLabel()?.hasPrefix("Answer ") == true })
-        (answer as? NSObject)?.accessibilityPerformAction(.press)
+        _ = answer.accessibilityPerformPress()
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(app.answers, [.prompt(runtimeSessionID: WorkspaceFixture.runtimeID(2))])
         workspace.window.sendEvent(key("\u{1b}", code: 53, window: workspace.window))
@@ -128,8 +128,7 @@ final class WorkspaceLifecyclePolishTests: XCTestCase {
         var visited = Set<ObjectIdentifier>()
         func elements(_ object: NSObject) -> [NSObject] {
             guard visited.insert(ObjectIdentifier(object)).inserted else { return [] }
-            let children = (object as? NSAccessibilityProtocol)?.accessibilityChildren() as? [NSObject]
-                ?? object.accessibilityAttributeValue(.children) as? [NSObject] ?? []
+            let children = (object as? NSAccessibilityProtocol)?.accessibilityChildren() as? [NSObject] ?? []
             // NSHostingView may keep native representable children in its
             // view tree while its virtual AX tree is served out-of-process.
             let native = (object as? NSView)?.subviews ?? []

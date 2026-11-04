@@ -69,7 +69,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxSidebarZoomPercent", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
+            "amxSidebarZoomPercent", "amxCompactSidebar", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
         ])
     }
 
@@ -186,6 +186,17 @@ final class AppPreferencesTests: XCTestCase {
             preferences.save(to: defaults)
             XCTAssertEqual(AppPreferences.load(from: defaults).sidebarZoomPercent, expected)
         }
+    }
+
+    func testCompactSidebarPersistsAndRejectsMistypedValues() {
+        let defaults = freshDefaults()
+        XCTAssertFalse(AppPreferences.load(from: defaults).compactSidebar)
+        var preferences = AppPreferences()
+        preferences.compactSidebar = true
+        preferences.save(to: defaults)
+        XCTAssertTrue(AppPreferences.load(from: defaults).compactSidebar)
+        defaults.set("true", forKey: AppPreferences.Key.compactSidebar)
+        XCTAssertFalse(AppPreferences.load(from: defaults).compactSidebar)
     }
 
     func testTerminalThemePersistsAsGhosttysValue() {
