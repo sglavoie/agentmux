@@ -56,6 +56,8 @@ enum MenuEntry: Equatable {
     case header(String)
     case session(MenuSessionRow)
     case submenu(String, [MenuSessionRow])
+    /// A nested menu of actions, including each project's folder alternate.
+    case actionSubmenu(String, [MenuEntry])
     case action(MenuAction, String)
     /// An action this amx or daemon cannot run, greyed out with the reason as
     /// its tooltip.
@@ -117,6 +119,7 @@ enum MenuBuilder {
         /// visits; it is greyed out when there are none.
         var waiting = 0
         var projects = FetchState<[ProjectEntry]>()
+        var projectGroup: String?
         /// Project directories the last survey found missing on disk.
         var missingProjectDirectories: Set<String> = []
         var recent = FetchState<[RecentConversation]>()
@@ -346,7 +349,7 @@ enum MenuBuilder {
         case .projects:
             return [.info("Launch in \(input.launchBackend.destination(cliBackend: input.cliLaunchBackend)) · \(input.launchBackend.source(cliSource: input.cliLaunchBackendSource))"),
                     .action(.launchSettings, "Launch Settings…"), .separator]
-                + projectEntries(input.projects, missing: input.missingProjectDirectories)
+                + scopedProjectEntries(input)
         case .recent: return recentEntries(input)
         case .notifications: return notificationEntries(input)
         }
@@ -374,14 +377,15 @@ enum MenuBuilder {
 
     /// Projects under one header per profile. A project whose directory is
     /// missing stays listed, greyed out, with the directory as the reason.
-    static func projectEntries(_ state: FetchState<[ProjectEntry]>, missing: Set<String> = []) -> [MenuEntry] {
-        guard let projects = state.value else {
+    static func projectEntries(_ state: FetchState<[ProjectEntry]>, missing: Set<String> = [], group: String? = nil) -> [MenuEntry] {
+        guard let all = state.value else {
             if let error = state.error { return [.info("Could not list projects: \(error)")] }
             return [.info("Loading…")]
         }
+        let projects = group.map { name in all.filter { $0.groups.contains(name) } } ?? all
         var entries: [MenuEntry] = []
         if projects.isEmpty {
-            entries.append(.info("No configured projects"))
+            entries.append(.info(group.map { "No projects in \($0)" } ?? "No configured projects"))
         }
         for (profile, members) in ProjectCatalog.grouped(projects) {
             entries.append(.header(profile.isEmpty ? "(no profile)" : profile))
@@ -396,6 +400,15 @@ enum MenuBuilder {
             entries.append(.info("Last refresh failed: \(error)"))
         }
         return entries
+    }
+
+    static func scopedProjectEntries(_ input: ActionsInput) -> [MenuEntry] {
+        guard let group = input.projectGroup else {
+            return projectEntries(input.projects, missing: input.missingProjectDirectories)
+        }
+        return [.header("Group: \(group)")]
+            + projectEntries(input.projects, missing: input.missingProjectDirectories, group: group)
+            + [.separator, .actionSubmenu("All projects", projectEntries(input.projects, missing: input.missingProjectDirectories))]
     }
 
     /// The most recently active conversations, newest first.
@@ -571,6 +584,14 @@ enum MenuBuilder {
                 let submenu = NSMenu(title: title)
                 submenu.autoenablesItems = false
                 rows.flatMap(sessionItems).forEach(submenu.addItem)
+                item.submenu = submenu
+                return [item]
+            case let .actionSubmenu(title, entries):
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                let submenu = NSMenu(title: title)
+                submenu.autoenablesItems = false
+                items(for: entries, target: target, sessionAction: sessionAction,
+                      actionSelector: actionSelector, muteAction: muteAction, submenus: submenus).forEach(submenu.addItem)
                 item.submenu = submenu
                 return [item]
             case let .action(action, title):

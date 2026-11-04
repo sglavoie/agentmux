@@ -37,6 +37,8 @@ protocol WorkspaceDelegate: AnyObject {
     func workspaceConversationChanged(_ conversation: ConversationIdentity?)
     /// The sidebar was hidden or shown.
     func workspaceSidebarCollapsedChanged(_ collapsed: Bool)
+    /// The group scope changed, including when navigation reveals an outside session.
+    func workspaceGroupChanged(_ group: String?)
     /// The open window entered or left full screen.
     func workspaceFullScreenChanged(_ fullScreen: Bool)
     /// The inspector was hidden or shown, or turned to another tab.
@@ -89,6 +91,8 @@ protocol WorkspaceDelegate: AnyObject {
     var workspaceLaunchDescription: String { get }
     var workspaceProjectGuidance: String { get }
     var workspaceProjects: [ProjectEntry] { get }
+    /// Only a successful catalog read can invalidate a restored group.
+    var workspaceProjectsLoaded: Bool { get }
     var workspaceOffersSetup: Bool { get }
     func workspaceSetupFinished()
     func workspaceLaunchProjects(from view: NSView)
@@ -111,8 +115,10 @@ protocol WorkspaceDelegate: AnyObject {
 }
 
 extension WorkspaceDelegate {
+    func workspaceGroupChanged(_ group: String?) {}
     var workspaceCommands: [WorkspaceSwitcher.Entry] { [] }
     var workspaceProjects: [ProjectEntry] { [] }
+    var workspaceProjectsLoaded: Bool { true }
     var workspaceLaunchDescription: String { "Launch in Workspace (tmux)" }
     var workspaceProjectGuidance: String { "Choose a configured project to start, or return to a past conversation." }
     var workspaceOffersSetup: Bool { false }

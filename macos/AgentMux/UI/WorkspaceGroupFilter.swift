@@ -20,7 +20,7 @@ final class WorkspaceGroupFilter: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override var isFlipped: Bool { true }
 
-    func show(groups: [String], selected: String?) {
+    func show(groups: [String], selected: String?, waiting: [String: Int] = [:], totalWaiting: Int? = nil) {
         if self.groups != groups || pills.isEmpty {
             self.groups = groups
             pills.forEach { $0.removeFromSuperview() }
@@ -35,6 +35,9 @@ final class WorkspaceGroupFilter: NSView {
             needsLayout = true
         }
         for pill in pills {
+            let previousTitle = pill.title
+            pill.showWaiting(pill.group.map { waiting[$0] } ?? totalWaiting)
+            if previousTitle != pill.title { invalidateIntrinsicContentSize(); needsLayout = true }
             pill.state = pill.group == selected ? .on : .off
             pill.needsDisplay = true
         }
@@ -75,6 +78,17 @@ final class WorkspaceGroupFilter: NSView {
 final class WorkspaceGroupPill: NSButton {
     static let labelFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
     let group: String?
+    private(set) var waitingCount: Int?
+
+    func showWaiting(_ count: Int?) {
+        waitingCount = count
+        let name = group ?? "All"
+        title = count.map { $0 > 0 ? "\(name) · \($0)" : name } ?? name
+        let label = group.map { "Group: \($0)" } ?? "All groups"
+        setAccessibilityLabel(count.map { "\(label), \($0) waiting" } ?? "\(label), waiting count unavailable")
+        let scope = group.map { "Show sessions in \($0). Click again to show all groups." } ?? "Show all groups."
+        toolTip = scope + (count.map { " \($0) waiting." } ?? " Waiting count unavailable.")
+    }
 
     init(group: String?) {
         self.group = group

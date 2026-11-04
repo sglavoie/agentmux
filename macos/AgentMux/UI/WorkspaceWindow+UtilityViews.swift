@@ -53,6 +53,7 @@ extension WorkspaceWindowController {
             if let row = state.row(.embedded(id)) {
                 Self.logger.notice("workspace: view request for session \(id, privacy: .public)")
                 activate(row)
+                if request.awaited { revealInSidebar() }
             } else if request.awaited, WorkspaceUtilityView.isRuntimeSessionID(id) {
                 Self.logger.notice("workspace: awaiting just-launched session \(id, privacy: .public)")
                 awaited = (id, now().addingTimeInterval(Self.awaitLimit))

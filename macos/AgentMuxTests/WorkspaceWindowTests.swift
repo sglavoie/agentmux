@@ -81,7 +81,7 @@ final class WorkspaceWindowTests: XCTestCase {
             ProjectEntry(profile: "work", title: "web", groups: ["tradition", "work"]),
         ]
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "tradition", "work"])
+        XCTAssertEqual(workspace.groupFilter.pills.map { $0.group ?? "All" }, ["All", "tradition", "work"])
         for index in [2, 1, 2, 1] {
             chooseGroup(at: index)
             XCTAssertEqual(Set(workspace.sessionShortcutRows.map(\.key)), [.embedded(F.runtimeID(1)), .embedded(F.runtimeID(4))])
@@ -125,7 +125,7 @@ final class WorkspaceWindowTests: XCTestCase {
             ProjectEntry(profile: "work", title: "offline", groups: ["empty", "personal"]),
         ]
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "empty", "personal", "shared", "work"])
+        XCTAssertEqual(workspace.groupFilter.pills.map { $0.group ?? "All" }, ["All", "empty", "personal", "shared", "work"])
         let hidden = try row("api", "work")
         workspace.select(hidden.key)
         XCTAssertTrue(workspace.openTerminalBesideSession())
@@ -163,7 +163,7 @@ final class WorkspaceWindowTests: XCTestCase {
             ProjectEntry(profile: "personal", title: "api"),
         ]
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "All", "personal"])
+        XCTAssertEqual(workspace.groupFilter.pills.map { $0.group ?? "All" }, ["All", "All", "personal"])
         chooseGroup(at: 1)
         XCTAssertEqual(workspace.selectedGroup, "All")
         XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(1))])
@@ -171,12 +171,12 @@ final class WorkspaceWindowTests: XCTestCase {
         app.workspaceProjects.append(ProjectEntry(profile: "work", title: "web", groups: ["All", "new"]))
         workspace.reloadSidebar(allowReorder: true)
         XCTAssertEqual(workspace.selectedGroup, "All")
-        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "All", "new", "personal"])
+        XCTAssertEqual(workspace.groupFilter.pills.map { $0.group ?? "All" }, ["All", "All", "new", "personal"])
         XCTAssertEqual(workspace.sessionShortcutRows.count, 2)
         app.workspaceProjects = []
         workspace.reloadSidebar(allowReorder: true)
         XCTAssertNil(workspace.selectedGroup)
-        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All"])
+        XCTAssertEqual(workspace.groupFilter.pills.map { $0.group ?? "All" }, ["All"])
         XCTAssertEqual(workspace.sessionShortcutRows.count, 3)
     }
 

@@ -114,6 +114,7 @@ extension AppDelegate {
             feedLive: live,
             waiting: live ? AttentionCycler.ordered(store.managedSessions).count : 0,
             projects: projects.state,
+            projectGroup: workspace?.selectedGroup,
             missingProjectDirectories: projects.missingDirectories,
             recent: recent.state,
             recentDays: prefs.recentDays,
@@ -177,8 +178,8 @@ extension AppDelegate {
                 self.hasOfferedInitialSetup = true
                 self.showWorkspace()
             }
-            self.updateWorkspaceProjectMenu()
             self.workspace?.reloadSidebar(allowReorder: true)
+            self.updateWorkspaceProjectMenu()
             self.workspace?.refreshCommands()
             self.statusItem?.refreshSubmenus()
         })

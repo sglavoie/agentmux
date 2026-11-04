@@ -17,9 +17,18 @@ extension WorkspaceWindowController {
     }
 
     private func refreshGroupFilter() {
-        let groups = ProjectCatalog.groups(delegate?.workspaceProjects ?? [])
-        if let selectedGroup, !groups.contains(selectedGroup) { self.selectedGroup = nil }
-        groupFilter.show(groups: groups, selected: selectedGroup)
+        let projects = delegate?.workspaceProjects ?? []
+        var groups = ProjectCatalog.groups(projects)
+        if let selectedGroup, !groups.contains(selectedGroup) {
+            if delegate?.workspaceProjectsLoaded == true { self.selectedGroup = nil }
+            else { groups.append(selectedGroup); groups.sort() }
+        }
+        let waiting = state.rows.filter(\.attention)
+        let counts = state.current
+            ? Dictionary(uniqueKeysWithValues: ProjectCatalog.groups(projects).map { ($0, ProjectCatalog.rows(waiting, in: $0, projects: projects).count) })
+            : [:]
+        groupFilter.show(groups: groups, selected: selectedGroup, waiting: counts,
+                         totalWaiting: state.current ? waiting.count : nil)
     }
 
     func selectGroup(_ group: String?) {

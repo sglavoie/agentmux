@@ -75,6 +75,7 @@ struct WorkspaceRestoration: Equatable {
     static let inspectorTabKey = "amxWorkspaceInspectorTab"
     static let sidebarWidthKey = "amxWorkspaceSidebarWidth"
     static let inspectorWidthKey = "amxWorkspaceInspectorWidth"
+    static let groupKey = "amxWorkspaceGroup"
 
     /// Whether the window was open when the app last ran.
     var windowOpen = false
@@ -94,6 +95,7 @@ struct WorkspaceRestoration: Equatable {
     /// shown; nil when nothing is saved, and the window's defaults apply.
     var sidebarWidth: Double?
     var inspectorWidth: Double?
+    var selectedGroup: String?
 
     static func load(from defaults: UserDefaults = .standard) -> WorkspaceRestoration {
         WorkspaceRestoration(
@@ -106,8 +108,14 @@ struct WorkspaceRestoration: Equatable {
             inspectorShown: defaults.bool(forKey: inspectorShownKey),
             inspectorTab: defaults.string(forKey: inspectorTabKey).flatMap(WorkspaceInspectorTab.init(rawValue:)) ?? .waiting,
             sidebarWidth: width(sidebarWidthKey, in: defaults),
-            inspectorWidth: width(inspectorWidthKey, in: defaults)
+            inspectorWidth: width(inspectorWidthKey, in: defaults),
+            selectedGroup: defaults.object(forKey: groupKey) as? String
         )
+    }
+
+    static func saveGroup(_ group: String?, to defaults: UserDefaults = .standard) {
+        if let group { defaults.set(group, forKey: groupKey) }
+        else { defaults.removeObject(forKey: groupKey) }
     }
 
     static func saveInspector(shown: Bool, tab: WorkspaceInspectorTab, to defaults: UserDefaults = .standard) {

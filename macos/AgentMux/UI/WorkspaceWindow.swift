@@ -115,7 +115,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     let sidebar = WorkspaceSidebarView()
     let groupFilter = WorkspaceGroupFilter()
     /// nil is All; a literal group named All remains a separate choice.
-    var selectedGroup: String?
+    var selectedGroup: String? {
+        didSet {
+            if selectedGroup != oldValue { delegate?.workspaceGroupChanged(selectedGroup) }
+        }
+    }
     var showsAllWaitingGroups = false
     private(set) var compactSidebar = false
 
@@ -609,6 +613,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
                 Self.logger.notice("workspace: awaited session \(awaited.runtimeSessionID, privacy: .public) is listed; showing it")
                 self.awaited = nil
                 activate(row)
+                revealInSidebar()
                 return
             }
             if now() >= awaited.until {

@@ -155,6 +155,20 @@ labeled by profile, with the same state glyphs the tab titles use and a count
 of waiting sessions beside each project. Pinned sessions and those needing
 attention lead the list.
 
+- The group buttons above the sidebar filter sessions by the projects' configured
+  `groups` tags. **All** shows every session; clicking the selected group also
+  returns to All. The choice survives app restarts. A group removed from the
+  configuration falls back to All after a successful project refresh; loading
+  or failed reads keep the saved choice.
+  Buttons show nonzero waiting counts, including sessions outside the selected
+  group. A session in several groups counts once in each, and once in All.
+  Counts disappear while the daemon feed is disconnected.
+- **Launch Project** in the workspace and menu bar follows the selected group,
+  including configured projects with no running sessions. Its **All projects**
+  submenu offers the full catalog without changing the group just by opening it.
+  Launching a project outside the group reveals the new session and switches
+  the sidebar to All. The command palette remains a search across all projects.
+
 - A line of chips above the sessions counts each section listed below it,
   Needs attention and Pinned included. A click on one goes to that section's
   first session and finds its line as **Reveal in Sidebar** (⌘J) does,

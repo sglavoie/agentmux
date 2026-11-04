@@ -53,6 +53,7 @@ extension AppDelegate {
                              canClose: { !model.landing }, close: { model.close() }, directory: { model.changes?.root ?? directory })
             }
             let restoration = WorkspaceRestoration.load()
+            controller.selectedGroup = restoration.selectedGroup
             // Before anything makes the window, which opens at these widths.
             controller.sidebarWidth = restoration.sidebarWidth.map { CGFloat($0) }
             controller.inspectorWidth = restoration.inspectorWidth.map { CGFloat($0) }
@@ -815,6 +816,13 @@ extension AppDelegate {
     }
 
     var workspaceProjects: [ProjectEntry] { projects.state.value ?? [] }
+    var workspaceProjectsLoaded: Bool { projects.state.value != nil && projects.state.error == nil }
+
+    func workspaceGroupChanged(_ group: String?) {
+        if !Self.isRunningTests, !isTerminating { WorkspaceRestoration.saveGroup(group) }
+        updateWorkspaceProjectMenu()
+        statusItem?.refreshSubmenus()
+    }
 
     func workspaceLaunchProjects(from view: NSView) {
         refreshProjects()
