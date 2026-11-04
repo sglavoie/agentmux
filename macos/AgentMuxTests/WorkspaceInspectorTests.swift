@@ -36,6 +36,97 @@ final class WorkspaceInspectorTests: XCTestCase {
 
     // MARK: Data
 
+    private func loadGroupedSessions() {
+        app.workspaceProjects = [
+            ProjectEntry(profile: "work", title: "api", groups: ["work"]),
+            ProjectEntry(profile: "personal", title: "api", groups: ["personal"]),
+            ProjectEntry(profile: "work", title: "web", groups: ["work"]),
+            ProjectEntry(profile: "work", title: "offline", groups: ["empty"]),
+        ]
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.setInspectorCollapsed(false)
+    }
+
+    func testWaitingFollowsGroupScopeAndKeepsInspectionOfTheShownSession() {
+        loadGroupedSessions()
+        let inspector = workspace.inspector
+        XCTAssertEqual(inspector.allGroupsButton.state, .off)
+        XCTAssertEqual(inspector.model.waiting.count, 2)
+        workspace.select(.embedded(F.runtimeID(2)))
+        workspace.selectGroup("work")
+        XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(4))])
+        XCTAssertEqual(inspector.tabs.label(forSegment: 0), "Waiting 1")
+        XCTAssertEqual(inspector.model.inspection?.key, .embedded(F.runtimeID(2)))
+
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(4))])
+        workspace.selectGroup("empty")
+        XCTAssertTrue(inspector.visibleWaiting.isEmpty)
+        XCTAssertFalse(inspector.nextButton.isEnabled)
+        XCTAssertEqual(inspector.tabs.label(forSegment: 0), "Waiting")
+        workspace.selectGroup(nil)
+        XCTAssertEqual(inspector.visibleWaiting.count, 2)
+    }
+
+    func testAllGroupsToggleRevealsHiddenWaitingSessionAndResetsSidebarScope() throws {
+        loadGroupedSessions()
+        workspace.selectGroup("work")
+        let inspector = workspace.inspector
+        inspector.allGroupsButton.performClick(nil)
+        XCTAssertTrue(workspace.showsAllWaitingGroups)
+        XCTAssertEqual(workspace.selectedGroup, "work", "the toggle alone does not change the sidebar")
+        XCTAssertEqual(inspector.visibleWaiting.count, 2)
+        XCTAssertEqual(inspector.tabs.label(forSegment: 0), "Waiting 2")
+
+        let hidden = try XCTUnwrap(inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
+            .first { $0.row.key == .embedded(F.runtimeID(2)) })
+        hidden.press()
+        XCTAssertNil(workspace.selectedGroup)
+        XCTAssertEqual(workspace.groupFilter.pills.first?.state, .on)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
+        let selected = try XCTUnwrap(workspace.state.row(.embedded(F.runtimeID(2))))
+        XCTAssertEqual(workspace.sidebar.selectedRow, workspace.items.firstIndex(of: .row(selected)))
+
+        workspace.selectGroup("work")
+        inspector.allGroupsButton.performClick(nil)
+        XCTAssertFalse(workspace.showsAllWaitingGroups)
+        XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(4))])
+        inspector.nextWaiting()
+        XCTAssertEqual(workspace.selectedGroup, "work", "selecting an in-scope session preserves the filter")
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(4)))
+    }
+
+    func testGroupScopeChangesImmediatelyDiscardHiddenContextAndHeldRows() throws {
+        loadGroupedSessions()
+        let inspector = workspace.inspector
+        let hidden = try XCTUnwrap(inspector.model.waiting.first { $0.key == .embedded(F.runtimeID(2)) })
+        inspector.toggleContext(hidden)
+        workspace.selectGroup("work")
+        XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(4))])
+        XCTAssertTrue(inspector.updatesButton.isHidden)
+
+        inspector.allGroupsButton.performClick(nil)
+        inspector.toggleContext(hidden)
+        inspector.allGroupsButton.performClick(nil)
+        XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(4))])
+        XCTAssertTrue(inspector.updatesButton.isHidden)
+    }
+
+    func testNextWaitingAcrossAllGroupsRespectsCategoryAndRevealsHiddenSession() {
+        loadGroupedSessions()
+        workspace.selectGroup("work")
+        let inspector = workspace.inspector
+        inspector.setWaitingFilter(.completed, oldestFirst: true)
+        XCTAssertTrue(inspector.visibleWaiting.isEmpty)
+        inspector.allGroupsButton.performClick(nil)
+        XCTAssertEqual(inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(2))])
+        inspector.nextButton.performClick(nil)
+        XCTAssertNil(workspace.selectedGroup)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertTrue(app.answers.isEmpty)
+    }
+
     func testRecapTracksOnlyTheVisibleSessionAndWaitsForItsWorkingTurn() {
         var session = F.tmux(1, project: "api", icon: "bolt", conversation: "one")
         app.store.apply(snapshot: F.snapshot([session]))

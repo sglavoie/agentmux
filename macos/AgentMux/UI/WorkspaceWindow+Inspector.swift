@@ -49,14 +49,18 @@ extension WorkspaceWindowController {
         guard let store = delegate?.store else { return }
         // Only what is listed can be gone to, so only that is shown.
         let sessions = store.sessions.filter { state.row(AttentionCycler.key($0)) != nil }
+        let waitingKeys = Set((showsAllWaitingGroups ? state : scopedSidebar).rows.map(\.key))
+        let waitingSessions = sessions.filter { waitingKeys.contains(AttentionCycler.key($0)) }
         let shown = shownSessionRow.flatMap { row in
             sessions.first { AttentionCycler.key($0) == row.key }
         }
         inspector.show(WorkspaceInspectorView.Model(
             tab: inspectorTab,
             waiting: WorkspaceInspector.waiting(
-                sessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order
+                waitingSessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order
             ),
+            waitingGroup: selectedGroup,
+            showsAllWaitingGroups: showsAllWaitingGroups,
             inspection: shown.map { WorkspaceInspector.inspection($0, now: now(), glyphs: glyphs, displayName: shownSessionRow?.displayName) },
             sourceConversation: shownSessionRow.flatMap { delegate?.workspaceHandoffSource($0) },
             current: state.current,

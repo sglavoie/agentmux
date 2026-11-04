@@ -116,6 +116,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     let groupFilter = WorkspaceGroupFilter()
     /// nil is All; a literal group named All remains a separate choice.
     var selectedGroup: String?
+    var showsAllWaitingGroups = false
     private(set) var compactSidebar = false
 
     func setCompactSidebar(_ compact: Bool) {
@@ -711,9 +712,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         contentItem = paneItem
 
         inspector.onTab = { [weak self] tab in self?.setInspectorTab(tab) }
+        inspector.onAllWaitingGroups = { [weak self] showAll in
+            self?.showsAllWaitingGroups = showAll
+            self?.reloadInspector()
+        }
         inspector.onWaiting = { [weak self] key in
             guard let self, let row = self.state.row(key) else { return }
             self.activate(row)
+            self.revealInSidebar()
         }
         inspector.onAction = { [weak self] action in self?.delegate?.workspaceInspectorAction(action) }
         inspector.onAnswer = { [weak self] answer in self?.delegate?.workspaceAnswer(answer) }

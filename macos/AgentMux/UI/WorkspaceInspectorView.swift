@@ -16,6 +16,8 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     struct Model: Equatable {
         var tab = WorkspaceInspectorTab.waiting
         var waiting: [WorkspaceWaitingRow] = []
+        var waitingGroup: String?
+        var showsAllWaitingGroups = false
         /// Nil when the pane is on no session.
         var inspection: WorkspaceInspection?
         var sourceConversation: ConversationIdentity?
@@ -61,12 +63,14 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
 
     var onTab: ((WorkspaceInspectorTab) -> Void)?
     var onWaiting: ((AttentionCycler.Key) -> Void)?
+    var onAllWaitingGroups: ((Bool) -> Void)?
     var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
     var onSource: ((ConversationIdentity) -> Void)?
     var onAction: ((WorkspaceInspectorAction) -> Void)?
     var onContext: ((WorkspaceWaitingRow, @escaping (WorkspaceWaitingContext.Result) -> Void) -> Void)?
     let filterPicker = NSPopUpButton()
     let oldestButton = NSButton(checkboxWithTitle: "Oldest first", target: nil, action: nil)
+    let allGroupsButton = NSButton(checkboxWithTitle: "Show all groups", target: nil, action: nil)
     let nextButton = NSButton(title: "Next Waiting", target: nil, action: nil)
     let updatesButton = NSButton(title: "Update List", target: nil, action: nil)
     private let inboxControls = NSStackView()
@@ -166,6 +170,9 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         filterPicker.setAccessibilityLabel("Waiting category")
         oldestButton.target = self
         oldestButton.action = #selector(filterChanged(_:))
+        allGroupsButton.target = self
+        allGroupsButton.action = #selector(allWaitingGroupsChanged(_:))
+        allGroupsButton.toolTip = "Show waiting sessions from every group. Selecting a hidden session switches the sidebar to All."
         nextButton.target = self
         nextButton.action = #selector(nextWaiting(_:))
         // The pane is narrow, so the button keeps the short form of the
@@ -174,13 +181,14 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         nextButton.setAccessibilityLabel(AttentionCycler.commandTitle)
         updatesButton.target = self
         updatesButton.action = #selector(applyWaitingUpdates(_:))
-        for control in [filterPicker, oldestButton, nextButton, updatesButton] {
+        for control in [filterPicker, oldestButton, allGroupsButton, nextButton, updatesButton] {
             control.controlSize = .small
             control.refusesFirstResponder = true
         }
         inboxControls.orientation = .vertical
         inboxControls.alignment = .leading
         inboxControls.spacing = 4
+        inboxControls.addArrangedSubview(allGroupsButton)
         let filters = NSStackView(views: [filterPicker, oldestButton])
         filters.spacing = 6
         filterPicker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -237,7 +245,9 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         let oldWaiting = visibleWaiting
         let newWaiting = waitingFilter.apply(model.waiting, oldestFirst: oldestFirst)
         let changed = oldWaiting.count != newWaiting.count || zip(oldWaiting, newWaiting).contains { !$0.sameContext(as: $1) }
-        if model.tab == .waiting && (pointerInside || expanded != nil), changed {
+        let scopeChanged = model.waitingGroup != self.model.waitingGroup
+            || model.showsAllWaitingGroups != self.model.showsAllWaitingGroups
+        if !scopeChanged, model.tab == .waiting && (pointerInside || expanded != nil), changed {
             // Do not move a target under a pointer or an open context. The live
             // snapshot still invalidates its answer/context buttons immediately.
             heldWaiting = oldWaiting.map { old in newWaiting.first { $0.sameContext(as: old) } ?? old }
@@ -260,6 +270,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
             if tab == model.tab { tabs.selectedSegment = index }
         }
         inboxControls.isHidden = model.tab != .waiting
+        allGroupsButton.state = model.showsAllWaitingGroups ? .on : .off
         readerHint.isHidden = model.tab != .waiting || window?.firstResponder !== self
         updatesButton.isEnabled = heldWaiting != nil
         updatesButton.isHidden = heldWaiting == nil
@@ -449,6 +460,10 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     @objc private func filterChanged(_ sender: Any?) {
         let filter = WorkspaceWaitingFilter(rawValue: filterPicker.titleOfSelectedItem ?? "") ?? .all
         setWaitingFilter(filter, oldestFirst: oldestButton.state == .on)
+    }
+
+    @objc private func allWaitingGroupsChanged(_ sender: NSButton) {
+        onAllWaitingGroups?(sender.state == .on)
     }
 
     @objc func nextWaiting(_ sender: Any? = nil) {

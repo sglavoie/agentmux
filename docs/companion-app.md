@@ -281,7 +281,8 @@ Whatever has the keyboard decides where a key goes.
   again keeps its width.
 - The button at the other end of the title bar, or **View › Toggle
   Inspector** (⌘⇧B), shows a second sidebar on the right, hidden until it is
-  asked for. Its **Waiting** tab lists every session waiting on you, in the
+  asked for. Its **Waiting** tab lists sessions waiting on you within the
+  selected group, with **Show all groups** available to include every group, in the
   order the session list has them (the order **F4** steps through), with why
   and for how long; a click goes to the session as a click on its line in
   the session list does. A row that can be answered from where you are has
@@ -457,6 +458,11 @@ Setup never launches an agent. Pending configuration reads, failed reads, and
 daemon recovery remain distinct from an empty configuration.
 
 ### Waiting
+
+Waiting follows the left sidebar's group filter by default. **Show all groups**
+includes waiting sessions from every group; selecting one outside the current
+group switches the left sidebar to **All** and reveals the session. Group filter
+changes apply immediately, including while reading context.
 
 Waiting in the inspector supports category filters, oldest-first sorting,
 expandable question/output context, and **Next Waiting**. **All** groups decisions
